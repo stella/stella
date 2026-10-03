@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import type { ReactNode } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import {
@@ -39,6 +40,11 @@ import { optionalSearchStringSchema } from "@/lib/schema";
 import type { EntityKind, ViewLayout, WorkspaceView } from "@/lib/types";
 import { overviewOptions } from "@/lib/workspaces/queries";
 import {
+  correspondenceAddressOptions,
+  correspondenceInfiniteOptions,
+  CORRESPONDENCE_PAGE_SIZE,
+} from "@/lib/workspaces/queries/correspondence";
+import {
   DEFAULT_ENTITY_WINDOW_SIZE,
   entitiesWindowOptions,
   filesystemEntitiesOptions,
@@ -51,6 +57,7 @@ import {
 } from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { useTableStore } from "@/lib/workspaces/table-store";
+import { CorrespondenceViewSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
@@ -181,6 +188,28 @@ export const Route = createFileRoute(
         ),
         "workspace-view.prefetch",
       );
+      return;
+    }
+
+    if (activeView.layout.type === "correspondence") {
+      if (isDocumentRoute) {
+        return;
+      }
+      // The list suspends on its first page; the address card reads its
+      // query without suspending, so a failed prefetch only reports.
+      await Promise.all([
+        ensureRouteInfiniteQueryData(
+          queryClient,
+          correspondenceInfiniteOptions(workspaceId, CORRESPONDENCE_PAGE_SIZE),
+        ),
+        prefetchRouteQuery(
+          queryClient,
+          correspondenceAddressOptions(workspaceId),
+          (error: unknown) => {
+            getAnalytics().captureError(error);
+          },
+        ),
+      ]);
       return;
     }
 
@@ -372,7 +401,6 @@ function VisibleFieldEntityViewContent({
 }
 
 function ViewShell({ activeView, workspaceId }: ViewContentProps) {
-  const navigate = Route.useNavigate();
   const matches = useMatches();
   const isOnPdfRoute = matches.some((m) => m.fullPath.endsWith("/document"));
   const paneRef = useRef<HTMLDivElement>(null);
@@ -385,37 +413,19 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" ref={paneRef}>
-      <div className="flex min-w-0 flex-col border-b md:flex-row md:items-center md:justify-between">
-        <div
-          className={cn(
-            "flex min-w-0 items-center",
-            TOOLBAR_ROW_HEIGHT,
-            hasViewToolbar(activeView) && "border-b md:border-b-0",
-          )}
-        >
-          <ViewSwitcher
-            activeViewId={activeView.id}
-            onViewChange={(viewId) => {
-              detached(
-                navigate({
-                  to: "/workspaces/$workspaceId/$viewId",
-                  params: { workspaceId, viewId },
-                  search: { page: undefined },
-                }),
-                "workspace-view.navigate",
-              );
-            }}
-            workspaceId={workspaceId}
-          />
-        </div>
-        {hasViewToolbar(activeView) && (
-          <ViewToolbar
-            paneRef={paneRef}
-            view={activeView}
-            workspaceId={workspaceId}
-          />
-        )}
-      </div>
+      <ViewChromeRow
+        activeViewId={activeView.id}
+        toolbar={
+          hasViewToolbar(activeView) ? (
+            <ViewToolbar
+              paneRef={paneRef}
+              view={activeView}
+              workspaceId={workspaceId}
+            />
+          ) : null
+        }
+        workspaceId={workspaceId}
+      />
       <div
         className="flex min-h-0 flex-1 flex-col"
         {...guideAnchor(
@@ -437,10 +447,56 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
   );
 }
 
-// Overview and AVT do not show the matter's entities through filters, sorts
-// and columns, so the toolbar that edits those has nothing to act on.
+// The view tabs row. Loaded views and the route-pending state render the same
+// row: the tabs are known before any view data is, so switching to a view the
+// user has not opened yet keeps the tabs still and shimmers only the toolbar
+// and body below them.
+function ViewChromeRow({
+  activeViewId,
+  toolbar,
+  workspaceId,
+}: {
+  activeViewId: string;
+  toolbar: ReactNode;
+  workspaceId: string;
+}) {
+  const navigate = Route.useNavigate();
+  return (
+    <div className="flex min-w-0 flex-col border-b md:flex-row md:items-center md:justify-between">
+      <div
+        className={cn(
+          "flex min-w-0 items-center",
+          TOOLBAR_ROW_HEIGHT,
+          toolbar !== null && "border-b md:border-b-0",
+        )}
+      >
+        <ViewSwitcher
+          activeViewId={activeViewId}
+          onViewChange={(viewId) => {
+            detached(
+              navigate({
+                to: "/workspaces/$workspaceId/$viewId",
+                params: { workspaceId, viewId },
+                search: { page: undefined },
+              }),
+              "workspace-view.navigate",
+            );
+          }}
+          workspaceId={workspaceId}
+        />
+      </div>
+      {toolbar}
+    </div>
+  );
+}
+
+// Overview, AVT and correspondence do not show the matter's entities through
+// filters, sorts and columns, so the toolbar that edits those has nothing to
+// act on.
 const hasViewToolbar = (view: WorkspaceView): boolean =>
-  view.layout.type !== "overview" && view.layout.type !== "avt";
+  view.layout.type !== "overview" &&
+  view.layout.type !== "avt" &&
+  view.layout.type !== "correspondence";
 
 const PENDING_TABLE_ROW_KEYS = [
   "r1",
@@ -521,6 +577,9 @@ const ViewBodySkeleton = ({
   if (layoutType === "overview") {
     return <PendingOverviewBody />;
   }
+  if (layoutType === "correspondence") {
+    return <CorrespondenceViewSkeleton />;
+  }
   // table / filesystem / calendar / unknown all fall back to the row list.
   return <PendingTableBody />;
 };
@@ -535,27 +594,34 @@ function ViewPendingComponent() {
   const queryClient = useQueryClient();
   const viewsQueryOptions = viewsOptions(workspaceId);
   const cachedViews = queryClient.getQueryData(viewsQueryOptions.queryKey);
-  const layoutType = (
-    cachedViews?.find((view) => view.id === viewId) ?? cachedViews?.at(0)
-  )?.layout.type;
+  const pendingView =
+    cachedViews?.find((view) => view.id === viewId) ?? cachedViews?.at(0);
+  const layoutType = pendingView?.layout.type;
+  const toolbarSkeleton = (
+    <div className={cn("flex items-center gap-1.5 px-3", TOOLBAR_ROW_HEIGHT)}>
+      <Skeleton className="size-7 rounded-md" />
+      <Skeleton className="size-7 rounded-md" />
+      <Skeleton className="h-7 w-24 rounded-md" />
+    </div>
+  );
 
   return (
     <>
-      <div
-        className={cn(
-          "flex min-w-0 flex-col border-b px-3 md:flex-row md:items-center md:justify-between",
-        )}
-      >
-        <div className={cn("flex items-center gap-1.5", TOOLBAR_ROW_HEIGHT)}>
-          <Skeleton className="h-7 w-24 rounded-md" />
-          <Skeleton className="h-7 w-20 rounded-md" />
+      {pendingView ? (
+        <ViewChromeRow
+          activeViewId={pendingView.id}
+          toolbar={hasViewToolbar(pendingView) ? toolbarSkeleton : null}
+          workspaceId={workspaceId}
+        />
+      ) : (
+        <div className="flex min-w-0 flex-col border-b px-3 md:flex-row md:items-center md:justify-between">
+          <div className={cn("flex items-center gap-1.5", TOOLBAR_ROW_HEIGHT)}>
+            <Skeleton className="h-7 w-24 rounded-md" />
+            <Skeleton className="h-7 w-20 rounded-md" />
+          </div>
+          {toolbarSkeleton}
         </div>
-        <div className={cn("flex items-center gap-1.5", TOOLBAR_ROW_HEIGHT)}>
-          <Skeleton className="size-7 rounded-md" />
-          <Skeleton className="size-7 rounded-md" />
-          <Skeleton className="h-7 w-24 rounded-md" />
-        </div>
-      </div>
+      )}
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex-1 overflow-auto">
           <ViewBodySkeleton layoutType={layoutType} />

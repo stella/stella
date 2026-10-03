@@ -446,14 +446,18 @@ export type {
   ContactImportVocabularyId,
 } from "./contact-import-labeled";
 export {
+  CONVERTIBLE_VIEW_LAYOUTS,
   DIRECTLY_CREATABLE_VIEW_LAYOUTS,
   isRequiredViewLayout,
+  isSingleViewLayout,
   REQUIRED_VIEW_LAYOUTS,
   VIEW_LAYOUT_TYPES,
 } from "./view-layout";
 export type {
+  ConvertibleViewLayoutType,
   DirectlyCreatableViewLayoutType,
   RequiredViewLayoutType,
+  SingleViewLayoutType,
   ViewLayoutType,
 } from "./view-layout";
 export type {
