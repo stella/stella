@@ -1,3 +1,4 @@
+import type { TSchema } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
@@ -56,11 +57,25 @@ const unicode = fc
   )
   .map((parts) => parts.join(""));
 
-const families = [
-  {
-    title: "statute listing bounds serialized Unicode metadata",
-    schema: listStatutesSuccessResponseSchema,
-    response: (text: string) => ({
+const boundedResponseProperty = (
+  schema: TSchema,
+  responseWithText: (text: string) => unknown,
+) =>
+  fc.property(unicode, (text) => {
+    const overlong = text.repeat(Math.ceil(9000 / text.length));
+    const response = responseWithText(overlong);
+    expect(Value.Check(schema, response)).toBe(true);
+    const serialized = JSON.stringify(response);
+    expect(Buffer.byteLength(serialized, "utf-8")).toBeLessThanOrEqual(
+      responseSchemaByteBound(schema),
+    );
+    expect(JSON.parse(serialized)).toEqual(response);
+  });
+
+test("statute listing bounds serialized Unicode metadata", () => {
+  assertProperty(
+    "statute listing bounds serialized Unicode metadata",
+    boundedResponseProperty(listStatutesSuccessResponseSchema, (text) => ({
       items: [
         projectStatuteListItem({
           ...shelfItem(text),
@@ -83,30 +98,41 @@ const families = [
         id,
       ]),
       limit: 1,
-    }),
-  },
-  {
-    title: "statute shelf bounds serialized Unicode metadata",
-    schema: legislationShelfSuccessResponseSchema,
-    response: (text: string) =>
+    })),
+    { numRuns: 30 },
+  );
+});
+
+test("statute shelf bounds serialized Unicode metadata", () => {
+  assertProperty(
+    "statute shelf bounds serialized Unicode metadata",
+    boundedResponseProperty(legislationShelfSuccessResponseSchema, (text) =>
       projectLegislationShelf({
         country: text,
         recentlyInForce: [shelfItem(text)],
         enteringIntoForce: [shelfItem(text)],
       }),
-  },
-  {
-    title: "statute facets bound serialized Unicode bucket labels",
-    schema: legislationFacetsSuccessResponseSchema,
-    response: (text: string) =>
+    ),
+    { numRuns: 30 },
+  );
+});
+
+test("statute facets bound serialized Unicode bucket labels", () => {
+  assertProperty(
+    "statute facets bound serialized Unicode bucket labels",
+    boundedResponseProperty(legislationFacetsSuccessResponseSchema, (text) =>
       projectLegislationFacets({
         documentType: [{ value: text, count: Number.MAX_VALUE }],
       }),
-  },
-  {
-    title: "statute resolver bounds serialized Unicode matches and echoes",
-    schema: resolveStatutesSuccessResponseSchema,
-    response: (text: string) =>
+    ),
+    { numRuns: 30 },
+  );
+});
+
+test("statute resolver bounds serialized Unicode matches and echoes", () => {
+  assertProperty(
+    "statute resolver bounds serialized Unicode matches and echoes",
+    boundedResponseProperty(resolveStatutesSuccessResponseSchema, (text) =>
       projectResolveStatutesResponse({
         items: [
           {
@@ -139,72 +165,72 @@ const families = [
           },
         ],
       }),
-  },
-  {
-    title:
-      "statute ELI gap response bounds serialized Unicode version metadata",
-    schema: publisherWindowInconsistentResponseSchema,
-    response: (text: string) => ({
-      code: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_CODE,
-      message: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE,
-      versions: [
-        projectInconsistentVersion({
-          id: text,
-          language: text,
-          versionValidFrom: text,
-          versionValidTo: text,
-          basis: "missing-start",
-        }),
-      ],
-    }),
-  },
-  {
-    title: "statute sitemap index bounds serialized Unicode shard metadata",
-    schema: statuteSitemapShardsSuccessResponseSchema,
-    response: (text: string) => ({
-      items: [
-        projectStatuteSitemapShard({
-          bucket: text,
-          country: text,
-          lastmod: text,
-        }),
-      ],
-      limit: 1,
-      nextCursor: null,
-    }),
-  },
-  {
-    title: "statute sitemap shard bounds serialized Unicode URL segments",
-    schema: statuteSitemapStatutesSuccessResponseSchema,
-    response: (text: string) => ({
-      items: [
-        projectStatuteSitemapStatute({
-          country: text,
-          slug: text,
-          lastmod: text,
-        }),
-      ],
-      limit: 1,
-      nextCursor: null,
-    }),
-  },
-];
+    ),
+    { numRuns: 30 },
+  );
+});
 
-for (const family of families) {
-  test(family.title, () => {
-    assertProperty(
-      family.title,
-      fc.property(unicode, (text) => {
-        const overlong = text.repeat(Math.ceil(9000 / text.length));
-        const response = family.response(overlong);
-        expect(Value.Check(family.schema, response)).toBe(true);
-        const serialized = JSON.stringify(response);
-        expect(Buffer.byteLength(serialized, "utf-8")).toBeLessThanOrEqual(
-          responseSchemaByteBound(family.schema),
-        );
-        expect(JSON.parse(serialized)).toEqual(response);
+test("statute ELI gap response bounds serialized Unicode version metadata", () => {
+  assertProperty(
+    "statute ELI gap response bounds serialized Unicode version metadata",
+    boundedResponseProperty(
+      publisherWindowInconsistentResponseSchema,
+      (text) => ({
+        code: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_CODE,
+        message: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE,
+        versions: [
+          projectInconsistentVersion({
+            id: text,
+            language: text,
+            versionValidFrom: text,
+            versionValidTo: text,
+            basis: "missing-start",
+          }),
+        ],
       }),
-      { numRuns: 30 },
-    );
-  });
-}
+    ),
+    { numRuns: 30 },
+  );
+});
+
+test("statute sitemap index bounds serialized Unicode shard metadata", () => {
+  assertProperty(
+    "statute sitemap index bounds serialized Unicode shard metadata",
+    boundedResponseProperty(
+      statuteSitemapShardsSuccessResponseSchema,
+      (text) => ({
+        items: [
+          projectStatuteSitemapShard({
+            bucket: text,
+            country: text,
+            lastmod: text,
+          }),
+        ],
+        limit: 1,
+        nextCursor: null,
+      }),
+    ),
+    { numRuns: 30 },
+  );
+});
+
+test("statute sitemap shard bounds serialized Unicode URL segments", () => {
+  assertProperty(
+    "statute sitemap shard bounds serialized Unicode URL segments",
+    boundedResponseProperty(
+      statuteSitemapStatutesSuccessResponseSchema,
+      (text) => ({
+        items: [
+          projectStatuteSitemapStatute({
+            country: text,
+            slug: text,
+            lastmod: text,
+          }),
+        ],
+        limit: 1,
+        nextCursor: null,
+      }),
+    ),
+    { numRuns: 30 },
+  );
+});

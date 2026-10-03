@@ -59,7 +59,7 @@ const listItemSchema = t.Object(
     versionValidTo: nullableBoundedString(DATE_BYTES),
     sourceUrl: nullableBoundedString(textBytes.sourceUrl),
     documentUrl: nullableBoundedString(textBytes.sourceUrl),
-    citationCaseCount: t.Number(),
+    citationCaseCount: t.Union([t.Number(), t.Null()]),
     firstVersionValidFrom: nullableBoundedString(DATE_BYTES),
     amendmentCount: t.Number(),
     lastAmendedOn: nullableBoundedString(DATE_BYTES),
@@ -193,7 +193,7 @@ export const statuteSitemapStatutesSuccessResponseSchema = t.Object(
 
 // Preserve persisted UUID brands and enum discriminators while bounding display
 // text at the response boundary. Whole statute bodies never enter this projection.
-export const projectStatuteCatalogIdentity = <
+const projectStatuteCatalogIdentity = <
   Item extends Static<typeof identitySchema>,
 >(
   item: Item,
@@ -206,9 +206,7 @@ export const projectStatuteCatalogIdentity = <
   language: truncateTextBytes(item.language, textBytes.language),
 });
 
-export const projectStatuteShelfItem = <
-  Item extends Static<typeof shelfItemSchema>,
->(
+const projectStatuteShelfItem = <Item extends Static<typeof shelfItemSchema>>(
   item: Item,
 ) => ({
   ...projectStatuteCatalogIdentity(item),
@@ -229,7 +227,7 @@ export const projectStatuteListItem = (
   lastAmendedOn: nullableText(item.lastAmendedOn, DATE_BYTES),
 });
 
-export const projectResolvedStatute = (
+const projectResolvedStatute = (
   item: Static<typeof resolvedStatuteSchema>,
 ) => ({
   ...projectStatuteCatalogIdentity(item),

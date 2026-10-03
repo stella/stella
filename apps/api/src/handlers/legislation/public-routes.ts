@@ -62,10 +62,10 @@ import {
 import {
   createSafePublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
-  safePublicHandlerErrorResponseSchema,
 } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
+import { safePublicHandlerErrorOrStatusTextResponseSchema } from "@/api/lib/search/public-error-response";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const listStatutes = createSafePublicHandler(
@@ -137,7 +137,7 @@ const readStatuteByEli = createSafePublicHandler(
         statuteReaderSuccessResponseSchema,
       ),
       404: t.Union([
-        safePublicHandlerErrorResponseSchema,
+        safePublicHandlerErrorOrStatusTextResponseSchema,
         publisherWindowInconsistentResponseSchema,
       ]),
     },
@@ -186,7 +186,7 @@ const readStatuteBySlug = createSafePublicHandler(
         statuteReaderSuccessResponseSchema,
       ),
       404: t.Union([
-        safePublicHandlerErrorResponseSchema,
+        safePublicHandlerErrorOrStatusTextResponseSchema,
         publisherWindowInconsistentResponseSchema,
       ]),
     },

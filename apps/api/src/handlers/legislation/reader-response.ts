@@ -47,7 +47,11 @@ const labelFields = {
   expressionKind: t.UnionEnum(LEGISLATION_EXPRESSION_KINDS),
   windowDisposition: t.UnionEnum(LEGISLATION_WINDOW_DISPOSITIONS),
   windowDispositionBasis: t.Union([
-    t.UnionEnum(Object.values(LEGISLATION_WINDOW_DISPOSITION_BASES).flat()),
+    t.Union(
+      Object.values(LEGISLATION_WINDOW_DISPOSITION_BASES)
+        .flat()
+        .map((basis) => t.Literal(basis)),
+    ),
     t.Null(),
   ]),
 };
@@ -70,7 +74,7 @@ const versionFields = {
   sourceUrl: nullableBoundedString(readerTextBytes.sourceUrl),
   documentUrl: nullableBoundedString(readerTextBytes.documentUrl),
 };
-export const statuteVersionSchema = t.Object(
+const statuteVersionSchema = t.Object(
   { ...versionFields, isDefault: t.Boolean() },
   closed,
 );
@@ -90,7 +94,7 @@ export const statuteReaderSuccessResponseSchema = t.Object(
     ...versionFields,
     createdAt: boundedString(32),
     updatedAt: boundedString(32),
-    citationCaseCount: t.Number(),
+    citationCaseCount: t.Union([t.Number(), t.Null()]),
     allowsDerivedAi: t.Boolean(),
     sections: t.Union([
       t.Array(
@@ -121,7 +125,7 @@ export const statuteReaderSuccessResponseSchema = t.Object(
   closed,
 );
 
-export const provisionHistoryItemSchema = t.Object(
+const provisionHistoryItemSchema = t.Object(
   {
     documentId: tSafeId("legislationDocument"),
     allowsDerivedAi: t.Boolean(),
@@ -274,12 +278,16 @@ export const projectProvisionPreview = (preview: ProvisionPreview) => ({
             readerTextBytes.heading,
           ),
         },
-  blocks: preview.blocks.slice(0, PREVIEW_BLOCK_MAX).map((block) => ({
-    id: truncateTextBytes(block.id, readerTextBytes.blockId),
-    anchorId:
-      block.anchorId === undefined
-        ? undefined
-        : truncateTextBytes(block.anchorId, readerTextBytes.anchor),
-    text: truncateHeadlineBytes(block.text, readerTextBytes.previewText),
-  })),
+  blocks: preview.blocks.slice(0, PREVIEW_BLOCK_MAX).map((block) => {
+    const projected = {
+      id: truncateTextBytes(block.id, readerTextBytes.blockId),
+      text: truncateHeadlineBytes(block.text, readerTextBytes.previewText),
+    };
+    if (block.anchorId === undefined) {return projected;}
+    return {
+      id: projected.id,
+      anchorId: truncateTextBytes(block.anchorId, readerTextBytes.anchor),
+      text: projected.text,
+    };
+  }),
 });
