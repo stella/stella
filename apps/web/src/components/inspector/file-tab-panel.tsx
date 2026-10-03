@@ -305,8 +305,8 @@ export const FileTabPanel = ({
     tab,
   });
 
-  const handleViewerError = () => {
-    notifyUserError(undefined, t("errors.actionFailed"));
+  const handleViewerError = (error: unknown) => {
+    notifyUserError(error, t("errors.actionFailed"));
   };
 
   const docxEditor = useDocxEditorBindings({
@@ -577,7 +577,7 @@ type FileTabSidepeekProps = {
   /** Whether the viewer sits under a measured PDF. */
   measured: boolean;
   onFacetChange: (facet: Facet) => void;
-  onViewerError: () => void;
+  onViewerError: (error: unknown) => void;
   scaleOffset: number;
   tab: FileTab;
   viewer: ReactNode;
@@ -699,7 +699,7 @@ const FileTabMeasurementBoundary = ({
   children: ReactElement;
   fieldId: string;
   measured: boolean;
-  onError: () => void;
+  onError: (error: unknown) => void;
   scaleOffset: number;
 }): ReactElement => {
   if (!measured) {

@@ -136,7 +136,7 @@ function RouteComponent() {
     // another user's concurrent edits to name/description/steps/trigger. A
     // dedicated enabled-only mutation (see the PR follow-ups) would remove the
     // full-body replay entirely; this closes the stale-cache window.
-    const detailResult = await Result.tryPromise(() =>
+    const detailResult = await Result.tryPromise(async () =>
       queryClient.query({
         ...flowDetailOptions(organizationId, flow.id),
         staleTime: 0,
@@ -149,12 +149,6 @@ function RouteComponent() {
       return;
     }
     const detail = detailResult.value;
-
-    if (!detail || !("steps" in detail)) {
-      setTogglingId(null);
-      notifyUserError(undefined, t("flows.saveFailed"));
-      return;
-    }
 
     const response = await api.flows({ flowId }).put({
       name: detail.name,
