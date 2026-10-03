@@ -923,7 +923,7 @@ export const documentIdFromLink = (
  */
 export const czRegionalListingIdentity = (raw: unknown): ListingIdentity => {
   const item = czRegionalIdentityItem(raw);
-  if (item === null || !item.jednaciCislo || !isCourtListing(item)) {
+  if (!item?.jednaciCislo || !isCourtListing(item)) {
     return { type: "unidentifiable" };
   }
   const sourceDocumentId = documentIdFromLink(item.odkaz ?? undefined);

@@ -687,12 +687,13 @@ describe("the crawl keeps a refused row as its listing", () => {
     if (result.isErr()) {
       expect(result.error).toBeInstanceOf(PublisherPageError);
     }
-    await expect(
-      czRegionalAdapter.reconciliation.listSlicePage({
-        slice: "2025-06-11",
-        page: 0,
-      }),
-    ).rejects.toBeInstanceOf(PublisherPageError);
+    const rejection: unknown = await czRegionalAdapter.reconciliation
+      .listSlicePage({ slice: "2025-06-11", page: 0 })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(rejection).toBeInstanceOf(PublisherPageError);
   });
 
   test.each([

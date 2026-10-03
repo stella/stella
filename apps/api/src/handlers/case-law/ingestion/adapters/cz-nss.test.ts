@@ -1277,7 +1277,7 @@ describe("cz-nss fetchPage", () => {
     const result = await czNssAdapter.fetchPage(`${SLICE}:0`, {});
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
-      expect(String(result.error)).toContain("carried no pagination state");
+      expect(result.error.message).toContain("carried no pagination state");
     }
   });
 

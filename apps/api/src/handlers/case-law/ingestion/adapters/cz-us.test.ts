@@ -1304,7 +1304,7 @@ describe("czUsAdapter.fetchPage", () => {
       expect(second).toBeDefined();
       expect(first?.sourceRaw).not.toBe(second?.sourceRaw);
       expect(first?.rawHash).not.toBe(second?.rawHash);
-      if (second === undefined || second.sourceRaw === undefined) {
+      if (second?.sourceRaw === undefined) {
         return;
       }
       const replay = await czUsAdapter.reparseStoredRaw?.({
@@ -2447,7 +2447,7 @@ describe("czUsAdapter.reparseStoredRaw", () => {
         type: TEXT_FIELD_TYPE.ABSENT,
         reason,
       });
-      expect(String(outcome.result.metadata["abstractState"])).toBe(state);
+      expect(outcome.result.metadata["abstractState"]).toBe(state);
     });
   }
 
