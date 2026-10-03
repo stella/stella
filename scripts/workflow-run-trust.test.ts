@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { definitelyFalse } from "./github-expression";
+
 // A workflow_run workflow runs in the default branch's context, with its
 // secrets and cache scope, for any completed run of a workflow with the
 // listed name. A name is not an identity, so every job must establish where
@@ -14,34 +16,75 @@ const WORKFLOWS_URL = new URL("../.github/workflows/", import.meta.url);
 /** workflow_run workflows today. Fewer means the scan broke. */
 const MINIMUM_WORKFLOW_RUN_WORKFLOWS = 5;
 
+// A source check holds when the job's condition is false, whatever every
+// other value is, as soon as ONE of these three facts about the triggering run
+// is wrong. Evaluated with three-valued logic, so `||`, `!=` or a check that
+// only mentions a field cannot pass.
+const RUN = "github.event.workflow_run";
 const SOURCE_CHECKS = [
   {
     name: "the triggering run's repository",
-    pattern:
-      /github\.event\.workflow_run\.head_repository\.full_name\s*==\s*github\.repository/u,
+    values: {
+      "github.repository": "owner/repo",
+      [`${RUN}.head_repository.full_name`]: "fork/repo",
+    },
   },
   {
     name: "the triggering workflow file",
-    pattern: /github\.event\.workflow_run\.path\b/u,
+    values: { [`${RUN}.path`]: ".github/workflows/untrusted.yml" },
   },
   {
     name: "the triggering event",
-    pattern: /github\.event\.workflow_run\.event\b/u,
+    values: { [`${RUN}.event`]: "untrusted_event" },
   },
 ] as const;
+
+const failedSourceChecks = (condition: string) =>
+  SOURCE_CHECKS.filter(
+    ({ values }) =>
+      condition.trim() === "" ||
+      !definitelyFalse(condition, {
+        values: { "github.event_name": "workflow_run", ...values },
+        status: {
+          always: true,
+          success: true,
+          failure: false,
+          cancelled: false,
+        },
+      }),
+  );
+
+/**
+ * Whether a dependent job's condition can run it although every gated job it
+ * needs was skipped: those results are 'skipped' and their outputs empty.
+ */
+const runsAfterSkippedGate = (condition: string, gatedNeeds: string[]) =>
+  !definitelyFalse(condition, {
+    values: Object.fromEntries(
+      gatedNeeds.map((need) => [`needs.${need}.result`, "skipped"]),
+    ),
+    fallback: (path) =>
+      gatedNeeds.some((need) => path.startsWith(`needs.${need}.outputs.`))
+        ? ""
+        : undefined,
+    status: { always: true },
+  });
 
 /** Status functions that run a job even when a job it needs was skipped. */
 const RUNS_AFTER_SKIP = /\b(always|failure|cancelled)\(\)/u;
 
 // Release and deploy jobs restore caches from the default branch's scope.
 // pull_request runs save only to their own pull request's scope, but
-// pull_request_target runs (and workflow_run runs, gated above) save to the
-// default branch's scope while a fork can influence them. So none of their
-// jobs may save to any cache, and a reusable workflow they call must be one
-// reviewed for that.
+// pull_request_target and workflow_run runs save to the default branch's
+// scope: a fork can influence the first, and the second runs release and
+// signing jobs. So none of their jobs may save to or restore from any cache,
+// and a reusable workflow they call must be one reviewed for that.
+const DEFAULT_SCOPE_EVENTS = ["pull_request_target", "workflow_run"];
 const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
   "stella/.github/.github/workflows/pr-lint.yml@aff5017c264acce5a2bcdf15876da08835e6de70":
     "title, label, size and assignee actions only; no cache",
+  "stella/.github/.github/workflows/npm-independent-release.yml@28f9f43d5c1e820500f8526a5527465bcbcdf425":
+    "checkout, artifact download, setup-node without a cache input and the hardened publish action; no cache",
 };
 
 /** Why a step can save to the Actions cache, or null when it cannot. */
@@ -83,7 +126,9 @@ const cacheSave = (step: Record<string, unknown>): string | null => {
 const cacheSaveProblems = (workflow: unknown): string[] => {
   if (
     !isRecord(workflow) ||
-    !triggers(workflow["on"]).includes("pull_request_target")
+    !triggers(workflow["on"]).some((event) =>
+      DEFAULT_SCOPE_EVENTS.includes(event),
+    )
   ) {
     return [];
   }
@@ -154,9 +199,7 @@ const trustProblems = (workflow: unknown): string[] => {
         continue;
       }
       const condition = conditionOf(job);
-      const missing = SOURCE_CHECKS.filter(
-        ({ pattern }) => !pattern.test(condition),
-      );
+      const missing = failedSourceChecks(condition);
       if (missing.length === 0) {
         gated.add(name);
         progress = true;
@@ -174,16 +217,11 @@ const trustProblems = (workflow: unknown): string[] => {
         );
       } else if (
         RUNS_AFTER_SKIP.test(condition) &&
-        !gatedNeeds.some((need) =>
-          new RegExp(
-            `needs\\.${need}\\.(outputs\\.[\\w-]+|result)\\s*==`,
-            "u",
-          ).test(condition),
-        )
+        runsAfterSkippedGate(condition, gatedNeeds)
       ) {
         problems.set(
           name,
-          `job '${name}' can run after its gated needs were skipped: its condition uses a status function without requiring a gated job's result or output`,
+          `job '${name}' can run after its gated needs were skipped: its status function is not paired with a requirement those skipped jobs cannot meet`,
         );
       } else {
         gated.add(name);
@@ -302,6 +340,46 @@ describe("workflow_run trust", () => {
     expect(trustProblems(workflow)).toHaveLength(2);
   });
 
+  test("rejects conditions that only mention the source fields", () => {
+    const weakened = [
+      // Any one check passing admits the run.
+      GATE.split(" && ").join(" || "),
+      // A comparison that every run satisfies.
+      "github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.path != '' && github.event.workflow_run.event != ''",
+      // The repository compared with itself.
+      "github.event.workflow_run.head_repository.full_name == github.event.workflow_run.head_repository.full_name && github.event.workflow_run.path == '.github/workflows/release.yml' && github.event.workflow_run.event == 'push'",
+      // A trusted alternative that a workflow_run event can reach.
+      `github.event.workflow_run.conclusion == 'success' || (${GATE})`,
+      // Negated.
+      `!(${GATE})`,
+    ];
+    for (const condition of weakened) {
+      const workflow = {
+        on: ["workflow_run"],
+        jobs: { only: { if: condition } },
+      };
+      expect(trustProblems(workflow), condition).toHaveLength(1);
+    }
+  });
+
+  test("rejects dependents whose condition selects a skipped gate", () => {
+    for (const condition of [
+      "always() && needs.resolve.result == 'skipped'",
+      "always() && needs.resolve.outputs.should_build == ''",
+      "always() && needs.resolve.result != 'success'",
+      "failure() || needs.resolve.outputs.channel != 'prod'",
+    ]) {
+      const workflow = {
+        on: ["workflow_run"],
+        jobs: {
+          resolve: { if: GATE },
+          after: { needs: "resolve", if: condition },
+        },
+      };
+      expect(trustProblems(workflow), condition).toHaveLength(1);
+    }
+  });
+
   test("rejects unknown and cyclic needs", () => {
     const workflow = {
       on: ["workflow_run"],
@@ -310,14 +388,18 @@ describe("workflow_run trust", () => {
     expect(trustProblems(workflow)).toHaveLength(3);
   });
 
-  test("no pull_request_target job can save to a cache", () => {
+  test("no pull_request_target or workflow_run job uses a cache", () => {
     const workflows = allWorkflows().filter(
       ({ workflow }) =>
         isRecord(workflow) &&
-        triggers(workflow["on"]).includes("pull_request_target"),
+        triggers(workflow["on"]).some((event) =>
+          DEFAULT_SCOPE_EVENTS.includes(event),
+        ),
     );
-    // cla.yml and pr-lint.yml today. Fewer means the scan broke.
-    expect(workflows.length).toBeGreaterThanOrEqual(2);
+    // cla.yml, pr-lint.yml and the workflow_run workflows today.
+    expect(workflows.length).toBeGreaterThanOrEqual(
+      MINIMUM_WORKFLOW_RUN_WORKFLOWS + 1,
+    );
     const problems = workflows.flatMap(({ file, workflow }) =>
       cacheSaveProblems(workflow).map((problem) => `${file}: ${problem}`),
     );
