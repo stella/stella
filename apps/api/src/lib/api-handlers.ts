@@ -375,6 +375,7 @@ export type HandlerConfig = InputSchema &
   CapabilityAccess &
   CapabilityTransportDisposition & {
     permissions: PermissionInput;
+    accountAccess?: "standard";
     /** Finite API-owned transport deadline for a generated capability command. */
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
@@ -1032,7 +1033,7 @@ const createSafeScopedHandler = <
       });
     }
 
-    if (requiresStandardAccount(config.permissions)) {
+    if (requiresStandardAccount(config.permissions, config.accountAccess)) {
       const accountAccess = checkAccountOperation(ctx.user.email);
       if (Result.isError(accountAccess)) {
         return toSafeStatusResponse(403, {

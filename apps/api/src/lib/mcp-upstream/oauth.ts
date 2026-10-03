@@ -94,6 +94,32 @@ export type BoundOAuthMetadata = DiscoveredOAuthMetadata & {
   readonly [boundOAuthMetadata]: true;
 };
 
+/**
+ * The authorization server a connector may use in an organization. An
+ * `unconfigured` connector has no issuer an administrator or the curated
+ * catalogue approved, so its observed issuer awaits administrator review.
+ */
+export type McpIssuerBinding =
+  | {
+      type: "approved";
+      issuer: string;
+      endpointOrigins: readonly string[];
+    }
+  | { type: "unconfigured" };
+
+export type ApprovedMcpIssuerBinding = Extract<
+  McpIssuerBinding,
+  { type: "approved" }
+>;
+
+export const mcpAuthorizationApprovalRequiredError = () =>
+  new HandlerError({
+    status: 409,
+    code: "mcp_authorization_approval_required",
+    message:
+      "An administrator must approve this connector before you can connect.",
+  });
+
 export const oauthDomainsMatch = (
   firstUrl: string,
   secondUrl: string,
@@ -171,14 +197,7 @@ export const bindDiscoveredMetadata = ({
       protectedResource,
     }).some((origin) => !confirmedEndpointOrigins.includes(origin))
   ) {
-    return Result.err(
-      new HandlerError({
-        status: 409,
-        code: "mcp_authorization_approval_required",
-        message:
-          "An administrator must approve this connector before you can connect.",
-      }),
-    );
+    return Result.err(mcpAuthorizationApprovalRequiredError());
   }
   return Result.ok({
     [boundOAuthMetadata]: true,
@@ -208,23 +227,11 @@ const validateResourceBinding = (
 
 export const validateApprovedOAuthIssuer = (
   metadata: DiscoveredOAuthMetadata,
-  approvedIssuer: string | null,
-): Result<void, HandlerError<409>> => {
-  if (
-    approvedIssuer !== null &&
-    metadata.authorizationServer.issuer !== approvedIssuer
-  ) {
-    return Result.err(
-      new HandlerError({
-        status: 409,
-        code: "mcp_authorization_approval_required",
-        message:
-          "An administrator must approve this connector before you can connect.",
-      }),
-    );
-  }
-  return Result.ok(undefined);
-};
+  binding: ApprovedMcpIssuerBinding,
+): Result<void, HandlerError<409>> =>
+  metadata.authorizationServer.issuer === binding.issuer
+    ? Result.ok(undefined)
+    : Result.err(mcpAuthorizationApprovalRequiredError());
 
 type OAuthDiscoveryDependencies = {
   signal?: AbortSignal;

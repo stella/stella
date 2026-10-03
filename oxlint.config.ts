@@ -302,6 +302,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-direct-property-table-write.fixture.ts", [
     "no-direct-property-table-write/no-direct-property-table-write",
   ]),
+  fixtureRuleOverride("no-direct-field-write.fixture.ts", [
+    "no-direct-field-write/no-direct-field-write",
+  ]),
   fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
     "no-direct-pdf-save/no-direct-pdf-save",
   ]),
@@ -933,6 +936,7 @@ export default defineConfig({
     "scanned-file-boundary/scanned-file-boundary": "error",
     "no-raw-zip-load/no-raw-zip-load": "error",
     "no-direct-property-table-write/no-direct-property-table-write": "error",
+    "no-direct-field-write/no-direct-field-write": "error",
     "no-direct-legislation-revision-write/no-direct-legislation-revision-write":
       "error",
     "no-unvalidated-clause-write/no-unvalidated-clause-write": "error",
@@ -1310,6 +1314,7 @@ export default defineConfig({
     "./.oxlint-plugins/scanned-file-boundary.ts",
     "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
+    "./.oxlint-plugins/no-direct-field-write.ts",
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
     "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
@@ -1324,6 +1329,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-contained-handler.ts",
     "./.oxlint-plugins/suppression-hygiene.ts",
     "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
+    "./.oxlint-plugins/no-array-built-typebox-union.ts",
     "./.oxlint-plugins/tagged-error-requires-message.ts",
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
     "./.oxlint-plugins/no-bare-jsonb-cast.ts",
@@ -2299,6 +2305,18 @@ export default defineConfig({
       ],
       rules: {
         "no-known-value-widening/no-known-value-widening": "error",
+      },
+    },
+    {
+      // A union over a computed array has a non-tuple type, so its `Static`
+      // collapses while the runtime schema still validates.
+      files: [
+        "apps/api/src/**/*.ts",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-array-built-typebox-union.fixture.ts",
+      ],
+      rules: {
+        "no-array-built-typebox-union/no-array-built-typebox-union": "error",
       },
     },
     {

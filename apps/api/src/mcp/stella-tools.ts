@@ -2243,7 +2243,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       }
       return {
         exhausted: false as const,
-        result: await search(body, caseLawPublicReadDb, observer),
+        result: await search({
+          body,
+          caseLawDb: caseLawPublicReadDb,
+          observer,
+        }),
       };
     },
   });

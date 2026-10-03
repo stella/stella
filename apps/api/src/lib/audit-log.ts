@@ -293,6 +293,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   usage_allocation: "other",
   usage_entitlement: "other",
   usage_event: "other",
+  usage_provider_event: "other",
   desktop_edit_session: "other",
   pdf_signing_session: "other",
   expense: "other",
