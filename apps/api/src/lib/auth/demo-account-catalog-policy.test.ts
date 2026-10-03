@@ -438,6 +438,10 @@ const REVIEWED_LOCAL_ENDPOINT_COUNTS = {
     calls: 6,
     exported: 0,
   },
+  "apps/api/src/handlers/search/routes.ts": {
+    calls: 5,
+    exported: 0,
+  },
   "apps/api/src/handlers/workspaces/routes.ts": {
     calls: 4,
     exported: 0,

@@ -43,8 +43,7 @@ export const createOtpAccountBudget = (
   reserve: async (email: string) => {
     const normalizedEmail = email.trim().toLowerCase();
     const isDemoAccount =
-      demoAccountEmail !== undefined &&
-      normalizedEmail === demoAccountEmail.trim().toLowerCase();
+      normalizedEmail === demoAccountEmail?.trim().toLowerCase();
     const accountBudget = isDemoAccount
       ? DEMO_OTP_ACCOUNT_BUDGET
       : OTP_ACCOUNT_BUDGET;
