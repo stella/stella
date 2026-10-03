@@ -8,7 +8,10 @@ import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citatio
 import { foldToAscii } from "@stll/text-normalize";
 
 import { COURT_PARTITION_FIELD } from "@/api/lib/legal-search/corpus-index-group-contract";
-import { readCorpusProvisionMentions } from "@/api/lib/legal-search/corpus-provision-mentions";
+import {
+  type CorpusProvisionMention,
+  readCorpusProvisionMentions,
+} from "@/api/lib/legal-search/corpus-provision-mentions";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { functionWordKey } from "@/api/lib/legal-search/morphology/function-words";
@@ -176,6 +179,53 @@ export const partitionCorpusFunctionWords = (
     return { required: tokens, dropped: [] };
   }
   return { required, dropped };
+};
+
+type PartitionCorpusQueryTokensOptions = {
+  tokens: readonly CorpusQueryToken[];
+  functionWords: ReadonlySet<string> | null;
+  queryVariant: CorpusIndexQueryVariant;
+  jurisdiction: string | undefined;
+};
+
+type PartitionCorpusQueryTokensResult = {
+  baseline: CorpusQueryPartition;
+  partition: CorpusQueryPartition;
+  profile: JurisdictionProfile | null;
+  mentions: readonly CorpusProvisionMention[];
+};
+
+/** Share original provision spans between clause construction and query reporting. */
+export const partitionCorpusQueryTokens = ({
+  tokens,
+  functionWords,
+  queryVariant,
+  jurisdiction,
+}: PartitionCorpusQueryTokensOptions): PartitionCorpusQueryTokensResult => {
+  const profile =
+    queryVariant === "provision-refs" &&
+    (jurisdiction === "SVK" || jurisdiction === "CZE")
+      ? PROVISION_CITATION_PROFILES[jurisdiction]
+      : null;
+  const mentions =
+    profile === null ? [] : readCorpusProvisionMentions(tokens, profile);
+  const baseline = partitionCorpusFunctionWords(tokens, functionWords);
+  if (mentions.length === 0 || baseline.dropped.length === 0) {
+    return { baseline, partition: baseline, profile, mentions };
+  }
+  const retained = new Set(baseline.required);
+  for (const { consumedRange } of mentions) {
+    for (const token of tokens.slice(consumedRange.start, consumedRange.end)) {
+      retained.add(token);
+    }
+  }
+  const partition = {
+    required: tokens.filter((token) => retained.has(token)),
+    dropped: tokens.flatMap((token) =>
+      token.type === "term" && !retained.has(token) ? [token.value] : [],
+    ),
+  };
+  return { baseline, partition, profile, mentions };
 };
 
 /**
@@ -508,6 +558,8 @@ type ProvisionLeafDropGroup = (typeof PROVISION_LEAF_DROP_ORDER)[number];
 
 type CorpusProvisionGroupsOptions = {
   tokens: readonly CorpusQueryToken[];
+  requiredTokens: readonly CorpusQueryToken[];
+  mentions: readonly CorpusProvisionMention[];
   profile: JurisdictionProfile;
   stemming: CorpusStemming | null;
   surfaceFields: readonly string[];
@@ -517,15 +569,17 @@ type CorpusProvisionGroupsOptions = {
 /** Reserve act alternatives before the ordinary allocator spends any leaves. */
 const corpusProvisionGroups = ({
   tokens,
+  requiredTokens,
+  mentions,
   profile,
   stemming,
   surfaceFields,
   leavesForToken,
 }: CorpusProvisionGroupsOptions) => {
-  const mentions = readCorpusProvisionMentions(tokens, profile);
   if (mentions.length === 0) {
     return null;
   }
+  const retained = new Set(requiredTokens);
   const required: CorpusQueryToken[] = [];
   const groups: {
     index: number;
@@ -542,7 +596,9 @@ const corpusProvisionGroups = ({
       if (token === undefined) {
         return panic("Corpus provision token index is missing");
       }
-      required.push(token);
+      if (retained.has(token)) {
+        required.push(token);
+      }
       continue;
     }
     const typed = tokens
@@ -732,14 +788,19 @@ export const corpusFreeTextClause = (
     slovakLegacyStemFields = [],
   }: CorpusFreeTextOptions = {},
 ): string | null => {
-  const partition = partitionCorpusFunctionWords(
-    tokenizeCorpusFreeText(text),
-    functionWords,
+  const tokens = tokenizeCorpusFreeText(text);
+  const { baseline, partition, profile, mentions } = partitionCorpusQueryTokens(
+    {
+      tokens,
+      functionWords,
+      queryVariant,
+      jurisdiction,
+    },
   );
   const partitionRequired =
     match === "any"
-      ? partition.required.slice(0, CORPUS_QUERY_LEAF_BUDGET)
-      : partition.required;
+      ? baseline.required.slice(0, CORPUS_QUERY_LEAF_BUDGET)
+      : baseline.required;
   if (partitionRequired.length === 0) {
     return null;
   }
@@ -756,14 +817,12 @@ export const corpusFreeTextClause = (
     },
     typed: quoteCorpusValue(token.value),
   });
-  const profile =
-    jurisdiction === "SVK" || jurisdiction === "CZE"
-      ? PROVISION_CITATION_PROFILES[jurisdiction]
-      : null;
   const provisionGroups =
-    queryVariant === "provision-refs" && profile !== null
+    profile !== null
       ? corpusProvisionGroups({
-          tokens: partitionRequired,
+          tokens,
+          requiredTokens: partition.required,
+          mentions,
           profile,
           stemming,
           surfaceFields,

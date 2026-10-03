@@ -171,7 +171,7 @@ const readGazetteAct = ({
   };
 };
 
-/** Reads required tokens only; a quoted phrase is never rewritten. */
+/** Reads original query tokens; a quoted phrase retains its own boundary. */
 export const readCorpusProvisionMentions = (
   tokens: readonly CorpusQueryToken[],
   profile: JurisdictionProfile,

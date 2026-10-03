@@ -47,6 +47,10 @@ const queryPart = fc.oneof(
     "§ 451 Občianskeho zákonníka",
     "§ 451 obcianskeho zakonnika",
     "§ 106 ods. 1 OZ",
+    "§ 106 ods. 1 písm. a OZ",
+    "§ 1 zákona o priestupkoch",
+    "§ 106 odst. 1 písm. a OZ",
+    "§ 1 zákona o azylu",
     "§ 2079 občanského zákoníku",
     "§ 2079 NOZ",
     "§ 451 Občianskeho súdneho poriadku",
@@ -98,12 +102,8 @@ test(
               queryVariant: "off",
             }),
           ).toBe(baseline);
-          const { required } = partitionCorpusFunctionWords(
-            tokenizeCorpusFreeText(text),
-            clauseOptions.functionWords,
-          );
           const mentions = readCorpusProvisionMentions(
-            required,
+            tokenizeCorpusFreeText(text),
             PROVISION_CITATION_PROFILES[jurisdiction],
           );
           if (mentions.length === 0) {

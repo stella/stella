@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
@@ -928,6 +929,63 @@ test("provision subdivisions and act lead-ins stop being separate requirements",
   ).toBe(
     '("106" AND ("OZ" OR "Občiansky zákonník" OR "Občianskeho zákonníka" OR "Občianskom zákonníku" OR "obč zák" OR "40 1964"))',
   );
+});
+
+test.each([
+  { jurisdiction: "SVK", language: "sk", query: "§ 1 zákona o priestupkoch" },
+  { jurisdiction: "CZE", language: "cs", query: "§ 1 zákona o azylu" },
+  { jurisdiction: "SVK", language: "sk", query: "§ 106 ods. 1 písm. a OZ" },
+  { jurisdiction: "CZE", language: "cs", query: "§ 106 odst. 1 písm. a OZ" },
+] as const)(
+  "provision spans retain function words under the production policy (%j)",
+  ({ jurisdiction, language, query }) => {
+    const options = { jurisdiction, queryVariant: "provision-refs" } as const;
+    const clause = corpusFreeTextClause(query, {
+      ...options,
+      functionWords: functionWordsFor(language),
+    });
+    expect(clause).toBe(corpusFreeTextClause(query, options));
+    expect(clause).not.toBe(
+      corpusFreeTextClause(query, {
+        jurisdiction,
+        functionWords: functionWordsFor(language),
+      }),
+    );
+  },
+);
+
+test("profile spellings form act groups with production function-word sets", () => {
+  for (const jurisdiction of ["CZE", "SVK"] as const) {
+    const profile = PROVISION_CITATION_PROFILES[jurisdiction];
+    const functionWords = functionWordsFor(
+      jurisdiction === "CZE" ? "cs" : "sk",
+    );
+    for (const entry of [...profile.titles, ...profile.aliases]) {
+      if ("unit" in entry && entry.unit === "article") {
+        continue;
+      }
+      for (const spelling of entry.spellings) {
+        const clause =
+          corpusFreeTextClause(`na § 451 ${spelling} a škody`, {
+            jurisdiction,
+            queryVariant: "provision-refs",
+            functionWords,
+          }) ?? panic("Profile spellings must produce a clause");
+        const groups = clauseGroups(clause);
+        expect(groups).toHaveLength(3);
+        expect(groups.at(0)).toBe('"451"');
+        expect(groups.at(1)).toContain(
+          quoteCorpusValue(
+            tokenizeCorpusFreeText(spelling)
+              .map(({ value }) => value)
+              .join(" "),
+          ),
+        );
+        expect(groups.at(1)).toContain(" OR ");
+        expect(groups.at(2)).toBe('"škody"');
+      }
+    }
+  }
 });
 
 test("tight act budgets drop predecessor numbers before headnote stems and current act numbers", () => {

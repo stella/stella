@@ -275,3 +275,37 @@ test.each([
     ).toBe("off");
   },
 );
+
+test.each([
+  { country: "SVK", query: "§ 1 zákona o priestupkoch" },
+  { country: "CZE", query: "§ 1 zákona o azylu" },
+  { country: "SVK", query: "§ 106 ods. 1 písm. a OZ" },
+  { country: "CZE", query: "§ 106 odst. 1 písm. a OZ" },
+] as const)(
+  "reported provision queries retain their clause on replay (%j)",
+  (overrides) => {
+    const body = request({
+      ...overrides,
+      query: `na ${overrides.query} a škody`,
+    });
+    const interpretation = interpretDecisionQuery({
+      body,
+      intent: parseDecisionQuery(body.query, {
+        grammar: decisionDocketGrammarForCountry(body.country),
+      }),
+      configuredVariant: "provision-refs",
+    });
+    expect(interpretation.droppedFunctionWords).toEqual(["na", "a"]);
+    expect(interpretation.queryUsed).toContain(
+      overrides.query.includes(" o ") ? " o " : "písm a",
+    );
+    const options = {
+      jurisdiction: body.country,
+      queryVariant: interpretation.queryVariant,
+      functionWords: interpretation.functionWords,
+    };
+    expect(corpusFreeTextClause(interpretation.queryUsed, options)).toBe(
+      corpusFreeTextClause(body.query, options),
+    );
+  },
+);

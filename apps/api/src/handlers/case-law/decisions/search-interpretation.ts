@@ -11,7 +11,7 @@ import { caseLawSearchWarnings } from "@/api/lib/case-law/search-warnings";
 import { caseLawQueryLanguage } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
   formatCorpusQueryTokens,
-  partitionCorpusFunctionWords,
+  partitionCorpusQueryTokens,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
 import {
@@ -156,12 +156,17 @@ export const interpretDecisionQuery = ({
           language: body.language,
         }),
       );
-  const { dropped, required } = partitionCorpusFunctionWords(
-    tokenizeCorpusFreeText(body.query),
+  const queryVariant = corpusQueryVariant({ configuredVariant, verbatim });
+  const {
+    partition: { dropped, required },
+  } = partitionCorpusQueryTokens({
+    tokens: tokenizeCorpusFreeText(body.query),
     functionWords,
-  );
+    queryVariant,
+    jurisdiction: body.country,
+  });
   return {
-    queryVariant: corpusQueryVariant({ configuredVariant, verbatim }),
+    queryVariant,
     // The reader's own string wherever nothing was dropped, so a search that
     // changed nothing reports itself back byte for byte rather than a
     // re-tokenised spelling of itself.
