@@ -60,7 +60,9 @@ describe.serial("legislation revision write ownership", () => {
 
   for (const [owner, fields] of Object.entries(LEGISLATION_PARTIAL_WRITERS)) {
     test(`confines ${owner} to its declared columns`, async () => {
-      const allowed = fields.map((field) => `${field}: value`).join(", ");
+      const allowed = fields
+        .map((field) => `${String(field)}: value`)
+        .join(", ");
       expect(
         await lint(
           [
