@@ -83,7 +83,9 @@ export const readZipIndex = (bytes: Uint8Array): ZipIndex => {
 
   const entryCount = view.getUint16(eocd + 10, true);
   const entries: ZipEntry[] = [];
-  let offset = view.getUint32(eocd + 16, true);
+  const centralStart = view.getUint32(eocd + 16, true);
+  const spans: { start: number; end: number }[] = [];
+  let offset = centralStart;
   for (let index = 0; index < entryCount; index++) {
     if (
       offset + CENTRAL_HEADER_BYTES > length ||
@@ -112,6 +114,25 @@ export const readZipIndex = (bytes: Uint8Array): ZipIndex => {
     if (dataStart + compressedSize > length) {
       return { type: "malformed" };
     }
+    const flags = view.getUint16(offset + 8, true);
+    let end = dataStart + compressedSize;
+    if (Math.floor(flags / 8) % 2 === 1) {
+      if (end + 12 > centralStart) {
+        return { type: "malformed" };
+      }
+      const descriptor =
+        view.getUint32(end, true) === 0x08_07_4b_50 ? end + 4 : end;
+      if (
+        descriptor + 12 > centralStart ||
+        view.getUint32(descriptor + 4, true) !== compressedSize ||
+        view.getUint32(descriptor + 8, true) !==
+          view.getUint32(offset + 24, true)
+      ) {
+        return { type: "malformed" };
+      }
+      end = descriptor + 12;
+    }
+    spans.push({ start: localOffset, end });
     entries.push({
       name: Buffer.from(bytes.subarray(nameStart, nameStart + nameLength)),
       flags: view.getUint16(offset + 8, true),
@@ -120,6 +141,20 @@ export const readZipIndex = (bytes: Uint8Array): ZipIndex => {
       data: bytes.subarray(dataStart, dataStart + compressedSize),
     });
     offset = nameStart + nameLength + extraLength + commentLength;
+  }
+  let nextLocal = 0;
+  for (const span of spans.toSorted((a, b) => a.start - b.start)) {
+    if (span.start !== nextLocal || span.end > centralStart) {
+      return { type: "malformed" };
+    }
+    nextLocal = span.end;
+  }
+  if (
+    nextLocal !== centralStart ||
+    offset !== eocd ||
+    eocd + EOCD_BYTES + view.getUint16(eocd + 20, true) !== length
+  ) {
+    return { type: "malformed" };
   }
   return { type: "read", entries };
 };

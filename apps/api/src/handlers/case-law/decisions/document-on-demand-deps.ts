@@ -7,15 +7,26 @@
  * handle itself is resolved on first use rather than at import.
  */
 
-import type { OnDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand";
+import {
+  recordDocumentPacingOutcome,
+  type OnDemandDocumentDeps,
+} from "@/api/handlers/case-law/decisions/document-on-demand";
+import { withImmediatePublisherSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { skCourtsDocumentFetch } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
+import type { DeferredDocumentAdapterKey } from "@/api/lib/legal-search/adapter-manifest";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
 import {
   DOCUMENT_FETCH_BUDGET_MS,
   fetchDecisionDocument,
   recordDocumentFetchRequest,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import { withTimeout } from "@/api/lib/with-timeout";
+
+const deferredDocumentFetchers = {
+  [ADAPTER_KEYS.SK_COURTS]: skCourtsDocumentFetch,
+} as const satisfies Record<DeferredDocumentAdapterKey, SkDocumentFetch>;
 
 export const onDemandDocumentDeps: OnDemandDocumentDeps = {
   recordRequest: async (decisionId) =>
@@ -26,13 +37,15 @@ export const onDemandDocumentDeps: OnDemandDocumentDeps = {
         await recordDocumentFetchRequest(decisionId, getCaseLawIngestionDb()),
       { label: "caseLaw.recordDocumentFetchRequest", timeoutMs: 15_000 },
     ),
-  fetchDocument: async (decision) =>
+  recordPacingOutcome: recordDocumentPacingOutcome,
+  withFetchBudget: async (adapterKey, operation) =>
+    await withImmediatePublisherSlot({ adapterKey, operation }),
+  fetchDocument: async (decision, adapterKey) =>
     await fetchDecisionDocument({
       decisionId: decision.id,
-      fetchDocument: skCourtsDocumentFetch,
+      fetchDocument: deferredDocumentFetchers[adapterKey],
       scopedDb: getCaseLawIngestionDb(),
-      // The unit races its own wall-clock budget; the signal aborts the
-      // download inside it, which is the part that can be cancelled.
+      // The unit races its own wall-clock budget; the signal aborts the download.
       signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
     }),
 };

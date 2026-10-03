@@ -22,7 +22,6 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPanel, DialogPopup, DialogTitle } from "@stll/ui/dialog";
 import { PencilIcon, PlusIcon, TrashIcon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 
 import {
   ManualTimeEntryForm,
@@ -32,6 +31,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import {
   useCreateTimeEntry,
@@ -109,7 +109,7 @@ export const PersonalTimesheetDay = ({
 
   const reportFailure = (error: unknown) => {
     getAnalytics().captureError(error);
-    stellaToast.add({ title: tErrors("actionFailed"), type: "error" });
+    notifyUserError(error, tErrors("actionFailed"));
   };
 
   // Each in-flight decision stays disabled until its own request settles, so

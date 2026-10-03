@@ -17,7 +17,6 @@ import {
   FramePanel,
   FrameTitle,
 } from "@stll/ui/frame";
-import { stellaToast } from "@stll/ui/toast";
 
 import { StellaMark } from "@/components/stella-mark";
 import { api } from "@/lib/api";
@@ -26,7 +25,7 @@ import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   getOauthHashFragment,
   getOauthClientDisplayName,
@@ -151,13 +150,7 @@ function ConsentPage() {
     if (result.error) {
       setHasError(true);
       setIsPending(false);
-      stellaToast.add({
-        title: userErrorFromThrown(
-          toAuthClientError(result.error),
-          t("consent.error"),
-        ),
-        type: "error",
-      });
+      notifyUserError(toAuthClientError(result.error), t("consent.error"));
       return;
     }
 
@@ -165,10 +158,7 @@ function ConsentPage() {
     if (!redirectUrl) {
       setHasError(true);
       setIsPending(false);
-      stellaToast.add({
-        title: t("consent.error"),
-        type: "error",
-      });
+      notifyUserError(undefined, t("consent.error"));
       return;
     }
 

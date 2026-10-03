@@ -14,7 +14,7 @@ import {
   ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { auditDetailsForResource } from "@/api/lib/audit-log-details";
+import { auditChangesForResource } from "@/api/lib/audit-log-details";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tPaginationCursor,
@@ -264,7 +264,7 @@ export const queryAuditLogPage = async function* ({
           action: row.action,
           resourceType: row.resourceType,
           resourceId: row.resourceId,
-          changes: auditDetailsForResource(row.resourceType, row.changes),
+          changes: auditChangesForResource(row.resourceType, row.changes),
           createdAtCursor: row.createdAtCursor,
           userId: row.userId,
           actor: userMap.get(row.userId) ?? row.userId,

@@ -39,6 +39,7 @@ import { installCatalogueEntry } from "@/lib/catalogue-install";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { notifyAuthClientError } from "@/lib/errors/user-toast";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { suggestedCountryCodes as getSuggestedCountryCodes } from "@/lib/jurisdictions";
 import {
@@ -284,10 +285,7 @@ export const OnboardingWizard = () => {
 
       if (createOrgError) {
         analytics.captureError(toAuthClientError(createOrgError));
-        stellaToast.add({
-          title: createOrgError.message ?? t("errors.actionFailed"),
-          type: "error",
-        });
+        notifyAuthClientError(createOrgError, t("errors.actionFailed"));
         setIsCreating(false);
         return;
       }
@@ -300,10 +298,7 @@ export const OnboardingWizard = () => {
 
       if (setActiveError) {
         analytics.captureError(toAuthClientError(setActiveError));
-        stellaToast.add({
-          title: setActiveError.message ?? t("errors.actionFailed"),
-          type: "error",
-        });
+        notifyAuthClientError(setActiveError, t("errors.actionFailed"));
         setIsCreating(false);
         return;
       }

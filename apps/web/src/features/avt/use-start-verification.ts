@@ -4,8 +4,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/toast";
-
 import { runSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import type { RunSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import {
@@ -14,7 +12,8 @@ import {
   latestVerificationsOptions,
 } from "@/features/avt/queries";
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors/user-safe";
+import { toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
 const RUN_ALREADY_ACTIVE_STATUS = 409;
@@ -69,9 +68,7 @@ export const useStartVerification = ({
 
     if (Result.isError(sent)) {
       // The request never got an answer (network, aborted transport).
-      stellaToast.add({
-        type: "error",
-        title: t("avt.runs.startFailed"),
+      notifyUserError(sent.error, t("avt.runs.startFailed"), {
         description: t("common.unexpectedError"),
       });
       return;
@@ -112,14 +109,7 @@ export const useStartVerification = ({
           return;
         }
       }
-      stellaToast.add({
-        type: "error",
-        title: t("avt.runs.startFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
+      notifyUserError(toAPIError(response.error), t("avt.runs.startFailed"));
       return;
     }
 

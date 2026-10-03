@@ -73,8 +73,9 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   clauseDetailOptions,
   knowledgeKeys,
@@ -318,9 +319,7 @@ export const DetailContent = ({
       return;
     }
     getAnalytics().captureError(error);
-    stellaToast.add({
-      type: "error",
-      title: t("clauses.saveFailed"),
+    notifyUserError(error, t("clauses.saveFailed"), {
       description: userErrorFromThrown(error, t("common.unexpectedError")),
     });
   };
@@ -678,9 +677,7 @@ export const ClauseHeader = ({
 
     if (response.error) {
       setTitleDraft(detail.title);
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.saveFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.saveFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -701,9 +698,7 @@ export const ClauseHeader = ({
       });
 
       if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("clauses.saveFailed"),
+        notifyUserError(toAPIError(response.error), t("clauses.saveFailed"), {
           description: userErrorMessage(
             response.error,
             t("common.unexpectedError"),
@@ -731,9 +726,7 @@ export const ClauseHeader = ({
       onDeleted();
     },
     onError: (error) => {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.deleteFailed"),
+      notifyUserError(error, t("clauses.deleteFailed"), {
         description: userErrorFromThrown(error, t("common.unexpectedError")),
       });
     },
@@ -1009,9 +1002,7 @@ const ClauseLanguageField = ({
       const response = await api.clauses({ clauseId }).post({ language: next });
 
       if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("clauses.saveFailed"),
+        notifyUserError(toAPIError(response.error), t("clauses.saveFailed"), {
           description: userErrorMessage(
             response.error,
             t("common.unexpectedError"),
@@ -1255,9 +1246,7 @@ const VariantRow = ({
     setDeleting(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.deleteFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.deleteFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -1321,9 +1310,7 @@ const VariantRow = ({
 
       const failure = first.error ?? second.error;
       if (failure) {
-        stellaToast.add({
-          type: "error",
-          title: t("clauses.saveFailed"),
+        notifyUserError(toAPIError(failure), t("clauses.saveFailed"), {
           description: userErrorMessage(failure, t("common.unexpectedError")),
         });
         return;
@@ -1529,9 +1516,7 @@ const VariantFormDialogBody = ({
     setSaving(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.saveFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.saveFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -1647,9 +1632,7 @@ export const HistoryTab = ({
     setLoading(false);
 
     if (error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.loadFailed"),
+      notifyUserError(error, t("clauses.loadFailed"), {
         description: userErrorMessage(error, t("common.unexpectedError")),
       });
       setSelectedId(null);

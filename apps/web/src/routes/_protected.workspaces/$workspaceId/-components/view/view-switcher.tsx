@@ -46,7 +46,6 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { MenuPreviewLayout } from "@stll/ui/preview-pane";
-import { stellaToast } from "@stll/ui/toast";
 import { WorkspaceViewSwitcher } from "@stll/workspace-ui/view-switcher";
 
 import {
@@ -60,6 +59,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import type { ViewLayout, ViewLayoutType } from "@/lib/api-contract";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { WorkspaceView } from "@/lib/types";
 import {
   useConvertView,
@@ -202,11 +202,8 @@ export const ViewSwitcher = ({
     reorderViews.mutate(
       { viewIds: [...reordered, ...hiddenViewIds] },
       {
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.failedToReorderViews"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.failedToReorderViews"));
         },
       },
     );
@@ -255,11 +252,8 @@ export const ViewSwitcher = ({
                     onSuccess: () => {
                       onViewChange(viewId);
                     },
-                    onError: () => {
-                      stellaToast.add({
-                        title: t("errors.failedToCreateView"),
-                        type: "error",
-                      });
+                    onError: (error) => {
+                      notifyUserError(error, t("errors.failedToCreateView"));
                     },
                   },
                 );
@@ -463,11 +457,8 @@ const ViewRenameEditor = ({
       { viewId: id, name: trimmed },
       {
         onSuccess: onStop,
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.failedToRenameView"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.failedToRenameView"));
           onStop();
           setRenameValue(name);
         },
@@ -537,11 +528,8 @@ const useViewActionsMenu = ({
         layout: view.layout,
       },
       {
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.failedToDuplicateView"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.failedToDuplicateView"));
         },
       },
     );
@@ -551,11 +539,8 @@ const useViewActionsMenu = ({
     deleteView.mutate(
       { viewId },
       {
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.failedToDeleteView"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.failedToDeleteView"));
         },
       },
     );
@@ -614,11 +599,11 @@ const useViewActionsMenu = ({
                             targetType: layoutType,
                           },
                           {
-                            onError: () => {
-                              stellaToast.add({
-                                title: t("errors.failedToChangeViewType"),
-                                type: "error",
-                              });
+                            onError: (error) => {
+                              notifyUserError(
+                                error,
+                                t("errors.failedToChangeViewType"),
+                              );
                             },
                           },
                         );

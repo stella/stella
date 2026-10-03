@@ -169,6 +169,9 @@ const benchmarkPassages = (family: Family): Passage[] =>
     });
   }).flat();
 
+const documentId = (key: number) =>
+  `00000000-0000-4000-8000-${key.toString(16).padStart(12, "0")}`;
+
 const mutationBase = () =>
   envBase.CORPUS_INDEX_Q09_ENDPOINT ??
   panic("missing engine mutation endpoint");
@@ -230,7 +233,30 @@ const search = async ({
     json,
   };
 };
-const keys = (result: Awaited<ReturnType<typeof search>>) =>
+// bun-types declares `.rejects` matchers as void, so awaiting them trips
+// type-aware lint; capture the rejection and assert on it directly.
+const rejected = (error: unknown) => error;
+
+const multiSearch = async (requests: readonly SearchOptions[]) => {
+  const raw = await request(`${searchBase()}/api/v1/_elastic/_msearch`, {
+    method: "POST",
+    headers: { "content-type": "application/x-ndjson" },
+    body: `${requests
+      .flatMap(({ query, size = 100, aggs, sort = ["_score"] }) => [
+        JSON.stringify({ index: INDEX_ID }),
+        JSON.stringify({ query, size, sort, aggs, track_total_hits: true }),
+      ])
+      .join("\n")}\n`,
+  });
+  const { responses } = v.parse(
+    v.object({ responses: v.array(v.unknown()) }),
+    JSON.parse(raw.body),
+  );
+  expect(responses).toHaveLength(requests.length);
+  return responses;
+};
+
+const keys = (result: v.InferOutput<typeof SearchSchema>) =>
   result.hits.hits
     .map(({ _source }) => _source.decision_key)
     .toSorted((a, b) => a - b);
@@ -410,9 +436,11 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
       INDEX_ID,
     );
     const canonicalFields = config.doc_mapping.field_mappings.filter(
-      ({ name }) => name === "text" || name === "text_stem",
+      ({ name }) =>
+        name === "text" || name === "text_stem" || name === "document_id",
     );
     expect(canonicalFields.map(({ name }) => name).toSorted()).toEqual([
+      "document_id",
       "text",
       "text_stem",
     ]);
@@ -461,7 +489,7 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
     await request(`${mutationBase()}/api/v1/${INDEX_ID}/ingest?commit=force`, {
       method: "POST",
       headers: { "content-type": "application/x-ndjson" },
-      body: `${documents.map((row) => JSON.stringify({ ...row, text_stem: stemCorpusText(row.text, "sk") })).join("\n")}\n`,
+      body: `${documents.map((row) => JSON.stringify({ ...row, document_id: documentId(row.decision_key), text_stem: stemCorpusText(row.text, "sk") })).join("\n")}\n`,
     });
     const census = await search({ query: { match_all: {} }, size: 0 });
     expect(census.hits.total.value).toBe(documents.length);
@@ -485,6 +513,152 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
       method: "DELETE",
     });
   }, TIMEOUT_MS);
+
+  test("multi-search preserves request order and standalone hits, including numeric term filters", async () => {
+    const requests = [
+      { query: { query_string: { query: "decision_key:40" } } },
+      {
+        query: {
+          bool: {
+            must: [termClause("alpha")],
+            filter: [{ terms: { decision_key: [13, 17, 20, 41] } }],
+          },
+        },
+      },
+      { query: { query_string: { query: "decision_key:41" } } },
+      { query: { query_string: { query: "decision_key:999999" } } },
+    ].map(({ query }) => ({ query, sort: ["passage_key"], size: 50 }));
+    const expectedKeys = [[40], [13, 17, 20], [41], []];
+    const standalone = [];
+    for (const [position, input] of requests.entries()) {
+      const result = await search(input);
+      expect(keys(result)).toEqual(
+        expectedKeys.at(position) ?? panic("missing expected keys"),
+      );
+      standalone.push(result);
+    }
+    // Reverse and duplicate inputs so index grouping or result compaction
+    // cannot accidentally satisfy the positional contract.
+    for (const order of [
+      [0, 1, 2, 3],
+      [3, 2, 1, 0, 1],
+    ]) {
+      const batch = await multiSearch(
+        order.map(
+          (position) => requests.at(position) ?? panic("missing request"),
+        ),
+      );
+      for (const [position, response] of batch.entries()) {
+        const requestPosition = order.at(position) ?? panic("missing position");
+        const expected =
+          standalone.at(requestPosition) ?? panic("missing standalone result");
+        const result = v.parse(SearchSchema, response);
+        expect(result.timed_out).toBe(false);
+        expect(result._shards.failed).toBe(0);
+        expect(result.hits).toEqual(expected.hits);
+      }
+    }
+  });
+
+  test("multi-search isolates an unknown-field error without dropping successful items", async () => {
+    const first = { query: { query_string: { query: "decision_key:40" } } };
+    const last = { query: { query_string: { query: "decision_key:41" } } };
+    const invalid = {
+      query: { query_string: { query: "missing_contract_field:alpha" } },
+    };
+    for (const inputs of [
+      [first, invalid, last],
+      [invalid, first, last],
+      [first, last, invalid],
+    ]) {
+      const responses = await multiSearch(inputs);
+      for (const [position, input] of inputs.entries()) {
+        const response = responses.at(position);
+        if (input === invalid) {
+          const failure = v.parse(
+            v.object({
+              status: v.literal(400),
+              error: v.object({ reason: v.string() }),
+            }),
+            response,
+          );
+          expect(failure.error.reason).toContain("missing_contract_field");
+          continue;
+        }
+        const result = v.parse(SearchSchema, response);
+        const standalone = await search(input);
+        expect(result.timed_out).toBe(false);
+        expect(result._shards.failed).toBe(0);
+        expect(result.hits).toEqual(standalone.hits);
+        expect(keys(result)).toEqual(input === first ? [40] : [41]);
+      }
+    }
+  });
+
+  test("multi-search rejects malformed query bodies for the whole batch", async () => {
+    const rejection = await multiSearch([
+      { query: { query_string: { query: "decision_key:40" } } },
+      { query: { bool: "invalid" } },
+    ]).then(() => panic("multi-search accepted a malformed body"), rejected);
+    expect(rejection).toMatchObject({
+      status: 400,
+      message: expect.stringContaining("failed to parse request body"),
+    });
+  });
+
+  test("multi-search rejects payloads above the stock one-MiB limit", async () => {
+    const rejection = await request(
+      `${searchBase()}/api/v1/_elastic/_msearch`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/x-ndjson" },
+        body: " ".repeat(1024 * 1024 + 1),
+      },
+    ).then(() => panic("multi-search accepted an oversized payload"), rejected);
+    expect(rejection).toMatchObject({ status: 413 });
+  });
+
+  test("multi-search accepts six term-filtered reads with two thousand document IDs", async () => {
+    const selected = [13, 17, 20];
+    const ids = [
+      ...selected.map(documentId),
+      ...Array.from({ length: 1997 }, (_, position) =>
+        documentId(100_000 + position),
+      ),
+    ];
+    expect(new Set(ids).size).toBe(2000);
+    const requests = ["alpha", "beta", "gamma", "gamma", "beta", "alpha"].map(
+      (term) => ({
+        query: {
+          bool: {
+            must: [termClause(term)],
+            filter: [{ terms: { document_id: ids } }],
+          },
+        },
+        size: 50,
+        sort: ["passage_key"],
+      }),
+    );
+    const batch = await multiSearch(requests);
+    const expected = [
+      [13, 17, 20],
+      [13, 17],
+      [17],
+      [17],
+      [13, 17],
+      [13, 17, 20],
+    ];
+    for (const [position, input] of requests.entries()) {
+      const result = v.parse(SearchSchema, batch.at(position));
+      const single = await search(input);
+      expect(keys(result)).toEqual(
+        expected.at(position) ?? panic("missing expected keys"),
+      );
+      expect(result.hits).toEqual(single.hits);
+      expect(result.timed_out).toBe(false);
+      expect(result._shards.failed).toBe(0);
+    }
+  });
 
   test("minimum_should_match counts distinct content groups and preserves required clauses", async () => {
     for (const minimum of [1, 2, 3]) {
