@@ -198,7 +198,7 @@
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1623,
+          "maxLength": 1756,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
@@ -928,7 +928,7 @@
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1844,
+          "maxLength": 5364,
           "description": "Opaque cursor from a previous search_legislation call"
         }
       }
@@ -3692,6 +3692,22 @@
           },
           "minItems": 1,
           "description": "Ordered clause body paragraphs; required when creating. Each paragraph carries text and optional formatting."
+        },
+        "expected_body": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "Paragraph text from the read body"
+              }
+            },
+            "required": ["text"],
+            "additionalProperties": {}
+          },
+          "minItems": 1,
+          "description": "Body from your last read; update only if the current body still matches. On conflict, read the clause again before saving."
         },
         "category_id": {
           "anyOf": [

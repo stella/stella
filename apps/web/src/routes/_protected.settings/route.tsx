@@ -45,7 +45,7 @@ import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";
-import { managementRoles } from "@/lib/organization/consts";
+import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { pageTitle } from "@/lib/page-title";
 import { isBillingSettingsAccessible } from "@/routes/_protected.settings/-components/organization/billing-settings.logic";
 
@@ -194,7 +194,7 @@ const NAV_ITEM_CLASS = cn(
 function SettingsLayout() {
   const t = useTranslations();
   const { data: role } = useQuery({ ...roleOptions, throwOnError: true });
-  const showOrganization = role !== undefined && managementRoles.includes(role);
+  const showOrganization = hasOrganizationManagementAccess(role);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });

@@ -34,12 +34,14 @@ export const tPublicCountryUnavailable = t.Object(
   {
     code: t.Literal(unavailableFields.code.literal),
     status: t.Literal(unavailableFields.status.literal),
-    country: t.Union(
-      unavailableFields.country.options.map((country) => t.Literal(country)),
+    country: t.Enum(
+      Object.fromEntries(
+        unavailableFields.country.options.map(
+          (country) => [country, country] as const,
+        ),
+      ),
     ),
-    reason: t.Union(
-      unavailableFields.reason.options.map((reason) => t.Literal(reason)),
-    ),
+    reason: t.UnionEnum(unavailableFields.reason.options),
     message: t.String(),
     hint: t.String(),
   } satisfies Record<keyof typeof unavailableFields, TSchema>,

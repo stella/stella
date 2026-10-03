@@ -1,4 +1,32 @@
+import type { TranslationKey } from "@/i18n/types";
 import type { EntityKind } from "@/lib/types";
+
+const copyToMatterErrorKeys = {
+  changed: "workspaces.copyToMatter.sourceChanged",
+  limit: "workspaces.copyToMatter.sourceVersionLimit",
+  inUse: "workspaces.copyToMatter.sourceInUse",
+  referenced: "workspaces.copyToMatter.sourceReferenced",
+  fallback: "errors.actionFailed",
+} as const satisfies Record<string, TranslationKey>;
+
+export const getCopyToMatterErrorKey = (value: unknown) => {
+  if (typeof value !== "object" || value === null || !("code" in value)) {
+    return copyToMatterErrorKeys.fallback;
+  }
+
+  switch (value.code) {
+    case "entity_transfer_source_changed":
+      return copyToMatterErrorKeys.changed;
+    case "entity_transfer_source_limit":
+      return copyToMatterErrorKeys.limit;
+    case "entity_transfer_source_in_use":
+      return copyToMatterErrorKeys.inUse;
+    case "entity_transfer_source_referenced":
+      return copyToMatterErrorKeys.referenced;
+    default:
+      return copyToMatterErrorKeys.fallback;
+  }
+};
 
 export type CopyToMatterEntity = {
   entityId: string;

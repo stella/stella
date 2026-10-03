@@ -476,6 +476,8 @@ const spendLeafBudget = (tokens: readonly TokenLeaves[]): BudgetedToken[] => {
 const SLOVAK_LEGACY_STEM_FIELDS = new Set(["text_stem", "headnote_stem"]);
 
 export type CorpusFreeTextOptions = {
+  /** Whether content tokens are all required or ranked by coverage. */
+  match?: "all" | "any" | undefined;
   /** Case-law SVK compatibility; paid only from baseline allocation headroom. */
   slovakLegacyStemFields?: readonly string[] | undefined;
   expand?: CorpusTermExpander | undefined;
@@ -535,6 +537,7 @@ export type CorpusFreeTextOptions = {
 export const corpusFreeTextClause = (
   text: string,
   {
+    match = "all",
     expand = noTermExpansion,
     stemming = null,
     surfaceFields = [],
@@ -544,10 +547,14 @@ export const corpusFreeTextClause = (
     slovakLegacyStemFields = [],
   }: CorpusFreeTextOptions = {},
 ): string | null => {
-  const { required } = partitionCorpusFunctionWords(
+  const partition = partitionCorpusFunctionWords(
     tokenizeCorpusFreeText(text),
     functionWords,
   );
+  const required =
+    match === "any"
+      ? partition.required.slice(0, CORPUS_QUERY_LEAF_BUDGET)
+      : partition.required;
   if (required.length === 0) {
     return null;
   }
@@ -607,7 +614,7 @@ export const corpusFreeTextClause = (
     return `(${[token.typed, ...extras].join(" OR ")})`;
   });
 
-  return `(${clauses.join(" AND ")})`;
+  return `(${clauses.join(match === "all" ? " AND " : " OR ")})`;
 };
 
 /**

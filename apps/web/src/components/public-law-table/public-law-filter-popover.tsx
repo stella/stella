@@ -17,6 +17,7 @@ import { cn } from "@stll/ui/utils";
 import {
   FACET_SECTION_LIMIT,
   facetSectionView,
+  formatFacetCount,
 } from "@/components/public-law-table/public-law-facets.logic";
 import type {
   FacetItem,
@@ -204,9 +205,9 @@ export const FacetOptions = ({
                 {item.label}
               </BidiText>
               {item.count !== null && (
-                <span className="text-muted-foreground text-2xs shrink-0 tabular-nums">
-                  {format.number(item.count)}
-                </span>
+                <bdi className="text-muted-foreground text-2xs shrink-0 tabular-nums">
+                  {formatFacetCount(item, format.number)}
+                </bdi>
               )}
             </label>
           </li>

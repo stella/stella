@@ -1,4 +1,5 @@
-// parser-output-unchanged: opt into publisher retries; fetched response parsing is unchanged.
+// parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
@@ -41,6 +42,7 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import {
   fetchPublisher,
@@ -67,6 +69,7 @@ import {
 import {
   ecjFormexDocuments,
   encodeEcjFormexArchive,
+  FORMEX_ARCHIVE_PREFIX,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-parts";
 import {
   listEcjNoticeFields,
@@ -93,8 +96,16 @@ import {
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import {
+  META_URL_DIAGNOSTICS,
+  rehydrateMetadataUrls,
+} from "@/api/lib/legal-search/metadata-urls";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { EU_ECJ_METADATA_URL_SCHEMA } from "./eu-ecj.metadata-urls";
 
 /**
  * European Court of Justice (CJEU) adapter.
@@ -494,6 +505,7 @@ const queryDecisions = async ({
   const query = buildListingQuery({ dateFrom, dateTo, celexFilter });
 
   const response = await fetchPublisher(SPARQL_URL, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     method: "POST",
@@ -801,6 +813,7 @@ const readDocumentResponse = async ({
 }: ReadDocumentOptions): Promise<ManifestationRead> => {
   const url = `${CELLAR_CONTENT_BASE}/${resource}`;
   const response = await fetchPublisher(url, {
+    fetchStage: "document",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     signal,
@@ -1357,37 +1370,98 @@ const presentEntries = (
   );
 
 /** What the notice states about this variant, as the row keeps it. */
-const noticeMetadata = (facts: EcjNoticeFacts): Record<string, unknown> =>
-  presentEntries({
-    noticeCelex: facts.celex,
-    noticeEcli: facts.ecli,
-    noticeDecisionDates: facts.decisionDate,
-    noticeCourtCodes: facts.courtCode,
-    lodgedOn: facts.lodgedOn,
-    form: facts.form,
-    celexType: facts.celexType,
-    recordVersion: facts.recordVersion,
-    referringCountry: facts.referringCountry,
-    procedureLanguage: facts.procedureLanguage,
-    procedureType: facts.procedureType,
-    observations: facts.observations,
-    nationalJudgment: facts.nationalJudgment,
-    interprets: facts.interprets,
-    doctrine: facts.doctrine,
-    subjectMatter: facts.subjectMatter,
-    caseLawSubjectMatter: facts.caseLawSubjectMatter,
-    caseLawDirectory: facts.caseLawDirectory,
-    caseLawDirectoryNew: facts.caseLawDirectoryNew,
-    publishedInReports: facts.publishedInReports,
-    reportsReference: facts.reportsReference,
-    ojNotice: facts.ojNotice,
-    dossier: facts.dossier,
-    caseEventWorks: facts.caseEventWorks,
-    abstractCelex: facts.abstractCelex,
-    title: facts.title,
-    caseIdentifier: facts.caseIdentifier,
-    manifestations: facts.manifestations,
+const noticeMetadata = (facts: EcjNoticeFacts) => ({
+  noticeCelex: facts.celex,
+  noticeEcli: facts.ecli,
+  noticeDecisionDates: facts.decisionDate,
+  noticeCourtCodes: facts.courtCode,
+  lodgedOn: facts.lodgedOn,
+  form: facts.form,
+  celexType: facts.celexType,
+  recordVersion: facts.recordVersion,
+  referringCountry: facts.referringCountry,
+  procedureLanguage: facts.procedureLanguage,
+  procedureType: facts.procedureType,
+  observations: facts.observations,
+  nationalJudgment: facts.nationalJudgment,
+  interprets: facts.interprets,
+  doctrine: facts.doctrine,
+  subjectMatter: facts.subjectMatter,
+  caseLawSubjectMatter: facts.caseLawSubjectMatter,
+  caseLawDirectory: facts.caseLawDirectory,
+  caseLawDirectoryNew: facts.caseLawDirectoryNew,
+  publishedInReports: facts.publishedInReports,
+  reportsReference: facts.reportsReference,
+  ojNotice: facts.ojNotice,
+  dossier: facts.dossier,
+  caseEventWorks: facts.caseEventWorks,
+  abstractCelex: facts.abstractCelex,
+  title: facts.title,
+  caseIdentifier: facts.caseIdentifier,
+  manifestations: facts.manifestations.map((manifestation) => ({
+    ...manifestation,
+    uri: toMetadataUrl(manifestation.uri, "decoded"),
+  })),
+});
+
+/** Rebuild URL diagnostics from this envelope, without carrying a saved sidecar. */
+const ecjPublisherMetadata = (
+  parts: SourceRawParts,
+  facts: EcjNoticeFacts | undefined,
+) => {
+  const rawBinding = parts[RAW_PART.LISTING];
+  const parsedBinding =
+    rawBinding === undefined
+      ? undefined
+      : Result.try({
+          try: (): unknown => JSON.parse(rawBinding),
+          catch: () => undefined,
+        }).unwrapOr(undefined);
+  // Historical listings selected four variables; each stated URL owns its
+  // replay address even when another current listing variable was not stored.
+  const manifestation =
+    isRecord(parsedBinding) && isSparqlBinding(parsedBinding["manifestation"])
+      ? parsedBinding["manifestation"]
+      : undefined;
+  const language =
+    isRecord(parsedBinding) && isSparqlBinding(parsedBinding["language"])
+      ? parsedBinding["language"]
+      : undefined;
+  const cdmType =
+    isRecord(parsedBinding) && isSparqlBinding(parsedBinding["type"])
+      ? parsedBinding["type"]
+      : undefined;
+  const binding = {
+    ...(manifestation === undefined
+      ? {}
+      : {
+          manifestationUri: toMetadataUrl(
+            manifestation.value,
+            "transport-json",
+          ),
+        }),
+    ...(language === undefined
+      ? {}
+      : { languageUri: toMetadataUrl(language.value, "transport-json") }),
+    ...(cdmType === undefined
+      ? {}
+      : { cdmType: toMetadataUrl(cdmType.value, "transport-json") }),
+  };
+  const source = checkedDecisionMetadata({
+    ...binding,
+    ...(facts === undefined ? {} : noticeMetadata(facts)),
   });
+  return {
+    metadata: presentEntries(
+      checkedDecisionMetadata(source, EU_ECJ_METADATA_URL_SCHEMA),
+    ),
+    ownedUrlKeys: new Set(
+      Object.keys(source).filter((key) =>
+        Object.hasOwn(EU_ECJ_METADATA_URL_SCHEMA, key),
+      ),
+    ),
+  };
+};
 
 /**
  * Build the ingestion result for one stored envelope.
@@ -1447,66 +1521,87 @@ const ecjDecisionFromParts = ({
   const judges = facts === undefined ? [] : noticeJudges(facts);
   const converterVersion = ecjConverterVersion(html);
 
-  return {
-    caseNumber,
-    sourceDocumentId: ecjSourceDocumentId(celex, language),
-    // What every row this adapter wrote before it stated an id was stored
-    // under: one row per docket and language, carrying the EUR-Lex URL of
-    // whichever of the docket's documents was written last. That URL names one
-    // CELEX in one language exactly, so it re-keys that row to the document it
-    // was built from rather than inserting a second one beside it; the
-    // docket's other documents find no null-id row and are inserted, which is
-    // the collapse being undone.
-    ...(sourceUrl === undefined ? {} : { legacySourceUrls: [sourceUrl] }),
-    ecli,
-    court: statedCourt,
-    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.EU_ECJ].country,
-    language,
-    decisionDate,
-    decisionType,
-    fulltext,
-    sourceUrl,
-    documentUrl,
-    // Absent, not empty, where no notice was read: an empty list is a
-    // publisher saying the decision names nobody, and a row stored before the
-    // notice was fetched would have its bench replaced by that statement.
-    ...(judges.length === 0 ? {} : { judges }),
-    ...(facts === undefined || facts.citedWorks.length === 0
-      ? {}
-      : { publisherCitedCases: facts.citedWorks }),
-    metadata: checkedDecisionMetadata({
-      ...metadata,
-      ...(facts === undefined ? {} : noticeMetadata(facts)),
-      ...presentEntries({ publisherCaseNumber: bibliography?.caseNumber }),
-      ...(bibliography === undefined
-        ? {}
-        : presentEntries({
-            formexCelex: bibliography.celex,
-            formexEcli: bibliography.ecli,
-            formexAuthors: bibliography.author,
-            reportsSequence: bibliography.sequence,
-            reportsPages: bibliography.pages,
-          })),
-      celex,
+  const publisherMetadata = ecjPublisherMetadata(parts, facts);
+  // HTML-only legacy payloads have no publisher URL source to rebuild; their
+  // bounded stored projection keeps omitted-address diagnostics across replay.
+  const replayMetadata =
+    publisherMetadata.ownedUrlKeys.size === 0
+      ? rehydrateMetadataUrls(metadata, EU_ECJ_METADATA_URL_SCHEMA)
+      : checkedDecisionMetadata(
+          Object.fromEntries(
+            Object.entries(metadata).filter(
+              ([key]) =>
+                key !== META_URL_DIAGNOSTICS &&
+                !publisherMetadata.ownedUrlKeys.has(key),
+            ),
+          ),
+        );
+  return plainTextIngestionResult(
+    {
+      caseNumber,
+      sourceDocumentId: ecjSourceDocumentId(celex, language),
+      // What every row this adapter wrote before it stated an id was stored
+      // under: one row per docket and language, carrying the EUR-Lex URL of
+      // whichever of the docket's documents was written last. That URL names one
+      // CELEX in one language exactly, so it re-keys that row to the document it
+      // was built from rather than inserting a second one beside it; the
+      // docket's other documents find no null-id row and are inserted, which is
+      // the collapse being undone.
+      ...(sourceUrl === undefined ? {} : { legacySourceUrls: [sourceUrl] }),
       ecli,
+      court: statedCourt,
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.EU_ECJ].country,
+      language,
       decisionDate,
       decisionType,
-      keywords,
-      ...presentEntries({ converterVersion }),
-    }),
-    textFields,
-    rawHash: hashContent(
-      `${celex}|${ecli}|${decisionDate}|${language}|${fulltext}`,
-    ),
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
-    documentAst,
-    sections,
-    // The envelope, not the manifestation alone: the query binding that named
-    // the row and the notice that states its bench are responses no address
-    // in the row would lead a replay back to.
-    sourceRaw: encodeSourceRawEnvelope(parts),
-    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+      fulltext,
+      sourceUrl,
+      documentUrl,
+      // Absent, not empty, where no notice was read: an empty list is a
+      // publisher saying the decision names nobody, and a row stored before the
+      // notice was fetched would have its bench replaced by that statement.
+      ...(judges.length === 0 ? {} : { judges }),
+      ...(facts === undefined || facts.citedWorks.length === 0
+        ? {}
+        : { publisherCitedCases: facts.citedWorks }),
+      metadata: checkedDecisionMetadata(
+        {
+          ...replayMetadata,
+          ...publisherMetadata.metadata,
+          ...presentEntries({ publisherCaseNumber: bibliography?.caseNumber }),
+          ...(bibliography === undefined
+            ? {}
+            : presentEntries({
+                formexCelex: bibliography.celex,
+                formexEcli: bibliography.ecli,
+                formexAuthors: bibliography.author,
+                reportsSequence: bibliography.sequence,
+                reportsPages: bibliography.pages,
+              })),
+          celex,
+          ecli,
+          decisionDate,
+          decisionType,
+          keywords,
+          ...presentEntries({ converterVersion }),
+        },
+        { type: "stored", schema: EU_ECJ_METADATA_URL_SCHEMA },
+      ),
+      textFields,
+      rawHash: hashContent(
+        `${celex}|${ecli}|${decisionDate}|${language}|${fulltext}`,
+      ),
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
+      documentAst,
+      sections,
+      // The envelope, not the manifestation alone: the query binding that named
+      // the row and the notice that states its bench are responses no address
+      // in the row would lead a replay back to.
+      sourceRaw: encodeSourceRawEnvelope(parts),
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    EU_ECJ_METADATA_URL_SCHEMA,
+  );
 };
 
 /**
@@ -1560,7 +1655,7 @@ const nonEmptyString = (value: unknown): string | undefined =>
  */
 const reparseStoredRaw = (
   stored: StoredRawReparseInput,
-): StoredRawReparseOutcome => {
+): Exclude<StoredRawReparseOutcome, { type: "supplement" }> => {
   if (
     stored.contentType !== null &&
     !ECJ_REPARSABLE_CONTENT_TYPES.has(stored.contentType)
@@ -1640,7 +1735,10 @@ const reparseStoredRaw = (
       (publishedLanguage && eurLexSourceUrl(publishedLanguage, celex)),
     documentUrl: stored.documentUrl ?? undefined,
     parts,
-    metadata: checkedDecisionMetadata(metadata),
+    metadata: checkedDecisionMetadata(metadata, {
+      type: "stored",
+      schema: EU_ECJ_METADATA_URL_SCHEMA,
+    }),
     textFields,
   });
 
@@ -1651,6 +1749,116 @@ const reparseStoredRaw = (
         detail: `no fulltext parsed from the stored payload for ${celex}`,
       }
     : { type: "parsed", result };
+};
+
+type EcjFormexRefreshOutcome =
+  | { type: "notice-missing" }
+  | { type: "formex-not-located" }
+  | { type: "formex-gone" }
+  | { type: "retryable-exhausted" }
+  | ({ type: "rate-limited" } & Pick<
+      PublisherRateLimitRefusalError,
+      "publisherKey" | "status" | "cooldownUntilEpochMs"
+    >)
+  | { type: "unchanged-already-current" }
+  | { type: "write-rejected"; rejection: string }
+  | {
+      type: "refreshed";
+      decision: IngestionResult;
+      formexShape: "archive" | "xml";
+      bytes: number;
+    };
+
+type RefreshEcjStoredFormexOptions = {
+  stored: StoredRawReparseInput;
+  signal: AbortSignal;
+  fetchFormex?: (
+    url: string,
+    init: Parameters<typeof fetchPublisher>[1],
+  ) => Promise<Response>;
+};
+
+// parser-output-unchanged: refreshes stored source bytes; parsing the resulting decision is unchanged.
+/** Refresh only the stored Formex part, preserving every other envelope part. */
+export const refreshEcjStoredFormex = async ({
+  stored,
+  signal,
+  fetchFormex: fetchRequest,
+}: RefreshEcjStoredFormexOptions): Promise<EcjFormexRefreshOutcome> => {
+  const raw = new TextDecoder().decode(stored.raw);
+  const parts = ecjStoredRawParts(raw, stored.contentType);
+  if (parts === null) {
+    return { type: "write-rejected", rejection: "invalid-envelope" };
+  }
+  const existingFormex = parts[RAW_PART.FORMEX];
+  if (existingFormex?.startsWith(FORMEX_ARCHIVE_PREFIX)) {
+    // Decode to ensure the marker is a valid archive before treating it as current.
+    ecjFormexDocuments(existingFormex);
+    return { type: "unchanged-already-current" };
+  }
+  const notice = parts[RAW_PART.NOTICE];
+  if (notice === undefined) {
+    return { type: "notice-missing" };
+  }
+
+  const fetchedResult = await Result.tryPromise({
+    try: async () =>
+      await fetchFormex(
+        parseEcjNotice(notice).manifestations,
+        signal,
+        fetchRequest,
+      ),
+    catch: (error) => error,
+  });
+  if (Result.isError(fetchedResult)) {
+    const { error } = fetchedResult;
+    if (!(error instanceof PublisherRateLimitRefusalError)) {
+      throw error;
+    }
+    return {
+      type: "rate-limited",
+      publisherKey: error.publisherKey,
+      status: error.status,
+      cooldownUntilEpochMs: error.cooldownUntilEpochMs,
+    };
+  }
+  const fetched = fetchedResult.value;
+  if (fetched.type === "not-located") {
+    return { type: "formex-not-located" };
+  }
+  if (fetched.type === "gone") {
+    return { type: "formex-gone" };
+  }
+  if (fetched.type === "retryable-exhausted") {
+    return { type: "retryable-exhausted" };
+  }
+
+  const nextRaw = encodeSourceRawEnvelope({
+    ...parts,
+    [RAW_PART.FORMEX]: fetched.formex,
+  });
+  const reparsed = reparseStoredRaw({
+    ...stored,
+    raw: new TextEncoder().encode(nextRaw),
+    contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  });
+  if (reparsed.type !== "parsed") {
+    return { type: "write-rejected", rejection: reparsed.rejection };
+  }
+  if (reparsed.result.sourceDocumentId !== stored.sourceDocumentId) {
+    return {
+      type: "write-rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+    };
+  }
+  return {
+    type: "refreshed",
+    decision: reparsed.result,
+    formexShape: fetched.formex.startsWith(FORMEX_ARCHIVE_PREFIX)
+      ? "archive"
+      : "xml",
+    bytes: new TextEncoder().encode(fetched.formex).byteLength,
+  };
 };
 
 /**
@@ -1678,6 +1886,7 @@ const fetchNotice = async (
     return undefined;
   }
   const response = await fetchPublisher(`${CELLAR_CELEX_PREFIX}${celex}`, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     signal,
@@ -1711,12 +1920,21 @@ const fetchNotice = async (
 const fetchFormex = async (
   manifestations: readonly EcjNoticeManifestation[],
   signal: AbortSignal,
-): Promise<string | undefined> => {
+  fetchRequest: (
+    url: string,
+    init: Parameters<typeof fetchPublisher>[1],
+  ) => Promise<Response> = fetchPublisher,
+): Promise<
+  | { type: "fetched"; formex: string }
+  | { type: "gone" }
+  | { type: "retryable-exhausted" }
+  | { type: "not-located" }
+> => {
   const manifestation = manifestations.find(
     (candidate) => candidate.type === FORMEX_MANIFESTATION_TYPE,
   );
   if (manifestation === undefined) {
-    return undefined;
+    return { type: "not-located" };
   }
   // The address comes from the notice, so it is held to Cellar's host.
   const contentUrl = publisherTarget(
@@ -1729,9 +1947,10 @@ const fetchFormex = async (
       reason: contentUrl.error.message,
       url: contentUrl.error.url,
     });
-    return undefined;
+    return { type: "not-located" };
   }
-  const response = await fetchPublisher(contentUrl.value, {
+  const response = await fetchRequest(contentUrl.value, {
+    fetchStage: "document",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     signal,
@@ -1741,20 +1960,26 @@ const fetchFormex = async (
       "User-Agent": INGESTION_USER_AGENT,
     },
   });
+  if (response.status === 404 || response.status === 410) {
+    return { type: "gone" };
+  }
   if (!response.ok) {
     logger.warn("case_law.ingestion.formex_unavailable", {
       adapterKey: ADAPTER_KEYS.EU_ECJ,
       httpStatus: response.status,
       url: contentUrl.value,
     });
-    return undefined;
+    return { type: "retryable-exhausted" };
   }
   if (
     mediaTypeOf(response.headers.get("content-type") ?? "") !== ZIP_MEDIA_TYPE
   ) {
-    return await response.text();
+    return { type: "fetched", formex: await response.text() };
   }
-  return await readEcjFormexArchive(await response.arrayBuffer());
+  return {
+    type: "fetched",
+    formex: await readEcjFormexArchive(await response.arrayBuffer()),
+  };
 };
 
 export const readEcjFormexArchive = async (
@@ -1825,10 +2050,12 @@ export const buildDecision = async (
   }
 
   const notice = await fetchNotice(celex, binding.language.value, signal);
-  const formex =
+  const formexResult =
     notice === undefined
       ? undefined
       : await fetchFormex(parseEcjNotice(notice).manifestations, signal);
+  const formex =
+    formexResult?.type === "fetched" ? formexResult.formex : undefined;
   const parts = ecjRawParts({ binding, html: served.html, notice, formex });
 
   return ecjDecisionFromParts({
@@ -1844,11 +2071,7 @@ export const buildDecision = async (
     documentUrl: served.url,
     parts,
     textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: {
-      manifestationUri: binding.manifestation.value,
-      languageUri: binding.language.value,
-      cdmType: binding.type.value,
-    },
+    metadata: {},
   });
 };
 
@@ -2718,6 +2941,7 @@ const EU_ECJ_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const euEcjAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.EU_ECJ,
   sourceSurfaces: EU_ECJ_SOURCE_SURFACES,
   sourceFields: {
@@ -2739,6 +2963,14 @@ export const euEcjAdapter = defineSourceAdapter({
    * is held.
    */
   reconciliation: {
+    // CELEX and language identify a manifestation; the listing exposes no content change signal.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            celex: payload["celex"],
+            language: payload["language"],
+          }
+        : null,
     firstSlice: COURT_EPOCH_YEAR,
     sliceOf: ecjYearOf,
     nextSlice: ecjNextSlice,
@@ -2757,6 +2989,7 @@ export const euEcjAdapter = defineSourceAdapter({
   async getTotalCount(signal) {
     try {
       const response = await fetchPublisher(SPARQL_URL, {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.EU_ECJ,
         retryPolicy: "publisher-backoff",
         method: "POST",
@@ -2808,6 +3041,7 @@ export const euEcjAdapter = defineSourceAdapter({
         });
 
         const decisions: IngestionResult[] = [];
+        let failed = 0;
         const completedVariants = new Set<string>();
 
         // 2. Fetch and parse each language variant
@@ -2822,7 +3056,20 @@ export const euEcjAdapter = defineSourceAdapter({
             continue;
           }
 
-          const decision = await buildDecision(binding, abortSignal);
+          const attempted = await buildPlainTextItem({
+            decisionOf: (value) => value,
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+
+            rawListing: JSON.stringify(binding),
+            build: async () => await buildDecision(binding, abortSignal),
+          });
+          if (attempted.type === "item_build_failed") {
+            failed++;
+            decisions.push(attempted.decision);
+            completedVariants.add(variantKey);
+            continue;
+          }
+          const decision = attempted.value;
           if (!decision) {
             continue;
           }
@@ -2834,7 +3081,11 @@ export const euEcjAdapter = defineSourceAdapter({
         // If the page was aborted mid-iteration, retry
         // the same day on the next run instead of skipping it.
         if (abortSignal.aborted) {
-          return { decisions, nextCursor: dateFrom };
+          return {
+            decisions,
+            nextCursor: dateFrom,
+            itemBuildFailures: { type: "item_build_failed", count: failed },
+          };
         }
 
         // Advance cursor to next day; stop if
@@ -2846,7 +3097,11 @@ export const euEcjAdapter = defineSourceAdapter({
         // a full historical re-scan).
         const nextCursor = nextDate <= today ? nextDate : today;
 
-        return { decisions, nextCursor };
+        return {
+          decisions,
+          nextCursor,
+          itemBuildFailures: { type: "item_build_failed", count: failed },
+        };
       },
       catch: (cause) => {
         const error = adapterCatch(ADAPTER_KEYS.EU_ECJ, cursor)(cause);

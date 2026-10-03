@@ -50,6 +50,7 @@ import {
   reserveOrganizationFileBytes,
 } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
@@ -396,7 +397,7 @@ type RunFinalizeProps = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
-  memberRole: { role: string };
+  memberRole: AuthorizedMemberRole;
   uploadId: SafeId<"pendingUpload">;
   claimRequestId: string;
   safeDb: SafeDb;

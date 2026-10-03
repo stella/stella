@@ -1,7 +1,5 @@
 import { Result } from "better-result";
 
-import { roles } from "@stll/permissions";
-
 import { createMemoryBodySchema } from "@/api/handlers/memories/create-schema";
 import type { CreateMemoryBody } from "@/api/handlers/memories/create-schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -11,6 +9,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizePersonMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import { persistExplicitMemory } from "@/api/lib/memory/persist-explicit-memory";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 // Matter-specific kinds may only live at workspace scope, so a fact
 // about one matter can never be saved as user (cross-matter) memory.
@@ -90,7 +89,7 @@ const createMemory = createSafeRootHandler(
 
     if (
       memoryScope.scope === "workspace" &&
-      !roles[memberRole.role].authorize({ workspace: ["update"] }).success
+      !hasMemberPermission(memberRole, { workspace: ["update"] })
     ) {
       return Result.err(
         new HandlerError({ status: 403, message: "Forbidden" }),

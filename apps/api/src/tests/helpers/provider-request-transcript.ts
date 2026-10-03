@@ -850,6 +850,7 @@ export const signedGeminiCallsOf = (answer: string): [string, string][] => {
     }
     try {
       visit(JSON.parse(line.slice("data:".length)));
+      // swallow-ok: non-JSON SSE frames contain no signed values; signed-call findings are validated separately
     } catch {
       // Not a JSON event: nothing signed in it.
     }

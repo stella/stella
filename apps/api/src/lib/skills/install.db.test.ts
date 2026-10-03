@@ -6,6 +6,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkills } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -76,7 +77,7 @@ describe("installing a skill fetched from a URL", () => {
     );
     const install = async () =>
       await installSkill({
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         origin: "url",
         parsed,
         recordAuditEvent: async () => undefined,
@@ -118,7 +119,7 @@ describe("installing a skill fetched from a URL", () => {
     );
     const install = async () =>
       await installSkill({
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         origin: "url",
         parsed,
         recordAuditEvent: async () => undefined,

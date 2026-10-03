@@ -27,6 +27,7 @@ import { publicCountryUnavailableSchema } from "@stll/api-contract/public-countr
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
   SEARCH_TOTAL_TYPE,
+  LEGISLATION_SEARCH_MATCH_TYPES,
 } from "@stll/api-contract/search";
 import type { SearchTotal } from "@stll/api-contract/search";
 import {
@@ -512,9 +513,10 @@ const documentFieldContentProjection = v.variant("type", [
     v.strictObject({
       version: v.literal(1),
       type: v.literal("person"),
-      // The workspace member handle is machinery chat cannot act on; the name
-      // is what a model reads.
-      userId: strippedField(),
+      // The workspace member handle is the person's reference: the model
+      // links the name with it (`#stella-user=<userId>`, PEOPLE MENTIONS) the
+      // way it links an entity with its `ent_N`. Null for a non-member.
+      userId: v.nullable(passthroughId()),
       name: v.string(),
       image: strippedField(),
     }),
@@ -1904,6 +1906,9 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
           effectiveDate: v.nullable(v.string()),
           eli: v.string(),
           language: v.string(),
+          match: v.strictObject({
+            type: v.picklist(LEGISLATION_SEARCH_MATCH_TYPES),
+          }),
           resourceName: passthroughId(),
           score: v.number(),
           snippet: v.nullable(v.string()),

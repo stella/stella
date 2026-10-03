@@ -388,6 +388,10 @@ const arbLayout = fc.oneof(
       nil: null,
     }),
   }),
+  fc.record({
+    type: fc.constant("correspondence" as const),
+    ...baseLayoutFields,
+  }),
 );
 
 const declaredLayoutKeys = new Set([
