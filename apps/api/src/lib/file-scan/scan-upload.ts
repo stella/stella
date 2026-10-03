@@ -6,7 +6,6 @@ import { panic, Result, TaggedError } from "better-result";
 
 import type { ApiFileSecurityRejection } from "@stll/api-contract";
 
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -18,6 +17,9 @@ export class FileScanRejectedError extends TaggedError(
 )<{
   message: string;
   rejection: ApiFileSecurityRejection;
+  /** Errors behind refusals raised because inspection itself failed; the
+   *  caller reports them (see `scan-upload-handler.ts`). */
+  inspectionFailures: readonly unknown[];
 }> {}
 
 export class FileScanFailedError extends TaggedError("FileScanFailedError")<{
@@ -25,18 +27,17 @@ export class FileScanFailedError extends TaggedError("FileScanFailedError")<{
   cause?: unknown;
 }> {}
 
-type ScanUploadInput = {
+export type ScanUploadInput = {
   bytes: ArrayBuffer | Uint8Array;
   declaredMimeType: string;
   fileName: string;
 };
 
 /** Scans untrusted bytes; only a non-rejecting verdict yields a `ScannedFile`. */
-export const scanUpload = async ({
-  bytes,
-  declaredMimeType,
-  fileName,
-}: ScanUploadInput): Promise<
+export const scanUpload = async (
+  { bytes, declaredMimeType, fileName }: ScanUploadInput,
+  scan: typeof scanFile = scanFile,
+): Promise<
   Result<ScannedFile, FileScanRejectedError | FileScanFailedError>
 > => {
   // Scan and keep a private copy: a caller still holding its buffer must not
@@ -45,7 +46,7 @@ export const scanUpload = async ({
     bytes instanceof ArrayBuffer
       ? bytes.slice(0)
       : new Uint8Array(bytes).buffer;
-  const scanned = await scanFile({
+  const scanned = await scan({
     buffer: new Uint8Array(buffer),
     declaredMimeType,
     fileName,
@@ -64,7 +65,13 @@ export const scanUpload = async ({
       panic("Rejecting scan had no rejecting findings");
     }
     return Result.err(
-      new FileScanRejectedError({ message: rejection.message, rejection }),
+      new FileScanRejectedError({
+        message: rejection.message,
+        rejection,
+        inspectionFailures: scanned.value.findings.flatMap(({ failure }) =>
+          failure === undefined ? [] : [failure],
+        ),
+      }),
     );
   }
   return Result.ok(
@@ -80,33 +87,3 @@ export const scanUpload = async ({
     }),
   );
 };
-
-/**
- * A scan failure as a request handler answers it: a rejection is the
- * structured 422 security rejection. A scanner failure says nothing about the
- * bytes, so it is a retryable 503 rather than a verdict on the file.
- */
-export const scanErrorForHandler = (
-  error: FileScanRejectedError | FileScanFailedError,
-  retryHint: string,
-): HandlerError<422 | 503> =>
-  FileScanRejectedError.is(error)
-    ? new HandlerError({ ...error.rejection, status: 422 })
-    : new HandlerError({
-        status: 503,
-        message: "File security scan is unavailable",
-        hint: retryHint,
-        cause: error,
-      });
-
-/** `scanUpload` for request handlers, failing as {@link scanErrorForHandler}. */
-export const scanUploadForHandler = async (
-  input: ScanUploadInput,
-  scan: typeof scanUpload = scanUpload,
-): Promise<Result<ScannedFile, HandlerError<422 | 503>>> =>
-  Result.mapError(await scan(input), (error) =>
-    scanErrorForHandler(
-      error,
-      "Retry the upload; the same file can be sent again.",
-    ),
-  );

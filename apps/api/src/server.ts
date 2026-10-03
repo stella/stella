@@ -3,7 +3,7 @@ import { panic } from "better-result";
 import { Elysia } from "elysia";
 
 import {
-  CHAT_TURN_ID_HEADER,
+  REQUEST_ID_HEADER,
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
 import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
@@ -66,6 +66,7 @@ import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legalReaderRoute } from "@/api/handlers/legal-reader/routes";
 import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
+import { createPublicStatuteSearchRateLimitComposition } from "@/api/handlers/legislation/public-search-rate-limit-composition";
 import { legislationRoute } from "@/api/handlers/legislation/routes";
 import { listsRoute } from "@/api/handlers/lists/routes";
 import { handleMcpAppSandboxRequest } from "@/api/handlers/mcp-app-sandbox/routes";
@@ -157,7 +158,6 @@ import {
   enrichRequestContext,
   getRequestId,
   initRequestContext,
-  REQUEST_ID_HEADER,
 } from "@/api/lib/observability/request-context";
 import {
   answerRequestError,
@@ -188,6 +188,7 @@ import {
   finalizeResponseCachePolicy,
   API_SECURITY_HEADERS,
   setSecurityHeaders,
+  CORS_EXPOSED_HEADERS,
 } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
@@ -271,12 +272,25 @@ if (isLocalDevOpen()) {
 }
 
 const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
-const CORS_EXPOSED_HEADERS = [
-  "Content-Disposition",
-  "X-Ai-Field-Errors",
-  REQUEST_ID_HEADER,
-  CHAT_TURN_ID_HEADER,
-];
+
+const publicStatuteSearchRateLimits =
+  createPublicStatuteSearchRateLimitComposition({
+    routes: publicLegislationRoute,
+    skipShared: (request) => {
+      // The dev-only e2e walk measures navigation, not abuse budgets.
+      if (env.E2E_DISABLE_AUTH_RATE_LIMIT) {
+        return true;
+      }
+      // Other dedicated budgets also exclude their traffic from the shared bucket.
+      const { pathname } = new URL(request.url);
+      return (
+        isUploadRateLimitedPath(pathname) ||
+        isFolioCollabRateLimitedPath(pathname) ||
+        isSkillSourceRateLimitedRequest(request) ||
+        isStyleSetUploadRateLimitedRequest(request)
+      );
+    },
+  });
 
 const api = new Elysia()
   .use(createAuthResponseCookiesPlugin())
@@ -436,38 +450,7 @@ const api = new Elysia()
   .group(STELLA_API_VERSION_PREFIX, (app) =>
     app
 
-      .use(
-        rateLimit({
-          duration: API_RATE_LIMITS.api.duration,
-          max: API_RATE_LIMITS.api.max,
-          ...createRedisRateLimit({
-            failurePolicy: "fail_open_local",
-            scope: "api",
-          }),
-          skip: (req) => {
-            // The e2e route walk fires hundreds of /v1 requests per minute
-            // from one IP; abuse limits are not what those runs measure. The
-            // flag is dev-only by env validation and CI's e2e job already
-            // sets it for the API it boots.
-            if (env.E2E_DISABLE_AUTH_RATE_LIMIT) {
-              return true;
-            }
-            // Endpoints with a dedicated rate-limit budget are excluded
-            // from the shared `api` bucket so unrelated `/v1` traffic on
-            // the same IP cannot drain their quota (see `upload` and
-            // `folioCollab` in API_RATE_LIMITS). Each path is matched by
-            // its canonical helper so this skip stays in lockstep with
-            // the dedicated limiter that owns it.
-            const { pathname } = new URL(req.url);
-            return (
-              isUploadRateLimitedPath(pathname) ||
-              isFolioCollabRateLimitedPath(pathname) ||
-              isSkillSourceRateLimitedRequest(req) ||
-              isStyleSetUploadRateLimitedRequest(req)
-            );
-          },
-        }),
-      )
+      .use(publicStatuteSearchRateLimits.shared)
       .use(authCapabilitiesRoute)
       .use(workspaceEventsRoute)
       .use(workspacesRoute)
@@ -539,7 +522,7 @@ const api = new Elysia()
       .use(contactsRoute)
       .use(legislationRoute)
       .use(legislationCorpusRoute)
-      .use(publicLegislationRoute)
+      .use(publicStatuteSearchRateLimits.publicLegislation)
       .use(publicKnowledgeRoute)
       .use(searchRoute)
       .use(savedSearchesRoute)

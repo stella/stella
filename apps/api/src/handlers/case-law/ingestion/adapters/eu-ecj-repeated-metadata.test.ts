@@ -72,15 +72,21 @@ test("every archive member survives stored replay and repeated bibliography stay
   if (outcome.type !== "parsed") {
     return;
   }
-  expect(outcome.result.metadata["publisherCaseNumber"]).toEqual([
-    "C-1/26",
-    "C-2/26",
-  ]);
-  expect(outcome.result.metadata["formexCelex"]).toEqual([
-    "62026CJ0001",
-    "62026CJ0002",
-  ]);
-  expect(outcome.result.metadata["formexAuthors"]).toEqual(["CJ", "GCEU"]);
+  expect(
+    Bun.deepEquals(outcome.result.metadata["publisherCaseNumber"], [
+      "C-1/26",
+      "C-2/26",
+    ]),
+  ).toBe(true);
+  expect(
+    Bun.deepEquals(outcome.result.metadata["formexCelex"], [
+      "62026CJ0001",
+      "62026CJ0002",
+    ]),
+  ).toBe(true);
+  expect(
+    Bun.deepEquals(outcome.result.metadata["formexAuthors"], ["CJ", "GCEU"]),
+  ).toBe(true);
   const stored = decodeSourceRawEnvelope(outcome.result.sourceRaw ?? "");
   expect(stored?.["formex"]).toBe(formex);
 });

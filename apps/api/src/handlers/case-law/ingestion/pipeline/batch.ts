@@ -1,6 +1,11 @@
 import { Result, panic } from "better-result";
 import { isNotNull } from "drizzle-orm";
 
+import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+} from "@stll/legal-atlas/ingestion-cycle";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawIngestionFailures } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -26,6 +31,8 @@ import {
   wrappedErrorDetail,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { createSourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+import type { SourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import type { DecisionRefresh } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
@@ -33,6 +40,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   ConcurrentModificationError,
+  ingestionStopKindOf,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
@@ -219,7 +227,12 @@ export type DecisionBatchHalt =
   | { type: "retryable"; reason: ProcessRetryReason }
   | { type: "timeout"; error: TimeoutError }
   | { type: "insert-limit" }
-  | { type: "failure-streak"; tag: string; message: string }
+  | {
+      type: "failure-streak";
+      tag: string;
+      message: string;
+      stopKind: IngestionStopKind;
+    }
   | { type: "aborted" };
 
 /**
@@ -381,7 +394,12 @@ const rejectDecision = ({
   });
 
   return tally.failureStreak >= MAX_CONSECUTIVE_FAILURES
-    ? { type: "failure-streak", tag, message }
+    ? {
+        type: "failure-streak",
+        tag,
+        message,
+        stopKind: ingestionStopKindOf(error),
+      }
     : null;
 };
 
@@ -416,7 +434,12 @@ const rejectSourceRecord = ({
     reason: CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
   });
   return tally.failureStreak >= MAX_CONSECUTIVE_FAILURES
-    ? { type: "failure-streak", tag: record.reason, message: record.message }
+    ? {
+        type: "failure-streak",
+        tag: record.reason,
+        message: record.message,
+        stopKind: INGESTION_STOP_KIND.ADAPTER_ERROR,
+      }
     : null;
 };
 
@@ -518,19 +541,24 @@ type ApplyDecisionBatchOptions = {
  * signal stops the batch; the pack and the ledger are still written for
  * what it reached.
  */
-export const applyDecisionBatch = async ({
-  batch: { batchRecords },
-  sourceId,
-  scopedDb,
-  observation,
-  refresh,
-  corpus,
-  polarityRules,
-  context,
-  failureStreak,
-  insertLimit,
-  signal,
-}: ApplyDecisionBatchOptions): Promise<DecisionBatchApplication> => {
+export const applyDecisionBatch = async (
+  {
+    batch: { batchRecords },
+    sourceId,
+    scopedDb,
+    observation,
+    refresh,
+    corpus,
+    polarityRules,
+    context,
+    failureStreak,
+    insertLimit,
+    signal,
+  }: ApplyDecisionBatchOptions,
+  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver = createSourceMetadataUrlSchemaResolver(
+    scopedDb,
+  ),
+): Promise<DecisionBatchApplication> => {
   const tally: BatchTally = {
     inserted: 0,
     skipped: 0,
@@ -586,17 +614,20 @@ export const applyDecisionBatch = async ({
       const processed = await Result.tryPromise({
         try: async () =>
           // db-await-in-loop: per-decision ingest pipeline: identity locks, corpus write, upsert, citations, ordered per observation
-          await processDecision({
-            input,
-            sourceId,
-            scopedDb,
-            observedAt: observation.observedAt,
-            observationOrder: observation.order,
-            refresh,
-            corpus,
-            corpusBatch,
-            polarityRules,
-          }),
+          await processDecision(
+            {
+              input,
+              sourceId,
+              scopedDb,
+              observedAt: observation.observedAt,
+              observationOrder: observation.order,
+              refresh,
+              corpus,
+              corpusBatch,
+              polarityRules,
+            },
+            resolveMetadataUrlSchema,
+          ),
         catch: (cause) => cause,
       });
       halt = Result.isError(processed)

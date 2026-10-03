@@ -593,6 +593,7 @@ export const scopedCommands = (
     if (!rootChecks.has(ROOT_CHECKS.rootScriptLint)) {
       commands.push(["bun", "run", "generate"]);
       commands.push(["bun", "--cwd=packages/cli", "run", "codegen:runtime"]);
+      commands.push(["bun", "apps/api/scripts/generate-capability-runtime.ts"]);
     }
     commands.push([
       "bun",
@@ -721,12 +722,27 @@ const main = () => {
         : presentChangedPaths.filter((file) => ownsCodeCheckPath(file, leg)),
     mergeBase,
     resolveMergeBase: () => {
-      const result = Bun.spawnSync(
-        ["git", "merge-base", DEFAULT_BASE, "HEAD"],
-        { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
-      );
+      const git = (args: string[]) =>
+        Bun.spawnSync(["git", ...args], {
+          cwd: REPO_ROOT,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+      // Only a missing comparison ref means "no base"; any other Git failure
+      // is surfaced rather than silently skipping the exact lint.
+      if (
+        git(["rev-parse", "--verify", "--quiet", `${DEFAULT_BASE}^{commit}`])
+          .exitCode !== 0
+      ) {
+        return null;
+      }
+      const result = git(["merge-base", DEFAULT_BASE, "HEAD"]);
       const base = result.stdout.toString().trim();
-      return result.exitCode === 0 && base !== "" ? base : null;
+      return result.exitCode === 0 && base !== ""
+        ? base
+        : panic(
+            `git merge-base ${DEFAULT_BASE} HEAD failed: ${result.stderr.toString().trim()}`,
+          );
     },
     measureDebt: measureResultBoundaryDebt,
     report: (message) => {

@@ -43,7 +43,10 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { knowledgeKeys, templateClausesOptions } from "@/lib/knowledge/queries";
+import {
+  invalidateTemplateClauseSources,
+  templateClausesOptions,
+} from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { LinkClauseDialog } from "@/routes/knowledge/-components/link-clause-dialog";
 
@@ -97,19 +100,14 @@ export const TemplateClausesTab = ({ templateId }: TemplateClausesTabProps) => {
   const outdatedCount = links.filter((link) => link.isOutdated).length;
 
   const invalidateLinks = useCallback(() => {
-    queryClient
-      .invalidateQueries({
-        queryKey: knowledgeKeys.templates.clauses(
-          activeOrganizationId,
-          templateId,
-        ),
-      })
-      .catch((error: unknown) => {
+    invalidateTemplateClauseSources(queryClient, activeOrganizationId).catch(
+      (error: unknown) => {
         // Invalidation failure leaves the clause list (and its nested preview)
         // stale without a user-facing symptom: capture it for telemetry.
         getAnalytics().captureError(error);
-      });
-  }, [queryClient, activeOrganizationId, templateId]);
+      },
+    );
+  }, [queryClient, activeOrganizationId]);
 
   const handleSyncAll = useCallback(async () => {
     setSyncingAll(true);

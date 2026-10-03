@@ -9,7 +9,6 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
-import capabilityCatalogRaw from "@stll/cli/capability-catalog.json";
 import type { PermissionInput } from "@stll/permissions";
 
 import { captureError } from "@/api/lib/analytics/capture";
@@ -47,7 +46,6 @@ import {
 } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
-import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch";
 import type { CapabilityDispatchEntry } from "@/api/mcp/generated/capability-dispatch";
 import {
   findRemovedInputIssues,
@@ -273,7 +271,7 @@ const isCatalogEntry = (value: unknown): value is CatalogEntry =>
  * shape, so a mismatch here is a corrupt build artifact: fail fast rather than
  * casting the raw import and letting a malformed entry flow downstream.
  */
-const parseCatalog = (raw: unknown): readonly CatalogEntry[] => {
+export const parseCatalog = (raw: unknown): readonly CatalogEntry[] => {
   if (!Array.isArray(raw)) {
     return panic("capability catalog artifact is not a JSON array");
   }
@@ -286,12 +284,29 @@ const parseCatalog = (raw: unknown): readonly CatalogEntry[] => {
 
 let catalog: readonly CatalogEntry[] | undefined;
 let catalogById: Map<string, CatalogEntry> | undefined;
-const getCatalog = () => (catalog ??= parseCatalog(capabilityCatalogRaw));
-const getCatalogById = () =>
-  (catalogById ??= new Map(getCatalog().map((entry) => [entry.id, entry])));
-const DISPATCH_BY_ID = new Map<string, CapabilityDispatchEntry>(
-  Object.entries(CAPABILITY_DISPATCH),
-);
+// Tool definitions are also imported by the exporter before shards exist.
+// Defer the generated runtime data until a capability is actually used.
+const getCatalog = async () => {
+  if (catalog !== undefined) {
+    return catalog;
+  }
+  const generated = await import("./generated/capability-catalog");
+  catalog = parseCatalog(generated.default);
+  return catalog;
+};
+const getCatalogById = async () =>
+  (catalogById ??= new Map(
+    (await getCatalog()).map((entry) => [entry.id, entry]),
+  ));
+let dispatchById: Map<string, CapabilityDispatchEntry> | undefined;
+const getDispatchById = async () => {
+  if (dispatchById !== undefined) {
+    return dispatchById;
+  }
+  const generated = await import("./generated/capability-dispatch");
+  dispatchById = new Map(Object.entries(generated.CAPABILITY_DISPATCH));
+  return dispatchById;
+};
 
 const capabilityDomain = (id: string): string => id.split(".").at(0) ?? id;
 const capabilityLeaf = (id: string): string => id.split(".").at(-1) ?? id;
@@ -377,7 +392,7 @@ const isEndpointDefinition = (value: unknown): value is EndpointDefinition =>
  * test would also catch); the caller maps that to `internal_error`.
  */
 const loadEndpoint = async (id: string): Promise<EndpointDefinition | null> => {
-  const dispatch = DISPATCH_BY_ID.get(id);
+  const dispatch = (await getDispatchById()).get(id);
   if (!dispatch) {
     return null;
   }
@@ -880,19 +895,19 @@ const contextFeatureEnabled = (
  * The MCP transport attests them on every authenticated response so a client
  * with a baked-in catalog can mark those commands instead of offering them.
  */
-export const featureOmittedCapabilityIds = (
+export const featureOmittedCapabilityIds = async (
   isFeatureEnabled: (
     feature: string | undefined,
   ) => boolean = isCapabilityFeatureEnabled,
-): readonly string[] =>
-  getCatalog()
+): Promise<readonly string[]> =>
+  (await getCatalog())
     .filter((entry) => !isFeatureEnabled(entry.feature))
     .map((entry) => entry.id)
     .toSorted();
 
 const listCapabilitiesHandler: McpToolHandler<
   v.InferInput<typeof LIST_CAPABILITIES_OUTPUT_SCHEMA>
-> = ({
+> = async ({
   args,
   context,
 }: {
@@ -921,7 +936,7 @@ const listCapabilitiesHandler: McpToolHandler<
   // invoke refuses them for it as well.
   const confirmable =
     context.toolConfirmation !== TOOL_CONFIRMATION.unavailable;
-  const filtered = getCatalog().filter(
+  const filtered = (await getCatalog()).filter(
     (entry) =>
       contextFeatureEnabled(entry.feature, context) &&
       (confirmable || !entry.destructive) &&
@@ -973,8 +988,8 @@ const decodeCapabilityCursor = (cursor: string): string | undefined | null => {
 
 // --- describe_capability -----------------------------------------------------
 
-const notFoundWithHint = (id: string): InternalToolErrorResult =>
-  notFoundResult(`No capability with id "${id}"`, hintForUnknownId(id));
+const notFoundWithHint = async (id: string): Promise<InternalToolErrorResult> =>
+  notFoundResult(`No capability with id "${id}"`, await hintForUnknownId(id));
 
 /**
  * Refusal for a capability whose deployment feature flag is off. Same message
@@ -990,10 +1005,10 @@ const featureDisabledResult = (
     hint: featureDisabledHint(feature),
   });
 
-const hintForUnknownId = (id: string): string => {
+const hintForUnknownId = async (id: string): Promise<string> => {
   const suggestions = closestToolNames(
     id,
-    getCatalog().map((entry) => entry.id),
+    (await getCatalog()).map((entry) => entry.id),
   );
   return suggestions.length > 0
     ? `${didYouMean(suggestions.map(quoteToolName))} Call list_capabilities to browse the full set.`
@@ -1064,7 +1079,7 @@ const describeCapabilityHandler: McpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const id = parsed.output.capability;
-  const entry = getCatalogById().get(id);
+  const entry = (await getCatalogById()).get(id);
   if (!entry) {
     return notFoundWithHint(id);
   }
@@ -1469,7 +1484,7 @@ export const invokedCapabilityConsumesServices = async (args: unknown) => {
     // Invalid calls reach canonical validation without executing work.
     return Result.ok(false);
   }
-  const entry = getCatalogById().get(parsed.output.capability);
+  const entry = (await getCatalogById()).get(parsed.output.capability);
   if (entry === undefined) {
     return Result.ok(false);
   }
@@ -1517,7 +1532,7 @@ const invokeCapabilityHandler = async ({
     confirm,
   } = parsed.output;
 
-  const entry = getCatalogById().get(id);
+  const entry = (await getCatalogById()).get(id);
 
   // 1. Unknown id -> not_found with a closest-id hint.
   if (!entry) {
@@ -2027,11 +2042,11 @@ export const mapHandlerResult = ({
   return successEgress(result, access);
 };
 
-export const resolveCapabilityReadClass = (args: unknown) => {
+export const resolveCapabilityReadClass = async (args: unknown) => {
   if (!isRecord(args) || typeof args["capability"] !== "string") {
     return undefined;
   }
-  const entry = getCatalogById().get(args["capability"]);
+  const entry = (await getCatalogById()).get(args["capability"]);
   if (entry === undefined || entry.access === "write") {
     return undefined;
   }

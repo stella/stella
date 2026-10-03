@@ -43,6 +43,7 @@ FROM deps AS builder
 ARG TARGETARCH
 ENV NODE_ENV=production
 COPY --from=pruner /app/out/full/ .
+RUN bun apps/api/scripts/generate-capability-runtime.ts
 # Build the server unminified: `bun build --minify` can break Elysia's AOT
 # handler codegen (minified variable renames vs Sucrose). See elysiajs/elysia#1711.
 RUN bun build \
@@ -144,6 +145,14 @@ RUN bun build \
     --target bun \
     --outfile /app/case-law-raw-layout.js \
     apps/api/src/scripts/case-law-raw-layout.ts
+# SK ÚS raw completion runs as its own one-off task with a scoped login rather
+# than inside the API task; it reports without writing until `--apply`:
+#   ["bun", "/app/complete-sk-us-raw.js", "--checkpoint", "/tmp/sk-us.json"]
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/complete-sk-us-raw.js \
+    apps/api/src/scripts/complete-sk-us-raw.ts
 # Decision-analysis operator pass. Like replay above, these need the API env
 # (corpus bucket, storage mode) and run inside the API task, but their
 # database login is overridden per task to the analysis writer role through
@@ -339,6 +348,7 @@ COPY --chown=stella:stella --from=builder /app/replay-case-law-source.js /app/re
 COPY --chown=stella:stella --from=builder /app/replay-tick.js /app/replay-tick.js
 COPY --chown=stella:stella --from=builder /app/redact-case-law-decision.js /app/redact-case-law-decision.js
 COPY --chown=stella:stella --from=builder /app/case-law-raw-layout.js /app/case-law-raw-layout.js
+COPY --chown=stella:stella --from=builder /app/complete-sk-us-raw.js /app/complete-sk-us-raw.js
 COPY --chown=stella:stella --from=builder /app/decision-analysis-candidates.js /app/decision-analysis-candidates.js
 COPY --chown=stella:stella --from=builder /app/decision-analysis-input.js /app/decision-analysis-input.js
 COPY --chown=stella:stella --from=builder /app/decision-analysis-save.js /app/decision-analysis-save.js

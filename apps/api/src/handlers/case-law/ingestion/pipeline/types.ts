@@ -101,6 +101,7 @@ export type DecisionRefresh =
 export type ProcessDecisionAttemptOptions = {
   signal?: AbortSignal;
   s3Policy?: S3CredentialRefreshOptions;
+  metadataUrlSchema?: unknown;
   input: IngestionResult;
   judges: CaseLawJudgeDependencies;
   sourceId: SafeId<"caseLawSource">;
@@ -127,7 +128,11 @@ export type ProcessDecisionAttemptOptions = {
 
 export type ProcessDecisionOptions = Omit<
   ProcessDecisionAttemptOptions,
-  "contentionReconciliation" | "corpus" | "judges" | "refresh"
+  | "contentionReconciliation"
+  | "corpus"
+  | "judges"
+  | "refresh"
+  | "metadataUrlSchema"
 > & {
   /** Defaults to `WHEN_SOURCE_CHANGED`, which is what a crawl wants. */
   refresh?: DecisionRefresh;

@@ -641,7 +641,7 @@ describe("diffNetworkBaseline", () => {
     );
     expect(deeper).toContain("  level 3: GET /v1/entities\n");
     // The actionable hint still closes the message.
-    expect(deeper).toContain("run the route-smoke suite");
+    expect(deeper).toContain("network-budgets/<change>.json");
   });
 
   test("a repeated API request is a problem", () => {
@@ -1067,5 +1067,80 @@ describe("mergeNetworkBaseline", () => {
       new Map([["/contacts", metrics(["GET /v1/contacts"], 1)]]),
     );
     expect(Object.keys(merged)).toEqual(["/contacts"]);
+  });
+});
+
+describe("merge-base scoped comparison", () => {
+  const entry = {
+    depth: 1,
+    requests: ["GET /v1/contacts"],
+    dbQueries: { "GET /v1/contacts": 2 },
+    responseSizes: { "GET /v1/contacts": 1024 },
+  };
+  const baseline = { "/contacts": entry };
+
+  test("new scoped routes are reported while unknown unchanged routes fail", () => {
+    const results = new Map([["/new", metrics(["GET /v1/new"], 1)]]);
+    const scoped = diffNetworkBaseline(baseline, results, {
+      changedRoutes: ["/new"],
+      requireAllRoutes: false,
+    });
+    expect(scoped.problems).toEqual([]);
+    expect(scoped.notices.join("\n")).toContain("New scoped route /new");
+    expect(
+      diffNetworkBaseline(baseline, results, {
+        requireAllRoutes: false,
+      }).problems.join("\n"),
+    ).toContain("New route not in");
+  });
+
+  test("only scoped deletions may disappear from coverage", () => {
+    expect(
+      diffNetworkBaseline(baseline, new Map(), { changedRoutes: ["/contacts"] })
+        .problems,
+    ).toEqual([]);
+    expect(
+      diffNetworkBaseline(baseline, new Map()).problems.join("\n"),
+    ).toContain("Stale network baseline entry");
+  });
+
+  test.each([
+    metrics(["GET /v1/contacts", "GET /v1/new"], 1),
+    metrics(["GET /v1/contacts"], 4),
+    metrics(["GET /v1/contacts"], 1, {}, { "GET /v1/contacts": 3 }),
+    metrics(["GET /v1/contacts"], 1, { "GET /v1/contacts": 20 }),
+    metrics(
+      ["GET /v1/contacts"],
+      1,
+      {},
+      undefined,
+      {},
+      { "GET /v1/contacts": 100_000 },
+    ),
+  ])(
+    "route changes never exempt existing request, depth, repeat, DB or size budgets",
+    (observed) => {
+      const results = new Map([["/contacts", observed]]);
+      const strict = diffNetworkBaseline(baseline, results);
+      expect(strict.problems.length).toBeGreaterThan(0);
+      expect(
+        diffNetworkBaseline(baseline, results, { changedRoutes: ["/contacts"] })
+          .problems,
+      ).toEqual(strict.problems);
+    },
+  );
+
+  test("an intentional increase passes only with the declared budget", () => {
+    const observed = metrics(["GET /v1/contacts", "GET /v1/new"], 1);
+    const results = new Map([["/contacts", observed]]);
+    expect(
+      diffNetworkBaseline(baseline, results).problems.join("\n"),
+    ).toContain("New API request");
+    expect(
+      diffNetworkBaseline(
+        { "/contacts": { ...entry, requests: observed.requests } },
+        results,
+      ).problems,
+    ).toEqual([]);
   });
 });

@@ -100,6 +100,7 @@ const withClone = (exercise: (root: string) => void) => {
       "scripts/db-await-in-loop.ts",
       "scripts/lint-suppressions.ts",
       "scripts/ownership.ts",
+      "scripts/parse-memo.ts",
       "scripts/generated-artifacts.ts",
       "scripts/result-boundary-globs.ts",
       "scripts/root-connection-shapes.ts",
@@ -167,7 +168,7 @@ test("a metric increase fails even with a forged committed budget", () => {
     const script = path.join(root, "scripts/ratchet.ts");
     const original = readFileSync(script, "utf-8");
     const mutant = original.replaceAll(
-      "const baseline = scanMergeBase(base);",
+      "const baseline = scanMergeBase({ ref: base, previous: head });",
       "const baseline = scanAll(REPO_ROOT);",
     );
     expect(mutant).not.toBe(original);
@@ -235,6 +236,56 @@ test("the measured base overrides stale headroom and explicit merge-group bases"
   });
 }, 30_000);
 
+test("--head measures a commit as data with that commit's allowances", () => {
+  withClone((root) => {
+    const base = git(root, "rev-parse", "HEAD");
+    git(root, "checkout", "-b", "raise");
+    write({ root, relative: FIRST, contents: casts(3) });
+    // The head's own checker would pass anything; only the base's may run.
+    write({
+      root,
+      relative: "scripts/ratchet.ts",
+      contents: "process.exit(0);\n",
+    });
+    commit(root, "raise with a permissive checker");
+    const raised = git(root, "rev-parse", "HEAD");
+    git(root, "checkout", "--quiet", base);
+    const headCheck = (head: string) =>
+      run(root, [
+        process.execPath,
+        "scripts/ratchet.ts",
+        "--check",
+        "--base",
+        base,
+        "--head",
+        head,
+      ]);
+    const rejected = headCheck(raised);
+    expect(rejected.code, rejected.output).toBe(1);
+    expect(rejected.output).toContain("as-casts: 6 -> 7");
+    const hint =
+      /Add (scripts\/ratchet-allowances\/\S+\.json) so added deltas total exactly 1: (\{.*\})$/mu.exec(
+        rejected.output,
+      );
+    const [, allowancePath, allowance] = hint ?? [];
+    if (allowancePath === undefined || allowance === undefined) {
+      throw new Error(`no allowance hint in: ${rejected.output}`);
+    }
+    // An allowance in the worktree funds nothing; the head's commit decides.
+    write({ root, relative: allowancePath, contents: `${allowance}\n` });
+    expect(headCheck(raised).code).toBe(1);
+    rmSync(path.join(root, allowancePath));
+    git(root, "checkout", "--quiet", "raise");
+    write({ root, relative: allowancePath, contents: `${allowance}\n` });
+    commit(root, "fund the increase");
+    const funded = git(root, "rev-parse", "HEAD");
+    git(root, "checkout", "--quiet", base);
+    const accepted = headCheck(funded);
+    expect(accepted.code, accepted.output).toBe(0);
+    expect(accepted.output).toContain("ratchet --check: OK");
+  });
+}, 30_000);
+
 test("a counter cannot supply an inflated total detached from its files", () => {
   expect(() =>
     scanAll(ROOT, {
@@ -280,6 +331,7 @@ test("CI selects the merge base on PRs and the event base on merge groups", () =
           ...process.env,
           GITHUB_ENV: output,
           MERGE_GROUP_BASE_SHA: eventBase,
+          BASE_REF: "main",
         },
         stdout: "pipe",
         stderr: "pipe",
@@ -783,8 +835,8 @@ test("untracked files cannot increase file, duplication, directory or dependency
     const script = path.join(root, "scripts/ratchet.ts");
     const original = readFileSync(script, "utf-8");
     const mutant = original.replaceAll(
-      "const current = scanAll(REPO_ROOT, { trackedFiles });",
-      "const current = scanAll(REPO_ROOT);",
+      "const tree = openSourceTree(REPO_ROOT, { trackedFiles });",
+      "const tree = openSourceTree(REPO_ROOT);",
     );
     expect(mutant).not.toBe(original);
     writeFileSync(script, mutant);

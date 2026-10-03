@@ -69,7 +69,9 @@ type OpenDesktopEditSessionHandlerProps = {
   workspaceId: SafeId<"workspace">;
 };
 
-const isUniqueViolationSafeDbError = (error: SafeDbError): boolean =>
+const isUniqueViolationSafeDbError = (
+  error: SafeDbError | HandlerError,
+): boolean =>
   "cause" in error && isPgError(error.cause, PG_ERROR.UNIQUE_VIOLATION);
 
 type ExistingOpenDesktopEditSession = {
@@ -390,7 +392,18 @@ export const openDesktopEditSessionHandler = async function* ({
     );
   }
 
-  const runOpenSession = async ({ allowInsert }: { allowInsert: boolean }) => {
+  type RunOpenSessionResult = Result<
+    | OpenDesktopEditSessionResponse
+    | null
+    | { error: { message: string; statusCode: 400 | 409 } },
+    SafeDbError | HandlerError<409>
+  >;
+
+  const runOpenSession = async ({
+    allowInsert,
+  }: {
+    allowInsert: boolean;
+  }): Promise<RunOpenSessionResult> => {
     const result = await safeDb(async (tx) => {
       await lockDesktopEditTarget({
         entityId,
@@ -530,6 +543,32 @@ export const openDesktopEditSessionHandler = async function* ({
     });
 
     if (Result.isError(result)) {
+      if (isPgError(result.error, PG_ERROR.FOREIGN_KEY_VIOLATION)) {
+        // The failed transaction has rolled back; check the scoped target again
+        // before treating an unrelated reference failure as a source change.
+        const currentTarget = await safeDb(
+          async (tx) =>
+            await readCurrentDesktopEditTarget({
+              entityId,
+              propertyId,
+              tx,
+              workspaceId,
+            }),
+        );
+        if (Result.isError(currentTarget)) {
+          return Result.err(currentTarget.error);
+        }
+        if (!currentTarget.value) {
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              code: "entity_transfer_source_changed",
+              retryable: true,
+              message: "The source changed. Try opening it again.",
+            }),
+          );
+        }
+      }
       return Result.err(result.error);
     }
 

@@ -57,7 +57,11 @@ import type {
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import {
+  registeredChatTool,
+  type ChatTool,
+  type ChatToolMap,
+} from "@/api/lib/chat/chat-tool-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
@@ -898,7 +902,7 @@ const validateContinuationToolCallIntegrity = ({
     const validatedCallResult = validateContinuationToolCallTransition({
       canonicalCall,
       incomingCall,
-      tool: tools[canonicalCall.name],
+      tool: registeredChatTool(tools, canonicalCall.name),
     });
     if (Result.isError(validatedCallResult)) {
       return Result.err(validatedCallResult.error);
@@ -1038,17 +1042,15 @@ const canonicalToolCallBase = (
   if (!isRecord(canonicalValue)) {
     panic("Canonical chat tool call is not an object");
   }
-  const base: Record<string, unknown> = {};
-  for (const [property, disposition] of Object.entries(
-    CONTINUATION_TOOL_CALL_PROPERTY_DISPOSITION,
-  )) {
-    if (
-      disposition === "state-independent" &&
-      Object.hasOwn(canonicalValue, property)
-    ) {
-      base[property] = canonicalValue[property];
-    }
-  }
+  const base = Object.fromEntries(
+    Object.entries(CONTINUATION_TOOL_CALL_PROPERTY_DISPOSITION).flatMap(
+      ([property, disposition]) =>
+        disposition === "state-independent" &&
+        Object.hasOwn(canonicalValue, property)
+          ? [[property, canonicalValue[property]] as const]
+          : [],
+    ),
+  );
   const input: unknown = canonicalCall.input;
   const argumentsText =
     input === undefined ? undefined : JSON.stringify(canonicalCall.input);
@@ -1495,7 +1497,7 @@ const validateToolCallPart = ({
   part: ChatToolCallPart;
   tools: ChatToolMap;
 }): Result<ValidatedToolCallPart, HandlerError<400>> => {
-  const tool = tools[part.name];
+  const tool = registeredChatTool(tools, part.name);
   if (TOOL_CALL_OUTPUT_VALIDATION[part.state] === "error") {
     return validateErrorToolCallPart({ part, tool });
   }
@@ -1716,7 +1718,7 @@ const validateToolResultPart = ({
     );
   }
 
-  const tool = tools[toolCall.name];
+  const tool = registeredChatTool(tools, toolCall.name);
   if (tool === undefined) {
     return Result.err(
       new HandlerError({

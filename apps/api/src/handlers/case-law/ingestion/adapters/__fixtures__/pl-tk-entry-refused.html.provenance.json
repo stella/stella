@@ -1,0 +1,10 @@
+{
+  "capture": "recorded",
+  "sha256": "a93c7d27d7eadf189004fb4ec67e591e87bd7df4bcd9463eb589d8fb09b370ef",
+  "sourceUrl": "https://ipo.trybunal.gov.pl/ipo/",
+  "capturedAt": "2026-10-02T14:21:04.356716+02:00",
+  "httpStatus": 403,
+  "contentType": "text/html",
+  "protocol": "HTTP/2",
+  "note": "Entry refusal body; contains no cookies, session ids or tokens. Response headers are omitted."
+}

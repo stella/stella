@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { Elysia } from "elysia";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
@@ -495,6 +495,45 @@ describe("finite HTTP action admission", () => {
       expect(deps.counts()).toEqual({ acquisitions: 1, releases: 1 });
     });
   });
+
+  test.each([400, 409, 429] as const)(
+    "an already disconnected request preserves status %s when signal composition loses its reason",
+    async (status) => {
+      await withFeature(true, async () => {
+        const deps = dependencies();
+        const controller = new AbortController();
+        controller.abort(new HandlerError({ status, message: "Disconnected" }));
+        const requestContext = context(controller.signal);
+        expect(requestContext.request.signal.reason).toBe(
+          controller.signal.reason,
+        );
+        const composed = AbortSignal.abort();
+        expect(composed.reason).not.toBe(controller.signal.reason);
+        const composition = spyOn(AbortSignal, "any").mockReturnValue(composed);
+        let calls = 0;
+        try {
+          const endpoint = createSafeRootHandler(
+            config,
+            async function* () {
+              calls += 1;
+              return Result.ok({ ok: true });
+            },
+            deps,
+          );
+          expect(
+            await endpoint.handler(asTestRaw(requestContext)),
+          ).toMatchObject({
+            code: status,
+            response: { message: "Disconnected" },
+          });
+          expect(calls).toBe(0);
+          expect(deps.counts()).toEqual({ acquisitions: 1, releases: 1 });
+        } finally {
+          composition.mockRestore();
+        }
+      });
+    },
+  );
 
   // A disconnect usually aborts with the platform's default reason, or none
   // that survives signal composition; only the HandlerError case above was

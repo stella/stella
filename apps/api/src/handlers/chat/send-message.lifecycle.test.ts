@@ -120,6 +120,11 @@ describe("send lifecycle checkpoint indexing", () => {
       const writtenMessages: Record<string, unknown>[] = [];
       const writtenTurns: Record<string, unknown>[] = [];
       const db = createScopedDbMock({
+        query: {
+          chatThreadCompactions: {
+            findFirst: async () => await Promise.resolve(null),
+          },
+        },
         update: (table: unknown) => ({
           set: (values: Record<string, unknown>) => ({
             where: () => {

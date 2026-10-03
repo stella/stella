@@ -31,4 +31,5 @@ export const decisionFilterFacets = ({
         year: yearsNewestFirst(search.year),
         decisionType: search.decisionType,
         language: search.language,
+        source: search.source,
       };

@@ -12,6 +12,7 @@ import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
  * Those routes must still land in the same limiter scope, so callers cannot
  * bypass or double the budget by choosing one path over the other — hence one
  * shared factory instead of a copy per route.
+ * `handlers/api-rate-limit-census.test.ts` fails on a `/v1` route without one.
  */
 export const createStandardApiRateLimitOptions = () =>
   ({

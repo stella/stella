@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+  chmodSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -10,10 +12,11 @@ import os from "node:os";
 import path from "node:path";
 
 import {
-  scopeBaseline,
-  summarizeBudgetChanges,
+  prepareComparisonBaseline,
   validateBaselineFile,
 } from "./network-baseline-scope";
+
+const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
 
 const entry = (depth: number) => ({ depth, requests: [`GET /${depth}`] });
 
@@ -65,86 +68,53 @@ declare module '@tanstack/react-router' {
 }`;
 
 describe("network baseline scope", () => {
-  test("keeps new and touched routes, restores all other base entries", () => {
-    const base = { "/": entry(1), "/chat": entry(2), "/settings": entry(3) };
-    const recorded = {
-      "/": entry(11),
-      "/chat": entry(22),
-      "/new-route": entry(44),
-    };
+  const scopedRoutes = (changedPaths: string[], tree = routeTree) =>
+    prepareComparisonBaseline({
+      base: {},
+      changedPaths,
+      baseRouteTree: routeTree,
+      routeTree: tree,
+      declarations: [],
+    }).changedRoutes;
 
+  test("index route changes include their redirect target and leave unrelated routes strict", () => {
     expect(
-      scopeBaseline({
-        base,
-        recorded,
-        changedPaths: ["apps/web/src/routes/_protected.chat/index.tsx"],
-        routeTree,
-        baseRouteTree: routeTree,
-      }),
-    ).toEqual({
-      "/": entry(1),
-      "/chat": entry(22),
-      "/settings": entry(3),
-    });
+      scopedRoutes(["apps/web/src/routes/_protected.chat/index.tsx"]),
+    ).toEqual(["/chat", "/chat target"]);
   });
 
-  test("accepts index and redirect target keys with a trailing slash in the tree", () => {
-    const base = { "/chat": entry(1), "/chat target": entry(2) };
-    const recorded = { "/chat": entry(11), "/chat target": entry(22) };
-    expect(
-      scopeBaseline({
-        base,
-        recorded,
-        changedPaths: ["apps/web/src/routes/_protected.chat/index.tsx"],
-        baseRouteTree: routeTree,
-        routeTree,
-      }),
-    ).toEqual(recorded);
+  test("pathless layout changes scope its route and descendants", () => {
+    expect(scopedRoutes(["apps/web/src/routes/_protected.tsx"])).toEqual([
+      "/",
+      "/ target",
+      "/chat",
+      "/chat target",
+      "/settings",
+      "/settings target",
+    ]);
   });
 
-  test("a changed pathless layout marks descendants", () => {
-    const base = { "/chat": entry(1), "/settings": entry(2) };
-    const recorded = { "/chat": entry(11), "/settings": entry(22) };
-    expect(
-      scopeBaseline({
-        base,
-        recorded,
-        changedPaths: ["apps/web/src/routes/_protected.tsx"],
-        baseRouteTree: routeTree,
-        routeTree,
-      }),
-    ).toEqual(recorded);
-  });
-
-  test("omits a deleted route present only in the base tree", () => {
-    const headRouteTree = routeTree.replace(
+  test("deleted routes remain scoped from the base tree", () => {
+    const tree = routeTree.replace(
       / {4}'\/_protected\/chat\/': \{[\s\S]*?^ {4}\}\n/gmu,
       "",
     );
+    expect(tree).not.toBe(routeTree);
     expect(
-      scopeBaseline({
-        base: { "/chat": entry(1), "/settings": entry(2) },
-        recorded: { "/settings": entry(22) },
-        changedPaths: ["apps/web/src/routes/_protected.chat/index.tsx"],
-        baseRouteTree: routeTree,
-        routeTree: headRouteTree,
-      }),
-    ).toEqual({ "/settings": entry(2) });
+      scopedRoutes(["apps/web/src/routes/_protected.chat/index.tsx"], tree),
+    ).toEqual(["/chat", "/chat target"]);
   });
 
-  test("--all permits every recorded entry while retaining recorded omissions", () => {
-    const base = { "/": entry(1), "/settings": entry(3) };
-    const recorded = { "/": entry(11) };
-    expect(
-      scopeBaseline({
-        base,
-        recorded,
-        changedPaths: [],
-        baseRouteTree: routeTree,
-        routeTree,
-        all: true,
-      }),
-    ).toEqual(recorded);
+  test("root changes include every route and an unrelated source includes none", () => {
+    expect(scopedRoutes(["apps/web/src/routes/__root.tsx"])).toEqual([
+      "/",
+      "/ target",
+      "/chat",
+      "/chat target",
+      "/settings",
+      "/settings target",
+    ]);
+    expect(scopedRoutes(["apps/web/src/component.tsx"])).toEqual([]);
   });
 
   test("rejects a budget for a request the route does not record", () => {
@@ -172,7 +142,7 @@ describe("network baseline scope", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 
   test("validates schema and rejects oversized files and symlinks", () => {
     const directory = mkdtempSync(path.join(os.tmpdir(), "network-baseline-"));
@@ -200,104 +170,10 @@ describe("network baseline scope", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 });
 
-describe("network baseline budget summary", () => {
-  test("lists added, removed and changed budgets per route", () => {
-    const summary = summarizeBudgetChanges({
-      base: {
-        "/chat": {
-          depth: 2,
-          requests: ["GET /a", "GET /old"],
-          requestCounts: { "GET /a": 1 },
-          dbQueries: { "GET /a": 4 },
-        },
-        "/gone": entry(1),
-        "/same": entry(3),
-      },
-      recorded: {
-        "/chat": {
-          depth: 3,
-          requests: ["GET /a", "GET /b"],
-          requestCounts: { "GET /a": 2 },
-          dbQueries: { "GET /a": 4, "GET /b": 1 },
-          responseSizes: { "GET /b": 900 },
-        },
-        "/new": entry(5),
-        "/same": entry(3),
-      },
-    });
-    expect(summary).toBe(
-      [
-        "This network baseline was recorded by this pull request's own code.",
-        "",
-        "Budget changes against the base branch:",
-        "",
-        "- `/chat`: depth 2 → 3; requestCounts `GET /a` 1 → 2; dbQueries `GET /b` none → 1; responseSizes `GET /b` none → 900; request `GET /b` added; request `GET /old` removed",
-        "- `/gone`: removed",
-        "- `/new`: added, depth 5, allowed requests 1",
-        "",
-        "Review these as budget changes and resolve this thread to accept them.",
-      ].join("\n"),
-    );
-  });
-
-  test("says so when nothing changed against the base branch", () => {
-    const baseline = { "/": entry(1) };
-    expect(
-      summarizeBudgetChanges({ base: baseline, recorded: baseline }),
-    ).toContain("No budget changes against the base branch.");
-  });
-
-  test("renders recorded keys as inert code spans", () => {
-    const summary = summarizeBudgetChanges({
-      base: {},
-      recorded: { "/x`\n@team **bold**": entry(1) },
-    });
-    expect(summary).toContain("- `/x  @team **bold**`: added");
-    expect(summary.split("\n")).toHaveLength(7);
-  });
-
-  test("stays under the comment size limit", () => {
-    const recorded = Object.fromEntries(
-      Array.from({ length: 5000 }, (_, index) => [
-        `/route-${index}-${"x".repeat(40)}`,
-        entry(1),
-      ]),
-    );
-    const summary = summarizeBudgetChanges({ base: {}, recorded });
-    expect(summary.length).toBeLessThan(65_536);
-    expect(summary).toMatch(/- \d+ more routes changed; see the file diff\./u);
-    expect(summary).toEndWith("resolve this thread to accept them.");
-  });
-
-  test("prints the summary from the command line", () => {
-    const directory = mkdtempSync(path.join(os.tmpdir(), "network-baseline-"));
-    const basePath = path.join(directory, "base.json");
-    const recordedPath = path.join(directory, "recorded.json");
-    try {
-      writeFileSync(basePath, JSON.stringify({ "/": entry(1) }));
-      writeFileSync(recordedPath, JSON.stringify({ "/": entry(2) }));
-      const result = Bun.spawnSync([
-        "bun",
-        "scripts/network-baseline-scope.ts",
-        "summary",
-        "--base",
-        basePath,
-        "--recorded",
-        recordedPath,
-      ]);
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout.toString()).toContain("- `/`: depth 1 → 2");
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  });
-});
-
-// The recorder runs pull request code and the deliver workflow holds write
-// tokens; these assertions fail the edit that would move either boundary.
+// Recorder and publisher share a read-only, main-only authority boundary.
 type WorkflowJob = {
   if?: string;
   needs?: string | string[];
@@ -332,137 +208,750 @@ const workflowSource = (file: string): string =>
 const readWorkflowJobs = (file: string): Record<string, WorkflowJob> => {
   const parsed: unknown = Bun.YAML.parse(workflowSource(file));
   const jobs = isRecord(parsed) ? parsed["jobs"] : undefined;
-  return isWorkflowJobs(jobs)
-    ? jobs
-    : expect.unreachable(`${file} has no jobs`);
+  if (!isRecord(jobs)) {
+    return expect.unreachable(`${file} has no jobs`);
+  }
+  // Reusable-workflow calls (`uses:` jobs) have no steps to inspect.
+  const stepJobs = Object.fromEntries(
+    Object.entries(jobs).filter(
+      ([, job]) => isRecord(job) && Array.isArray(job["steps"]),
+    ),
+  );
+  return isWorkflowJobs(stepJobs)
+    ? stepJobs
+    : expect.unreachable(`${file} has malformed jobs`);
 };
 
 describe("network baseline workflows", () => {
-  test("the recorder passes no secrets and keeps read-only credentials", () => {
+  test("preparation generates revision trees instead of reading a committed route tree", () => {
+    const script = readFileSync(
+      path.join(
+        import.meta.dirname,
+        "..",
+        ".github/actions/prepare-network-baseline/prepare.sh",
+      ),
+      "utf-8",
+    );
+    expect(script).not.toMatch(/git\s+show[^\n]*routeTree\.gen\.ts/u);
+    expect(script).not.toContain("apps/web/src/routeTree.gen.ts");
+    expect(script).toContain(
+      'network-baseline-route-tree.ts "$repository" "$base" "$base_tree"',
+    );
+    expect(script).toContain(
+      'network-baseline-route-tree.ts "$repository" "$head" "$head_tree"',
+    );
+    for (const file of ["ci.yml", "network-baseline-record.yml"]) {
+      for (const job of Object.values(readWorkflowJobs(file))) {
+        const prepare = job.steps.findIndex(
+          (step) => step.uses === "./.github/actions/prepare-network-baseline",
+        );
+        if (prepare === -1) {
+          continue;
+        }
+        const install = job.steps.findIndex(
+          (step) => step.name === "Install dependencies",
+        );
+        expect(install, file).toBeGreaterThan(-1);
+        expect(prepare, file).toBeGreaterThan(install);
+      }
+    }
+  });
+
+  test("recordings run only on main and carry an immutable source identity", () => {
     const source = workflowSource("network-baseline-record.yml");
+    const parsed: unknown = Bun.YAML.parse(source);
+    expect(isRecord(parsed) && parsed["on"]).toMatchObject({
+      push: { branches: ["main"] },
+    });
+    if (!isRecord(parsed) || !isRecord(parsed["on"])) {
+      expect.unreachable("workflow triggers");
+    }
+    expect(parsed["on"]["pull_request"]).toBeUndefined();
+    const jobs = readWorkflowJobs("network-baseline-record.yml");
+    expect(jobs["build"]?.if).toContain("github.ref == 'refs/heads/main'");
+    expect(jobs["record"]?.needs).toBe("build");
+    expect(jobs["build"]?.permissions).toEqual({ contents: "read" });
+    expect(jobs["record"]?.permissions).toEqual({
+      contents: "read",
+      actions: "read",
+    });
+    const record = jobs["record"] ?? expect.unreachable("record job");
+    const seed = record.steps.findIndex(
+      (step) => step.uses === "./.github/actions/prepare-network-baseline",
+    );
+    expect(seed).toBeGreaterThan(-1);
+    expect(record.steps.at(seed)).toMatchObject({
+      if: "(inputs.mode || 'write') == 'write'",
+      with: {
+        "base-sha": githubExpression("github.sha"),
+        token: githubExpression("github.token"),
+        purpose: "recording",
+      },
+    });
+    expect(
+      record.steps.findIndex((step) => step.env?.["E2E_NETWORK_BASELINE"]),
+    ).toBeGreaterThan(seed);
+    expect(source).toContain(
+      `network-baseline-record-${githubExpression("github.sha")}`,
+    );
+    expect(source).toContain(
+      `E2E_NETWORK_BASELINE: ${githubExpression("inputs.mode || 'write'")}`,
+    );
     expect(source).not.toMatch(/\bsecrets\.\w/u);
-    expect(source).not.toMatch(/\bsecrets:\s*inherit\b/u);
-    for (const [name, job] of Object.entries(
-      readWorkflowJobs("network-baseline-record.yml"),
-    )) {
-      const levels = isRecord(job.permissions)
-        ? Object.values(job.permissions)
-        : [];
-      expect(levels.length, name).toBeGreaterThan(0);
-      expect(
-        levels.every((level) => level === "read"),
-        name,
-      ).toBe(true);
+    for (const job of Object.values(jobs)) {
       for (const step of job.steps) {
         if (step.uses?.startsWith("actions/checkout@")) {
-          expect(step.with?.["persist-credentials"], name).toBe(false);
+          expect(step.with?.["persist-credentials"]).toBe(false);
+          expect(step.with?.["ref"]).toBe(githubExpression("github.sha"));
         }
       }
     }
   });
 
-  test("a delivered commit opens a budget review thread", () => {
+  test("delivery validates successful main recordings with no branch write authority", () => {
+    const source = workflowSource("network-baseline-deliver.yml");
     const jobs = readWorkflowJobs("network-baseline-deliver.yml");
-    const deliver = jobs["deliver"] ?? expect.unreachable("deliver job");
-    const stepIds = deliver.steps.map((step) => step.id);
-    const summaryIndex = stepIds.indexOf("summary");
-    const tokenIndex = stepIds.indexOf("app-token");
-    const commitIndex = stepIds.indexOf("commit");
-    expect(summaryIndex).toBeGreaterThan(-1);
-    expect(tokenIndex).toBeGreaterThan(summaryIndex);
-    expect(commitIndex).toBeGreaterThan(tokenIndex);
-    expect(deliver.outputs?.["committed"]).toContain(
-      "steps.commit.outputs.operation == 'committed'",
+    expect(Object.keys(jobs)).toEqual(["deliver"]);
+    const deliver = jobs["deliver"] ?? expect.unreachable("delivery job");
+    expect(deliver.if).toContain(
+      "head_branch == github.event.repository.default_branch",
     );
-    expect(deliver.outputs?.["commit-sha"]).toContain(
-      "steps.commit.outputs.commit-sha",
+    expect(deliver.if).toContain(
+      "head_repository.full_name == github.repository",
     );
-
-    const review =
-      jobs["request-budget-review"] ?? expect.unreachable("review job");
-    expect(review.needs).toBe("deliver");
-    expect(review.if).toContain("needs.deliver.outputs.committed == 'true'");
-    expect(review.permissions).toEqual({ "pull-requests": "write" });
-    const post = review.steps.find((step) =>
-      step.run?.includes('"repos/$REPOSITORY/pulls/$PR_NUMBER/comments"'),
+    expect(deliver.if).toContain("conclusion == 'success'");
+    // The display name alone does not identify the recorder workflow.
+    expect(deliver.if).toContain(
+      "github.event.workflow_run.path == '.github/workflows/network-baseline-record.yml'",
     );
-    expect(post?.run).toContain('commit_id="$COMMIT_SHA"');
-    expect(post?.run).toContain("path=apps/web/e2e/network-baseline.json");
-    expect(post?.run).toContain("subject_type=file");
-    expect(post?.run).not.toContain("${{");
+    expect(deliver.permissions).toEqual({ actions: "read", contents: "read" });
+    const validation = deliver.steps.findIndex((step) =>
+      step.run?.includes(" validate "),
+    );
+    const publication = deliver.steps.findIndex(
+      (step) =>
+        step.with?.["name"] ===
+        `network-baseline-main-${githubExpression("github.event.workflow_run.head_sha")}`,
+    );
+    expect(validation).toBeGreaterThan(-1);
+    expect(publication).toBeGreaterThan(validation);
+    expect(source).not.toContain("signed-commit");
+    expect(source).not.toContain("secrets.");
   });
 
-  test("a recording that never reaches the branch fails on the pull request", () => {
-    const jobs = readWorkflowJobs("network-baseline-deliver.yml");
-    const deliver = jobs["deliver"] ?? expect.unreachable("deliver job");
-    expect(deliver.outputs?.["pr"]).toContain("steps.pr.outputs.pr");
-    expect(deliver.outputs?.["head"]).toContain("steps.artifact.outputs.head");
-    expect(deliver.outputs?.["push-allowed"]).toContain(
-      "steps.pr.outputs.push-allowed",
-    );
-    const deliverLevels = isRecord(deliver.permissions)
-      ? Object.values(deliver.permissions)
-      : [];
-    expect(deliverLevels.length).toBeGreaterThan(0);
-    expect(deliverLevels.every((level) => level === "read")).toBe(true);
-
-    const report = jobs["report-delivery"] ?? expect.unreachable("report job");
-    expect(report.needs).toBe("deliver");
-    // always(): the report exists for the case where deliver failed.
-    expect(report.if).toContain("always()");
-    expect(report.if).toContain("needs.deliver.outputs.pr != ''");
-    expect(report.permissions).toEqual({
-      issues: "write",
-      "pull-requests": "write",
-      statuses: "write",
-    });
-
-    const step = report.steps.find((candidate) =>
-      candidate.run?.includes('"repos/$REPOSITORY/statuses/$HEAD_SHA"'),
-    );
-    // always(): a failed label removal must not hide the report.
-    expect(step?.if).toBe(
-      "always() && needs.deliver.outputs.push-allowed == 'true'",
-    );
-    expect(step?.env?.["HEAD_SHA"]).toContain("needs.deliver.outputs.head");
-    expect(step?.env?.["DELIVERED"]).toContain(
-      "needs.deliver.outputs.committed == 'true'",
-    );
-    expect(step?.run).toContain("state=failure");
-    // The merge-queue remedy is offered only when the commit step failed
-    // and the pull request is still queued, never for other failures.
-    expect(deliver.outputs?.["commit-outcome"]).toContain(
-      "steps.commit.outcome",
-    );
-    expect(step?.env?.["COMMIT_FAILED"]).toContain(
-      "needs.deliver.outputs.commit-outcome == 'failure'",
-    );
-    const queueHint = step?.run?.indexOf("merge queue, and a queued branch");
-    const queueGate = step?.run?.indexOf('if [[ "$queued" == true ]]; then');
-    expect(step?.run).toContain('if [[ "$COMMIT_FAILED" == true ]]; then');
-    expect(step?.run).toContain("isInMergeQueue");
-    expect(queueGate).toBeGreaterThan(-1);
-    expect(queueHint).toBeGreaterThan(queueGate ?? Infinity);
-    expect(step?.run).toContain(
-      '"repos/$REPOSITORY/issues/$PR_NUMBER/comments"',
-    );
-    expect(step?.run).not.toContain("${{");
-  });
-
-  test("every job that removes the recording label may write to pull requests", () => {
-    const jobs = readWorkflowJobs("network-baseline-deliver.yml");
-    const labelJobs = Object.entries(jobs).filter(([, job]) =>
-      job.steps.some((step) => step.run?.includes("labels/baseline%3Arecord")),
-    );
-    expect(labelJobs.map(([name]) => name).toSorted()).toEqual([
-      "remove-label-after-failure",
-      "report-delivery",
-    ]);
-    for (const [name, job] of labelJobs) {
-      expect(job.permissions, name).toMatchObject({
-        issues: "write",
-        "pull-requests": "write",
+  test("both comparison jobs load the merge-base budget before measuring", () => {
+    const jobs = readWorkflowJobs("ci.yml");
+    for (const name of ["route-smoke", "e2e-production-shard"]) {
+      const job = jobs[name] ?? expect.unreachable(name);
+      expect(job.permissions).toMatchObject({
+        contents: "read",
+        actions: "read",
       });
+      const prepare = job.steps.findIndex(
+        (step) => step.uses === "./.github/actions/prepare-network-baseline",
+      );
+      const comparison = job.steps.findIndex(
+        (step) => step.name === "Check route network baseline",
+      );
+      expect(prepare).toBeGreaterThan(-1);
+      expect(comparison).toBeGreaterThan(prepare);
+      // Every event that compares also loads the published budget; an event
+      // filter here would compare against the frozen committed JSON instead.
+      expect(job.steps[prepare]?.if ?? "", name).not.toContain("event_name");
+      expect(job.steps[prepare]?.with?.["base-sha"]).toContain(
+        "github.event.pull_request.base.sha",
+      );
+      expect(job.steps[prepare]?.with?.["base-sha"]).toContain(
+        "github.event.merge_group.base_sha",
+      );
+      const checkout = job.steps.find((step) =>
+        step.uses?.startsWith("actions/checkout@"),
+      );
+      expect(checkout?.with?.["fetch-depth"]).toBe(0);
     }
   });
+});
+
+describe("reviewed network budgets", () => {
+  const prepare = (declarations: unknown[] = []) =>
+    prepareComparisonBaseline({
+      base: { "/chat": entry(1), "/settings": entry(2) },
+      changedPaths: ["apps/web/src/routes/_protected.chat/index.tsx"],
+      baseRouteTree: routeTree,
+      routeTree,
+      declarations,
+    });
+
+  test("route edits preserve all old budgets and scope only their route keys", () => {
+    const result = prepare();
+    expect(result.baseline).toEqual({
+      "/chat": entry(1),
+      "/settings": entry(2),
+    });
+    expect(result.changedRoutes).toEqual(["/chat", "/chat target"]);
+    expect(result.notices).toEqual([]);
+  });
+
+  test("an explicit budget affects only its declared route and reports its reason", () => {
+    const result = prepare([
+      { route: "/chat", reason: "Additional endpoint", budget: entry(3) },
+    ]);
+    expect(result.baseline).toEqual({
+      "/chat": entry(3),
+      "/settings": entry(2),
+    });
+    expect(result.notices).toEqual(["- `/chat`: `Additional endpoint`"]);
+  });
+
+  test.each([
+    [null],
+    [{ route: "/chat", reason: " ", budget: entry(1) }],
+    [{ route: "chat", reason: "Change", budget: entry(1) }],
+    [{ route: "/chat", reason: "Change", budget: { depth: -1, requests: [] } }],
+    [
+      {
+        route: "/chat",
+        reason: "Change",
+        budget: { ...entry(1), dbQueries: { "GET /absent": 10 } },
+      },
+    ],
+    [{ route: "/chat", reason: "Change", budget: entry(1), extra: true }],
+    [
+      { route: "/chat", reason: "Change", budget: entry(1) },
+      { route: "/chat", reason: "Other", budget: entry(2) },
+    ],
+  ])(
+    "invalid or duplicate declarations fail closed",
+    (...declarations) => {
+      const result = Bun.spawnSync(
+        [
+          "bun",
+          "-e",
+          `import { readFileSync } from "node:fs"; import { prepareComparisonBaseline } from "./scripts/network-baseline-scope.ts"; prepareComparisonBaseline(JSON.parse(readFileSync(0, "utf-8")));`,
+        ],
+        {
+          cwd: path.join(import.meta.dirname, ".."),
+          stdin: Buffer.from(
+            JSON.stringify({
+              base: {},
+              changedPaths: [],
+              baseRouteTree: routeTree,
+              routeTree,
+              declarations,
+            }),
+          ),
+        },
+      );
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr.toString()).toMatch(
+        /Invalid network budget declaration|Duplicate network budget declaration/u,
+      );
+    },
+    60_000,
+  );
+
+  test("preparation rejects PR edits of shared JSON", () => {
+    const directory = mkdtempSync(path.join(os.tmpdir(), "network-budget-"));
+    try {
+      const base = path.join(directory, "base.json");
+      const tree = path.join(directory, "tree.ts");
+      const changed = path.join(directory, "changed");
+      writeFileSync(base, JSON.stringify({ "/chat": entry(1) }));
+      writeFileSync(tree, routeTree);
+      writeFileSync(changed, "apps/web/e2e/network-baseline.json\n");
+      const result = Bun.spawnSync(
+        [
+          "bun",
+          "scripts/network-baseline-scope.ts",
+          "prepare",
+          "--base",
+          base,
+          "--changed",
+          changed,
+          "--base-route-tree",
+          tree,
+          "--route-tree",
+          tree,
+          "--output",
+          path.join(directory, "output.json"),
+          "--context",
+          path.join(directory, "context.json"),
+        ],
+        { cwd: path.join(import.meta.dirname, "..") },
+      );
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr.toString()).toContain(
+        "instead of editing network-baseline.json",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 60_000);
+});
+
+const installRouteTreeGeneratorFixture = (directory: string) => {
+  const script = path.join(
+    directory,
+    "apps/web/scripts/network-baseline-route-tree.ts",
+  );
+  mkdirSync(path.dirname(script), { recursive: true });
+  writeFileSync(
+    script,
+    `import { writeFileSync } from "node:fs";
+const [repository, revision, output] = Bun.argv.slice(2);
+if (!repository || !revision || !output || !/^[a-f0-9]{40}$/.test(revision)) process.exit(1);
+const result = Bun.spawnSync(["git", "-C", repository, "show", revision + ":apps/web/src/fixture-route-tree.txt"]);
+if (result.exitCode !== 0) process.exit(result.exitCode);
+writeFileSync(output, result.stdout);
+`,
+  );
+};
+
+describe("merge-base preparation integration", () => {
+  test("PR merge refs use advanced main rather than the recorded event base", () => {
+    const directory = mkdtempSync(path.join(os.tmpdir(), "network-pr-merge-"));
+    const root = path.join(import.meta.dirname, "..");
+    const runnerPath = process.env["PATH"];
+    if (typeof runnerPath !== "string") {
+      expect.unreachable("integration fixture requires PATH");
+    }
+    const run = (args: string[], env: Record<string, string> = {}) =>
+      Bun.spawnSync(args, { cwd: directory, env: { ...process.env, ...env } });
+    const checked = (args: string[]) => {
+      const result = run(args);
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      return result.stdout.toString().trim();
+    };
+    const baselinePath = path.join(
+      directory,
+      "apps/web/e2e/network-baseline.json",
+    );
+    const treePath = path.join(
+      directory,
+      "apps/web/src/fixture-route-tree.txt",
+    );
+    const mainBaseline = { "/chat": entry(8), "/settings": entry(2) };
+    const mainTree = `${routeTree}\n// main advances\n`;
+    try {
+      mkdirSync(path.dirname(baselinePath), { recursive: true });
+      mkdirSync(path.dirname(treePath), { recursive: true });
+      mkdirSync(path.join(directory, "scripts"));
+      mkdirSync(path.join(directory, "bin"));
+      writeFileSync(
+        path.join(directory, "scripts/network-baseline-scope.ts"),
+        readFileSync(path.join(root, "scripts/network-baseline-scope.ts")),
+      );
+      writeFileSync(
+        baselinePath,
+        JSON.stringify({ "/chat": entry(1), "/settings": entry(2) }),
+      );
+      writeFileSync(treePath, routeTree);
+      installRouteTreeGeneratorFixture(directory);
+      checked(["git", "init", "-b", "main"]);
+      checked(["git", "config", "user.name", "Fixture"]);
+      checked(["git", "config", "user.email", "fixture@example.test"]);
+      checked(["git", "config", "commit.gpgsign", "false"]);
+      checked(["git", "add", "apps", "scripts"]);
+      checked(["git", "commit", "-m", "recorded base"]);
+      const recordedBase = checked(["git", "rev-parse", "HEAD"]);
+      checked(["git", "remote", "add", "origin", directory]);
+      checked(["git", "switch", "-c", "feature"]);
+      writeFileSync(path.join(directory, "feature.txt"), "feature");
+      checked(["git", "add", "feature.txt"]);
+      checked(["git", "commit", "-m", "feature"]);
+      const feature = checked(["git", "rev-parse", "HEAD"]);
+      expect(
+        checked(["git", "diff", "--name-only", recordedBase, feature]),
+      ).toBe("feature.txt");
+      checked(["git", "switch", "main"]);
+      writeFileSync(baselinePath, JSON.stringify(mainBaseline));
+      writeFileSync(treePath, mainTree);
+      checked(["git", "add", "apps"]);
+      checked(["git", "commit", "-m", "main recording advances"]);
+      const advancedMain = checked(["git", "rev-parse", "HEAD"]);
+      checked(["git", "merge", "--no-ff", "--no-edit", "feature"]);
+      expect(checked(["git", "rev-parse", "HEAD^1"])).toBe(advancedMain);
+      expect(checked(["git", "merge-base", "HEAD", recordedBase])).toBe(
+        recordedBase,
+      );
+      expect(
+        checked(["git", "diff", "--name-only", recordedBase, "HEAD"]),
+      ).toContain("apps/web/e2e/network-baseline.json");
+      const gh = path.join(directory, "bin/gh");
+      writeFileSync(
+        gh,
+        "#!/usr/bin/env bash\nprintf '%s\\n' '{\"artifacts\":[],\"workflow_runs\":[]}'\n",
+      );
+      chmodSync(gh, 0o755);
+      const summary = path.join(directory, "summary");
+      writeFileSync(summary, "");
+      const prepareScript = path.join(
+        root,
+        ".github/actions/prepare-network-baseline/prepare.sh",
+      );
+      const prepare = (script: string) =>
+        run(["bash", script], {
+          PATH: `${path.join(directory, "bin")}:${runnerPath}`,
+          BASE_SHA: recordedBase,
+          GITHUB_EVENT_NAME: "pull_request",
+          NETWORK_BASELINE_PURPOSE: "comparison",
+          REPOSITORY: "fixture/fixture",
+          RUNNER_TEMP: directory,
+          GITHUB_STEP_SUMMARY: summary,
+        });
+      expect(
+        run(["git", "show", `${advancedMain}:apps/web/src/routeTree.gen.ts`])
+          .exitCode,
+      ).not.toBe(0);
+      const result = prepare(prepareScript);
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      expect(JSON.parse(readFileSync(baselinePath, "utf-8"))).toEqual(
+        mainBaseline,
+      );
+      expect(
+        JSON.parse(
+          readFileSync(
+            path.join(directory, "apps/web/e2e/.network-baseline-base.json"),
+            "utf-8",
+          ),
+        ),
+      ).toEqual(mainBaseline);
+      expect(
+        readFileSync(path.join(directory, "base-route-tree.gen.ts"), "utf-8"),
+      ).toBe(mainTree);
+      expect(
+        readFileSync(path.join(directory, "head-route-tree.gen.ts"), "utf-8"),
+      ).toBe(mainTree);
+      expect(
+        readFileSync(
+          path.join(directory, "apps/web/e2e/.network-baseline-changed"),
+          "utf-8",
+        ).trim(),
+      ).toBe("feature.txt");
+      expect(readFileSync(summary, "utf-8")).toContain(
+        `merge base ${advancedMain}`,
+      );
+      const script = readFileSync(prepareScript, "utf-8");
+      const mutant = script.replace(
+        /if \[\[ "\$\{GITHUB_EVENT_NAME:-\}"[\s\S]*?^fi\n/mu,
+        "",
+      );
+      expect(mutant).not.toBe(script);
+      const mutantPath = path.join(directory, "prepare-mutant.sh");
+      writeFileSync(mutantPath, mutant);
+      const mutation = prepare(mutantPath);
+      expect(mutation.exitCode).not.toBe(0);
+      expect(mutation.stderr.toString()).toContain(
+        "PRs must declare network budget changes instead of editing network-baseline.json",
+      );
+      const committedTreeMutant = script.replace(
+        'bun apps/web/scripts/network-baseline-route-tree.ts "$repository" "$base" "$base_tree"',
+        'git show "$base:apps/web/src/routeTree.gen.ts" > "$base_tree"',
+      );
+      expect(committedTreeMutant).not.toBe(script);
+      writeFileSync(mutantPath, committedTreeMutant);
+      const committedTreeMutation = prepare(mutantPath);
+      expect(committedTreeMutation.exitCode).not.toBe(0);
+      expect(committedTreeMutation.stderr.toString()).toContain(
+        "does not exist",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  test("merging main changes the baseline source without editing the PR JSON", () => {
+    const directory = mkdtempSync(
+      path.join(os.tmpdir(), "network-merge-base-"),
+    );
+    const root = path.join(import.meta.dirname, "..");
+    const runnerPath = process.env["PATH"];
+    if (typeof runnerPath !== "string") {
+      expect.unreachable("integration fixture requires PATH");
+    }
+    const run = (args: string[], env: Record<string, string> = {}) =>
+      Bun.spawnSync(args, {
+        cwd: directory,
+        env: { ...process.env, ...env },
+      });
+    const checked = (args: string[]) => {
+      const result = run(args);
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      return result.stdout.toString().trim();
+    };
+    try {
+      mkdirSync(path.join(directory, "apps/web/e2e"), { recursive: true });
+      mkdirSync(path.join(directory, "apps/web/src"), { recursive: true });
+      mkdirSync(path.join(directory, "scripts"));
+      mkdirSync(path.join(directory, "bin"));
+      writeFileSync(
+        path.join(directory, "scripts/network-baseline-scope.ts"),
+        readFileSync(path.join(root, "scripts/network-baseline-scope.ts")),
+      );
+      writeFileSync(
+        path.join(directory, "apps/web/e2e/network-baseline.json"),
+        JSON.stringify({ "/chat": entry(1), "/settings": entry(2) }),
+      );
+      writeFileSync(
+        path.join(directory, "apps/web/src/fixture-route-tree.txt"),
+        routeTree,
+      );
+      installRouteTreeGeneratorFixture(directory);
+      checked(["git", "init", "-b", "main"]);
+      checked(["git", "config", "user.name", "Fixture"]);
+      checked(["git", "config", "user.email", "fixture@example.test"]);
+      checked(["git", "config", "commit.gpgsign", "false"]);
+      checked(["git", "add", "apps", "scripts"]);
+      checked(["git", "commit", "-m", "fixture"]);
+      const firstBase = checked(["git", "rev-parse", "HEAD"]);
+      checked(["git", "remote", "add", "origin", directory]);
+      checked(["git", "switch", "-c", "feature"]);
+      writeFileSync(path.join(directory, "feature.txt"), "feature");
+      checked(["git", "add", "feature.txt"]);
+      checked(["git", "commit", "-m", "feature"]);
+      const feature = checked(["git", "rev-parse", "HEAD"]);
+      const gh = path.join(directory, "bin/gh");
+      writeFileSync(
+        gh,
+        `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$TEST_ARTIFACTS" == fail ]]; then exit 42; fi
+case "$*" in
+  *actions/artifacts/3/zip*) cat "$TEST_ZIP_NEW" ;;
+  *actions/artifacts/*/zip*) cat "$TEST_ZIP" ;;
+  *actions/artifacts*) printf '%s\\n' "$TEST_ARTIFACTS" ;;
+  *actions/workflows/*) printf '%s\\n' "$TEST_RUNS" ;;
+  *actions/runs/*) printf '%s\\n' "$TEST_RUN" ;;
+  *) exit 1 ;;
+esac
+`,
+      );
+      chmodSync(gh, 0o755);
+      // The action does not provision ripgrep; exercise inheritance without it.
+      const unavailableRipgrep = path.join(directory, "bin/rg");
+      writeFileSync(unavailableRipgrep, "#!/usr/bin/env bash\nexit 127\n");
+      chmodSync(unavailableRipgrep, 0o755);
+      const summary = path.join(directory, "summary");
+      writeFileSync(summary, "");
+      const prepare = (
+        base: string,
+        artifactEnv: Record<string, string> = {},
+      ) => {
+        const result = run(
+          [
+            "bash",
+            path.join(
+              root,
+              ".github/actions/prepare-network-baseline/prepare.sh",
+            ),
+          ],
+          {
+            PATH: `${path.join(directory, "bin")}:${runnerPath}`,
+            BASE_SHA: base,
+            GITHUB_EVENT_NAME: "push",
+            REPOSITORY: "fixture/fixture",
+            RUNNER_TEMP: directory,
+            GITHUB_STEP_SUMMARY: summary,
+            TEST_ARTIFACTS: '{"artifacts":[]}',
+            TEST_RUNS: '{"workflow_runs":[]}',
+            ...artifactEnv,
+          },
+        );
+        expect(result.exitCode, result.stderr.toString()).toBe(0);
+        return JSON.parse(
+          readFileSync(
+            path.join(directory, "apps/web/e2e/network-baseline.json"),
+            "utf-8",
+          ),
+        );
+      };
+      expect(prepare(firstBase)).toEqual({
+        "/chat": entry(1),
+        "/settings": entry(2),
+      });
+      checked(["git", "restore", "apps/web/e2e/network-baseline.json"]);
+      checked(["git", "switch", "main"]);
+      writeFileSync(path.join(directory, "main.txt"), "main advances");
+      checked(["git", "add", "main.txt"]);
+      checked(["git", "commit", "-m", "main advance"]);
+      const nextBase = checked(["git", "rev-parse", "HEAD"]);
+      checked(["git", "switch", "feature"]);
+      checked(["git", "merge", "--no-edit", "main"]);
+      expect(nextBase).not.toBe(firstBase);
+      expect(checked(["git", "diff", "--name-only", firstBase, feature])).toBe(
+        "feature.txt",
+      );
+      expect(prepare(nextBase)).toEqual({
+        "/chat": entry(1),
+        "/settings": entry(2),
+      });
+      expect(checked(["git", "diff", "--name-only", nextBase, "HEAD"])).toBe(
+        "feature.txt",
+      );
+      expect(readFileSync(summary, "utf-8")).toContain(
+        `merge base ${nextBase}`,
+      );
+      const publication = { "/chat": entry(8), "/settings": entry(2) };
+      mkdirSync(path.join(directory, "published"));
+      writeFileSync(
+        path.join(directory, "published/network-baseline.json"),
+        JSON.stringify(publication),
+      );
+      const zip = run([
+        "zip",
+        "-jq",
+        path.join(directory, "baseline.zip"),
+        path.join(directory, "published/network-baseline.json"),
+      ]);
+      expect(zip.exitCode).toBe(0);
+      const artifactEnv = {
+        TEST_ARTIFACTS: JSON.stringify({
+          artifacts: [
+            {
+              id: 1,
+              name: `network-baseline-main-${firstBase}`,
+              expired: false,
+              workflow_run: { id: 2 },
+            },
+          ],
+        }),
+        TEST_RUNS: JSON.stringify({
+          workflow_runs: [{ event: "push", head_sha: firstBase }],
+        }),
+        TEST_RUN: JSON.stringify({
+          path: ".github/workflows/network-baseline-deliver.yml",
+          event: "workflow_run",
+          conclusion: "success",
+          head_branch: "main",
+        }),
+        TEST_ZIP: path.join(directory, "baseline.zip"),
+      };
+      expect(prepare(nextBase, artifactEnv)).toEqual(publication);
+      expect(readFileSync(summary, "utf-8")).toContain(
+        `recording at ${firstBase} (merge base ${nextBase})`,
+      );
+      expect(
+        prepare(nextBase, {
+          ...artifactEnv,
+          TEST_RUN: JSON.stringify({
+            path: ".github/workflows/ci.yml",
+            event: "pull_request",
+            conclusion: "success",
+            head_branch: "feature",
+          }),
+        }),
+      ).toEqual({ "/chat": entry(1), "/settings": entry(2) });
+      mkdirSync(path.join(directory, "apps/web/e2e/network-budgets"));
+      writeFileSync(
+        path.join(directory, "apps/web/e2e/network-budgets/change.json"),
+        JSON.stringify({
+          route: "/chat",
+          reason: "Additional endpoint",
+          budget: entry(9),
+        }),
+      );
+      checked(["git", "add", "apps/web/e2e/network-budgets/change.json"]);
+      checked(["git", "commit", "-m", "declare budget"]);
+      expect(prepare(nextBase)).toEqual({
+        "/chat": entry(9),
+        "/settings": entry(2),
+      });
+      const inheritedBase = checked(["git", "rev-parse", "HEAD"]);
+      expect(prepare(inheritedBase)).toEqual({
+        "/chat": entry(1),
+        "/settings": entry(2),
+      });
+      // Main must seed declarations even when no request observes them yet.
+      const declared = { "/chat": entry(9), "/settings": entry(2) };
+      expect(
+        prepare(inheritedBase, { NETWORK_BASELINE_PURPOSE: "recording" }),
+      ).toEqual(declared);
+      expect(
+        prepare(inheritedBase, {
+          ...artifactEnv,
+          NETWORK_BASELINE_PURPOSE: "recording",
+        }),
+      ).toEqual(declared);
+      // The next publication contains the declaration plus a measured peak.
+      const newerPublication = { "/chat": entry(10), "/settings": entry(2) };
+      writeFileSync(
+        path.join(directory, "published/network-baseline.json"),
+        JSON.stringify(newerPublication),
+      );
+      checked([
+        "zip",
+        "-jq",
+        path.join(directory, "newer-baseline.zip"),
+        path.join(directory, "published/network-baseline.json"),
+      ]);
+      checked(["git", "restore", "apps/web/e2e/network-baseline.json"]);
+      writeFileSync(path.join(directory, "docs.txt"), "main advances again");
+      checked(["git", "add", "docs.txt"]);
+      checked(["git", "commit", "-m", "docs advance"]);
+      const latestBase = checked(["git", "rev-parse", "HEAD"]);
+      const shuffledArtifacts = {
+        ...artifactEnv,
+        TEST_ARTIFACTS: JSON.stringify({
+          artifacts: [
+            {
+              id: 1,
+              name: `network-baseline-main-${firstBase}`,
+              expired: false,
+              workflow_run: { id: 2 },
+            },
+            {
+              id: 3,
+              name: `network-baseline-main-${inheritedBase}`,
+              expired: false,
+              workflow_run: { id: 4 },
+            },
+          ],
+        }),
+        TEST_ZIP_NEW: path.join(directory, "newer-baseline.zip"),
+      };
+      for (const sources of [
+        [firstBase, inheritedBase, nextBase],
+        [nextBase, inheritedBase, firstBase],
+        [inheritedBase, firstBase, nextBase],
+      ]) {
+        const inherited = {
+          ...shuffledArtifacts,
+          TEST_RUNS: JSON.stringify({
+            workflow_runs: sources.map((head_sha) => ({
+              event: "push",
+              head_sha,
+            })),
+          }),
+        };
+        expect(prepare(latestBase, inherited)).toEqual(newerPublication);
+        expect(
+          prepare(latestBase, {
+            ...inherited,
+            NETWORK_BASELINE_PURPOSE: "recording",
+          }),
+        ).toEqual(newerPublication);
+      }
+      const unavailable = run(
+        [
+          "bash",
+          path.join(
+            root,
+            ".github/actions/prepare-network-baseline/prepare.sh",
+          ),
+        ],
+        {
+          PATH: `${path.join(directory, "bin")}:${runnerPath}`,
+          BASE_SHA: nextBase,
+          GITHUB_EVENT_NAME: "push",
+          REPOSITORY: "fixture/fixture",
+          RUNNER_TEMP: directory,
+          GITHUB_STEP_SUMMARY: summary,
+          TEST_ARTIFACTS: "fail",
+        },
+      );
+      expect(unavailable.exitCode).toBe(42);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 60_000);
 });

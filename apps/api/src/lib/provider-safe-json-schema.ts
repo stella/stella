@@ -944,16 +944,17 @@ const projectChild = ({
   seenRefs,
 }: ProjectChildParams): unknown => {
   if (key === "properties" && isJsonObject(value)) {
-    const projectedProperties: JsonObject = {};
-    for (const [propertyName, propertySchema] of Object.entries(value)) {
-      projectedProperties[propertyName] = projectNode({
-        node: propertySchema,
-        path: joinPath(path, propertyName),
-        context,
-        seenRefs,
-      });
-    }
-    return projectedProperties;
+    return Object.fromEntries(
+      Object.entries(value).map(([propertyName, propertySchema]) => [
+        propertyName,
+        projectNode({
+          node: propertySchema,
+          path: joinPath(path, propertyName),
+          context,
+          seenRefs,
+        }),
+      ]),
+    );
   }
 
   if (key === "additionalProperties" && isJsonObject(value)) {

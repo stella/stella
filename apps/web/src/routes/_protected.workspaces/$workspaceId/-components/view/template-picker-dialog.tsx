@@ -31,6 +31,7 @@ import {
   GanttChartIcon,
   KanbanIcon,
   LayoutDashboardIcon,
+  MailIcon,
   TableIcon,
   Trash2Icon,
 } from "@stll/ui/icons";
@@ -58,6 +59,7 @@ const layoutIcons = {
   calendar: CalendarIcon,
   timeline: GanttChartIcon,
   avt: FileCheckIcon,
+  correspondence: MailIcon,
 } as const satisfies Record<ViewLayoutType, React.ElementType>;
 
 type TemplatePickerDialogProps = {

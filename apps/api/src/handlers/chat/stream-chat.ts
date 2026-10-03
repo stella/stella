@@ -382,6 +382,10 @@ export const prepareResumeForThirdParty = async ({
   );
 };
 
+export type StreamChatOutcome =
+  | { type: "streaming"; response: Response }
+  | { type: "refused"; response: ChatTurnFailureResponse };
+
 export const streamChat = async ({
   devModelId,
   latestMessageId,
@@ -417,14 +421,17 @@ export const streamChat = async ({
   externalMcpToolSource,
   userId,
   workspaceId,
-}: StreamChatProps): Promise<Response> => {
+}: StreamChatProps): Promise<StreamChatOutcome> => {
   const messages = pruneOrphanedToolParts(rawMessages);
   const agentBoundaryError = resolveAgentRunBoundaryError({
     boundary: thirdPartyBoundary,
     runMode,
   });
   if (agentBoundaryError !== null) {
-    return thirdPartyBoundaryRefusalResponse(agentBoundaryError);
+    return {
+      type: "refused",
+      response: thirdPartyBoundaryRefusalResponse(agentBoundaryError),
+    };
   }
   const systemSafeText = chatSafePromptText(systemSafe);
   reserveThirdPartyBoundarySourcePlaceholders({
@@ -436,7 +443,10 @@ export const streamChat = async ({
     text: systemUntrusted,
   });
   if (Result.isError(preparedUntrusted)) {
-    return thirdPartyBoundaryRefusalResponse(preparedUntrusted.error);
+    return {
+      type: "refused",
+      response: thirdPartyBoundaryRefusalResponse(preparedUntrusted.error),
+    };
   }
   const system =
     preparedUntrusted.value.length > 0
@@ -455,14 +465,20 @@ export const streamChat = async ({
     messages,
   });
   if (Result.isError(rawPreparedMessages)) {
-    return thirdPartyBoundaryRefusalResponse(rawPreparedMessages.error);
+    return {
+      type: "refused",
+      response: thirdPartyBoundaryRefusalResponse(rawPreparedMessages.error),
+    };
   }
   const preparedResumeResult = await prepareResumeForThirdParty({
     boundary: thirdPartyBoundary,
     resume,
   });
   if (Result.isError(preparedResumeResult)) {
-    return thirdPartyBoundaryRefusalResponse(preparedResumeResult.error);
+    return {
+      type: "refused",
+      response: thirdPartyBoundaryRefusalResponse(preparedResumeResult.error),
+    };
   }
   const preparedResume = preparedResumeResult.value;
   // Messages carry user-authored and historical text (mention hrefs from
@@ -475,7 +491,7 @@ export const streamChat = async ({
     workspaceIds: tenantWorkspaceIds,
   });
 
-  const primaryModel = resolveTanStackTextModel({
+  const primaryModel = await resolveTanStackTextModel({
     dataClass: "customer",
     modelId: devModelId,
     organizationId,
@@ -522,44 +538,53 @@ export const streamChat = async ({
     chatTurnRejectsStreamingTools({ model, toolCount: modelTools.length });
 
   if (modelRejectsImages(primaryModel)) {
-    return new ChatTurnFailureResponse({
-      failureCode: "unsupported-input",
-      payload: {
-        code: IMAGE_INPUT_UNSUPPORTED_CODE,
-        message: imageInputUnsupportedError().message,
-      },
-      status: 422,
-    });
+    return {
+      type: "refused",
+      response: new ChatTurnFailureResponse({
+        failureCode: "unsupported-input",
+        payload: {
+          code: IMAGE_INPUT_UNSUPPORTED_CODE,
+          message: imageInputUnsupportedError().message,
+        },
+        status: 422,
+      }),
+    };
   }
 
   if (modelRejectsAnyDocument(primaryModel)) {
     // A plain 422, NOT a third-party-boundary refusal: that code is the sole
     // trigger for the "send without anonymization" retry, which cannot fix a
     // model that simply cannot read the attachment's format.
-    return new ChatTurnFailureResponse({
-      failureCode: "unsupported-input",
-      payload: {
-        message:
-          "This model cannot read one of the attached documents. Remove the attachment or switch to a model that supports it.",
-      },
-      status: 422,
-    });
+    return {
+      type: "refused",
+      response: new ChatTurnFailureResponse({
+        failureCode: "unsupported-input",
+        payload: {
+          message:
+            "This model cannot read one of the attached documents. Remove the attachment or switch to a model that supports it.",
+        },
+        status: 422,
+      }),
+    };
   }
 
   if (modelRejectsStreamingTools(primaryModel)) {
-    return new ChatTurnFailureResponse({
-      failureCode: "unsupported-input",
-      payload: {
-        message:
-          "This model cannot use tools while streaming, so it cannot answer chat questions about your matter. Switch to a model that supports tool use.",
-      },
-      status: 422,
-    });
+    return {
+      type: "refused",
+      response: new ChatTurnFailureResponse({
+        failureCode: "unsupported-input",
+        payload: {
+          message:
+            "This model cannot use tools while streaming, so it cannot answer chat questions about your matter. Switch to a model that supports tool use.",
+        },
+        status: 422,
+      }),
+    };
   }
 
   const resolvedFallbackModel =
     devModelId === undefined
-      ? resolveFallbackTextModel({
+      ? await resolveFallbackTextModel({
           organizationId,
           orgAIConfig,
           managedAIResidency,
@@ -706,7 +731,7 @@ export const streamChat = async ({
     storedHistory,
   });
 
-  return run.produce(output);
+  return { type: "streaming", response: run.produce(output) };
 };
 
 /** A pre-stream rejection retains its settlement code alongside its HTTP body. */
@@ -956,15 +981,15 @@ type ResolveFallbackTextModelProps = {
   threadId: SafeId<"chatThread">;
 };
 
-const resolveFallbackTextModel = ({
+const resolveFallbackTextModel = async ({
   organizationId,
   orgAIConfig,
   managedAIResidency,
   primaryModel,
   threadId,
-}: ResolveFallbackTextModelProps): ResolvedTanStackTextModel | null => {
+}: ResolveFallbackTextModelProps): Promise<ResolvedTanStackTextModel | null> => {
   try {
-    const fallbackModel = resolveTanStackTextModel({
+    const fallbackModel = await resolveTanStackTextModel({
       dataClass: "customer",
       organizationId,
       orgAIConfig,
