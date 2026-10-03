@@ -24,7 +24,7 @@ export const recordMcpAuthorizationReview = async ({
   connectorId,
   userId,
   observedIssuer,
-  observedEndpointOrigins = [],
+  observedEndpointOrigins,
   lease,
 }: RecordMcpAuthorizationReviewOptions): Promise<Result<void, SafeDbError>> =>
   await safeDb(async (tx) => {
@@ -82,7 +82,7 @@ export const recordMcpAuthorizationReview = async ({
         organizationId,
         connectorId,
         observedIssuer,
-        observedEndpointOrigins,
+        observedEndpointOrigins: observedEndpointOrigins ?? [],
       })
       .onConflictDoUpdate({
         target: [
@@ -91,6 +91,11 @@ export const recordMcpAuthorizationReview = async ({
         ],
         set: {
           observedIssuer,
+          // Keep what an earlier discovery observed when this one has no
+          // origins to report; otherwise the review shows the current ones.
+          ...(observedEndpointOrigins === undefined
+            ? {}
+            : { observedEndpointOrigins }),
           status: "needs_reapproval",
           updatedAt: new Date(),
         },

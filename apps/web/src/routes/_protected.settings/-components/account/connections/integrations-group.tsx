@@ -49,6 +49,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   isEffectivelyInstalled,
   type CatalogueMcp,
@@ -303,7 +304,11 @@ const ApproveAuthorizationButton = ({
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      stellaToast.add({
+        title: t("errors.actionFailed"),
+        description: userErrorFromThrown(error, t("errors.actionFailed")),
+        type: "error",
+      });
     },
   });
   return (

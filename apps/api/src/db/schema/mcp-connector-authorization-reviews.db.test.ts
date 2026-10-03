@@ -446,10 +446,13 @@ describe("MCP connector authorization reviews", () => {
         userId: ownerId,
         connectorId: sharedConnectorId,
         observedIssuer: "https://auth.example.test/updated",
-        observedEndpointOrigins: ["https://auth.example.test"],
+        observedEndpointOrigins: [
+          "https://auth.example.test",
+          "https://token.example.test",
+        ],
       }),
     );
-    expect(
+    const sharedReview = async () =>
       await testDb
         .select({
           approvedIssuer: mcpConnectorAuthorizationReviews.approvedIssuer,
@@ -457,19 +460,35 @@ describe("MCP connector authorization reviews", () => {
             mcpConnectorAuthorizationReviews.approvedEndpointOrigins,
           status: mcpConnectorAuthorizationReviews.status,
           observedIssuer: mcpConnectorAuthorizationReviews.observedIssuer,
+          observedEndpointOrigins:
+            mcpConnectorAuthorizationReviews.observedEndpointOrigins,
         })
         .from(mcpConnectorAuthorizationReviews)
         .where(
           eq(mcpConnectorAuthorizationReviews.connectorId, sharedConnectorId),
-        ),
-    ).toEqual([
-      {
-        approvedIssuer: "https://auth.example.test/shared",
-        approvedEndpointOrigins: ["https://auth.example.test"],
+        );
+    const updatedReview = {
+      approvedIssuer: "https://auth.example.test/shared",
+      approvedEndpointOrigins: ["https://auth.example.test"],
+      observedIssuer: "https://auth.example.test/updated",
+      observedEndpointOrigins: [
+        "https://auth.example.test",
+        "https://token.example.test",
+      ],
+      status: "needs_reapproval",
+    };
+    expect(await sharedReview()).toEqual([updatedReview]);
+    // A later observation without endpoint origins keeps the stored ones.
+    Result.unwrap(
+      await recordMcpAuthorizationReview({
+        safeDb: createSafeDb(testDb, [], organizationId, ownerId),
+        organizationId,
+        userId: ownerId,
+        connectorId: sharedConnectorId,
         observedIssuer: "https://auth.example.test/updated",
-        status: "needs_reapproval",
-      },
-    ]);
+      }),
+    );
+    expect(await sharedReview()).toEqual([updatedReview]);
     expect(
       await loadMcpConnectionById({
         connectionId: memberConnectionId,

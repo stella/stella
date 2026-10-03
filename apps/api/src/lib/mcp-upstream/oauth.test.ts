@@ -48,12 +48,13 @@ const discoveryTransport = ({
     validateOutboundFetchTarget: async (url: string | URL) =>
       Result.ok({ addresses: [], url: new URL(url) }),
     safeOutboundFetchBytes: async ({
-      url,
+      url: rawUrl,
       method,
     }: {
-      url: URL;
+      url: string | URL;
       method?: string;
     }) => {
+      const url = new URL(rawUrl);
       requests.push({ url: url.toString(), method: method ?? "GET" });
       const responseData = () => {
         if (method === "POST") {
