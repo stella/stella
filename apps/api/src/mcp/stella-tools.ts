@@ -2084,6 +2084,10 @@ const mismatchedSearchCursorResult = (encoded: number, queryCount: number) =>
     hint: `Send the same ${String(encoded)} queries this cursor was issued for, in the same order, or omit 'cursor' to start a new search.`,
   });
 
+const mcpCorpusQueryVariant = ({ testDependencies }: McpRequestContext) =>
+  testDependencies?.corpusIndexQueryVariant ??
+  envBase.CORPUS_INDEX_QUERY_VARIANT;
+
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
 > = async ({ args, context }) => {
@@ -2185,7 +2189,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       subCursor,
       interpretation: interpretDecisionQuery({
         body,
-        configuredVariant: envBase.CORPUS_INDEX_QUERY_VARIANT,
+        configuredVariant: mcpCorpusQueryVariant(context),
         intent: parseDecisionQuery(query, { grammar, reporters }),
       }),
     };
