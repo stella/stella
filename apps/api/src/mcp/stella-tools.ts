@@ -2182,10 +2182,10 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       body,
       query,
       subCursor,
-      interpretation: interpretDecisionQuery(
+      interpretation: interpretDecisionQuery({
         body,
-        parseDecisionQuery(query, { grammar, reporters }),
-      ),
+        intent: parseDecisionQuery(query, { grammar, reporters }),
+      }),
     };
   });
   const outcomes = await mapWithConcurrency({

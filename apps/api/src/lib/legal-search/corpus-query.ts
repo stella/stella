@@ -1,6 +1,15 @@
 import { panic } from "better-result";
 
+import type {
+  JurisdictionProfile,
+  WorkIdentifier,
+} from "@stll/legal-atlas/provision-citation-profile";
+import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
+import { foldToAscii } from "@stll/text-normalize";
+
 import { COURT_PARTITION_FIELD } from "@/api/lib/legal-search/corpus-index-group-contract";
+import { readCorpusProvisionMentions } from "@/api/lib/legal-search/corpus-provision-mentions";
+import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { functionWordKey } from "@/api/lib/legal-search/morphology/function-words";
 import { stemSlovakUpstream } from "@/api/lib/legal-search/morphology/slovak";
@@ -449,12 +458,15 @@ type BudgetedToken = {
  * allocates stems left to right and leaves the remaining tokens bare, which
  * is what every token got before this pass existed.
  */
-const spendLeafBudget = (tokens: readonly TokenLeaves[]): BudgetedToken[] => {
+const spendLeafBudget = (
+  tokens: readonly TokenLeaves[],
+  reserved = 0,
+): BudgetedToken[] => {
   const budgeted: BudgetedToken[] = tokens.map((token) => ({
     granted: { stem: [], surface: [], keywords: [], legal: [] },
     token,
   }));
-  let leaves = tokens.length;
+  let leaves = tokens.length + reserved;
 
   for (const pass of LEAF_BUDGET_PASSES) {
     for (const entry of budgeted) {
@@ -475,7 +487,177 @@ const spendLeafBudget = (tokens: readonly TokenLeaves[]): BudgetedToken[] => {
 
 const SLOVAK_LEGACY_STEM_FIELDS = new Set(["text_stem", "headnote_stem"]);
 
+const sameWork = (left: WorkIdentifier, right: WorkIdentifier): boolean =>
+  left.number === right.number &&
+  left.year === right.year &&
+  left.collection === right.collection;
+
+// Historical gazette numbers leave first; the typed act is always retained.
+// Headnotes are optional, so their stem phrase leaves before passage stems.
+const PROVISION_LEAF_DROP_ORDER = [
+  "predecessorGazette",
+  "headnoteStem",
+  "stem",
+  "surface",
+  "titles",
+  "gazette",
+  "aliases",
+] as const;
+
+type ProvisionLeafDropGroup = (typeof PROVISION_LEAF_DROP_ORDER)[number];
+
+type CorpusProvisionGroupsOptions = {
+  tokens: readonly CorpusQueryToken[];
+  profile: JurisdictionProfile;
+  stemming: CorpusStemming | null;
+  surfaceFields: readonly string[];
+  leavesForToken: (token: CorpusQueryToken) => TokenLeaves;
+};
+
+/** Reserve act alternatives before the ordinary allocator spends any leaves. */
+const corpusProvisionGroups = ({
+  tokens,
+  profile,
+  stemming,
+  surfaceFields,
+  leavesForToken,
+}: CorpusProvisionGroupsOptions) => {
+  const mentions = readCorpusProvisionMentions(tokens, profile);
+  if (mentions.length === 0) {
+    return null;
+  }
+  const required: CorpusQueryToken[] = [];
+  const groups: {
+    index: number;
+    leaves: string[];
+    dropGroups: Record<ProvisionLeafDropGroup, readonly string[]>;
+    typedLeaf: string;
+  }[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    const mention = mentions.find(
+      ({ consumedRange }) => consumedRange.start === index,
+    );
+    if (mention === undefined) {
+      const token = tokens.at(index);
+      if (token === undefined) {
+        return panic("Corpus provision token index is missing");
+      }
+      required.push(token);
+      continue;
+    }
+    const typed = tokens
+      .slice(mention.actTokenRange.start, mention.actTokenRange.end)
+      .map(({ value }) => value)
+      .join(" ");
+    const namesForWorks = (entries: JurisdictionProfile["titles"]) =>
+      entries
+        .filter(({ identifier }) =>
+          mention.works.some((work) => sameWork(identifier, work)),
+        )
+        .flatMap(({ spellings }) =>
+          spellings.map((spelling) =>
+            quoteCorpusValue(corpusTokens(spelling).join(" ")),
+          ),
+        );
+    const typedLeaf = quoteCorpusValue(typed);
+    const titles = namesForWorks(profile.titles).filter(
+      (leaf) => leaf !== typedLeaf,
+    );
+    const aliases = namesForWorks(profile.aliases);
+    const gazetteLeaf = ({ number, year }: WorkIdentifier) =>
+      quoteCorpusValue(corpusTokens(`${number} ${year}`).join(" "));
+    const gazette = mention.works.map(gazetteLeaf);
+    const key = foldToAscii(typed).toLowerCase();
+    // Only the spelling actually cited determines succession. An older act's
+    // explicit historical title may itself have an unbounded citation window.
+    const citedEntries = [...profile.titles, ...profile.aliases].filter(
+      ({ spellings }) =>
+        spellings.some(
+          (spelling) =>
+            foldToAscii(corpusTokens(spelling).join(" ")).toLowerCase() === key,
+        ),
+    );
+    const predecessorGazette = mention.works
+      .filter((work) => {
+        const entries = citedEntries.filter(({ identifier }) =>
+          sameWork(identifier, work),
+        );
+        return (
+          entries.length > 0 &&
+          entries.every(({ citedUntil }) => citedUntil !== undefined)
+        );
+      })
+      .map(gazetteLeaf);
+    const surface = surfaceFieldLeaves(typed, surfaceFields);
+    const stems = stemLeaves(typed, stemming);
+    const leaves = [
+      ...new Set([
+        typedLeaf,
+        ...titles,
+        ...surface,
+        ...stems,
+        ...aliases,
+        ...gazette,
+      ]),
+    ];
+    const dropGroups = {
+      predecessorGazette,
+      headnoteStem: stems.filter((leaf) => leaf.startsWith("headnote_stem:")),
+      stem: stems.filter((leaf) => !leaf.startsWith("headnote_stem:")),
+      surface: surface.toReversed(),
+      titles: titles.toReversed(),
+      gazette: gazette.filter((leaf) => !predecessorGazette.includes(leaf)),
+      aliases: aliases.toReversed(),
+    } satisfies Record<ProvisionLeafDropGroup, readonly string[]>;
+    groups.push({ index: required.length, leaves, dropGroups, typedLeaf });
+    index = mention.consumedRange.end - 1;
+  }
+  const tokenLeaves = required.map(leavesForToken);
+  // Preserve baseline stem coverage; the remaining optional alternatives use
+  // the ordinary whole-group allocator after the act reservation.
+  const baseline =
+    tokenLeaves.length +
+    tokenLeaves.reduce(
+      (count, token) => count + token.alternatives.stem.length,
+      0,
+    );
+  let reserved = groups.reduce(
+    (count, group) => count + group.leaves.length,
+    0,
+  );
+  for (const kind of PROVISION_LEAF_DROP_ORDER) {
+    for (const group of groups.toReversed()) {
+      for (const leaf of group.dropGroups[kind]) {
+        if (baseline + reserved <= CORPUS_QUERY_LEAF_BUDGET) {
+          break;
+        }
+        const index = group.leaves.indexOf(leaf);
+        if (index !== -1 && leaf !== group.typedLeaf) {
+          group.leaves.splice(index, 1);
+          reserved -= 1;
+        }
+      }
+    }
+  }
+  if (baseline + reserved > CORPUS_QUERY_LEAF_BUDGET) {
+    return null;
+  }
+  return {
+    required,
+    reserved,
+    groups: groups.map(({ index, leaves }) => ({
+      index,
+      clause:
+        leaves.length === 1
+          ? (leaves.at(0) ?? panic("Empty provision group"))
+          : `(${leaves.join(" OR ")})`,
+    })),
+  };
+};
+
 export type CorpusFreeTextOptions = {
+  queryVariant?: CorpusIndexQueryVariant | undefined;
+  jurisdiction?: string | undefined;
   /** Whether content tokens are all required or ranked by coverage. */
   match?: "all" | "any" | undefined;
   /** Case-law SVK compatibility; paid only from baseline allocation headroom. */
@@ -532,12 +714,15 @@ export type CorpusFreeTextOptions = {
  *
  * With no expander, no extra fields and no stemming this emits exactly what it
  * emitted before any of them existed, byte for byte; the wider forms differ
- * only by OR groups in the positions those features chose.
+ * only by OR groups in the positions those features chose. The query variant
+ * off, or a query with no provision mention, keeps the existing path byte-identical.
  */
 export const corpusFreeTextClause = (
   text: string,
   {
     match = "all",
+    queryVariant = "off",
+    jurisdiction,
     expand = noTermExpansion,
     stemming = null,
     surfaceFields = [],
@@ -551,30 +736,46 @@ export const corpusFreeTextClause = (
     tokenizeCorpusFreeText(text),
     functionWords,
   );
-  const required =
+  const partitionRequired =
     match === "any"
       ? partition.required.slice(0, CORPUS_QUERY_LEAF_BUDGET)
       : partition.required;
-  if (required.length === 0) {
+  if (partitionRequired.length === 0) {
     return null;
   }
 
-  const budgeted = spendLeafBudget(
-    required.map((token) => ({
-      alternatives: {
-        stem: stemLeaves(token.value, stemming),
-        surface: [
-          ...expansionLeaves(token, expand),
-          ...surfaceFieldLeaves(token.value, surfaceFields),
-        ],
-        keywords: surfaceFieldLeaves(token.value, keywordFields),
-        legal: legalAlternativeLeaves(token, legalAlternatives, stemming),
-      },
-      typed: quoteCorpusValue(token.value),
-    })),
-  );
+  const leavesForToken = (token: CorpusQueryToken): TokenLeaves => ({
+    alternatives: {
+      stem: stemLeaves(token.value, stemming),
+      surface: [
+        ...expansionLeaves(token, expand),
+        ...surfaceFieldLeaves(token.value, surfaceFields),
+      ],
+      keywords: surfaceFieldLeaves(token.value, keywordFields),
+      legal: legalAlternativeLeaves(token, legalAlternatives, stemming),
+    },
+    typed: quoteCorpusValue(token.value),
+  });
+  const profile =
+    jurisdiction === "SVK" || jurisdiction === "CZE"
+      ? PROVISION_CITATION_PROFILES[jurisdiction]
+      : null;
+  const provisionGroups =
+    queryVariant === "provision-refs" && profile !== null
+      ? corpusProvisionGroups({
+          tokens: partitionRequired,
+          profile,
+          stemming,
+          surfaceFields,
+          leavesForToken,
+        })
+      : null;
+  const required = provisionGroups?.required ?? partitionRequired;
+  const reserved = provisionGroups?.reserved ?? 0;
+  const budgeted = spendLeafBudget(required.map(leavesForToken), reserved);
 
   let used =
+    reserved +
     budgeted.length +
     budgeted.reduce(
       (total, { granted }) =>
@@ -614,6 +815,11 @@ export const corpusFreeTextClause = (
     return `(${[token.typed, ...extras].join(" OR ")})`;
   });
 
+  if (provisionGroups !== null) {
+    for (const { index, clause } of provisionGroups.groups.toReversed()) {
+      clauses.splice(index, 0, clause);
+    }
+  }
   return `(${clauses.join(match === "all" ? " AND " : " OR ")})`;
 };
 
@@ -643,6 +849,7 @@ export type CaseLawCorpusFilters = {
 };
 
 export type CaseLawCorpusQueryOptions = {
+  queryVariant?: CorpusIndexQueryVariant | undefined;
   text: string;
   /** Query scope, independent of whether the target index needs a filter clause. */
   jurisdiction: string | undefined;
@@ -665,6 +872,7 @@ export type CaseLawCorpusQueryOptions = {
 export const caseLawCorpusQuery = ({
   text,
   jurisdiction,
+  queryVariant,
   filters,
   expand,
   stemming,
@@ -674,6 +882,8 @@ export const caseLawCorpusQuery = ({
   legalAlternatives,
 }: CaseLawCorpusQueryOptions): string | null => {
   const freeText = corpusFreeTextClause(text, {
+    jurisdiction,
+    queryVariant,
     expand,
     stemming,
     surfaceFields,

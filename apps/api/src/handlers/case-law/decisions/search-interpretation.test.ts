@@ -26,12 +26,12 @@ const request = (
 });
 
 const interpret = (body: SearchDecisionsBody) =>
-  interpretDecisionQuery(
+  interpretDecisionQuery({
     body,
-    parseDecisionQuery(body.query, {
+    intent: parseDecisionQuery(body.query, {
       grammar: decisionDocketGrammarForCountry(body.country),
     }),
-  );
+  });
 
 /**
  * The clause the engine receives, without stemming or expansion so the
@@ -248,3 +248,26 @@ describe("searchAnswer", () => {
     expect(answerFor(request({ strict: true }), 3).warnings).toEqual([]);
   });
 });
+
+test.each([
+  { query: "§ 451 Občianskeho zákonníka", strict: true, expected: "off" },
+  { query: "22 Cdo 1000/2020", expected: "off" },
+  { query: "§ 451 Občianskeho zákonníka", expected: "provision-refs" },
+  { query: "náhrada škody", expected: "provision-refs" },
+])(
+  "strict and whole identifiers gate provision grouping (%j)",
+  ({ expected, ...overrides }) => {
+    const body = request(overrides);
+    const intent = parseDecisionQuery(body.query, {
+      grammar: decisionDocketGrammarForCountry(body.country),
+    });
+    expect(
+      interpretDecisionQuery({
+        body,
+        intent,
+        configuredVariant: "provision-refs",
+      }).queryVariant,
+    ).toBe(expected);
+    expect(interpretDecisionQuery({ body, intent }).queryVariant).toBe("off");
+  },
+);

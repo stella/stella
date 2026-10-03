@@ -15,6 +15,10 @@ import {
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
 import {
+  type CorpusIndexQueryVariant,
+  corpusQueryVariant,
+} from "@/api/lib/legal-search/corpus-query-variant-policy";
+import {
   type LegalAlternatives,
   normalizeLegalAlternatives,
 } from "@/api/lib/legal-search/legal-alternatives";
@@ -107,6 +111,7 @@ export const narrowingFilters = (body: SearchDecisionsBody): string[] =>
     .toSorted();
 
 export type DecisionQueryInterpretation = {
+  queryVariant: CorpusIndexQueryVariant;
   /** The query as executed, itself re-readable as a query. */
   queryUsed: string;
   /** Function words left out, as the reader wrote them. */
@@ -129,10 +134,17 @@ export type DecisionQueryInterpretation = {
  * parts are not words at all and whose fall-through to the text index exists
  * precisely to find the decision it names.
  */
-export const interpretDecisionQuery = (
-  body: SearchDecisionsBody,
-  intent: DecisionQueryIntent,
-): DecisionQueryInterpretation => {
+type InterpretDecisionQueryOptions = {
+  body: SearchDecisionsBody;
+  intent: DecisionQueryIntent;
+  configuredVariant?: CorpusIndexQueryVariant;
+};
+
+export const interpretDecisionQuery = ({
+  body,
+  intent,
+  configuredVariant = "off",
+}: InterpretDecisionQueryOptions): DecisionQueryInterpretation => {
   // An identifier found among other words leaves them a text search, read
   // like any other should the reference name nothing.
   const verbatim = body.strict === true || isWholeEntryIdentifier(intent);
@@ -149,6 +161,7 @@ export const interpretDecisionQuery = (
     functionWords,
   );
   return {
+    queryVariant: corpusQueryVariant({ configuredVariant, verbatim }),
     // The reader's own string wherever nothing was dropped, so a search that
     // changed nothing reports itself back byte for byte rather than a
     // re-tokenised spelling of itself.

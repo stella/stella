@@ -25,6 +25,7 @@ import {
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
 import { CORPUS_MEMBER_LAYOUTS } from "@/api/lib/legal-search/corpus-member-layout";
+import { CORPUS_INDEX_QUERY_VARIANTS } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { QUERY_EXPANSION_MODES } from "@/api/lib/legal-search/query-expansion-mode";
 import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
@@ -171,6 +172,10 @@ export const envBaseServerSchema = {
   // Experimental shared relevance ranking; disabled until runtime evaluation.
   CORPUS_INDEX_RANKING_MODE: v.optional(
     v.picklist(CORPUS_INDEX_RANKING_MODES),
+    "off",
+  ),
+  CORPUS_INDEX_QUERY_VARIANT: v.optional(
+    v.picklist(CORPUS_INDEX_QUERY_VARIANTS),
     "off",
   ),
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
