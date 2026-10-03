@@ -20,6 +20,7 @@ import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -88,7 +89,7 @@ const createFor = async (body: CreateCtx["body"]) => {
       safeDb: createSafeDb(db, [], ids.orgA, ids.userA1),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
-      memberRole: { role: "member" },
+      memberRole: sessionMemberRole("member"),
       recordAuditEvent: createAuditRecorder({
         organizationId: ids.orgA,
         userId: ids.userA1,

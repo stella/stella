@@ -477,9 +477,14 @@ const executeRun = async (
             {
               key: String(position),
               text: claim.text,
-              context:
-                document.blocks.at(claim.blockIndex)?.text ??
-                panic("An extracted claim names a block outside the document"),
+              context: {
+                text:
+                  document.blocks.at(claim.blockIndex)?.text ??
+                  panic(
+                    "An extracted claim names a block outside the document",
+                  ),
+                anchor: claim.anchor,
+              },
             },
           ]
         : [],

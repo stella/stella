@@ -1,14 +1,24 @@
 import { afterEach, describe, expect, it, mock, test } from "bun:test";
 
+import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
   ADAPTER_PUBLISHER_GATES,
   createPublisherSlot,
+  deferPublisherGate,
   publisherRequestIntervalMs,
   publisherRequestsPerDay,
   PUBLISHER_GATES,
+  readPublisherCooldown,
+  withPublisherRequestRateLimit,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { connectedGateClient } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  connectedGateClient,
+  publisherGateKeys,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
+import {
+  fetchPublisher,
+  fetchWithRetry,
+} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { rejectionOf } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -156,28 +166,112 @@ describe("a publisher's rate-limit refusal", () => {
     Bun.sleep = originalSleep;
   });
 
-  test("costs one request and is handed back, never retried", async () => {
-    let requests = 0;
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        requests += 1;
-        return new Response("", { status: 429 });
-      }),
-    );
+  test.each([401, 403, 429])(
+    "%s costs one request and stops with a typed refusal, never retried",
+    async (httpStatus) => {
+      let requests = 0;
+      globalThis.fetch = asFetchMock(
+        mock(async () => {
+          requests += 1;
+          return new Response("", { status: httpStatus });
+        }),
+      );
 
-    const response = await fetchWithRetry(
-      "https://ris.bka.gv.at/x",
-      undefined,
-      {
-        adapterKey: ADAPTER_KEYS.AT_COURTS,
-        maxRetries: 2,
+      const error = await rejectionOf(
+        fetchWithRetry("https://ris.bka.gv.at/x", undefined, {
+          fetchStage: "listing",
+          adapterKey: ADAPTER_KEYS.AT_COURTS,
+          maxRetries: 2,
+          refusalMode: "stop-refusal",
+        }),
+      );
+
+      // Rule 19a: no retry clears the refusal, and the budget a retry would
+      // spend is the budget the halt protects. The caller holds its cursor.
+      expect(error).toMatchObject({
+        httpStatus,
+        stopKind: "publisher_refusal",
+      });
+      expect(requests).toBe(1);
+    },
+  );
+
+  test.each([401, 403, 429])(
+    "an existing document workflow receives %s without retries",
+    async (status) => {
+      let requests = 0;
+      globalThis.fetch = asFetchMock(
+        mock(async () => {
+          requests++;
+          return new Response("refused document", { status });
+        }),
+      );
+      const response = await fetchWithRetry(
+        "https://ris.bka.gv.at/x",
+        undefined,
+        {
+          fetchStage: "listing",
+          adapterKey: ADAPTER_KEYS.AT_COURTS,
+        },
+      );
+      expect(response.status).toBe(status);
+      expect(await response.text()).toBe("refused document");
+      expect(requests).toBe(1);
+    },
+  );
+
+  for (const refusalMode of [
+    undefined,
+    "return-response",
+    "stop-refusal",
+  ] as const) {
+    test.each([401, 403])(
+      `the real publisher-backoff path preserves status in mode ${refusalMode ?? "default"}`,
+      async (status) => {
+        let requests = 0;
+        globalThis.fetch = asFetchMock(
+          mock(async () => {
+            requests++;
+            return new Response("refused document", { status });
+          }),
+        );
+        const pending = fetchPublisher("https://ris.bka.gv.at/x", {
+          fetchStage: "listing",
+          adapterKey: ADAPTER_KEYS.AT_COURTS,
+          retryPolicy: "publisher-backoff",
+          timeoutMs: 1000,
+          refusalMode,
+        });
+        if (refusalMode === "stop-refusal") {
+          expect(await rejectionOf(pending)).toMatchObject({
+            httpStatus: status,
+            stopKind: "publisher_refusal",
+          });
+        } else {
+          const response = await pending;
+          expect(response.status).toBe(status);
+          expect(await response.text()).toBe("refused document");
+        }
+        expect(requests).toBe(1);
       },
     );
+  }
 
-    // Rule 19a: no retry clears the refusal, and the budget a retry would
-    // spend is the budget the halt protects. The caller holds its cursor.
-    expect(response.status).toBe(429);
-    expect(requests).toBe(1);
+  test("legacy fetch timeouts keep their original identity", async () => {
+    const failure = new DOMException("Request timed out", "TimeoutError");
+    globalThis.fetch = asFetchMock(
+      mock(async () => {
+        throw failure;
+      }),
+    );
+    const caught = await rejectionOf(
+      fetchWithRetry("https://ris.bka.gv.at/x", undefined, {
+        fetchStage: "listing",
+        adapterKey: ADAPTER_KEYS.AT_COURTS,
+        maxRetries: 0,
+      }),
+    );
+    expect(caught).toBe(failure);
   });
 
   test("still retries a 5xx, which is the publisher failing to answer", async () => {
@@ -194,6 +288,7 @@ describe("a publisher's rate-limit refusal", () => {
       "https://ris.bka.gv.at/x",
       undefined,
       {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.AT_COURTS,
         maxRetries: 2,
       },
@@ -201,6 +296,189 @@ describe("a publisher's rate-limit refusal", () => {
 
     expect(response.status).toBe(503);
     expect(requests).toBe(3);
+  });
+});
+
+describe("a run-scoped publisher rate limit", () => {
+  const originalFetch = globalThis.fetch;
+  const originalSleep = Bun.sleep;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    Bun.sleep = originalSleep;
+  });
+
+  const createGateClock = () => {
+    let now = 0;
+    let nextSlot = 0;
+    let cooldownUntil = 0;
+    const reservations: string[][] = [];
+    const dependencies = {
+      redis: () => ({
+        send: (_command: string, args: string[]) => {
+          if (args.length === 5) {
+            reservations.push(args);
+            const intervalMs = Number(args.at(-1));
+            const slot = Math.max(now, nextSlot, cooldownUntil);
+            nextSlot = slot + intervalMs;
+            return slot - now;
+          }
+          if (args.length === 4) {
+            cooldownUntil = Math.max(cooldownUntil, now + Number(args.at(-1)));
+            return cooldownUntil - now;
+          }
+          return cooldownUntil > now ? cooldownUntil - now : 0;
+        },
+      }),
+      sleep: async (durationMs: number) => {
+        now += durationMs;
+      },
+    };
+    return { dependencies, reservations, now: () => now };
+  };
+
+  test("counts listing, notice, HTML, and every Formex retry in the run window", async () => {
+    let formexAttempts = 0;
+    const requests: { url: string; time: number }[] = [];
+    const clock = createGateClock();
+    globalThis.fetch = asFetchMock(
+      mock(async (input) => {
+        const url = String(input);
+        requests.push({ url, time: clock.now() });
+        if (url.endsWith("/formex") && formexAttempts++ === 0) {
+          return new Response("", { status: 503 });
+        }
+        return new Response("", { status: 200 });
+      }),
+    );
+    Bun.sleep = async () => {};
+
+    const response = await withPublisherRequestRateLimit({
+      gateId: "cellar-eu",
+      requestsPerSecond: 2,
+      dependencies: clock.dependencies,
+      operation: async () => {
+        const publisher = "https://publications.europa.eu";
+        const listing = await fetchPublisher(`${publisher}/listing`, {
+          fetchStage: "listing",
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        });
+        const notice = await fetchPublisher(`${publisher}/notice`, {
+          fetchStage: "document",
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        });
+        const html = await fetchPublisher(`${publisher}/html`, {
+          fetchStage: "document",
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        });
+        const formex = await fetchWithRetry(`${publisher}/formex`, undefined, {
+          fetchStage: "document",
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          maxRetries: 1,
+          baseDelayMs: 0,
+          maxDelayMs: 0,
+        });
+        return { listing, notice, html, formex };
+      },
+    });
+
+    expect(Object.values(response).map((result) => result.status)).toEqual([
+      200, 200, 200, 200,
+    ]);
+    const reservations = clock.reservations;
+    expect(reservations).toHaveLength(5);
+    expect(reservations.map((args) => args.at(-1))).toEqual([
+      "500",
+      "500",
+      "500",
+      "500",
+      "500",
+    ]);
+    expect(requests.map(({ url }) => new URL(url).pathname)).toEqual([
+      "/listing",
+      "/notice",
+      "/html",
+      "/formex",
+      "/formex",
+    ]);
+    expect(requests.map(({ time }) => time)).toEqual([
+      0, 500, 1000, 1500, 2000,
+    ]);
+    for (const { time } of requests) {
+      expect(
+        requests.filter(
+          (request) => request.time >= time && request.time < time + 1000,
+        ).length,
+      ).toBeLessThanOrEqual(2);
+    }
+  });
+
+  test("the shared EU cooldown still blocks requests inside a scoped rate run", async () => {
+    const clock = createGateClock();
+    const { key, cooldownKey } = publisherGateKeys("cellar-eu");
+    const requestTimes: number[] = [];
+    globalThis.fetch = asFetchMock(
+      mock(async () => {
+        requestTimes.push(clock.now());
+        return new Response("", { status: 200 });
+      }),
+    );
+
+    const cooldownUntil = await withPublisherRequestRateLimit({
+      gateId: "cellar-eu",
+      requestsPerSecond: 1,
+      dependencies: clock.dependencies,
+      operation: async () => {
+        const deferred = await deferPublisherGate("cellar-eu", 5000);
+        const sharedDeadline = await readPublisherCooldown("cellar-eu");
+        const first = await fetchPublisher(
+          "https://publications.europa.eu/formex",
+          {
+            fetchStage: "document",
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+          },
+        );
+        const second = await fetchPublisher(
+          "https://publications.europa.eu/formex",
+          {
+            fetchStage: "document",
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+          },
+        );
+        return { deferred, sharedDeadline, first, second };
+      },
+    });
+
+    expect(cooldownUntil.deferred).toBe(5000);
+    expect(cooldownUntil.sharedDeadline).toBe(5000);
+    expect(cooldownUntil.first.status).toBe(200);
+    expect(cooldownUntil.second.status).toBe(200);
+    expect(requestTimes).toEqual([5000, 6000]);
+    expect(clock.reservations.at(0)?.slice(2, 4)).toEqual([key, cooldownKey]);
+    expect(clock.reservations.map((args) => args.at(-1))).toEqual([
+      "1000",
+      "1000",
+    ]);
+  });
+
+  test("rejects rates above the gate's two requests per second", async () => {
+    // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+    // type-aware lint; capture the refusal explicitly instead.
+    const refusal = await withPublisherRequestRateLimit({
+      gateId: "cellar-eu",
+      requestsPerSecond: 2.01,
+      operation: async () => "unreachable",
+    }).then(
+      () => "accepted",
+      (error: unknown) =>
+        error instanceof Error ? error.message : String(error),
+    );
+    expect(refusal).toContain("at most 2");
   });
 });
 

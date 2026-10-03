@@ -238,6 +238,7 @@ export type CreateIngestionDbOptions = {
    * gave up on it.
    */
   laneWaitMs?: number;
+  signal?: AbortSignal;
 };
 
 // SET LOCAL ROLE stella_ingestion per transaction. Used by the
@@ -254,9 +255,12 @@ export type CreateIngestionDbOptions = {
 export const createIngestionDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
-    { laneWaitMs }: CreateIngestionDbOptions = {},
+    { laneWaitMs, signal }: CreateIngestionDbOptions = {},
   ) =>
-  async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
+  async <T>(
+    fn: (tx: TTransaction) => Promise<T>,
+    options: CreateIngestionDbOptions = {},
+  ): Promise<T> =>
     await runUnderCorpusSchemaLane({
       database,
       work: async (tx) => {
@@ -266,6 +270,8 @@ export const createIngestionDb =
         return await fn(tx);
       },
       ...(laneWaitMs === undefined ? {} : { laneWaitMs }),
+      ...(signal === undefined ? {} : { signal }),
+      ...options,
     });
 
 const toSafeDbError = (cause: unknown): SafeDbError => {

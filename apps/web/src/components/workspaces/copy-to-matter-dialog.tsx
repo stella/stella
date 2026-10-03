@@ -25,6 +25,7 @@ import {
 import type { MatterTarget } from "@/components/matter-target-picker.logic";
 import {
   getCopyToMatterRootEntities,
+  getCopyToMatterErrorKey,
   type CopyToMatterEntity,
 } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -133,18 +134,13 @@ export const CopyToMatterDialog = ({
 
       if (Result.isError(result)) {
         failedCount++;
+        firstErrorMessage ??= t("errors.actionFailed");
         continue;
       }
       const { error } = result.value;
       if (error) {
         failedCount++;
-        if (
-          firstErrorMessage === null &&
-          typeof error.value === "object" &&
-          "message" in error.value
-        ) {
-          firstErrorMessage = error.value.message;
-        }
+        firstErrorMessage ??= t(getCopyToMatterErrorKey(error.value));
       }
     }
 
@@ -189,7 +185,7 @@ export const CopyToMatterDialog = ({
     if (failedCount > 0) {
       stellaToast.add({
         title: successTitle,
-        description: t("errors.actionFailed"),
+        description: firstErrorMessage ?? t("errors.actionFailed"),
         type: "warning",
         action: goToMatterAction,
         timeout: 10_000,

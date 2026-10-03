@@ -37,6 +37,7 @@ import type {
   DocumentReviewRunBasis,
   DocumentReviewRunStatus,
 } from "@/api/lib/document-review/run-contract";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -142,7 +143,7 @@ const orgContext = () => ({
     workspaceId === ids.wsA1
       ? { id: ids.wsA1, status: "active" as const }
       : null,
-  memberRole: { role: "owner" as const },
+  memberRole: sessionMemberRole("owner"),
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
   managedAIResidency: "eu" as const,

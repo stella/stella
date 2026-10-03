@@ -1,3 +1,5 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
  * Polish tax interpretations and rulings (EUREKA) adapter.
  *
@@ -47,6 +49,7 @@
 
 import { Result, panic } from "better-result";
 
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -83,6 +86,7 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -108,6 +112,7 @@ import type { TextField } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -531,7 +536,13 @@ type EurekaResponse = {
 const fetchEureka = async (
   rawUrl: string,
   init: { method?: string; headers: Record<string, string>; body?: string },
-  signal?: AbortSignal,
+  {
+    fetchStage,
+    signal,
+  }: {
+    fetchStage: DocumentFetchStage;
+    signal?: AbortSignal | undefined;
+  },
 ): Promise<EurekaResponse> => {
   const target = restrictOutboundUrl({
     hostPolicy: PL_KIS_HOST_POLICY,
@@ -549,6 +560,7 @@ const fetchEureka = async (
       redirect: "error",
     },
     {
+      fetchStage,
       adapterKey: ADAPTER_KEYS.PL_KIS,
       signal,
       timeoutMs: REQUEST_TIMEOUT_MS,
@@ -639,7 +651,7 @@ const search = async (
       },
       body: plKisListingBody(query),
     },
-    signal,
+    { fetchStage: "listing", signal },
   );
   if (!response.ok || response.bytes === null) {
     return Result.err(
@@ -1253,7 +1265,7 @@ export const assemblePlKisDecision = async ({
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
   const listingOnly = parsed === undefined;
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
     ...(signature === undefined
       ? { caseNumberIsPlaceholder: true }
@@ -1336,7 +1348,7 @@ export const assemblePlKisDecision = async ({
         }
       : {}),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
   return listingOnly
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };
@@ -1357,7 +1369,7 @@ const fetchDetailText = async (
   const response = await fetchEureka(
     detailUrl(id),
     { headers: { Accept: "application/json" } },
-    signal,
+    { fetchStage: "document", signal },
   );
   if (response.status === 404 || response.status === 410) {
     return Result.ok(undefined);
@@ -1382,7 +1394,7 @@ const fetchPdf = async (
   const response = await fetchEureka(
     pdfUrl(id),
     { headers: { Accept: "application/pdf" } },
-    signal,
+    { fetchStage: "document", signal },
   );
   if (response.status === 404 || response.status === 410) {
     return Result.ok(undefined);
@@ -1924,7 +1936,11 @@ const readBoundary = async (
     : Result.ok(newest);
 };
 
-type Collected = { decisions: IngestionResult[]; aborted: boolean };
+type Collected = {
+  decisions: IngestionResult[];
+  itemBuildFailures: number;
+  aborted: boolean;
+};
 
 const collectDecisions = async (
   rows: Record<string, unknown>[],
@@ -1932,18 +1948,32 @@ const collectDecisions = async (
   signal?: AbortSignal,
 ): Promise<Result<Collected, AdapterFetchError>> => {
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   for (const row of rows) {
     if (signal?.aborted) {
-      return Result.ok({ decisions, aborted: true });
+      return Result.ok({ decisions, itemBuildFailures, aborted: true });
     }
-    const attempted = await buildPlKisDecision(row, cursor, signal);
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_KIS,
+
+      rawListing: JSON.stringify(row),
+      decisionOf: (result) =>
+        result.isOk() ? result.value.decision : undefined,
+      build: async () => await buildPlKisDecision(row, cursor, signal),
+    });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      continue;
+    }
+    const attempted = captured.value;
     if (Result.isError(attempted)) {
       return attempted;
     }
     // The crawl keeps a listing-only row; only the reconciliation refuses it.
     decisions.push(attempted.value.decision);
   }
-  return Result.ok({ decisions, aborted: false });
+  return Result.ok({ decisions, itemBuildFailures, aborted: false });
 };
 
 const sweepPage = async (
@@ -2002,13 +2032,33 @@ const sweepPage = async (
       if (Result.isError(collected)) {
         return collected;
       }
-      const { aborted, decisions } = collected.value;
+      const { aborted, decisions, itemBuildFailures } = collected.value;
       if (aborted) {
-        return Result.ok({ decisions, sourceUrl: url, nextCursor: cursor });
+        return Result.ok({
+          decisions,
+          ...(itemBuildFailures === 0
+            ? {}
+            : {
+                itemBuildFailures: {
+                  type: "item_build_failed" as const,
+                  count: itemBuildFailures,
+                },
+              }),
+          sourceUrl: url,
+          nextCursor: cursor,
+        });
       }
       if ((page + 1) * CRAWL_PAGE_SIZE < totalHits) {
         return Result.ok({
           decisions,
+          ...(itemBuildFailures === 0
+            ? {}
+            : {
+                itemBuildFailures: {
+                  type: "item_build_failed" as const,
+                  count: itemBuildFailures,
+                },
+              }),
           sourceUrl: url,
           nextCursor: encodePlKisCursor({ ...start, month, page: page + 1 }),
         });
@@ -2016,6 +2066,14 @@ const sweepPage = async (
       const after = nextMonth();
       return Result.ok({
         decisions,
+        ...(itemBuildFailures === 0
+          ? {}
+          : {
+              itemBuildFailures: {
+                type: "item_build_failed" as const,
+                count: itemBuildFailures,
+              },
+            }),
         sourceUrl: url,
         nextCursor:
           after === null
@@ -2093,12 +2151,36 @@ const tipPage = async (
   if (Result.isError(collected)) {
     return collected;
   }
-  const { aborted, decisions } = collected.value;
+  const { aborted, decisions, itemBuildFailures } = collected.value;
   if (aborted) {
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: cursor });
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: url,
+      nextCursor: cursor,
+    });
   }
   if (reachedFrontier) {
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: caughtUp() });
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: url,
+      nextCursor: caughtUp(),
+    });
   }
   if ((page + 2) * CRAWL_PAGE_SIZE > PL_KIS_RESULT_WINDOW) {
     // The next page is past what the search serves. The rows between here and
@@ -2109,12 +2191,32 @@ const tipPage = async (
       frontier: start.frontier,
       pending,
     });
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: caughtUp() });
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: url,
+      nextCursor: caughtUp(),
+    });
   }
   // A descending listing grows only at its head, so the next page can re-read
   // a row but cannot step over one.
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: url,
     nextCursor: encodePlKisCursor({
       phase: "tip",
@@ -2160,12 +2262,32 @@ const undatedPage = async (
   if (Result.isError(collected)) {
     return collected;
   }
-  const { aborted, decisions } = collected.value;
+  const { aborted, decisions, itemBuildFailures } = collected.value;
   if (aborted) {
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: cursor });
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: url,
+      nextCursor: cursor,
+    });
   }
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: url,
     nextCursor: encodePlKisCursor(
       (start.page + 1) * CRAWL_PAGE_SIZE < undated
@@ -2230,6 +2352,7 @@ const plKisTotalCount = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const plKisAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_KIS,
   language: LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,
@@ -2252,6 +2375,37 @@ export const plKisAdapter = defineSourceAdapter({
   getTotalCount: plKisTotalCount,
 
   reconciliation: {
+    // The declared listing columns hold record content, without result coordinates.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            ID_INFORMACJI: payload["ID_INFORMACJI"],
+            KATEGORIA_INFORMACJI: payload["KATEGORIA_INFORMACJI"],
+            SYG: payload["SYG"],
+            DT_WYD: payload["DT_WYD"],
+            TEZA: payload["TEZA"],
+            STATUS_INFORMACJI: payload["STATUS_INFORMACJI"],
+            DATA_PUBLIKACJI: payload["DATA_PUBLIKACJI"],
+            AUTOR: payload["AUTOR"],
+            SLOWA_KLUCZOWE: payload["SLOWA_KLUCZOWE"],
+            PRZEPISY: payload["PRZEPISY"],
+            ZAGADNIENIA: payload["ZAGADNIENIA"],
+            INFORMACJA_ZMIENIANA: payload["INFORMACJA_ZMIENIANA"],
+            MIEJ_PUB: payload["MIEJ_PUB"],
+            INN_ZROD: payload["INN_ZROD"],
+            RODZAJ_DECYZJI: payload["RODZAJ_DECYZJI"],
+            DAT_WAZ_OD: payload["DAT_WAZ_OD"],
+            DAT_WAZ_DO: payload["DAT_WAZ_DO"],
+            STAN_PRAW: payload["STAN_PRAW"],
+            NOMENKLATURA_SCALONA: payload["NOMENKLATURA_SCALONA"],
+            KLASYFIKACJA_PKWIU: payload["KLASYFIKACJA_PKWIU"],
+            KLASYFIKACJA_PKOB: payload["KLASYFIKACJA_PKOB"],
+            RODZAJ_WYROBU_AKCYZOWEGO: payload["RODZAJ_WYROBU_AKCYZOWEGO"],
+            DATA_REJESTRACJI: payload["DATA_REJESTRACJI"],
+            KOMENTARZE_BIP: payload["KOMENTARZE_BIP"],
+            KOM_BIP_OPIS: payload["KOM_BIP_OPIS"],
+          }
+        : null,
     firstSlice: PL_KIS_FIRST_SLICE,
     sliceOf,
     nextSlice: (slice) => plKisNextSlice(slice),

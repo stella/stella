@@ -5,8 +5,6 @@ export class HeavyWorkSlotError extends TaggedError("HeavyWorkSlotError")<{
   cause: unknown;
 }> {}
 
-export type HeavyWorkKind = "index_repair" | "index_build" | "backfill_batch";
-
 export type HeavyWorkSession = {
   /** A dedicated physical session, retained until close; never a pool query. */
   query: (
@@ -18,28 +16,58 @@ export type HeavyWorkSession = {
 // Two-key advisory locks are database-local and separate from bigint locks.
 const LOCK_NAMESPACE = 1_937_007_724;
 const WORK_LOCK = 0;
-const PRIORITIES = {
+const INTENT_KEYS = {
   index_repair: 1,
   index_build: 2,
   backfill_batch: 3,
+  operator_job: 4,
 } as const;
-const READ_HIGHER_PRIORITY_SQL = `SELECT NOT EXISTS (
-  SELECT 1 FROM pg_locks
-  WHERE locktype = 'advisory' AND granted AND mode = 'ShareLock'
-    AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
-    AND classid = $1::oid AND objid > 0 AND objid < $2::oid AND objsubid = 2
-) AS acquired`;
+export type HeavyWorkKind = keyof typeof INTENT_KEYS;
+const PRIORITIES = {
+  index_repair: 1,
+  index_build: 2,
+  operator_job: 3,
+  backfill_batch: 4,
+} as const satisfies Record<HeavyWorkKind, number>;
+
+const higherPriorityQuery = (kind: HeavyWorkKind) => {
+  const keys = Object.entries(INTENT_KEYS).flatMap(([candidate, key]) => {
+    const rank = Object.entries(PRIORITIES)
+      .find(([name]) => name === candidate)
+      ?.at(1);
+    if (typeof rank !== "number") {
+      panic("Heavy-work intent has no priority");
+    }
+    return rank < PRIORITIES[kind] ? [key] : [];
+  });
+  return {
+    statement: `SELECT NOT EXISTS (
+      SELECT 1 FROM pg_locks AS intent
+      WHERE intent.locktype = 'advisory' AND intent.granted AND intent.mode = 'ShareLock'
+        AND intent.database = (SELECT oid FROM pg_database WHERE datname = current_database())
+        AND intent.classid = $1::oid AND intent.objsubid = 2
+        AND intent.pid <> pg_backend_pid()
+        AND ${keys.length === 0 ? "FALSE" : `intent.objid IN (${keys.map((_, offset) => `$${offset + 2}::oid`).join(", ")})`}
+        AND NOT (intent.objid = ${INTENT_KEYS.index_build} AND EXISTS (
+          SELECT 1 FROM pg_locks AS operator_intent
+          WHERE operator_intent.locktype = 'advisory' AND operator_intent.granted
+            AND operator_intent.mode = 'ShareLock' AND operator_intent.database = intent.database
+            AND operator_intent.classid = intent.classid AND operator_intent.objsubid = 2
+            AND operator_intent.pid = intent.pid AND operator_intent.objid = ${INTENT_KEYS.operator_job}
+        ))
+    ) AS acquired`,
+    parameters: [LOCK_NAMESPACE, ...keys],
+  };
+};
 
 /** The work and its slot end together on commit, rollback or backend death. */
 export const tryAcquireBackfillTransactionSlot = async (
   session: HeavyWorkSession,
 ) => {
-  const waiting = (
-    await session.query(READ_HIGHER_PRIORITY_SQL, [
-      LOCK_NAMESPACE,
-      PRIORITIES.backfill_batch,
-    ])
-  ).at(0);
+  const higher = higherPriorityQuery("backfill_batch");
+  const waiting = (await session.query(higher.statement, higher.parameters)).at(
+    0,
+  );
   if (waiting === undefined) {
     panic("Advisory priority query returned no result");
   }
@@ -59,10 +87,7 @@ export const tryAcquireBackfillTransactionSlot = async (
     return false;
   }
   const priority = (
-    await session.query(READ_HIGHER_PRIORITY_SQL, [
-      LOCK_NAMESPACE,
-      PRIORITIES.backfill_batch,
-    ])
+    await session.query(higher.statement, higher.parameters)
   ).at(0);
   if (priority === undefined) {
     panic("Advisory priority query returned no result");
@@ -83,12 +108,18 @@ export const createHeavyWorkSlot = ({
   session,
   kind,
 }: HeavyWorkSlotOptions) => {
-  const priority = PRIORITIES[kind];
-  let registered = false;
+  const higher = higherPriorityQuery(kind);
+  // Until all pre-operator processes have drained, key 2 makes operators visible
+  // to their objid < 3 probes. Register key 4 first so peers identify the alias.
+  const intentKeys =
+    kind === "operator_job"
+      ? [INTENT_KEYS.operator_job, INTENT_KEYS.index_build]
+      : [INTENT_KEYS[kind]];
+  const registeredKeys: number[] = [];
   let held = false;
   let closed = false;
-  const query = async (statement: string, key: number) => {
-    const row = (await session.query(statement, [LOCK_NAMESPACE, key])).at(0);
+  const query = async (statement: string, parameters: readonly number[]) => {
+    const row = (await session.query(statement, parameters)).at(0);
     if (row === undefined) {
       panic("Advisory lock query returned no result");
     }
@@ -99,10 +130,10 @@ export const createHeavyWorkSlot = ({
       return;
     }
     if (
-      !(await query(
-        "SELECT pg_advisory_unlock($1::int, $2::int) AS acquired",
+      !(await query("SELECT pg_advisory_unlock($1::int, $2::int) AS acquired", [
+        LOCK_NAMESPACE,
         WORK_LOCK,
-      ))
+      ]))
     ) {
       panic("Heavy-work slot ownership was lost");
     }
@@ -115,29 +146,34 @@ export const createHeavyWorkSlot = ({
     if (held) {
       return true;
     }
-    if (!registered) {
-      registered = await query(
-        "SELECT pg_try_advisory_lock_shared($1::int, $2::int) AS acquired",
-        priority,
-      );
-      if (!registered) {
+    for (const key of intentKeys) {
+      if (registeredKeys.includes(key)) {
+        continue;
+      }
+      if (
+        !(await query(
+          "SELECT pg_try_advisory_lock_shared($1::int, $2::int) AS acquired",
+          [LOCK_NAMESPACE, key],
+        ))
+      ) {
         return false;
       }
+      registeredKeys.push(key);
     }
     // Registered higher priorities must not compete with transient low-priority
     // attempts for the work lock, even while a rejected batch records its hold.
-    if (!(await query(READ_HIGHER_PRIORITY_SQL, priority))) {
+    if (!(await query(higher.statement, higher.parameters))) {
       return false;
     }
     held = await query(
       "SELECT pg_try_advisory_lock($1::int, $2::int) AS acquired",
-      WORK_LOCK,
+      [LOCK_NAMESPACE, WORK_LOCK],
     );
     if (!held) {
       return false;
     }
     // Recheck under the work lock so newly registered higher priorities win.
-    if (!(await query(READ_HIGHER_PRIORITY_SQL, priority))) {
+    if (!(await query(higher.statement, higher.parameters))) {
       await release();
       return false;
     }
@@ -162,16 +198,21 @@ export const createHeavyWorkSlot = ({
       return;
     }
     await release();
-    if (registered) {
+    // Remove aliases before their identifying key, including after partial registration.
+    while (registeredKeys.length > 0) {
+      const key = registeredKeys.at(-1);
+      if (key === undefined) {
+        panic("Heavy-work intent registration was lost");
+      }
       if (
         !(await query(
           "SELECT pg_advisory_unlock_shared($1::int, $2::int) AS acquired",
-          priority,
+          [LOCK_NAMESPACE, key],
         ))
       ) {
         panic("Heavy-work intent ownership was lost");
       }
-      registered = false;
+      registeredKeys.pop();
     }
     closed = true;
   };

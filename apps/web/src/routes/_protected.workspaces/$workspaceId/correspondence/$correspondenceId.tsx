@@ -15,6 +15,7 @@ import {
 } from "@stll/ui/select";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
+import { MatterRefLink } from "@/components/matter-ref-link";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
@@ -25,7 +26,9 @@ import {
   correspondenceByIdOptions,
   uniqueCorrespondenceAddresses,
 } from "@/lib/workspaces/queries/correspondence";
+import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
+import { correspondenceViewId } from "@/lib/workspaces/view-layout";
 import { CorrespondenceProvenance } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
 import { correspondenceProvenancePresentation } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.logic";
 import { useUpdateCorrespondence } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
@@ -64,15 +67,8 @@ function CorrespondenceDetailPage() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 border-b px-4 py-3">
-        <Link
-          from={Route.fullPath}
-          params={{ workspaceId }}
-          to="/workspaces/$workspaceId/correspondence"
-        >
-          <span className="text-muted-foreground hover:text-foreground flex min-h-11 items-center px-2 text-sm">
-            {t("correspondence.backToList")}
-          </span>
-        </Link>
+        <BackToCorrespondenceLink workspaceId={workspaceId} />
+
         <h1 className="min-w-0 flex-1 truncate text-sm font-medium">
           <bdi dir="auto">{record.subject || t("emailViewer.noSubject")}</bdi>
         </h1>
@@ -316,6 +312,34 @@ function CorrespondenceDetailPage() {
     </div>
   );
 }
+
+// Back to the matter's correspondence view (the overview when the matter
+// removed it). Until the matter's views are cached, the matter itself, which
+// opens its first view.
+const BackToCorrespondenceLink = ({ workspaceId }: { workspaceId: string }) => {
+  const t = useTranslations();
+  const { data: viewId = null } = useQuery({
+    ...viewsOptions(workspaceId),
+    select: correspondenceViewId,
+  });
+  const label = (
+    <span className="text-muted-foreground hover:text-foreground flex min-h-11 items-center px-2 text-sm">
+      {t("correspondence.backToList")}
+    </span>
+  );
+
+  if (viewId === null) {
+    return <MatterRefLink workspaceId={workspaceId}>{label}</MatterRefLink>;
+  }
+  return (
+    <Link
+      params={{ workspaceId, viewId }}
+      to="/workspaces/$workspaceId/$viewId"
+    >
+      {label}
+    </Link>
+  );
+};
 
 const DetailField = ({
   label,

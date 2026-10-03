@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 describe("createTimeEntryHandler", () => {
@@ -26,7 +27,7 @@ describe("createTimeEntryHandler", () => {
         organizationId: toSafeId<"organization">("org_test"),
         workspaceId: toSafeId<"workspace">("workspace_test"),
         userId: toSafeId<"user">("user_test"),
-        memberRole: { role: "member" },
+        memberRole: sessionMemberRole("member"),
         recordAuditEvent: async () => {},
         body: {
           workItemId: toSafeId<"entity">("matter_test"),

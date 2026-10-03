@@ -21,7 +21,7 @@ const resolveRateHandler = createSafeHandler(
     description:
       "Resolve the effective hourly rate for a user on a given date in a " +
       "matter, using the matter's default rate table (user-specific rate " +
-      "first, then the table default). Returns the hourly rate in integer " +
+      "first, then the organization role, then the table default). Returns the hourly rate in integer " +
       "minor currency units (e.g. cents) and the currency, or nulls when no " +
       "rate applies.",
     permissions: { rate: ["read"] },

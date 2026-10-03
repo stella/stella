@@ -12,6 +12,7 @@ import { isSafeIdValue, toSafeId } from "./safe-id";
 export const CHAT_RESOURCE_HREF_PREFIX = {
   [RESOURCE_TYPE.CASE_LAW_DECISION]: "#stella-decision=",
   [RESOURCE_TYPE.ENTITY]: "#stella-entity=",
+  [RESOURCE_TYPE.USER]: "#stella-user=",
   [RESOURCE_TYPE.WORKSPACE]: "#stella-workspace=",
 } as const;
 
@@ -20,6 +21,15 @@ export const CHAT_RESOURCE_HREF_PREFIX = {
  * model puts the decisionId a tool returned.
  */
 export const CHAT_DECISION_HREF_TEMPLATE = `${CHAT_RESOURCE_HREF_PREFIX.case_law_decision}<decisionId>`;
+
+/**
+ * The person link as a prompt shows it: the placeholder stands where the
+ * model puts the `userId` a tool returned. A user id is a non-tenant handle
+ * tools already pass through verbatim, so, like a decision, it needs no
+ * per-turn ref. The web renders a person chip only for people the viewer's
+ * own organization lists, and plain text otherwise.
+ */
+export const CHAT_USER_HREF_TEMPLATE = `${CHAT_RESOURCE_HREF_PREFIX.user}<userId>`;
 
 type ChatResourceLinkDisposition =
   | {
@@ -88,7 +98,11 @@ export const CHAT_RESOURCE_LINK_DISPOSITION = {
   [RESOURCE_TYPE.TEMPLATE_CATEGORY]: { type: "unsupported" },
   [RESOURCE_TYPE.TEMPLATE_VERSION]: { type: "unsupported" },
   [RESOURCE_TYPE.TIME_ENTRY]: { type: "unsupported" },
-  [RESOURCE_TYPE.USER]: { type: "unsupported" },
+  [RESOURCE_TYPE.USER]: {
+    type: "supported",
+    location: "none",
+    mention: "generated_reference",
+  },
   [RESOURCE_TYPE.USER_FILE]: { type: "unsupported" },
   [RESOURCE_TYPE.WORKSPACE]: {
     type: "supported",
@@ -153,7 +167,7 @@ const CANONICAL_COMPONENT = "(?:[A-Za-z0-9_~-]|%[0-9A-Fa-f]{2})+";
 const CANONICAL_HREF_BOUNDARY =
   "(?=$|[\\s()!\"',.;?`*>\\[\\]{}]|(?=(?![\\x00-\\x7F])\\p{P}))";
 const CHAT_RESOURCE_HREF_CANDIDATE_REGEX = new RegExp(
-  `(?:${CHAT_RESOURCE_HREF_PREFIX.entity}${CANONICAL_COMPONENT}(?::${CANONICAL_COMPONENT})?|${CHAT_RESOURCE_HREF_PREFIX.workspace}${CANONICAL_COMPONENT}|${CHAT_RESOURCE_HREF_PREFIX.case_law_decision}${CANONICAL_COMPONENT})${CANONICAL_HREF_BOUNDARY}`,
+  `(?:${CHAT_RESOURCE_HREF_PREFIX.entity}${CANONICAL_COMPONENT}(?::${CANONICAL_COMPONENT})?|${CHAT_RESOURCE_HREF_PREFIX.workspace}${CANONICAL_COMPONENT}|${CHAT_RESOURCE_HREF_PREFIX.case_law_decision}${CANONICAL_COMPONENT}|${CHAT_RESOURCE_HREF_PREFIX.user}${CANONICAL_COMPONENT})${CANONICAL_HREF_BOUNDARY}`,
   "gu",
 );
 
@@ -200,6 +214,8 @@ export const toChatResourceHref = (
   switch (target.type) {
     case RESOURCE_TYPE.CASE_LAW_DECISION:
       return `${CHAT_RESOURCE_HREF_PREFIX.case_law_decision}${encodeChatResourceId(target.resource.id)}`;
+    case RESOURCE_TYPE.USER:
+      return `${CHAT_RESOURCE_HREF_PREFIX.user}${encodeChatResourceId(target.resource.id)}`;
     case RESOURCE_TYPE.ENTITY:
     case RESOURCE_TYPE.WORKSPACE:
       return toChatMentionResourceHref(target);
@@ -286,6 +302,21 @@ export const parseChatResourceHref = (
           resource: resourceRef({
             type: RESOURCE_TYPE.CASE_LAW_DECISION,
             id: toSafeId<"caseLawDecision">(id),
+          }),
+        }
+      : null;
+  }
+
+  if (href.startsWith(CHAT_RESOURCE_HREF_PREFIX.user)) {
+    const id = decodeChatResourceId(
+      href.slice(CHAT_RESOURCE_HREF_PREFIX.user.length),
+    );
+    return id !== null
+      ? {
+          type: RESOURCE_TYPE.USER,
+          resource: resourceRef({
+            type: RESOURCE_TYPE.USER,
+            id: toSafeId<"user">(id),
           }),
         }
       : null;

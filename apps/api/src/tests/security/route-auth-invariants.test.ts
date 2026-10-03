@@ -84,6 +84,7 @@ describe("root route registrations", () => {
       "internalTimeEntriesRoute",
       "localDevPublicRoutes",
       "mcpRoute",
+      "memberTimeTargetsRoute",
       "memoriesRoute",
       "multipartFormParser",
       "myTimeEntriesRoute",

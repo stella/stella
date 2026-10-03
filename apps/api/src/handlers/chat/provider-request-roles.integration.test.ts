@@ -39,6 +39,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isChatModelReasoningEffortAvailable } from "@/api/lib/chat-model-selection";
 import { runChatThreadCompaction } from "@/api/lib/chat/thread-compaction";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   insertTestSkill,
   latestTestSkillRevisionId,
@@ -172,7 +173,7 @@ const handlerContext = (
 ) =>
   createTestHandlerContext({
     ...fields,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig: run.orgAIConfig,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu" as const,

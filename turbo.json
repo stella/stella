@@ -20,7 +20,27 @@
   "globalDependencies": ["patches/**"],
   "tasks": {
     // Outputs are ignored by Git, but restored by Turbo on a cache hit.
+    "@stll/web#generate:route-tree": {
+      "inputs": [
+        "src/routes/**",
+        "vite.config.ts",
+        "route-tree.config.ts",
+        "scripts/generate-route-tree.ts",
+        "package.json",
+        "$TURBO_ROOT$/bun.lock"
+      ],
+      "outputs": ["src/routeTree.gen.ts"]
+    },
+    "@stll/web#build": {
+      "dependsOn": ["^build", "generate:route-tree", "generate:api-types"]
+    },
+    "@stll/web#dev": {
+      "dependsOn": ["generate:route-tree", "generate:api-types"],
+      "persistent": true,
+      "cache": false
+    },
     "@stll/web#generate:api-types": {
+      "dependsOn": ["generate:route-tree"],
       "inputs": [
         "$TURBO_ROOT$/apps/api/**",
         "$TURBO_ROOT$/apps/web/src/**",
@@ -45,14 +65,15 @@
         "!$TURBO_ROOT$/packages/**/.env*",
         "!$TURBO_ROOT$/packages/**/.turbo/**",
         "!$TURBO_ROOT$/packages/**/*.tsbuildinfo",
-        "!src/generated/api-routes.gen.ts"
+        "!src/generated/api-routes.gen.ts",
+        "!src/routeTree.gen.ts"
       ],
       "outputs": ["src/generated/api-routes.gen.ts"]
     },
     // Compiler scripts prepare direct invocations, but skip that cache restore
     // inside Turbo (TURBO_HASH): these dependencies already prepared the file.
     "@stll/web#typecheck": {
-      "dependsOn": ["transit", "generate:api-types"],
+      "dependsOn": ["transit", "generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
@@ -67,7 +88,7 @@
       "outputs": [".cache/tsbuildinfo*.json", "**/.cache/tsbuildinfo*.json"]
     },
     "@stll/web#lint": {
-      "dependsOn": ["transit", "generate:api-types"],
+      "dependsOn": ["transit", "generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
@@ -92,7 +113,7 @@
       ]
     },
     "@stll/web#lint:fix": {
-      "dependsOn": ["transit", "generate:api-types"],
+      "dependsOn": ["transit", "generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/oxlint.config.ts",
@@ -111,7 +132,7 @@
       "cache": false
     },
     "@stll/web#test:property": {
-      "dependsOn": ["generate:api-types"],
+      "dependsOn": ["generate:api-types", "generate:route-tree"],
       "inputs": ["$TURBO_DEFAULT$"],
       "cache": false
     },
@@ -179,7 +200,9 @@
     "//#typecheck:repo": {
       "dependsOn": [
         "@stll/web#generate:api-types",
-        "@stll/cli#codegen:runtime"
+        "@stll/web#generate:route-tree",
+        "@stll/cli#codegen:runtime",
+        "@stll/api#generate:capability-runtime"
       ],
       // Root projects can import workspace source. The broad workspace inputs
       // trade some misses for correctness while still sharing exact results
@@ -374,8 +397,9 @@
     "@stll/cli#codegen:runtime": {
       "inputs": [
         "package.json",
-        "capability-catalog.json",
+        "capabilities/**",
         "src/codegen.ts",
+        "src/capability-catalog-data.ts",
         "src/write-generated-file.ts",
         "src/capability-catalog-load.ts",
         "src/generate-capability-tree.ts",
@@ -465,8 +489,27 @@
         "$TURBO_ROOT$/.github/workflows/scheduled-run-alerts.yml"
       ]
     },
+    "@stll/api#generate:capability-runtime": {
+      "inputs": [
+        "scripts/generate-capability-runtime.ts",
+        "src/mcp/generated/capability-dispatch/**",
+        "$TURBO_ROOT$/packages/cli/capabilities/**",
+        "$TURBO_ROOT$/packages/cli/src/capability-catalog-data.ts"
+      ],
+      "outputs": [
+        "src/mcp/generated/capability-dispatch.ts",
+        "src/mcp/generated/capability-catalog.ts"
+      ]
+    },
+    "@stll/api#build": {
+      "dependsOn": ["^build", "generate:capability-runtime"]
+    },
     "@stll/api#typecheck": {
-      "dependsOn": ["transit", "@stll/cli#codegen:runtime"],
+      "dependsOn": [
+        "transit",
+        "@stll/cli#codegen:runtime",
+        "generate:capability-runtime"
+      ],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
@@ -481,12 +524,14 @@
       "outputs": [
         ".cache/tsbuildinfo*.json",
         "**/.cache/tsbuildinfo*.json",
+        "src/mcp/generated/capability-dispatch.ts",
+        "src/mcp/generated/capability-catalog.ts",
         "$TURBO_ROOT$/packages/cli/src/generated/route-map.ts",
         "$TURBO_ROOT$/packages/cli/src/generated/tool-annotations.ts"
       ]
     },
     "@stll/api#lint": {
-      "dependsOn": ["typecheck"],
+      "dependsOn": ["typecheck", "generate:capability-runtime"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
@@ -511,14 +556,18 @@
       ]
     },
     "@stll/api#lint:fix": {
-      "dependsOn": ["transit", "@stll/cli#codegen:runtime"]
+      "dependsOn": [
+        "transit",
+        "@stll/cli#codegen:runtime",
+        "generate:capability-runtime"
+      ]
     },
     "@stll/api#test:property": {
-      "dependsOn": ["@stll/cli#codegen:runtime"],
+      "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
       "cache": false
     },
     "@stll/api#test": {
-      "dependsOn": ["@stll/cli#codegen:runtime"],
+      "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
       "env": ["API_TEST_SHARD"],
       // How many test batches run at once; it never changes results, so it
       // passes through without entering the cache key.
@@ -533,7 +582,7 @@
       ]
     },
     "@stll/web#test": {
-      "dependsOn": ["generate:api-types"],
+      "dependsOn": ["generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.oxlint-plugins/**",

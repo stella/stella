@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import {
   DIRECTLY_CREATABLE_VIEW_LAYOUTS,
   isRequiredViewLayout,
+  isSingleViewLayout,
   type RequiredViewLayoutType,
 } from "@stll/api-contract";
 import {
@@ -28,6 +29,7 @@ import {
   GanttChartIcon,
   KanbanIcon,
   LayoutDashboardIcon,
+  MailIcon,
   PencilIcon,
   PlusIcon,
   TableIcon,
@@ -81,6 +83,7 @@ const layoutIcons = {
   calendar: CalendarIcon,
   timeline: GanttChartIcon,
   avt: FileCheckIcon,
+  correspondence: MailIcon,
 } as const satisfies Record<ViewLayoutType, React.ElementType>;
 
 const LAYOUT_LABEL_KEYS = {
@@ -91,9 +94,12 @@ const LAYOUT_LABEL_KEYS = {
   calendar: "workspaces.views.layouts.calendar",
   timeline: "workspaces.views.layouts.timeline",
   avt: "workspaces.views.layouts.avt",
+  correspondence: "correspondence.title",
 } as const satisfies Record<ViewLayoutType, TranslationKey>;
 
-const emptyLayout = (type: RequiredViewLayoutType): ViewLayout => {
+const emptyLayout = (
+  type: RequiredViewLayoutType | "correspondence",
+): ViewLayout => {
   const base = {
     filters: [],
     sorts: [],
@@ -142,6 +148,7 @@ const defaultLayouts = {
     showTable: false,
   },
   avt: EMPTY_AVT_LAYOUT,
+  correspondence: emptyLayout("correspondence"),
 } as const satisfies Record<ViewLayoutType, ViewLayout>;
 
 const LAYOUT_OPTIONS = DIRECTLY_CREATABLE_VIEW_LAYOUTS;
@@ -172,12 +179,18 @@ export const ViewSwitcher = ({
     onRenameView: setRenamingViewId,
   });
   const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
-  const hasOverviewView = views.some((view) => view.layout.type === "overview");
-  const createLayoutOptions = hasOverviewView
-    ? LAYOUT_OPTIONS.filter((layoutType) => layoutType !== "overview")
-    : LAYOUT_OPTIONS;
+  // A matter holds at most one overview and one correspondence view, so the
+  // menus stop offering a layout the matter already has.
+  const heldSingleLayouts = new Set<ViewLayoutType>(
+    allViews
+      .map((view) => view.layout.type)
+      .filter((layoutType) => isSingleViewLayout(layoutType)),
+  );
+  const createLayoutOptions = LAYOUT_OPTIONS.filter(
+    (layoutType) => !heldSingleLayouts.has(layoutType),
+  );
   const disallowedTemplateLayouts = new Set<ViewLayoutType>([
-    ...(hasOverviewView ? ["overview" as const] : []),
+    ...heldSingleLayouts,
     ...(avtEnabled ? [] : ["avt" as const]),
   ]);
   // Views hidden from the switcher keep their place after the shown ones:
@@ -225,13 +238,17 @@ export const ViewSwitcher = ({
                 createView.mutate(
                   {
                     id: viewId,
-                    // `layoutType` lets each locale inflect "New {layout}"
-                    // for the layout noun's gender (ICU select); the name
-                    // stays distinct from the default-view-name set.
-                    name: t("workspaces.views.newView", {
-                      layout: t(LAYOUT_LABEL_KEYS[layoutType]),
-                      layoutType,
-                    }),
+                    // A layout a matter holds once comes back under its
+                    // default name, which the API re-localizes per reader.
+                    // Others get "New {layout}": `layoutType` lets each
+                    // locale inflect it for the layout noun's gender (ICU
+                    // select), and it stays out of the default-name set.
+                    name: isSingleViewLayout(layoutType)
+                      ? t(LAYOUT_LABEL_KEYS[layoutType])
+                      : t("workspaces.views.newView", {
+                          layout: t(LAYOUT_LABEL_KEYS[layoutType]),
+                          layoutType,
+                        }),
                     layout: defaultLayouts[layoutType],
                   },
                   {
@@ -558,7 +575,7 @@ const useViewActionsMenu = ({
             {t("common.rename")}
           </MenuItem>
         )}
-        {canCreateView && layout.type !== "overview" && (
+        {canCreateView && !isSingleViewLayout(layout.type) && (
           <MenuItem onClick={() => handleDuplicate(view)}>
             <CopyIcon />
             {t("common.duplicate")}
@@ -579,7 +596,10 @@ const useViewActionsMenu = ({
             <MenuSubPopup>
               <ViewLayoutMenuContent
                 options={LAYOUT_OPTIONS.flatMap((layoutType) => {
-                  if (layoutType === layout.type || layoutType === "overview") {
+                  if (
+                    layoutType === layout.type ||
+                    isSingleViewLayout(layoutType)
+                  ) {
                     return [];
                   }
                   return [

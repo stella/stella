@@ -22,6 +22,7 @@ import { WEB_SEARCH_TOOL_NAME } from "@/api/handlers/chat/tools/web-search-tools
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -152,7 +153,7 @@ const call = async ({
       getAccessibleWorkspaces: async () => workspaces,
       getWorkspaceAccess: async (workspaceId) =>
         workspaces.find(({ id }) => id === workspaceId) ?? null,
-      memberRole: { role: "owner" as const },
+      memberRole: sessionMemberRole("owner"),
       query,
       safeDb,
       scopedDb,
@@ -391,7 +392,7 @@ describe("built-in skills are decided beside installed ones", () => {
         {
           getAccessibleWorkspaces: async () => WITH_MATTER(),
           getWorkspaceAccess: async () => null,
-          memberRole: { role: "owner" as const },
+          memberRole: sessionMemberRole("owner"),
           query: {},
           safeDb,
           scopedDb,
