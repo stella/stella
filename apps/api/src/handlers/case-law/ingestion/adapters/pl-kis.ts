@@ -115,7 +115,10 @@ import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { PL_KIS_METADATA_URL_SCHEMA } from "./pl-kis.metadata-urls";
 
 // ── Publisher boundary ───────────────────────────────────
 
@@ -1084,12 +1087,15 @@ const statedDay = (
 const supplementaryMetadata = (
   row: Record<string, unknown>,
   detail: PlKisDetail | undefined,
-): Record<string, unknown> => {
+) => {
   const attachments = detail?.fields.get("ZALACZNIKI")?.value;
   return {
     attachments: Array.isArray(attachments) ? attachments : [],
     officialPublication: statedString(row, detail, "MIEJ_PUB"),
-    otherSourceUrl: statedString(row, detail, "INN_ZROD"),
+    otherSourceUrl: toMetadataUrl(
+      statedString(row, detail, "INN_ZROD"),
+      "transport-json",
+    ),
     decisionKind: labelsOf(row["RODZAJ_DECYZJI"])[0],
     decisionKindId: detailString(detail, "RODZAJ_DECYZJI"),
     validFrom: statedDay(row, detail, "DAT_WAZ_OD"),
@@ -1125,7 +1131,7 @@ const relatedDocumentsOf = (
         {
           relation: category?.relation ?? "amends",
           eurekaId: amended,
-          sourceUrl: plKisWebUrl(amended),
+          sourceUrl: toMetadataUrl(plKisWebUrl(amended), "constructed"),
         },
       ];
 };
@@ -1265,90 +1271,101 @@ export const assemblePlKisDecision = async ({
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
   const listingOnly = parsed === undefined;
 
-  const decision: IngestionResult = plainTextIngestionResult({
-    caseNumber,
-    ...(signature === undefined
-      ? { caseNumberIsPlaceholder: true }
-      : { identifiers: [{ type: "case-number", value: signature }] }),
-    sourceDocumentId: id,
-    // The quarantine key keeps meeting the row stored while the id was
-    // missing, so the observation that recovers it enriches that row.
-    ...(publisherId === undefined
-      ? {}
-      : { sourceDocumentIdRepairAliases: [quarantineId] }),
-    court,
-    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIS].country,
-    language: LANGUAGE,
-    ...(decisionDate === undefined ? {} : { decisionDate }),
-    ...(decisionType === undefined ? {} : { decisionType }),
-    ...(parsed === undefined ? {} : { fulltext: parsed.output.fulltext }),
-    ...(listingOnly ? { isListingOnly: true } : {}),
-    ...(sourceUrl === undefined ? {} : { sourceUrl }),
-    ...(documentUrl === undefined ? {} : { documentUrl }),
-    textFields: {
-      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      headnote: thesisField(statedString(row, detail, "TEZA")),
-    },
-    metadata: checkedDecisionMetadata({
-      eurekaId: id,
+  const decision: IngestionResult = plainTextIngestionResult(
+    {
       caseNumber,
+      ...(signature === undefined
+        ? { caseNumberIsPlaceholder: true }
+        : { identifiers: [{ type: "case-number", value: signature }] }),
+      sourceDocumentId: id,
+      // The quarantine key keeps meeting the row stored while the id was
+      // missing, so the observation that recovers it enriches that row.
+      ...(publisherId === undefined
+        ? {}
+        : { sourceDocumentIdRepairAliases: [quarantineId] }),
       court,
-      decisionDate,
-      decisionType,
-      category:
-        category === undefined
-          ? { id: categoryId, label: categoryLabels[0] }
-          : {
-              id: category.id,
-              label: categoryLabels[0],
-              disposition: category.disposition,
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIS].country,
+      language: LANGUAGE,
+      ...(decisionDate === undefined ? {} : { decisionDate }),
+      ...(decisionType === undefined ? {} : { decisionType }),
+      ...(parsed === undefined ? {} : { fulltext: parsed.output.fulltext }),
+      ...(listingOnly ? { isListingOnly: true } : {}),
+      ...(sourceUrl === undefined ? {} : { sourceUrl }),
+      ...(documentUrl === undefined ? {} : { documentUrl }),
+      textFields: {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        headnote: thesisField(statedString(row, detail, "TEZA")),
+      },
+      metadata: checkedDecisionMetadata(
+        {
+          eurekaId: id,
+          caseNumber,
+          court,
+          decisionDate,
+          decisionType,
+          category:
+            category === undefined
+              ? { id: categoryId, label: categoryLabels[0] }
+              : {
+                  id: category.id,
+                  label: categoryLabels[0],
+                  disposition: category.disposition,
+                },
+          authorities,
+          authorityIds: detailIds(detail, "AUTOR"),
+          status: statusOf(statusId),
+          statusId,
+          statusLabel: statusLabels[0],
+          publishedAt: statedDay(row, detail, "DATA_PUBLIKACJI"),
+          keywords,
+          keywordIds: detailIds(detail, "SLOWA_KLUCZOWE"),
+          provisions,
+          provisionIds: detailIds(detail, "PRZEPISY"),
+          taxTags: [...new Set(provisions.flatMap(({ taxTags }) => taxTags))],
+          issues: issues.map((label) => ({
+            path: issuePathOf(label),
+            raw: label,
+          })),
+          issueIds: detailIds(detail, "ZAGADNIENIA"),
+          taxes: [
+            ...new Set(
+              issues.flatMap((label) => issuePathOf(label).slice(0, 1)),
+            ),
+          ],
+          relatedDocuments: relatedDocumentsOf(row, detail, includedCategory),
+          ...supplementaryMetadata(row, detail),
+          ...(parsed === undefined ? {} : { documentFrom: parsed.from }),
+          ...(unmapped.length === 0 ? {} : { unmappedSourceFields: unmapped }),
+          ...(listingOnly
+            ? { detailStatus: detailProblem ?? "document-empty" }
+            : {}),
+          sourceAttribution:
+            "System Informacji Skarbowej EUREKA, Ministerstwo Finansów",
+        },
+        PL_KIS_METADATA_URL_SCHEMA,
+      ),
+      // The PDF is stored beside the envelope rather than in it, so a corrected
+      // rendition under an unchanged detail has to change the hash too.
+      rawHash:
+        parsed?.from === "pdf" && pdfBytes !== undefined
+          ? hashContent(
+              `${sourceRaw}\n${new Bun.CryptoHasher("sha256").update(pdfBytes).digest("hex")}`,
+            )
+          : hashContent(sourceRaw),
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS],
+      documentAst,
+      sourceRaw,
+      ...(parsed?.from === "pdf" && pdfBytes !== undefined
+        ? {
+            sourceRawObjects: {
+              [PDF_OBJECT]: { bytes: pdfBytes, contentType: "application/pdf" },
             },
-      authorities,
-      authorityIds: detailIds(detail, "AUTOR"),
-      status: statusOf(statusId),
-      statusId,
-      statusLabel: statusLabels[0],
-      publishedAt: statedDay(row, detail, "DATA_PUBLIKACJI"),
-      keywords,
-      keywordIds: detailIds(detail, "SLOWA_KLUCZOWE"),
-      provisions,
-      provisionIds: detailIds(detail, "PRZEPISY"),
-      taxTags: [...new Set(provisions.flatMap(({ taxTags }) => taxTags))],
-      issues: issues.map((label) => ({ path: issuePathOf(label), raw: label })),
-      issueIds: detailIds(detail, "ZAGADNIENIA"),
-      taxes: [
-        ...new Set(issues.flatMap((label) => issuePathOf(label).slice(0, 1))),
-      ],
-      relatedDocuments: relatedDocumentsOf(row, detail, includedCategory),
-      ...supplementaryMetadata(row, detail),
-      ...(parsed === undefined ? {} : { documentFrom: parsed.from }),
-      ...(unmapped.length === 0 ? {} : { unmappedSourceFields: unmapped }),
-      ...(listingOnly
-        ? { detailStatus: detailProblem ?? "document-empty" }
+          }
         : {}),
-      sourceAttribution:
-        "System Informacji Skarbowej EUREKA, Ministerstwo Finansów",
-    }),
-    // The PDF is stored beside the envelope rather than in it, so a corrected
-    // rendition under an unchanged detail has to change the hash too.
-    rawHash:
-      parsed?.from === "pdf" && pdfBytes !== undefined
-        ? hashContent(
-            `${sourceRaw}\n${new Bun.CryptoHasher("sha256").update(pdfBytes).digest("hex")}`,
-          )
-        : hashContent(sourceRaw),
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS],
-    documentAst,
-    sourceRaw,
-    ...(parsed?.from === "pdf" && pdfBytes !== undefined
-      ? {
-          sourceRawObjects: {
-            [PDF_OBJECT]: { bytes: pdfBytes, contentType: "application/pdf" },
-          },
-        }
-      : {}),
-    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  });
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    PL_KIS_METADATA_URL_SCHEMA,
+  );
   return listingOnly
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };

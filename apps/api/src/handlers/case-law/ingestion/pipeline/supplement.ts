@@ -8,6 +8,8 @@ import {
   PROCESS_DECISION_RETRY_REASON,
   PROCESS_DECISION_STATUS,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { createSourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+import type { SourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import { rebuildStoredJudgment } from "@/api/handlers/case-law/ingestion/pipeline/stored-judgment";
 import { DECISION_SUPPLEMENT_DOCUMENT_ROLE } from "@/api/handlers/case-law/ingestion/pipeline/supplement-document-role";
 import {
@@ -89,15 +91,18 @@ const leaveFormerHolder = async (
       },
     };
   }
-  const rewritten = await processDecision({
-    input: rebuiltFormer.result,
-    sourceId,
-    scopedDb,
-    observedAt,
-    observationOrder: await nextObservationOrder(),
-    corpus,
-    polarityRules,
-  });
+  const rewritten = await processDecision(
+    {
+      input: rebuiltFormer.result,
+      sourceId,
+      scopedDb,
+      observedAt,
+      observationOrder: await nextObservationOrder(),
+      corpus,
+      polarityRules,
+    },
+    placement.resolveMetadataUrlSchema,
+  );
   if (rewritten.status === PROCESS_DECISION_STATUS.RETRYABLE) {
     return rewritten;
   }
@@ -134,18 +139,21 @@ const leaveFormerHolder = async (
       reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
     };
   }
-  return await processSupplement({
-    supplement,
-    sourceId,
-    scopedDb,
-    observedAt,
-    nextObservationOrder,
-    reparseStoredRaw,
-    readStoredRaw,
-    corpus,
-    polarityRules,
-    absorb,
-  });
+  return await processSupplement(
+    {
+      supplement,
+      sourceId,
+      scopedDb,
+      observedAt,
+      nextObservationOrder,
+      reparseStoredRaw,
+      readStoredRaw,
+      corpus,
+      polarityRules,
+      absorb,
+    },
+    placement.resolveMetadataUrlSchema,
+  );
 };
 
 /**
@@ -161,18 +169,24 @@ const leaveFormerHolder = async (
  * failure anywhere leaves it parked for the next observation of either
  * document.
  */
-export const processSupplement = async ({
-  supplement,
-  sourceId,
-  scopedDb,
-  observedAt,
-  nextObservationOrder,
-  reparseStoredRaw,
-  readStoredRaw,
-  corpus = CASE_LAW_CORPUS_DEPENDENCIES,
-  polarityRules,
-  absorb = absorbStandaloneSupplementRow,
-}: ProcessSupplementOptions): Promise<ProcessSupplementResult> => {
+export const processSupplement = async (
+  {
+    supplement,
+    sourceId,
+    scopedDb,
+    observedAt,
+    nextObservationOrder,
+    reparseStoredRaw,
+    readStoredRaw,
+    corpus = CASE_LAW_CORPUS_DEPENDENCIES,
+    polarityRules,
+    absorb = absorbStandaloneSupplementRow,
+  }: ProcessSupplementOptions,
+  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver = createSourceMetadataUrlSchemaResolver(
+    scopedDb,
+  ),
+): Promise<ProcessSupplementResult> => {
+  const metadataUrlSchema = await resolveMetadataUrlSchema(sourceId);
   const { sourceDocumentId } = supplement.document;
   const expectedRole = DECISION_SUPPLEMENT_DOCUMENT_ROLE[supplement.kind];
   if (
@@ -183,7 +197,7 @@ export const processSupplement = async ({
   }
   // The internal supplement kind does not establish a publisher role when
   // the adapter could not classify every component of the source enum.
-  const document = sanitizeResult(supplement.document);
+  const document = sanitizeResult(supplement.document, metadataUrlSchema);
   assertDocketKeyedSupplementAllowed(document.country);
   const key: SupplementTargetKey = {
     sourceId,
@@ -223,6 +237,8 @@ export const processSupplement = async ({
   const { row, selection, leavesHolder, judgment } = placed;
 
   const placement: SupplementPlacement = {
+    metadataUrlSchema,
+    resolveMetadataUrlSchema,
     supplement,
     sourceId,
     scopedDb,
@@ -305,15 +321,18 @@ export const processSupplement = async ({
       SUPPLEMENT_STANDALONE_REASON.JUDGMENT_UNREADABLE,
     );
   }
-  const written = await processDecision({
-    input: rebuilt.result,
-    sourceId,
-    scopedDb,
-    observedAt,
-    observationOrder: await nextObservationOrder(),
-    corpus,
-    polarityRules,
-  });
+  const written = await processDecision(
+    {
+      input: rebuilt.result,
+      sourceId,
+      scopedDb,
+      observedAt,
+      observationOrder: await nextObservationOrder(),
+      corpus,
+      polarityRules,
+    },
+    resolveMetadataUrlSchema,
+  );
   if (written.status === PROCESS_DECISION_STATUS.RETRYABLE) {
     return written;
   }

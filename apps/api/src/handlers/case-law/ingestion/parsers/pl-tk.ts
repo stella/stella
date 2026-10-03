@@ -32,7 +32,12 @@ import {
   validateAndLog,
   type ValidationResult,
 } from "@/api/lib/legal-search/parsers/validate-ast";
-import { sanitizeUrl } from "@/api/lib/sanitize-url";
+import {
+  toMetadataUrl,
+  type MetadataUrlDefect,
+  type SafeHref,
+  sanitizeUrl,
+} from "@/api/lib/sanitize-url";
 
 export const PL_TK_ORIGIN = "https://ipo.trybunal.gov.pl";
 
@@ -97,9 +102,19 @@ const absoluteUrl = (href: string | undefined): string | undefined => {
     : url.toString();
 };
 
+const metadataUrlOf = (href: string | undefined) => {
+  if (href?.trim().length === 0) {
+    return undefined;
+  }
+  const resolved = absoluteUrl(href);
+  return resolved === undefined
+    ? undefined
+    : toMetadataUrl(resolved, "constructed");
+};
+
 // ── Page structure ───────────────────────────────────────
 
-export type PlTkLink = { text: string; url: string };
+export type PlTkLink = { text: string; url: SafeHref | MetadataUrlDefect };
 
 /** One line of `Miejsce publikacji`: the citation and the links beside it. */
 export type PlTkPublication = { text: string; links: PlTkLink[] };
@@ -149,7 +164,7 @@ export type PlTkRuling = {
   note: string | undefined;
   panel: PlTkPanelJudge[];
   /** The Word rendering the portal offers for download. */
-  wordDocumentUrl: string | undefined;
+  wordDocumentUrl: SafeHref | MetadataUrlDefect | undefined;
   /** Footnotes the text carries, publication annotations among them. */
   footnotes: string[];
   dissents: PlTkDissent[];
@@ -329,7 +344,7 @@ export const readPlTkCasePage = (html: string): PlTkCasePage | null => {
         .find("li a")
         .toArray()
         .flatMap((element) => {
-          const url = absoluteUrl($(element).attr("href"));
+          const url = metadataUrlOf($(element).attr("href"));
           const text = collapse($(element).text());
           return url === undefined ? [] : [{ text, url }];
         }),
@@ -385,7 +400,7 @@ const publicationsOf = (
         .find("a")
         .toArray()
         .flatMap((anchor) => {
-          const url = absoluteUrl($(anchor).attr("href"));
+          const url = metadataUrlOf($(anchor).attr("href"));
           return url === undefined
             ? []
             : [{ text: collapse($(anchor).text()), url }];
@@ -590,7 +605,7 @@ export const readPlTkRuling = (
   const note = collapse(
     tab.find('div[style="margin:5px"] > span').first().text(),
   );
-  const word = absoluteUrl(
+  const word = metadataUrlOf(
     byId($, `sprawaForm:tabView:pobierzDoc${documentId}`).attr("href"),
   );
 
