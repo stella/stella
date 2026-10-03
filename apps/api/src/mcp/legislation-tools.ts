@@ -586,6 +586,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
 
   return toolDataResult({
     nextCursor: result.nextCursor,
+    paginationOutcome: result.paginationOutcome,
     results: result.items.map((hit) => ({
       appUrl: buildLegislationDocumentAppUrl({
         country: hit.country,

@@ -31,6 +31,7 @@ import {
   decodeCompatId,
 } from "@/api/mcp/compat-ids";
 import {
+  COMPAT_SEARCH_CURSOR_MAX_LENGTH,
   compatCorpusFetchResponse,
   compatSearchCursorError,
   compatSearchPageLimitResult,
@@ -278,6 +279,7 @@ const compatSearchArgsSchema = nullAsAbsent(
       v.description("Search query"),
     ),
     cursor: cursorInput({
+      maxLength: COMPAT_SEARCH_CURSOR_MAX_LENGTH,
       description:
         "Opaque cursor from a previous search call to fetch the next page",
     }),
@@ -520,6 +522,7 @@ const handleCompatSearchTool: McpToolHandler<
   // anonymized mode. The handler never branches on mode.
   return {
     egress: "compatSearch",
+    paginationOutcome: corpus.paginationOutcome,
     nextCursor: exhausted
       ? null
       : encodeCompatSearchCursor({
