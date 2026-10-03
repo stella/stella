@@ -699,6 +699,10 @@ describe("the crawl keeps a refused row as its listing", () => {
     { autor: 7 },
     { autor: { value: "publisher value" } },
     { autor: [7] },
+    { predmetRizeni: { value: "publisher value" } },
+    { datumVydani: 7 },
+    { klicovaSlova: [7] },
+    { zminenaUstanoveni: "publisher value" },
     { odkaz: 7 },
     { odkaz: { value: "publisher value" } },
     { odkaz: [7] },
@@ -709,7 +713,12 @@ describe("the crawl keeps a refused row as its listing", () => {
       const raw = { ...item, ...drift };
       expect(isCzRegionalApiItem(raw)).toBe(false);
       const listing = JSON.stringify({ items: [raw], totalPages: 1 });
-      globalThis.fetch = asFetchMock(async () => new Response(listing));
+      const document = await readFixture(DISTRICT_DOCUMENT);
+      const documentFetch = mock(async () => new Response(document));
+      globalThis.fetch = asFetchMock(async (input: string) =>
+        input === item.odkaz ? await documentFetch() : new Response(listing),
+      );
+      const hasValidLink = !("odkaz" in drift);
       const identity =
         "odkaz" in drift
           ? { type: "case-number", caseNumber: "18 C 130/2024", language: "cs" }
@@ -724,9 +733,19 @@ describe("the crawl keeps a refused row as its listing", () => {
       });
       expect(listed.items).toEqual([raw]);
       const repaired = await buildCzRegionalDecision(raw);
-      expect(repaired.type).toBe("detail-unavailable");
-      if (repaired.type === "detail-unavailable") {
-        expect(repaired.decision.isListingOnly).toBe(true);
+      expect(repaired.type).toBe(hasValidLink ? "built" : "detail-unavailable");
+      if (repaired.type !== "unkeyable") {
+        expect(repaired.decision.isListingOnly).toBe(
+          hasValidLink ? undefined : true,
+        );
+        if (hasValidLink) {
+          expect(repaired.decision.fulltext).toBeTruthy();
+          expect(
+            decodeSourceRawEnvelope(repaired.decision.sourceRaw ?? "")?.[
+              "document"
+            ],
+          ).toBe(document);
+        }
         expect(
           JSON.parse(
             decodeSourceRawEnvelope(repaired.decision.sourceRaw ?? "")?.[
@@ -747,7 +766,47 @@ describe("the crawl keeps a refused row as its listing", () => {
         await czRegionalAdapter.fetchPage("2025-06-11:0", {})
       ).unwrap();
       expect(page.decisions).toHaveLength(1);
-      expect(page.decisions.at(0)?.isListingOnly).toBe(true);
+      expect(page.decisions.at(0)?.isListingOnly).toBe(
+        hasValidLink ? undefined : true,
+      );
+      expect(documentFetch).toHaveBeenCalledTimes(hasValidLink ? 3 : 0);
+      if (hasValidLink) {
+        const decision =
+          page.decisions.at(0) ?? panic("Crawled decision absent");
+        expect(decision.fulltext).toBeTruthy();
+        const replayed = await czRegionalAdapter.reparseStoredRaw?.({
+          raw: new TextEncoder().encode(decision.sourceRaw),
+          contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+          sourceDocumentId: decision.sourceDocumentId ?? null,
+          caseNumber: decision.caseNumber,
+          language: decision.language,
+          court: decision.court,
+          ecli: decision.ecli ?? null,
+          decisionDate: decision.decisionDate ?? null,
+          decisionType: decision.decisionType ?? null,
+          sourceUrl: decision.sourceUrl ?? null,
+          documentUrl: decision.documentUrl ?? null,
+          metadata: decision.metadata,
+        });
+        expect(replayed?.type).toBe("parsed");
+        if (replayed?.type === "parsed") {
+          expect(replayed.result.isListingOnly).toBeUndefined();
+          expect(replayed.result.sourceRaw).toBe(decision.sourceRaw);
+          expect(replayed.result.fulltext).toBe(decision.fulltext);
+        }
+        const storedRaw =
+          decodeSourceRawEnvelope(page.decisions.at(0)?.sourceRaw ?? "")?.[
+            "listing"
+          ] ?? panic("Stored listing absent");
+        const recovered = await buildCzRegionalDecision(JSON.parse(storedRaw));
+        expect(recovered.type).toBe("built");
+        if (recovered.type === "built") {
+          expect(recovered.decision.isListingOnly).toBeUndefined();
+          expect(recovered.decision.fulltext).toBe(
+            repaired.type === "built" ? repaired.decision.fulltext : undefined,
+          );
+        }
+      }
       expect(
         JSON.parse(
           decodeSourceRawEnvelope(page.decisions.at(0)?.sourceRaw ?? "")?.[

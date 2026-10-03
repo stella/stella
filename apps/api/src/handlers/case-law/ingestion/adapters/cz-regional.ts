@@ -513,23 +513,20 @@ const readCzRegionalListingItem = (raw: unknown): CzRegionalListingRead => {
     : { type: "unavailable", item, raw };
 };
 
+type CzRegionalListingItem = { item: CzRegionalApiItem; raw: unknown };
+
 const readCzRegionalListingItems = (rows: unknown[]) => {
-  const items: CzRegionalApiItem[] = [];
-  const retained: IngestionResult[] = [];
+  const items: CzRegionalListingItem[] = [];
   let failures = 0;
   for (const row of rows) {
     const read = readCzRegionalListingItem(row);
     switch (read.type) {
       case "present":
-        items.push(read.item);
+        items.push({ item: read.item, raw: row });
         continue;
-      case "unavailable": {
-        const built = buildCzRegionalListingFallback(read.item, read.raw);
-        if (built.type !== "unkeyable") {
-          retained.push(built.decision);
-        }
+      case "unavailable":
+        items.push({ item: read.item, raw: read.raw });
         break;
-      }
       case "unidentifiable":
         break;
       default:
@@ -545,7 +542,7 @@ const readCzRegionalListingItems = (rows: unknown[]) => {
       }),
     );
   }
-  return { items, failures, retained };
+  return { items, failures };
 };
 
 /**
@@ -1028,6 +1025,8 @@ export type CzRegionalBuildResult =
 type AssembleCzRegionalOptions = {
   /** The listing row, which is the only surface stating several fields. */
   item: CzRegionalApiItem;
+  /** The verbatim listing when optional metadata cannot be read. */
+  rawListing?: unknown;
   /** The document payload, or null where none was read. */
   document: CzRegionalDocumentPayload | null;
   /** The chain payload, which only the chain pass supplies. */
@@ -1048,6 +1047,7 @@ type AssembleCzRegionalOptions = {
  */
 export const assembleCzRegionalDecision = ({
   item,
+  rawListing = item,
   document,
   chain,
 }: AssembleCzRegionalOptions): CzRegionalBuildResult => {
@@ -1115,7 +1115,7 @@ export const assembleCzRegionalDecision = ({
   const fulltext = parsed?.fulltext ?? text.plain;
 
   const sourceRaw = encodeSourceRawEnvelope({
-    [RAW_PART.LISTING]: JSON.stringify(item),
+    [RAW_PART.LISTING]: JSON.stringify(rawListing),
     ...(document === null ? {} : { [RAW_PART.DOCUMENT]: document.raw }),
     ...(chain === null ? {} : { [RAW_PART.CHAIN]: chain.raw }),
   });
@@ -1224,7 +1224,7 @@ const buildCzRegionalListingFallback = (
 /**
  * Fetch the document for a listed item and assemble the decision.
  * The crawl retains identifiable rows whose metadata cannot be read;
- * repair and reconciliation keep them available for a later retry.
+ * valid identity fields still drive the document fetch when optional metadata drifts.
  */
 export const buildCzRegionalDecision = async (
   raw: unknown,
@@ -1235,6 +1235,9 @@ export const buildCzRegionalDecision = async (
     case "unidentifiable":
       return { type: "unkeyable" };
     case "unavailable": {
+      if (read.item.odkaz && restrictCzRegionalFinaldocUrl(read.item.odkaz)) {
+        break;
+      }
       const built = buildCzRegionalListingFallback(read.item, raw);
       if (built.type === "unkeyable") {
         return built;
@@ -1262,7 +1265,12 @@ export const buildCzRegionalDecision = async (
     splitCaseReference(item.jednaciCislo).caseNumber,
     signal,
   );
-  const built = assembleCzRegionalDecision({ item, document, chain: null });
+  const built = assembleCzRegionalDecision({
+    item,
+    rawListing: raw,
+    document,
+    chain: null,
+  });
   if (document !== null || built.type !== "built") {
     return built;
   }
@@ -1538,8 +1546,8 @@ const listCzRegionalSlicePage = async ({
 
 /**
  * Rebuild a decision from a payload the loop stored verbatim. The payload is
- * revalidated by the shared builder so identifiable rows with unreadable
- * metadata retain their listing fallback for a later retry.
+ * revalidated by the shared builder; valid links are fetched even when optional
+ * metadata drifts.
  */
 const buildCzRegionalFromPayload = async (
   payload: unknown,
@@ -1909,8 +1917,9 @@ const reparseCzRegionalStoredRaw = (
       detail: "the stored payload is not an envelope",
     };
   }
-  const item = parsedPart(parts, RAW_PART.LISTING);
-  if (!isCzRegionalApiItem(item)) {
+  const rawListing = parsedPart(parts, RAW_PART.LISTING);
+  const read = readCzRegionalListingItem(rawListing);
+  if (read.type === "unidentifiable") {
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
@@ -1921,12 +1930,18 @@ const reparseCzRegionalStoredRaw = (
   const documentRaw = parts[RAW_PART.DOCUMENT];
   const chainRaw = parts[RAW_PART.CHAIN];
 
-  const built = assembleCzRegionalDecision({
-    item,
-    document:
-      documentRaw === undefined ? null : readCzRegionalDocument(documentRaw),
-    chain: chainRaw === undefined ? null : readCzRegionalChain(chainRaw),
-  });
+  const built =
+    read.type === "unavailable" && documentRaw === undefined
+      ? buildCzRegionalListingFallback(read.item, rawListing)
+      : assembleCzRegionalDecision({
+          item: read.item,
+          rawListing,
+          document:
+            documentRaw === undefined
+              ? null
+              : readCzRegionalDocument(documentRaw),
+          chain: chainRaw === undefined ? null : readCzRegionalChain(chainRaw),
+        });
   if (built.type !== "built") {
     return {
       type: "rejected",
@@ -2035,7 +2050,7 @@ const nextCzRegionalListingCursor = ({
 };
 
 type BuildCzRegionalPageItemsOptions = {
-  items: readonly CzRegionalApiItem[];
+  items: readonly CzRegionalListingItem[];
   cursor: string | null;
   initialFailures: number;
   readBudgetSpent: () => boolean;
@@ -2074,7 +2089,10 @@ const buildCzRegionalPageItems = async ({
       item.jednaciCislo ?? undefined,
     );
   };
-  const pushListingRow = async (item: CzRegionalApiItem): Promise<void> => {
+  const pushListingRow = async ({
+    item,
+    raw,
+  }: CzRegionalListingItem): Promise<void> => {
     const attempted = await buildPlainTextItem({
       decisionOf: (value) => {
         switch (value.type) {
@@ -2090,10 +2108,12 @@ const buildCzRegionalPageItems = async ({
       },
       adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
 
-      rawListing: JSON.stringify(item),
+      rawListing: JSON.stringify(raw),
       build: async () =>
         await Promise.resolve(
-          assembleCzRegionalDecision({ item, document: null, chain: null }),
+          isCzRegionalApiItem(raw)
+            ? assembleCzRegionalDecision({ item, document: null, chain: null })
+            : buildCzRegionalListingFallback(item, raw),
         ),
     });
     if (attempted.type === "item_build_failed") {
@@ -2118,8 +2138,9 @@ const buildCzRegionalPageItems = async ({
       continue;
     }
     const built = await Promise.all(
-      batch.map(async (item) => ({
+      batch.map(async ({ item, raw }) => ({
         item,
+        raw,
         attempt: await Result.tryPromise({
           try: async () => {
             const attempted = await buildPlainTextItem({
@@ -2137,9 +2158,9 @@ const buildCzRegionalPageItems = async ({
               },
               adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
 
-              rawListing: JSON.stringify(item),
+              rawListing: JSON.stringify(raw),
               build: async () =>
-                await buildCzRegionalDecision(item, effectiveSignal),
+                await buildCzRegionalDecision(raw, effectiveSignal),
             });
             return attempted.type === "item_build_failed"
               ? attempted
@@ -2165,10 +2186,10 @@ const buildCzRegionalPageItems = async ({
       })),
     );
     signal?.throwIfAborted();
-    for (const { item, attempt } of built) {
+    for (const { item, raw, attempt } of built) {
       if (Result.isError(attempt) && attempt.error instanceof DOMException) {
         deferred += 1;
-        await pushListingRow(item);
+        await pushListingRow({ item, raw });
         continue;
       }
       if (Result.isError(attempt)) {
@@ -2184,7 +2205,7 @@ const buildCzRegionalPageItems = async ({
         // document again (and parks the refusal) instead of losing it.
         const failureCountBeforeFallback = refused;
         observeItemBuildFailure(attempt.error, item.jednaciCislo ?? undefined);
-        await pushListingRow(item);
+        await pushListingRow({ item, raw });
         if (refused === failureCountBeforeFallback) {
           refused++;
         }
@@ -2386,9 +2407,7 @@ export const czRegionalAdapter = defineSourceAdapter({
             return panic("Unhandled regional page read");
         }
         const json = read.page;
-        const { items, failures, retained } = readCzRegionalListingItems(
-          json.items,
-        );
+        const { items, failures } = readCzRegionalListingItems(json.items);
 
         const { decisions, refused, deferred } = await buildCzRegionalPageItems(
           {
@@ -2421,7 +2440,7 @@ export const czRegionalAdapter = defineSourceAdapter({
         });
 
         return {
-          decisions: [...retained, ...decisions],
+          decisions,
           itemBuildFailures: { type: "item_build_failed", count: refused },
           nextCursor: nextCzRegionalListingCursor({
             state,
