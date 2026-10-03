@@ -3550,6 +3550,7 @@ export default defineConfig({
               "apps/api/src/env-db-load-gate.ts",
               "apps/api/src/env-db-timeouts.ts",
               "apps/api/src/env-replay.ts",
+              "apps/api/src/env-eu-completion.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/db-url.ts",

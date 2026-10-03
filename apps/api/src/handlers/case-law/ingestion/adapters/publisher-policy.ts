@@ -1,4 +1,4 @@
-// parser-output-unchanged: run pacing and shared cooldown coordination only; parsing and stored output are unchanged.
+// parser-output-unchanged: completion admission uses typed Results and job-boundary rejection; parsing and stored output are unchanged.
 /**
  * What each publisher costs, declared once, and the only fetch that spends it.
  *
@@ -16,7 +16,7 @@
  * requests rather than a total.
  */
 
-import { panic } from "better-result";
+import { panic, type Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -226,7 +226,7 @@ export const PUBLISHER_GATES = {
   /** publications.europa.eu, both the SPARQL endpoint and Cellar. */
   "cellar-eu": {
     publisher: "EU Publications Office",
-    intervalMs: POLITE_INTERVAL_MS,
+    intervalMs: 1000,
     hosts: ["publications.europa.eu"],
   },
 } as const satisfies Record<string, PublisherGate>;
@@ -351,9 +351,27 @@ const slotsByGate = new Map<
 type RunPublisherLimit = {
   gateId: "cellar-eu";
   gateSlot: ReturnType<typeof createPublisherGateSlot>;
+  controls?: PublisherRunControls;
+};
+
+export type PublisherRunControls = {
+  check: () => Promise<Result<void, unknown>>;
+  checkBeforeSend: () => Result<void, unknown>;
+  chargeRequest: () => Promise<Result<void, unknown>>;
+  /** The job boundary adapts typed failures to the adapter's Promise rejection contract. */
+  raiseFailure: (error: unknown) => never;
+  retry: "durable";
+  onRefusal?: (cooldownUntilEpochMs: number) => void;
+  onFailure?: (error: unknown) => void;
+  limitResponse?: (response: Response) => Response;
 };
 
 const runPublisherLimit = new AsyncLocalStorage<RunPublisherLimit>();
+
+export const publisherRunControls = (gateId: PublisherGateId) => {
+  const run = runPublisherLimit.getStore();
+  return run?.gateId === gateId ? run.controls : undefined;
+};
 
 const getPublisherGateSlot = (gateId: PublisherGateId) => {
   const slot = slotsByGate.get(gateId) ?? createPublisherGateSlot(gateId);
@@ -366,6 +384,7 @@ type WithPublisherRequestRateLimitOptions<T> = {
   requestsPerSecond: number;
   operation: () => Promise<T>;
   dependencies?: PublisherRequestGateDependencies;
+  controls?: PublisherRunControls;
 };
 
 /**
@@ -377,6 +396,7 @@ export const withPublisherRequestRateLimit = async <T>({
   requestsPerSecond,
   operation,
   dependencies,
+  controls,
 }: WithPublisherRequestRateLimitOptions<T>): Promise<T> => {
   if (
     !Number.isFinite(requestsPerSecond) ||
@@ -394,6 +414,7 @@ export const withPublisherRequestRateLimit = async <T>({
   return await runPublisherLimit.run(
     {
       gateId,
+      ...(controls === undefined ? {} : { controls }),
       gateSlot: createPublisherGateSlotAtInterval({
         gateId,
         intervalMs: requestedIntervalMs,

@@ -131,6 +131,17 @@ RUN bun build \
     --target bun \
     --outfile /app/replay-tick.js \
     apps/api/src/scripts/replay-tick.ts
+# Bounded EU completion ticks and operator controls.
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/eu-completion-tick.js \
+    apps/api/src/scripts/eu-completion-tick.ts
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/eu-completion-control.js \
+    apps/api/src/scripts/eu-completion-control.ts
 # Case-law erasure and raw-storage operator passes. They delete from the
 # documents bucket, so they run inside the API task, whose role may:
 #   ["bun", "/app/redact-case-law-decision.js", "<decision id>"]
@@ -346,6 +357,8 @@ COPY --chown=stella:stella --from=builder /app/database-census.js /app/database-
 COPY --chown=stella:stella --from=builder /app/better-auth-sign-in-replay.js /app/better-auth-sign-in-replay.js
 COPY --chown=stella:stella --from=builder /app/replay-case-law-source.js /app/replay-case-law-source.js
 COPY --chown=stella:stella --from=builder /app/replay-tick.js /app/replay-tick.js
+COPY --chown=stella:stella --from=builder /app/eu-completion-tick.js /app/eu-completion-tick.js
+COPY --chown=stella:stella --from=builder /app/eu-completion-control.js /app/eu-completion-control.js
 COPY --chown=stella:stella --from=builder /app/redact-case-law-decision.js /app/redact-case-law-decision.js
 COPY --chown=stella:stella --from=builder /app/case-law-raw-layout.js /app/case-law-raw-layout.js
 COPY --chown=stella:stella --from=builder /app/complete-sk-us-raw.js /app/complete-sk-us-raw.js
