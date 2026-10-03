@@ -33,7 +33,7 @@ export const DOCUMENT_TIER = {
 export type DocumentTier = (typeof DOCUMENT_TIER)[keyof typeof DOCUMENT_TIER];
 
 /** A decision to fetch, and which tier it came from. */
-export type QueuedDocument = {
+type QueuedDocument = {
   tier: DocumentTier;
   decision: PendingDocument;
 };
@@ -48,7 +48,7 @@ export type PendingDocumentTierLoaders = {
   loadRemaining: (limit: number) => Promise<RemainingDocumentScanResult>;
 };
 
-export type PendingDocumentQueueResult =
+type PendingDocumentQueueResult =
   | { type: "row"; row: QueuedDocument }
   | { type: "budget-spent" }
   | { type: "exhausted" };

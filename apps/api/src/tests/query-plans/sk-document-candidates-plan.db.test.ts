@@ -138,7 +138,7 @@ test("outstanding candidate pages bound cooldown-heavy first, middle and NULL-ta
         expect(visited).toBeLessThanOrEqual(DOCUMENT_SCAN_ROW_BUDGET);
         expect(plan["Total Cost"]).toBeLessThan(10_000);
         process.stdout.write(
-          `Outstanding candidates ${after?.decisionDate ?? (after ? "NULL-tail" : "first")}: visited=${visited}, cost=${plan["Total Cost"]}\n`,
+          `Outstanding candidates ${after?.decisionDate ?? (after ? "NULL-tail" : "first")}: visited=${visited}, cost=${String(plan["Total Cost"])}\n`,
         );
         for (const node of nodes.filter(
           (candidate) => candidate["Node Type"] === "Sort",
