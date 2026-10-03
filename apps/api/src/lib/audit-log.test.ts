@@ -338,10 +338,11 @@ describe("audit detail projection", () => {
         resourceId: "thread-1",
         changes: {
           title: { old: "Chat A", new: "Chat B" },
+          name: { old: "Chat A", new: "Chat B" },
           chatModel: { old: "model-a", new: "model-b" },
           created: {
             old: null,
-            new: { title: "Chat A", chatModel: "model-a" },
+            new: { title: "Chat A", summary: "Chat A", chatModel: "model-a" },
           },
         },
         metadata: { title: "Chat A", threadId: "thread-1" },
@@ -355,5 +356,37 @@ describe("audit detail projection", () => {
       });
       expect(inserted.at(0)?.["metadata"]).not.toHaveProperty("title");
     }
+  });
+
+  test("chat message and file entries keep no change fields", async () => {
+    let inserted: Record<string, unknown>[] = [];
+    const tx = asTestRaw<Transaction>({
+      insert: () => ({
+        values: async (rows: Record<string, unknown>[]) => {
+          inserted = rows;
+        },
+      }),
+    });
+    const recorder = createBackgroundAuditRecorder({
+      organizationId: safeId<"organization">("org-1"),
+      userId: safeId<"user">("user-1"),
+      workspaceId: null,
+      execution: {
+        performer: { type: "user", id: safeId<"user">("user-1") },
+        trigger: { type: "direct" },
+      },
+    });
+    await recorder(
+      tx,
+      [AUDIT_RESOURCE_TYPE.CHAT_MESSAGE, AUDIT_RESOURCE_TYPE.CHAT_FILE].map(
+        (resourceType) => ({
+          action: AUDIT_ACTION.UPDATE,
+          resourceType,
+          resourceId: "resource-1",
+          changes: { text: { old: "Chat A", new: "Chat B" } },
+        }),
+      ),
+    );
+    expect(inserted.map((row) => row["changes"])).toEqual([{}, {}]);
   });
 });

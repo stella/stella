@@ -191,7 +191,7 @@ const generateAdmittedThreadTitle = async ({
         resourceId: threadId,
         workspaceId: threadWorkspaceId,
         changes: {
-          title: { old: currentThread.title, new: title },
+          titleChanged: { old: false, new: true },
           titleSource: {
             old: currentThread.titleSource,
             new: CHAT_TITLE_SOURCE.AI,
