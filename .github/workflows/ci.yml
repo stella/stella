@@ -1108,12 +1108,13 @@ jobs:
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
           bun --bun turbo run format "${args[@]}" -- --check
 
-      - name: Select measured ratchet base
+      - name: Select measured ratchet base from the target branch
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         env:
           MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
         run: |
-          base="${MERGE_GROUP_BASE_SHA:-$(git merge-base origin/main HEAD)}"
+          base="${MERGE_GROUP_BASE_SHA:-$(git merge-base "origin/$BASE_REF" HEAD)}"
           git cat-file -e "$base^{commit}"
           echo "RATCHET_BASE_REF=$base" >> "$GITHUB_ENV"
 
@@ -1127,6 +1128,10 @@ jobs:
           bun test scripts/ratchet-improvements.test.ts scripts/autofix-ratchet-boundary.test.ts scripts/ratchet-derived-totals.test.ts
           bun scripts/ratchet.ts --self-test
           bun scripts/ratchet.ts --check
+
+      - name: Ratchet scanner invariants
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/ratchet-scan.test.ts
 
       - name: Documentation source policy rule
         if: needs.ci-plan.outputs.package_checks_required == 'true'

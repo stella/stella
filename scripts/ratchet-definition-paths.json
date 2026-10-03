@@ -6,6 +6,7 @@
   "scripts/generated-artifacts.ts",
   "scripts/lint-suppressions.ts",
   "scripts/ownership.ts",
+  "scripts/parse-memo.ts",
   "scripts/ratchet.ts",
   "scripts/result-boundary-globs.ts",
   "scripts/root-connection-shapes.ts",
