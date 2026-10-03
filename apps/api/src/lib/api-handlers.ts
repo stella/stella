@@ -68,7 +68,6 @@ import {
   projectPublicErrorBody,
   PUBLIC_ERROR_TEXT_BYTES,
   safePublicHandlerErrorOrStatusTextResponseSchema,
-  safePublicHandlerErrorResponseSchema,
 } from "@/api/lib/search/public-error-response";
 import { truncateTextBytes } from "@/api/lib/search/response-text-bounds";
 import {
@@ -732,13 +731,33 @@ type SafeHandlerLogContext = {
   route: string;
 };
 
-const runSafeHandler = async <
+type ErrorStatusBuilder<TErrorStatus> = (
+  statusCode: HandlerErrorStatusCode,
+  body: SafeErrorBody,
+) => TErrorStatus;
+
+type RunSafeHandlerWithOptions<
   TContext extends SafeHandlerLogContext,
   TResult extends SafeHandlerPayload,
->(
-  ctx: TContext,
-  handler: SafeHandlerFn<TContext, TResult>,
-): Promise<SafeHandlerResult<TResult>> => {
+  TErrorStatus,
+> = {
+  ctx: TContext;
+  handler: SafeHandlerFn<TContext, TResult>;
+  /** Builds the response for every handled failure; owns the error wire shape. */
+  toErrorStatus: ErrorStatusBuilder<TErrorStatus>;
+};
+
+const runSafeHandlerWith = async <
+  TContext extends SafeHandlerLogContext,
+  TResult extends SafeHandlerPayload,
+  TErrorStatus,
+>({
+  ctx,
+  handler,
+  toErrorStatus,
+}: RunSafeHandlerWithOptions<TContext, TResult, TErrorStatus>): Promise<
+  TResult | TErrorStatus
+> => {
   try {
     const result = await Result.gen(() => handler(ctx));
 
@@ -763,7 +782,7 @@ const runSafeHandler = async <
         telemetry: safeErrorTelemetryDisposition(statusCode),
       });
 
-      return toSafeStatusResponse(statusCode, safeErrorBody(handlerError));
+      return toErrorStatus(statusCode, safeErrorBody(handlerError));
     }
 
     if (DatabaseError.is(error)) {
@@ -775,7 +794,7 @@ const runSafeHandler = async <
         telemetry: "capture",
       });
 
-      return toSafeStatusResponse(500, {
+      return toErrorStatus(500, {
         code: API_ERROR_CODE.internalServerError,
         message: "Internal server error",
       });
@@ -793,7 +812,7 @@ const runSafeHandler = async <
         telemetry: "capture",
       });
 
-      return toSafeStatusResponse(400, {
+      return toErrorStatus(400, {
         code: API_ERROR_CODE.accessDenied,
         message: "Access denied",
       });
@@ -807,7 +826,7 @@ const runSafeHandler = async <
       telemetry: "capture",
     });
 
-    return toSafeStatusResponse(500, {
+    return toErrorStatus(500, {
       code: API_ERROR_CODE.internalServerError,
       message: "Internal server error",
     });
@@ -831,10 +850,7 @@ const runSafeHandler = async <
         statusCode: handlerError.status,
         telemetry: safeErrorTelemetryDisposition(handlerError.status),
       });
-      return toSafeStatusResponse(
-        handlerError.status,
-        safeErrorBody(handlerError),
-      );
+      return toErrorStatus(handlerError.status, safeErrorBody(handlerError));
     }
 
     logAndCaptureSafeError({
@@ -845,12 +861,25 @@ const runSafeHandler = async <
       telemetry: "capture",
     });
 
-    return toSafeStatusResponse(500, {
+    return toErrorStatus(500, {
       code: API_ERROR_CODE.internalServerError,
       message: "Internal server error",
     });
   }
 };
+
+const runSafeHandler = async <
+  TContext extends SafeHandlerLogContext,
+  TResult extends SafeHandlerPayload,
+>(
+  ctx: TContext,
+  handler: SafeHandlerFn<TContext, TResult>,
+): Promise<SafeHandlerResult<TResult>> =>
+  await runSafeHandlerWith({
+    ctx,
+    handler,
+    toErrorStatus: toSafeStatusResponse,
+  });
 
 type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
   ? unknown
@@ -1553,7 +1582,7 @@ const safePublicHandlers = new WeakMap<object, CachePolicy>();
 export const getPublicHandlerCachePolicy = (handler: unknown) =>
   typeof handler === "function" ? safePublicHandlers.get(handler) : undefined;
 
-/** Whether a mounted route handler came out of `createSafePublicHandler`. */
+/** Whether a mounted route handler came out of a public handler factory. */
 export const isSafePublicHandler = (handler: unknown): boolean =>
   typeof handler === "function" && safePublicHandlers.has(handler);
 
@@ -1580,6 +1609,8 @@ function toSafePublicStatusResponse(
  * For unauthenticated routes that intentionally expose public data.
  * The handler still gets structured error capture and sanitized
  * responses, but no user, org, workspace, or permission context.
+ * Error bodies keep their ceremony fields for self-authorizing endpoints;
+ * corpus routes use `createSafeBoundedPublicHandler`.
  */
 export const createSafePublicHandler = <
   TConfig extends PublicHandlerConfig,
@@ -1588,33 +1619,61 @@ export const createSafePublicHandler = <
   config: TConfig,
   handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,
 ) => {
-  // Schema opt-in preserves self-authorizing public endpoints' ceremony fields.
-  // Corpus routes declare this bounded contract and share its wire projection.
-  const boundsPublicErrors =
-    config.response !== undefined &&
-    Object.values(config.response).some(
-      (schema) =>
-        schema === safePublicHandlerErrorResponseSchema ||
-        schema === safePublicHandlerErrorOrStatusTextResponseSchema,
-    );
   const definition = {
     config,
     handler: async (ctx: PublicHandlerContext<TConfig>) => {
-      const originalResponse = await runSafeHandler(ctx, handler);
+      const response = await runSafeHandler(ctx, handler);
+      applyResponseCachePolicy({
+        cache: config.cache,
+        response,
+        set: ctx.set,
+      });
+      return response;
+    },
+  };
+  safePublicHandlers.set(definition.handler, config.cache);
+  return definition;
+};
+
+const toBoundedPublicErrorStatus = (
+  statusCode: HandlerErrorStatusCode,
+  body: SafeErrorBody,
+) => toSafePublicStatusResponse(statusCode, projectPublicErrorBody(body));
+
+/**
+ * A public corpus route: every error answers with the bounded public body
+ * (`safePublicHandlerErrorResponseSchema`), whether the failure is handled
+ * by the factory or returned as a status by the handler itself.
+ */
+export const createSafeBoundedPublicHandler = <
+  TConfig extends PublicHandlerConfig,
+  TResult extends SafeHandlerPayload,
+>(
+  config: TConfig,
+  handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,
+) => {
+  const definition = {
+    config,
+    handler: async (ctx: PublicHandlerContext<TConfig>) => {
+      const result = await runSafeHandlerWith({
+        ctx,
+        handler,
+        toErrorStatus: toBoundedPublicErrorStatus,
+      });
       const response =
-        boundsPublicErrors &&
-        originalResponse instanceof ElysiaCustomStatusResponse &&
-        originalResponse.code >= 400
+        // Projection is idempotent, so factory-built statuses pass through it
+        // unchanged; handler-returned statuses are bounded the same way.
+        result instanceof ElysiaCustomStatusResponse && result.code >= 400
           ? toSafePublicStatusResponse(
-              originalResponse.code,
-              typeof originalResponse.response === "string"
+              result.code,
+              typeof result.response === "string"
                 ? truncateTextBytes(
-                    originalResponse.response,
+                    result.response,
                     PUBLIC_ERROR_TEXT_BYTES.statusText,
                   )
-                : projectPublicErrorBody(originalResponse.response),
+                : projectPublicErrorBody(result.response),
             )
-          : originalResponse;
+          : result;
       applyResponseCachePolicy({
         cache: config.cache,
         response,

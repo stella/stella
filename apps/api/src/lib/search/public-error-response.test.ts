@@ -7,6 +7,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  createSafeBoundedPublicHandler,
   createSafePublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
   safeHandlerResponseSchemasWithStatusText,
@@ -83,33 +84,42 @@ const publicConfig = {
 
 const failureText = "😀\u0000".repeat(4096);
 
-test("public handlers bound both returned status errors and resolved handler errors on the wire", async () => {
-  const returned = createSafePublicHandler(publicConfig, async function* () {
-    return Result.ok(
-      status(503, {
-        ...unboundedError(failureText),
-        country: "SVK",
-        status: "unavailable",
-        reason: "pending_public",
-      }),
-    );
-  });
-  const resolved = createSafePublicHandler(publicConfig, async function* () {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: failureText,
-        hint: failureText,
-        issues: Array.from({ length: 32 }, () => ({
-          path: failureText,
+test("bounded public handlers bound both returned status errors and resolved handler errors on the wire", async () => {
+  const returned = createSafeBoundedPublicHandler(
+    publicConfig,
+    async function* () {
+      return Result.ok(
+        status(503, {
+          ...unboundedError(failureText),
+          country: "SVK",
+          status: "unavailable",
+          reason: "pending_public",
+        }),
+      );
+    },
+  );
+  const resolved = createSafeBoundedPublicHandler(
+    publicConfig,
+    async function* () {
+      return Result.err(
+        new HandlerError({
+          status: 400,
           message: failureText,
-        })),
-      }),
-    );
-  });
-  const statusText = createSafePublicHandler(publicConfig, async function* () {
-    return Result.ok(status(404, failureText));
-  });
+          hint: failureText,
+          issues: Array.from({ length: 32 }, () => ({
+            path: failureText,
+            message: failureText,
+          })),
+        }),
+      );
+    },
+  );
+  const statusText = createSafeBoundedPublicHandler(
+    publicConfig,
+    async function* () {
+      return Result.ok(status(404, failureText));
+    },
+  );
   const legacy = createSafePublicHandler(
     {
       ...publicConfig,
