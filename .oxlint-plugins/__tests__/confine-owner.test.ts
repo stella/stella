@@ -50,3 +50,24 @@ describe.serial("confine-owner member-call rows", () => {
     expect(await lint("apps/web/src/store.ts")).toEqual([]);
   });
 });
+
+describe.serial("member authority context ownership", () => {
+  test("allows construction only in declared context builders", async () => {
+    const { OWNERSHIP } = await import("../../scripts/ownership.ts");
+    const source =
+      'import { hasMemberPermission, sessionMemberRole } from "@/api/lib/permission-authorization";\nhasMemberPermission(sessionMemberRole("admin"), { entity: ["update"] });';
+    const options = { ruleOptions: { entries: OWNERSHIP } };
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ...options,
+        sourcePath: "apps/api/src/handlers/example.ts",
+      }),
+    ).toEqual([1]);
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ...options,
+        sourcePath: "apps/api/src/lib/auth.ts",
+      }),
+    ).toEqual([]);
+  });
+});

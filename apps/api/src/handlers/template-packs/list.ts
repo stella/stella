@@ -14,13 +14,13 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import type { MemberRole } from "@/api/lib/member-roles";
 import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
   type Page,
 } from "@/api/lib/pagination";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 import {
@@ -91,7 +91,7 @@ export type ListTemplatePacksProps = {
   catalogue: TemplatePackCatalogue;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  memberRole: { role: MemberRole };
+  memberRole: AuthorizedMemberRole;
   query: { limit?: number; cursor?: string; locale?: string };
 };
 

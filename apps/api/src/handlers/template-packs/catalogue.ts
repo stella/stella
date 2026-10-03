@@ -17,7 +17,8 @@ import type {
 } from "@stll/template-packs/schema";
 
 import { env } from "@/api/env";
-import type { MemberRole } from "@/api/lib/member-roles";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
 let catalogue: TemplatePackCatalogue | null = null;
 
@@ -34,13 +35,10 @@ export const getTemplatePackCatalogue = (): TemplatePackCatalogue => {
   return catalogue;
 };
 
-const TEMPLATE_PACK_INSTALL_ROLES = ["admin", "owner"] as const;
-
-/** Installing copies content into the shared library: owners and admins. */
-export const canInstallTemplatePacks = (memberRole: {
-  role: MemberRole;
-}): boolean =>
-  TEMPLATE_PACK_INSTALL_ROLES.some((role) => role === memberRole.role);
+export const canInstallTemplatePacks = (
+  memberRole: AuthorizedMemberRole,
+): boolean =>
+  hasManagementPermission(memberRole, { organizationSettings: ["update"] });
 
 /** File paths are how the deployment finds the bytes, not part of the API. */
 export type TemplatePackTemplateView = Omit<

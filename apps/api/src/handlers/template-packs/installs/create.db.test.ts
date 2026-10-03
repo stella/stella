@@ -1,12 +1,3 @@
-/**
- * Install is an identity operation, not just a copy: a second install of the
- * same pack template must not add a second copy, and the copy it does make
- * must carry the pack, version, slug and content hash it came from. The
- * handler's pre-read and a partial unique index guard the same invariant, so
- * this runs against a real database with the real index in place; only the
- * DOCX-and-S3 write itself is stubbed.
- */
-
 import { Result } from "better-result";
 import {
   afterAll,
@@ -17,6 +8,14 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
+/**
+ * Install is an identity operation, not just a copy: a second install of the
+ * same pack template must not add a second copy, and the copy it does make
+ * must carry the pack, version, slug and content hash it came from. The
+ * handler's pre-read and a partial unique index guard the same invariant, so
+ * this runs against a real database with the real index in place; only the
+ * DOCX-and-S3 write itself is stubbed.
+ */
 import { eq, sql } from "drizzle-orm";
 
 import { createTemplatePackCatalogue } from "@stll/template-packs";
@@ -30,6 +29,11 @@ import { createSafeDb } from "@/api/db/scoped";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { MemberRole } from "@/api/lib/member-roles";
+import {
+  authorizedMemberRole,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import type { CreateStoredTemplateOptions } from "@/api/lib/templates/create-template";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -158,7 +162,7 @@ const packOrigin = (slug: string, contentHash: string): BundledPackOrigin => {
 
 const install = async (
   templateSlugs: string[],
-  role = "admin",
+  role: MemberRole = "admin",
   catalogue = testCatalogue(),
 ) =>
   await Result.gen(() =>
@@ -167,7 +171,7 @@ const install = async (
       safeDb,
       organizationId: ids.orgA,
       userId: ids.userAdmin,
-      memberRole: asTestRaw<{ role: "admin" }>({ role }),
+      memberRole: sessionMemberRole(role),
       packId: PACK_ID,
       body: { templateSlugs },
       recordAuditEvent: noopAudit,
@@ -467,7 +471,7 @@ describe("template pack install", () => {
         safeDb: otherOrgSafeDb,
         organizationId: ids.orgB,
         userId: ids.userB1,
-        memberRole: asTestRaw<{ role: "admin" }>({ role: "owner" }),
+        memberRole: sessionMemberRole("owner"),
         packId: PACK_ID,
         body: { templateSlugs: [INSTALLED_SLUG] },
         recordAuditEvent: noopAudit,
@@ -503,4 +507,69 @@ describe("template pack install", () => {
     expect(Result.isError(result)).toBe(true);
     expect(await packTemplateRows()).toHaveLength(0);
   });
+});
+
+describe("template pack permission decisions", () => {
+  test.each([
+    {
+      name: "admin route grant",
+      authority: authorizedMemberRole({
+        role: "admin",
+        credential: {
+          type: "attenuated",
+          permissions: { template: ["create"] },
+        },
+      }),
+      expected: "denied",
+    },
+    {
+      name: "admin management grant",
+      authority: authorizedMemberRole({
+        role: "admin",
+        credential: {
+          type: "attenuated",
+          permissions: {
+            template: ["create"],
+            organizationSettings: ["update"],
+          },
+        },
+      }),
+      expected: "allowed",
+    },
+    {
+      name: "admin session",
+      authority: sessionMemberRole("admin"),
+      expected: "allowed",
+    },
+  ])(
+    "applies install permissions for $name",
+    async ({ authority, expected }) => {
+      const result = await Result.gen(() =>
+        installTemplatePackHandler({
+          catalogue: testCatalogue(),
+          safeDb,
+          organizationId: ids.orgA,
+          userId: ids.userAdmin,
+          memberRole: authority,
+          packId: PACK_ID,
+          body: { templateSlugs: [NEW_SLUG] },
+          recordAuditEvent: noopAudit,
+        }),
+      );
+      if (expected === "denied") {
+        expect(Result.isError(result)).toBe(true);
+        if (Result.isError(result)) {
+          expect(result.error.status).toBe(403);
+        }
+        expect(await packTemplateRows()).toEqual([]);
+        return;
+      }
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isOk(result)) {
+        expect(result.value.items).toMatchObject([
+          { slug: NEW_SLUG, status: "installed" },
+        ]);
+      }
+    },
+  );
 });

@@ -16,7 +16,7 @@ import { tSafeId, withDescription } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
 import { LIMITS } from "@/api/lib/limits";
-import type { MemberRole } from "@/api/lib/member-roles";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -79,7 +79,7 @@ export type InstallTemplatePackProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  memberRole: { role: MemberRole };
+  memberRole: AuthorizedMemberRole;
   packId: string;
   body: { templateSlugs: string[]; categoryId?: SafeId<"templateCategory"> };
   recordAuditEvent: AuditRecorder;

@@ -1,7 +1,10 @@
 import { describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { readAuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import {
+  authorizedMemberRole,
+  readAuthorizedMemberRole,
+} from "@/api/lib/permission-authorization";
 import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
@@ -17,14 +20,18 @@ describe("MCP member authority", () => {
         memberRole: "owner",
         credentialPermissions: { view: ["create"] },
       }),
-    ).toEqual({
-      role: "owner",
-      credential: { type: "attenuated", permissions: { view: ["create"] } },
-    });
-    expect(mcpMemberAuthority({ memberRole: "admin" })).toEqual({
-      role: "admin",
-      credential: { type: "session" },
-    });
+    ).toEqual(
+      authorizedMemberRole({
+        role: "owner",
+        credential: { type: "attenuated", permissions: { view: ["create"] } },
+      }),
+    );
+    expect(mcpMemberAuthority({ memberRole: "admin" })).toEqual(
+      authorizedMemberRole({
+        role: "admin",
+        credential: { type: "session" },
+      }),
+    );
   });
 
   test("the MCP check and the handler check agree", () => {
@@ -90,18 +97,22 @@ describe("the context a capability handler receives", () => {
   test("carries a narrowed credential's own set", async () => {
     const synthesized = await synthesize({ view: ["create"] });
 
-    expect(readAuthorizedMemberRole(synthesized)).toEqual({
-      role: "owner",
-      credential: { type: "attenuated", permissions: { view: ["create"] } },
-    });
+    expect(readAuthorizedMemberRole(synthesized)).toEqual(
+      authorizedMemberRole({
+        role: "owner",
+        credential: { type: "attenuated", permissions: { view: ["create"] } },
+      }),
+    );
   });
 
   test("carries a session credential when the credential has no set", async () => {
     const synthesized = await synthesize(undefined);
 
-    expect(readAuthorizedMemberRole(synthesized)).toEqual({
-      role: "owner",
-      credential: { type: "session" },
-    });
+    expect(readAuthorizedMemberRole(synthesized)).toEqual(
+      authorizedMemberRole({
+        role: "owner",
+        credential: { type: "session" },
+      }),
+    );
   });
 });

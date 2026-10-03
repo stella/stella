@@ -10,13 +10,13 @@ import { permissionMacro } from "@/api/lib/auth";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import {
+  authorizedMemberRole,
   grantsPermissions,
   hasManagementPermission,
   hasMemberPermission,
   readAuthorizedMemberRole,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
-import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
 const MEMBER_ROLES = Object.keys(roles).filter(isMemberRole);
 
@@ -122,17 +122,11 @@ describe("permission authorization", () => {
         memberRole: { role: "owner", credential: { type: "attenuated" } },
       }),
     ).toBeNull();
-    expect(
-      readAuthorizedMemberRole({
-        memberRole: {
-          role: "owner",
-          credential: { type: "attenuated", permissions: { view: ["create"] } },
-        },
-      }),
-    ).toEqual({
+    const authority = authorizedMemberRole({
       role: "owner",
       credential: { type: "attenuated", permissions: { view: ["create"] } },
     });
+    expect(readAuthorizedMemberRole({ memberRole: authority })).toBe(authority);
   });
 
   test("authorizes a session from the local role map", () => {
@@ -179,13 +173,13 @@ describe("permission authorization", () => {
         permissionSet,
         requested,
         (role, granted, request) => {
-          const authority: AuthorizedMemberRole = {
+          const authority = authorizedMemberRole({
             role,
             credential: {
               type: "attenuated",
               permissions: toPermissionInput(granted),
             },
-          };
+          });
           const input = toPermissionInput(request);
 
           expect(hasMemberPermission(authority, input)).toBe(
@@ -210,19 +204,19 @@ describe("permission authorization", () => {
     );
     expect(
       hasManagementPermission(
-        {
+        authorizedMemberRole({
           role: "owner",
           credential: { type: "attenuated", permissions: view },
-        },
+        }),
         update,
       ),
     ).toBe(false);
     expect(
       hasManagementPermission(
-        {
+        authorizedMemberRole({
           role: "admin",
           credential: { type: "attenuated", permissions: update },
-        },
+        }),
         update,
       ),
     ).toBe(true);
