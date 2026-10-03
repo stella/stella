@@ -901,18 +901,29 @@ const typeAnnotationName = (identifier: unknown): string | null => {
     : null;
 };
 
-// Whether a function is the callback of `<handle>.transaction(...)`.
+// Whether a function is the callback of `<handle>.transaction(...)` or of a
+// handle-named runner such as `safeDb(...)`, which passes its callback a handle.
 const isTransactionCallback = (fn: unknown): boolean => {
   const call = isAstNode(fn) ? fn.parent : null;
-  if (!isAstNode(call) || call.type !== "CallExpression") {
+  if (
+    !isAstNode(call) ||
+    call.type !== "CallExpression" ||
+    !Array.isArray(call.arguments) ||
+    !call.arguments.includes(fn)
+  ) {
     return false;
   }
   const callee = unwrapExpression(call.callee);
+  if (isIdentifierReference(callee)) {
+    return isDatabaseHandleName(callee.name);
+  }
+  if (callee?.type !== "MemberExpression") {
+    return false;
+  }
+  const property = memberPropertyName(callee);
   return (
-    callee?.type === "MemberExpression" &&
-    memberPropertyName(callee) === "transaction" &&
-    Array.isArray(call.arguments) &&
-    call.arguments.includes(fn)
+    property !== null &&
+    (property === "transaction" || isDatabaseHandleName(property))
   );
 };
 
