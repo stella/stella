@@ -152,22 +152,29 @@ describe.skipIf(!runPostgresTests)("completed provider event retention", () => {
         const redact = async () =>
           await redactCompletedWebhookEvents({ db, retentionDays: 1, now });
         expect(await redact()).toBe(WEBHOOK_RETENTION_BATCH_SIZE);
-        expect(await redact()).toBe(2);
+        expect(await redact()).toBe(3);
         expect(await redact()).toBe(0);
         const rows = await db.select().from(hostedUsageWebhookEvents);
         expect(rows).toHaveLength(WEBHOOK_RETENTION_BATCH_SIZE + 6);
         for (const row of rows) {
           if (
             row.eventId.startsWith("completed-") ||
-            row.eventId === "error-only"
+            row.eventId === "error-only" ||
+            row.eventId === "ignored"
           ) {
             expect(row.payload).toEqual({});
             expect(row.errorMessage).toBeNull();
-            expect(row.result).toBe("ok");
+            expect(row.result).toBe(
+              row.eventId === "ignored" ? "ignored" : "ok",
+            );
             expect(row.eventType).toBe("fixture");
             expect(row.processedAt).toEqual(old);
           } else {
             expect(row.payload).toEqual(payload);
+            if (row.eventId === "error") {
+              expect(row.result).toBe("error");
+              expect(row.errorMessage).toBe("unresolved detail");
+            }
           }
         }
       });

@@ -23,7 +23,7 @@ export const redactCompletedWebhookEvents = async ({
     update usage_provider_webhook_events set payload = '{}'::jsonb, error_message = null
     where ctid in (
       select ctid from usage_provider_webhook_events
-      where processed_at < ${cutoff}::timestamptz and result = 'ok'
+      where processed_at < ${cutoff}::timestamptz and result IN ('ok', 'ignored')
         and (payload <> '{}'::jsonb or error_message is not null)
       order by processed_at limit ${WEBHOOK_RETENTION_BATCH_SIZE}
       for update skip locked
