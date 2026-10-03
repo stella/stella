@@ -1,5 +1,5 @@
 /** Shared template-clause link operations used by the clause and template slices. */
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
@@ -13,6 +13,7 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
@@ -457,7 +458,7 @@ export const syncClauseHandler = async ({
         version: clause.currentVersion,
         organizationId: { eq: organizationId },
       },
-      columns: { id: true, version: true },
+      columns: { id: true, version: true, body: true },
     }),
   );
 
@@ -465,6 +466,12 @@ export const syncClauseHandler = async ({
     return status(404, {
       message: "Version not found",
     });
+  }
+
+  const validation = validateClauseBodyDirectives(latestVersion.body);
+  if (Result.isError(validation)) {
+    const { code, message, hint, issues, retryable } = validation.error;
+    return status(422, { code, message, hint, issues, retryable });
   }
 
   const updated = await scopedDb(async (tx) => {
@@ -701,6 +708,7 @@ export const syncAllClausesHandler = async ({
         clauseId: clauseVersions.clauseId,
         id: clauseVersions.id,
         version: clauseVersions.version,
+        body: clauseVersions.body,
       })
       .from(clauseVersions)
       .where(
@@ -710,6 +718,13 @@ export const syncAllClausesHandler = async ({
         ),
       )
       .limit(targetVersionByClauseId.size);
+    for (const { body } of currentVersions) {
+      const validation = validateClauseBodyDirectives(body);
+      if (Result.isError(validation)) {
+        const { code, message, hint, issues, retryable } = validation.error;
+        return status(422, { code, message, hint, issues, retryable });
+      }
+    }
     const currentVersionByClauseId = new Map(
       currentVersions.map((version) => [version.clauseId, version]),
     );
@@ -770,5 +785,8 @@ export const syncAllClausesHandler = async ({
     return synced;
   });
 
+  if (!Array.isArray(syncedLinkIds)) {
+    return syncedLinkIds;
+  }
   return { syncedCount: syncedLinkIds.length };
 };
