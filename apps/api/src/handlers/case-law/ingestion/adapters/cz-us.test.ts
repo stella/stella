@@ -379,7 +379,10 @@ const installSearchMock = ({
                       row.caseNumber,
                       row.date,
                       counterText === undefined ? {} : { counter: counterText },
-                    ).replace("Lorem ipsum dolor sit amet.", documentText),
+                    ).replace(
+                      "Lorem ipsum dolor sit amet.",
+                      () => documentText,
+                    ),
                 { status: detailStatus },
               )
             : new Response("missing", { status: 404 }),
@@ -1244,6 +1247,34 @@ describe("czUsAdapter.fetchPage", () => {
     ).decisions.at(0);
 
     expect(first?.rawHash).not.toBe(second?.rawHash);
+  });
+
+  test("ignores hidden ASP.NET request state in the source hash", async () => {
+    const rows = [
+      {
+        id: "9101",
+        sz: "raw-hash_1",
+        caseNumber: "Fixture 1",
+        date: "1. 1. 2024",
+      },
+    ];
+    const captures = [];
+    for (const state of ["first", "second"]) {
+      installSearchMock({
+        rows,
+        recordCardSuffix: `<input type="hidden" name="__VIEWSTATE" value="${state} > token" /><input name="__EVENTVALIDATION" value="${state}" type="hidden"><input type="hidden" name="__VIEWSTATEGENERATOR" value="${state}">`,
+      });
+      captures.push(
+        unwrap(
+          await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+        ).decisions.at(0),
+      );
+    }
+    const [first, second] = captures;
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    expect(first?.sourceRaw).not.toBe(second?.sourceRaw);
+    expect(first?.rawHash).toBe(second?.rawHash);
   });
 
   for (const payload of ["document", "record-card"] as const) {

@@ -2120,9 +2120,23 @@ type CzUsSourceHashInput = {
   abstractState: CzUsAbstractState;
 };
 
-// Source bytes keep change detection independent of parser projections.
-const czUsSourceHash = (payloads: CzUsSourceHashInput) =>
-  hashContent(JSON.stringify(payloads));
+// Keep source bytes outside ASP.NET request state independent of projections.
+const czUsSourceHash = (payloads: CzUsSourceHashInput) => {
+  const detail = payloads.detail?.replace(
+    /<input\b(?:[^>"']|"[^"]*"|'[^']*')*>/giu,
+    (input) => {
+      const $ = cheerio.load(input);
+      const field = $("input");
+      return field.attr("type")?.toLowerCase() === "hidden" &&
+        /^__(?:VIEWSTATE(?:GENERATOR|FIELDCOUNT|\d+)?|EVENTVALIDATION)$/iu.test(
+          field.attr("name") ?? "",
+        )
+        ? ""
+        : input;
+    },
+  );
+  return hashContent(JSON.stringify({ ...payloads, detail }));
+};
 
 /**
  * Assemble one decision from the responses the court served for it.
@@ -2703,10 +2717,10 @@ const czUsStoredRawParts = (
 };
 
 /**
- * Rebuild a NALUS decision solely from its saved source responses. Rows from
- * before the multi-page envelope retain their metadata because their raw HTML
- * has no abstract page; envelope rows re-project the original abstract block
- * breaks without contacting the publisher.
+ * Rebuild a NALUS decision solely from its saved source responses. Abstract
+ * absence is derived from the captured page or saved availability state;
+ * envelope rows re-project the original abstract block breaks without
+ * contacting the publisher.
  */
 const reparseStoredRaw = (
   stored: StoredRawReparseInput,
