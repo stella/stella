@@ -39,6 +39,7 @@ import { RECONCILE_DOCUMENT_REVIEW_RUNS_TASK } from "@/api/lib/scheduler/tasks/d
 import { SWEEP_FILE_COMPARISON_UPLOADS_TASK } from "@/api/lib/scheduler/tasks/file-comparison-sweep";
 import { REPAIR_FILE_DERIVATIVES_TASK } from "@/api/lib/scheduler/tasks/file-derivative-repair";
 import { RECONCILE_FLOW_RUN_ORPHANS_TASK } from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
+import { REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK } from "@/api/lib/scheduler/tasks/hosted-usage-webhook-retention";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
 import { BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import { RECONCILE_LIST_VERIFICATION_RUNS_TASK } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
@@ -407,6 +408,14 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: SWEEP_REGISTRATIONS_TASK,
   },
   {
+    description: "Redact expired completed provider event details",
+    id: "usage.redactWebhookEvents.minute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK,
+    enabled: env.HOSTED_USAGE_WEBHOOK_RETENTION_DAYS !== undefined,
+  },
+  {
     description: "Delete expired action cost observations",
     id: "actions.sweepCosts.minute",
     mode: "recurring",
@@ -550,6 +559,11 @@ export const DECLARED_SCHEDULER_JOBS = [
  * registered" loud instead of silent.
  */
 export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
+  if (env.HOSTED_USAGE_WEBHOOK_RETENTION_DAYS === undefined) {
+    logger.info("scheduler.provider_event_retention_disabled", {
+      reason: "HOSTED_USAGE_WEBHOOK_RETENTION_DAYS is unset",
+    });
+  }
   for (const { mode, ...definition } of DECLARED_SCHEDULER_JOBS) {
     // Sequential on purpose: each upsert is a read followed by a write, so
     // issuing all of them at once puts more concurrent statements in flight

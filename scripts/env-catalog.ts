@@ -272,6 +272,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Maximum agent registrations per UTC day (1–1000000; default 10000).",
   OPEN_CLIENT_REGISTRATION_DAILY_LIMIT:
     "Maximum open client registrations per UTC day (1–1000000; default 10000).",
+  HOSTED_USAGE_WEBHOOK_RETENTION_DAYS:
+    "Retention in days for completed provider event details; unset disables redaction.",
   AGENT_CLIENT_STORAGE_V1_ENABLED:
     "Enable the shared agent client storage format.",
   ACTION_LIMIT_CONTACT_URL:
@@ -431,7 +433,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Leave on unless the endpoint presents a certificate no trust anchor can " +
     "validate and the private network is the boundary instead.",
   REDIS_URL:
-    "Valkey or Redis URL used for cross-instance broadcasts and rate limits. Treated as secret because it may contain credentials.",
+    "Valkey or Redis URL used for cross-instance broadcasts and rate limits. Set maxmemory-policy noeviction on the server for admission, reservations, and fences. Treated as secret because it may contain credentials.",
   S3_ACCESS_KEY_ID:
     'S3 access-key ID. Required with S3_CREDENTIALS_PROVIDER="env"; otherwise omit it with the secret to use the selected provider.',
   S3_BUCKET: "S3 bucket for uploaded files.",
@@ -679,6 +681,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   HOSTED_USAGE_PROVIDER_API_KEY: ENV_CREDENTIAL_KIND.credential,
   HOSTED_USAGE_PROVIDER_API_VERSION: ENV_CREDENTIAL_KIND.notCredential,
   HOSTED_USAGE_PROVIDER_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  HOSTED_USAGE_WEBHOOK_RETENTION_DAYS: ENV_CREDENTIAL_KIND.notCredential,
   HOSTED_USAGE_WEBHOOK_SECRET: ENV_CREDENTIAL_KIND.credential,
   HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS: ENV_CREDENTIAL_KIND.credential,
   HUGGINGFACE_API_KEY: ENV_CREDENTIAL_KIND.credential,

@@ -1510,7 +1510,7 @@ const r = new Elysia()
       ".onBeforeHandle(() => undefined)",
       ".onRequest(() => undefined)",
       ".guard({ beforeHandle: () => undefined }, (app) => app)",
-      ".use(deploymentFeatureGate(isLocalDevOpen()))",
+      ".use(deploymentFeatureGate(isLocalDevOpen))",
     ]) {
       expect(scan(hook), hook).toBe(1);
     }
@@ -1549,9 +1549,11 @@ const r = new Elysia()
         waivedIds: new Set(),
       }).violations.length;
     const reproduced = [
-      ".use(deploymentFeatureGate(env.FEATURE_LEGAL_LISTS))",
-      ".use(deploymentFeatureGate(isLocalDevOpen() || env.FEATURE_LEGAL_LISTS))",
-      ".use(deploymentFeatureGate(legalListsDeployed()))",
+      ".use(deploymentFeatureGate(() => env.FEATURE_LEGAL_LISTS))",
+      ".use(deploymentFeatureGate(() => isLocalDevOpen() || env.FEATURE_LEGAL_LISTS))",
+      ".use(deploymentFeatureGate(legalListsDeployed))",
+      // The formatter's wrapped form.
+      ".use(\n    deploymentFeatureGate(\n      () => isLocalDevOpen() || env.FEATURE_LEGAL_LISTS,\n    ),\n  )",
     ];
     for (const gate of reproduced) {
       expect(violations(gate, "FEATURE_LEGAL_LISTS"), gate).toBe(0);
@@ -1563,11 +1565,13 @@ const r = new Elysia()
       // A custom hook is never inferred from the flags it mentions.
       ".onBeforeHandle(({ set }) => { if (env.FEATURE_LEGAL_LISTS) return undefined; set.status = 404; })",
       // Compound and inverted conditions, directly or through a helper.
-      ".use(deploymentFeatureGate(env.FEATURE_LEGAL_LISTS && isOwner()))",
-      ".use(deploymentFeatureGate(!env.FEATURE_LEGAL_LISTS))",
-      ".use(deploymentFeatureGate(listsAndDraftsDeployed()))",
+      ".use(deploymentFeatureGate(() => env.FEATURE_LEGAL_LISTS && isOwner()))",
+      ".use(deploymentFeatureGate(() => !env.FEATURE_LEGAL_LISTS))",
+      ".use(deploymentFeatureGate(listsAndDraftsDeployed))",
+      // A flag read once, not per request, is not the gate's contract.
+      ".use(deploymentFeatureGate(env.FEATURE_LEGAL_LISTS))",
       // A second hook beside the gate.
-      ".use(deploymentFeatureGate(env.FEATURE_LEGAL_LISTS))\n  .onBeforeHandle(() => undefined)",
+      ".use(deploymentFeatureGate(() => env.FEATURE_LEGAL_LISTS))\n  .onBeforeHandle(() => undefined)",
     ];
     for (const hooks of notReproduced) {
       expect(violations(hooks, "FEATURE_LEGAL_LISTS"), hooks).toBe(1);
@@ -1581,7 +1585,7 @@ const custom = new Elysia()
   .onBeforeHandle(() => undefined)
   .get("/a", getStatus.handler, {});
 const gated = new Elysia()
-  .use(deploymentFeatureGate(env.FEATURE_LEGAL_LISTS))
+  .use(deploymentFeatureGate(() => env.FEATURE_LEGAL_LISTS))
   .get("/b", getStatus.handler, {});
 `;
     const scan = scanRouteHookGuards({

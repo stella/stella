@@ -4532,7 +4532,7 @@ export default defineConfig({
                 name: "@/api/lib/api-handlers",
                 importNames: ["createSafeHandler", "createSafeRootHandler"],
                 message:
-                  "Public route files must use createSafePublicHandler and must not receive authenticated handler context.",
+                  "Public route files must use createSafePublicHandler or createSafeBoundedPublicHandler and must not receive authenticated handler context.",
               },
               {
                 name: "@/api/lib/auth",

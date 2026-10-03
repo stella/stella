@@ -51,10 +51,6 @@ const providerMetadataSchema = v.object({
    */
   organization_id: optionalStringSchema,
   /**
-   * Identifies the usage_policy row this hosted setup maps to.
-   */
-  usage_policy_id: optionalStringSchema,
-  /**
    * Identifies the seat the allocation is attached to. Optional:
    * if unset the allocation goes to the org pool.
    */
@@ -110,8 +106,6 @@ const providerAllocationSchema = v.object({
   account_ref: v.string(),
   policy_ref: v.string(),
   allocation_reason: v.optional(v.string()),
-  amount: v.optional(v.number()),
-  currency: v.optional(v.string()),
   metadata: v.optional(providerMetadataSchema),
 });
 

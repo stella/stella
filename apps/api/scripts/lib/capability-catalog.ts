@@ -1204,13 +1204,15 @@ export const scanFileResponseReturns = ({
 const ROUTE_HOOK_SOURCE = String.raw`\.(?:onBeforeHandle|beforeHandle|onRequest)\s*\(|\bbeforeHandle\s*:|\.use\(\s*deploymentFeatureGate\b`;
 const ROUTE_HOOK_PATTERN = new RegExp(ROUTE_HOOK_SOURCE, "u");
 const ROUTE_HOOK_OCCURRENCES = new RegExp(ROUTE_HOOK_SOURCE, "gu");
-// The one hook the invoke path reproduces: `deploymentFeatureGate(<flag>)` whose
-// argument is exactly a deployment flag (optionally opened in local dev), or a
-// call to an imported helper whose whole body is that expression.
+// The one hook the invoke path reproduces: `deploymentFeatureGate(() => <flag>)`
+// whose predicate is exactly a deployment flag (optionally opened in local
+// dev), or an imported helper whose whole body is that expression.
 const FEATURE_GATE_CALL = /\.use\(\s*deploymentFeatureGate\(/u;
 const CANONICAL_FEATURE_EXPRESSION =
   /^\s*(?:isLocalDevOpen\(\)\s*\|\|\s*)?env\.(?<flag>FEATURE_[A-Z0-9_]+)\s*$/u;
-const HELPER_CALL = /^\s*(?<name>[A-Za-z_$][\w$]*)\(\)\s*$/u;
+const CANONICAL_FEATURE_PREDICATE =
+  /^\(\)\s*=>\s*(?:isLocalDevOpen\(\)\s*\|\|\s*)?env\.(?<flag>FEATURE_[A-Z0-9_]+)$/u;
+const HELPER_REFERENCE = /^(?<name>[A-Za-z_$][\w$]*)$/u;
 // A `.use(x)` of a plain identifier mounts a plugin. One defined in this file
 // with `new Elysia`, or imported from a relative path or the handler tree, is a
 // child route: it inherits the hook, but its handlers are not attributable here.
@@ -1349,15 +1351,19 @@ const reproducedFeatureFlag = ({
   if (gate === null) {
     return undefined;
   }
-  const argument = balancedArgument(block, gate.index + gate[0].length);
+  // The formatter may wrap the argument and leave a trailing comma.
+  const argument = balancedArgument(block, gate.index + gate[0].length)
+    ?.trim()
+    .replace(/,$/u, "")
+    .trimEnd();
   if (argument === undefined) {
     return undefined;
   }
-  const direct = CANONICAL_FEATURE_EXPRESSION.exec(argument)?.groups?.["flag"];
+  const direct = CANONICAL_FEATURE_PREDICATE.exec(argument)?.groups?.["flag"];
   if (direct !== undefined) {
     return direct;
   }
-  const helper = HELPER_CALL.exec(argument)?.groups?.["name"];
+  const helper = HELPER_REFERENCE.exec(argument)?.groups?.["name"];
   const helperPath = helper === undefined ? undefined : importPaths.get(helper);
   const helperSource =
     helperPath === undefined ? undefined : readModule(helperPath);

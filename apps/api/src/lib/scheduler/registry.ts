@@ -93,6 +93,10 @@ import {
   reconcileFlowRunOrphans,
 } from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
 import {
+  REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK,
+  redactHostedUsageWebhookEvents,
+} from "@/api/lib/scheduler/tasks/hosted-usage-webhook-retention";
+import {
   INFO_SOUD_SYNC_TRACKED_CASES_TASK,
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
@@ -174,6 +178,7 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
   [BACKFILL_AGENT_CLIENT_STORAGE_TASK]: backfillAgentClientStorage,
   [BACKFILL_HEARTBEAT_TASK]: emitBackfillHeartbeats,
   "scheduler.noop": noopTask,
