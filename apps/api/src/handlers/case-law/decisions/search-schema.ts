@@ -2,7 +2,10 @@ import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
-import { CASE_LAW_SEARCH_WARNING_CODES } from "@stll/api-contract/search";
+import {
+  CASE_LAW_SEARCH_WARNING_CODES,
+  FACET_COUNT_TYPE,
+} from "@stll/api-contract/search";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
   DECISION_IDENTIFIER_TYPES,
@@ -145,6 +148,18 @@ const searchFacetBucketsSchema = t.Array(
   ),
 );
 
+const sourceFacetBucketsSchema = t.Array(
+  t.Object(
+    {
+      value: t.String(),
+      label: nullableStringSchema,
+      count: t.Integer({ minimum: 0 }),
+      countType: t.UnionEnum(Object.values(FACET_COUNT_TYPE)),
+    },
+    { additionalProperties: false },
+  ),
+);
+
 /**
  * Courts grouped by where they sit in their jurisdiction, apex first: a
  * reader narrowing to "the supreme courts" is doing one thing, not picking
@@ -211,7 +226,7 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
           court: searchCourtTiersSchema,
           year: searchFacetBucketsSchema,
           decisionType: searchFacetBucketsSchema,
-          source: searchFacetBucketsSchema,
+          source: sourceFacetBucketsSchema,
           language: searchFacetBucketsSchema,
         },
         { additionalProperties: false },

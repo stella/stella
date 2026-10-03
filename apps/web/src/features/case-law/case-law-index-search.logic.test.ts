@@ -101,11 +101,12 @@ describe("the filters the URL carries", () => {
         from: "2024-01-01",
         lang: "cs",
         q: "nájem",
+        sourceId: "cz-nss",
         to: "2024-12-31",
         type: "rozsudek",
       }),
     ).toBe(
-      "/law/cases?country=cz&court=Nejvy%C5%A1%C5%A1%C3%AD+soud&from=2024-01-01&to=2024-12-31&type=rozsudek&lang=cs&q=n%C3%A1jem",
+      "/law/cases?country=cz&court=Nejvy%C5%A1%C5%A1%C3%AD+soud&from=2024-01-01&to=2024-12-31&sourceId=cz-nss&type=rozsudek&lang=cs&q=n%C3%A1jem",
     );
   });
 
@@ -133,7 +134,7 @@ describe("the filters the URL carries", () => {
       [...CASE_LAW_FILTER_KEYS, "from", "to", "year"].toSorted(),
     );
     expect(Object.values(cleared)).toEqual(
-      CASE_LAW_FILTER_KEYS.map(() => undefined),
+      [...CASE_LAW_FILTER_KEYS, "from", "to", "year"].map(() => undefined),
     );
     expect(
       hasActiveCaseLawFilter({ country: "cz", q: "nájem", ...cleared }),

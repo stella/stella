@@ -30,6 +30,7 @@ export type CaseLawIndexSearch = {
    */
   questions?: string[] | undefined;
   sort?: SearchSort | undefined;
+  sourceId?: string | undefined;
   /**
    * Require every word the query carries, as a link beside the results asks
    * for it. Absent while the search may drop a word, which is the default,
@@ -48,7 +49,12 @@ export type CaseLawIndexSearch = {
 };
 
 /** The single-select facet fields, so clearing cannot miss one added later. */
-export const CASE_LAW_FILTER_KEYS = ["court", "lang", "type"] as const;
+export const CASE_LAW_FILTER_KEYS = [
+  "court",
+  "lang",
+  "sourceId",
+  "type",
+] as const;
 
 export type CaseLawFilterKey = (typeof CASE_LAW_FILTER_KEYS)[number];
 
@@ -157,6 +163,7 @@ export const clearedCaseLawFilters = (): Record<CaseLawFilterKey, undefined> &
   court: undefined,
   from: undefined,
   lang: undefined,
+  sourceId: undefined,
   to: undefined,
   type: undefined,
   year: undefined,
@@ -230,7 +237,7 @@ export const decisionSortOrder = (sort: SearchSort | undefined): SearchSort =>
 export const createCaseLawIndexPath = (
   search: CaseLawIndexSearch,
 ): `/law/cases${string}` => {
-  const { country, court, lang, q, sort, strict, type } = search;
+  const { country, court, lang, q, sort, sourceId, strict, type } = search;
   const params = new URLSearchParams();
   const range = decisionDateRange(search);
   if (country) {
@@ -246,6 +253,9 @@ export const createCaseLawIndexPath = (
   }
   if (range.to !== undefined) {
     params.set("to", range.to);
+  }
+  if (sourceId) {
+    params.set("sourceId", sourceId);
   }
   if (type) {
     params.set("type", type);

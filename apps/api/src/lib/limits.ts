@@ -528,6 +528,7 @@ export const LIMITS = {
   caseLawSitemapShardUrlLimit: 5000,
   /** Max child sitemap entries in one sitemap index by protocol. */
   caseLawSitemapIndexEntryLimit: 50_000,
+  caseLawSourceFacetCountCap: 1000,
   caseLawFacetLimit: 20,
   /**
    * Buckets a facet aggregation asks the engine for, before the display cap.

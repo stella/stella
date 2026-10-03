@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import type { DecisionIdentityResolution } from "@stll/api-contract/decision-query-intent";
+import { DEFAULT_SEARCH_EXCERPT } from "@stll/api-contract/search";
 
-import { decisionMatchToOpen } from "@/features/case-law/open-decision-match";
+import {
+  createDecisionFiltersFromSearch,
+  decisionMatchToOpen,
+} from "@/features/case-law/open-decision-match";
 
 type Hit = { readonly id: string };
 
@@ -49,4 +53,15 @@ describe("decisionMatchToOpen", () => {
       expect(decisionMatchToOpen(resolution)).toBeUndefined();
     }
   });
+});
+
+test("the selected source narrows both browse and ranked decision requests", () => {
+  for (const q of [undefined, "nájem"]) {
+    expect(
+      createDecisionFiltersFromSearch(
+        { country: "cz", sourceId: "cz-nss", q },
+        { excerpt: DEFAULT_SEARCH_EXCERPT },
+      ),
+    ).toMatchObject({ country: "cz", sourceId: "cz-nss" });
+  }
 });
