@@ -3,7 +3,6 @@ import Elysia, { t } from "elysia";
 
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
-import { env } from "@/api/env";
 import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
@@ -89,8 +88,8 @@ import {
   tPublicLawCountry,
 } from "@/api/lib/legal-search/public-law-country";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
+import { publicLawFeatureGate } from "@/api/lib/public-law-feature";
 import { projectResponseText } from "@/api/lib/search/project-response-text";
-import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const listDecisions = createSafePublicHandler(
   {
@@ -435,14 +434,7 @@ const listSitemapShards = createSafePublicHandler(
 export const publicCaseLawRoute = new Elysia({
   prefix: "/case",
 })
-  .onBeforeHandle(({ set }) => {
-    if (isLocalDevOpen() || env.FEATURE_PUBLIC_LAW) {
-      return undefined;
-    }
-
-    set.status = 404;
-    return { error: "Not Found" } as const;
-  })
+  .use(publicLawFeatureGate)
   .get("/coverage", readCaseLawCoverage.handler, {
     response: readCaseLawCoverage.config.response,
   })
