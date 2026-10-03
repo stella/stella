@@ -2,7 +2,6 @@ import { apiKey } from "@better-auth/api-key";
 import { createCimdClientDiscovery } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
-import { oauthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -88,6 +87,15 @@ import {
   createDemoSessionFilter,
   warnDemoAccountConfiguration,
 } from "@/api/lib/auth/demo-account-policy";
+import {
+  createOAuthConsentInfoPlugin,
+  getVerifiedOAuthOrigins,
+} from "@/api/lib/auth/oauth-consent-info";
+import { withOwnClientDocuments } from "@/api/lib/auth/oauth-own-client-documents";
+import {
+  createStellaOAuthProvider,
+  OAUTH_DISABLED_PATHS,
+} from "@/api/lib/auth/oauth-registration-policy";
 import {
   admitOpenClient,
   authorizationClientId,
@@ -1169,6 +1177,9 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       // strictly stronger than the freshness it used to carry.
       "/unlink-account",
       "/organization/leave",
+      // OAuth client management Stella has no use for; see
+      // `OAUTH_ENDPOINT_POLICY`.
+      ...OAUTH_DISABLED_PATHS,
     ],
     user: {
       additionalFields: AUTH_USER_ADDITIONAL_FIELDS,
@@ -1702,122 +1713,133 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           });
         },
       }),
-      oauthProvider({
-        loginPage: OAUTH_UI_LOGIN_PATH,
-        consentPage: OAUTH_UI_CONSENT_PATH,
-        scopes: [...MCP_OAUTH_SCOPES],
-        resources: oauthResources,
-        // The additive bridge/backfill owns resource creation and proves its
-        // fixed point before this candidate runs. Runtime seeding would hide
-        // a missed migration and add an owner-DB write to auth startup.
-        resourceSeedMode: "none",
-        enforcePerClientResources: true,
-        clientRegistrationDefaultResources: oauthResourceIdentifiers,
-        clientRegistrationAllowedResources: oauthResourceIdentifiers,
-        allowDynamicClientRegistration: true,
-        allowUnauthenticatedClientRegistration: true,
-        rateLimit: { register: AUTH_RATE_LIMITS.oauthClientRegistration },
-        // Hosted MCP clients identify themselves by an https URL `client_id`
-        // and skip per-user registration entirely. The transport resolves the
-        // host once, refuses any non-public-routable answer, pins that address
-        // for the connection, and never follows a redirect; resources and
-        // scopes stay bound by the `clientMetadataDocument` registration rules
-        // above, so such a client gets no more reach than a registered one.
-        extensions: [
-          {
-            clientDiscovery: createCimdClientDiscovery({
-              fetchClientMetadataResource,
-            }),
-          },
-        ],
-        accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
-        refreshTokenExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
-        clientReference: ({ session }) =>
-          getSessionActiveOrganizationId(session),
-        postLogin: {
-          page: OAUTH_UI_ORGANIZATION_PATH,
-          shouldRedirect: async ({
-            headers,
-            scopes,
-            session,
-          }): Promise<boolean> => {
-            const needsOrganization = scopes.some(isMcpResourceScope);
-            if (!needsOrganization) {
-              return false;
-            }
-
-            const activeOrganizationId =
-              getSessionActiveOrganizationId(session);
-            // The organization page continues the authorization once the user
-            // has picked; the provider asks this predicate again on that step,
-            // so the pick itself has to end the redirect.
-            if (activeOrganizationId && isOrganizationPageContinuation()) {
-              return false;
-            }
-
-            const organizations: { id: string }[] =
-              await auth.api.listOrganizations({
-                headers,
-              });
-
-            return (
-              organizations.length !== 1 ||
-              organizations.at(0)?.id !== activeOrganizationId
-            );
-          },
-          consentReferenceId: ({ scopes, session }) => {
-            const needsOrganization = scopes.some(isMcpResourceScope);
-            if (!needsOrganization) {
-              return undefined;
-            }
-
-            const activeOrganizationId =
-              getSessionActiveOrganizationId(session);
-            if (!activeOrganizationId) {
-              throw new APIError("BAD_REQUEST", {
-                error: "set_organization",
-                message:
-                  "An organization must be selected before granting stella MCP access",
-              });
-            }
-
-            return activeOrganizationId;
-          },
-        },
-        customAccessTokenClaims: async ({ referenceId, user }) => {
-          if (user) {
-            requireDemoAccountAccess(
-              checkConfiguredDemoAccountAccess({
-                email: user.email,
-                operation: "growth",
+      createOAuthConsentInfoPlugin([env.FRONTEND_URL, getAuthIssuerUrl()]),
+      createStellaOAuthProvider(
+        {
+          loginPage: OAUTH_UI_LOGIN_PATH,
+          consentPage: OAUTH_UI_CONSENT_PATH,
+          scopes: [...MCP_OAUTH_SCOPES],
+          resources: oauthResources,
+          // The additive bridge/backfill owns resource creation and proves its
+          // fixed point before this candidate runs. Runtime seeding would hide
+          // a missed migration and add an owner-DB write to auth startup.
+          resourceSeedMode: "none",
+          enforcePerClientResources: true,
+          clientRegistrationDefaultResources: oauthResourceIdentifiers,
+          clientRegistrationAllowedResources: oauthResourceIdentifiers,
+          allowDynamicClientRegistration: true,
+          allowUnauthenticatedClientRegistration: true,
+          rateLimit: { register: AUTH_RATE_LIMITS.oauthClientRegistration },
+          // Hosted MCP clients identify themselves by an https URL `client_id`
+          // and skip per-user registration entirely. The transport resolves the
+          // host once, refuses any non-public-routable answer, pins that address
+          // for the connection, and never follows a redirect; resources and
+          // scopes stay bound by the `clientMetadataDocument` registration rules
+          // above, so such a client gets no more reach than a registered one.
+          extensions: [
+            {
+              clientDiscovery: createCimdClientDiscovery({
+                fetchClientMetadataResource: withOwnClientDocuments(
+                  fetchClientMetadataResource,
+                ),
               }),
-            );
-          }
-          if (!referenceId || !user) {
-            return { org_id: referenceId };
-          }
-          // `member_id` pins the token to the membership row that minted it,
-          // so a later membership of the same user in the same organization
-          // (removal followed by re-invitation) is a different identity.
-          const row = await rootDb
-            .select({ id: member.id })
-            .from(member)
-            .where(
-              and(
-                eq(member.userId, user.id),
-                eq(member.organizationId, referenceId),
-              ),
-            )
-            .limit(1)
-            .then((rows) => rows.at(0));
-          if (!row) {
-            throw new APIError("FORBIDDEN", {
-              message: "The user is not a member of this organization",
-            });
-          }
-          return { org_id: referenceId, [MCP_MEMBER_ID_CLAIM]: row.id };
+            },
+          ],
+          accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
+          refreshTokenExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
+          clientReference: ({ session }) =>
+            getSessionActiveOrganizationId(session),
+          postLogin: {
+            page: OAUTH_UI_ORGANIZATION_PATH,
+            shouldRedirect: async ({
+              headers,
+              scopes,
+              session,
+            }): Promise<boolean> => {
+              const needsOrganization = scopes.some(isMcpResourceScope);
+              if (!needsOrganization) {
+                return false;
+              }
+
+              const activeOrganizationId =
+                getSessionActiveOrganizationId(session);
+              // The organization page continues the authorization once the user
+              // has picked; the provider asks this predicate again on that step,
+              // so the pick itself has to end the redirect.
+              if (activeOrganizationId && isOrganizationPageContinuation()) {
+                return false;
+              }
+
+              const organizations: { id: string }[] =
+                await auth.api.listOrganizations({
+                  headers,
+                });
+
+              return (
+                organizations.length !== 1 ||
+                organizations.at(0)?.id !== activeOrganizationId
+              );
+            },
+            consentReferenceId: ({ scopes, session }) => {
+              const needsOrganization = scopes.some(isMcpResourceScope);
+              if (!needsOrganization) {
+                return undefined;
+              }
+
+              const activeOrganizationId =
+                getSessionActiveOrganizationId(session);
+              if (!activeOrganizationId) {
+                throw new APIError("BAD_REQUEST", {
+                  error: "set_organization",
+                  message:
+                    "An organization must be selected before granting stella MCP access",
+                });
+              }
+
+              return activeOrganizationId;
+            },
+          },
+          customAccessTokenClaims: async ({ referenceId, user }) => {
+            if (user) {
+              requireDemoAccountAccess(
+                checkConfiguredDemoAccountAccess({
+                  email: user.email,
+                  operation: "growth",
+                }),
+              );
+            }
+            if (!referenceId || !user) {
+              return { org_id: referenceId };
+            }
+            // `member_id` pins the token to the membership row that minted it,
+            // so a later membership of the same user in the same organization
+            // (removal followed by re-invitation) is a different identity.
+            const row = await rootDb
+              .select({ id: member.id })
+              .from(member)
+              .where(
+                and(
+                  eq(member.userId, user.id),
+                  eq(member.organizationId, referenceId),
+                ),
+              )
+              .limit(1)
+              .then((rows) => rows.at(0));
+            if (!row) {
+              throw new APIError("FORBIDDEN", {
+                message: "The user is not a member of this organization",
+              });
+            }
+            return { org_id: referenceId, [MCP_MEMBER_ID_CLAIM]: row.id };
+          },
         },
-      }),
+        {
+          verifiedOrigins: getVerifiedOAuthOrigins([
+            env.FRONTEND_URL,
+            getAuthIssuerUrl(),
+          ]),
+        },
+      ),
       oauthUiFragmentBridgePlugin,
     ],
     hooks: {
