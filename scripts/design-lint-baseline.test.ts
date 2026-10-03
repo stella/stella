@@ -21,6 +21,7 @@ const backlog = (
   "no-imported-class-constant/no-imported-class-constant": imported,
   "require-bounded-request-schema/require-bounded-request-schema": {},
   "no-unbounded-response-body/no-unbounded-response-body": {},
+  "no-computed-key-record-assignment/no-computed-key-record-assignment": {},
   "eslint/complexity": {},
   "eslint/max-lines-per-function": {},
   "eslint/max-params": {},
@@ -103,6 +104,10 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
       "no-unbounded-response-body(no-unbounded-response-body)",
       "no-unbounded-response-body/no-unbounded-response-body",
     ],
+    [
+      "no-computed-key-record-assignment(no-computed-key-record-assignment)",
+      "no-computed-key-record-assignment/no-computed-key-record-assignment",
+    ],
     ["eslint(complexity)", "eslint/complexity"],
     ["eslint(max-lines-per-function)", "eslint/max-lines-per-function"],
     ["eslint(max-params)", "eslint/max-params"],
@@ -113,6 +118,7 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
     "no-imported-class-constant",
     "require-bounded-request-schema",
     "no-unbounded-response-body",
+    "no-computed-key-record-assignment",
     "eslint",
   ]);
   expect(DESIGN_LINT_RULE_BY_DIAGNOSTIC_CODE.size).toBe(

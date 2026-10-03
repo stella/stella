@@ -6,6 +6,10 @@ import fc from "fast-check";
 import { normalizeCountry } from "@stll/agent-input";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import {
+  SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+} from "@stll/api-contract/search";
 import { propertyConfig } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -238,11 +242,13 @@ beforeEach(() => {
   searchProviderSearchMock.mockResolvedValue({ hits: [], nextCursor: null });
   searchDecisionsHandlerMock.mockReset();
   searchDecisionsHandlerMock.mockResolvedValue({
+    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
     hits: [decisionHit],
     nextCursor: null,
   });
   searchLegislationHandlerMock.mockReset();
   searchLegislationHandlerMock.mockResolvedValue({
+    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
     items: [statuteHit],
     nextCursor: null,
   });
@@ -456,6 +462,24 @@ describe("the corpus page cap split across countries", () => {
 });
 
 describe("compat search reaching the public corpus", () => {
+  test("compat search preserves a truncated corpus outcome", async () => {
+    await withCorpus(async () => {
+      searchDecisionsHandlerMock.mockResolvedValue({
+        hits: [],
+        nextCursor: null,
+        paginationOutcome: SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+      });
+      const payload = await run({
+        args: { query: "contract" },
+        context: createContext(),
+        handler: COMPAT_TOOL_HANDLERS.search,
+      });
+      expect(payload).toMatchObject({
+        paginationOutcome: SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+      });
+    });
+  });
+
   test("the default surface returns matter hits, then decisions, then statutes", async () => {
     await withCorpus(async () => {
       searchProviderSearchMock.mockResolvedValue({
@@ -667,10 +691,12 @@ describe("compat search reaching the public corpus", () => {
         nextCursor: "matter-2",
       });
       searchDecisionsHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         hits: [],
         nextCursor: "decisions-2",
       });
       searchLegislationHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         items: [],
         nextCursor: null,
       });

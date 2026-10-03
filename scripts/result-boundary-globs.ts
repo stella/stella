@@ -129,6 +129,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
   "apps/web/src/queries/**/*.{ts,tsx}",
+  "apps/web/src/routes/-protected-app/**/*.{ts,tsx}",
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
@@ -219,6 +220,12 @@ export const RESULT_BOUNDARY_GLOBS = [
   // These packages are boundary adapters by design: the runtime turns
   // invalid startup state into fatal exceptions, while the testkit exposes
   // assertion failures to test runners.
+  // Fetch-compatible callback used by Better Auth's customFetchImpl. The SDK
+  // consumes Response/rejection, so this HTTP boundary cannot return Result.
+  "packages/fetch/src/index.ts",
+  // The publisher HTTP boundary keeps the fetch-compatible rejection contract;
+  // adapters convert its typed failures to Result at their ingestion boundary.
+  "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
   "packages/property-testing/src/index.ts",

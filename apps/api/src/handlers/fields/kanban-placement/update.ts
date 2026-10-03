@@ -12,6 +12,9 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { FlowRunCompletionNotice } from "@/api/lib/flows/flow-run-actor";
+import { notifyFlowRunActorOfCompletion } from "@/api/lib/flows/flow-run-completion-notice";
+import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 
@@ -61,6 +64,7 @@ const updateKanbanPlacement = createSafeHandler(
       );
     }
     const status = body.status;
+    const completionNotices: FlowRunCompletionNotice[] = [];
 
     yield* Result.await(
       abortableTx(safeDb, async (tx) => {
@@ -74,6 +78,12 @@ const updateKanbanPlacement = createSafeHandler(
               userId: user.id,
               recordAuditEvent,
               body: { taskId: body.entityId, status },
+              decideGate: async (options) =>
+                await decideGateForTask(options, {
+                  notifyRunCompleted: (notice) => {
+                    completionNotices.push(notice);
+                  },
+                }),
             }),
           );
           if (Result.isError(taskResult)) {
@@ -102,6 +112,15 @@ const updateKanbanPlacement = createSafeHandler(
           throw fieldError.error;
         }
       }),
+    );
+
+    // A completion pointer uses the owner connection. File it only after the
+    // outer transaction releases its workspace/run locks and commits the move.
+    await Promise.all(
+      completionNotices.map(
+        async (notice) =>
+          await notifyFlowRunActorOfCompletion(notice).catch(captureError),
+      ),
     );
 
     if (body.fields.length > 0) {

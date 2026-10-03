@@ -31,6 +31,9 @@ export const CHAT_TURN_INTENT = {
  */
 export const CHAT_TURN_ID_HEADER = "x-stella-chat-turn-id";
 
+/** Response header carrying the per-request correlation id (receipt). */
+export const REQUEST_ID_HEADER = "x-request-id";
+
 export const CHAT_RUN_MODE = { agent: "agent" } as const;
 export type ChatRunMode = (typeof CHAT_RUN_MODE)[keyof typeof CHAT_RUN_MODE];
 

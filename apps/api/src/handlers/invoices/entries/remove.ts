@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { resultTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
+  INVOICE_ATTACHMENT,
   expenses,
   INVOICE_STATUS,
   invoiceLines,
@@ -193,6 +194,7 @@ const removeEntries = createSafeHandler(
             .update(timeEntries)
             .set({
               invoiceId: null,
+              invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
               status: BILLING_STATUS.APPROVED,
               updatedAt: now,
             })

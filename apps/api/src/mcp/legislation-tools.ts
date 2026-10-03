@@ -27,7 +27,7 @@ import {
   READ_STATUTE_PROVISIONS_PROJECTION,
   SEARCH_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
-import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
+import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { PROVISION_STATUS } from "@/api/lib/legal-search/legislation-provision-vocabulary";
 import { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
@@ -237,7 +237,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
     ),
     cursor: cursorInput({
       description: "Opaque cursor from a previous search_legislation call",
-      maxLength: CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+      maxLength: CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
     }),
   }),
 );
@@ -586,6 +586,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
 
   return toolDataResult({
     nextCursor: result.nextCursor,
+    paginationOutcome: result.paginationOutcome,
     results: result.items.map((hit) => ({
       appUrl: buildLegislationDocumentAppUrl({
         country: hit.country,
@@ -599,6 +600,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
       effectiveDate: hit.effectiveDate,
       eli: hit.eli,
       language: hit.language,
+      match: hit.match,
       resourceName: legislationResourceName(hit.documentId),
       score: hit.score,
       snippet: toPlainTextSnippet(hit.headline),

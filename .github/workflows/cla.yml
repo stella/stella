@@ -35,7 +35,9 @@ permissions:
 
 jobs:
   verify-signatures:
-    if: (github.event_name != 'pull_request_target' || github.actor != 'dependabot[bot]') && (github.event_name != 'issue_comment' || (github.event.issue.pull_request && (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA')))
+    # Notification runs for other authors complete with the job skipped; only a
+    # successful dependabot notification requests verification.
+    if: (github.event_name != 'pull_request_target' || github.actor != 'dependabot[bot]') && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login == 'dependabot[bot]')) && (github.event_name != 'issue_comment' || (github.event.issue.pull_request && (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA')))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -99,7 +101,7 @@ jobs:
           permission-members: read
 
       - name: Verify contributor signatures
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.credentials.outcome == 'success' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           CLA_STORE_TOKEN: ${{ steps.store-token.outputs.token }}
@@ -346,12 +348,7 @@ jobs:
               const verdict = await verifyPull(pull);
               await finishVerification(scoped, verdict.unsigned, verdict.unlinked);
             };
-            const verifyGroup = async (group) => {
-              const id = await startCheck(group?.head_sha);
-              if (!validSha(group.base_sha) || typeof group.base_ref !== "string" || typeof group.head_ref !== "string") fail("CLA_INVALID_MERGE_GROUP");
-              const anchor = group.head_ref.match(/\/pr-(\d+)-[0-9a-f]+$/u);
-              if (!anchor || !positiveInteger(Number(anchor[1]))) fail("CLA_INVALID_QUEUE_REF");
-              const baseRef = group.base_ref.replace(/^refs\/heads\//u, "");
+            const readQueueEntries = async (baseRef) => {
               const entries = new Map();
               const cursors = new Set();
               let cursor = null;
@@ -379,6 +376,33 @@ jobs:
                 if (page.pageInfo.hasNextPage && (typeof cursor !== "string" || cursors.has(cursor))) fail("CLA_INVALID_QUEUE_CURSOR");
                 cursors.add(cursor);
               } while (cursor !== null);
+              return entries;
+            };
+            // GitHub rebuilds a group when a member leaves or joins the queue. The old
+            // head can then never merge and the rebuilt group runs its own check, so a
+            // verification that a membership change broke ends neutral, but only after
+            // observing the transition: the first snapshot held this head and a later
+            // one does not. A head never seen (lagging or unbuilt entry) or still
+            // queued fails as before.
+            const GROUP_CHANGE_CODES = new Set(["CLA_GROUP_PULL_CHANGED", "CLA_INCOMPLETE_MERGE_GROUP",
+              "CLA_GROUP_COMMIT_SNAPSHOT_CHANGED", "CLA_PULL_CHANGED", "CLA_COMMIT_SNAPSHOT_CHANGED"]);
+            const verifyGroup = async (group) => {
+              const id = await startCheck(group?.head_sha);
+              if (!validSha(group.base_sha) || typeof group.base_ref !== "string" || typeof group.head_ref !== "string") fail("CLA_INVALID_MERGE_GROUP");
+              const anchor = group.head_ref.match(/\/pr-(\d+)-[0-9a-f]+$/u);
+              if (!anchor || !positiveInteger(Number(anchor[1]))) fail("CLA_INVALID_QUEUE_REF");
+              const baseRef = group.base_ref.replace(/^refs\/heads\//u, "");
+              const entries = await readQueueEntries(baseRef);
+              try {
+                await verifyGroupChain({ id, group, baseRef, entries, anchor: Number(anchor[1]) });
+              } catch (error) {
+                if (error.name !== "ClaPolicyError" || !GROUP_CHANGE_CODES.has(error.message) || !entries.has(group.head_sha)) throw error;
+                if ((await readQueueEntries(baseRef)).has(group.head_sha)) throw error;
+                await completeCheck(id, "neutral", "CLA_GROUP_SUPERSEDED",
+                  `The merge group changed during verification (${error.message}); the rebuilt group is verified by its own run.`);
+              }
+            };
+            const verifyGroupChain = async ({ id, group, baseRef, entries, anchor }) => {
               // Queue entries link each cumulative head to its predecessor. Follow that
               // complete chain to the webhook base; commit-to-PR associations can omit
               // synthetic commits and therefore cannot prove group membership.
@@ -395,7 +419,7 @@ jobs:
                 groupedEntries.set(entry.pullRequest.number, entry);
                 head = entry.baseCommit.oid;
               }
-              if (entries.get(group.head_sha)?.pullRequest.number !== Number(anchor[1])) fail("CLA_INCOMPLETE_MERGE_GROUP");
+              if (entries.get(group.head_sha)?.pullRequest.number !== anchor) fail("CLA_INCOMPLETE_MERGE_GROUP");
               const unsigned = [];
               const unlinked = [];
               for (const number of numbers) {

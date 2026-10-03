@@ -360,6 +360,119 @@ describe("install-free invocation classification", () => {
     ]);
   });
 
+  test.each([
+    "env bunx some-tool",
+    "CI=true env -- bunx some-tool",
+    "exec env CI=true bun x some-tool",
+    "env CI=true npx some-tool",
+  ])("classifies package execution through wrappers: %s", (command) => {
+    expect(kinds(command)).toEqual(["fetch"]);
+  });
+
+  test.each([
+    "if false; then bun ci; fi",
+    "if false; then out=$(bun ci); fi",
+    "if false; then (bun ci); fi",
+    "(false && bun ci)",
+    ...["&& true", "|| true", "&", "| cat"].flatMap((operator) => [
+      `(bun ci) ${operator}`,
+      `{ bun ci; } ${operator}`,
+      `({ bun ci; }) ${operator}`,
+    ]),
+    "false && bun ci",
+    "bun ci || true",
+    "for item in; do bun ci; done",
+    "bun ci &",
+    "bun ci | cat",
+    "! bun ci",
+  ])("shell control flow cannot establish install coverage: %s", (install) => {
+    expect(kinds(`${install}\nbun scripts/check.ts`)).toEqual([
+      "install",
+      "files",
+    ]);
+  });
+
+  test.each(["test -d node_modules || bun install", "bun install || true"])(
+    "nested script control flow cannot establish install coverage: %s",
+    (setup) => {
+      const root = repository(
+        [
+          "jobs:",
+          "  job:",
+          "    steps:",
+          "      - run: bun run setup; bun scripts/check.ts",
+          "      - run: bun scripts/check.ts",
+        ].join("\n"),
+        {
+          "package.json": JSON.stringify({
+            scripts: { setup: "bun run inner", inner: setup },
+          }),
+        },
+      );
+      expect(
+        installFreeInvocations({ root, workflow: CI_WORKFLOW }).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["install", "files", "files"]);
+    },
+  );
+
+  test("straight-line nested installs retain coverage", () => {
+    expect(
+      classify("bun run setup; bun scripts/missing.ts", {
+        "package.json": JSON.stringify({
+          scripts: { setup: "bun run inner", inner: "bun ci" },
+        }),
+      }).map(({ classification }) => classification.type),
+    ).toEqual(["install"]);
+    expect(kinds("{ bun ci; }\nbun scripts/missing.ts")).toEqual(["install"]);
+  });
+
+  test.each([
+    'bash -c "bun scripts/check.ts"',
+    "sh -c 'bunx some-tool'",
+    "bash -lc 'env npx some-tool'",
+    `sh -c 'bash -c "bun scripts/check.ts"'`,
+    `bash -c 'bun "'`,
+    'sh -c "$SCRIPT"',
+  ])("reports Bun or unparseable shell command strings: %s", (command) => {
+    expect(kinds(command)).toEqual(["unclassified"]);
+  });
+
+  test.each([
+    'echo "bun scripts/check.ts"',
+    `bash -c 'echo "bun scripts/check.ts"'`,
+    "sh -c 'echo bunx some-tool'",
+  ])("ignores Bun names in shell output: %s", (command) => {
+    expect(kinds(command)).toEqual([]);
+  });
+
+  test("unconditional installs retain coverage across later control flow", () => {
+    expect(kinds("bun ci\nif true; then bun scripts/missing.ts; fi")).toEqual([
+      "install",
+    ]);
+    expect(
+      kinds("(if false; then bun ci; fi)\n(bun ci; bun scripts/missing.ts)"),
+    ).toEqual(["install", "install"]);
+  });
+
+  test("a conditional shell install cannot cover a later workflow step", () => {
+    const root = repository(
+      [
+        "jobs:",
+        "  job:",
+        "    steps:",
+        "      - run: if false; then bun ci; fi",
+        "      - run: bun scripts/check.ts",
+      ].join("\n"),
+    );
+    expect(
+      installFreeInvocations({ root, workflow: CI_WORKFLOW }).map(
+        ({ classification }) => classification.type,
+      ),
+    ).toEqual(["install", "files"]);
+  });
+
   test("commands after an install in the same directory are covered", () => {
     expect(
       kinds(
@@ -374,13 +487,52 @@ describe("install-free invocation classification", () => {
       kinds(
         [
           "bun install -g turbo",
-          "(cd scratch && bun install)",
+          "(cd scratch; bun install)",
           "bun scripts/check.ts",
           "(cd scratch && bun scripts/missing.ts)",
         ].join("\n"),
       ),
     ).toEqual(["install", "install", "files"]);
   });
+
+  const continuationCases: readonly {
+    continuation: string;
+    kinds: Classification["type"][];
+  }[] = [
+    { continuation: "true", kinds: ["install", "files"] },
+    { continuation: `\${{ inputs.optional }}`, kinds: ["install", "files"] },
+    { continuation: "false", kinds: ["install"] },
+  ];
+  test.each(continuationCases)(
+    "an install with continue-on-error $continuation covers only successful steps",
+    ({ continuation, kinds: expectedKinds }) => {
+      for (const directive of [
+        "run: bun ci",
+        "uses: ./.github/actions/install",
+      ]) {
+        const root = repository(
+          [
+            "jobs:",
+            "  job:",
+            "    steps:",
+            `      - ${directive}`,
+            `        continue-on-error: ${continuation}`,
+            "      - run: bun scripts/check.ts",
+          ].join("\n"),
+          {
+            ".github/actions/install/action.yml":
+              "runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: bun ci\n",
+          },
+        );
+        expect(
+          installFreeInvocations({ root, workflow: CI_WORKFLOW }).map(
+            ({ classification }) => classification.type,
+          ),
+          directive,
+        ).toEqual(expectedKinds);
+      }
+    },
+  );
 
   test("a later step is covered only by an install its condition implies", () => {
     const root = repository(

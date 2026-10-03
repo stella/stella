@@ -1245,7 +1245,7 @@ export const TemplateStudioPage = ({
           .then(
             async () =>
               await queryClient.invalidateQueries({
-                queryKey: knowledgeKeys.templates.fillDiscover(
+                queryKey: knowledgeKeys.templates.fillDiscoverRoot(
                   activeOrganizationId,
                   templateId,
                 ),

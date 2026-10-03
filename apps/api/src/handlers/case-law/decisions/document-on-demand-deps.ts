@@ -28,7 +28,7 @@ export const onDemandDocumentDeps: OnDemandDocumentDeps = {
     ),
   fetchDocument: async (decision) =>
     await fetchDecisionDocument({
-      decision,
+      decisionId: decision.id,
       fetchDocument: skCourtsDocumentFetch,
       scopedDb: getCaseLawIngestionDb(),
       // The unit races its own wall-clock budget; the signal aborts the

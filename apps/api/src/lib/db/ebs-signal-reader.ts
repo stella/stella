@@ -5,10 +5,11 @@ import {
   ebsBalance,
   type EbsBalanceReading,
 } from "@stll/db-load-gate/indicators";
+import { Temporal } from "@stll/time";
 
 import {
   createEbsBalanceReader,
-  type EbsBalanceReadError,
+  EbsBalanceReadError,
 } from "./ebs-balance-reader";
 
 type EbsEnvironment = {
@@ -77,16 +78,107 @@ export type EbsConfigurationEvent = {
   message: string;
   configurationKeys: readonly string[];
 };
+type RawReaderOptions = {
+  instanceIdentifier: string;
+  clock: () => number;
+  timeoutMs: number;
+  maxStalenessMs: number;
+};
+type RawReader = () => Promise<Result<EbsBalanceReading, EbsBalanceReadError>>;
+type RawReaderFactory = (options: RawReaderOptions) => RawReader;
+const RAW_READING_CACHE_MS = 120_000;
+
+type EbsReaderCacheOptions = {
+  createReader: RawReaderFactory;
+  clock: () => number;
+};
+
+/** Share provider requests, never rewrite the last real datapoint timestamp. */
+export const createEbsReaderCache = ({
+  createReader,
+  clock,
+}: EbsReaderCacheOptions) => {
+  const readers = new Map<string, RawReader>();
+  return (options: RawReaderOptions): RawReader => {
+    const key = JSON.stringify([
+      options.instanceIdentifier,
+      options.timeoutMs,
+      options.maxStalenessMs,
+    ]);
+    const existing = readers.get(key);
+    if (existing !== undefined) {
+      return existing;
+    }
+    let raw: RawReader | undefined;
+    let lastAttempt: number | null = null;
+    let lastReal: EbsBalanceReading | undefined;
+    let cached: Result<EbsBalanceReading, EbsBalanceReadError> | undefined;
+    let inFlight:
+      | Promise<Result<EbsBalanceReading, EbsBalanceReadError>>
+      | undefined;
+    const read: RawReader = async () => {
+      if (inFlight !== undefined) {
+        return await inFlight;
+      }
+      const now = clock();
+      if (
+        cached !== undefined &&
+        lastAttempt !== null &&
+        now - lastAttempt >= 0 &&
+        now - lastAttempt < RAW_READING_CACHE_MS
+      ) {
+        return cached;
+      }
+      lastAttempt = now;
+      inFlight = (async () => {
+        const attempted = await Result.tryPromise({
+          try: async () => {
+            raw ??= createReader(options);
+            return await raw();
+          },
+          catch: (cause) =>
+            new EbsBalanceReadError({
+              message: "EBS cached metric request failed",
+              cause,
+            }),
+        });
+        const outcome = attempted.isOk()
+          ? attempted.value
+          : Result.err(attempted.error);
+        if (outcome.isOk()) {
+          lastReal = outcome.value;
+        }
+        cached =
+          outcome.isErr() && lastReal !== undefined
+            ? Result.ok(lastReal)
+            : outcome;
+        return cached;
+      })();
+      try {
+        return await inFlight;
+      } finally {
+        inFlight = undefined;
+      }
+    };
+    readers.set(key, read);
+    return read;
+  };
+};
+
+let sharedReaderFactory: RawReaderFactory | undefined;
+const sharedReader: RawReaderFactory = (options) => {
+  sharedReaderFactory ??= createEbsReaderCache({
+    createReader: createEbsBalanceReader,
+    clock: () => Temporal.Now.instant().epochMilliseconds,
+  });
+  return sharedReaderFactory(options);
+};
+
 type EbsSignalReaderOptions = {
   configuration: EbsConfiguration;
   clock: () => number;
   config: HealthConfig;
-  createReader?: (options: {
-    instanceIdentifier: string;
-    clock: () => number;
-    timeoutMs: number;
-    maxStalenessMs: number;
-  }) => () => Promise<Result<EbsBalanceReading, EbsBalanceReadError>>;
+  createReader?: RawReaderFactory;
   log?: (event: EbsConfigurationEvent) => void;
 };
 
@@ -95,7 +187,7 @@ export const createEbsSignalReader = ({
   configuration,
   clock,
   config,
-  createReader = createEbsBalanceReader,
+  createReader = sharedReader,
   log = (event) => process.stderr.write(`${JSON.stringify(event)}\n`),
 }: EbsSignalReaderOptions): (() => Promise<Signal>) => {
   let loggedMissing = false;

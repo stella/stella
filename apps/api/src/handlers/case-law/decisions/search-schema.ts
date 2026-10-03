@@ -2,7 +2,10 @@ import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
-import { CASE_LAW_SEARCH_WARNING_CODES } from "@stll/api-contract/search";
+import {
+  CASE_LAW_SEARCH_WARNING_CODES,
+  FACET_COUNT_TYPE,
+} from "@stll/api-contract/search";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
   DECISION_IDENTIFIER_TYPES,
@@ -23,12 +26,14 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { tLegalAlternatives } from "@/api/lib/legal-search/legal-alternatives";
 import {
   tPublicCountryUnavailable,
   tPublicLawCountry,
 } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
+import { searchPaginationOutcomeSchema } from "@/api/lib/search/pagination-outcome-schema";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
 export const searchDecisionsBodySchema = t.Object({
@@ -37,7 +42,11 @@ export const searchDecisionsBodySchema = t.Object({
     maxLength: LIMITS.searchQueryMaxLength,
   }),
   limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: t.Optional(
+    tPaginationCursor({
+      maxChars: CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+    }),
+  ),
   court: t.Optional(t.String({ maxLength: 512 })),
   courts: t.Optional(
     t.Array(t.String({ minLength: 1, maxLength: 512 }), {
@@ -145,6 +154,23 @@ const searchFacetBucketsSchema = t.Array(
   ),
 );
 
+const sourceFacetBucketsSchema = t.Array(
+  t.Object(
+    {
+      value: t.String(),
+      label: nullableStringSchema,
+      count: t.Integer({ minimum: 0 }),
+      // Elysia's TypeBox module inference needs a tuple; a mapped array becomes never.
+      countType: t.Union([
+        t.Literal(FACET_COUNT_TYPE.EXACT),
+        t.Literal(FACET_COUNT_TYPE.AT_LEAST),
+        t.Literal(FACET_COUNT_TYPE.ESTIMATE),
+      ]),
+    },
+    { additionalProperties: false },
+  ),
+);
+
 /**
  * Courts grouped by where they sit in their jurisdiction, apex first: a
  * reader narrowing to "the supreme courts" is doing one thing, not picking
@@ -211,7 +237,7 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
           court: searchCourtTiersSchema,
           year: searchFacetBucketsSchema,
           decisionType: searchFacetBucketsSchema,
-          source: searchFacetBucketsSchema,
+          source: sourceFacetBucketsSchema,
           language: searchFacetBucketsSchema,
         },
         { additionalProperties: false },
@@ -220,6 +246,7 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
     ]),
     total: searchTotalSchema,
     nextCursor: nullableStringSchema,
+    paginationOutcome: searchPaginationOutcomeSchema,
     /**
      * The query the engine actually answered: the words it required, with a
      * phrase still quoted. Equal in meaning to the request's `query` when

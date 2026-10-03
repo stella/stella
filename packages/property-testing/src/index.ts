@@ -173,6 +173,46 @@ export const propertySeed = (): number | undefined => {
   return exploring ? undefined : DEFAULT_PROPERTY_SEED;
 };
 
+type PropertySample<T> = {
+  value: T;
+  /** Replay coordinates and the drawn value, for an `expect` message. */
+  label: string;
+};
+
+/** fast-check seeds are 32-bit integers. */
+const MAX_GENERATED_SEED = 0x80_00_00_00;
+
+type DrawPropertySamplesOptions = {
+  numRuns: number;
+  seed?: number | undefined;
+};
+
+/**
+ * Draw the inputs `fc.assert` would run under `propertyConfig`, for tests
+ * that evaluate samples as one batch instead of one predicate call each.
+ * The seed is always explicit (a random one when the tier policy leaves it
+ * unset), so every label replays its batch:
+ * `PROPERTY_TEST_SEED=<seed>` redraws the same samples in the same order.
+ */
+export const drawPropertySamples = <T>(
+  arbitrary: fc.Arbitrary<T>,
+  { numRuns, seed: requestedSeed }: DrawPropertySamplesOptions,
+): PropertySample<T>[] => {
+  const seed =
+    requestedSeed ??
+    propertySeed() ??
+    Math.floor(Math.random() * MAX_GENERATED_SEED);
+  // PROPERTY_TEST_PATH walks one counterexample's shrink tree; fc.sample would
+  // follow it and renumber the batch, so batches replay by seed and index.
+  const { path: _path, ...params } = propertyConfig<T>({ numRuns, seed });
+  const factor = readNumRunsFactor(process.env[NUM_RUNS_FACTOR_ENV]);
+  const factorEnv = factor === 1 ? "" : ` ${NUM_RUNS_FACTOR_ENV}=${factor}`;
+  return fc.sample(arbitrary, params).map((value, index) => ({
+    value,
+    label: `${PROPERTY_TEST_SEED_ENV}=${seed}${factorEnv} sample ${index}: ${fc.stringify(value)}`,
+  }));
+};
+
 /**
  * Scale a per-test Bun timeout (ms) by the same nightly factor that scales
  * `numRuns`, so an expensive property whose run count grows ×N also gets ×N

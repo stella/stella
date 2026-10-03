@@ -1,10 +1,14 @@
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
-import { panic, TaggedError } from "better-result";
+import {
+  infiniteQueryOptions,
+  queryOptions,
+  type QueryClient,
+} from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
-import { DOCX_MIME, STALE_TIME } from "@/lib/consts";
+import { STALE_TIME } from "@/lib/consts";
 import {
   APIError,
   shouldRetryAPIRequest,
@@ -185,11 +189,19 @@ export const knowledgeKeys = {
     ],
     // Server re-discovered fill schema for the saved document. Nested under
     // `detail` (the document reference it depends on), keyed on the stable
-    // template id only: the presigned URL rotates on every detail refetch and
+    // template and clause/link stamps: the presigned URL rotates on detail refetch and
     // must not be part of the cache identity.
-    fillDiscover: (organizationId: string, templateId: string) => [
+    fillDiscoverRoot: (organizationId: string, templateId: string) => [
       ...knowledgeKeys.templates.detail(organizationId, templateId),
       FILL_DISCOVER_SEGMENT,
+    ],
+    fillDiscover: (
+      organizationId: string,
+      templateId: string,
+      sourceStamp: string,
+    ) => [
+      ...knowledgeKeys.templates.fillDiscoverRoot(organizationId, templateId),
+      sourceStamp,
     ],
     // What the decision model makes of the values entered so far. `valuesHash`
     // is the request values' stable TanStack hash, so one entry per distinct
@@ -317,7 +329,7 @@ export const knowledgeKeys = {
  */
 export const isTemplateFillDiscoverKey = (
   queryKey: readonly unknown[],
-): boolean => queryKey.at(-1) === FILL_DISCOVER_SEGMENT;
+): boolean => queryKey.at(-2) === FILL_DISCOVER_SEGMENT;
 
 // ── Template queries ────────────────────────────────
 
@@ -426,19 +438,13 @@ export const templateDocxBufferOptions = (
 // fillable field schema (the same merge the fill endpoint applies, so
 // `{% for %}` array fields and manifest metadata are both present). Shared by
 // the Studio fill tab and any host that renders the fill form standalone, so
-// both dedupe on one cache entry. Keyed on the stable template id (see the
+// both dedupe on one cache entry. Keyed on template and source stamps (see the
 // `fillDiscover` key comment): the presigned URL and file name are runtime-only
 // context, never cache identity.
-class TemplateDocumentFetchError extends TaggedError(
-  "TemplateDocumentFetchError",
-)<{
-  message: string;
-  status: number;
-}> {}
-
 type TemplateFillDiscoverKey = {
   organizationId: string;
   templateId: string;
+  sourceStamp: string;
 };
 
 type TemplateFillDiscoverContext = {
@@ -455,11 +461,12 @@ export const templateFillDiscoverOptions = ({
   key,
   context,
 }: TemplateFillDiscoverOptionsInput) =>
-  // oxlint-disable-next-line @tanstack/query/exhaustive-deps -- presignedUrl/fileName are runtime-only context; keyed on the stable template id so a URL rotation does not evict this cache and force a re-download + re-discover.
+  // oxlint-disable-next-line @tanstack/query/exhaustive-deps -- presignedUrl/fileName are runtime-only context; source stamps identify stored content; signed URL rotation must not evict discovery.
   queryOptions({
     queryKey: knowledgeKeys.templates.fillDiscover(
       key.organizationId,
       key.templateId,
+      key.sourceStamp,
     ),
     queryFn: async ({ signal }) => {
       if (
@@ -468,20 +475,8 @@ export const templateFillDiscoverOptions = ({
       ) {
         panic("template fill: saved template document is unavailable");
       }
-      const res = await fetchWithTimeout(context.presignedUrl, {
-        signal,
-        timeoutMs: 15_000,
-      });
-      if (!res.ok) {
-        throw new TemplateDocumentFetchError({
-          message: `Template document fetch failed (${res.status})`,
-          status: res.status,
-        });
-      }
-      const blob = await res.blob();
-      const file = new File([blob], context.fileName, { type: DOCX_MIME });
       const response = await api.templates.discover.post(
-        { file },
+        { templateId: toSafeId<"template">(key.templateId) },
         { fetch: { signal } },
       );
       if (response.error) {
@@ -1024,3 +1019,30 @@ export const mcpConnectionsOptions = (organizationId: string, userId: string) =>
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
+
+/** Clause publications and link edits refresh both schema discovery and slot previews. */
+export const invalidateTemplateClauseSources = async (
+  queryClient: QueryClient,
+  organizationId: string,
+) =>
+  await queryClient.invalidateQueries({
+    queryKey: knowledgeKeys.templates.all(organizationId),
+  });
+
+type ClauseSourceLink = {
+  id: string;
+  clauseVersionId: string | null;
+  clauseVariantId: string | null;
+  slotName: string | null;
+  clause: { currentVersion: number } | null;
+};
+export const templateClauseSourceStamp = (links: readonly ClauseSourceLink[]) =>
+  JSON.stringify(
+    links.map((link) => [
+      link.id,
+      link.slotName,
+      link.clauseVariantId,
+      link.clauseVersionId,
+      link.clause?.currentVersion,
+    ]),
+  );

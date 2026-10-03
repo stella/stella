@@ -14,6 +14,8 @@ import {
   resolveDecisionIdentity,
 } from "@stll/api-contract/decision-query-intent";
 import {
+  FACET_COUNT_TYPE,
+  SEARCH_PAGINATION_COMPLETE,
   countedSearchTotal,
   DEFAULT_SEARCH_EXCERPT,
   SEARCH_TOTAL_NOT_COUNTED,
@@ -88,6 +90,7 @@ import type {
   SearchFacetBucket,
 } from "@/api/lib/case-law/decision-search-facets";
 import {
+  cappedSourceFacetBuckets,
   groupCourtsByTier,
   labelSourceBuckets,
   readCaseLawSourceNames,
@@ -127,7 +130,10 @@ import {
 import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
-import { currentCaseLawCorpusProjection } from "@/api/lib/legal-search/case-law-corpus-projection";
+import {
+  caseLawCorpusDocumentCanRecur,
+  currentCaseLawCorpusProjection,
+} from "@/api/lib/legal-search/case-law-corpus-projection";
 import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated-decisions";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
@@ -161,6 +167,10 @@ import {
   type CorpusTermExpander,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
+import {
+  corpusQueryRankingMode,
+  corpusRankingCursorTarget,
+} from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
   type CorpusSearchCursor,
   decodeCorpusSearchCursor,
@@ -621,19 +631,42 @@ export const caseLawSearchPlan = ({
   `;
 
   const sourceFacetQuery = sql`
-    SELECT d.source_id::text AS value, ${judgmentCountSql} AS count
-    ${facetFrom}
-    WHERE ${ftsSearch.predicate}
-      ${datedFilter}
-      ${courtFilter}
-      ${courtListFilter}
-      ${countryFilter}
-      ${dateFromFilter}
-      ${dateToFilter}
-      ${typeFilter}
-      ${languageFilter}
-    GROUP BY d.source_id
-    ORDER BY count DESC
+    WITH source_matches AS NOT MATERIALIZED (
+      SELECT d.id, d.source_id, d.language_group_key
+      ${facetFrom}
+      WHERE ${ftsSearch.predicate}
+        ${datedFilter}
+        ${courtFilter}
+        ${courtListFilter}
+        ${countryFilter}
+        ${dateFromFilter}
+        ${dateToFilter}
+        ${typeFilter}
+        ${languageFilter}
+    )
+    SELECT source.id::text AS value, bucket.count
+    FROM case_law_sources source
+    CROSS JOIN LATERAL (
+      SELECT count(*)::int AS count
+      FROM (
+        SELECT 1
+        FROM source_matches matched
+        WHERE matched.source_id = source.id
+          AND NOT EXISTS (
+            SELECT 1
+            FROM source_matches sibling
+            WHERE sibling.source_id = matched.source_id
+              AND sibling.language_group_key = matched.language_group_key
+              AND sibling.id < matched.id
+            -- Preserve the indexed sibling probe instead of flattening it
+            -- into an anti-join that reads the entire matching set.
+            LIMIT 1 OFFSET 0
+          )
+        LIMIT ${LIMITS.caseLawSourceFacetCountCap + 1}
+      ) capped_judgments
+    ) bucket
+    WHERE bucket.count > 0
+    ORDER BY bucket.count DESC, source.name, source.id
     LIMIT ${LIMITS.caseLawFacetLimit}
   `;
 
@@ -862,7 +895,7 @@ const searchPostgresDecisions = async (
         Number(countResult.at(0)?.["total"]) || 0,
       );
 
-  const sourceBuckets = facetBuckets(sourceResultRaw);
+  const sourceBuckets = cappedSourceFacetBuckets(facetBuckets(sourceResultRaw));
   const facets: DecisionSearchFacets | null = parsedCursor
     ? null
     : {
@@ -891,6 +924,7 @@ const searchPostgresDecisions = async (
     facets,
     total,
     nextCursor,
+    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
     ...searchAnswer({
       body,
       interpretation,
@@ -1134,7 +1168,7 @@ type DecisionRowsQueryOptions = {
  */
 export const candidateDecisionRowsQuery = (
   tx: CaseLawPublicReadTransaction,
-  { filters, ids }: DecisionRowsQueryOptions,
+  { filters, generation, ids }: DecisionRowsQueryOptions,
 ) =>
   tx
     .select({
@@ -1147,6 +1181,12 @@ export const candidateDecisionRowsQuery = (
       // A directory court is ranked by its id, not by its name.
       courtId: caseLawDecisions.courtId,
       languageGroupKey: caseLawDecisions.languageGroupKey,
+      canRecur: sql<boolean>`CASE WHEN ${caseLawCorpusDocumentCanRecur(generation)}
+        THEN true ELSE EXISTS (
+        SELECT 1 FROM ${caseLawDecisions} sibling
+        WHERE sibling.language_group_key = ${caseLawDecisions.languageGroupKey}
+          AND sibling.id <> ${caseLawDecisions.id}
+      ) END`,
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
@@ -1330,6 +1370,7 @@ type RehydrateCaseLawCandidatesOptions = {
   /** The request's record of rows read so far; only ids absent from it are read. */
   hydrated?: HydratedDecisionRows | undefined;
   timeDbRead?: TimeDbRead | undefined;
+  excludedGroups?: ReadonlySet<string> | undefined;
 };
 
 /**
@@ -1429,6 +1470,7 @@ export const rehydrateCaseLawCandidates = async ({
   generation,
   hydrated = new Map(),
   timeDbRead = untimedDbRead,
+  excludedGroups = new Set(),
 }: RehydrateCaseLawCandidatesOptions) => {
   const ids = candidates
     .filter((candidate) => !hydrated.has(candidate.id))
@@ -1482,7 +1524,7 @@ export const rehydrateCaseLawCandidates = async ({
     courtTierById,
     sort: body.sort ?? DEFAULT_SEARCH_SORT,
   });
-  const { representatives } = collapseByLanguageGroup(
+  const { representatives, groupTokenById } = collapseByLanguageGroup(
     ranked,
     (hitId) => byId.get(hitId)?.languageGroupKey ?? null,
   );
@@ -1490,7 +1532,26 @@ export const rehydrateCaseLawCandidates = async ({
   // No context travels with the ranking: what a page displays is read once
   // the page is decided, for its ids only, so nothing the blend read has to
   // be carried through the scan.
-  return { context: null, ranked: representatives };
+  return {
+    context: null,
+    ranked: representatives.filter((hit) => {
+      const token = groupTokenById.get(hit.id);
+      if (token === undefined) {
+        return panic("Missing language group token for representative");
+      }
+      return !excludedGroups.has(token);
+    }),
+    groups: representatives.flatMap((hit) => {
+      if (!byId.get(hit.id)?.canRecur) {
+        return [];
+      }
+      const token = groupTokenById.get(hit.id);
+      if (token === undefined) {
+        return panic("Missing language group token for representative");
+      }
+      return [token];
+    }),
+  };
 };
 
 type DecisionIdentity = Extract<DecisionQueryIntent, { type: "identifier" }>;
@@ -1702,6 +1763,7 @@ const decisionHitsPage = ({
     facets,
     total,
     nextCursor,
+    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
   };
 };
 
@@ -1819,7 +1881,15 @@ const readCaseLawSearchFacets = async ({
       }),
       year,
       decisionType,
-      source: labelSourceBuckets(source, registry.value.nameById),
+      source: labelSourceBuckets(
+        source.map(({ value, label, count }) => ({
+          value,
+          label,
+          count,
+          countType: FACET_COUNT_TYPE.ESTIMATE,
+        })),
+        registry.value.nameById,
+      ),
       language,
     },
     total: countedSearchTotal(SEARCH_TOTAL_TYPE.ESTIMATE, read.value.total),
@@ -1918,7 +1988,16 @@ export const searchCorpusIndexDecisions = async (
     observeFailure(target.error, { sink: corpusIndexGroupNotReady });
     return status(503, { message: "Search is temporarily unavailable" });
   }
-  const { serving, route, contract, cursorTarget } = target.value;
+  const { serving, route, contract } = target.value;
+  const rankingMode = corpusQueryRankingMode({
+    configuredMode: envBase.CORPUS_INDEX_RANKING_MODE,
+    sort,
+    textTokenCount: tokenizeCorpusFreeText(body.query).length,
+  });
+  const cursorTarget = corpusRankingCursorTarget(
+    target.value.cursorTarget,
+    rankingMode,
+  );
   const generation = serving.generation;
   // Asserted before any engine work: every decision count this branch reports
   // is a cardinality over this field, so a generation that cannot aggregate
@@ -1987,6 +2066,7 @@ export const searchCorpusIndexDecisions = async (
         courtWeights,
         generation,
         hydrated,
+        excludedGroups: new Set(parsedCursor?.excludedGroups),
         timeDbRead: async (run) =>
           await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),
       });
@@ -2067,6 +2147,7 @@ export const searchCorpusIndexDecisions = async (
       facets: null,
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
       nextCursor: null,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       ...searchAnswer({
         body,
         interpretation,
@@ -2120,6 +2201,7 @@ export const searchCorpusIndexDecisions = async (
     order: corpusSearchOrder(sort),
     parsedCursor,
     scanTransport: caseLawScanTransport(sort),
+    rankingMode,
     snippetFields: ["text"],
     extractId: (hit) => {
       const id = hit["document_id"];
@@ -2143,6 +2225,7 @@ export const searchCorpusIndexDecisions = async (
         courtWeights,
         generation,
         hydrated,
+        excludedGroups: new Set(parsedCursor?.excludedGroups),
         timeDbRead: async (run) =>
           await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),
       }),
@@ -2228,11 +2311,15 @@ export const searchCorpusIndexDecisions = async (
   }
   return {
     ...page,
+    paginationOutcome: searchPage.paginationOutcome,
     ...searchAnswer({
       body,
       interpretation,
       hitCount: page.hits.length,
-      countsResultSet: parsedCursor === null && nextCursor === null,
+      countsResultSet:
+        parsedCursor === null &&
+        nextCursor === null &&
+        searchPage.paginationOutcome.type === "complete",
     }),
   };
 };

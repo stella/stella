@@ -148,3 +148,62 @@ for (const scenario of [
     expect(JSON.parse(stdout)).toEqual(scenario.expected);
   });
 }
+
+for (const failure of [
+  { sqlState: "42883", failureCause: "function_missing" },
+  { sqlState: "42501", failureCause: "execute_denied" },
+]) {
+  test(`database-only indicator ${failure.failureCause} records its structured warning without application settings`, async () => {
+    await Bun.write(EMPTY_ENV_FILE, "");
+    const runtimePath = nodePath.join(import.meta.dir, "backfill-runtime.ts");
+    const child = Bun.spawn({
+      cmd: [
+        "bun",
+        `--env-file=${EMPTY_ENV_FILE}`,
+        "--eval",
+        `const { createDatabaseLoadVerdictReader } = await import(${JSON.stringify(runtimePath)});
+         const { PgDialect } = await import('drizzle-orm/pg-core');
+         const dialect = new PgDialect();
+         const warnings = [];
+         const read = createDatabaseLoadVerdictReader({
+           db: { transaction: async (work) => await work({
+             execute: async (statement) => {
+               if (dialect.sqlToQuery(statement).sql.includes('set_config')) return [];
+               throw Object.assign(new Error('private diagnostic payload'), { code: ${JSON.stringify(failure.sqlState)} });
+             },
+           }) },
+           tableName: 'case_law_decisions',
+           clock: () => 1000,
+           warn: (...record) => { warnings.push(record); },
+         });
+         const verdict = await read();
+         await Bun.write(Bun.stdout, JSON.stringify({ verdict, warnings }));`,
+      ],
+      env: {
+        HOME: "/tmp",
+        NODE_ENV: "test",
+        PATH: process.env["PATH"] ?? "",
+      },
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+    const [stderr, stdout, exitCode] = await Promise.all([
+      new Response(child.stderr).text(),
+      new Response(child.stdout).text(),
+      child.exited,
+    ]);
+    expect(stderr).not.toContain(ENVIRONMENT_VALIDATION_MESSAGE);
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(stdout)).toEqual({
+      verdict: expect.objectContaining({ kind: "unknown" }),
+      warnings: [
+        [
+          "database_load_gate.indicators_unavailable",
+          { failureCause: failure.failureCause, sqlState: failure.sqlState },
+        ],
+      ],
+    });
+    expect(stderr).not.toContain("private diagnostic payload");
+    expect(stdout).not.toContain("private diagnostic payload");
+  });
+}

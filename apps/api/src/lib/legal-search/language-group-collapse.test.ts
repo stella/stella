@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 
@@ -40,6 +40,39 @@ const collapseInput = fc
   );
 
 describe("collapsing candidates by language group", () => {
+  test("every representative has one distinct stable group token", () => {
+    assertProperty(
+      "every representative has one distinct stable group token",
+      fc.property(collapseInput, ({ candidates, groups }) => {
+        const { representatives, groupTokenById } = collapseByLanguageGroup(
+          candidates,
+          groupOf(groups),
+        );
+        expect([...groupTokenById.keys()]).toEqual(
+          representatives.map(({ id }) => id),
+        );
+        expect(new Set(groupTokenById.values()).size).toBe(
+          representatives.length,
+        );
+        const reversed = collapseByLanguageGroup(
+          candidates.toReversed(),
+          groupOf(groups),
+        );
+        expect(new Set(reversed.groupTokenById.values())).toEqual(
+          new Set(groupTokenById.values()),
+        );
+      }),
+    );
+  });
+
+  test("singleton identities cannot collide with language group keys", () => {
+    const { groupTokenById } = collapseByLanguageGroup(
+      [{ id: "same" }, { id: "grouped" }],
+      (id) => (id === "grouped" ? "same" : null),
+    );
+    expect(new Set(groupTokenById.values()).size).toBe(2);
+  });
+
   test("every group is represented exactly once, by its first candidate", () => {
     fc.assert(
       fc.property(collapseInput, ({ candidates, groups }) => {

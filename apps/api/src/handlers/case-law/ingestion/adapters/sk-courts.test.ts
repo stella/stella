@@ -1,3 +1,7 @@
+import { panic } from "better-result";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
+
+import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 /**
  * What this adapter does with the record its publisher serves.
  *
@@ -14,11 +18,6 @@
  * are made against what the publisher sent rather than against a payload
  * written to match the code.
  */
-
-import { panic } from "better-result";
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
-
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -30,9 +29,14 @@ import {
   skCourtsAdapter,
   SK_COURTS_SOURCE_FIELD_PATHS,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+import { SK_COURTS_METADATA_URL_SCHEMA } from "./sk-courts.metadata-urls";
 
 describe("Slovak court backfill rejects unreadable publisher listings", () => {
   afterEach(() => mock.restore());
@@ -101,8 +105,11 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
         expect(page.isOk()).toBe(true);
         if (page.isOk()) {
           expect(
-            page.value.decisions.map(({ caseNumber }) => caseNumber),
-          ).toEqual(Array.from({ length: 99 }, () => good.spisovaZnacka));
+            Bun.deepEquals(
+              page.value.decisions.map(({ caseNumber }) => caseNumber),
+              Array.from({ length: 99 }, () => good.spisovaZnacka),
+            ),
+          ).toBe(true);
           expect(page.value.itemBuildFailures).toEqual({
             type: "item_build_failed",
             count: 1,
@@ -149,11 +156,14 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
         expect(page.isOk()).toBe(true);
         if (page.isOk()) {
           expect(
-            page.value.decisions.map(({ caseNumber }) => caseNumber),
-          ).toEqual([
-            ...Array.from({ length: 99 }, () => good.spisovaZnacka),
-            bad.spisovaZnacka,
-          ]);
+            Bun.deepEquals(
+              page.value.decisions.map(({ caseNumber }) => caseNumber),
+              [
+                ...Array.from({ length: 99 }, () => good.spisovaZnacka),
+                bad.spisovaZnacka,
+              ],
+            ),
+          ).toBe(true);
           expect(page.value.itemBuildFailures).toEqual({
             type: "item_build_failed",
             count: 1,
@@ -381,14 +391,14 @@ describe("a stored record reaches the targets the inventory declares", () => {
     }
     const { metadata } = outcome.result;
 
-    expect(metadata["area"]).toEqual(["Občianske právo"]);
-    expect(metadata["originCourt"]).toBe("Mestský súd Bratislava I");
-    expect(metadata["originCourtRegistreGuid"]).toBe("sud_102");
+    expect(Bun.deepEquals(metadata["area"], ["Občianske právo"])).toBe(true);
+    expect(metadata["originCourt"] === "Mestský súd Bratislava I").toBe(true);
+    expect(metadata["originCourtRegistreGuid"] === "sud_102").toBe(true);
     // The docket the file was opened under, beside the prefixed one the
     // receiving court renumbered it to. A citation names the first, and
     // before this the row held neither the name nor the number.
-    expect(metadata["originCaseNumber"]).toBe("7C/221/1991");
-    expect(outcome.result.caseNumber).toBe(TRANSFERRED_FILE_DOCKET);
+    expect(metadata["originCaseNumber"] === "7C/221/1991").toBe(true);
+    expect(outcome.result.caseNumber === TRANSFERRED_FILE_DOCKET).toBe(true);
   });
 
   test("the record's other labelled fields keep their targets", async () => {
@@ -403,22 +413,26 @@ describe("a stored record reaches the targets the inventory declares", () => {
     }
     const { metadata } = outcome.result;
 
-    expect(outcome.result.ecli).toBe("ECLI:SK:OSBA1:1997:1191896318.4");
-    expect(outcome.result.court).toBe("Okresný súd Bratislava I");
+    expect(outcome.result.ecli === "ECLI:SK:OSBA1:1997:1191896318.4").toBe(
+      true,
+    );
+    expect(outcome.result.court === "Okresný súd Bratislava I").toBe(true);
     expect(outcome.result.decisionDate).toBe("1997-06-20");
-    expect(outcome.result.decisionType).toBe("Rozsudok");
-    expect(metadata["decisionTypeKey"]).toBe("rozsudok");
-    expect(metadata["identifikacneCislo"]).toBe("1191896318");
-    expect(metadata["subArea"]).toEqual(["Ostatné"]);
-    expect(metadata["decisionNature"]).toEqual(["Zmeňujúce"]);
-    expect(metadata["documentName"]).toBe("Rozsudok_7C-221-1991.pdf");
-    expect(metadata["documentExtension"]).toBe("PDF");
-    expect(metadata["documentSize"]).toBe(95_553);
-    expect(metadata["updateDate"]).toBe("26.09.2023");
-    expect(metadata["updateDateIso"]).toBe("2023-09-26");
+    expect(outcome.result.decisionType === "Rozsudok").toBe(true);
+    expect(metadata["decisionTypeKey"] === "rozsudok").toBe(true);
+    expect(metadata["identifikacneCislo"] === "1191896318").toBe(true);
+    expect(Bun.deepEquals(metadata["subArea"], ["Ostatné"])).toBe(true);
+    expect(Bun.deepEquals(metadata["decisionNature"], ["Zmeňujúce"])).toBe(
+      true,
+    );
+    expect(metadata["documentName"] === "Rozsudok_7C-221-1991.pdf").toBe(true);
+    expect(metadata["documentExtension"] === "PDF").toBe(true);
+    expect(metadata).toHaveProperty("documentSize", 95_553);
+    expect(metadata["updateDate"] === "26.09.2023").toBe(true);
+    expect(metadata["updateDateIso"] === "2023-09-26").toBe(true);
     // The name is the judge's or a senior court officer's and the record says
     // which nowhere, so it stays a stated name rather than a bench role.
-    expect(metadata["judge"]).toBe("JUDr. Anton Mihalovits");
+    expect(metadata["judge"] === "JUDr. Anton Mihalovits").toBe(true);
     expect(outcome.result.judges).toBeUndefined();
   });
 
@@ -521,9 +535,9 @@ describe("derived general-court metadata", () => {
   test("absent documents have no public API link and absent text is not published", () => {
     const decision = assembleSkCourtsDecision({ item, detail: null });
     expect(decision?.sourceUrl).toBeUndefined();
-    expect(decision?.metadata["sourceUrlStatus"]).toBe(
-      "not-published-by-source",
-    );
+    expect(
+      decision?.metadata["sourceUrlStatus"] === "not-published-by-source",
+    ).toBe(true);
     expect(decision?.textFields.headnote).toEqual({
       type: "absent",
       reason: "not_published",
@@ -541,7 +555,7 @@ describe("derived general-court metadata", () => {
       detail: { dokument: { url } },
     });
     expect(decision?.sourceUrl).toBe(url);
-    expect(decision?.metadata["sourceUrlStatus"]).toBe("published");
+    expect(decision?.metadata["sourceUrlStatus"] === "published").toBe(true);
   });
 
   test("calendar-invalid dates remain stated and carry a derived defect", () => {
@@ -550,24 +564,155 @@ describe("derived general-court metadata", () => {
         item,
         detail: { updateDate },
       });
-      expect(decision?.metadata["updateDate"]).toBe(updateDate);
+      expect(decision?.metadata["updateDate"] === updateDate).toBe(true);
       expect(decision?.metadata["updateDateIso"]).toBeUndefined();
-      expect(decision?.metadata["updateDateDefect"]).toEqual({
-        type: "invalid-publisher-date",
-        value: updateDate,
-      });
+      expect(
+        Bun.deepEquals(decision?.metadata["updateDateDefect"], {
+          type: "invalid-publisher-date",
+          value: updateDate,
+        }),
+      ).toBe(true);
     }
   });
 });
 
-test("rejected source links preserve the publisher-stated URL", () => {
+test("rejected source links retain plain publisher-stated text", () => {
   for (const url of ["data:text/plain,blocked", "not a URL", "", "   "]) {
     const decision = assembleSkCourtsDecision({
       item: { spisovaZnacka: "1C/1/2024", sud: { nazov: "Okresný súd" } },
       detail: { dokument: { url } },
     });
     expect(decision?.sourceUrl).toBeUndefined();
-    expect(decision?.metadata["sourceUrlStatus"]).toBe("rejected-url");
-    expect(decision?.metadata["statedSourceUrl"]).toBe(url);
+    expect(decision?.metadata).toHaveProperty(
+      "sourceUrlStatus",
+      "rejected-url",
+    );
+    expect(decision?.metadata).toHaveProperty("statedSourceUrl", url.trim());
+    expect(decision?.metadata["metadataUrlDiagnostics"]).toBeUndefined();
   }
+});
+
+describe("declared metadata URLs remain scalar across projection and reload", () => {
+  for (const entry of [
+    { input: null, expected: null },
+    { input: "", empty: true },
+    { input: "   ", empty: true },
+    {
+      input: "https://publisher.example/item?a=1&amp;b=2",
+      expected: "https://publisher.example/item?a=1&amp;b=2",
+    },
+    {
+      input: "https://publisher.example/item?a=1&amp;amp;b=2",
+      expected: "https://publisher.example/item?a=1&amp;amp;b=2",
+    },
+    {
+      input: "https://publisher.example/item?a=1&b=2",
+      expected: "https://publisher.example/item?a=1&b=2",
+    },
+    {
+      input: "  https://publisher.example/item?x=%26amp%3B  ",
+      expected: "https://publisher.example/item?x=%26amp%3B",
+    },
+    { input: "/item?a=1&amp;b=2", reason: "invalid-url" },
+    { input: "ftp://publisher.example/item", reason: "unsafe-protocol" },
+    {
+      input: '<a href="https://publisher.example/item">link</a>',
+      reason: "invalid-url",
+    },
+  ]) {
+    test(String(entry.input), async () => {
+      const { input } = entry;
+      const decision =
+        assembleSkCourtsDecision({
+          item: {
+            spisovaZnacka: "1C/1/2024",
+            guid: "decision-id",
+            sud: { nazov: "Okresný súd" },
+          },
+          detail: {
+            dokument: { url: input },
+            odkazovanePredpisy: [{ nazov: "Zákon", url: input }],
+          },
+        }) ?? panic("URL regression payload built no decision");
+      const repeated = toPlainTextIngestionResult(
+        decision,
+        SK_COURTS_METADATA_URL_SCHEMA,
+      ).unwrap().metadata;
+      const serializedMetadata = JSON.stringify(decision.metadata);
+      const restored = toPlainTextMetadataObject(
+        rehydrateMetadataUrls(
+          JSON.parse(serializedMetadata),
+          SK_COURTS_METADATA_URL_SCHEMA,
+        ),
+        SK_COURTS_METADATA_URL_SCHEMA,
+      ).unwrap();
+      const addresses = ["referencedLegislation[0].url"];
+      for (const metadata of [decision.metadata, repeated, restored]) {
+        for (const address of addresses) {
+          if ("expected" in entry) {
+            expect(metadata).toHaveProperty(address, entry.expected);
+          } else {
+            expect(metadata).not.toHaveProperty(address);
+          }
+        }
+        if ("empty" in entry) {
+          expect(metadata["metadataUrlDiagnostics"]).toBeUndefined();
+        }
+        if ("reason" in entry) {
+          expect(metadata).toHaveProperty(
+            "metadataUrlDiagnostics.entries",
+            expect.arrayContaining(
+              addresses.map((address) => ({ address, reason: entry.reason })),
+            ),
+          );
+        }
+      }
+    });
+  }
+});
+
+describe("Slovak detail refusals preserve listing-only decisions", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test.each([401, 403, 429])(
+    "a detail HTTP %s keeps the listed decision and advances the page",
+    async (status) => {
+      const stored = await storedDecision(TRANSFERRED_FILE_ID);
+      const raw: unknown = JSON.parse(stored.sourceRaw);
+      const listing = isRecord(raw) ? raw["listItem"] : undefined;
+      if (!isRecord(listing)) {
+        panic("the recorded decision has no listing item");
+      }
+      let detailRequests = 0;
+      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.searchParams.has("page")) {
+          return Response.json({ rozhodnutieList: [listing], numFound: 1 });
+        }
+        if (url.pathname.includes("/v1/sud/")) {
+          return new Response("registry unavailable", { status: 404 });
+        }
+        expect(
+          decodeURIComponent(url.pathname).endsWith(`/${TRANSFERRED_FILE_ID}`),
+        ).toBe(true);
+        detailRequests += 1;
+        return new Response("refused", { status });
+      });
+
+      const page = (await skCourtsAdapter.fetchPage(null, {})).unwrap();
+      expect(detailRequests).toBe(1);
+      expect(page.decisions).toHaveLength(1);
+      const decision = page.decisions.at(0);
+      expect(decision?.caseNumber === TRANSFERRED_FILE_DOCKET).toBe(true);
+      const parts = decodeSourceRawEnvelope(decision?.sourceRaw ?? "");
+      expect(parts?.["listing"]).toBe(JSON.stringify(listing));
+      expect(parts?.["detail"]).toBeUndefined();
+      expect(page.nextCursor).not.toBeNull();
+    },
+  );
 });

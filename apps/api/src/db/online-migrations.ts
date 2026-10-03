@@ -1,11 +1,17 @@
 import { panic, Result } from "better-result";
 
 import {
+  DOCUMENT_OUTSTANDING_DATE_INDEX,
+  DOCUMENT_OUTSTANDING_INDEX,
+} from "@/api/lib/legal-search/sk-document-outstanding-index";
+
+import {
   REWRITTEN_MIGRATION_INDEXES,
   type RequiredMigrationIndex,
 } from "../lib/db/migration-history";
 import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
+import { CORPUS_PROJECTION_CLEANUP_STALL_REPAIR } from "./corpus-projection-cleanup-stall-repair";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import { DECISION_DATE_CEILING_REPAIR } from "./decision-date-ceiling-repair";
 import { createOnlineIndexGate } from "./online-index-gate";
@@ -71,6 +77,15 @@ type OnlineIndex = RequiredMigrationIndex & {
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql:
+      'CREATE INDEX CONCURRENTLY "rate_entries_table_role_from_idx" ON public."rate_entries" USING btree ("rate_table_id", "role", "effective_from")',
+    definitionBody:
+      "ON public.rate_entries USING btree (rate_table_id, role, effective_from)",
+    isUnique: false,
+    name: "rate_entries_table_role_from_idx",
+    tableName: "rate_entries",
+  },
+  {
+    createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "session_priorTokenHash_idx" ON public."session" USING btree ("prior_token_hash")',
     definitionBody: "ON public.session USING btree (prior_token_hash)",
     isUnique: true,
@@ -121,6 +136,8 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "case_law_decisions_provision_scope_cursor_idx",
     tableName: "case_law_decisions",
   },
+  DOCUMENT_OUTSTANDING_INDEX,
+  DOCUMENT_OUTSTANDING_DATE_INDEX,
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "case_law_decisions_docket_family_key_idx" ON public."case_law_decisions" USING btree ("docket_family_key") WHERE "docket_family_key" IS NOT NULL',
@@ -237,6 +254,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "workspace_views_correspondence_uidx" ON public."workspace_views" USING btree ("workspace_id") WHERE ("layout" ->> \'type\') = \'correspondence\'',
+    definitionBody:
+      "ON public.workspace_views USING btree (workspace_id) WHERE ((layout ->> 'type'::text) = 'correspondence'::text)",
+    isUnique: true,
+    name: "workspace_views_correspondence_uidx",
+    tableName: "workspace_views",
+  },
+  {
+    createSql:
       'CREATE INDEX CONCURRENTLY "report_exports_workspace_requester_created_idx" ON public."report_exports" USING btree ("workspace_id", "requested_by", "created_at", "id")',
     definitionBody:
       "ON public.report_exports USING btree (workspace_id, requested_by, created_at, id)",
@@ -316,6 +342,10 @@ type OnlineIndexReplacement = {
 
 const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
   {
+    legacyName: "case_law_decisions_document_pending_date_idx",
+    replacementNames: [DOCUMENT_OUTSTANDING_DATE_INDEX.name],
+  },
+  {
     legacyName: "case_law_decisions_source_case_lang_idx",
     replacementNames: [
       "case_law_decisions_source_document_idx",
@@ -360,6 +390,7 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
+  CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
   // Not behind one migration: the OAuth resource set is derived from the MCP
   // audiences in application code, so it is the code that moves and the rows
   // that follow. Its completion is the startup census, so the deploy that

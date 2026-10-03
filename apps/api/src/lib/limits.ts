@@ -12,6 +12,7 @@ import {
   VIEW_SORTS_MAX,
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "@stll/api-contract";
+import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import {
   CHAT_CONTEXT_FILE_MAX_BYTES,
@@ -273,6 +274,8 @@ export const LIMITS = {
   sseHeartbeatMs: 15_000,
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
+  clauseExpectedBodyTextChars: 10 * 1024 * 1024,
+  clauseExpectedBodyParagraphs: 100_000,
   templateClausesPerTemplate: 50,
   templateVersionsPerTemplate: 50,
   /** Approval-snapshot history per playbook (one row per `approve` call, never
@@ -526,6 +529,7 @@ export const LIMITS = {
   caseLawSitemapShardUrlLimit: 5000,
   /** Max child sitemap entries in one sitemap index by protocol. */
   caseLawSitemapIndexEntryLimit: 50_000,
+  caseLawSourceFacetCountCap: 1000,
   caseLawFacetLimit: 20,
   /**
    * Buckets a facet aggregation asks the engine for, before the display cap.
@@ -557,6 +561,7 @@ export const LIMITS = {
   caseLawLatestPerCourt: 5,
   legislationListPageSizeDefault: 20,
   legislationListPageSizeMax: 100,
+  publicStatuteSearchPageSizeMax: PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX,
   /** Rows per list on the law home's legislation shelf. */
   legislationShelfPerList: 5,
   /** Days either side of today the legislation shelf looks at. */
@@ -814,6 +819,9 @@ export const API_RATE_LIMITS = {
   /** REST API: 1000 req/min per IP. Covers normal navigation
    *  (5-10 requests per page load × frequent workspace switching). */
   api: { duration: 60_000, max: 1000 },
+  /** Public statute full-text search: 30 req/min per IP, separate from
+   *  navigation so an unauthenticated search loop has a bounded budget. */
+  publicStatuteSearch: { duration: 60_000, max: 30 },
   /** Skill URL discovery/import: 10 req/min per IP. Each request performs
    *  bounded outbound source fetches, so this separate cap prevents the
    *  general API budget from amplifying third-party traffic. */

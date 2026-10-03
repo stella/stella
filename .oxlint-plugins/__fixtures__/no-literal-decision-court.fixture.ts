@@ -84,10 +84,30 @@ declare const fetchListing: (options: { courtFilter?: string }) => void;
 // expect-clean: no-literal-decision-court/no-literal-decision-court
 fetchListing({ courtFilter: "AUSL" });
 
+const quarantineRow = {
+  court: "",
+  isListingOnly: true,
+  caseNumberIsPlaceholder: true,
+};
+
+const emptyCourtRow = {
+  // oxlint-disable-next-line no-literal-decision-court/no-literal-decision-court -- fixture: an ordinary row cannot silently omit its deciding court
+  court: "",
+};
+
+const emptyListingCourt = {
+  isListingOnly: true,
+  // oxlint-disable-next-line no-literal-decision-court/no-literal-decision-court -- fixture: listing-only without a quarantined placeholder still attributes a court
+  court: "",
+};
+
 export {
   assertedLiteralCourtRow,
   literalCourtRow,
   recordFieldRow,
   resolvedRow,
   templateCourtRow,
+  quarantineRow,
+  emptyCourtRow,
+  emptyListingCourt,
 };

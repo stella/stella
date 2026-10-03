@@ -79,8 +79,8 @@ export const normalizeUserShortcutsField = (
     return a > b ? 1 : 0;
   };
 
-  const normalized: Record<string, string> = {};
-  for (const [id, binding] of entries.toSorted(byId)) {
+  const sorted = entries.toSorted(byId);
+  for (const [id, binding] of sorted) {
     if (id.length === 0 || id.length > MAX_SHORTCUT_ID_LENGTH) {
       return rejectUserShortcuts();
     }
@@ -90,8 +90,7 @@ export const normalizeUserShortcutsField = (
     if (binding.length > MAX_SHORTCUT_BINDING_LENGTH) {
       return rejectUserShortcuts();
     }
-    normalized[id] = binding;
   }
 
-  return Result.ok(JSON.stringify(normalized));
+  return Result.ok(JSON.stringify(Object.fromEntries(sorted)));
 };

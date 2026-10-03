@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { STATUTE_ALIASES } from "@stll/api-contract/statute-aliases";
+
 import {
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
@@ -24,15 +26,16 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { isAfterSearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
+import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
 import {
   inForceToday,
   legislationVersionRef,
 } from "@/api/lib/legal-search/legislation-validity-window";
-import { legislationWorkToken } from "@/api/lib/legal-search/legislation-work-collapse";
 import {
   legislationWorkRefKey,
+  readNamedLegislationWorks,
   syncLegislationWorkNamesTx,
 } from "@/api/lib/legal-search/legislation-work-names";
 import type {
@@ -119,6 +122,49 @@ const VERSIONS = [
   vatAmendment,
 ];
 
+// Alias targets are derived from their owner; added documents have no search
+// projection, so these identity lookups cannot change the paging fixtures.
+const aliasTargetSeeds = [
+  ...new Map(
+    Object.values(STATUTE_ALIASES.cze).map(
+      (target) =>
+        [
+          `${target.collection}/${target.year}/${target.number}`,
+          target,
+        ] as const,
+    ),
+  ).values(),
+]
+  .filter(
+    (target) =>
+      !VERSIONS.some(
+        (seed) => seed.eli === eli(`${target.year}/${target.number}`),
+      ),
+  )
+  .map((target) =>
+    version(
+      `${target.year}/${target.number}`,
+      target.label,
+      "2024-01-01",
+      null,
+    ),
+  );
+const domesticSameNumber = version(
+  "2008/57",
+  "57/2008 Sb.",
+  "2008-01-01",
+  null,
+);
+const internationalSameNumber = {
+  ...version("2008/57", "57/2008 Sb. m. s.", "2008-01-01", null),
+  eli: "https://example.test/eli/cz/sm/2008/57",
+};
+const IDENTITY_LOOKUP_VERSIONS = [
+  ...aliasTargetSeeds,
+  domesticSameNumber,
+  internationalSameNumber,
+];
+
 let client: PGlite;
 let db: ReturnType<typeof drizzle>;
 let legislationDb: LegislationReadDb;
@@ -170,6 +216,19 @@ beforeAll(
         versionValidFrom: seed.validFrom,
         versionValidTo: seed.validTo,
         contentHash: `hash-${String(index)}`,
+      })),
+    );
+    await db.insert(legislationDocuments).values(
+      IDENTITY_LOOKUP_VERSIONS.map((seed, index) => ({
+        id: seed.id,
+        sourceId,
+        eli: seed.eli,
+        title: seed.title,
+        country: "CZE",
+        language: "cs",
+        versionValidFrom: seed.validFrom,
+        versionValidTo: seed.validTo,
+        contentHash: `identity-lookup-${String(index)}`,
       })),
     );
     // The excerpt configuration the Postgres path highlights with.
@@ -226,7 +285,7 @@ beforeAll(
         status: "applied" as const,
         appendStartedAt: new Date(),
         appendCommittedAt: new Date(),
-        expectedDocumentCount: 1,
+        expectedDocumentCount: entityId === vat.id ? 3 : 1,
         appliedAt: new Date(),
       })),
     );
@@ -335,6 +394,80 @@ describe("one hit per act", () => {
 });
 
 describe("acts the query names come first", () => {
+  test.each([
+    "Výklad smlouvy podle zákona č. 89/2012 Sb. při náhradě škody",
+    "Výklad smlouvy podle OZ při náhradě škody",
+    "Vyklad smlouvy podle NOZ pri nahrade skody",
+    "Výklad smlouvy podle občanského zákoníku a § 2051 zákona č. 89/2012 Sb.",
+  ])(
+    "a reference inside %s pins the act even when only its amendment was scanned",
+    async (query) => {
+      const scan: [VersionSeed, number][] = [[amendment, 0.9]];
+      expect(scan.some(([seed]) => seed.eli === codeCurrent.eli)).toBe(false);
+
+      const result = await rehydrate(query, scan);
+
+      expect(ids(result)).toEqual([
+        String(codeCurrent.id),
+        String(amendment.id),
+      ]);
+    },
+  );
+
+  test.each(Object.entries(STATUTE_ALIASES.cze))(
+    "the whole-query shared alias %s resolves to its declared act",
+    async (alias, target) => {
+      const named = await legislationDb(
+        async (tx) =>
+          await readNamedLegislationWorks(tx, {
+            query: alias,
+            country: "CZE",
+          }),
+      );
+
+      expect(named.map((work) => work.eli)).toEqual([
+        `https://example.test/eli/cz/${target.collection}/${target.year}/${target.number}`,
+      ]);
+      expect(named.every((work) => work.fromCitation)).toBe(true);
+    },
+  );
+
+  test.each([
+    "Použití oz při výkladu smlouvy",
+    "Použití noz při výkladu smlouvy",
+    "Použití sr při vyřizování žádosti",
+    "Občan předložil občanský průkaz",
+    "Společnost předložila zakladatelskou listinu",
+    "Použití obc. zak. při výkladu smlouvy",
+    "Občanský průkaz občana obsahuje jeho jméno",
+    "Při zakladatelské listině společnosti se ověřuje podpis",
+  ])("ordinary prose %s never pins an alias target", async (query) => {
+    const named = await legislationDb(
+      async (tx) =>
+        await readNamedLegislationWorks(tx, { query, country: "CZE" }),
+    );
+    expect(named).toEqual([]);
+
+    const result = await rehydrate(query, [[amendment, 0.9]]);
+    expect(ids(result)).toEqual([String(amendment.id)]);
+  });
+
+  test.each([
+    ["Výklad zákona č. 57/2008 Sb.", domesticSameNumber],
+    ["Výklad smlouvy č. 57/2008 Sb. m. s.", internationalSameNumber],
+  ] as const)(
+    "the collection in %s selects only that act",
+    async (query, expected) => {
+      expect(domesticSameNumber.eli).not.toBe(internationalSameNumber.eli);
+      const named = await legislationDb(
+        async (tx) =>
+          await readNamedLegislationWorks(tx, { query, country: "CZE" }),
+      );
+
+      expect(named.map((work) => work.eli)).toEqual([expected.eli]);
+    },
+  );
+
   test("a name in the act's own title, corroborated by a citation, pins the act in force", async () => {
     const result = await rehydrate("Občanský zákoník", [
       [old1964, 0.9],
@@ -371,8 +504,31 @@ describe("acts the query names come first", () => {
 });
 
 describe("acts an earlier scan window showed", () => {
+  test("only recurring Works consume the carried budget, including the cursor Work", async () => {
+    const result = await rehydrate("smlouva", [
+      [amendment, 0.9],
+      [vat, 0.8],
+      [code2014, 0.7],
+    ]);
+    const tokenOf = (seed: VersionSeed) =>
+      corpusSearchGroupToken(
+        legislationWorkRefKey({ sourceId, eli: seed.eli, language: "cs" }),
+      );
+    expect(new Set(result.groups)).toEqual(
+      new Set([tokenOf(vat), tokenOf(code2014)]),
+    );
+    expect(ids(result)).toContain(String(amendment.id));
+
+    const continuation = await rehydrate(
+      "smlouva",
+      [[vat, 0.8]],
+      String(amendment.id),
+    );
+    expect(continuation.groups).toContain(tokenOf(amendment));
+  });
+
   test("stay off the page when the cursor carries them", async () => {
-    const codeToken = legislationWorkToken(
+    const codeToken = corpusSearchGroupToken(
       legislationWorkRefKey({ sourceId, eli: code2014.eli, language: "cs" }),
     );
     const scan = candidates([code2014, 0.9], [old1964, 0.5]);
@@ -398,6 +554,7 @@ describe("acts an earlier scan window showed", () => {
 
 describe("the Postgres search path", () => {
   const searchDependencies = {
+    provider: "pg-fts",
     loadSearchConfigs: async () =>
       await Promise.resolve([
         {
@@ -408,6 +565,35 @@ describe("the Postgres search path", () => {
         },
       ]),
   } satisfies NonNullable<Parameters<typeof searchLegislationHandler>[3]>;
+
+  test.each([
+    ["OZ", STATUTE_ALIASES.cze.oz],
+    ["ZP", STATUTE_ALIASES.cze.zp],
+    ["TrZ", STATUTE_ALIASES.cze.trz],
+    ["OSŘ", STATUTE_ALIASES.cze.osr],
+  ] as const)(
+    "the embedded abbreviation %s reaches the public search result as a strict pin",
+    async (abbreviation, target) => {
+      const response = await searchLegislationHandler(
+        {
+          query: `Použití ${abbreviation} při výkladu`,
+          jurisdiction: "CZE",
+          limit: 10,
+        },
+        legislationDb,
+        "unobserved",
+        searchDependencies,
+      );
+      if (!("items" in response)) {
+        panic("the search refused an embedded act abbreviation");
+      }
+      const firstHit = response.items.at(0);
+      expect(firstHit?.eli).toBe(
+        `https://example.test/eli/cz/${target.collection}/${target.year}/${target.number}`,
+      );
+      expect(firstHit?.match).toEqual({ type: "strict" });
+    },
+  );
 
   /** Every page of a query, `limit` hits at a time. */
   const allPages = async (query: string, limit: number) => {
@@ -437,6 +623,42 @@ describe("the Postgres search path", () => {
     }
     return panic("the search never reached its last page");
   };
+
+  test("an issued Postgres cursor is bound to its query and filters", async () => {
+    const body = { query: "smlouva", jurisdiction: "CZE", limit: 1 };
+    const page = await searchLegislationHandler(
+      body,
+      legislationDb,
+      "unobserved",
+      searchDependencies,
+    );
+    if (!("items" in page) || page.nextCursor === null) {
+      panic("the fixture did not issue a Postgres cursor");
+    }
+    const control = await searchLegislationHandler(
+      { ...body, cursor: page.nextCursor },
+      legislationDb,
+      "unobserved",
+      searchDependencies,
+    );
+    if (!("items" in control)) {
+      panic("the search refused its own cursor");
+    }
+    expect(control.items.length).toBeGreaterThan(0);
+    for (const change of [{ query: "náhrada" }, { language: "cs" }]) {
+      // db-await-in-loop: each replay changes an independent request field
+      const response = await searchLegislationHandler(
+        { ...body, ...change, cursor: page.nextCursor },
+        legislationDb,
+        "unobserved",
+        searchDependencies,
+      );
+      expect(response).toMatchObject({
+        code: 400,
+        response: { message: "Invalid cursor" },
+      });
+    }
+  });
 
   test("shows each act once, as its current version, across pages", async () => {
     const pages = await allPages("smlouva", 2);

@@ -45,10 +45,12 @@ const RUNTIME_PREFIXES = [
   "apps/web/src/",
   "apps/web/public/",
   "apps/web/scripts/",
-  "scripts/network-baseline-scope",
+  "scripts/network-baseline-",
   // Helpers read these from disk (e.g. the uploaded document), so the import
   // graph cannot see them.
   "apps/web/e2e/fixtures/",
+  "apps/web/e2e/network-budgets/",
+  ".github/actions/prepare-network-baseline/",
   ".github/actions/setup-e2e-stack/",
   ".github/actions/setup-production-e2e/",
   ".github/actions/setup-playwright/",

@@ -2,6 +2,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { LEGISLATION_SEARCH_MATCH_TYPES } from "@stll/api-contract/search";
 
 import {
   safeHandlerErrorResponseSchema,
@@ -12,9 +13,10 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
-import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
+import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { tPublicCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
+import { searchPaginationOutcomeSchema } from "@/api/lib/search/pagination-outcome-schema";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
 export const PUBLIC_JURISDICTIONS_DESCRIPTION =
@@ -29,7 +31,7 @@ export const searchLegislationBodySchema = t.Object({
   // showed, so the cursor may be longer than a bare keyset.
   cursor: t.Optional(
     tPaginationCursor({
-      maxChars: CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+      maxChars: CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
     }),
   ),
   jurisdiction: t.Optional(
@@ -52,6 +54,12 @@ export const searchLegislationSuccessResponseSchema = t.Object(
     items: t.Array(
       t.Object(
         {
+          match: t.Object(
+            {
+              type: t.UnionEnum(LEGISLATION_SEARCH_MATCH_TYPES),
+            },
+            { additionalProperties: false },
+          ),
           documentId: t.String(),
           eli: t.String(),
           slug: nullableStringSchema,
@@ -69,6 +77,7 @@ export const searchLegislationSuccessResponseSchema = t.Object(
       ),
     ),
     nextCursor: nullableStringSchema,
+    paginationOutcome: searchPaginationOutcomeSchema,
     total: searchTotalSchema,
   },
   { additionalProperties: false },

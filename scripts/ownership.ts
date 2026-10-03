@@ -160,6 +160,11 @@ export const ROOT_CONNECTION_DOORS = [
           reason:
             "The review-gate resolver files the notice when an approval finishes the run.",
         },
+        {
+          path: "apps/api/src/handlers/fields/kanban-placement/update.ts",
+          reason:
+            "Kanban collects the resolver's run-derived notice and files it after its outer transaction commits.",
+        },
       ],
     },
   },
@@ -206,7 +211,7 @@ export const ROOT_CONNECTION_DOORS = [
         "apps/api/src/handlers/entities/copy.ts",
         "apps/api/src/handlers/entities/create.ts",
         "apps/api/src/handlers/entities/duplicate.ts",
-        "apps/api/src/handlers/entities/rename.ts",
+        "apps/api/src/handlers/entities/rename-operation.ts",
         "apps/api/src/handlers/entities/versions/delete.ts",
         "apps/api/src/handlers/fields/kanban-placement/update.ts",
         "apps/api/src/handlers/fields/upsert.ts",
@@ -335,6 +340,18 @@ const MODEL_REQUEST_NAMES = [
 ] as const;
 
 export const OWNERSHIP = [
+  {
+    id: "api-test-memory-planner",
+    capability: "Measured API test memory and batch composition",
+    owner: ["apps/api/scripts/test-batch-plan.ts"],
+    summary:
+      "The planner owns measured peak RSS, conservative unknown weights and automatic process isolation. Batch plans must fit their execution-class memory caps before a test starts.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["apps/api/scripts/test-peak-rss.json"],
+      allowed: [],
+    },
+  },
   {
     id: "model-request-send-mode",
     capability: "Sending a request to an AI model",
@@ -770,7 +787,10 @@ export const OWNERSHIP = [
   {
     id: "member-authorization",
     capability: "Deciding what a request's member role and credential may do",
-    owner: ["apps/api/src/lib/permission-authorization.ts"],
+    owner: [
+      "apps/api/src/lib/permission-authorization.ts",
+      "apps/web/src/lib/organization/role-assignment.logic.ts",
+    ],
     summary:
       "Every permission decision reads the request's `AuthorizedMemberRole`: " +
       "the member role together with the credential behind the request. A " +
@@ -779,7 +799,9 @@ export const OWNERSHIP = [
       "`hasManagementPermission` are the reads, and every handler context " +
       "builder sets the credential once, so no handler-level check can fall " +
       "back to the role's full authority. Reading the role table directly " +
-      "skips the credential.",
+      "skips the credential. The web organization role-policy owner derives " +
+      "session UI visibility and assignable roles from the shared role policy; " +
+      "API decisions still enforce the request credential.",
     enforcement: {
       kind: "import",
       specifiers: ["@stll/permissions"],
@@ -1320,6 +1342,23 @@ export const OWNERSHIP = [
       "The shared discriminated values make text presence and row-preview truncation explicit to API consumers. " +
       "The API owner classifies source values, converts them to storage metadata, " +
       "and reconstructs bounded public values; the adapter lint keeps protected keys behind that boundary.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "case-law-plain-text",
+    capability:
+      "Sanitizing publisher labels and metadata into branded plain text",
+    owner: [
+      "apps/api/src/lib/case-law/plain-text.ts",
+      "apps/api/src/lib/legal-search/plain-text-assembly.ts",
+      "apps/api/src/lib/case-law/plain-text-markup.ts",
+    ],
+    summary:
+      "The shared sanitizer owns the private PlainText brand, markup removal, " +
+      "and structural whitespace normalization. Adapters pass publisher text " +
+      "through this boundary; no-forged-plain-text rejects casts, type predicates, " +
+      "and parallel brand declarations outside the owner. The markup module " +
+      "shares the language-blind output predicate used by ingestion guards.",
     enforcement: { kind: "none" },
   },
   {

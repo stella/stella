@@ -1,3 +1,4 @@
+// parser-output-unchanged: for parsers that do not adopt the new row and text helpers, the inline walk excludes the same script/style tags as before.
 /**
  * Shared inline-tree utilities for case-law HTML parsers.
  *
@@ -16,6 +17,26 @@ import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 import type { Inline } from "@/api/handlers/case-law/document-ast";
 import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
+
+const EXCLUDED_HTML_TAGS = ["script", "style"];
+const EXCLUDED_HTML_SELECTOR = EXCLUDED_HTML_TAGS.join(", ");
+
+/** Content outside the decision text axis. */
+export const isExcludedHtmlTag = (tag: string): boolean =>
+  EXCLUDED_HTML_TAGS.includes(tag);
+
+/** Read text without mutating the source DOM or retaining non-content tags. */
+export const visibleHtmlText = (el: cheerio.Cheerio<AnyNode>): string => {
+  const copy = el.clone();
+  copy.find(EXCLUDED_HTML_SELECTOR).remove();
+  return copy.not(EXCLUDED_HTML_SELECTOR).text();
+};
+
+/** Nested table text belongs to the outer cell's inline tree, once. */
+export const ownTableRows = (table: cheerio.Cheerio<AnyNode>) =>
+  table
+    .children("tr")
+    .add(table.children("thead, tbody, tfoot").children("tr"));
 
 /**
  * Append text to an inline list, dropping empty strings and coalescing
@@ -129,7 +150,7 @@ export const walkInlines = (
 
       const tag = child.tagName.toLowerCase();
       // isTag() also matches <script>/<style>; never emit their raw text.
-      if (tag === "script" || tag === "style") {
+      if (isExcludedHtmlTag(tag)) {
         return;
       }
 
