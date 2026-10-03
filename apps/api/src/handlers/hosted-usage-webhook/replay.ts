@@ -246,11 +246,11 @@ export const replayProviderEvent = async (
         }),
     );
   }
-  const result = await Result.tryPromise({
+  const operation = await Result.tryPromise({
     try: async () =>
       await options.runTransaction(async (tx) => {
         if (options.mode === "apply") {
-          return await replayReceiptInTx({ ...options, tx });
+          return Result.ok(await replayReceiptInTx({ ...options, tx }));
         }
         await tx.execute(sql`SAVEPOINT provider_event_replay_preview`);
         const evaluated = await Result.tryPromise({
@@ -269,10 +269,7 @@ export const replayProviderEvent = async (
           sql`ROLLBACK TO SAVEPOINT provider_event_replay_preview`,
         );
         await tx.execute(sql`RELEASE SAVEPOINT provider_event_replay_preview`);
-        if (Result.isError(evaluated)) {
-          throw evaluated.error;
-        }
-        return evaluated.value;
+        return evaluated;
       }),
     catch: (cause) =>
       new ProviderEventReplayError({
@@ -280,6 +277,7 @@ export const replayProviderEvent = async (
         cause,
       }),
   });
+  const result = operation.andThen((evaluated) => evaluated);
   if (Result.isError(result)) {
     observeReplayError({
       error: result.error,
