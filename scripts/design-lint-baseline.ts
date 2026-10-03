@@ -3,7 +3,8 @@
 // `oxlint.config.ts` enables the tracked rules (the `@shadcn/lint` pair, the
 // local `no-raw-overflow-scroll` and `no-imported-class-constant`, the API
 // size-bound rules `require-bounded-request-schema` and
-// `no-unbounded-response-body`, and the function size limits `complexity`,
+// `no-unbounded-response-body`, `no-computed-key-record-assignment`, and the
+// function size limits `complexity`,
 // `max-lines-per-function` and `max-params`) for every file in their scope
 // except the ones this baseline lists per rule (scripts/design-lint-policy.ts
 // turns the rule off there, or down to its ceiling for a size limit). Those files carry merged-code debt; this guard holds each file's
@@ -96,6 +97,7 @@ const emptyBacklog = (): DesignLintBacklog => ({
   "no-imported-class-constant/no-imported-class-constant": {},
   "require-bounded-request-schema/require-bounded-request-schema": {},
   "no-unbounded-response-body/no-unbounded-response-body": {},
+  "no-computed-key-record-assignment/no-computed-key-record-assignment": {},
   "eslint/complexity": {},
   "eslint/max-lines-per-function": {},
   "eslint/max-params": {},

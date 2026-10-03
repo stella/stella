@@ -225,9 +225,9 @@ describe("Austrian official RIS court sources", () => {
       expect(result.isOk()).toBe(true);
       const decision = result.unwrap().decisions.at(0);
       expect(decision?.sourceDocumentId).toBe(id);
-      expect(decision?.caseNumber).toBe(caseNumber);
-      expect(decision?.court).toBe(court);
-      expect(decision?.decisionType).toBe("erkenntnis");
+      expect(decision?.caseNumber === caseNumber).toBe(true);
+      expect(decision?.court === court).toBe(true);
+      expect(decision?.decisionType === "erkenntnis").toBe(true);
       expect(new URL(urls.at(0) ?? "").searchParams.get("Applikation")).toBe(
         source.application,
       );

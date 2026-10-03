@@ -171,6 +171,7 @@ const collectTextRefWorkspaceIds = (
         ids.add(target.resource.id);
         break;
       case RESOURCE_TYPE.CASE_LAW_DECISION:
+      case RESOURCE_TYPE.USER:
         break;
       default:
         target satisfies never;

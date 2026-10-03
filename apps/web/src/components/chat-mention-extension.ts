@@ -5,7 +5,7 @@ import type { EntityKind, ResourceRef } from "@stll/api-contract";
 
 import { ChatMentionNode } from "@/components/chat-mention-node";
 
-export type { MentionCategory } from "@/components/chat/chat-mention-href";
+export type { ChatMentionCategory as MentionCategory } from "@/lib/api-contract";
 
 type ChatMentionOptionBase = {
   label: string;
@@ -22,6 +22,9 @@ export type ChatMentionOption =
        *  backend can recover workspace context while keeping model-facing
        *  markdown clean. */
       sourceWorkspaceId?: string;
+      /** The matter the entity lives in, always: the chip paints its glyph
+       *  in this matter's colour. Presentation only; the API drops it. */
+      matterId: string;
     })
   | (ChatMentionOptionBase & {
       category: "workspace";
@@ -68,6 +71,14 @@ export const ChatMention = MentionExtension.extend({
         renderHTML: (attrs: Record<string, unknown>) =>
           typeof attrs["mimeType"] === "string"
             ? { "data-mime-type": attrs["mimeType"] }
+            : {},
+      },
+      matterId: {
+        default: null,
+        parseHTML: (el: HTMLElement) => el.dataset["matterId"],
+        renderHTML: (attrs: Record<string, unknown>) =>
+          typeof attrs["matterId"] === "string"
+            ? { "data-matter-id": attrs["matterId"] }
             : {},
       },
       sourceWorkspaceId: {

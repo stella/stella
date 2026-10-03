@@ -1,6 +1,10 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  factoriesWhere,
+  SAFE_HANDLER_FACTORIES,
+} from "../apps/api/src/lib/safe-handler-factories.ts";
+import {
   filenameForContext,
   getImportedName,
   getImportLocalName,
@@ -18,6 +22,14 @@ const LIMITS_MODULE = "@/api/lib/limits";
 const NORMALIZER = "normalizeTenantPageLimit";
 const PAGE_VARIABLES = new Set(["limit", "pageSize", "windowSize"]);
 const REQUEST_ROOTS = new Set(["query", "body", "input", "parsed"]);
+// An anonymous factory exempts the file only when imported from the module
+// that defines it.
+const ANONYMOUS_HANDLER_FACTORY_MODULES: ReadonlyMap<string, string> = new Map(
+  factoriesWhere(({ context }) => context === "anonymous").map((name) => [
+    name,
+    SAFE_HANDLER_FACTORIES[name].module,
+  ]),
+);
 
 // Public corpus readers have their own page budgets and do not own a tenant
 // action. Native MCP tools stay in scope even when they call those readers.
@@ -136,7 +148,7 @@ export default eslintCompatPlugin({
             anonymousPublic = false;
             const filename = filenameForContext(context);
             if (
-              /\.oxlint-plugins\/__fixtures__\/require-tenant-page-limit\.fixture\.tsx?$/u.test(
+              /\.oxlint-plugins\/__fixtures__\/require-tenant-page-limit\.fixture(?:\.[a-z-]+)?\.tsx?$/u.test(
                 filename,
               )
             ) {
@@ -171,8 +183,9 @@ export default eslintCompatPlugin({
                 pageSources.defaults.add(local);
               }
               if (
-                node.source.value === "@/api/lib/api-handlers" &&
-                imported === "createSafePublicHandler"
+                imported !== null &&
+                ANONYMOUS_HANDLER_FACTORY_MODULES.get(imported) ===
+                  node.source.value
               ) {
                 anonymousPublic = true;
               }

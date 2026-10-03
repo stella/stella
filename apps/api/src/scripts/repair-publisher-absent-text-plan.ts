@@ -199,7 +199,9 @@ export const selectAbsentTextPageStatement = ({
   markers: readonly string[];
   pageSize: number;
   sourceId: SafeId<"caseLawSource">;
-}): SQL => sql`
+}): SQL =>
+  // sql-perf-allow: bounded by source cursor page LIMIT pageSize before count over page
+  sql`
   WITH page AS (
     SELECT d.id, d.created_at, d.metadata
       FROM case_law_decisions d

@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import { decisionDocketGrammarForJurisdiction } from "@stll/api-contract/decision-docket-grammar";
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
+import { parseStatuteQuery } from "@stll/api-contract/statute-query-intent";
 
 import { REGION_BY_COUNTRY } from "@/features/case-law/case-law-jurisdiction";
-import { parseStatuteQuery } from "@/features/statutes/statute-query-intent";
 import { isPublicStatuteCountry, STATUTE_COUNTRIES } from "@/lib/statute-route";
 import {
   LAW_HOME_JURISDICTION_CODES,

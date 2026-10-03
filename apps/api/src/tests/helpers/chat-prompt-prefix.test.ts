@@ -157,4 +157,22 @@ describe("the prompt prefix of a thread's model calls", () => {
       { block: { index: 1, segment: "messages" }, call: 3, extends: 2 },
     ]);
   });
+
+  test("starts over after a compaction and holds the calls after it", () => {
+    const ledger = createPromptPrefixLedger();
+    const record = (messages: ModelMessage[]) => {
+      ledger.record(
+        promptBlocksOf({ messages, systemPrompts: [SYSTEM], tools: TOOLS }),
+      );
+    };
+    record([user("Draft an NDA"), answer("Here"), user("Shorter")]);
+    ledger.compacted();
+    record([user("Summary: an NDA was drafted"), user("Shorter")]);
+    record([user("Summary: an NDA was rewritten"), user("Shorter")]);
+    // Only the call that rewrote the summary breaks: the compaction itself
+    // is sanctioned, and the calls after it must still extend each other.
+    expect(ledger.takeBreaks()).toMatchObject([
+      { block: { index: 0, segment: "messages" }, call: 2, extends: 1 },
+    ]);
+  });
 });

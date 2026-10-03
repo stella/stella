@@ -12,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 
+import { CLI_CLIENT_METADATA_PATH } from "./client-metadata-document.js";
 import { CLI_IDENTITY_SCOPES, LOGIN_TIMEOUT_MS } from "./constants.js";
 import { readCredentialFile } from "./credential-store.js";
 import { login } from "./login.js";
@@ -77,6 +78,8 @@ const DEFAULT_SUPPORTED = [
 type ProviderOptions = {
   readonly scopesSupported?: readonly string[];
   readonly registrationResponse?: () => Response;
+  /** Advertise client metadata document support under this issuer. */
+  readonly documentIssuer?: string;
   readonly tokenResponse?: (body: URLSearchParams) => Response;
 };
 
@@ -108,7 +111,10 @@ const startProvider = (options: ProviderOptions = {}) => {
       if (url.pathname === "/.well-known/oauth-authorization-server") {
         return Response.json({
           authorization_endpoint: `${origin}/authorize`,
-          issuer: origin,
+          issuer: options.documentIssuer ?? origin,
+          ...(options.documentIssuer
+            ? { client_id_metadata_document_supported: true }
+            : {}),
           registration_endpoint: `${origin}/register`,
           scopes_supported: options.scopesSupported ?? DEFAULT_SUPPORTED,
           token_endpoint: `${origin}/token`,
@@ -155,6 +161,7 @@ const driveCallback =
       "state",
       options.state ?? parsed.searchParams.get("state") ?? "",
     );
+    // swallow-ok: callback server may close after responding; login result and stored token are asserted by callers
     await fetch(callback).catch(() => {});
   };
 
@@ -239,6 +246,54 @@ describe("login orchestration", () => {
       expect(credential?.name).toBe("A Person");
       // The server's default org is set so `--org`-less commands resolve.
       expect(persisted.defaultOrgByServer[provider.url]).toBe("org-42");
+    } finally {
+      provider.close();
+    }
+  });
+
+  test("uses the published client document when the server accepts one", async () => {
+    const provider = startProvider({
+      documentIssuer: "https://api.stella.example/api/auth",
+    });
+    const authorized: { clientId: string | null } = { clientId: null };
+    onBrowserOpen = async (authorizeUrl) => {
+      authorized.clientId = new URL(authorizeUrl).searchParams.get("client_id");
+      await driveCallback()(authorizeUrl);
+    };
+
+    try {
+      const result = await login(
+        makeProcess(),
+        baseOptions(configDir, provider.url),
+        boundaries,
+      );
+
+      expect(Result.isOk(result)).toBe(true);
+      const clientId = `https://api.stella.example${CLI_CLIENT_METADATA_PATH}`;
+      expect(authorized.clientId).toBe(clientId);
+      expect(provider.counts.registration).toBe(0);
+      const persisted = await readCredentialFile(configDir);
+      expect(persisted.credentials.at(0)?.clientId).toBe(clientId);
+    } finally {
+      provider.close();
+    }
+  });
+
+  test("registers a client when the server's issuer cannot host a client document", async () => {
+    const provider = startProvider({
+      documentIssuer: "http://localhost:3001/api/auth",
+    });
+    onBrowserOpen = driveCallback();
+
+    try {
+      const result = await login(
+        makeProcess(),
+        baseOptions(configDir, provider.url),
+        boundaries,
+      );
+
+      expect(Result.isOk(result)).toBe(true);
+      expect(provider.counts.registration).toBe(1);
     } finally {
       provider.close();
     }

@@ -1,3 +1,6 @@
+// parser-output-unchanged: Public corpus address caps and global validation affect HTTP admission only.
+import * as v from "valibot";
+
 import {
   AGENT_SKILLS_CHAT_METADATA_MAX,
   CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX,
@@ -12,12 +15,15 @@ import {
   VIEW_SORTS_MAX,
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "@stll/api-contract";
+import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import {
   CHAT_CONTEXT_FILE_MAX_BYTES,
   CHAT_CONTEXT_FILE_MAX_MEGABYTES,
 } from "@stll/chat-limits";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
+
+import type { env } from "@/api/env";
 
 /** Hoisted so `versionFieldsScanLimit` can derive from it inside the same
  *  object literal instead of restating the page size. */
@@ -273,6 +279,8 @@ export const LIMITS = {
   sseHeartbeatMs: 15_000,
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
+  clauseExpectedBodyTextChars: 10 * 1024 * 1024,
+  clauseExpectedBodyParagraphs: 100_000,
   templateClausesPerTemplate: 50,
   templateVersionsPerTemplate: 50,
   /** Approval-snapshot history per playbook (one row per `approve` call, never
@@ -526,6 +534,7 @@ export const LIMITS = {
   caseLawSitemapShardUrlLimit: 5000,
   /** Max child sitemap entries in one sitemap index by protocol. */
   caseLawSitemapIndexEntryLimit: 50_000,
+  caseLawSourceFacetCountCap: 1000,
   caseLawFacetLimit: 20,
   /**
    * Buckets a facet aggregation asks the engine for, before the display cap.
@@ -557,6 +566,20 @@ export const LIMITS = {
   caseLawLatestPerCourt: 5,
   legislationListPageSizeDefault: 20,
   legislationListPageSizeMax: 100,
+  publicStatuteSearchPageSizeMax: PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX,
+  legislationSearchTextBytes: {
+    documentId: 36,
+    eli: 512 * 4,
+    slug: 256 * 4,
+    title: 4096,
+    country: 3 * 4,
+    language: 8 * 4,
+    documentType: 128 * 4,
+    status: 32 * 4,
+    effectiveDate: 32,
+    sourceUrl: 2048 * 4,
+    headline: 4096,
+  },
   /** Rows per list on the law home's legislation shelf. */
   legislationShelfPerList: 5,
   /** Days either side of today the legislation shelf looks at. */
@@ -863,3 +886,120 @@ export const API_RATE_LIMITS = {
    *  confirmation OTP email request limit: 5 requests per minute. */
   twoFactorManageOtp: { duration: 60_000, max: 5 },
 } as const;
+
+export type PublicCorpusLimitsConfiguration = Pick<
+  typeof env,
+  | "PUBLIC_LAW_DATABASE_POOL_MAX"
+  | "PUBLIC_LAW_DATABASE_URL"
+  | "DATABASE_ROOT_POOL_MAX"
+  | "PUBLIC_CORPUS_RESERVED_CONNECTIONS"
+  | "PUBLIC_CORPUS_ASSUMED_REPLICAS"
+  | "PUBLIC_CORPUS_SEARCH_P95_SECONDS"
+  | "PUBLIC_CORPUS_AGGREGATE_P95_SECONDS"
+  | "PUBLIC_CORPUS_SITEMAP_P95_SECONDS"
+  | "PUBLIC_CORPUS_SEARCH_ADDRESS_MAX"
+  | "PUBLIC_CORPUS_SEARCH_GLOBAL_MAX"
+  | "PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX"
+  | "PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX"
+>;
+
+/** Derive fleet request budgets from pool permits and assumed p95 latency.
+ * Defaults are initial estimates: tune replica count, latency and overrides
+ * against the first week's observations. Search may make 2–3 engine calls
+ * per request; these budgets count requests, not individual engine calls. */
+export const getPublicCorpusLimits = (
+  configuration: PublicCorpusLimitsConfiguration,
+) => {
+  const dedicatedPool = configuration.PUBLIC_LAW_DATABASE_URL !== undefined;
+  const rootReservation = Math.min(
+    configuration.DATABASE_ROOT_POOL_MAX,
+    configuration.PUBLIC_CORPUS_RESERVED_CONNECTIONS ??
+      Math.max(1, Math.floor(configuration.DATABASE_ROOT_POOL_MAX / 4)),
+  );
+  const pool = dedicatedPool
+    ? configuration.PUBLIC_LAW_DATABASE_POOL_MAX
+    : rootReservation;
+  const replicas = configuration.PUBLIC_CORPUS_ASSUMED_REPLICAS;
+  const totalConcurrency = dedicatedPool ? 3 * pool : rootReservation;
+  const searchConcurrency = Math.min(2 * pool, totalConcurrency);
+  const aggregateConcurrency = dedicatedPool
+    ? pool
+    : Math.max(1, Math.floor(rootReservation / 2));
+  type GlobalBudgetOptions = {
+    permits: number;
+    p95Seconds: number;
+    override: number | undefined;
+  };
+  const globalBudget = ({
+    permits,
+    p95Seconds,
+    override,
+  }: GlobalBudgetOptions) => {
+    const max =
+      override ??
+      Math.max(1, Math.floor((replicas * permits * 60) / p95Seconds));
+    v.parse(
+      v.pipe(
+        v.number(),
+        v.minValue(
+          2,
+          "Public corpus global request budgets must be at least 2",
+        ),
+      ),
+      max,
+    );
+    return { duration: 60_000, max, localMax: Math.floor(max / replicas) };
+  };
+  const searchGlobal = globalBudget({
+    permits: searchConcurrency,
+    p95Seconds: configuration.PUBLIC_CORPUS_SEARCH_P95_SECONDS,
+    override: configuration.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX,
+  });
+  const aggregateGlobal = globalBudget({
+    permits: aggregateConcurrency,
+    p95Seconds: configuration.PUBLIC_CORPUS_AGGREGATE_P95_SECONDS,
+    override: configuration.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX,
+  });
+  const sitemapGlobal = globalBudget({
+    permits: totalConcurrency,
+    p95Seconds: configuration.PUBLIC_CORPUS_SITEMAP_P95_SECONDS,
+    override: configuration.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX,
+  });
+  type AddressBudgetOptions = { configuredMax: number; globalMax: number };
+  const addressBudget = ({
+    configuredMax,
+    globalMax,
+  }: AddressBudgetOptions) => ({
+    duration: 60_000,
+    max: Math.min(configuredMax, Math.floor(globalMax / 2)),
+  });
+  return {
+    totalConcurrency,
+    classes: {
+      search: {
+        concurrency: searchConcurrency,
+        address: addressBudget({
+          configuredMax: configuration.PUBLIC_CORPUS_SEARCH_ADDRESS_MAX,
+          globalMax: searchGlobal.max,
+        }),
+        global: searchGlobal,
+      },
+      aggregate: {
+        concurrency: aggregateConcurrency,
+        address: addressBudget({
+          configuredMax: 60,
+          globalMax: aggregateGlobal.max,
+        }),
+        global: aggregateGlobal,
+      },
+      sitemap: {
+        address: addressBudget({
+          configuredMax: 10,
+          globalMax: sitemapGlobal.max,
+        }),
+        global: sitemapGlobal,
+      },
+      browse: { address: API_RATE_LIMITS.api },
+    },
+  };
+};

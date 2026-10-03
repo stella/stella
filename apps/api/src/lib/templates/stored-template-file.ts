@@ -15,8 +15,8 @@ import type { StoredFileScanState } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { validateDocxArchive } from "@/api/lib/docx-archive";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { scanErrorForHandler } from "@/api/lib/file-scan/scan-upload";
 import type { scanUpload } from "@/api/lib/file-scan/scan-upload";
+import { scanErrorForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   readStoredObject,

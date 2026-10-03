@@ -14,6 +14,7 @@ import { panic, Result } from "better-result";
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
 import { listSkillMetadata, readDocumentedChatReads } from "@stll/skills";
 
+import { isChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import {
   EAGER_CHAT_READ_TOOLS,
   toDocumentedChatReads,
@@ -35,6 +36,7 @@ import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-ad
 import { READ_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
+import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import { renderProjectionShape } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
@@ -64,24 +66,27 @@ import {
  */
 
 /**
- * The chat-projectable read tools, in registry order. Derived from the
+ * The reads a chat script may call, in registry order. Derived from the
  * `as const` registry array so each `access: "read"` element's `name` narrows
- * to the `RegistryReadToolName` union (no cast); the ref-field map then decides
- * chat projectability per tool.
+ * to the `RegistryReadToolName` union (no cast); the ref-field map decides chat
+ * projectability and the read script policy which of those are script
+ * functions.
  */
-export const chatProjectableReadToolNames =
-  (): readonly RegistryReadToolName[] => {
-    const names: RegistryReadToolName[] = [];
-    for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
-      if (definition.access !== "read") {
-        continue;
-      }
-      if (READ_TOOL_REF_FIELD_MAP[definition.name].chatProjectable) {
-        names.push(definition.name);
-      }
+export const chatScriptReadToolNames = (): readonly RegistryReadToolName[] => {
+  const names: RegistryReadToolName[] = [];
+  for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
+    if (definition.access !== "read") {
+      continue;
     }
-    return names;
-  };
+    if (
+      READ_TOOL_REF_FIELD_MAP[definition.name].chatProjectable &&
+      isChatScriptRead(definition.name)
+    ) {
+      names.push(definition.name);
+    }
+  }
+  return names;
+};
 
 /**
  * The `execute_typescript` runner that Stella's sandbox owns unchanged. Passed to
@@ -112,7 +117,7 @@ const chatReadToolDescription = (toolName: RegistryReadToolName): string => {
   const entry = READ_TOOL_REF_FIELD_MAP[toolName];
   if (!entry.chatProjectable) {
     // Non-projectable tools never enter the chat catalog
-    // (`chatProjectableReadToolNames` filters them out); the plain
+    // (`chatScriptReadToolNames` filters them out); the plain
     // description satisfies the type without inventing a shape.
     return definition.description;
   }
@@ -141,7 +146,7 @@ const buildChatReadTools = ({
     ...EAGER_CHAT_READ_TOOLS,
     ...documentedReads,
   ]);
-  return chatProjectableReadToolNames().map((toolName) => {
+  return chatScriptReadToolNames().map((toolName) => {
     const definition =
       getStaticMcpToolDefinition(toolName) ??
       panic(`Chat read tool ${toolName} is missing from the static registry`);
@@ -174,7 +179,7 @@ const buildChatReadTools = ({
 export type ChatCodeModeReadRunner = (
   toolName: RegistryReadToolName,
   args: Record<string, unknown>,
-) => Promise<unknown>;
+) => Promise<Result<unknown, ChatToolError>>;
 
 type CreateChatCodeModeSurfaceProps = {
   concurrencyKey: string;
@@ -201,8 +206,12 @@ export const createChatCodeModeSurface = ({
     }),
     tools: buildChatReadTools({
       documentedReads,
-      runReadTool: async (toolName, args) =>
-        await runReadTool(toolName, isRecord(args) ? args : {}),
+      runReadTool: async (toolName, args) => {
+        const result = await runReadTool(toolName, isRecord(args) ? args : {});
+        return Result.isError(result)
+          ? raiseChatToolError(result.error)
+          : result.value;
+      },
     }),
     ...CODE_MODE_RUNTIME_CONFIG,
   });
@@ -216,7 +225,7 @@ const SCRIPT_FUNCTION_PREFIX = "external_";
  * a script misspelled.
  */
 const CHAT_SCRIPT_READ_FUNCTIONS: ReadonlySet<string> = new Set(
-  chatProjectableReadToolNames().map(
+  chatScriptReadToolNames().map(
     (toolName) => `${SCRIPT_FUNCTION_PREFIX}${toolName}`,
   ),
 );
@@ -298,10 +307,12 @@ export const buildChatCodeMode = (
       // server defect this turn is refused before dispatch. "Do not retry this
       // call" is enforced here, not left to the model's reading of error prose.
       if (toolDefectMemo.isKnownDefect(toolName, toolArgs)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: knownDefectRefusalMessage(toolName),
-        });
+        return Result.err(
+          new ChatToolError({
+            kind: "server-defect",
+            message: knownDefectRefusalMessage(toolName),
+          }),
+        );
       }
       const result = await runRegistryReadTool({
         toolName,
@@ -309,13 +320,10 @@ export const buildChatCodeMode = (
         context,
         refRegistry,
       });
-      if (Result.isError(result)) {
-        if (result.error.kind === "server-defect") {
-          toolDefectMemo.recordDefect(toolName, toolArgs);
-        }
-        throw result.error;
+      if (Result.isError(result) && result.error.kind === "server-defect") {
+        toolDefectMemo.recordDefect(toolName, toolArgs);
       }
-      return result.value;
+      return result;
     },
     // A script that calls a direct tool, an unprefixed read or a tool this
     // chat does not offer is told the call to make instead.

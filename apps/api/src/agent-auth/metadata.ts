@@ -8,7 +8,7 @@ import {
   getAgentAuthManifestUrl,
   getAgentAuthUrl,
 } from "@/api/agent-auth/constants";
-import { env } from "@/api/env";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 
 /**
  * The `agent_auth` profile block merged onto our RFC 8414 authorization
@@ -22,7 +22,7 @@ import { env } from "@/api/env";
  * would reject — an agent that picks it from discovery must be able to use it.
  */
 export const getAgentAuthMetadataBlock = () => {
-  const idJagEnabled = env.FEATURE_AGENT_ID_JAG;
+  const idJagEnabled = isDeploymentFeatureEnabled("FEATURE_AGENT_ID_JAG");
   return {
     skill: getAgentAuthManifestUrl(),
     identity_endpoint: getAgentAuthUrl(AGENT_AUTH_IDENTITY_PATH),

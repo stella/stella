@@ -137,7 +137,10 @@ export const createLazyBullMqQueue = <DataType>({
   let queue: Queue<DataType> | null = null;
 
   return () => {
-    connection ??= createBullMqConnection(connectionOptions);
+    connection ??= createBullMqConnection({
+      storeClass: "durable-coordination",
+      overrides: connectionOptions,
+    });
     queue ??= new Queue<DataType>(name, {
       ...options,
       connection,

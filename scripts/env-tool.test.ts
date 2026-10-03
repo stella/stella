@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import { QUERY_EXPANSION_MODES } from "../apps/api/src/lib/legal-search/query-expansion-mode";
+import { SECRET_EXAMPLES } from "../packages/runtime-mode/src/secret-examples.generated";
 import {
   ENV_CATALOG,
+  ENV_CREDENTIAL_CLASSIFICATION,
+  ENV_CREDENTIAL_KIND,
   ENV_EXPOSURE,
   ENV_OWNER,
   ENV_REQUIREMENT,
@@ -23,6 +27,7 @@ import {
   parseEnvText,
   parseWebBuildContract,
   renderApiEnvExample,
+  renderSecretExamples,
   renderCollabEnvExample,
   renderWebBuildContract,
   renderWebEnvExample,
@@ -39,6 +44,49 @@ describe("tracked env files", () => {
 });
 
 describe("generated environment examples", () => {
+  test("every catalog entry declares a credential classification", () => {
+    const classifications = new Map(
+      Object.entries(ENV_CREDENTIAL_CLASSIFICATION),
+    );
+    expect(ENV_CATALOG.length).toBeGreaterThan(0);
+    expect(
+      [...new Set(ENV_CATALOG.map(({ name }) => name))].toSorted(),
+    ).toEqual([...classifications.keys()].toSorted());
+    for (const entry of ENV_CATALOG) {
+      expect(Object.values(ENV_CREDENTIAL_KIND)).toContain(
+        entry.credentialKind,
+      );
+      expect(classifications.get(entry.name)).toBe(entry.credentialKind);
+    }
+  });
+
+  test("every runtime example has an explicit credential classification", () => {
+    for (const [name, example] of Object.entries(SECRET_EXAMPLES)) {
+      const entries = ENV_CATALOG.filter((entry) => entry.name === name);
+      expect(entries.length).toBeGreaterThan(0);
+      expect(
+        entries.every(
+          (entry) =>
+            entry.credentialKind === ENV_CREDENTIAL_KIND.credential &&
+            entry.example === example,
+        ),
+      ).toBe(true);
+      expect(example).not.toBe("");
+    }
+  });
+
+  test("runtime examples match the catalog", () => {
+    expect(
+      readFileSync(
+        new URL(
+          "../packages/runtime-mode/src/secret-examples.generated.ts",
+          import.meta.url,
+        ),
+        "utf-8",
+      ),
+    ).toBe(renderSecretExamples());
+  });
+
   test("contain every documented schema entry exactly once", () => {
     const examples = {
       api: renderApiEnvExample(),
@@ -257,6 +305,31 @@ describe("environment file parsing", () => {
 
 describe("environment doctor output", () => {
   const validApiInput = () => parseEnvText(renderApiEnvExample(), {});
+
+  test("checks runtime examples in API and collaboration configurations", () => {
+    for (const app of ["api", "collab"] as const) {
+      const input =
+        app === "api"
+          ? validApiInput()
+          : parseEnvText(renderCollabEnvExample(), {});
+      const strict = validateDoctorEnvironment({
+        app,
+        input,
+        mode: "production",
+      });
+      expect(strict.status).toBe("invalid");
+      if (strict.status === "invalid") {
+        expect(
+          strict.issues.some((issue) =>
+            issue.includes("must use configured values"),
+          ),
+        ).toBe(true);
+      }
+      expect(
+        validateDoctorEnvironment({ app, input, mode: "development" }).status,
+      ).toBe("valid");
+    }
+  });
 
   test("never renders cataloged secret values", () => {
     const secretEntry = ENV_CATALOG.find(

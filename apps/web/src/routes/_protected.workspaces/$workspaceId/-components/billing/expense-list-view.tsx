@@ -6,11 +6,11 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { PlusIcon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 
 import { ExpenseForm } from "@/components/billing/expense-form";
 import type { ExpenseFormValues } from "@/components/billing/expense-form";
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   useCreateExpense,
   useDeleteExpense,
@@ -85,11 +85,8 @@ export const ExpenseListView = ({
       },
       {
         onSuccess: () => setFormOpen(false),
-        onError: () => {
-          stellaToast.add({
-            title: t("billing.failedToSave"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("billing.failedToSave"));
         },
       },
     );
@@ -114,11 +111,8 @@ export const ExpenseListView = ({
       },
       {
         onSuccess: () => setEditingId(null),
-        onError: () => {
-          stellaToast.add({
-            title: t("billing.failedToSave"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("billing.failedToSave"));
         },
       },
     );
@@ -128,11 +122,8 @@ export const ExpenseListView = ({
     deleteExpense.mutate(
       { workspaceId, id },
       {
-        onError: () => {
-          stellaToast.add({
-            title: t("billing.failedToDelete"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("billing.failedToDelete"));
         },
       },
     );
