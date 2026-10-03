@@ -300,8 +300,9 @@ const isInflateError = (cause: unknown): boolean =>
   cause["code"].startsWith("Z_");
 
 const unreadableEntry = (entry: ZipEntry): Refusal | null => {
-  // oxlint-disable-next-line no-bitwise -- ZIP flag check
-  const flagged = ENCRYPTION_FLAGS.some((f) => (entry.flags & f) !== 0);
+  const flagged = ENCRYPTION_FLAGS.some(
+    (flag) => Math.floor(entry.flags / flag) % 2 === 1,
+  );
   if (entry.method === AES || flagged) {
     return "encrypted";
   }
