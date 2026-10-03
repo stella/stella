@@ -1,3 +1,5 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 
 import { polishAdministrativeDocketOf } from "@stll/api-contract/decision-docket-grammar";
@@ -977,6 +979,7 @@ const search = async ({
     url,
     { headers: { Accept: "application/json" }, redirect: "error" },
     {
+      fetchStage: "listing",
       adapterKey: ADAPTER_KEYS.PL_UODO,
       signal,
       timeoutMs: ADAPTER_TIMEOUT.LIST,
@@ -1171,6 +1174,7 @@ const fetchBody = async ({
         target.toString(),
         { headers: { Accept: "application/xml" }, redirect: "error" },
         {
+          fetchStage: "document",
           adapterKey: ADAPTER_KEYS.PL_UODO,
           signal,
           timeoutMs: ADAPTER_TIMEOUT.PAGE,
@@ -2507,6 +2511,7 @@ const plUodoFetchPage = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const plUodoAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_UODO,
   language: PL_UODO_LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,
@@ -2527,6 +2532,31 @@ export const plUodoAdapter = defineSourceAdapter({
   getTotalCount: countPlUodoRecords,
 
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            type: payload["type"],
+            version: payload["version"],
+            id: payload["id"],
+            time: payload["time"],
+            mtime: payload["mtime"],
+            languages: payload["languages"],
+            name: payload["name"],
+            title: payload["title"],
+            refid: payload["refid"],
+            refname: payload["refname"],
+            kind: payload["kind"],
+            parts: payload["parts"],
+            publication: payload["publication"],
+            publicator: payload["publicator"],
+            dates: payload["dates"],
+            entities: payload["entities"],
+            terms: payload["terms"],
+            refs: payload["refs"],
+            resources: payload["resources"],
+          }
+        : null,
     firstSlice: PL_UODO_FIRST_SLICE,
     sliceOf: yearOf,
     nextSlice,

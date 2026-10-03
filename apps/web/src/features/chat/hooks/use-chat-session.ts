@@ -15,11 +15,6 @@ import { v7 as uuidv7 } from "uuid";
 import * as v from "valibot";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
-import {
-  resourceRef,
-  RESOURCE_TYPE,
-  toChatResourceHref,
-} from "@stll/api-contract";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
@@ -83,6 +78,7 @@ import type {
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { entityReferenceHref } from "@/components/references/reference.logic";
 import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
 import {
   isChatMessageStartError,
@@ -1196,19 +1192,9 @@ export const useChatSession = ({
         }
         const created = response.data;
         const fileName = created.fileName;
-        const href = toChatResourceHref({
-          type: RESOURCE_TYPE.ENTITY,
-          resource: resourceRef({
-            type: RESOURCE_TYPE.ENTITY,
-            id: toSafeId<"entity">(created.entityId),
-          }),
-          location: {
-            type: "workspace",
-            workspace: resourceRef({
-              type: RESOURCE_TYPE.WORKSPACE,
-              id: toSafeId<"workspace">(matterId),
-            }),
-          },
+        const href = entityReferenceHref({
+          entityId: created.entityId,
+          matterId,
         });
         return {
           success: true,

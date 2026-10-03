@@ -52,6 +52,11 @@
     "takenOverLocalError": "Desktop editing moved to another device. This local copy is preserved."
   },
   "dialog": {
+    "accountWindowTitle": "Connect account",
+    "accountTitle": "Connect this account?",
+    "accountSubtitle": "Connect stella desktop to this account and organization.",
+    "accountEmail": "Account",
+    "organizationName": "Organization",
     "allow": "Allow",
     "apiUrl": "API URL",
     "cancel": "Cancel",

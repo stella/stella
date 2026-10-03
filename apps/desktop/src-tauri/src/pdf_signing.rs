@@ -300,6 +300,7 @@ struct RedeemRequest<'a> {
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RedeemResponse {
+  identity: crate::types::DesktopAccountIdentity,
   session_id: String,
   session_token: String,
   api_base_url: String,
@@ -522,7 +523,16 @@ pub async fn redeem_and_sign(
   })
   .map_err(|e| format!("stella desktop could not start the signing client: {e}"))?;
 
-  let redeemed = redeem(&client, &api_base_url, &handoff_token).await?;
+  let account =
+    crate::deep_link::linked_handoff_account(&app_handle, &api_base_url).await?;
+  let redeemed = redeem(
+    &client,
+    &api_base_url,
+    &handoff_token,
+    &account.credential.key,
+  )
+  .await?;
+  crate::deep_link::ensure_handoff_identity(&redeemed.identity, &account.identity)?;
   if !is_safe_session_id(&redeemed.session_id) {
     return Err("Invalid PDF signing session payload.".to_string());
   }
@@ -531,6 +541,9 @@ pub async fn redeem_and_sign(
   let session_api_base_url =
     config::normalize_self_host_api_base_url(&redeemed.api_base_url)
       .map_err(|_| "Invalid PDF signing API URL.".to_string())?;
+  if session_api_base_url != api_base_url {
+    return Err("PDF signing session names a different account server.".to_string());
+  }
   if !api_trusted_for_signing(&manager, &session_api_base_url).await {
     return Err("PDF signing session names an untrusted API URL.".to_string());
   }
@@ -557,6 +570,13 @@ pub async fn redeem_and_sign(
     ),
   };
   let identities = identities.unwrap_or_default();
+
+  if let Err(error) =
+    crate::deep_link::recheck_handoff_account(&app_handle, &account).await
+  {
+    session.cancel(REASON_USER_CANCELLED).await;
+    return Err(error);
+  }
 
   let (choice_sender, choice_receiver) = oneshot::channel();
   let (outcome_sender, outcome_receiver) = oneshot::channel();
@@ -631,6 +651,15 @@ pub async fn redeem_and_sign(
     ));
     return Err("stella desktop no longer has the chosen certificate.".to_string());
   };
+
+  if let Err(error) =
+    crate::deep_link::recheck_handoff_account(&app_handle, &account).await
+  {
+    session.cancel(REASON_USER_CANCELLED).await;
+    let _ = outcome_sender.send(PdfSignResult::Cancelled);
+    let _ = window.close();
+    return Err(error);
+  }
 
   let signature = match prepare_signature(&session, &identity, &prompt_owner).await {
     Ok(signature) => signature,
@@ -875,9 +904,11 @@ async fn redeem(
   client: &DesktopHttpClient,
   api_base_url: &str,
   handoff_token: &str,
+  credential_key: &str,
 ) -> Result<RedeemResponse, String> {
   let response = client
     .post(format!("{api_base_url}/v1/pdf-signing-handoffs/redeem"))
+    .bearer_auth(credential_key)
     .json(&RedeemRequest { handoff_token })
     .timeout(REDEEM_TIMEOUT)
     .send()
@@ -1215,7 +1246,7 @@ mod tests {
 
   #[test]
   fn reads_the_stamp_page_from_the_redeemed_session() {
-    let base = r#"{"sessionId":"s","sessionToken":"t","apiBaseUrl":"https://api.stll.app","documentName":"d","versionNumber":1,"workspaceName":"w""#;
+    let base = r#"{"identity":{"userId":"user","organizationId":"org"},"sessionId":"s","sessionToken":"t","apiBaseUrl":"https://api.stll.app","documentName":"d","versionNumber":1,"workspaceName":"w""#;
     let visible: RedeemResponse =
       serde_json::from_str(&format!(r#"{base},"stampPageNumber":3}}"#)).unwrap();
     assert_eq!(visible.stamp_page_number, Some(3));
@@ -1502,7 +1533,7 @@ mod tests {
   #[test]
   fn reads_the_session_expiry_from_the_redeemed_session() {
     let redeemed: RedeemResponse = serde_json::from_str(
-      r#"{"sessionId":"s","sessionToken":"t","apiBaseUrl":"https://api.stll.app","documentName":"d","versionNumber":1,"workspaceName":"w","expiresAt":"2026-09-26T12:10:00.000Z"}"#,
+      r#"{"identity":{"userId":"user","organizationId":"org"},"sessionId":"s","sessionToken":"t","apiBaseUrl":"https://api.stll.app","documentName":"d","versionNumber":1,"workspaceName":"w","expiresAt":"2026-09-26T12:10:00.000Z"}"#,
     )
     .unwrap();
     assert_eq!(

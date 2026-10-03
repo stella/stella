@@ -73,18 +73,18 @@ describe("sourceExportTargets", () => {
     const withCatalog = {
       ...manifest({
         ".": "./src/index.ts",
-        "./capability-catalog.json": "./capability-catalog.json",
+        "./contract.json": "./contract.json",
       }),
-      files: ["capability-catalog.json", "dist", "src", "README.md"],
+      files: ["contract.json", "dist", "src", "README.md"],
     };
 
     expect(sourceExportTargets(withCatalog)).toEqual({
       ".": "./src/index.ts",
-      "./capability-catalog.json": "./capability-catalog.json",
+      "./contract.json": "./contract.json",
     });
     expect(toPublishedManifest(withCatalog).exports).toEqual({
       ".": { types: "./dist/index.d.ts", import: "./dist/index.js" },
-      "./capability-catalog.json": "./capability-catalog.json",
+      "./contract.json": "./contract.json",
     });
   });
 
@@ -93,7 +93,7 @@ describe("sourceExportTargets", () => {
       sourceExportTargets(
         manifest({
           ".": "./src/index.ts",
-          "./capability-catalog.json": "./capability-catalog.json",
+          "./contract.json": "./contract.json",
         }),
       ),
     ).toThrow(/expected source export/u);

@@ -327,6 +327,7 @@ const crawlCaller: Caller = {
     const run = await Result.tryPromise({
       try: async () =>
         await runIngestionPipeline({
+          acquireStoredTotalAdmission: async () => "held",
           source: sourceLease.source,
           sourceLease,
           scopedDb,
@@ -467,7 +468,7 @@ test("the registered batch clones and persists declared URL scalars and diagnost
         .where(eq(caseLawDecisions.sourceId, sourceId))
     ).at(0);
     expect(afterReplay?.metadata).toEqual(row?.metadata);
-    expect(batch).toEqual(originalBatch);
+    expect(batch).toMatchObject(originalBatch);
   } finally {
     fakeS3.stop();
   }

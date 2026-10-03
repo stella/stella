@@ -71,6 +71,7 @@ describe("readiness heartbeat scheduling", () => {
     state.timeOut(
       new Error("document OCR readiness heartbeat exceeded 2000ms"),
     );
+    // swallow-ok: injected caller timeout precedes assertions that the underlying write retains its slot
     await first?.catch(() => undefined);
 
     expect(beat.start()).toBeNull();
@@ -88,6 +89,7 @@ describe("readiness heartbeat scheduling", () => {
     expect(next).not.toBeNull();
     expect(state.starts).toBe(2);
     state.timeOut(new Error("done"));
+    // swallow-ok: final drain of the second heartbeat after its start count has been asserted
     await next?.catch(() => undefined);
   });
 
@@ -129,7 +131,9 @@ describe("readiness heartbeat scheduling", () => {
 
     // A rejection that left the slot taken would silence the heartbeat for
     // the life of the process, which the lease TTL cannot survive.
+    // swallow-ok: injected connection rejection exercises release of the single-flight slot, asserted below
     await beat.start()?.catch(() => undefined);
+    // swallow-ok: second injected connection rejection is followed by the next-start count assertion
     await beat.start()?.catch(() => undefined);
 
     expect(starts).toBe(2);

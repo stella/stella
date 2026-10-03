@@ -11,6 +11,11 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  DOCUMENT_FETCH_EVENT,
+  type DocumentStageObservation,
+} from "@stll/legal-atlas/document-fetch-diagnostics";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import type {
@@ -25,6 +30,7 @@ import { DOCUMENT_TIER } from "@/api/lib/legal-search/sk-document-queue";
 
 import {
   DRAIN_CHECK_SLICE_MS,
+  type SkDocumentDrainOptions,
   type SkDocumentDrainSummary,
   type SkDocumentDrainTiming,
   runSkDocumentDrain,
@@ -127,6 +133,7 @@ type DrainRun = {
 };
 
 type RunDrainOptions = {
+  documentObservations?: SkDocumentDrainOptions["documentObservations"];
   /** A queue, or one built over the run's fake clock. */
   queue: PendingDocumentQueue | ((now: () => number) => PendingDocumentQueue);
   /** Answers one fetch; throwing stands in for a transient failure. */
@@ -139,6 +146,7 @@ type RunDrainOptions = {
 };
 
 const runDrain = async ({
+  documentObservations,
   drainAtClock,
   polls,
   queue,
@@ -153,6 +161,7 @@ const runDrain = async ({
   const source = typeof queue === "function" ? queue(() => clock) : queue;
 
   await runSkDocumentDrain({
+    ...(documentObservations === undefined ? {} : { documentObservations }),
     queue: {
       next: async () => {
         events.push({ type: "poll" });
@@ -203,6 +212,113 @@ const gapsBetween = (
   }
   return gaps;
 };
+
+describe("source-keyed deferred document observations", () => {
+  test("each drain outcome is accumulated with the five-minute discriminator and backlog probe", async () => {
+    for (const status of OUTCOME_STATUSES) {
+      const observations: DocumentStageObservation[] = [];
+      let probes = 0;
+      await runDrain({
+        queue: queueOf(["fixture"]),
+        respond: () => OUTCOMES[status],
+        polls: 1,
+        documentObservations: {
+          source: "sk-courts",
+          observe: (event) => {
+            observations.push(event);
+          },
+          hasPending: async () => {
+            probes += 1;
+            return true;
+          },
+        },
+      });
+      expect(probes).toBe(1);
+      expect(observations).toEqual([
+        {
+          event: DOCUMENT_FETCH_EVENT.window,
+          aggregation: "five_minute",
+          source: "sk-courts",
+          backlog: 1,
+          attempted: 1,
+          filled: status === "filled" ? 1 : 0,
+          failed: status === "deferred" || status === "parked" ? 1 : 0,
+          window_seconds: 0,
+        },
+      ]);
+    }
+  });
+
+  test("idle intervals report an empty backlog without producing legacy empty summaries", async () => {
+    const observations: DocumentStageObservation[] = [];
+    const run = await runDrain({
+      queue: queueOf([]),
+      respond: () => OUTCOMES.filled,
+      polls: 4,
+      timing: { ...TIMING, summaryIntervalMs: 1000 },
+      documentObservations: {
+        source: "sk-courts",
+        observe: (event) => {
+          observations.push(event);
+        },
+        hasPending: async () => false,
+      },
+    });
+    expect(run.summaries).toEqual([]);
+    expect(observations.length).toBeGreaterThan(0);
+    for (const observation of observations) {
+      expect(observation).toMatchObject({
+        event: DOCUMENT_FETCH_EVENT.window,
+        aggregation: "five_minute",
+        source: "sk-courts",
+        backlog: 0,
+        attempted: 0,
+        filled: 0,
+        failed: 0,
+      });
+      if (observation.event === DOCUMENT_FETCH_EVENT.window) {
+        expect(observation.window_seconds).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  test("backlog probe failure cannot turn a stalled source into a healthy empty source", async () => {
+    const observations: DocumentStageObservation[] = [];
+    const run = await runDrain({
+      queue: queueOf(["fixture"]),
+      respond: () => OUTCOMES.deferred,
+      polls: 1,
+      documentObservations: {
+        source: "sk-courts",
+        observe: (event) => {
+          observations.push(event);
+        },
+        hasPending: async () => {
+          throw new Error("private query context");
+        },
+      },
+    });
+    expect(observations).toEqual([
+      {
+        event: DOCUMENT_FETCH_EVENT.fetchOutcome,
+        source: "sk-courts",
+        outcome: "unknown",
+      },
+      {
+        event: DOCUMENT_FETCH_EVENT.window,
+        aggregation: "five_minute",
+        source: "sk-courts",
+        backlog: 1,
+        attempted: 1,
+        filled: 0,
+        failed: 2,
+        window_seconds: 0,
+      },
+    ]);
+    expect(run.summaries.at(0)?.failed).toBe(0);
+    expect(JSON.stringify(observations)).not.toContain("private");
+  });
+});
 
 /** Fake-clock time at which the walk fetched this document. */
 const fetchedAt = ({ events }: DrainRun, caseNumber: string): number => {

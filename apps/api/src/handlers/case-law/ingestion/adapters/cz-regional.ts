@@ -1,3 +1,5 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
@@ -533,6 +535,7 @@ const fetchFinaldoc = async (
       {
         maxRetries: 1,
         signal,
+        fetchStage: "document",
         adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
       },
     );
@@ -619,6 +622,7 @@ export const fetchCzRegionalAffectingDocs = async (
   const response = await fetchPublisher(
     `${BASE_URL}/finalDocChain/affectingDocs/${encodeURIComponent(sourceDocumentId)}`,
     {
+      fetchStage: "document",
       adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
       ...(signal === undefined ? {} : { signal }),
       headers: {
@@ -1233,6 +1237,7 @@ const fetchListPage = async ({ cursor, signal, state }: FetchListPageOptions) =>
           .map(Number);
         const url = `${BASE_URL}/opendata/${year}/${month}/${day}?page=${state.page}`;
         const response = await fetchPublisher(url, {
+          fetchStage: "listing",
           adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
           signal: attemptSignal,
           headers: {
@@ -2086,6 +2091,7 @@ const buildCzRegionalPageItems = async ({
 };
 
 export const czRegionalAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.CZ_REGIONAL,
   sourceSurfaces: CZ_REGIONAL_SOURCE_SURFACES,
   sourceFields: {
@@ -2121,6 +2127,7 @@ export const czRegionalAdapter = defineSourceAdapter({
           const response = await fetchPublisher(
             `${BASE_URL}/opendata/${year}`,
             {
+              fetchStage: "listing",
               adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
               signal,
               timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -2166,6 +2173,22 @@ export const czRegionalAdapter = defineSourceAdapter({
    * each item the way the ingest would, and compare against what is held.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            jednaciCislo: payload["jednaciCislo"],
+            ecli: payload["ecli"],
+            soud: payload["soud"],
+            autor: payload["autor"],
+            predmetRizeni: payload["predmetRizeni"],
+            datumVydani: payload["datumVydani"],
+            datumZverejneni: payload["datumZverejneni"],
+            klicovaSlova: payload["klicovaSlova"],
+            zminenaUstanoveni: payload["zminenaUstanoveni"],
+            odkaz: payload["odkaz"],
+          }
+        : null,
     firstSlice: CZ_REGIONAL_FEED_START,
     ...czRegionalDaySlices.walk,
     tipWindowDays: CZ_REGIONAL_TIP_WINDOW_DAYS,

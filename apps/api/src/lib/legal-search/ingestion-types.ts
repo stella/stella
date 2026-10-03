@@ -1,5 +1,7 @@
+// parser-output-unchanged: observer wiring returns the adapter’s same normalized SyncPage.
+// parser-output-unchanged: replay outcome type gains an optional legacy docket; no parser output changes.
+// parser-output-unchanged: The required reconciliation revision projection changes retry bookkeeping, not parsed decision output.
 // parser-output-unchanged: preserves explicit URL declarations; ordinary metadata strings are projected as before
-// parser-output-unchanged: SyncPage adds optional failure telemetry; decision parsing and stored output are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
@@ -18,6 +20,10 @@ import type {
   DecisionIdentifiers,
   DecisionPrimaryReferenceType,
 } from "@stll/legal-ast/decision-identifier";
+import type {
+  DocumentStage,
+  DocumentStageObserver,
+} from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import {
@@ -30,6 +36,10 @@ import {
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
+import {
+  withDocumentStageWindow,
+  type DocumentStagePageOptions,
+} from "@/api/lib/legal-search/document-stage-observation";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type {
   DecisionSection,
@@ -1258,6 +1268,11 @@ export type HeldRowRules = {
  */
 export type SourceReconciliation = SourceSliceWalk & {
   /**
+   * Per-record content/identity signal, excluding listing coordinates and corpus-wide revisions.
+   * Classify each new payload field as content/identity (include it) or traversal/repair metadata (exclude it).
+   */
+  revisionOf: (payload: unknown) => unknown;
+  /**
    * Whether a stored row counts as held only when it carries the document,
    * and not when it carries the listing metadata alone.
    *
@@ -1604,6 +1619,10 @@ export type SourceFieldInventory = {
  */
 export type SourceAdapter = {
   key: AdapterKey;
+  documentStage: DocumentStage;
+  observeDocumentStage: (
+    options: Omit<DocumentStagePageOptions, "source">,
+  ) => Promise<Result<SyncPage, AdapterFetchError>>;
   /** An opt-in annotation source; never a second decision-producing adapter. */
   collectionEnrichment?: SkCollectionConnector | undefined;
   name: string;
@@ -1620,6 +1639,7 @@ export type SourceAdapter = {
     cursor: string | null,
     config: Record<string, unknown>,
     signal?: AbortSignal,
+    onDocumentObservation?: DocumentStageObserver,
   ) => Promise<Result<SyncPage, AdapterFetchError>>;
   /** Minimum ms between requests to respect rate limits. */
   minRequestIntervalMs: number;
@@ -1698,14 +1718,25 @@ export type SourceAdapter = {
 
 type SourceAdapterDefinition<TKey extends AdapterKey> = Omit<
   SourceAdapter,
-  "country" | "key" | "name"
+  "country" | "key" | "name" | "observeDocumentStage"
 > & { readonly key: TKey };
 
 /** Build an adapter from the source facts declared for its registry key. */
 export const defineSourceAdapter = <const TKey extends AdapterKey>(
   adapter: SourceAdapterDefinition<TKey>,
-): SourceAdapter & { readonly key: TKey } => ({
-  ...adapter,
-  country: ADAPTER_MANIFESTS[adapter.key].country,
-  name: ADAPTER_MANIFESTS[adapter.key].name,
-});
+): SourceAdapter & { readonly key: TKey } => {
+  const observeDocumentStage = async (
+    options: Omit<DocumentStagePageOptions, "source">,
+  ) => await withDocumentStageWindow({ ...options, source: adapter.key });
+  return {
+    ...adapter,
+    observeDocumentStage,
+    country: ADAPTER_MANIFESTS[adapter.key].country,
+    name: ADAPTER_MANIFESTS[adapter.key].name,
+    fetchPage: async (cursor, config, signal, onDocumentObservation) =>
+      await observeDocumentStage({
+        fetchPage: async () => await adapter.fetchPage(cursor, config, signal),
+        observe: onDocumentObservation,
+      }),
+  };
+};

@@ -204,6 +204,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   template_lookup_format: null,
   time_entry: null,
   time_timer: null,
+  time_daily_target: null,
   usage_allocation: null,
   usage_entitlement: null,
   usage_event: null,

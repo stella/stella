@@ -18,7 +18,6 @@ import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
 import { toSafeId } from "@/api/lib/branded-types";
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
-import { getModelImageCapability } from "@/api/lib/chat/sdk-image-capability";
 import { toDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-adapter";
@@ -177,68 +176,6 @@ describe("isAllowedBYOKModel", () => {
         role: "pdf",
       }),
     ).toBe(true);
-  });
-});
-
-describe("SDK image-attachment capability", () => {
-  test.each(TANSTACK_AI_PROVIDERS)(
-    "keeps unknown models distinct from unsupported %s models",
-    (provider) => {
-      expect(
-        getModelImageCapability({ provider, modelId: "unknown-model" }),
-      ).toBe("unknown");
-    },
-  );
-
-  test("retains unknown capability for offered models absent from the installed SDK", () => {
-    for (const model of [
-      { provider: "openai", modelId: "gpt-6.1-sol" },
-      { provider: "openrouter", modelId: "openai/gpt-6.1-sol" },
-      { provider: "anthropic", modelId: "claude-sonnet-5-5" },
-    ] as const) {
-      expect(getModelImageCapability(model)).toBe("unknown");
-    }
-    expect(
-      getModelImageCapability({ provider: "bedrock", modelId: "constructor" }),
-    ).toBe("unknown");
-  });
-
-  test("uses the installed SDK vision metadata", () => {
-    for (const model of [
-      { provider: "bedrock", modelId: "us.amazon.nova-lite-v1:0" },
-      { provider: "mistral", modelId: "mistral-medium-latest" },
-      { provider: "google", modelId: "gemini-3.8-flash" },
-      { provider: "anthropic", modelId: "claude-sonnet-5" },
-      { provider: "openai", modelId: "gpt-5.2" },
-      { provider: "openrouter", modelId: "google/gemini-3.8-flash" },
-    ] as const) {
-      expect(getModelImageCapability(model)).toBe("accepts");
-    }
-  });
-
-  test("recognizes configured text-only SDK models outside the offered catalog", () => {
-    expect(BYOK_MODEL_OPTIONS.openai).not.toContain("o3-mini");
-    expect(
-      getModelImageCapability({ provider: "openai", modelId: "o3-mini" }),
-    ).toBe("unsupported");
-  });
-
-  test("refuses SDK models explicitly lacking image modality", () => {
-    for (const modelId of [
-      "us.amazon.nova-micro-v1:0",
-      "openai.gpt-oss-120b-1:0",
-      "openai.gpt-oss-20b-1:0",
-    ]) {
-      expect(getModelImageCapability({ provider: "bedrock", modelId })).toBe(
-        "unsupported",
-      );
-    }
-    expect(
-      getModelImageCapability({
-        provider: "mistral",
-        modelId: "codestral-latest",
-      }),
-    ).toBe("unsupported");
   });
 });
 

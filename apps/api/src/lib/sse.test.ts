@@ -139,6 +139,7 @@ const observeStreamRead = async (stream: ReadableStream) => {
       Bun.sleep(100).then(() => "test-deadline" as const),
     ]);
   } finally {
+    // swallow-ok: finally cancels the observation reader without masking its original read result or failure
     await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }

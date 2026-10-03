@@ -1,6 +1,8 @@
 import { Result, panic } from "better-result";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { DocumentStageObserver } from "@stll/legal-atlas/document-fetch-diagnostics";
+
+import type { IngestionScopedDb } from "@/api/db/safe-db";
 import type { caseLawSources } from "@/api/db/schema";
 import {
   ADAPTER_TIMEOUT,
@@ -35,7 +37,7 @@ import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestio
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
-import { refreshSourceStoredTotal } from "@/api/handlers/case-law/ingestion/source-totals";
+import { refreshNextSourceStoredTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
@@ -54,7 +56,10 @@ import {
   remainingCycleMs,
   startCycleDeadline,
 } from "@/api/lib/legal-search/cycle-deadline";
-import type { StartCycleDeadlineOptions } from "@/api/lib/legal-search/cycle-deadline";
+import type {
+  CycleDeadline,
+  StartCycleDeadlineOptions,
+} from "@/api/lib/legal-search/cycle-deadline";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -64,9 +69,17 @@ type DbSlot = {
 };
 
 type PipelineInput = {
+  onDocumentObservation?: DocumentStageObserver;
   source: typeof caseLawSources.$inferSelect;
   sourceLease: CaseLawSourceIngestionLease;
-  scopedDb: ScopedDb;
+  scopedDb: IngestionScopedDb;
+  countStoredTotalSource?: Parameters<
+    typeof refreshNextSourceStoredTotal
+  >[0]["countSource"];
+  acquireStoredTotalAdmission: (options: {
+    deadline: CycleDeadline | undefined;
+    phase?: "reserve" | "start";
+  }) => Promise<"granted" | "held" | "unknown">;
   /**
    * The cycle's time budget, and the signals that end it early. The loop
    * starts a page only while enough of the budget is left for the page to
@@ -204,6 +217,9 @@ export const runIngestionPipeline = async ({
   source,
   sourceLease,
   scopedDb,
+  acquireStoredTotalAdmission,
+  countStoredTotalSource,
+  onDocumentObservation,
   cycle,
   maxPages: maxPagesOverride,
   maxDecisions,
@@ -266,6 +282,7 @@ export const runIngestionPipeline = async ({
             fetchCursor,
             source.config ?? {},
             pageSignal,
+            onDocumentObservation,
           );
           if (Result.isError(pageResult)) {
             return { error: pageResult.error, type: "fetch-error" } as const;
@@ -676,15 +693,19 @@ export const runIngestionPipeline = async ({
   }
   cursor = checkpoint.cursor;
 
-  // After the checkpoint and outside its transaction: the count walks the
-  // source's whole index range, and holding the leased source row's
-  // transaction open for it would block the next cycle on bookkeeping. It
-  // rate-limits itself to one count per source per interval and reports its
-  // own failures, so its outcome never reaches this run's result.
-  await refreshSourceStoredTotal({
+  // Outside the checkpoint transaction: a durable refresh claim bounds
+  // daily counts, including failed attempts, through separate admission.
+  await refreshNextSourceStoredTotal({
     scopedDb,
-    sourceId: source.id,
-    now: new Date(),
+    ...(countStoredTotalSource === undefined
+      ? {}
+      : { countSource: countStoredTotalSource }),
+    ...(deadline === undefined ? {} : { deadline }),
+    acquireAdmission: async (phase) =>
+      await acquireStoredTotalAdmission({
+        deadline,
+        ...(phase === undefined ? {} : { phase }),
+      }),
   });
 
   return {

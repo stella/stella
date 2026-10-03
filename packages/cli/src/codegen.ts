@@ -12,6 +12,10 @@ import { panic, Result } from "better-result";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
+import {
+  checkCapabilityRegistry,
+  readCapabilityCatalog,
+} from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import {
   buildCliRouteTree,
@@ -33,7 +37,6 @@ const snapshotUrl = new URL(
   "generated/registry-snapshot.json",
   import.meta.url,
 );
-const catalogUrl = new URL("../capability-catalog.json", import.meta.url);
 const outputUrl = new URL("generated/route-map.ts", import.meta.url);
 const resourceSnapshotUrl = new URL(
   "generated/resources-snapshot.json",
@@ -55,6 +58,12 @@ const discriminatorSubcommandSchema = v.object({
   destructive: v.optional(v.boolean()),
   include: v.optional(stringArraySchema),
   required: v.optional(stringArraySchema),
+});
+
+const compositeSectionSchema = v.object({
+  title: v.string(),
+  rows: v.pipe(v.string(), v.minLength(1)),
+  columns: stringArraySchema,
 });
 
 const cliAnnotationSchema = v.object({
@@ -88,6 +97,15 @@ const cliAnnotationSchema = v.object({
   flagRename: v.optional(v.record(v.string(), v.string())),
   localFileBase64Prop: v.optional(v.pipe(v.string(), v.minLength(1))),
   confirmPassthrough: v.optional(v.literal(true)),
+  composite: v.optional(
+    v.object({
+      summary: stringArraySchema,
+      sections: v.tupleWithRest(
+        [compositeSectionSchema],
+        compositeSectionSchema,
+      ),
+    }),
+  ),
 });
 
 type ParsedDiscriminatorSubcommand = v.InferOutput<
@@ -167,6 +185,9 @@ const projectToolAnnotation = (cli: ParsedCliAnnotation): ToolAnnotation => {
   if (cli.confirmPassthrough !== undefined) {
     annotation.confirmPassthrough = cli.confirmPassthrough;
   }
+  if (cli.composite !== undefined) {
+    annotation.composite = cli.composite;
+  }
   return annotation;
 };
 
@@ -221,11 +242,11 @@ for (const tool of snapshot.output) {
 // shared `buildCliRouteTree` the runtime registry-refresh path also uses. The
 // catalog is trusted, committed data (owned by the api-side exporter),
 // validated to the fields the CLI consumes so a malformed snapshot fails loudly.
-const catalogEntries = parseCapabilityCatalog(
-  JSON.parse(await readFile(catalogUrl, "utf-8")),
-);
+const rawCatalog = readCapabilityCatalog();
+checkCapabilityRegistry(rawCatalog, new Set(listings.map(({ name }) => name)));
+const catalogEntries = parseCapabilityCatalog(rawCatalog);
 if (catalogEntries === null) {
-  panic("capability-catalog.json does not match the expected entry shape");
+  panic("capability catalog shards do not match the expected entry shape");
 }
 
 const { tree: routeMap, stats: capabilityStats } = buildCliRouteTree({

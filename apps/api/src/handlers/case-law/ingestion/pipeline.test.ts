@@ -9,6 +9,10 @@ import {
 } from "@stll/api-contract/decision-document-role";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import {
+  DOCUMENT_FETCH_EVENT,
+  type DocumentStageObserver,
+} from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -26,6 +30,7 @@ import {
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
   bareCitationKey,
@@ -53,6 +58,7 @@ import {
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   observedDocketOf,
@@ -61,6 +67,7 @@ import {
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
+import { defineSourceAdapter } from "@/api/lib/legal-search/ingestion-types";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
@@ -112,6 +119,47 @@ const testSourceLease = (
   release: async () => undefined,
   source,
 });
+
+const cursorOnlyDb =
+  (onCursor: (cursor: string | null | undefined) => void): ScopedDb =>
+  async (callback) => {
+    const tx = {
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            for: () => ({ limit: async () => await Promise.resolve([]) }),
+            limit: async () =>
+              await Promise.resolve(
+                table === caseLawSources
+                  ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
+                  : [],
+              ),
+          }),
+        }),
+      }),
+      execute: async () => await Promise.resolve([]),
+      update: (table: unknown) => ({
+        set: (values: { syncCursor?: string | null }) => {
+          if (table === caseLawSources && "syncCursor" in values) {
+            onCursor(values.syncCursor);
+          }
+
+          return {
+            where: () => ({
+              returning: async () => [
+                { cursor: values.syncCursor ?? null, order: 1n },
+              ],
+            }),
+          };
+        },
+      }),
+    };
+
+    // SAFETY: these cases exercise only the case_law_sources cursor update;
+    // the fake implements that chain.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    return await callback(tx as unknown as Transaction);
+  };
 
 afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
@@ -794,6 +842,7 @@ describe("runIngestionPipeline — database timeouts", () => {
     };
 
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb,
@@ -910,6 +959,7 @@ describe("runIngestionPipeline — failure records", () => {
     logs = installRecordingLogger();
 
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb,
@@ -940,6 +990,7 @@ describe("runIngestionPipeline — failure records", () => {
     logs = installRecordingLogger();
 
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb,
@@ -965,6 +1016,7 @@ describe("runIngestionPipeline — failure records", () => {
     const { scopedDb, state } = failingDecisionDb(postgresError("40001"));
 
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb,
@@ -1052,6 +1104,7 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
     };
 
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb,
@@ -1068,52 +1121,104 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
   });
 });
 
+describe("runIngestionPipeline — document observer failures", () => {
+  test("observer failures preserve the result and cursor-write trace", async () => {
+    const source = caseLawSourceRow({ name: "Document observer source" });
+    const run = async ({ observe }: { observe?: DocumentStageObserver }) => {
+      const cursorWrites: (string | null | undefined)[] = [];
+
+      const wrappedAdapter = defineSourceAdapter({
+        ...czNsAdapter,
+        fetchPage: async () => {
+          for (let fetch = 0; fetch < 100; fetch++) {
+            await observePublisherDocumentFetch({
+              source: czNsAdapter.key,
+              fetch: async () => new Response("document"),
+            });
+          }
+          return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+        },
+      });
+      czNsAdapter.fetchPage = wrappedAdapter.fetchPage;
+      expect(getAdapter(source.adapterKey)).toBe(czNsAdapter);
+
+      const logs = installRecordingLogger();
+      const leaseEffects: string[] = [];
+      const result = await runIngestionPipeline({
+        acquireStoredTotalAdmission: async () => "held",
+        source,
+        sourceLease: {
+          ...testSourceLease(source),
+          beforeRemoteEffect: async (effect) => {
+            leaseEffects.push("remote");
+            return await effect();
+          },
+        },
+        scopedDb: cursorOnlyDb((cursor) => {
+          cursorWrites.push(cursor);
+        }),
+        maxPages: 1,
+        ...(observe ? { onDocumentObservation: observe } : {}),
+      }).finally(() => logs.restore());
+
+      return {
+        cursorWrites,
+        finalCursor: cursorWrites.at(-1),
+        result,
+        leaseEffects,
+        failures: logs.records.filter(
+          ({ message }) => message === DOCUMENT_FETCH_EVENT.observerFailed,
+        ),
+        fetchEvents: logs.records.filter(
+          ({ message }) => message === DOCUMENT_FETCH_EVENT.fetchOutcome,
+        ).length,
+      };
+    };
+
+    const baseline = await run({});
+    expect(baseline.cursorWrites).toEqual(["cursor-2"]);
+    expect(baseline.result.nextCursor).toBe("cursor-2");
+    const failures: { name: string; observe: DocumentStageObserver }[] = [
+      {
+        name: "throw",
+        observe: () => {
+          throw new Error("observer threw");
+        },
+      },
+      {
+        name: "reject",
+        observe: async () => {
+          throw new Error("observer rejected");
+        },
+      },
+      {
+        name: "never resolve",
+        observe: async () => await new Promise<void>(() => {}),
+      },
+    ];
+
+    for (const { name, observe } of failures) {
+      const startedAt = performance.now();
+      const actual = await run({ observe });
+      expect(performance.now() - startedAt, name).toBeLessThan(2500);
+      expect(actual.result, name).toEqual(baseline.result);
+      expect(actual.cursorWrites, name).toEqual(baseline.cursorWrites);
+      expect(actual.finalCursor, name).toBe(baseline.finalCursor);
+      expect(actual.leaseEffects, name).toEqual(baseline.leaseEffects);
+      expect(actual.fetchEvents, name).toBe(100);
+      expect(actual.failures, name).toHaveLength(1);
+      expect(actual.failures.at(0)?.attributes?.["reason"], name).toBe(
+        "circuit_open",
+      );
+    }
+  });
+});
+
 describe("runIngestionPipeline — cycle deadline", () => {
   /**
    * The cursor advance is the only database work these cases reach: neither
    * starts a page that returns decisions.
    */
-  const cursorOnlyDb =
-    (onCursor: (cursor: string | null | undefined) => void): ScopedDb =>
-    async (callback) => {
-      const tx = {
-        select: () => ({
-          from: (table: unknown) => ({
-            where: () => ({
-              for: () => ({ limit: async () => await Promise.resolve([]) }),
-              limit: async () =>
-                await Promise.resolve(
-                  table === caseLawSources
-                    ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
-                    : [],
-                ),
-            }),
-          }),
-        }),
-        execute: async () => await Promise.resolve([]),
-        update: (table: unknown) => ({
-          set: (values: { syncCursor?: string | null }) => {
-            if (table === caseLawSources) {
-              onCursor(values.syncCursor);
-            }
-
-            return {
-              where: () => ({
-                returning: async () => [
-                  { cursor: values.syncCursor ?? null, order: 1n },
-                ],
-              }),
-            };
-          },
-        }),
-      };
-
-      // SAFETY: these cases exercise only the case_law_sources cursor update;
-      // the fake implements that chain.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
-    };
-
   test("stops before a page the remaining budget cannot cover", async () => {
     const source = caseLawSourceRow({ name: "Short-budget source" });
 
@@ -1128,6 +1233,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
     // the cycle deadline long before it can finish. The deadline has not
     // fired yet: it is the remaining budget, not the abort, that decides.
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb: cursorOnlyDb((cursor) => {
@@ -1168,6 +1274,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
 
     let persistedCursor: string | null | undefined;
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: lease,
       scopedDb: cursorOnlyDb((cursor) => {
@@ -1195,6 +1302,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
 
     let persistedCursor: string | null | undefined;
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb: cursorOnlyDb((cursor) => {

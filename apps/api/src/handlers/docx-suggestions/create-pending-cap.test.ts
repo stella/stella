@@ -21,6 +21,7 @@ import createDocxSuggestions from "@/api/handlers/docx-suggestions/create";
 import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -105,7 +106,7 @@ afterAll(async () => {
 const handlerContext = () => {
   const activeWorkspaceIds = [ids.wsA1];
   return {
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     request: new Request(`https://example.test/docx-suggestions/${ids.wsA1}`),
     route: "/docx-suggestions/pending-cap",
     recordAuditEvent: async () => {},

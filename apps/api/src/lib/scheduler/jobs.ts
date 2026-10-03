@@ -7,12 +7,15 @@ import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { logger } from "@/api/lib/observability/logger";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import {
   REGISTERED_SCHEDULER_TASK_NAMES,
   type RegisteredSchedulerTaskName,
 } from "@/api/lib/scheduler/registry";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { SWEEP_ACTION_COSTS_TASK } from "@/api/lib/scheduler/tasks/action-cost-retention";
+import { BACKFILL_AGENT_CLIENT_STORAGE_TASK } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
+import { BACKFILL_HEARTBEAT_TASK } from "@/api/lib/scheduler/tasks/backfill-heartbeat";
 import { RECONCILE_BILINGUAL_RUNS_TASK } from "@/api/lib/scheduler/tasks/bilingual-run-reconcile";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import { REFRESH_CASE_LAW_BROWSE_FACETS_TASK } from "@/api/lib/scheduler/tasks/case-law-browse-facet-refresh";
@@ -298,9 +301,19 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
   },
   {
+    description: "Move stored agent client values to the shared envelope",
+    enabled: env.AGENT_CLIENT_STORAGE_V1_ENABLED,
+    id: "agentClients.backfillStorage.minutely",
+    mode: "recurring",
+    payloadUpdate: "preserve",
+    payload: { paused: false, completed: false },
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: BACKFILL_AGENT_CLIENT_STORAGE_TASK,
+  },
+  {
     description:
       "Backfill provision-citation scopes and state, then validate the provision-row CHECKs",
-    id: "caseLaw.backfillProvisionState.minutely",
+    id: SCHEDULER_BACKFILL_IDS.provisionState,
     mode: "recurring",
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 1000 },
@@ -309,11 +322,18 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Attach publisher expression ids to legislation rows stored without one",
-    id: "legislation.backfillExpressionIds.fiveMinute",
+    id: SCHEDULER_BACKFILL_IDS.expressionIds,
     mode: "recurring",
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
+  },
+  {
+    description: "Emit persisted backfill health gauges",
+    id: "backfill.heartbeat.minutely",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: BACKFILL_HEARTBEAT_TASK,
   },
   {
     description:

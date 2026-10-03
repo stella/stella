@@ -1,3 +1,5 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 
 import { Temporal } from "@stll/time";
@@ -951,6 +953,7 @@ const fetchHeadnoteListing = async ({
     headnoteListingQuery(source, caseNumber, decisionDate),
     { headers: { Accept: "application/json" }, redirect: "error" },
     {
+      fetchStage: "listing",
       adapterKey: source.key,
       baseDelayMs: REQUEST_INTERVAL_MS,
       signal,
@@ -1128,6 +1131,7 @@ const buildDecision = async ({
     xmlUrl,
     { headers: { Accept: "application/xml" }, redirect: "error" },
     {
+      fetchStage: "document",
       adapterKey: source.key,
       baseDelayMs: REQUEST_INTERVAL_MS,
       signal,
@@ -1304,6 +1308,7 @@ const fetchListing = async ({
     url,
     { headers: { Accept: "application/json" }, redirect: "error" },
     {
+      fetchStage: "listing",
       adapterKey: source.key,
       baseDelayMs: REQUEST_INTERVAL_MS,
       signal,
@@ -1460,6 +1465,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
   dependencies: AtRisDependencies,
 ): AtRisSourceAdapter<TKey> =>
   defineSourceAdapter({
+    documentStage: "inline",
     key: source.key,
     sourceSurfaces: atRisSourceSurfaces(source.key),
     sourceFields: atRisFieldInventory(profileOf(source)),
@@ -1470,6 +1476,14 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
     maxSyncPages: 1,
 
     reconciliation: {
+      // Decision metadata and document references describe the item, without search result coordinates.
+      revisionOf: (payload) =>
+        isRecord(payload)
+          ? {
+              metadata: nestedRecord(payload, "Data", "Metadaten"),
+              documents: nestedRecord(payload, "Data", "Dokumentliste"),
+            }
+          : null,
       firstSlice: source.firstSlice,
       sliceOf: (now) => tipSlice(source, now),
       nextSlice: (slice) => {

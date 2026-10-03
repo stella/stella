@@ -13,7 +13,7 @@
 // fails safe to the full check.
 
 import { panic } from "better-result";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -22,6 +22,7 @@ import {
   type CodeCheckLeg,
 } from "../packages/scripts/src/code-quality-partition";
 import { isChangedLintPath } from "./lint-paths";
+import { measureResultBoundaryDebt } from "./ratchet";
 import {
   isResultConventionExcludedFile,
   isResultConventionSourceFile,
@@ -30,50 +31,6 @@ import {
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
 const WORKSPACE_PARENTS = ["apps", "packages"] as const;
-const RESULT_BOUNDARY_BASELINE_PATH = path.join(
-  REPO_ROOT,
-  "scripts/ratchet-baseline.json",
-);
-const RESULT_BOUNDARY_METRICS = [
-  "throw-outside-boundary",
-  "try-catch-outside-boundary",
-] as const;
-
-type JsonRecord = Record<string, unknown>;
-
-const isJsonRecord = (value: unknown): value is JsonRecord =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-/**
- * Files already tracked by the result ratchet carry deliberate legacy debt.
- * The ratchet rejects any increase; running the strict lint over those files
- * rejects every existing violation as well, so a change unrelated to that
- * debt cannot pass the affected-file gate. Keep the two guards monotone by
- * linting only files with no baseline entry here.
- */
-const readResultBoundaryBaselineFiles = (): ReadonlySet<string> => {
-  const parsed: unknown = JSON.parse(
-    readFileSync(RESULT_BOUNDARY_BASELINE_PATH, "utf-8"),
-  );
-  if (!isJsonRecord(parsed)) {
-    panic("result-boundary ratchet baseline must be an object");
-  }
-
-  const files = new Set<string>();
-  for (const metric of RESULT_BOUNDARY_METRICS) {
-    const snapshot = parsed[metric];
-    if (!isJsonRecord(snapshot) || !isJsonRecord(snapshot["files"])) {
-      panic(`result-boundary ratchet baseline is missing ${metric}.files`);
-    }
-    for (const file of Object.keys(snapshot["files"])) {
-      files.add(file);
-    }
-  }
-  return files;
-};
-
-const RESULT_BOUNDARY_BASELINE_FILES = readResultBoundaryBaselineFiles();
-
 export const DEPENDENCY_CACHE_INPUTS = [
   "$TURBO_ROOT$/.npmrc",
   "$TURBO_ROOT$/bun.lock",
@@ -531,11 +488,12 @@ const hasTargets = (scope: TaskScope): boolean =>
 
 export const resultBoundaryLintCommand = (
   changedFiles: readonly string[],
+  debtFiles: ReadonlySet<string>,
 ): string[] | null => {
   const paths = [...new Set(changedFiles)]
     .filter(isResultConventionSourceFile)
     .filter((file) => !isResultConventionExcludedFile(file))
-    .filter((file) => !RESULT_BOUNDARY_BASELINE_FILES.has(file))
+    .filter((file) => !debtFiles.has(file))
     .toSorted();
   if (paths.length === 0) {
     return null;
@@ -549,6 +507,37 @@ export const resultBoundaryLintCommand = (
     "--deny-warnings",
     ...paths,
   ];
+};
+
+type PlanResultBoundaryLintOptions = {
+  files: readonly string[];
+  mergeBase: string | null;
+  resolveMergeBase: () => string | null;
+  measureDebt: (base: string) => ReadonlySet<string>;
+  report: (message: string) => void;
+};
+
+export const planResultBoundaryLint = ({
+  files,
+  mergeBase,
+  resolveMergeBase,
+  measureDebt,
+  report,
+}: PlanResultBoundaryLintOptions): string[] | null => {
+  const candidates = files
+    .filter(isResultConventionSourceFile)
+    .filter((file) => !isResultConventionExcludedFile(file));
+  if (candidates.length === 0) {
+    return null;
+  }
+  const base = mergeBase ?? resolveMergeBase();
+  if (base === null) {
+    report(
+      `code-check: skipping exact result boundary lint; no merge base for ${DEFAULT_BASE} (normal lint checks still run)\n`,
+    );
+    return null;
+  }
+  return resultBoundaryLintCommand(candidates, measureDebt(base));
 };
 
 type ScopedCommandsOptions = {
@@ -602,7 +591,9 @@ export const scopedCommands = (
   }
   if (plan.rootLintPaths.length > 0) {
     if (!rootChecks.has(ROOT_CHECKS.rootScriptLint)) {
+      commands.push(["bun", "run", "generate"]);
       commands.push(["bun", "--cwd=packages/cli", "run", "codegen:runtime"]);
+      commands.push(["bun", "apps/api/scripts/generate-capability-runtime.ts"]);
     }
     commands.push([
       "bun",
@@ -680,7 +671,11 @@ export const planFullCheck = ({
 const presentPaths = (paths: readonly string[]): string[] =>
   paths.filter((file) => existsSync(path.join(REPO_ROOT, file)));
 
-type ScopeCheck = { plan: CheckPlan; presentChangedPaths: string[] };
+type ScopeCheck = {
+  plan: CheckPlan;
+  presentChangedPaths: string[];
+  mergeBase: string | null;
+};
 
 const planScope = (scope: CheckScope): ScopeCheck => {
   switch (scope.type) {
@@ -692,6 +687,7 @@ const planScope = (scope: CheckScope): ScopeCheck => {
           workspacePaths: workspacePaths(),
         }),
         presentChangedPaths: files,
+        mergeBase: null,
       };
     }
     case "affected": {
@@ -705,6 +701,7 @@ const planScope = (scope: CheckScope): ScopeCheck => {
           workspacePaths: workspacePaths(),
         }),
         presentChangedPaths,
+        mergeBase: changed.mergeBase,
       };
     }
     default: {
@@ -716,13 +713,27 @@ const planScope = (scope: CheckScope): ScopeCheck => {
 
 const main = () => {
   const options = parseArgs(process.argv.slice(2));
-  const { plan, presentChangedPaths } = planScope(options.scope);
+  const { plan, presentChangedPaths, mergeBase } = planScope(options.scope);
   const leg = options.leg;
-  const resultBoundaryCommand = resultBoundaryLintCommand(
-    leg === undefined
-      ? presentChangedPaths
-      : presentChangedPaths.filter((file) => ownsCodeCheckPath(file, leg)),
-  );
+  const resultBoundaryCommand = planResultBoundaryLint({
+    files:
+      leg === undefined
+        ? presentChangedPaths
+        : presentChangedPaths.filter((file) => ownsCodeCheckPath(file, leg)),
+    mergeBase,
+    resolveMergeBase: () => {
+      const result = Bun.spawnSync(
+        ["git", "merge-base", DEFAULT_BASE, "HEAD"],
+        { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
+      );
+      const base = result.stdout.toString().trim();
+      return result.exitCode === 0 && base !== "" ? base : null;
+    },
+    measureDebt: measureResultBoundaryDebt,
+    report: (message) => {
+      process.stdout.write(message);
+    },
+  });
   if (resultBoundaryCommand !== null) {
     process.stdout.write("code-check: exact result boundary lint\n");
     if (options.dryRun) {

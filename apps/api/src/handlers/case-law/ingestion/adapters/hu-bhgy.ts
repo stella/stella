@@ -1,3 +1,5 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 
 import type { Document as FolioDocument } from "@stll/docx-core/model";
@@ -399,6 +401,7 @@ const search = async ({
       redirect: "error",
     },
     {
+      fetchStage: "listing",
       adapterKey: ADAPTER_KEYS.HU_BHGY,
       signal,
       timeoutMs: ADAPTER_TIMEOUT.LIST,
@@ -496,6 +499,7 @@ const fetchDocument = async (
     target.toString(),
     { redirect: "error" },
     {
+      fetchStage: "document",
       adapterKey: ADAPTER_KEYS.HU_BHGY,
       signal,
       timeoutMs: ADAPTER_TIMEOUT.PAGE,
@@ -1972,6 +1976,7 @@ const huBhgyTotalCount = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const huBhgyAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.HU_BHGY,
   language: HU_BHGY_LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,
@@ -1993,6 +1998,26 @@ export const huBhgyAdapter = defineSourceAdapter({
   getTotalCount: huBhgyTotalCount,
 
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            Azonosito: payload["Azonosito"],
+            MeghozoBirosag: payload["MeghozoBirosag"],
+            Kollegium: payload["Kollegium"],
+            JogTerulet: payload["JogTerulet"],
+            KapcsolodoHatarozatok: payload["KapcsolodoHatarozatok"],
+            Jogszabalyhelyek: payload["Jogszabalyhelyek"],
+            HatarozatEve: payload["HatarozatEve"],
+            Szoveg: payload["Szoveg"],
+            Rezume: payload["Rezume"],
+            EgyediAzonosito: payload["EgyediAzonosito"],
+            IndexelesIdeje: payload["IndexelesIdeje"],
+            NemHivatkozhatoSzoveg: payload["NemHivatkozhatoSzoveg"],
+            IndexId: payload["IndexId"],
+            DownloadLink: payload["DownloadLink"],
+          }
+        : null,
     firstSlice: HU_BHGY_FIRST_SLICE,
     sliceOf,
     nextSlice,

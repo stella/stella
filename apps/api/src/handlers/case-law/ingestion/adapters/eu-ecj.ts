@@ -1,3 +1,5 @@
+// parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
@@ -67,6 +69,7 @@ import {
 import {
   ecjFormexDocuments,
   encodeEcjFormexArchive,
+  FORMEX_ARCHIVE_PREFIX,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-parts";
 import {
   listEcjNoticeFields,
@@ -502,6 +505,7 @@ const queryDecisions = async ({
   const query = buildListingQuery({ dateFrom, dateTo, celexFilter });
 
   const response = await fetchPublisher(SPARQL_URL, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     method: "POST",
@@ -809,6 +813,7 @@ const readDocumentResponse = async ({
 }: ReadDocumentOptions): Promise<ManifestationRead> => {
   const url = `${CELLAR_CONTENT_BASE}/${resource}`;
   const response = await fetchPublisher(url, {
+    fetchStage: "document",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     signal,
@@ -1650,7 +1655,7 @@ const nonEmptyString = (value: unknown): string | undefined =>
  */
 const reparseStoredRaw = (
   stored: StoredRawReparseInput,
-): StoredRawReparseOutcome => {
+): Exclude<StoredRawReparseOutcome, { type: "supplement" }> => {
   if (
     stored.contentType !== null &&
     !ECJ_REPARSABLE_CONTENT_TYPES.has(stored.contentType)
@@ -1746,6 +1751,116 @@ const reparseStoredRaw = (
     : { type: "parsed", result };
 };
 
+type EcjFormexRefreshOutcome =
+  | { type: "notice-missing" }
+  | { type: "formex-not-located" }
+  | { type: "formex-gone" }
+  | { type: "retryable-exhausted" }
+  | ({ type: "rate-limited" } & Pick<
+      PublisherRateLimitRefusalError,
+      "publisherKey" | "status" | "cooldownUntilEpochMs"
+    >)
+  | { type: "unchanged-already-current" }
+  | { type: "write-rejected"; rejection: string }
+  | {
+      type: "refreshed";
+      decision: IngestionResult;
+      formexShape: "archive" | "xml";
+      bytes: number;
+    };
+
+type RefreshEcjStoredFormexOptions = {
+  stored: StoredRawReparseInput;
+  signal: AbortSignal;
+  fetchFormex?: (
+    url: string,
+    init: Parameters<typeof fetchPublisher>[1],
+  ) => Promise<Response>;
+};
+
+// parser-output-unchanged: refreshes stored source bytes; parsing the resulting decision is unchanged.
+/** Refresh only the stored Formex part, preserving every other envelope part. */
+export const refreshEcjStoredFormex = async ({
+  stored,
+  signal,
+  fetchFormex: fetchRequest,
+}: RefreshEcjStoredFormexOptions): Promise<EcjFormexRefreshOutcome> => {
+  const raw = new TextDecoder().decode(stored.raw);
+  const parts = ecjStoredRawParts(raw, stored.contentType);
+  if (parts === null) {
+    return { type: "write-rejected", rejection: "invalid-envelope" };
+  }
+  const existingFormex = parts[RAW_PART.FORMEX];
+  if (existingFormex?.startsWith(FORMEX_ARCHIVE_PREFIX)) {
+    // Decode to ensure the marker is a valid archive before treating it as current.
+    ecjFormexDocuments(existingFormex);
+    return { type: "unchanged-already-current" };
+  }
+  const notice = parts[RAW_PART.NOTICE];
+  if (notice === undefined) {
+    return { type: "notice-missing" };
+  }
+
+  const fetchedResult = await Result.tryPromise({
+    try: async () =>
+      await fetchFormex(
+        parseEcjNotice(notice).manifestations,
+        signal,
+        fetchRequest,
+      ),
+    catch: (error) => error,
+  });
+  if (Result.isError(fetchedResult)) {
+    const { error } = fetchedResult;
+    if (!(error instanceof PublisherRateLimitRefusalError)) {
+      throw error;
+    }
+    return {
+      type: "rate-limited",
+      publisherKey: error.publisherKey,
+      status: error.status,
+      cooldownUntilEpochMs: error.cooldownUntilEpochMs,
+    };
+  }
+  const fetched = fetchedResult.value;
+  if (fetched.type === "not-located") {
+    return { type: "formex-not-located" };
+  }
+  if (fetched.type === "gone") {
+    return { type: "formex-gone" };
+  }
+  if (fetched.type === "retryable-exhausted") {
+    return { type: "retryable-exhausted" };
+  }
+
+  const nextRaw = encodeSourceRawEnvelope({
+    ...parts,
+    [RAW_PART.FORMEX]: fetched.formex,
+  });
+  const reparsed = reparseStoredRaw({
+    ...stored,
+    raw: new TextEncoder().encode(nextRaw),
+    contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  });
+  if (reparsed.type !== "parsed") {
+    return { type: "write-rejected", rejection: reparsed.rejection };
+  }
+  if (reparsed.result.sourceDocumentId !== stored.sourceDocumentId) {
+    return {
+      type: "write-rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+    };
+  }
+  return {
+    type: "refreshed",
+    decision: reparsed.result,
+    formexShape: fetched.formex.startsWith(FORMEX_ARCHIVE_PREFIX)
+      ? "archive"
+      : "xml",
+    bytes: new TextEncoder().encode(fetched.formex).byteLength,
+  };
+};
+
 /**
  * The branch notice for one work, negotiated into one expression's language.
  *
@@ -1771,6 +1886,7 @@ const fetchNotice = async (
     return undefined;
   }
   const response = await fetchPublisher(`${CELLAR_CELEX_PREFIX}${celex}`, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     signal,
@@ -1804,12 +1920,21 @@ const fetchNotice = async (
 const fetchFormex = async (
   manifestations: readonly EcjNoticeManifestation[],
   signal: AbortSignal,
-): Promise<string | undefined> => {
+  fetchRequest: (
+    url: string,
+    init: Parameters<typeof fetchPublisher>[1],
+  ) => Promise<Response> = fetchPublisher,
+): Promise<
+  | { type: "fetched"; formex: string }
+  | { type: "gone" }
+  | { type: "retryable-exhausted" }
+  | { type: "not-located" }
+> => {
   const manifestation = manifestations.find(
     (candidate) => candidate.type === FORMEX_MANIFESTATION_TYPE,
   );
   if (manifestation === undefined) {
-    return undefined;
+    return { type: "not-located" };
   }
   // The address comes from the notice, so it is held to Cellar's host.
   const contentUrl = publisherTarget(
@@ -1822,9 +1947,10 @@ const fetchFormex = async (
       reason: contentUrl.error.message,
       url: contentUrl.error.url,
     });
-    return undefined;
+    return { type: "not-located" };
   }
-  const response = await fetchPublisher(contentUrl.value, {
+  const response = await fetchRequest(contentUrl.value, {
+    fetchStage: "document",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     signal,
@@ -1834,20 +1960,26 @@ const fetchFormex = async (
       "User-Agent": INGESTION_USER_AGENT,
     },
   });
+  if (response.status === 404 || response.status === 410) {
+    return { type: "gone" };
+  }
   if (!response.ok) {
     logger.warn("case_law.ingestion.formex_unavailable", {
       adapterKey: ADAPTER_KEYS.EU_ECJ,
       httpStatus: response.status,
       url: contentUrl.value,
     });
-    return undefined;
+    return { type: "retryable-exhausted" };
   }
   if (
     mediaTypeOf(response.headers.get("content-type") ?? "") !== ZIP_MEDIA_TYPE
   ) {
-    return await response.text();
+    return { type: "fetched", formex: await response.text() };
   }
-  return await readEcjFormexArchive(await response.arrayBuffer());
+  return {
+    type: "fetched",
+    formex: await readEcjFormexArchive(await response.arrayBuffer()),
+  };
 };
 
 export const readEcjFormexArchive = async (
@@ -1918,10 +2050,12 @@ export const buildDecision = async (
   }
 
   const notice = await fetchNotice(celex, binding.language.value, signal);
-  const formex =
+  const formexResult =
     notice === undefined
       ? undefined
       : await fetchFormex(parseEcjNotice(notice).manifestations, signal);
+  const formex =
+    formexResult?.type === "fetched" ? formexResult.formex : undefined;
   const parts = ecjRawParts({ binding, html: served.html, notice, formex });
 
   return ecjDecisionFromParts({
@@ -2807,6 +2941,7 @@ const EU_ECJ_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const euEcjAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.EU_ECJ,
   sourceSurfaces: EU_ECJ_SOURCE_SURFACES,
   sourceFields: {
@@ -2828,6 +2963,14 @@ export const euEcjAdapter = defineSourceAdapter({
    * is held.
    */
   reconciliation: {
+    // CELEX and language identify a manifestation; the listing exposes no content change signal.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            celex: payload["celex"],
+            language: payload["language"],
+          }
+        : null,
     firstSlice: COURT_EPOCH_YEAR,
     sliceOf: ecjYearOf,
     nextSlice: ecjNextSlice,
@@ -2846,6 +2989,7 @@ export const euEcjAdapter = defineSourceAdapter({
   async getTotalCount(signal) {
     try {
       const response = await fetchPublisher(SPARQL_URL, {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.EU_ECJ,
         retryPolicy: "publisher-backoff",
         method: "POST",
