@@ -3,8 +3,15 @@ import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import {
+  projectProvisionPreview,
+  provisionPreviewSuccessResponseSchema,
+} from "@/api/handlers/legislation/reader-response";
+import {
+  safePublicHandlerResponseSchemasWithStatusText,
+  createSafeBoundedPublicHandler,
+} from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeBoundedPublicHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
@@ -22,6 +29,9 @@ import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 const PREVIEW_READ_STEP = "provisionPreview.corpusAst";
 
 const config = {
+  response: safePublicHandlerResponseSchemasWithStatusText(
+    provisionPreviewSuccessResponseSchema,
+  ),
   cache: { kind: "public", maxAge: 3600, swr: 86_400 },
   // Not a capability: a cacheable browser citation-preview read gated
   // by the public-law route hook, neither of
@@ -101,7 +111,7 @@ export const readProvisionPreviewHandler = async ({
     return status(404, { message: "Provision not found" });
   }
 
-  return preview;
+  return projectProvisionPreview(preview);
 };
 
 const readProvisionPreview = createSafeBoundedPublicHandler(
