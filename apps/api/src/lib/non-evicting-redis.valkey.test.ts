@@ -28,7 +28,7 @@ describe.skipIf(!runValkeyTests)("admission policy over Valkey", () => {
         }
         return reply.replace(
           /^maxmemory_policy:[^\r\n]+/mu,
-          () => `maxmemory_policy:${override}`,
+          () => `maxmemory_policy:${String(override)}`,
         );
       },
     };
@@ -48,8 +48,8 @@ describe.skipIf(!runValkeyTests)("admission policy over Valkey", () => {
     );
     const userId = toSafeId<"user">("policy_user");
     let executions = 0;
-    const admit = () =>
-      withActionAdmission({
+    const admit = async () =>
+      await withActionAdmission({
         organizationId,
         userId,
         enabled: true,
@@ -75,7 +75,7 @@ describe.skipIf(!runValkeyTests)("admission policy over Valkey", () => {
       expect(executions).toBe(1);
       override = "allkeys-lru";
       refresh();
-      const client = await store.ready();
+      const client = (await store.ready()).unwrap();
       const refused = await admit();
       expect(Result.isError(refused)).toBe(true);
       if (Result.isError(refused)) {

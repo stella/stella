@@ -1,3 +1,4 @@
+// parser-output-unchanged: coordination client construction only; parsing is untouched
 // parser-output-unchanged: publisher scheduling only; response parsing is unchanged.
 import { TaggedError } from "better-result";
 
@@ -115,7 +116,19 @@ let deployedStore:
 const deployedGateClient = async () => {
   const { createAdmissionRedis } = await loadRedisClient();
   deployedStore ??= createAdmissionRedis();
-  return await deployedStore.ready();
+  const connection = await deployedStore.ready();
+  if (connection.status === "error") {
+    return await Promise.reject(connection.error);
+  }
+  return {
+    send: async (command: string, args: string[]) => {
+      const reply = await connection.value.send(command, args);
+      if (reply.status === "error") {
+        return await Promise.reject(reply.error);
+      }
+      return reply.value;
+    },
+  };
 };
 
 const defaultDependencies = (

@@ -28,6 +28,14 @@ export type StorePolicyObservation =
   | { status: "unknown" }
   | { status: "refused" };
 
+export type NonEvictingRedisClient = {
+  type: "checked";
+  send: (
+    command: string,
+    args: string[],
+  ) => Promise<Result<unknown, ActionAdmissionError | RedisClientClosedError>>;
+};
+
 type NonEvictingRedisOptions = {
   connection: { ready: () => Promise<RedisCommands>; close: () => void };
   observe: (observation: StorePolicyObservation) => void;
@@ -50,27 +58,34 @@ export const nonEvictingRedis = ({
   let cancelRefresh: (() => void) | undefined;
   let cancelReconnect: (() => void) | undefined;
 
-  const assertCurrent = (state: CheckedConnection) => {
+  const checkCurrent = (
+    state: CheckedConnection,
+  ): Result<void, RedisClientClosedError> => {
     if (current !== state) {
-      throw new RedisClientClosedError({
-        message: "Admission client closed or replaced during policy inspection",
-      });
+      return Result.err(
+        new RedisClientClosedError({
+          message:
+            "Admission client closed or replaced during policy inspection",
+        }),
+      );
     }
+    return Result.ok(undefined);
   };
 
-  const check = (state: CheckedConnection) => {
+  const check = async (state: CheckedConnection) => {
     state.checking ??= (async () => {
       for (;;) {
         if (current !== state) {
           return;
         }
         const generation = state.generation;
-        const reply = await Result.tryPromise(() =>
-          withCommandTimeout({
-            command: state.client.send("INFO", ["memory"]),
-            commandTimeoutMs: POLICY_COMMAND_TIMEOUT_MS,
-            label: "admission-store-policy",
-          }),
+        const reply = await Result.tryPromise(
+          async () =>
+            await withCommandTimeout({
+              command: state.client.send("INFO", ["memory"]),
+              commandTimeoutMs: POLICY_COMMAND_TIMEOUT_MS,
+              label: "admission-store-policy",
+            }),
         );
         if (current !== state) {
           return;
@@ -100,10 +115,12 @@ export const nonEvictingRedis = ({
     })().finally(() => {
       state.checking = undefined;
     });
-    return state.checking;
+    await state.checking;
   };
 
-  const ready = async () => {
+  const ready = async (): Promise<
+    Result<NonEvictingRedisClient, RedisClientClosedError>
+  > => {
     const client = await connection.ready();
     if (current?.client !== client) {
       cancelReconnect?.();
@@ -130,26 +147,43 @@ export const nonEvictingRedis = ({
     }
     const state = current;
     await state.checking;
-    assertCurrent(state);
-    return {
+    const active = checkCurrent(state);
+    if (Result.isError(active)) {
+      return active;
+    }
+    return Result.ok({
+      type: "checked" as const,
       send: async (command: string, args: string[]) => {
         await state.checking;
-        assertCurrent(state);
+        const currentConnection = checkCurrent(state);
+        if (Result.isError(currentConnection)) {
+          return currentConnection;
+        }
         switch (state.policy.status) {
           case "refused":
-            throw new ActionAdmissionError({
-              message: NON_EVICTING_STORE_MESSAGE,
-              reason: "unavailable",
-            });
+            return Result.err(
+              new ActionAdmissionError({
+                message: NON_EVICTING_STORE_MESSAGE,
+                reason: "unavailable",
+              }),
+            );
           case "allowed":
           case "unknown":
-            return await client.send(command, args);
+            return await Result.tryPromise({
+              try: async () => await client.send(command, args),
+              catch: (cause) =>
+                new ActionAdmissionError({
+                  message: "Admission storage is unavailable",
+                  reason: "unavailable",
+                  cause,
+                }),
+            });
           default:
             state.policy satisfies never;
             return panic("Unhandled admission store policy");
         }
       },
-    };
+    });
   };
 
   return {
