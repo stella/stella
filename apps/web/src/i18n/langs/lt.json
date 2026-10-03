@@ -2256,6 +2256,7 @@
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
       "legalSourceEntityLimitReached": "Šioje byloje pasiektas elementų limitas, todėl dokumento sukurti nepavyko.",
       "legalSourceFilePropertyMissing": "Šioje byloje trūksta failo ypatybės, todėl dokumento sukurti nepavyko.",
+      "mcpAuthorizationApprovalRequired": "Kad galėtumėte prisijungti, administratorius turi iš naujo patvirtinti šią jungtį.",
       "notOrganizationMember": "Nesate šios organizacijos narys.",
       "providerKeyRejected": "Teikėjas atmetė API raktą.",
       "providerRateLimited": "Pasiektas teikėjo užklausų limitas. Netrukus bandykite dar kartą.",

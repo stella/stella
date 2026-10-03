@@ -13,6 +13,7 @@ import {
 import { redactMcpOAuthRegistrationResponse } from "@/api/lib/mcp-upstream/oauth-registration-response";
 import {
   authorizationServerMetadataUrls,
+  canonicalMcpResourceUrl,
   mcpWellKnownProtectedResourceUrls,
 } from "@/api/lib/mcp-upstream/url-safety";
 import {
@@ -53,6 +54,7 @@ const authorizationServerMetadataSchema = v.looseObject({
   token_endpoint_auth_methods_supported: v.optional(v.array(v.string())),
   grant_types_supported: v.optional(v.array(v.string())),
   client_id_metadata_document_supported: v.optional(v.boolean()),
+  authorization_response_iss_parameter_supported: v.optional(v.boolean()),
 });
 
 const dynamicClientRegistrationResponseSchema = v.looseObject({
@@ -76,6 +78,103 @@ export type UpstreamAuthorizationServerMetadata = v.InferOutput<
   typeof authorizationServerMetadataSchema
 >;
 
+const boundOAuthMetadata = Symbol("BoundOAuthMetadata");
+
+export type BoundOAuthMetadata = {
+  readonly [boundOAuthMetadata]: true;
+  readonly authorizationServer: Readonly<UpstreamAuthorizationServerMetadata>;
+  readonly protectedResource: Readonly<ProtectedResourceMetadata>;
+};
+
+type BindDiscoveredMetadataOptions = {
+  connectorUrl: string;
+  protectedResource: ProtectedResourceMetadata;
+  authorizationServer: UpstreamAuthorizationServerMetadata;
+};
+
+export const bindDiscoveredMetadata = ({
+  connectorUrl,
+  protectedResource,
+  authorizationServer,
+}: BindDiscoveredMetadataOptions): Result<
+  BoundOAuthMetadata,
+  HandlerError<502>
+> => {
+  const resource = validateResourceBinding(
+    connectorUrl,
+    protectedResource.resource,
+  );
+  if (Result.isError(resource)) {
+    return Result.err(resource.error);
+  }
+  if (
+    authorizationServer.issuer !== protectedResource.authorization_servers.at(0)
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 502,
+        message:
+          "MCP authorization server metadata does not match the selected issuer",
+      }),
+    );
+  }
+  return Result.ok({
+    [boundOAuthMetadata]: true,
+    authorizationServer: Object.freeze({ ...authorizationServer }),
+    protectedResource: Object.freeze({ ...protectedResource }),
+  });
+};
+
+const validateResourceBinding = (
+  connectorUrl: string,
+  resourceUrl: string,
+): Result<void, HandlerError<502>> => {
+  const matches = Result.try(
+    () =>
+      canonicalMcpResourceUrl(connectorUrl) ===
+      canonicalMcpResourceUrl(resourceUrl),
+  );
+  if (Result.isError(matches) || !matches.value) {
+    return Result.err(
+      new HandlerError({
+        status: 502,
+        message: "MCP resource metadata does not match the connector URL",
+      }),
+    );
+  }
+  return Result.ok(undefined);
+};
+
+export const validateApprovedOAuthIssuer = (
+  metadata: BoundOAuthMetadata,
+  approvedIssuer: string | null,
+): Result<void, HandlerError<409>> => {
+  if (
+    approvedIssuer !== null &&
+    metadata.authorizationServer.issuer !== approvedIssuer
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        code: "mcp_authorization_approval_required",
+        message:
+          "An administrator must re-approve this connector before you can connect.",
+      }),
+    );
+  }
+  return Result.ok(undefined);
+};
+
+type OAuthDiscoveryDependencies = {
+  safeOutboundFetchBytes: typeof safeOutboundFetchBytes;
+  validateOutboundFetchTarget: typeof validateOutboundFetchTarget;
+};
+
+const DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES: OAuthDiscoveryDependencies = {
+  safeOutboundFetchBytes,
+  validateOutboundFetchTarget,
+};
+
 export type TokenResponse = v.InferOutput<typeof tokenResponseSchema>;
 
 export type RegisteredOAuthClient = {
@@ -94,7 +193,9 @@ const fetchJson = async <T>({
   init,
   schema,
   url,
+  dependencies = DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES,
 }: {
+  dependencies?: OAuthDiscoveryDependencies;
   init?: McpFetchJsonInit | undefined;
   schema: v.GenericSchema<unknown, T>;
   url: URL;
@@ -106,7 +207,7 @@ const fetchJson = async <T>({
         headers.set("Accept", "application/json");
       }
 
-      const response = await safeOutboundFetchBytes({
+      const response = await dependencies.safeOutboundFetchBytes({
         body: init?.body,
         headers,
         maxBytes: OAUTH_FETCH_MAX_BYTES,
@@ -145,16 +246,9 @@ const fetchJson = async <T>({
 
 export const discoverOAuthMetadata = async (
   rawMcpUrl: string,
-): Promise<
-  Result<
-    {
-      authorizationServer: UpstreamAuthorizationServerMetadata;
-      protectedResource: ProtectedResourceMetadata;
-    },
-    HandlerError<400 | 502>
-  >
-> => {
-  const target = await validateOutboundFetchTarget(rawMcpUrl);
+  dependencies = DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES,
+): Promise<Result<BoundOAuthMetadata, HandlerError<400 | 502>>> => {
+  const target = await dependencies.validateOutboundFetchTarget(rawMcpUrl);
   if (Result.isError(target)) {
     return Result.err(
       new HandlerError({
@@ -169,6 +263,7 @@ export const discoverOAuthMetadata = async (
   let protectedResource: ProtectedResourceMetadata | null = null;
   for (const metadataUrl of mcpWellKnownProtectedResourceUrls(parsedUrl)) {
     const result = await fetchJson({
+      dependencies,
       schema: protectedResourceMetadataSchema,
       url: metadataUrl,
     });
@@ -187,30 +282,15 @@ export const discoverOAuthMetadata = async (
     );
   }
 
-  const authorizationServerUrl = new URL(
-    protectedResource.authorization_servers.at(0) ?? "",
+  const resource = validateResourceBinding(
+    rawMcpUrl,
+    protectedResource.resource,
   );
-  let authorizationServer: UpstreamAuthorizationServerMetadata | null = null;
-  for (const metadataUrl of authorizationServerMetadataUrls(
-    authorizationServerUrl,
-  )) {
-    const result = await fetchJson({
-      schema: authorizationServerMetadataSchema,
-      url: metadataUrl,
-    });
-    if (Result.isOk(result)) {
-      const safeMetadata = await validateAuthorizationServerMetadata(
-        result.value,
-      );
-      if (Result.isError(safeMetadata)) {
-        return Result.err(safeMetadata.error);
-      }
-      authorizationServer = result.value;
-      break;
-    }
+  if (Result.isError(resource)) {
+    return Result.err(resource.error);
   }
-
-  if (!authorizationServer) {
+  const authorizationServerUrl = protectedResource.authorization_servers.at(0);
+  if (!authorizationServerUrl) {
     return Result.err(
       new HandlerError({
         status: 502,
@@ -218,8 +298,18 @@ export const discoverOAuthMetadata = async (
       }),
     );
   }
-
-  return Result.ok({ authorizationServer, protectedResource });
+  const authorizationServer = await discoverAuthorizationServer(
+    authorizationServerUrl,
+    dependencies,
+  );
+  if (Result.isError(authorizationServer)) {
+    return Result.err(authorizationServer.error);
+  }
+  return bindDiscoveredMetadata({
+    connectorUrl: rawMcpUrl,
+    protectedResource,
+    authorizationServer: authorizationServer.value,
+  });
 };
 
 const randomBase64Url = (byteLength: number): string => {
@@ -293,32 +383,30 @@ export const buildMcpClientMetadataDocument =
   });
 
 export const buildAuthorizeUrl = ({
-  authorizationServer,
+  metadata,
   clientId,
   codeChallenge,
   connectorSlug,
-  protectedResource,
   redirectUri,
   requestedScopes,
   state,
 }: {
-  authorizationServer: UpstreamAuthorizationServerMetadata;
+  metadata: BoundOAuthMetadata;
   clientId: string;
   codeChallenge: string;
   connectorSlug: string;
-  protectedResource: ProtectedResourceMetadata;
   redirectUri: string;
   requestedScopes: string[];
   state: string;
 }): string => {
-  const url = new URL(authorizationServer.authorization_endpoint);
+  const url = new URL(metadata.authorizationServer.authorization_endpoint);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", clientId);
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("code_challenge", codeChallenge);
   url.searchParams.set("code_challenge_method", "S256");
   url.searchParams.set("state", state);
-  url.searchParams.set("resource", protectedResource.resource);
+  url.searchParams.set("resource", metadata.protectedResource.resource);
 
   if (requestedScopes.length > 0) {
     url.searchParams.set("scope", requestedScopes.join(" "));
@@ -373,16 +461,19 @@ export const buildOAuthClientRegistrationRequest = ({
 });
 
 export const registerOAuthClient = async ({
-  authorizationServer,
+  metadata,
+  dependencies = DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES,
   connectorSlug,
   redirectUri,
   requestedScopes,
 }: {
-  authorizationServer: UpstreamAuthorizationServerMetadata;
+  metadata: BoundOAuthMetadata;
+  dependencies?: OAuthDiscoveryDependencies;
   connectorSlug: string;
   redirectUri: string;
   requestedScopes: string[];
 }): Promise<Result<RegisteredOAuthClient, HandlerError<502>>> => {
+  const { authorizationServer } = metadata;
   if (!authorizationServer.registration_endpoint) {
     return Result.err(
       new HandlerError({
@@ -401,6 +492,7 @@ export const registerOAuthClient = async ({
   });
 
   const response = await fetchJson({
+    dependencies,
     init: {
       body: JSON.stringify(registrationBody),
       headers: { "Content-Type": "application/json" },
@@ -428,25 +520,35 @@ export const registerOAuthClient = async ({
 };
 
 export const exchangeAuthorizationCode = async ({
-  authorizationServerUrl,
+  metadata,
+  dependencies = DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES,
   clientId,
   clientSecret,
   code,
   codeVerifier,
+  responseIssuer,
   redirectUri,
-  resourceUrl,
 }: {
-  authorizationServerUrl: string;
+  metadata: BoundOAuthMetadata;
+  dependencies?: OAuthDiscoveryDependencies;
   clientId: string;
   clientSecret: ClientSecret | null;
   code: string;
   codeVerifier: string;
+  responseIssuer: string | undefined;
   redirectUri: string;
-  resourceUrl: string;
 }): Promise<Result<TokenResponse, HandlerError<502>>> => {
-  const metadata = await discoverAuthorizationServer(authorizationServerUrl);
-  if (Result.isError(metadata)) {
-    return Result.err(metadata.error);
+  if (
+    metadata.authorizationServer
+      .authorization_response_iss_parameter_supported === true &&
+    responseIssuer !== metadata.authorizationServer.issuer
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 502,
+        message: "MCP authorization response issuer does not match",
+      }),
+    );
   }
 
   const body = new URLSearchParams({
@@ -455,7 +557,7 @@ export const exchangeAuthorizationCode = async ({
     client_id: clientId,
     code_verifier: codeVerifier,
     redirect_uri: redirectUri,
-    resource: resourceUrl,
+    resource: metadata.protectedResource.resource,
   });
 
   if (clientSecret) {
@@ -463,6 +565,7 @@ export const exchangeAuthorizationCode = async ({
   }
 
   const token = await fetchJson({
+    dependencies,
     init: {
       body,
       headers: {
@@ -471,7 +574,7 @@ export const exchangeAuthorizationCode = async ({
       method: "POST",
     },
     schema: tokenResponseSchema,
-    url: new URL(metadata.value.token_endpoint),
+    url: new URL(metadata.authorizationServer.token_endpoint),
   });
 
   if (Result.isError(token)) {
@@ -488,28 +591,23 @@ export const exchangeAuthorizationCode = async ({
 };
 
 export const refreshOAuthToken = async ({
-  authorizationServerUrl,
+  metadata,
+  dependencies = DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES,
   clientId,
   clientSecret,
   refreshToken,
-  resourceUrl,
 }: {
-  authorizationServerUrl: string;
+  metadata: BoundOAuthMetadata;
+  dependencies?: OAuthDiscoveryDependencies;
   clientId: string;
   clientSecret: ClientSecret | null;
   refreshToken: RefreshToken;
-  resourceUrl: string;
 }): Promise<Result<TokenResponse, HandlerError<502>>> => {
-  const metadata = await discoverAuthorizationServer(authorizationServerUrl);
-  if (Result.isError(metadata)) {
-    return Result.err(metadata.error);
-  }
-
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     client_id: clientId,
     refresh_token: refreshToken,
-    resource: resourceUrl,
+    resource: metadata.protectedResource.resource,
   });
 
   if (clientSecret) {
@@ -517,6 +615,7 @@ export const refreshOAuthToken = async ({
   }
 
   const token = await fetchJson({
+    dependencies,
     init: {
       body,
       headers: {
@@ -525,7 +624,7 @@ export const refreshOAuthToken = async ({
       method: "POST",
     },
     schema: tokenResponseSchema,
-    url: new URL(metadata.value.token_endpoint),
+    url: new URL(metadata.authorizationServer.token_endpoint),
   });
 
   if (Result.isError(token)) {
@@ -543,17 +642,29 @@ export const refreshOAuthToken = async ({
 
 const discoverAuthorizationServer = async (
   authorizationServerUrl: string,
+  dependencies: OAuthDiscoveryDependencies,
 ): Promise<Result<UpstreamAuthorizationServerMetadata, HandlerError<502>>> => {
   for (const metadataUrl of authorizationServerMetadataUrls(
     new URL(authorizationServerUrl),
   )) {
     const result = await fetchJson({
+      dependencies,
       schema: authorizationServerMetadataSchema,
       url: metadataUrl,
     });
     if (Result.isOk(result)) {
+      if (result.value.issuer !== authorizationServerUrl) {
+        return Result.err(
+          new HandlerError({
+            status: 502,
+            message:
+              "MCP authorization server metadata does not match the selected issuer",
+          }),
+        );
+      }
       const safeMetadata = await validateAuthorizationServerMetadata(
         result.value,
+        dependencies,
       );
       if (Result.isError(safeMetadata)) {
         return Result.err(safeMetadata.error);
@@ -572,6 +683,7 @@ const discoverAuthorizationServer = async (
 
 const validateAuthorizationServerMetadata = async (
   metadata: UpstreamAuthorizationServerMetadata,
+  dependencies: OAuthDiscoveryDependencies,
 ): Promise<Result<void, HandlerError<502>>> => {
   const urls = [
     metadata.issuer,
@@ -584,7 +696,9 @@ const validateAuthorizationServerMetadata = async (
   // round instead of paying a DNS round-trip per URL. The first unsafe URL
   // still decides the result.
   const validations = await Promise.all(
-    urls.map(async (url) => await validateOutboundFetchTarget(url)),
+    urls.map(
+      async (url) => await dependencies.validateOutboundFetchTarget(url),
+    ),
   );
   for (const validation of validations) {
     if (Result.isError(validation)) {

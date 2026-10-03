@@ -10,15 +10,19 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { oauthCallbackFailureReason } from "@/api/lib/errors/oauth-callback-failure";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
 import {
   decryptMcpSecret,
   encryptMcpSecret,
 } from "@/api/lib/mcp-upstream/crypto";
 import {
+  discoverOAuthMetadata,
+  validateApprovedOAuthIssuer,
   exchangeAuthorizationCode,
   tokenExpiresAt,
 } from "@/api/lib/mcp-upstream/oauth";
+import { canonicalMcpResourceUrl } from "@/api/lib/mcp-upstream/url-safety";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -26,6 +30,7 @@ const STATE_TTL_MS = 10 * 60 * 1000;
 const requestQuery = t.Object({
   code: t.Optional(t.String()),
   state: t.Optional(t.String()),
+  iss: t.Optional(t.String()),
 });
 
 const config = {
@@ -108,6 +113,8 @@ const mcpOAuthCallback = createSafeRootHandler(
                 columns: {
                   id: true,
                   slug: true,
+                  url: true,
+                  oauthIssuer: true,
                 },
               },
             },
@@ -137,6 +144,46 @@ const mcpOAuthCallback = createSafeRootHandler(
           );
         }
         const connectorSlug = row.connector.slug;
+
+        if (
+          canonicalMcpResourceUrl(row.resourceUrl) !==
+          canonicalMcpResourceUrl(row.connector.url)
+        ) {
+          return Result.ok(
+            redirectForFailure(
+              new HandlerError({
+                status: 502,
+                message:
+                  "MCP resource metadata does not match the connector URL",
+              }),
+            ),
+          );
+        }
+        const metadata = await discoverOAuthMetadata(row.connector.url);
+        if (Result.isError(metadata)) {
+          return Result.ok(redirectForFailure(metadata.error));
+        }
+        const approvedIssuer = validateApprovedOAuthIssuer(
+          metadata.value,
+          row.connector.oauthIssuer,
+        );
+        if (Result.isError(approvedIssuer)) {
+          return Result.ok(redirectForFailure(approvedIssuer.error));
+        }
+        if (
+          metadata.value.authorizationServer.issuer !==
+          row.authorizationServerUrl
+        ) {
+          return Result.ok(
+            redirectForFailure(
+              new HandlerError({
+                status: 502,
+                message:
+                  "MCP authorization server metadata does not match the selected issuer",
+              }),
+            ),
+          );
+        }
 
         const clientResult = await safeDb((tx) =>
           tx.query.mcpOAuthClients.findFirst({
@@ -175,13 +222,13 @@ const mcpOAuthCallback = createSafeRootHandler(
             : null;
 
         const token = await exchangeAuthorizationCode({
-          authorizationServerUrl: row.authorizationServerUrl,
+          metadata: metadata.value,
+          responseIssuer: input.iss,
           clientId: client.clientId,
           clientSecret,
           code,
           codeVerifier: row.codeVerifier,
           redirectUri: row.redirectUri,
-          resourceUrl: row.resourceUrl,
         });
 
         if (Result.isError(token)) {

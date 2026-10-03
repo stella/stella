@@ -2256,6 +2256,7 @@
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "legalSourceEntityLimitReached": "Diese Akte hat das Limit für Einträge erreicht, daher konnte das Dokument nicht erstellt werden.",
       "legalSourceFilePropertyMissing": "In dieser Akte fehlt eine Dateieigenschaft, daher konnte das Dokument nicht erstellt werden.",
+      "mcpAuthorizationApprovalRequired": "Ein Administrator muss diesen Connector erneut genehmigen, bevor Sie eine Verbindung herstellen können.",
       "notOrganizationMember": "Sie sind kein Mitglied dieser Organisation.",
       "providerKeyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt.",
       "providerRateLimited": "Das Anfragelimit des Anbieters wurde erreicht. Versuchen Sie es in Kürze erneut.",

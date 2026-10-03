@@ -1,6 +1,15 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
+  bindDiscoveredMetadata,
+  buildAuthorizeUrl,
+  discoverOAuthMetadata,
+  exchangeAuthorizationCode,
+  validateApprovedOAuthIssuer,
   buildMcpClientMetadataDocument,
   buildOAuthClientRegistrationRequest,
   clientRegistrationMode,
@@ -13,7 +22,218 @@ import type {
   TokenResponse,
 } from "@/api/lib/mcp-upstream/oauth";
 import { redactMcpOAuthRegistrationResponse } from "@/api/lib/mcp-upstream/oauth-registration-response";
+import { canonicalMcpResourceUrl } from "@/api/lib/mcp-upstream/url-safety";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const connectorUrl = "https://mcp.example.com/rpc";
+const issuer = "https://as.example.com";
+
+const discoveryTransport = ({
+  resource = connectorUrl,
+  metadataIssuer = issuer,
+  responseIssuerSupported = false,
+} = {}) => {
+  const requests: { url: string; method: string }[] = [];
+  const dependencies = {
+    validateOutboundFetchTarget: async (url: string | URL) =>
+      Result.ok({ addresses: [], url: new URL(url) }),
+    safeOutboundFetchBytes: async ({
+      url,
+      method,
+    }: {
+      url: URL;
+      method?: string;
+    }) => {
+      requests.push({ url: url.toString(), method: method ?? "GET" });
+      const responseData = () => {
+        if (method === "POST") {
+          return { access_token: "access", token_type: "Bearer" };
+        }
+        if (url.hostname === "mcp.example.com") {
+          return { resource, authorization_servers: [issuer] };
+        }
+        return {
+          issuer: metadataIssuer,
+          authorization_endpoint: `${issuer}/authorize`,
+          token_endpoint: `${issuer}/token`,
+          authorization_response_iss_parameter_supported:
+            responseIssuerSupported,
+        };
+      };
+      return Result.ok({
+        body: new TextEncoder().encode(JSON.stringify(responseData())).buffer,
+        headers: new Headers({ "Content-Type": "application/json" }),
+        ok: true,
+        status: 200,
+      });
+    },
+  } satisfies Parameters<typeof discoverOAuthMetadata>[1];
+  return { dependencies, requests };
+};
+
+describe("upstream metadata binding", () => {
+  test("uses only metadata issued for the connector", async () => {
+    const transport = discoveryTransport({
+      resource: "https://mcp.example.com/other",
+    });
+    const result = await discoverOAuthMetadata(
+      connectorUrl,
+      transport.dependencies,
+    );
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.status).toBe(502);
+      expect(result.error.message).toContain("resource metadata");
+    }
+    expect(transport.requests).toHaveLength(1);
+    expect(transport.requests.every(({ method }) => method === "GET")).toBe(
+      true,
+    );
+  });
+
+  test("uses only metadata issued by the selected server", async () => {
+    const transport = discoveryTransport({
+      metadataIssuer: "https://as.example.com/other",
+    });
+    const result = await discoverOAuthMetadata(
+      connectorUrl,
+      transport.dependencies,
+    );
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.status).toBe(502);
+      expect(result.error.message).toContain("selected issuer");
+    }
+    expect(transport.requests).toHaveLength(2);
+    expect(transport.requests.every(({ method }) => method === "GET")).toBe(
+      true,
+    );
+  });
+
+  test("builds authorization requests from configured metadata", async () => {
+    const transport = discoveryTransport();
+    const result = await discoverOAuthMetadata(
+      connectorUrl,
+      transport.dependencies,
+    );
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      return;
+    }
+    const url = new URL(
+      buildAuthorizeUrl({
+        metadata: result.value,
+        clientId: "client",
+        codeChallenge: "challenge",
+        connectorSlug: "registry",
+        redirectUri: "https://app.example.com/callback",
+        requestedScopes: ["read"],
+        state: "state",
+      }),
+    );
+    expect(url.origin).toBe(issuer);
+    expect(url.searchParams.get("resource")).toBe(connectorUrl);
+    expect(url.searchParams.get("scope")).toBe("read");
+    expect(Result.isOk(validateApprovedOAuthIssuer(result.value, null))).toBe(
+      true,
+    );
+    expect(Result.isOk(validateApprovedOAuthIssuer(result.value, issuer))).toBe(
+      true,
+    );
+    const approval = validateApprovedOAuthIssuer(
+      result.value,
+      `${issuer}/other`,
+    );
+    expect(Result.isError(approval)).toBe(true);
+    if (Result.isError(approval)) {
+      expect(approval.error.status).toBe(409);
+      expect(approval.error.code).toBe("mcp_authorization_approval_required");
+    }
+  });
+
+  test("mcp-resource-url.equivalence", () => {
+    assertProperty(
+      "mcp-resource-url.equivalence",
+      fc.property(
+        fc.record({
+          scheme: fc.constantFrom("http", "https"),
+          host: fc.integer({ min: 1, max: 100_000 }),
+          path: fc.integer({ min: 1, max: 100_000 }),
+          equivalent: fc.boolean(),
+          distinctPart: fc.constantFrom("path", "query", "port", "host"),
+          slashes: fc.integer({ min: 1, max: 4 }),
+        }),
+        ({ scheme, host, path, equivalent, slashes, distinctPart }) => {
+          const base = `${scheme}://server${host}.example.com/rpc${path}`;
+          const distinctResources = {
+            path: `${base}/other`,
+            query: `${base}?mode=read`,
+            port: `${scheme}://server${host}.example.com:8443/rpc${path}`,
+            host: `${scheme}://other${host}.example.com/rpc${path}`,
+          };
+          const resource = equivalent
+            ? `${scheme.toUpperCase()}://SERVER${host}.EXAMPLE.COM:${scheme === "https" ? 443 : 80}/rpc${path}${"/".repeat(slashes)}`
+            : distinctResources[distinctPart];
+          expect(resource).not.toBe(base);
+          expect(
+            canonicalMcpResourceUrl(resource) === canonicalMcpResourceUrl(base),
+          ).toBe(equivalent);
+          expect(
+            canonicalMcpResourceUrl(canonicalMcpResourceUrl(resource)),
+          ).toBe(canonicalMcpResourceUrl(resource));
+          const binding = bindDiscoveredMetadata({
+            connectorUrl: base,
+            protectedResource: { resource, authorization_servers: [issuer] },
+            authorizationServer: authorizationServer({}),
+          });
+          expect(Result.isOk(binding)).toBe(equivalent);
+        },
+      ),
+    );
+  });
+});
+
+describe("authorization response metadata", () => {
+  for (const supported of [false, true]) {
+    for (const responseIssuer of [undefined, issuer, `${issuer}/other`]) {
+      const presentKind = responseIssuer === issuer ? "matching" : "different";
+      const responseKind =
+        responseIssuer === undefined ? "absent" : presentKind;
+      test(`processes configured issuer responses (${supported}, ${responseKind})`, async () => {
+        const transport = discoveryTransport({
+          responseIssuerSupported: supported,
+        });
+        const metadata = await discoverOAuthMetadata(
+          connectorUrl,
+          transport.dependencies,
+        );
+        expect(Result.isOk(metadata)).toBe(true);
+        if (Result.isError(metadata)) {
+          return;
+        }
+        const result = await exchangeAuthorizationCode({
+          metadata: metadata.value,
+          dependencies: transport.dependencies,
+          clientId: "client",
+          clientSecret: null,
+          code: "code",
+          codeVerifier: "verifier",
+          responseIssuer,
+          redirectUri: "https://app.example.com/callback",
+        });
+        const valid = !supported || responseIssuer === issuer;
+        expect(Result.isOk(result)).toBe(valid);
+        expect(
+          transport.requests.filter(({ method }) => method === "POST"),
+        ).toHaveLength(valid ? 1 : 0);
+        if (Result.isError(result)) {
+          expect(result.error.status).toBe(502);
+          expect(result.error.message).toContain("response issuer");
+        }
+      });
+    }
+  }
+});
 
 const authorizationServer = (
   overrides: Partial<UpstreamAuthorizationServerMetadata>,

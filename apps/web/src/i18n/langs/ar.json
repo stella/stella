@@ -2256,6 +2256,7 @@
       "internalServerError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "legalSourceEntityLimitReached": "بلغ هذا الملف القانوني الحد الأقصى للعناصر، لذا تعذّر إنشاء المستند.",
       "legalSourceFilePropertyMissing": "يفتقر هذا الملف القانوني إلى خاصية ملف، لذا تعذر إنشاء المستند.",
+      "mcpAuthorizationApprovalRequired": "يجب على مسؤول الموافقة على هذا الموصل مجددًا قبل أن تتمكن من الاتصال.",
       "notOrganizationMember": "أنت لست عضوًا في هذه المؤسسة.",
       "providerKeyRejected": "رفض مزود الخدمة مفتاح API.",
       "providerRateLimited": "تم بلوغ حد طلبات مزود الخدمة. حاول مرة أخرى بعد قليل.",

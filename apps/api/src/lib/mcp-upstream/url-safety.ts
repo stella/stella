@@ -1,3 +1,11 @@
+export const canonicalMcpResourceUrl = (rawUrl: string): string => {
+  const url = new URL(rawUrl);
+  while (url.pathname.length > 1 && url.pathname.endsWith("/")) {
+    url.pathname = url.pathname.slice(0, -1);
+  }
+  return url.toString();
+};
+
 export const mcpWellKnownProtectedResourceUrls = (mcpUrl: URL): URL[] => {
   const root = new URL("/.well-known/oauth-protected-resource", mcpUrl.origin);
   const pathScoped = new URL(

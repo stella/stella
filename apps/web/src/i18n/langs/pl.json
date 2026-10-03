@@ -2256,6 +2256,7 @@
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
+      "mcpAuthorizationApprovalRequired": "Administrator musi ponownie zatwierdzić ten łącznik, zanim będzie można się połączyć.",
       "notOrganizationMember": "Nie jesteś członkiem tej organizacji.",
       "providerKeyRejected": "Dostawca odrzucił klucz API.",
       "providerRateLimited": "Osiągnięto limit żądań dostawcy. Spróbuj ponownie za chwilę.",

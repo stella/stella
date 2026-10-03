@@ -2256,6 +2256,7 @@
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",
       "legalSourceFilePropertyMissing": "Sellel toimikul puudub faili atribuut, mistõttu dokumenti ei saanud luua.",
+      "mcpAuthorizationApprovalRequired": "Enne ühendamist peab administraator selle pistiku uuesti heaks kiitma.",
       "notOrganizationMember": "Te ei ole selle organisatsiooni liige.",
       "providerKeyRejected": "Teenusepakkuja lükkas API-võtme tagasi.",
       "providerRateLimited": "Teenusepakkuja päringulimiit on täis. Proovige varsti uuesti.",

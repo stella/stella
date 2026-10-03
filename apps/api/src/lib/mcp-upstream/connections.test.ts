@@ -5,6 +5,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
+import { bindDiscoveredMetadata } from "@/api/lib/mcp-upstream/oauth";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -31,6 +32,7 @@ type CapturedTransport = {
 const state = {
   closes: 0,
   dbSets: [] as Record<string, unknown>[],
+  decryptCalls: 0,
   encryptCalls: 0,
   refresh: (() =>
     Result.ok({
@@ -46,6 +48,19 @@ const state = {
 };
 
 const connectionDependenciesTestDouble = {
+  discoverOAuthMetadata: async (connectorUrl: string) =>
+    bindDiscoveredMetadata({
+      connectorUrl,
+      protectedResource: {
+        resource: connectorUrl,
+        authorization_servers: ["https://auth.example.com"],
+      },
+      authorizationServer: {
+        issuer: "https://auth.example.com",
+        authorization_endpoint: "https://auth.example.com/authorize",
+        token_endpoint: "https://auth.example.com/token",
+      },
+    }),
   createMCPClient: async ({ transport }: { transport: CapturedTransport }) => {
     state.transports.push(transport);
     return {
@@ -63,8 +78,10 @@ const connectionDependenciesTestDouble = {
     return state.refresh();
   },
   tokenExpiresAt: () => new Date(Date.now() + 3_600_000),
-  decryptMcpSecret: async ({ purpose }: { purpose: string }) =>
-    `decrypted-${purpose}`,
+  decryptMcpSecret: async ({ purpose }: { purpose: string }) => {
+    state.decryptCalls += 1;
+    return `decrypted-${purpose}`;
+  },
   encryptMcpSecret: async () => {
     state.encryptCalls += 1;
     return { ciphertext: Buffer.from("cipher"), iv: Buffer.from("iv") };
@@ -154,7 +171,7 @@ const oauthRow = (
   oauthClientId: "client-1",
   oauthClientSecretEncrypted: Buffer.from("secret"),
   oauthClientSecretIv: Buffer.from("iv"),
-  oauthResourceUrl: "https://mcp.example.com",
+  oauthResourceUrl: "https://mcp.example.com/rpc",
   refreshTokenEncrypted: Buffer.from("refresh"),
   refreshTokenIv: Buffer.from("iv"),
   slug: "registry",
@@ -177,6 +194,7 @@ beforeEach(() => {
   state.closes = 0;
   state.dbSets = [];
   state.encryptCalls = 0;
+  state.decryptCalls = 0;
   state.refreshCalls = 0;
   state.toolsOptions = [];
   state.refresh = () =>
@@ -189,6 +207,50 @@ beforeEach(() => {
 
 afterEach(() => {
   analytics.restore();
+});
+
+test("uses only credentials configured for the connector", async () => {
+  for (const expiresAt of [null, new Date(0)]) {
+    const client = await createMcpClientForConnection({
+      organizationId,
+      userId,
+      safeDb: makeSafeDb(),
+      row: oauthRow({
+        oauthResourceUrl: "https://mcp.example.com/other",
+        expiresAt,
+      }),
+    });
+    expect(client).toBeNull();
+  }
+  expect(state.transports).toEqual([]);
+  expect(state.decryptCalls).toBe(0);
+  expect(state.refreshCalls).toBe(0);
+  expect(hasStatusSet("needs_reauth")).toBe(true);
+});
+
+test("uses a consistent connection snapshot while preparing credentials", async () => {
+  const row = oauthRow({ expiresAt: null });
+  const client = await createMcpClientForConnectionImpl({
+    organizationId,
+    userId,
+    safeDb: makeSafeDb(),
+    outboundFetch,
+    row,
+    dependencies: asTestRaw<
+      NonNullable<
+        Parameters<typeof createMcpClientForConnectionImpl>[0]["dependencies"]
+      >
+    >({
+      ...connectionDependenciesTestDouble,
+      decryptMcpSecret: async () => {
+        row.url = "https://mcp.example.com/updated";
+        return "access";
+      },
+    }),
+  });
+  expect(client).not.toBeNull();
+  expect(state.transports.at(0)?.url).toBe("https://mcp.example.com/rpc");
+  expect(lastAuthHeader()).toBe("Bearer access");
 });
 
 describe("MCP upstream connection lifecycle", () => {
@@ -561,7 +623,7 @@ describe("loading a user's active MCP connections", () => {
     oauthClientId: "client-1",
     oauthClientSecretEncrypted: null,
     oauthClientSecretIv: null,
-    oauthResourceUrl: "https://mcp.example.com",
+    oauthResourceUrl: "https://mcp.example.com/rpc",
     refreshTokenEncrypted: Buffer.from("refresh"),
     refreshTokenIv: Buffer.from("iv"),
     slug: "registry",

@@ -73,7 +73,12 @@ const stateRow = (overrides: Record<string, unknown> = {}) => ({
   codeVerifier: "verifier",
   redirectUri: "https://api.example.com/cb",
   resourceUrl: "https://rs.example.com",
-  connector: { id: toSafeId<"mcpConnector">("conn_1"), slug: "acme" },
+  connector: {
+    id: toSafeId<"mcpConnector">("conn_1"),
+    slug: "acme",
+    url: "https://rs.example.com",
+    oauthIssuer: "https://as.example.com",
+  },
   ...overrides,
 });
 
@@ -108,6 +113,18 @@ const reasonOf = (result: unknown): string | null => {
 };
 
 describe("mcpOAuthCallback identity binding", () => {
+  test("uses the connector resource configured for the pending connection", async () => {
+    const counter = { calls: 0 };
+    const result = await mcpOAuthCallback.handler(
+      callbackContext(
+        stateRow({ resourceUrl: "https://rs.example.com/other" }),
+        counter,
+      ),
+    );
+    expect(reasonOf(result)).toBe("invalid-secret");
+    expect(counter.calls).toBe(1);
+  });
+
   test("rejects a state row belonging to another organization", async () => {
     const counter = { calls: 0 };
     const result = await mcpOAuthCallback.handler(

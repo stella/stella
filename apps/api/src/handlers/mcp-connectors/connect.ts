@@ -25,6 +25,7 @@ import {
   getMcpOAuthRedirectUri,
   pickRequestedScopes,
   registerOAuthClient,
+  validateApprovedOAuthIssuer,
 } from "@/api/lib/mcp-upstream/oauth";
 import type { McpClientRegistrationMode } from "@/api/lib/mcp-upstream/oauth";
 import { redactMcpOAuthRegistrationResponse } from "@/api/lib/mcp-upstream/oauth-registration-response";
@@ -44,148 +45,158 @@ type ConnectMcpConnectorResult =
   | { type: "none"; connected: true }
   | { type: "oauth2"; authorizeUrl: string };
 
-const connectMcpConnector = createSafeRootHandler(
-  config,
-  async function* ({ params: requestParams, safeDb, session, user }) {
-    const connector = yield* Result.await(
-      loadConnector({
-        safeDb,
-        organizationId: session.activeOrganizationId,
-        slug: requestParams.slug,
-      }),
-    );
-
-    if (connector.authType === "bearer") {
-      return Result.ok<ConnectMcpConnectorResult>({
-        type: "bearer",
-        requiresToken: true,
-      });
-    }
-
-    if (connector.authType === "none") {
-      const saved = yield* Result.await(
-        // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-        safeDb((tx) => {
-          // audit: skip — per-user MCP connection toggle; SOC 2 relevance lives at the connector-config layer (audited in create-connector / delete-connector).
-          return tx
-            .insert(mcpUserConnections)
-            .values({
-              organizationId: session.activeOrganizationId,
-              connectorId: connector.id,
-              userId: user.id,
-              status: "connected",
-              enabled: true,
-            })
-            .onConflictDoUpdate({
-              target: [
-                mcpUserConnections.organizationId,
-                mcpUserConnections.connectorId,
-                mcpUserConnections.userId,
-              ],
-              set: {
-                status: "connected",
-                enabled: true,
-                accessTokenEncrypted: null,
-                accessTokenIv: null,
-                refreshTokenEncrypted: null,
-                refreshTokenIv: null,
-                staticTokenEncrypted: null,
-                staticTokenIv: null,
-                cachedTools: null,
-                cachedToolsRefreshedAt: null,
-                resourceUrl: null,
-                authorizationServerUrl: null,
-                updatedAt: new Date(),
-              },
-            })
-            .returning({ id: mcpUserConnections.id });
+export const createConnectMcpConnectorHandler = (
+  discoverMetadata: typeof discoverOAuthMetadata,
+) =>
+  createSafeRootHandler(
+    config,
+    async function* ({ params: requestParams, safeDb, session, user }) {
+      const connector = yield* Result.await(
+        loadConnector({
+          safeDb,
+          organizationId: session.activeOrganizationId,
+          slug: requestParams.slug,
         }),
       );
 
-      const connection = saved.at(0);
-      if (connection) {
-        await refreshCachedMcpToolsForConnection({
-          connectionId: connection.id,
-          organizationId: session.activeOrganizationId,
-          safeDb,
-          userId: user.id,
+      if (connector.authType === "bearer") {
+        return Result.ok<ConnectMcpConnectorResult>({
+          type: "bearer",
+          requiresToken: true,
         });
       }
 
-      return Result.ok<ConnectMcpConnectorResult>({
-        type: "none",
-        connected: true,
-      });
-    }
+      if (connector.authType === "none") {
+        const saved = yield* Result.await(
+          // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+          safeDb((tx) => {
+            // audit: skip — per-user MCP connection toggle; SOC 2 relevance lives at the connector-config layer (audited in create-connector / delete-connector).
+            return tx
+              .insert(mcpUserConnections)
+              .values({
+                organizationId: session.activeOrganizationId,
+                connectorId: connector.id,
+                userId: user.id,
+                status: "connected",
+                enabled: true,
+              })
+              .onConflictDoUpdate({
+                target: [
+                  mcpUserConnections.organizationId,
+                  mcpUserConnections.connectorId,
+                  mcpUserConnections.userId,
+                ],
+                set: {
+                  status: "connected",
+                  enabled: true,
+                  accessTokenEncrypted: null,
+                  accessTokenIv: null,
+                  refreshTokenEncrypted: null,
+                  refreshTokenIv: null,
+                  staticTokenEncrypted: null,
+                  staticTokenIv: null,
+                  cachedTools: null,
+                  cachedToolsRefreshedAt: null,
+                  resourceUrl: null,
+                  authorizationServerUrl: null,
+                  updatedAt: new Date(),
+                },
+              })
+              .returning({ id: mcpUserConnections.id });
+          }),
+        );
 
-    const metadata = yield* Result.await(discoverOAuthMetadata(connector.url));
+        const connection = saved.at(0);
+        if (connection) {
+          await refreshCachedMcpToolsForConnection({
+            connectionId: connection.id,
+            organizationId: session.activeOrganizationId,
+            safeDb,
+            userId: user.id,
+          });
+        }
 
-    // Servers that advertise OAuth but offer no client registration path
-    // (neither CIMD nor dynamic registration) cannot complete stella's
-    // OAuth flow; a pre-issued static token is the only way to connect.
-    const registrationMode = clientRegistrationMode(
-      metadata.authorizationServer,
-    );
-    if (registrationMode === "unsupported") {
-      return Result.ok<ConnectMcpConnectorResult>({
-        type: "bearer",
-        requiresToken: true,
-      });
-    }
-
-    const redirectUri = getMcpOAuthRedirectUri();
-    const requestedScopes = pickRequestedScopes({
-      connectorScopes: connector.oauthRequestedScopes,
-      protectedResource: metadata.protectedResource,
-    });
-    const client = yield* Result.await(
-      ensureOAuthClient({
-        connectorId: connector.id,
-        connectorSlug: connector.slug,
-        safeDb,
-        organizationId: session.activeOrganizationId,
-        redirectUri,
-        authorizationServer: metadata.authorizationServer,
-        registrationMode,
-        requestedScopes,
-      }),
-    );
-    const pkce = createPkce();
-    const state = createOAuthState();
-
-    yield* Result.await(
-      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb((tx) => {
-        // audit: skip — ephemeral OAuth state row consumed by the callback; the resulting connection is recorded at callback time.
-        return tx.insert(mcpOAuthState).values({
-          state,
-          connectorId: connector.id,
-          organizationId: session.activeOrganizationId,
-          userId: user.id,
-          codeVerifier: pkce.codeVerifier,
-          redirectUri,
-          resourceUrl: metadata.protectedResource.resource,
-          authorizationServerUrl: metadata.authorizationServer.issuer,
+        return Result.ok<ConnectMcpConnectorResult>({
+          type: "none",
+          connected: true,
         });
-      }),
-    );
+      }
 
-    const authorizeUrl = buildAuthorizeUrl({
-      authorizationServer: metadata.authorizationServer,
-      clientId: client.clientId,
-      codeChallenge: pkce.codeChallenge,
-      connectorSlug: connector.slug,
-      protectedResource: metadata.protectedResource,
-      redirectUri,
-      requestedScopes,
-      state,
-    });
+      const metadata = yield* Result.await(discoverMetadata(connector.url));
 
-    return Result.ok<ConnectMcpConnectorResult>({
-      type: "oauth2",
-      authorizeUrl,
-    });
-  },
+      yield* Result.await(
+        validateApprovedOAuthIssuer(metadata, connector.oauthIssuer),
+      );
+
+      // Servers that advertise OAuth but offer no client registration path
+      // (neither CIMD nor dynamic registration) cannot complete stella's
+      // OAuth flow; a pre-issued static token is the only way to connect.
+      const registrationMode = clientRegistrationMode(
+        metadata.authorizationServer,
+      );
+      if (registrationMode === "unsupported") {
+        return Result.ok<ConnectMcpConnectorResult>({
+          type: "bearer",
+          requiresToken: true,
+        });
+      }
+
+      const redirectUri = getMcpOAuthRedirectUri();
+      const requestedScopes = pickRequestedScopes({
+        connectorScopes: connector.oauthRequestedScopes,
+        protectedResource: metadata.protectedResource,
+      });
+      const client = yield* Result.await(
+        ensureOAuthClient({
+          connectorId: connector.id,
+          connectorSlug: connector.slug,
+          safeDb,
+          organizationId: session.activeOrganizationId,
+          redirectUri,
+          metadata,
+          registrationMode,
+          requestedScopes,
+        }),
+      );
+      const pkce = createPkce();
+      const state = createOAuthState();
+
+      yield* Result.await(
+        // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+        safeDb((tx) => {
+          // audit: skip — ephemeral OAuth state row consumed by the callback; the resulting connection is recorded at callback time.
+          return tx.insert(mcpOAuthState).values({
+            state,
+            connectorId: connector.id,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+            codeVerifier: pkce.codeVerifier,
+            redirectUri,
+            resourceUrl: metadata.protectedResource.resource,
+            authorizationServerUrl: metadata.authorizationServer.issuer,
+          });
+        }),
+      );
+
+      const authorizeUrl = buildAuthorizeUrl({
+        metadata,
+        clientId: client.clientId,
+        codeChallenge: pkce.codeChallenge,
+        connectorSlug: connector.slug,
+        redirectUri,
+        requestedScopes,
+        state,
+      });
+
+      return Result.ok<ConnectMcpConnectorResult>({
+        type: "oauth2",
+        authorizeUrl,
+      });
+    },
+  );
+
+const connectMcpConnector = createConnectMcpConnectorHandler(
+  discoverOAuthMetadata,
 );
 
 export default connectMcpConnector;
@@ -195,6 +206,7 @@ type LoadedConnector = {
   slug: string;
   authType: "none" | "bearer" | "oauth2";
   oauthRequestedScopes: string[] | null;
+  oauthIssuer: string | null;
   url: string;
 };
 
@@ -214,6 +226,7 @@ const loadConnector = async ({
         slug: mcpConnectors.slug,
         authType: mcpConnectors.authType,
         oauthRequestedScopes: mcpConnectors.oauthRequestedScopes,
+        oauthIssuer: mcpConnectors.oauthIssuer,
         url: mcpConnectors.url,
       })
       .from(mcpConnectors)
@@ -244,9 +257,7 @@ const loadConnector = async ({
 };
 
 type EnsureOAuthClientOptions = {
-  authorizationServer: Parameters<
-    typeof registerOAuthClient
-  >[0]["authorizationServer"];
+  metadata: Parameters<typeof registerOAuthClient>[0]["metadata"];
   connectorId: typeof mcpConnectors.$inferSelect.id;
   connectorSlug: string;
   organizationId: NonNullable<typeof mcpConnectors.$inferSelect.organizationId>;
@@ -257,7 +268,7 @@ type EnsureOAuthClientOptions = {
 };
 
 const ensureOAuthClient = async ({
-  authorizationServer,
+  metadata,
   connectorId,
   connectorSlug,
   organizationId,
@@ -278,7 +289,7 @@ const ensureOAuthClient = async ({
           where: {
             organizationId: { eq: organizationId },
             connectorId: { eq: connectorId },
-            authorizationServerUrl: { eq: authorizationServer.issuer },
+            authorizationServerUrl: { eq: metadata.authorizationServer.issuer },
           },
           columns: {
             clientId: true,
@@ -309,7 +320,7 @@ const ensureOAuthClient = async ({
           }
         : yield* Result.await(
             registerOAuthClient({
-              authorizationServer,
+              metadata,
               connectorSlug,
               redirectUri,
               requestedScopes,
@@ -333,7 +344,7 @@ const ensureOAuthClient = async ({
           .values({
             organizationId,
             connectorId,
-            authorizationServerUrl: authorizationServer.issuer,
+            authorizationServerUrl: metadata.authorizationServer.issuer,
             clientId: registered.clientId,
             clientSecretEncrypted: encryptedSecret?.ciphertext ?? null,
             clientSecretIv: encryptedSecret?.iv ?? null,
@@ -361,7 +372,9 @@ const ensureOAuthClient = async ({
             where: {
               organizationId: { eq: organizationId },
               connectorId: { eq: connectorId },
-              authorizationServerUrl: { eq: authorizationServer.issuer },
+              authorizationServerUrl: {
+                eq: metadata.authorizationServer.issuer,
+              },
             },
             columns: {
               clientId: true,

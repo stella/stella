@@ -2256,6 +2256,7 @@
       "internalServerError": "Niečo sa pokazilo. Skúste to prosím znova.",
       "legalSourceEntityLimitReached": "Tento spis dosiahol limit položiek, preto dokument nebolo možné vytvoriť.",
       "legalSourceFilePropertyMissing": "V tomto spise chýba vlastnosť súboru, preto dokument nebolo možné vytvoriť.",
+      "mcpAuthorizationApprovalRequired": "Skôr než sa budete môcť pripojiť, musí správca tento konektor znova schváliť.",
       "notOrganizationMember": "Nie ste členom tejto organizácie.",
       "providerKeyRejected": "Poskytovateľ odmietol kľúč API.",
       "providerRateLimited": "Bol dosiahnutý limit požiadaviek poskytovateľa. Skúste to čoskoro znova.",

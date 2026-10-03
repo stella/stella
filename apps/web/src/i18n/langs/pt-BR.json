@@ -2256,6 +2256,7 @@
       "internalServerError": "Algo deu errado. Tente novamente.",
       "legalSourceEntityLimitReached": "Este assunto atingiu o limite de itens, portanto não foi possível criar o documento.",
       "legalSourceFilePropertyMissing": "Este assunto não tem uma propriedade de arquivo, portanto não foi possível criar o documento.",
+      "mcpAuthorizationApprovalRequired": "Um administrador precisa aprovar este conector novamente antes que você possa se conectar.",
       "notOrganizationMember": "Você não é membro desta organização.",
       "providerKeyRejected": "O provedor rejeitou a chave de API.",
       "providerRateLimited": "O limite de solicitações do provedor foi atingido. Tente novamente em instantes.",

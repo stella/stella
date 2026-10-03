@@ -16,15 +16,18 @@ import {
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
   decryptMcpSecret,
   encryptMcpSecret,
 } from "@/api/lib/mcp-upstream/crypto";
 import {
+  discoverOAuthMetadata,
   refreshOAuthToken,
   tokenExpiresAt,
 } from "@/api/lib/mcp-upstream/oauth";
+import { canonicalMcpResourceUrl } from "@/api/lib/mcp-upstream/url-safety";
 import {
   safeOutboundFetchStream,
   validateOutboundFetchTarget,
@@ -54,11 +57,13 @@ type ConnectionDependencies = {
   decryptMcpSecret: typeof decryptMcpSecret;
   encryptMcpSecret: typeof encryptMcpSecret;
   refreshOAuthToken: typeof refreshOAuthToken;
+  discoverOAuthMetadata: typeof discoverOAuthMetadata;
   tokenExpiresAt: typeof tokenExpiresAt;
 };
 
 const DEFAULT_CONNECTION_DEPENDENCIES: ConnectionDependencies = {
   createMCPClient,
+  discoverOAuthMetadata,
   decryptMcpSecret,
   encryptMcpSecret,
   refreshOAuthToken,
@@ -123,6 +128,35 @@ export type LoadedMcpConnection =
       refreshTokenIv: Buffer | null;
       type: "oauth2";
     });
+
+const boundMcpConnection = Symbol("BoundMcpConnection");
+
+type BoundMcpConnection = Readonly<LoadedMcpConnection> & {
+  readonly [boundMcpConnection]: true;
+};
+
+const bindMcpConnection = (
+  row: LoadedMcpConnection,
+): Result<BoundMcpConnection, HandlerError<502>> => {
+  if (row.type === "oauth2") {
+    const matches = Result.try(
+      () =>
+        canonicalMcpResourceUrl(row.oauthResourceUrl) ===
+        canonicalMcpResourceUrl(row.url),
+    );
+    if (Result.isError(matches) || !matches.value) {
+      return Result.err(
+        new HandlerError({
+          status: 502,
+          message: "MCP connection resource does not match the connector URL",
+        }),
+      );
+    }
+  }
+  return Result.ok(
+    Object.freeze({ ...row, [boundMcpConnection]: true as const }),
+  );
+};
 
 const selectConnectionFields = {
   userConnectionId: mcpUserConnections.id,
@@ -299,9 +333,18 @@ export const createMcpClientForConnection = async ({
   safeDb: SafeDb;
   userId: SafeId<"user">;
 }): Promise<MCPClient | null> => {
+  const bound = bindMcpConnection(row);
+  if (Result.isError(bound)) {
+    captureError(bound.error, {
+      source: "mcp-upstream-client",
+      connectorSlug: row.slug,
+    });
+    await markNeedsReauth({ connectionId: row.userConnectionId, safeDb });
+    return null;
+  }
   const token = await resolveAuthorizationToken({
     organizationId,
-    row,
+    row: bound.value,
     safeDb,
     userId,
     dependencies,
@@ -310,7 +353,9 @@ export const createMcpClientForConnection = async ({
     return null;
   }
 
-  const target = await outboundFetch.validateOutboundFetchTarget(row.url);
+  const target = await outboundFetch.validateOutboundFetchTarget(
+    bound.value.url,
+  );
   if (Result.isError(target)) {
     captureError(target.error, {
       source: "mcp-upstream-client",
@@ -320,16 +365,30 @@ export const createMcpClientForConnection = async ({
   }
 
   return await dependencies.createMCPClient({
-    transport: {
-      type: "http",
-      url: target.value.url.toString(),
-      fetch: createSafeMcpFetch(outboundFetch.safeOutboundFetchStream),
-      ...(token.value === null
-        ? {}
-        : { headers: { Authorization: `Bearer ${token.value}` } }),
-    },
+    transport: createBoundMcpTransport({
+      row: bound.value,
+      token: token.value,
+      safeFetch: outboundFetch.safeOutboundFetchStream,
+    }),
   });
 };
+
+type BoundMcpTransportOptions = {
+  row: BoundMcpConnection;
+  token: string | null;
+  safeFetch: typeof safeOutboundFetchStream;
+};
+
+const createBoundMcpTransport = ({
+  row,
+  token,
+  safeFetch,
+}: BoundMcpTransportOptions) => ({
+  type: "http" as const,
+  url: new URL(row.url).toString(),
+  fetch: createSafeMcpFetch(safeFetch),
+  ...(token === null ? {} : { headers: { Authorization: `Bearer ${token}` } }),
+});
 
 /** Metadata the upstream server reports during the MCP `initialize`
  * handshake. `null` when no authenticated client could be opened. */
@@ -646,7 +705,7 @@ const resolveAuthorizationToken = async ({
 }: {
   dependencies: ConnectionDependencies;
   organizationId: SafeId<"organization">;
-  row: LoadedMcpConnection;
+  row: BoundMcpConnection;
   safeDb: SafeDb;
   userId: SafeId<"user">;
 }): Promise<{ type: "ok"; value: string | null } | { type: "skip" }> => {
@@ -691,6 +750,19 @@ const resolveAuthorizationToken = async ({
     return { type: "skip" };
   }
 
+  const metadata = await dependencies.discoverOAuthMetadata(row.url);
+  if (
+    Result.isError(metadata) ||
+    metadata.value.authorizationServer.issuer !==
+      row.oauthAuthorizationServerUrl
+  ) {
+    if (Result.isError(metadata)) {
+      captureError(metadata.error, { source: "mcp-upstream-token-refresh" });
+    }
+    await markNeedsReauth({ connectionId: row.userConnectionId, safeDb });
+    return { type: "skip" };
+  }
+
   const refreshToken = await dependencies.decryptMcpSecret({
     ciphertext: row.refreshTokenEncrypted,
     connectorId: row.connectorId,
@@ -710,11 +782,10 @@ const resolveAuthorizationToken = async ({
         })
       : null;
   const refreshed = await dependencies.refreshOAuthToken({
-    authorizationServerUrl: row.oauthAuthorizationServerUrl,
+    metadata: metadata.value,
     clientId: row.oauthClientId,
     clientSecret,
     refreshToken,
-    resourceUrl: row.oauthResourceUrl,
   });
 
   if (Result.isError(refreshed)) {
