@@ -28,8 +28,9 @@
 //            one suite may share a title.
 //
 // no-promise-matchers
-//   Flagged: expect(promise).rejects.*, expect(promise).resolves.* on the
-//            `bun:test` `expect` (named, aliased, or a namespace member).
+//   Flagged: expect(promise).rejects.*, expect(promise).resolves.*, also
+//            after `.not`, on the `bun:test` `expect` (named, aliased, or a
+//            namespace member).
 //            An `expect(...).rejects` that is not awaited can settle after the
 //            test ends, so its failure lands on a later test or is lost.
 //   Allowed: `expect(await promise)...` for a resolved value, and
@@ -82,6 +83,7 @@ const TEST_FUNCTIONS: ReadonlyMap<string, TestKind> = new Map([
 const DISABLED_FUNCTIONS = new Set(["xdescribe", "xit", "xtest"]);
 
 const PROMISE_MATCHER_PROPERTIES = new Set(["rejects", "resolves"]);
+const NEGATION_MODIFIER = "not";
 
 const FOCUS_MODIFIER = "only";
 const DISABLE_MODIFIERS = new Set(["skip", "todo"]);
@@ -516,7 +518,16 @@ export default eslintCompatPlugin({
             ) {
               return;
             }
-            const subject = unwrapExpression(node.object);
+            // `expect(p).not.rejects` puts the modifier between the call and
+            // the matcher property.
+            let subject = unwrapExpression(node.object);
+            while (
+              isAstNode(subject) &&
+              subject.type === "MemberExpression" &&
+              memberPropertyName(subject) === NEGATION_MODIFIER
+            ) {
+              subject = unwrapExpression(subject.object);
+            }
             if (!isAstNode(subject) || subject.type !== "CallExpression") {
               return;
             }

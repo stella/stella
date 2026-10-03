@@ -198,6 +198,11 @@ const _namespace = bt.expect(pending).rejects.toBeInstanceOf(Error);
 // computed member
 // oxlint-disable-next-line bun-test-hygiene/no-promise-matchers, typescript/dot-notation -- the computed form is the case under test
 const _computed = expect(pending)["rejects"].toBeInstanceOf(Error);
+// a negation before the promise matcher
+// oxlint-disable-next-line bun-test-hygiene/no-promise-matchers
+const _negatedRejects = expect(pending).not.rejects.toThrow("boom");
+// oxlint-disable-next-line bun-test-hygiene/no-promise-matchers
+const _negatedResolves = expect(pending).not.resolves.toBe(2);
 // an awaited value
 // expect-clean: bun-test-hygiene/no-promise-matchers
 const _awaited = async () => expect(await pending).toBe(1);
