@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
 
@@ -68,7 +69,11 @@ const createCapacityApp = () => {
 const request = (
   { path, method }: { path: string; method: string },
   signal?: AbortSignal,
-) => new Request(`http://localhost${path}`, { method, signal });
+) =>
+  new Request(`http://localhost${path}`, {
+    method,
+    ...(signal === undefined ? {} : { signal }),
+  });
 
 const probeRequest = (route: { path: string; method: string }) =>
   new Request(request(route), { headers: { "x-capacity-probe": "1" } });
@@ -95,7 +100,11 @@ describe("public corpus active request capacity", () => {
       expect(lines).toEqual([]);
       expect((await app.handle(probeRequest(route))).status).toBe(429);
       expect(lines).toHaveLength(1);
-      expect(JSON.parse(lines[0])).toMatchObject({
+      const line = lines.at(0);
+      if (line === undefined) {
+        panic("Capacity refusal must emit a metric line");
+      }
+      expect(JSON.parse(line)).toMatchObject({
         class: "search",
         outcome: "refused",
         PublicCorpusAdmissions: 1,

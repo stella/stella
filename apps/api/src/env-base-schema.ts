@@ -1,3 +1,4 @@
+// parser-output-unchanged: Public corpus admission settings do not change ingestion parser output.
 // parser-output-unchanged: Search ranking flag and policy; ingestion parsers never read them.
 /**
  * Base environment variables shared by all entrypoints

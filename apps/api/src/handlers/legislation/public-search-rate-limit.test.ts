@@ -156,33 +156,35 @@ describe("public statute search request budget", () => {
                 Number(left.scope < right.scope),
             ),
         ).toEqual(
-          [
-            { scope: "api", failurePolicy: "fail_open_local" },
-            {
-              scope: "public-statute-search",
-              failurePolicy: "fail_open_local",
-            },
-            {
-              scope: "public-corpus-aggregate",
-              failurePolicy: "fail_open_local",
-            },
-            {
-              scope: "public-corpus-sitemap",
-              failurePolicy: "fail_open_local",
-            },
-            {
-              scope: "public-corpus-global-search",
-              failurePolicy: "fail_open_local",
-            },
-            {
-              scope: "public-corpus-global-aggregate",
-              failurePolicy: "fail_open_local",
-            },
-            {
-              scope: "public-corpus-global-sitemap",
-              failurePolicy: "fail_open_local",
-            },
-          ].toSorted(
+          (
+            [
+              { scope: "api", failurePolicy: "fail_open_local" },
+              {
+                scope: "public-statute-search",
+                failurePolicy: "fail_open_local",
+              },
+              {
+                scope: "public-corpus-aggregate",
+                failurePolicy: "fail_open_local",
+              },
+              {
+                scope: "public-corpus-sitemap",
+                failurePolicy: "fail_open_local",
+              },
+              {
+                scope: "public-corpus-global-search",
+                failurePolicy: "fail_open_local",
+              },
+              {
+                scope: "public-corpus-global-aggregate",
+                failurePolicy: "fail_open_local",
+              },
+              {
+                scope: "public-corpus-global-sitemap",
+                failurePolicy: "fail_open_local",
+              },
+            ] as const
+          ).toSorted(
             (left, right) =>
               Number(left.scope > right.scope) -
               Number(left.scope < right.scope),

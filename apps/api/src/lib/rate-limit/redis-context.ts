@@ -458,8 +458,8 @@ export const createRedisRateLimit = ({
   // failed request refund only the specific increment attempt it made.
   context: new RedisRateLimitContext({
     failurePolicy,
-    localMax,
-    onLocalFallback,
+    ...(localMax === undefined ? {} : { localMax }),
+    ...(onLocalFallback === undefined ? {} : { onLocalFallback }),
   }),
   generator: requestScopedGenerator(scope, counterKeyGenerator),
 });

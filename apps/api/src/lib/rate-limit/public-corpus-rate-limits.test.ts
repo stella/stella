@@ -472,7 +472,7 @@ describe("public corpus fleet request budgets", () => {
       const captured = bindings.optionsByScope.get(
         "public-corpus-global-search",
       );
-      if (!captured?.onLocalFallback) {
+      if (!captured?.onLocalFallback || captured.localMax === undefined) {
         panic("Global policy must report local fallback");
       }
       expect(captured.localMax).toBe(2);
