@@ -24,6 +24,9 @@
  * own, so a rejection that escaped here would 500 the public read; the
  * per-await wrapping below is defence in depth, not the guarantee.
  *
+ * Read-through takes an immediate reservation from the queue’s shared
+ * publisher gate; a busy source leaves the read metadata-only.
+ *
  * The bounds above are per process. The cross-process claim that keeps
  * two replicas off one document lives in the fetch unit itself, which
  * is also where the database access is: this module stays free of it,
@@ -32,23 +35,21 @@
  * two together for the public read.
  */
 
-import { Result, UnhandledException } from "better-result";
+import { panic, Result, TaggedError, UnhandledException } from "better-result";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import {
+  ADAPTER_MANIFESTS,
+  type DeferredDocumentAdapterKey,
+} from "@/api/lib/legal-search/adapter-manifest";
 import type {
   BackfilledDocument,
   DecisionDocumentOutcome,
   PendingDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import { withTimeout } from "@/api/lib/with-timeout";
-
-/** Sources that ingest metadata first and the document later. */
-const DEFERRED_DOCUMENT_ADAPTER_KEYS: ReadonlySet<string> = new Set([
-  ADAPTER_KEYS.SK_COURTS,
-]);
 
 /**
  * How long a read waits for a document. Deliberately shorter than the
@@ -62,6 +63,11 @@ const READ_BUDGET_LABEL = "caseLaw.deferredDocumentRead";
 
 /** Concurrent read-through fetches allowed at a time. */
 const CONCURRENT_FETCH_LIMIT = 2;
+
+class DocumentPacingDeferred extends TaggedError("DocumentPacingDeferred")<{
+  message: string;
+  outcome: "pacing-deferred";
+}> {}
 
 const CAPTURE_SOURCE = "case-law-document-on-demand";
 
@@ -112,18 +118,30 @@ export const isDeferredDocumentFetchable = ({
   documentPending &&
   !documentReadFailed &&
   documentUrl !== null &&
-  DEFERRED_DOCUMENT_ADAPTER_KEYS.has(adapterKey);
+  Object.values(ADAPTER_MANIFESTS).some(
+    (source) =>
+      source.key === adapterKey && source.documentStage === "deferred",
+  );
 
 /**
- * The two durable effects this path needs. Both are supplied by the
+ * The pacing and durable effects this path needs are supplied by the
  * caller: the tests drive them directly, and production passes the
- * database-backed pair from `document-on-demand-deps.ts`.
+ * production wiring from `document-on-demand-deps.ts`.
  */
 export type OnDemandDocumentDeps = {
   recordRequest: (decisionId: SafeId<"caseLawDecision">) => Promise<void>;
   fetchDocument: (
     decision: PendingDocument,
+    adapterKey: DeferredDocumentAdapterKey,
   ) => Promise<DecisionDocumentOutcome>;
+  withFetchBudget: (
+    adapterKey: DeferredDocumentAdapterKey,
+    operation: () => Promise<DecisionDocumentOutcome>,
+  ) => Promise<
+    | { status: "completed"; value: DecisionDocumentOutcome }
+    | { status: "pacing-deferred" }
+  >;
+  recordPacingDeferred: (decisionId: SafeId<"caseLawDecision">) => void;
 };
 
 /**
@@ -145,6 +163,17 @@ const recordFailure = (
     captureError(error, { source: CAPTURE_SOURCE, decisionId });
   }).unwrapOr(undefined);
 
+export const recordDocumentPacingDeferred = (
+  decisionId: SafeId<"caseLawDecision">,
+): void =>
+  recordFailure(
+    new DocumentPacingDeferred({
+      message: "Document fetch pacing deferred",
+      outcome: "pacing-deferred",
+    }),
+    decisionId,
+  );
+
 /**
  * Whether this is the read budget running out rather than something
  * failing. Expiry is the designed outcome for a document the source is
@@ -158,18 +187,40 @@ const isReadBudgetExpiry = (error: unknown): boolean => {
   return TimeoutError.is(raised) && raised.label === READ_BUDGET_LABEL;
 };
 
-const runFetch = async (
-  decision: PendingDocument,
-  deps: OnDemandDocumentDeps,
-): Promise<BackfilledDocument | null> => {
+type FetchDeferredDocumentOptions = {
+  decision: PendingDocument;
+  deps: OnDemandDocumentDeps;
+  adapterKey: DeferredDocumentAdapterKey;
+};
+
+const runFetch = async ({
+  decision,
+  deps,
+  adapterKey,
+}: FetchDeferredDocumentOptions): Promise<BackfilledDocument | null> => {
   // The outcome is read inside the guard, not after it: an unexpected
   // shape from the fetch unit would otherwise throw past the only thing
   // catching for this promise, and this promise is the one the read
   // budget abandons — a rejection landing after that has nothing
   // attached to it at all.
   const outcome = await Result.tryPromise(async () => {
-    const fetched = await deps.fetchDocument(decision);
-    return fetched.status === "filled" ? fetched.document : null;
+    const budgeted = await deps.withFetchBudget(
+      adapterKey,
+      async () => await deps.fetchDocument(decision, adapterKey),
+    );
+    switch (budgeted.status) {
+      case "pacing-deferred":
+        deps.recordPacingDeferred(decision.id);
+        return null;
+      case "completed":
+        return budgeted.value.status === "filled"
+          ? budgeted.value.document
+          : null;
+      default: {
+        budgeted satisfies never;
+        return panic("Unhandled document fetch budget outcome");
+      }
+    }
   });
 
   if (Result.isError(outcome)) {
@@ -180,11 +231,12 @@ const runFetch = async (
   return outcome.value;
 };
 
-const startFetch = async (
-  decision: PendingDocument,
-  deps: OnDemandDocumentDeps,
-): Promise<BackfilledDocument | null> => {
-  const flight = runFetch(decision, deps).finally(() => {
+const startFetch = async ({
+  decision,
+  deps,
+  adapterKey,
+}: FetchDeferredDocumentOptions): Promise<BackfilledDocument | null> => {
+  const flight = runFetch({ decision, deps, adapterKey }).finally(() => {
     inFlight.delete(decision.id);
   });
   inFlight.set(decision.id, flight);
@@ -194,6 +246,7 @@ const startFetch = async (
 
 export type ReadThroughDeferredDocumentOptions = {
   decision: PendingDocument;
+  adapterKey: string;
   deps: OnDemandDocumentDeps;
   /**
    * Whether this reader's interest is persisted as demand.
@@ -216,6 +269,7 @@ export type ReadThroughDeferredDocumentOptions = {
  */
 export const readThroughDeferredDocument = async ({
   decision,
+  adapterKey,
   deps,
   recordDemand,
 }: ReadThroughDeferredDocumentOptions): Promise<BackfilledDocument | null> => {
@@ -225,6 +279,12 @@ export const readThroughDeferredDocument = async ({
   // (first request wins), so if the budget expires mid-write and the
   // write lands afterwards anyway, the queue still learns of the demand.
   const attempt = async (): Promise<BackfilledDocument | null> => {
+    const source = Object.values(ADAPTER_MANIFESTS).find(
+      (entry) => entry.key === adapterKey,
+    );
+    if (source?.documentStage !== "deferred") {
+      return null;
+    }
     // Recorded before anything can turn the fetch down, so a reader who
     // arrives with the slots full, or whose wait runs out, still moves
     // this decision to the front of the queue.
@@ -242,7 +302,8 @@ export const readThroughDeferredDocument = async ({
       return null;
     }
 
-    return await (existing ?? startFetch(decision, deps));
+    return await (existing ??
+      startFetch({ decision, deps, adapterKey: source.key }));
   };
 
   // The single boundary the module's guarantee rests on. Every await

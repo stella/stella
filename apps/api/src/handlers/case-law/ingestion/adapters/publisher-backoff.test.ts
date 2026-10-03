@@ -59,6 +59,13 @@ const createGateClock = () => {
         values.get(key) ?? now,
         cooldownKey === undefined ? now : (values.get(cooldownKey) ?? now),
       );
+      if (args.at(0)?.includes("if math.max(reserved, cooldown) > now")) {
+        if (slot > now) {
+          return 0;
+        }
+        values.set(key, now + Number(args.at(2 + keyCount)));
+        return 1;
+      }
       values.set(key, slot + Number(args.at(2 + keyCount)));
       return slot - now;
     },
@@ -223,3 +230,37 @@ describe("a publisher cooldown shared across workers", () => {
     expect(requested).toBe(true);
   });
 });
+
+test("immediate reservations share the queued gate and leave a busy slot unchanged", async () => {
+  const clock = createGateClock();
+  const first = createPublisherRequestSlot(CONFIG, clock.dependencies);
+  const second = createPublisherRequestSlot(CONFIG, clock.dependencies);
+  expect(await first.tryReserve()).toBe(true);
+  expect(await second.tryReserve()).toBe(false);
+  expect(clock.sleeps).toEqual([]);
+  clock.advanceTo(CONFIG.intervalMs);
+  expect(await second.tryReserve()).toBe(true);
+});
+
+test("immediate reservations observe active shared cooldown", async () => {
+  const clock = createGateClock();
+  const first = createPublisherRequestSlot(CONFIG, clock.dependencies);
+  const second = createPublisherRequestSlot(CONFIG, clock.dependencies);
+  await first.defer(CONFIG.intervalMs * 2);
+  expect(await second.tryReserve()).toBe(false);
+  clock.advanceTo(CONFIG.intervalMs * 2);
+  expect(await second.tryReserve()).toBe(true);
+  expect(clock.sleeps).toEqual([]);
+});
+
+for (const reply of [-1, 2, "invalid"]) {
+  test(`immediate reservations propagate invalid reply ${reply}`, async () => {
+    const slot = createPublisherRequestSlot(CONFIG, {
+      redis: () => ({ send: () => reply }),
+      sleep: async () => {},
+    });
+    await expect(slot.tryReserve()).rejects.toThrow(
+      "publisher gate returned an invalid wait",
+    );
+  });
+}

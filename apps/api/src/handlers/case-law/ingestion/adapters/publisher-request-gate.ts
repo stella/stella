@@ -1,4 +1,4 @@
-// parser-output-unchanged: publisher scheduling only; response parsing is unchanged.
+// parser-output-unchanged: immediate reservations share publisher pacing; response parsing and stored output are unchanged.
 import { TaggedError } from "better-result";
 
 import { Temporal } from "@stll/time";
@@ -8,6 +8,17 @@ import { withTimeout } from "@/api/lib/with-timeout";
 import { isLocalDevOpen, isLocalTestRun } from "@/api/runtime-mode";
 
 const PUBLISHER_GATE_COMMAND_TIMEOUT_MS = 5000;
+
+const TRY_RESERVE_SLOT_SCRIPT = `
+local clock = redis.call("TIME")
+local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
+local reserved = tonumber(redis.call("GET", KEYS[1])) or now
+local cooldown = tonumber(redis.call("GET", KEYS[2])) or now
+if math.max(reserved, cooldown) > now then return 0 end
+local interval = tonumber(ARGV[1])
+redis.call("PSETEX", KEYS[1], interval * 2, tostring(now + interval))
+return 1
+`;
 
 const RESERVE_SLOT_SCRIPT = `
 local clock = redis.call("TIME")
@@ -181,6 +192,13 @@ const defaultDependencies = (
           ? Math.max(0, localCooldownUntil - now)
           : Math.max(now, localCooldownUntil);
       }
+      if (args[0] === TRY_RESERVE_SLOT_SCRIPT) {
+        if (Math.max(localNextRequestAt, localCooldownUntil) > now) {
+          return 0;
+        }
+        localNextRequestAt = now + intervalMs;
+        return 1;
+      }
       const slot = Math.max(now, localNextRequestAt, localCooldownUntil);
       localNextRequestAt = slot + intervalMs;
       return slot - now;
@@ -222,7 +240,13 @@ export const createPublisherRequestSlot = (
   dependencies = defaultDependencies(intervalMs),
 ) => {
   const { key, cooldownKey } = publisherGateKeys(slot);
-  const commandWait = async (args: string[], signal?: AbortSignal) => {
+  const commandWait = async (
+    args: string[],
+    {
+      signal,
+      replies,
+    }: { signal?: AbortSignal | undefined; replies?: readonly number[] } = {},
+  ) => {
     const redis = await dependencies.redis();
     const rawWait = await withTimeout(
       async () => await redis.send("EVAL", args),
@@ -233,7 +257,11 @@ export const createPublisherRequestSlot = (
       },
     );
     const waitMs = Number(rawWait);
-    if (!Number.isFinite(waitMs) || waitMs < 0) {
+    if (
+      !Number.isFinite(waitMs) ||
+      waitMs < 0 ||
+      (replies !== undefined && !replies.includes(waitMs))
+    ) {
       throw new PublisherGateReplyError({
         message: `${publisher} publisher gate returned an invalid wait`,
       });
@@ -245,7 +273,7 @@ export const createPublisherRequestSlot = (
       const keys = cooldown === "shared" ? [key, cooldownKey] : [key];
       const waitMs = await commandWait(
         [RESERVE_SLOT_SCRIPT, String(keys.length), ...keys, String(intervalMs)],
-        signal,
+        { signal },
       );
       await dependencies.sleep(waitMs, signal);
       if (cooldown !== "shared") {
@@ -253,10 +281,9 @@ export const createPublisherRequestSlot = (
       }
       // Recheck reservations already sleeping when another worker backs off.
       // Re-reserving after the cooldown preserves spacing between those workers.
-      const remaining = await commandWait(
-        [COOLDOWN_SCRIPT, "1", cooldownKey],
+      const remaining = await commandWait([COOLDOWN_SCRIPT, "1", cooldownKey], {
         signal,
-      );
+      });
       if (remaining === 0) {
         return;
       }
@@ -264,6 +291,13 @@ export const createPublisherRequestSlot = (
     }
   };
   return Object.assign(reserve, {
+    tryReserve: async (signal?: AbortSignal): Promise<boolean> => {
+      const reply = await commandWait(
+        [TRY_RESERVE_SLOT_SCRIPT, "2", key, cooldownKey, String(intervalMs)],
+        { signal, replies: [0, 1] },
+      );
+      return reply === 1;
+    },
     readCooldown: async (): Promise<number | null> => {
       const deadline = await commandWait([
         READ_COOLDOWN_SCRIPT,
@@ -275,7 +309,7 @@ export const createPublisherRequestSlot = (
     defer: async (durationMs: number, signal?: AbortSignal) =>
       await commandWait(
         [COOLDOWN_SCRIPT, "1", cooldownKey, String(durationMs)],
-        signal,
+        { signal },
       ),
   });
 };

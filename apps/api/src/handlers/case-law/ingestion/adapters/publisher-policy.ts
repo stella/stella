@@ -1,4 +1,4 @@
-// parser-output-unchanged: run pacing and shared cooldown coordination only; parsing and stored output are unchanged.
+// parser-output-unchanged: immediate reservations share publisher pacing; response parsing and stored output are unchanged.
 /**
  * What each publisher costs, declared once, and the only fetch that spends it.
  *
@@ -355,6 +355,47 @@ type RunPublisherLimit = {
 
 const runPublisherLimit = new AsyncLocalStorage<RunPublisherLimit>();
 
+// The first request spends the immediate reservation, rather than reserving twice.
+const immediateReservation = new AsyncLocalStorage<{
+  gateId: PublisherGateId;
+  status: "reserved" | "spent";
+}>();
+
+type WithImmediatePublisherSlotOptions<T> = {
+  adapterKey: AdapterKey;
+  operation: () => Promise<T>;
+  dependencies?: PublisherRequestGateDependencies;
+};
+
+type ImmediatePublisherSlotResult<T> =
+  | { status: "completed"; value: T }
+  | { status: "pacing-deferred" };
+
+export const withImmediatePublisherSlot = async <T>({
+  adapterKey,
+  operation,
+  dependencies,
+}: WithImmediatePublisherSlotOptions<T>): Promise<
+  ImmediatePublisherSlotResult<T>
+> => {
+  const gateId = ADAPTER_PUBLISHER_GATES[adapterKey];
+  const slot =
+    dependencies === undefined
+      ? getPublisherGateSlot(gateId)
+      : createPublisherGateSlot(gateId, dependencies);
+  if (!(await slot.tryReserve())) {
+    return { status: "pacing-deferred" };
+  }
+  return await immediateReservation.run(
+    { gateId, status: "reserved" },
+    async () =>
+      ({
+        status: "completed",
+        value: await operation(),
+      }) as const,
+  );
+};
+
 const getPublisherGateSlot = (gateId: PublisherGateId) => {
   const slot = slotsByGate.get(gateId) ?? createPublisherGateSlot(gateId);
   slotsByGate.set(gateId, slot);
@@ -415,6 +456,11 @@ export const reservePublisherGateSlot = async (
   gateId: PublisherGateId,
   signal?: AbortSignal,
 ): Promise<void> => {
+  const immediate = immediateReservation.getStore();
+  if (immediate?.gateId === gateId && immediate.status === "reserved") {
+    immediate.status = "spent";
+    return;
+  }
   const runLimit = runPublisherLimit.getStore();
   if (runLimit?.gateId === gateId) {
     await runLimit.gateSlot(signal);

@@ -1,3 +1,4 @@
+// parser-output-unchanged: document scheduling is checked against the source manifest; parsed output is unchanged.
 // parser-output-unchanged: observer wiring returns the adapter’s same normalized SyncPage.
 // parser-output-unchanged: replay outcome type gains an optional legacy docket; no parser output changes.
 // parser-output-unchanged: The required reconciliation revision projection changes retry bookkeeping, not parsed decision output.
@@ -1719,7 +1720,10 @@ export type SourceAdapter = {
 type SourceAdapterDefinition<TKey extends AdapterKey> = Omit<
   SourceAdapter,
   "country" | "key" | "name" | "observeDocumentStage"
-> & { readonly key: TKey };
+> & {
+  readonly key: TKey;
+  readonly documentStage: (typeof ADAPTER_MANIFESTS)[TKey]["documentStage"];
+};
 
 /** Build an adapter from the source facts declared for its registry key. */
 export const defineSourceAdapter = <const TKey extends AdapterKey>(
