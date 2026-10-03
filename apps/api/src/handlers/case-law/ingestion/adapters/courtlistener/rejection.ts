@@ -7,6 +7,7 @@ import { TaggedError } from "better-result";
 export const COURTLISTENER_REJECTION_REASON = {
   SCHEMA_DRIFT: "schema-drift",
   INVALID_RECORD: "invalid-record",
+  PLAIN_TEXT_REJECTED: "plain-text-rejected",
   INCOMPLETE_CLUSTER: "incomplete-cluster",
   OVER_LIMIT: "over-limit",
   COURT_UNKNOWN: "court-unknown",

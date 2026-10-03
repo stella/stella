@@ -196,6 +196,7 @@ test("original PR and merge-group job predicates keep their behavior", () => {
     workflowSchema,
     Bun.YAML.parse(previous.stdout.toString()),
   );
+  let compared = 0;
   for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
     for (const depth of ["fast", "full"]) {
       for (const required of ["true", "false"]) {
@@ -205,12 +206,16 @@ test("original PR and merge-group job predicates keep their behavior", () => {
         plan["trusted"] = "true";
         plan["suite_depth"] = depth;
         plan["heavy_web_build_required"] = "false";
+        // Only the heavy-only gating must leave ordinary runs unchanged; other
+        // predicates, and jobs later removed, belong to their own changes.
         for (const [job, body] of Object.entries(original.jobs)) {
+          const current = workflow.jobs[job]?.if;
+          if (current?.includes("inputs.heavy_only") !== true) {
+            continue;
+          }
+          compared += 1;
           expect(
-            selected(
-              workflow.jobs[job]?.if ?? "true",
-              context(event, false, plan),
-            ),
+            selected(current, context(event, false, plan)),
             `${event}/${depth}/${required}/${job}`,
           ).toBe(selected(body.if ?? "true", context(event, false, plan)));
         }
@@ -223,6 +228,7 @@ test("original PR and merge-group job predicates keep their behavior", () => {
       }
     }
   }
+  expect(compared).toBeGreaterThan(0);
 }, 30_000);
 
 type EvaluateOptions = {

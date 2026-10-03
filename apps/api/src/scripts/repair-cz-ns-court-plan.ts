@@ -96,7 +96,9 @@ export const selectCzNsCourtPageStatement = ({
   pageSize: number;
   publisherEcliCode: string;
   sourceId: SafeId<"caseLawSource">;
-}): SQL => sql`
+}): SQL =>
+  // sql-perf-allow: bounded by source cursor page LIMIT pageSize before count over page
+  sql`
   WITH page AS (
     SELECT d.id, d.ecli, d.court, d.created_at
       FROM case_law_decisions d

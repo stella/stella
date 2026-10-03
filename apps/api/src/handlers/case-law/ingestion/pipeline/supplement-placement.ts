@@ -20,6 +20,7 @@ import {
   RAW_OBJECT_COPY_TIMEOUT_MS,
   writeOwnedRawPayload,
 } from "@/api/handlers/case-law/ingestion/pipeline/raw-payload";
+import type { SourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import { SUPPLEMENT_JUDGMENT_READ_FAILED } from "@/api/handlers/case-law/ingestion/pipeline/supplement-types";
 import type {
   ProcessSupplementOptions,
@@ -52,6 +53,8 @@ export type SupplementPlacement = Required<
   Pick<ProcessSupplementOptions, "absorb" | "corpus">
 > &
   Omit<ProcessSupplementOptions, "absorb" | "corpus"> & {
+    metadataUrlSchema: unknown;
+    resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
     /** The publisher's id for the supplement, as the adapter stated it. */
     sourceDocumentId: string;
     /** The supplement's document, sanitized. */
@@ -431,20 +434,23 @@ export const keepSupplementStandalone = async (
         .limit(1),
     )
   ).at(0);
-  const written = await processDecision({
-    input: supplement.document,
-    sourceId,
-    scopedDb,
-    observedAt,
-    observationOrder: await nextObservationOrder(),
-    refresh:
-      storedType !== undefined &&
-      storedType.decisionType !== (document.decisionType ?? null)
-        ? DECISION_REFRESH.ALWAYS
-        : DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-    corpus,
-    polarityRules,
-  });
+  const written = await processDecision(
+    {
+      input: supplement.document,
+      sourceId,
+      scopedDb,
+      observedAt,
+      observationOrder: await nextObservationOrder(),
+      refresh:
+        storedType !== undefined &&
+        storedType.decisionType !== (document.decisionType ?? null)
+          ? DECISION_REFRESH.ALWAYS
+          : DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+      corpus,
+      polarityRules,
+    },
+    placement.resolveMetadataUrlSchema,
+  );
   if (written.status === PROCESS_DECISION_STATUS.RETRYABLE) {
     return written;
   }

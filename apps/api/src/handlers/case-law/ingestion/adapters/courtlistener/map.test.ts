@@ -46,6 +46,24 @@ const stored = (result: IngestionResult): StoredRawReparseInput => ({
 });
 
 describe("complete CourtListener import mapping", () => {
+  test("a rejected label returns a typed cluster rejection while other records map", () => {
+    const bad = mapCourtListenerRecord(
+      courtListenerRecord({
+        cluster: clusterRow({ case_name: "\\par broken" }),
+      }),
+    );
+    expect(bad.isErr()).toBe(true);
+    if (bad.isErr()) {
+      expect(bad.error).toMatchObject({
+        reason: "plain-text-rejected",
+        sourceRecordKey: "cluster:9114912",
+        clusterId: "9114912",
+        diagnostics: [{ path: "labels-or-metadata", detail: "rtf-syntax" }],
+      });
+    }
+    expect(mapCourtListenerRecord(courtListenerRecord()).isOk()).toBe(true);
+  });
+
   test("a short order maps completely and replay is a fixed point", () => {
     const input = courtListenerRecord({
       cluster: clusterRow({
@@ -56,7 +74,7 @@ describe("complete CourtListener import mapping", () => {
       }),
     });
     const result = mapCourtListenerRecord(input).unwrap();
-    expect(result.decisionType).toBe("order");
+    expect(result.decisionType === "order").toBe(true);
     expect(result.sourceDocumentId).toBe("9114912");
     expect(result.courtId).toBe("scotus");
     expect(result.fulltext).toContain("Caption");

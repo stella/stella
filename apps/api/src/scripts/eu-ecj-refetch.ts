@@ -12,6 +12,7 @@ import {
 import { withPublisherRequestRateLimit } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { createSourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import {
@@ -357,6 +358,9 @@ const runCelexRefresh = async ({
     console.error("interrupt received; finishing the current decision…");
   });
 
+  const resolveMetadataUrlSchema =
+    createSourceMetadataUrlSchemaResolver(ingestionDb);
+
   const counts = {
     visited: 0,
     variantsExpected: 0,
@@ -415,14 +419,17 @@ const runCelexRefresh = async ({
             sourceId: source.id,
           });
           // db-await-in-loop: per-decision ingest pipeline, ordered by the observation number allocated just above
-          const processed = await processDecision({
-            input: result,
-            sourceId: source.id,
-            scopedDb: ingestionDb,
-            observedAt: new Date(),
-            observationOrder,
-            refresh: DECISION_REFRESH.ALWAYS,
-          });
+          const processed = await processDecision(
+            {
+              input: result,
+              sourceId: source.id,
+              scopedDb: ingestionDb,
+              observedAt: new Date(),
+              observationOrder,
+              refresh: DECISION_REFRESH.ALWAYS,
+            },
+            resolveMetadataUrlSchema,
+          );
           if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
             counts.retryable += 1;
             celexFailed = true;

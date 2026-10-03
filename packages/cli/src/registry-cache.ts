@@ -121,11 +121,9 @@ const toJsonValue = (value: unknown): StableStringifyInput => {
   }
 
   if (isRecord(value)) {
-    const jsonObject: Record<string, StableStringifyInput> = {};
-    for (const [key, nested] of Object.entries(value)) {
-      jsonObject[key] = toJsonValue(nested);
-    }
-    return jsonObject;
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nested]) => [key, toJsonValue(nested)]),
+    );
   }
 
   return null;

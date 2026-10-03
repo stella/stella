@@ -200,21 +200,23 @@ describe("the stored payload is an envelope of every response read", () => {
     ).toEqual(["chain", "document", "listing"]);
     // The affecting document's own id is the one thing the forward edge in
     // the other decision's payload never states.
-    expect(decision.metadata["affectingDocs"]).toEqual([
-      {
-        uuid: "e53d0e6b-949a-44b1-8224-5a3d63a27571",
-        caseNumber: {
-          senate: 26,
-          registry: "Co",
-          index: 43,
-          year: 2025,
-          pageNumber: 49,
+    expect(
+      Bun.deepEquals(decision.metadata["affectingDocs"], [
+        {
+          uuid: "e53d0e6b-949a-44b1-8224-5a3d63a27571",
+          caseNumber: {
+            senate: 26,
+            registry: "Co",
+            index: 43,
+            year: 2025,
+            pageNumber: 49,
+          },
+          courtCode: "KSHK",
+          affectedDate: "2025-03-11",
+          affectedTypes: ["CONFIRM"],
         },
-        courtCode: "KSHK",
-        affectedDate: "2025-03-11",
-        affectedTypes: ["CONFIRM"],
-      },
-    ]);
+      ]),
+    ).toBe(true);
   });
 
   test("a payload stored before the envelope is reported, not guessed at", async () => {
@@ -251,9 +253,9 @@ describe("what the publisher states reaches the row", () => {
       document: APPELLATE_DOCUMENT,
     });
 
-    expect(decision.caseNumber).toBe("26 Co 43/2025");
-    expect(decision.sheetNumber).toBe("49");
-    expect(decision.ecli).toBe("ECLI:CZ:KSHK:2025:26.Co.43.2025.1");
+    expect(decision.caseNumber === "26 Co 43/2025").toBe(true);
+    expect(decision.sheetNumber === "49").toBe(true);
+    expect(decision.ecli === "ECLI:CZ:KSHK:2025:26.Co.43.2025.1").toBe(true);
     expect(decision.decisionDate).toBe("2025-03-11");
     expect(decision.sourceDocumentId).toBe(
       "e53d0e6b-949a-44b1-8224-5a3d63a27571",
@@ -280,9 +282,11 @@ describe("what the publisher states reaches the row", () => {
       document: APPELLATE_DOCUMENT,
     });
 
-    expect(decision.judges).toEqual([
-      { role: "rapporteur", nameAsPrinted: "Dana Mazáková" },
-    ]);
+    expect(
+      Bun.deepEquals(decision.judges, [
+        { role: "rapporteur", nameAsPrinted: "Dana Mazáková" },
+      ]),
+    ).toBe(true);
     // How that one judge sat is the court's own word for it and stays on the
     // verbatim blob rather than becoming a role of its own.
     expect(decision.metadata["solver"]).toMatchObject({
@@ -296,9 +300,11 @@ describe("what the publisher states reaches the row", () => {
       docket: DISTRICT_DOCKET,
     });
 
-    expect(decision.judges).toEqual([
-      { role: "rapporteur", nameAsPrinted: "Eva Tabetová" },
-    ]);
+    expect(
+      Bun.deepEquals(decision.judges, [
+        { role: "rapporteur", nameAsPrinted: "Eva Tabetová" },
+      ]),
+    ).toBe(true);
   });
 
   test("the publisher's own relation graph becomes cited cases", async () => {
@@ -308,7 +314,9 @@ describe("what the publisher states reaches the row", () => {
       document: APPELLATE_DOCUMENT,
     });
 
-    expect(decision.publisherCitedCases).toEqual(["18 C 130/2024"]);
+    expect(
+      Bun.deepEquals(decision.publisherCitedCases, ["18 C 130/2024"]),
+    ).toBe(true);
     // The relation kind has nowhere to go on a list of case numbers, so the
     // typed edge is kept beside it.
     expect(decision.metadata["affectedDocs"]).toMatchObject([
@@ -445,9 +453,9 @@ describe("the decision type is the publisher's enum in the local language", () =
       chain: null,
     });
 
-    expect(built.type === "built" && built.decision.decisionType).toBe(
-      "trestní příkaz",
-    );
+    expect(
+      built.type === "built" && built.decision.decisionType?.toString(),
+    ).toBe("trestní příkaz");
     // The synthesized heading is keyed on the same local word, so a type the
     // map missed would leave the document without its own title.
     expect(
@@ -510,9 +518,11 @@ describe("document metadata the publisher sends null or reshaped", () => {
     async (_part, solver, printed) => {
       const decision = await builtWith({ solver });
 
-      expect(decision.judges).toEqual([
-        { role: "rapporteur", nameAsPrinted: printed },
-      ]);
+      expect(
+        Bun.deepEquals(decision.judges, [
+          { role: "rapporteur", nameAsPrinted: printed },
+        ]),
+      ).toBe(true);
     },
   );
 
@@ -647,14 +657,17 @@ describe("the crawl keeps a refused row as its listing", () => {
         count: 1,
       });
       expect(
-        page.decisions.map(({ caseNumber, isListingOnly }) => ({
-          caseNumber,
-          isListingOnly,
-        })),
-      ).toEqual([
-        { caseNumber: "18 C 130/2024", isListingOnly: true },
-        { caseNumber: "26 Co 43/2025", isListingOnly: undefined },
-      ]);
+        Bun.deepEquals(
+          page.decisions.map(({ caseNumber, isListingOnly }) => ({
+            caseNumber,
+            isListingOnly,
+          })),
+          [
+            { caseNumber: "18 C 130/2024", isListingOnly: true },
+            { caseNumber: "26 Co 43/2025", isListingOnly: undefined },
+          ],
+        ),
+      ).toBe(true);
       expect(page.nextCursor).toBe("2025-06-11:1");
     });
   }
@@ -752,14 +765,17 @@ describe("the crawl keeps a refused row as its listing", () => {
       count: 1,
     });
     expect(
-      decisions.map(({ caseNumber, isListingOnly }) => ({
-        caseNumber,
-        isListingOnly,
-      })),
-    ).toEqual([
-      { caseNumber: "18 C 130/2024", isListingOnly: true },
-      { caseNumber: "26 Co 43/2025", isListingOnly: undefined },
-    ]);
+      Bun.deepEquals(
+        decisions.map(({ caseNumber, isListingOnly }) => ({
+          caseNumber,
+          isListingOnly,
+        })),
+        [
+          { caseNumber: "18 C 130/2024", isListingOnly: true },
+          { caseNumber: "26 Co 43/2025", isListingOnly: undefined },
+        ],
+      ),
+    ).toBe(true);
     // The raw listing row is what a later replay or reconciliation rebuilds it
     // from, so the listing-only row carries it and nothing else.
     expect(
@@ -793,14 +809,17 @@ describe("the crawl keeps a refused row as its listing", () => {
       const page = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
 
       expect(
-        page.unwrap().decisions.map(({ caseNumber, isListingOnly }) => ({
-          caseNumber,
-          isListingOnly,
-        })),
-      ).toEqual([
-        { caseNumber: "18 C 130/2024", isListingOnly: true },
-        { caseNumber: "26 Co 43/2025", isListingOnly: true },
-      ]);
+        Bun.deepEquals(
+          page.unwrap().decisions.map(({ caseNumber, isListingOnly }) => ({
+            caseNumber,
+            isListingOnly,
+          })),
+          [
+            { caseNumber: "18 C 130/2024", isListingOnly: true },
+            { caseNumber: "26 Co 43/2025", isListingOnly: true },
+          ],
+        ),
+      ).toBe(true);
       expect(
         logs
           .at("WARN")

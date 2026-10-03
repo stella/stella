@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { toMajorUnits, tryToMinorUnits } from "@stll/money";
 
 import { expenseCategorySchema } from "@/api/db/billing-validators";
+import { resultTx } from "@/api/db/safe-db";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -52,135 +53,120 @@ const config = {
 const updateExpense = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
-    const existing = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.expenses.findFirst({
-          where: {
-            id: { eq: body.id },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: {
-            status: true,
-            dateIncurred: true,
-            amount: true,
-            currency: true,
-            category: true,
-            description: true,
-            invoiceDescription: true,
-            billable: true,
-            markup: true,
-            matterId: true,
-          },
-        }),
-      ),
-    );
+    const result = yield* Result.await(
+      resultTx(safeDb, async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(expenses)
+          .where(
+            and(
+              eq(expenses.id, body.id),
+              eq(expenses.workspaceId, workspaceId),
+            ),
+          )
+          .limit(1)
+          .for("update");
 
-    if (!existing) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Expense not found" }),
-      );
-    }
+        if (!existing) {
+          return Result.err(
+            new HandlerError({ status: 404, message: "Expense not found" }),
+          );
+        }
 
-    if (
-      existing.status === BILLING_STATUS.BILLED ||
-      existing.status === BILLING_STATUS.WRITTEN_OFF
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Cannot edit a billed or written-off expense",
-        }),
-      );
-    }
+        if (
+          existing.status === BILLING_STATUS.BILLED ||
+          existing.status === BILLING_STATUS.WRITTEN_OFF
+        ) {
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Cannot edit a billed or written-off expense",
+            }),
+          );
+        }
 
-    if (body.matterId !== undefined) {
-      const matter = yield* Result.await(
-        safeDb((tx) =>
-          tx.query.entities.findFirst({
+        if (body.matterId !== undefined) {
+          const matter = await tx.query.entities.findFirst({
             where: {
               id: { eq: body.matterId },
               workspaceId: { eq: workspaceId },
             },
             columns: { id: true },
-          }),
-        ),
-      );
-
-      if (!matter) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Matter not found in this workspace",
-          }),
-        );
-      }
-    }
-
-    // The stored integer means nothing without its currency: 1250 is 12.50 USD
-    // and 1250 JPY. A currency change that leaves the amount alone would
-    // therefore silently restate the expense's value, so restate it here
-    // instead, in the transaction that changes the code. An amount sent
-    // alongside the currency is already in the new currency's units and wins
-    // as given.
-    // The currency this update restates the amount INTO, or null when it does
-    // not restate: an amount sent alongside the currency is already in the new
-    // currency's units and wins as given.
-    const restatementCurrency =
-      body.amount === undefined &&
-      body.currency !== undefined &&
-      body.currency !== existing.currency
-        ? body.currency
-        : null;
-    const restatedAmount =
-      restatementCurrency === null
-        ? null
-        : tryToMinorUnits({
-            amount: toMajorUnits({
-              amountCents: existing.amount,
-              currency: existing.currency,
-            }),
-            currency: restatementCurrency,
           });
 
-    // Both ends of the new currency's range, refused before anything is
-    // written. Too small: a zero would break `expenses_amount_positive_check`.
-    // Too large: `tryToMinorUnits` declines a scaled value past the safe
-    // integer range, where the stored amount stops being the one it names --
-    // three decimals from none multiplies by a thousand, so an amount well
-    // inside the old currency's range can leave it.
-    if (
-      restatementCurrency !== null &&
-      (restatedAmount === null || restatedAmount < 1)
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message:
-            "This expense cannot be restated in the new currency; " +
-            "send the amount in that currency instead",
-        }),
-      );
-    }
+          if (!matter) {
+            return Result.err(
+              new HandlerError({
+                status: 400,
+                message: "Matter not found in this workspace",
+              }),
+            );
+          }
+        }
 
-    const updates = {
-      ...pickDefined(body, [
-        "dateIncurred",
-        "currency",
-        "category",
-        "description",
-        "invoiceDescription",
-        "billable",
-        "markup",
-        "matterId",
-        "status",
-      ]),
-      ...(restatedAmount === null ? {} : { amount: restatedAmount }),
-      ...(body.amount !== undefined ? { amount: cents(body.amount) } : {}),
-      updatedAt: new Date(),
-    };
+        // The stored integer means nothing without its currency: 1250 is 12.50 USD
+        // and 1250 JPY. A currency change that leaves the amount alone would
+        // therefore silently restate the expense's value, so restate it here
+        // instead, in the transaction that changes the code. An amount sent
+        // alongside the currency is already in the new currency's units and wins
+        // as given.
+        // The currency this update restates the amount INTO, or null when it does
+        // not restate: an amount sent alongside the currency is already in the new
+        // currency's units and wins as given.
+        const restatementCurrency =
+          body.amount === undefined &&
+          body.currency !== undefined &&
+          body.currency !== existing.currency
+            ? body.currency
+            : null;
+        const restatedAmount =
+          restatementCurrency === null
+            ? null
+            : tryToMinorUnits({
+                amount: toMajorUnits({
+                  amountCents: existing.amount,
+                  currency: existing.currency,
+                }),
+                currency: restatementCurrency,
+              });
 
-    yield* Result.await(
-      safeDb(async (tx) => {
+        // Both ends of the new currency's range, refused before anything is
+        // written. Too small: a zero would break `expenses_amount_positive_check`.
+        // Too large: `tryToMinorUnits` declines a scaled value past the safe
+        // integer range, where the stored amount stops being the one it names --
+        // three decimals from none multiplies by a thousand, so an amount well
+        // inside the old currency's range can leave it.
+        if (
+          restatementCurrency !== null &&
+          (restatedAmount === null || restatedAmount < 1)
+        ) {
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message:
+                "This expense cannot be restated in the new currency; " +
+                "send the amount in that currency instead",
+            }),
+          );
+        }
+
+        const updates = {
+          ...pickDefined(body, [
+            "dateIncurred",
+            "currency",
+            "category",
+            "description",
+            "invoiceDescription",
+            "billable",
+            "markup",
+            "matterId",
+            "status",
+          ]),
+          ...(restatedAmount === null ? {} : { amount: restatedAmount }),
+          ...(body.amount !== undefined ? { amount: cents(body.amount) } : {}),
+          updatedAt: new Date(),
+        };
+
         await tx
           .update(expenses)
           .set(updates)
@@ -197,10 +183,10 @@ const updateExpense = createSafeHandler(
           resourceId: body.id,
           changes: buildExpenseDiff(existing, updates),
         });
+        return Result.ok({ id: body.id });
       }),
     );
-
-    return Result.ok({ id: body.id });
+    return Result.ok(result);
   },
 );
 
