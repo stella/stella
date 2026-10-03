@@ -1102,6 +1102,7 @@ describe("runIngestionPipeline — document observer failures", () => {
       const logs = installRecordingLogger();
       const leaseEffects: string[] = [];
       const result = await runIngestionPipeline({
+        acquireStoredTotalAdmission: async () => "held",
         source,
         sourceLease: {
           ...testSourceLease(source),
