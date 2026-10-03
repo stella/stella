@@ -733,3 +733,43 @@ test("retains a nested table inside its outer cell once", () => {
   expect(tables.at(0)?.rows.at(0)?.at(0)?.plainText).toBe("OuterqzmarkerInner");
   expect(parsed.fulltext.split("qzmarkerInner").length - 1).toBe(1);
 });
+
+for (const tag of ["script", "style"]) {
+  test(`ignores ${tag} text in metadata captions and values`, () => {
+    const clean = `<table id="box-table-a"><caption>Metadata</caption><tbody>
+      <tr><td>Soud:</td><td>Nejvyšší soud</td></tr>
+      <tr><td>Heslo:</td><td>Dovolání<br/>Přípustnost dovolání</td></tr>
+    </tbody></table>`;
+    const hidden = `<${tag}>qzmetadataHidden</${tag}>`;
+    const injected = clean
+      .replace("Metadata", () => `Metadata${hidden}`)
+      .replace("Nejvyšší soud", () => `Nejvyšší soud${hidden}`)
+      .replace("Dovolání<br/>", () => `Dovolání${hidden}<br/>`);
+    expect(injected).not.toBe(clean);
+    expect(extractNsMetadata(cheerio.load(injected))).toEqual(
+      extractNsMetadata(cheerio.load(clean)),
+    );
+  });
+}
+
+test("retains metadata footer rows through the shared row owner", () => {
+  const { source } = extractNsMetadata(
+    cheerio.load(`<table id="box-table-a">
+    <tbody><tr><td>Soud:</td><td>Nejvyšší soud</td></tr></tbody>
+    <tfoot><tr><td>Dodatečná informace:</td><td>Source footer</td></tr></tfoot>
+  </table>`),
+  );
+  expect(source["metadataTable"]).toEqual({
+    captions: [],
+    rows: [
+      [
+        { type: "data", text: "Soud:" },
+        { type: "data", text: "Nejvyšší soud" },
+      ],
+      [
+        { type: "data", text: "Dodatečná informace:" },
+        { type: "data", text: "Source footer" },
+      ],
+    ],
+  });
+});

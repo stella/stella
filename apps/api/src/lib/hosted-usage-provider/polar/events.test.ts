@@ -126,7 +126,10 @@ describe("normalizePolarEvent — subscription lifecycle", () => {
 describe("normalizePolarEvent — orders", () => {
   test("one-time purchase order.paid -> allocation.created (addon)", () => {
     const result = normalizePolarEvent(
-      { type: "order.paid", data: polarOrder() },
+      {
+        type: "order.paid",
+        data: polarOrder({ created_at: "2026-06-15T12:00:00Z" }),
+      },
       "order.paid",
     );
     expect(result.handled).toBe(true);
@@ -134,6 +137,7 @@ describe("normalizePolarEvent — orders", () => {
     expect(candidate["type"]).toBe("allocation.created");
     const mapped = expectRecord(candidate["data"]);
     expect(mapped["allocation_reason"]).toBe("addon");
+    expect(mapped["occurred_at"]).toBe("2026-06-15T12:00:00Z");
     expect(mapped["account_ref"]).toBe("cus_abc");
     expect(mapped["policy_ref"]).toBe("prod_pack");
     expect(mapped["amount"]).toBe(5000);

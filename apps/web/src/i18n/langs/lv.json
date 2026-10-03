@@ -1566,6 +1566,7 @@
       "socialSecurityNumber": "Sociālās apdrošināšanas numurs",
       "taxIdentificationNumber": "Nodokļu maksātāja numurs"
     },
+    "approve": "Apstiprināt",
     "archive": "Arhivēt",
     "ask": "Jautāt",
     "askAI": "Jautāt AI",
@@ -1849,12 +1850,14 @@
   },
   "consent": {
     "allow": "Atļaut",
+    "appIdentity": "Lietotnes identitāte",
     "completeSetup": "Pabeigt iestatīšanu",
     "defaultClientName": "Lietojumprogramma",
     "description": "{clientName} vēlas piekļūt jūsu stella darbvietai",
     "error": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
     "missingJurisdictions": "Jūsu stella organizācija vēl nav iestatījusi savas prakses jurisdikcijas. Daži ar jurisdikciju saistīti rīki nebūs pieejami, līdz pabeigsiet iestatīšanu.",
     "permissions": "Tas atļaus lietotnei:",
+    "redirectDestination": "Novirzīšanas galamērķis",
     "scopeAdminRead": "Lasīt jūsu organizācijas audita žurnālu",
     "scopeAdminWrite": "Pārvaldīt organizācijas dalībniekus un iestatījumus",
     "scopeBillingWrite": "Izveidot, rediģēt un dzēst jūsu laika ierakstus",
@@ -1875,7 +1878,8 @@
     "scopeSkills": "Izmantot jūsu saglabātās stella prasmes",
     "scopeTemplates": "Dokumentu veidņu saraksts, aizpildīšana un izveide",
     "scopeTemplatesAnonymized": "Skatīt, aizpildīt un izveidot jūsu dokumentu veidņu anonimizētās versijas",
-    "title": "Autorizēt piekļuvi"
+    "title": "Autorizēt piekļuvi",
+    "unverifiedApp": "Nepārbaudīta lietotne"
   },
   "contacts": {
     "alsoPartyIn": "Ir arī puse {count, plural, zero {# citās lietās} one {# citā lietā} other {# citās lietās}}",
@@ -2263,6 +2267,7 @@
       "internalServerError": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "legalSourceEntityLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums, tāpēc dokumentu nevarēja izveidot.",
       "legalSourceFilePropertyMissing": "Šajā lietā trūkst faila rekvizīta, tāpēc dokumentu nevarēja izveidot.",
+      "mcpAuthorizationApprovalRequired": "Lai varētu izveidot savienojumu, administratoram šis savienotājs ir jāapstiprina.",
       "notOrganizationMember": "Jūs neesat šīs organizācijas dalībnieks.",
       "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",
       "providerRateLimited": "Sasniegts pakalpojuma sniedzēja pieprasījumu limits. Drīzumā mēģiniet vēlreiz.",
@@ -3394,6 +3399,8 @@
         "none": "Bez autentifikācijas",
         "oauth2": "OAuth 2.0"
       },
+      "authorizationReviewDescription": "Pirms apstiprināšanas pārbaudiet autorizācijas serveri un galapunktu izcelsmi.",
+      "authorizationServer": "Autorizācijas serveris",
       "bearerTokenDescription": "Šis serveris izmanto Bearer tokenu. Ielīmējiet pakalpojuma sniedzēja tokenu, lai pabeigtu savienošanu.",
       "connectedToast": "MCP pievienots",
       "connectedWithLastUsed": "Pievienots · pēdoreiz izmantots {time}",
@@ -3404,9 +3411,11 @@
       "emptyDescription": "Atlasītās juridiskās integrācijas parādīsies šeit, kad tās būs iespējotas jūsu darbvietai.",
       "emptyTitle": "Integrāciju vēl nav",
       "enable": "Ieslēgt",
+      "endpointOrigins": "Galapunktu izcelsme",
       "errorDescription": "Integrāciju neizdevās atjaunināt.",
       "errorTitle": "MCP neizdevās",
       "mcpExplainer": "Integrācijas pievieno tērzēšanai ārējus pakalpojumus, ar kuriem var strādāt AI.",
+      "needsReapproval": "Nepieciešams atkārtots apstiprinājums",
       "needsReauth": "Nepieciešama atkārtota pievienošana",
       "off": "Izslēgts",
       "on": "Ieslēgts",

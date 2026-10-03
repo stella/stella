@@ -33,6 +33,7 @@ import {
   inlinesToPlainText,
   isExcludedHtmlTag,
   ownTableRows,
+  visibleHtmlText,
   walkInlines as walkInlinesShared,
 } from "./shared-inlines";
 
@@ -250,7 +251,7 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
 
   const splitBrValues = (td: cheerio.Cheerio<AnyNode>) =>
     ($(td).html() ?? "").split(/<br\s*\/?>/iu).flatMap((s) => {
-      const trimmed = cheerio.load(s).text().trim();
+      const trimmed = visibleHtmlText(cheerio.load(s).root()).trim();
       return trimmed ? [trimmed] : [];
     });
 
@@ -261,18 +262,18 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
     copy.find("br").each((_, br) => {
       $(br).replaceWith(new Text("\n"));
     });
-    return copy.text().trim();
+    return visibleHtmlText(copy).trim();
   };
 
   const metadataTable: SourceMetadataTable = {
     captions: metaTable
       .children("caption")
       .toArray()
-      .map((caption) => $(caption).text().trim()),
+      .map((caption) => visibleHtmlText($(caption)).trim()),
     rows: [],
   };
   source["metadataTable"] = metadataTable;
-  metaTable.find("> tbody > tr, > tr").each((_, tr) => {
+  ownTableRows(metaTable).each((_, tr) => {
     const tds = $(tr).children("td, th");
     metadataTable.rows.push(
       tds.toArray().map((cell) => ({
@@ -284,29 +285,26 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
       const singleTd = tds;
       if (
         singleTd.length === 1 &&
-        singleTd.text().includes("ústavní stížnost")
+        visibleHtmlText(singleTd).includes("ústavní stížnost")
       ) {
         const nestedTable = singleTd.find("table");
         if (nestedTable.length > 0) {
           const rows: TableCell[][] = [];
-          nestedTable
-            .first()
-            .find("> tbody > tr, > tr")
-            .each((__, innerTr) => {
-              const row: TableCell[] = [];
-              $(innerTr)
-                .children("td, th")
-                .each((___, td) => {
-                  const inlines = walkInlines($, $(td));
-                  row.push({
-                    inlines,
-                    plainText: inlinesToPlainText(inlines),
-                  });
+          ownTableRows(nestedTable.first()).each((__, innerTr) => {
+            const row: TableCell[] = [];
+            $(innerTr)
+              .children("td, th")
+              .each((___, td) => {
+                const inlines = walkInlines($, $(td));
+                row.push({
+                  inlines,
+                  plainText: inlinesToPlainText(inlines),
                 });
-              if (row.length > 0) {
-                rows.push(row);
-              }
-            });
+              });
+            if (row.length > 0) {
+              rows.push(row);
+            }
+          });
           relatedProceedingsTable = rows.length > 0 ? rows : null;
 
           if (rows.length > 1) {
@@ -493,7 +491,7 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
 
   const processNode = (node: AnyNode, parentCentered: boolean) => {
     if (isText(node)) {
-      const text = $(node).text();
+      const text = node.data;
       if (text.trim()) {
         appendToBuffer([{ type: "text", text }], parentCentered);
       }

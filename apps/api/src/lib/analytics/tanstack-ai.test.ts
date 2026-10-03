@@ -7,6 +7,8 @@ import type {
 import { EventType } from "@tanstack/ai";
 import { describe, expect, spyOn, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -945,20 +947,25 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       expect(
-        generateChatObject({
-          adapter,
-          messages: [{ role: "user", content: "Return JSON" }],
-          outputSchema: {
-            type: "object",
-            properties: { value: { type: "string" } },
-            required: ["value"],
-          },
-          middleware: [callbacks.middleware],
-        }).catch((error: unknown) => {
-          callbacks.captureError(error);
-          throw error;
-        }),
-      ).rejects.toThrow("the maximum token limit was reached");
+        await rejectionOf(
+          generateChatObject({
+            adapter,
+            messages: [{ role: "user", content: "Return JSON" }],
+            outputSchema: {
+              type: "object",
+              properties: { value: { type: "string" } },
+              required: ["value"],
+            },
+            middleware: [callbacks.middleware],
+          }).catch((error: unknown) => {
+            callbacks.captureError(error);
+            throw error;
+          }),
+        ),
+      ).toHaveProperty(
+        "message",
+        expect.stringContaining("the maximum token limit was reached"),
+      );
       expect(
         errorSpy.mock.calls.filter(
           ([event]) => event === "tanstack_ai.generation.failed",

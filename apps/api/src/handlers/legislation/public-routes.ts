@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
-import { env } from "@/api/env";
 import {
   readStatuteByEliHandler,
   readStatuteByEliQuerySchema,
@@ -11,6 +10,15 @@ import {
   readStatuteBySlugParamsSchema,
   readStatuteBySlugQuerySchema,
 } from "@/api/handlers/legislation/by-slug";
+import {
+  listStatutesSuccessResponseSchema,
+  legislationShelfSuccessResponseSchema,
+  legislationFacetsSuccessResponseSchema,
+  resolveStatutesSuccessResponseSchema,
+  statuteSitemapShardsSuccessResponseSchema,
+  statuteSitemapStatutesSuccessResponseSchema,
+  publisherWindowInconsistentResponseSchema,
+} from "@/api/handlers/legislation/catalog-response";
 import {
   legislationFacetsQuerySchema,
   readLegislationFacetsHandler,
@@ -27,6 +35,11 @@ import {
 } from "@/api/handlers/legislation/provision-history";
 import readProvisionPreview from "@/api/handlers/legislation/provision-preview";
 import searchPublicStatutes from "@/api/handlers/legislation/public-search";
+import {
+  statuteReaderSuccessResponseSchema,
+  statuteVersionsSuccessResponseSchema,
+  provisionHistorySuccessResponseSchema,
+} from "@/api/handlers/legislation/reader-response";
 import {
   resolveStatutesBodySchema,
   resolveStatutesHandler,
@@ -45,13 +58,21 @@ import {
   listStatuteVersionsParamsSchema,
   listStatuteVersionsQuerySchema,
 } from "@/api/handlers/legislation/versions";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  createSafeBoundedPublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
+} from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
-import { isLocalDevOpen } from "@/api/runtime-mode";
+import { safePublicHandlerErrorOrStatusTextResponseSchema } from "@/api/lib/search/public-error-response";
 
-const listStatutes = createSafePublicHandler(
+const listStatutes = createSafeBoundedPublicHandler(
   {
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      listStatutesSuccessResponseSchema,
+    ),
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     query: listStatutesQuerySchema,
@@ -67,8 +88,11 @@ const listStatutes = createSafePublicHandler(
   },
 );
 
-const readLegislationShelf = createSafePublicHandler(
+const readLegislationShelf = createSafeBoundedPublicHandler(
   {
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      legislationShelfSuccessResponseSchema,
+    ),
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     query: legislationShelfQuerySchema,
@@ -85,8 +109,11 @@ const readLegislationShelf = createSafePublicHandler(
   },
 );
 
-const readLegislationFacets = createSafePublicHandler(
+const readLegislationFacets = createSafeBoundedPublicHandler(
   {
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      legislationFacetsSuccessResponseSchema,
+    ),
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     query: legislationFacetsQuerySchema,
@@ -103,8 +130,17 @@ const readLegislationFacets = createSafePublicHandler(
   },
 );
 
-const readStatuteByEli = createSafePublicHandler(
+const readStatuteByEli = createSafeBoundedPublicHandler(
   {
+    response: {
+      ...safePublicHandlerResponseSchemasWithStatusText(
+        statuteReaderSuccessResponseSchema,
+      ),
+      404: t.Union([
+        safePublicHandlerErrorOrStatusTextResponseSchema,
+        publisherWindowInconsistentResponseSchema,
+      ]),
+    },
     mcp: { type: "covered", by: "read_statute" },
     cache: { kind: "none" },
     query: readStatuteByEliQuerySchema,
@@ -121,8 +157,11 @@ const readStatuteByEli = createSafePublicHandler(
   },
 );
 
-const resolveStatutes = createSafePublicHandler(
+const resolveStatutes = createSafeBoundedPublicHandler(
   {
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      resolveStatutesSuccessResponseSchema,
+    ),
     // The batch form of `by-eli`: one read per Work is what `read_statute`
     // already answers, so an agent gains nothing from a second tool.
     mcp: { type: "covered", by: "read_statute" },
@@ -140,8 +179,17 @@ const resolveStatutes = createSafePublicHandler(
   },
 );
 
-const readStatuteBySlug = createSafePublicHandler(
+const readStatuteBySlug = createSafeBoundedPublicHandler(
   {
+    response: {
+      ...safePublicHandlerResponseSchemasWithStatusText(
+        statuteReaderSuccessResponseSchema,
+      ),
+      404: t.Union([
+        safePublicHandlerErrorOrStatusTextResponseSchema,
+        publisherWindowInconsistentResponseSchema,
+      ]),
+    },
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     params: readStatuteBySlugParamsSchema,
@@ -163,8 +211,11 @@ const readStatuteBySlug = createSafePublicHandler(
   },
 );
 
-const readStatute = createSafePublicHandler(
+const readStatute = createSafeBoundedPublicHandler(
   {
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      statuteReaderSuccessResponseSchema,
+    ),
     mcp: { type: "covered", by: "read_statute" },
     cache: { kind: "none" },
     params: t.Object({ documentId: tSafeId("legislationDocument") }),
@@ -184,8 +235,11 @@ const readStatute = createSafePublicHandler(
   },
 );
 
-const listStatuteVersions = createSafePublicHandler(
+const listStatuteVersions = createSafeBoundedPublicHandler(
   {
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      statuteVersionsSuccessResponseSchema,
+    ),
     mcp: { type: "covered", by: "read_statute" },
     cache: { kind: "none" },
     params: listStatuteVersionsParamsSchema,
@@ -207,8 +261,11 @@ const listStatuteVersions = createSafePublicHandler(
   },
 );
 
-const readProvisionHistory = createSafePublicHandler(
+const readProvisionHistory = createSafeBoundedPublicHandler(
   {
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      provisionHistorySuccessResponseSchema,
+    ),
     mcp: { type: "tool", name: "read_provision_history" },
     cache: { kind: "none" },
     params: provisionHistoryParamsSchema,
@@ -231,8 +288,11 @@ const readProvisionHistory = createSafePublicHandler(
   },
 );
 
-const listStatuteSitemapShards = createSafePublicHandler(
+const listStatuteSitemapShards = createSafeBoundedPublicHandler(
   {
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      statuteSitemapShardsSuccessResponseSchema,
+    ),
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
   },
@@ -248,8 +308,11 @@ const listStatuteSitemapShards = createSafePublicHandler(
   },
 );
 
-const listStatuteSitemapStatutes = createSafePublicHandler(
+const listStatuteSitemapStatutes = createSafeBoundedPublicHandler(
   {
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      statuteSitemapStatutesSuccessResponseSchema,
+    ),
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
     query: sitemapShardStatutesQuerySchema,
@@ -276,15 +339,14 @@ const listStatuteSitemapStatutes = createSafePublicHandler(
 export const publicLegislationRoute = new Elysia({
   prefix: "/law",
 })
-  .onBeforeHandle(({ status }) => {
-    if (isLocalDevOpen() || env.FEATURE_PUBLIC_LAW) {
-      return undefined;
-    }
-
-    return status(404, { message: "Not Found" });
-  })
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
+    ),
+  )
   .get("/statutes", listStatutes.handler, {
     query: listStatutes.config.query,
+    response: listStatutes.config.response,
   })
   .get("/statutes/search", searchPublicStatutes.handler, {
     query: searchPublicStatutes.config.query,
@@ -293,31 +355,38 @@ export const publicLegislationRoute = new Elysia({
   // Ahead of `/statutes/:documentId` for the same reason as `by-eli` below.
   .get("/statutes/shelf", readLegislationShelf.handler, {
     query: readLegislationShelf.config.query,
+    response: readLegislationShelf.config.response,
   })
   // Ahead of `/statutes/:documentId` for the same reason as `by-eli` below.
   .get("/statutes/facets", readLegislationFacets.handler, {
     query: readLegislationFacets.config.query,
+    response: readLegislationFacets.config.response,
   })
   // Ahead of `/statutes/:documentId`, or the literal segment would be read as
   // a document id and rejected by the UUID schema.
   .get("/statutes/by-eli", readStatuteByEli.handler, {
     query: readStatuteByEli.config.query,
+    response: readStatuteByEli.config.response,
   })
   .post("/statutes/resolve", resolveStatutes.handler, {
     body: resolveStatutes.config.body,
+    response: resolveStatutes.config.response,
   })
   // Ahead of `/statutes/:documentId` for the same reason: `by-slug` is a
   // literal segment, not a document id.
   .get("/statutes/by-slug/:slug", readStatuteBySlug.handler, {
     params: readStatuteBySlug.config.params,
     query: readStatuteBySlug.config.query,
+    response: readStatuteBySlug.config.response,
   })
   .get("/statutes/:documentId", readStatute.handler, {
     params: readStatute.config.params,
+    response: readStatute.config.response,
   })
   .get("/statutes/:documentId/versions", listStatuteVersions.handler, {
     params: listStatuteVersions.config.params,
     query: listStatuteVersions.config.query,
+    response: listStatuteVersions.config.response,
   })
   .get(
     "/statutes/:documentId/provisions/:anchor/preview",
@@ -325,6 +394,7 @@ export const publicLegislationRoute = new Elysia({
     {
       params: readProvisionPreview.config.params,
       query: readProvisionPreview.config.query,
+      response: readProvisionPreview.config.response,
     },
   )
   .get(
@@ -333,9 +403,13 @@ export const publicLegislationRoute = new Elysia({
     {
       params: readProvisionHistory.config.params,
       query: readProvisionHistory.config.query,
+      response: readProvisionHistory.config.response,
     },
   )
-  .get("/sitemap/shards", listStatuteSitemapShards.handler)
+  .get("/sitemap/shards", listStatuteSitemapShards.handler, {
+    response: listStatuteSitemapShards.config.response,
+  })
   .get("/sitemap/statutes/shard", listStatuteSitemapStatutes.handler, {
     query: listStatuteSitemapStatutes.config.query,
+    response: listStatuteSitemapStatutes.config.response,
   });

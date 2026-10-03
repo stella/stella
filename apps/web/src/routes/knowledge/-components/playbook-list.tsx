@@ -26,6 +26,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { roleOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 import { organizationListOptions } from "@/lib/organization/queries";
 
@@ -86,10 +87,8 @@ export const PlaybookList = ({
       onSelect(id);
     },
     onError: (error) => {
-      stellaToast.add({
-        title: t("common.unexpectedError"),
+      notifyUserError(error, t("common.unexpectedError"), {
         description: userErrorFromThrown(error, t("common.unexpectedError")),
-        type: "error",
       });
     },
   });

@@ -1566,6 +1566,7 @@
       "socialSecurityNumber": "Socialinio draudimo numeris",
       "taxIdentificationNumber": "Mokesčių mokėtojo kodas"
     },
+    "approve": "Patvirtinti",
     "archive": "Archyvuoti",
     "ask": "Klausti",
     "askAI": "Klausti DI",
@@ -1849,12 +1850,14 @@
   },
   "consent": {
     "allow": "Leisti",
+    "appIdentity": "Programėlės tapatybė",
     "completeSetup": "Užbaigti sąranką",
     "defaultClientName": "Programa",
     "description": "{clientName} nori pasiekti jūsų stella darbo sritį",
     "error": "Įvyko klaida. Bandykite dar kartą.",
     "missingJurisdictions": "Jūsų stella organizacija dar nenustatė savo praktikos jurisdikcijų. Kol neužbaigsite sąrankos, kai kurie jurisdikciją vertinantys įrankiai bus nepasiekiami.",
     "permissions": "Tai leis programai:",
+    "redirectDestination": "Peradresavimo paskirties vieta",
     "scopeAdminRead": "Skaityti jūsų organizacijos audito žurnalą",
     "scopeAdminWrite": "Tvarkyti organizacijos narius ir nustatymus",
     "scopeBillingWrite": "Kurti, redaguoti ir ištrinti jūsų laiko įrašus",
@@ -1875,7 +1878,8 @@
     "scopeSkills": "Naudoti jūsų išsaugotus stella įgūdžius",
     "scopeTemplates": "Dokumentų šablonų sąrašas, pildymas ir kūrimas",
     "scopeTemplatesAnonymized": "Peržiūrėti, pildyti ir kurti anonimizuotas jūsų dokumentų šablonų versijas",
-    "title": "Suteikti prieigą"
+    "title": "Suteikti prieigą",
+    "unverifiedApp": "Nepatvirtinta programėlė"
   },
   "contacts": {
     "alsoPartyIn": "Taip pat dalyvauja kaip šalis {count, plural, one {# kitoje byloje} few {# kitose bylose} other {# kitų bylų}}",
@@ -2263,6 +2267,7 @@
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
       "legalSourceEntityLimitReached": "Šioje byloje pasiektas elementų limitas, todėl dokumento sukurti nepavyko.",
       "legalSourceFilePropertyMissing": "Šioje byloje trūksta failo ypatybės, todėl dokumento sukurti nepavyko.",
+      "mcpAuthorizationApprovalRequired": "Kad galėtumėte prisijungti, administratorius turi patvirtinti šią jungtį.",
       "notOrganizationMember": "Nesate šios organizacijos narys.",
       "providerKeyRejected": "Teikėjas atmetė API raktą.",
       "providerRateLimited": "Pasiektas teikėjo užklausų limitas. Netrukus bandykite dar kartą.",
@@ -3394,6 +3399,8 @@
         "none": "Be autentifikavimo",
         "oauth2": "OAuth 2.0"
       },
+      "authorizationReviewDescription": "Prieš patvirtindami patikrinkite autorizavimo serverį ir galinių taškų kilmę.",
+      "authorizationServer": "Autorizavimo serveris",
       "bearerTokenDescription": "Šis serveris naudoja Bearer tokeną. Įklijuokite teikėjo tokeną, kad užbaigtumėte prijungimą.",
       "connectedToast": "MCP prijungta",
       "connectedWithLastUsed": "Prijungta · paskutinį kartą naudota {time}",
@@ -3404,9 +3411,11 @@
       "emptyDescription": "Atrinktos teisinės integracijos bus rodomos čia, kai jos bus įjungtos jūsų darbo srityje.",
       "emptyTitle": "Integracijų dar nėra",
       "enable": "Įjungti",
+      "endpointOrigins": "Galinių taškų kilmė",
       "errorDescription": "Nepavyko atnaujinti integracijos.",
       "errorTitle": "MCP nepavyko",
       "mcpExplainer": "Integracijos prijungia prie pokalbio išorines paslaugas, su kuriomis gali dirbti DI.",
+      "needsReapproval": "Reikia patvirtinti iš naujo",
       "needsReauth": "Reikia prisijungti iš naujo",
       "off": "Išjungta",
       "on": "Įjungta",

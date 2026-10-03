@@ -1566,6 +1566,7 @@
       "socialSecurityNumber": "Numéro de sécurité sociale",
       "taxIdentificationNumber": "Numéro fiscal"
     },
+    "approve": "Approuver",
     "archive": "Archiver",
     "ask": "Demander",
     "askAI": "Demander à l’IA",
@@ -1849,12 +1850,14 @@
   },
   "consent": {
     "allow": "Autoriser",
+    "appIdentity": "Identité de l’application",
     "completeSetup": "Terminer la configuration",
     "defaultClientName": "Une application",
     "description": "{clientName} souhaite accéder à votre espace de travail stella",
     "error": "Une erreur s’est produite. Veuillez réessayer.",
     "missingJurisdictions": "Votre organisation stella n’a pas encore configuré ses juridictions d’exercice. Certains outils tenant compte de la juridiction resteront indisponibles tant que vous n’aurez pas terminé la configuration.",
     "permissions": "Cela autorisera l’application à :",
+    "redirectDestination": "Destination de redirection",
     "scopeAdminRead": "Lire le journal d'audit de votre organisation",
     "scopeAdminWrite": "Gérer les membres et les paramètres de l'organisation",
     "scopeBillingWrite": "Créer, modifier et supprimer vos saisies de temps",
@@ -1875,7 +1878,8 @@
     "scopeSkills": "Utiliser vos compétences stella enregistrées",
     "scopeTemplates": "Lister, remplir et créer vos modèles de documents",
     "scopeTemplatesAnonymized": "Lister, remplir et créer des versions anonymisées de vos modèles de documents",
-    "title": "Autoriser l’accès"
+    "title": "Autoriser l’accès",
+    "unverifiedApp": "Application non vérifiée"
   },
   "contacts": {
     "alsoPartyIn": "Apparaît également comme partie dans {count, plural, one {# autre dossier} many {# autres dossiers} other {# autres dossiers}}",
@@ -2263,6 +2267,7 @@
       "internalServerError": "Une erreur s’est produite. Veuillez réessayer.",
       "legalSourceEntityLimitReached": "Ce dossier a atteint la limite d’éléments, le document n’a donc pas pu être créé.",
       "legalSourceFilePropertyMissing": "Il manque une propriété de fichier dans ce dossier, le document n’a donc pas pu être créé.",
+      "mcpAuthorizationApprovalRequired": "Un administrateur doit approuver ce connecteur avant que vous puissiez vous connecter.",
       "notOrganizationMember": "Vous n’êtes pas membre de cette organisation.",
       "providerKeyRejected": "Le fournisseur a refusé la clé API.",
       "providerRateLimited": "La limite de requêtes du fournisseur a été atteinte. Réessayez dans quelques instants.",
@@ -3394,6 +3399,8 @@
         "none": "Sans authentification",
         "oauth2": "OAuth 2.0"
       },
+      "authorizationReviewDescription": "Vérifiez le serveur d’autorisation et les origines des points de terminaison avant d’approuver.",
+      "authorizationServer": "Serveur d’autorisation",
       "bearerTokenDescription": "Ce serveur utilise un jeton Bearer. Collez le jeton fourni pour terminer la connexion.",
       "connectedToast": "MCP connecté",
       "connectedWithLastUsed": "Connecté · dernière utilisation {time}",
@@ -3404,9 +3411,11 @@
       "emptyDescription": "Les intégrations juridiques sélectionnées apparaîtront ici lorsqu’elles seront activées pour votre espace de travail.",
       "emptyTitle": "Aucune intégration pour le moment",
       "enable": "Activer",
+      "endpointOrigins": "Origines des points de terminaison",
       "errorDescription": "L’intégration n’a pas pu être mise à jour.",
       "errorTitle": "Échec MCP",
       "mcpExplainer": "Les intégrations connectent aux conversations des services externes avec lesquels l’IA peut travailler.",
+      "needsReapproval": "Nouvelle approbation requise",
       "needsReauth": "Reconnexion requise",
       "off": "Désactivé",
       "on": "Activé",

@@ -1569,6 +1569,7 @@ type Messages = {
       "socialSecurityNumber": "Social security number";
       "taxIdentificationNumber": "Tax identification number";
     };
+    "approve": "Approve";
     "archive": "Archive";
     "ask": "Ask";
     "askAI": "Ask AI";
@@ -1852,12 +1853,14 @@ type Messages = {
   };
   "consent": {
     "allow": "Allow";
+    "appIdentity": "App identity";
     "completeSetup": "Complete setup";
     "defaultClientName": "An application";
     "description": "{clientName} wants to access your stella workspace";
     "error": "Something went wrong. Please try again.";
     "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.";
     "permissions": "This will allow the application to:";
+    "redirectDestination": "Redirect destination";
     "scopeAdminRead": "Read your organization's audit log";
     "scopeAdminWrite": "Manage organization members and settings";
     "scopeBillingWrite": "Create, edit, and delete your time entries";
@@ -1879,6 +1882,7 @@ type Messages = {
     "scopeTemplates": "List, fill, and create your document templates";
     "scopeTemplatesAnonymized": "List, fill, and create anonymized versions of your document templates";
     "title": "Authorize access";
+    "unverifiedApp": "Unverified app";
   };
   "contacts": {
     "alsoPartyIn": "Also appears as party in {count, plural, one {# other matter} other {# other matters}}";
@@ -2266,6 +2270,7 @@ type Messages = {
       "internalServerError": "The server could not complete the action. Please try again.";
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.";
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.";
+      "mcpAuthorizationApprovalRequired": "An administrator must approve this connector before you can connect.";
       "notOrganizationMember": "You are not a member of this organization.";
       "providerKeyRejected": "The provider rejected the API key.";
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.";
@@ -3397,6 +3402,8 @@ type Messages = {
         "none": "No auth";
         "oauth2": "OAuth 2.0";
       };
+      "authorizationReviewDescription": "Review the authorization server and endpoint origins before approving.";
+      "authorizationServer": "Authorization server";
       "bearerTokenDescription": "This server uses a bearer token. Paste the token from the provider to finish connecting.";
       "connectedToast": "MCP connected";
       "connectedWithLastUsed": "Connected · last used {time}";
@@ -3407,9 +3414,11 @@ type Messages = {
       "emptyDescription": "Curated legal integrations will appear here as they are enabled for your workspace.";
       "emptyTitle": "No integrations yet";
       "enable": "Enable";
+      "endpointOrigins": "Endpoint origins";
       "errorDescription": "The integration could not be updated.";
       "errorTitle": "MCP failed";
       "mcpExplainer": "Integrations connect external services to the chat that the AI can work with.";
+      "needsReapproval": "Needs re-approval";
       "needsReauth": "Needs reconnect";
       "off": "Off";
       "on": "On";

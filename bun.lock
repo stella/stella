@@ -192,6 +192,7 @@
       },
       "devDependencies": {
         "@hocuspocus/provider": "^4.7.0",
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
       },
@@ -457,6 +458,7 @@
       "devDependencies": {
         "@happy-dom/global-registrator": "20.14.5",
         "@playwright/test": "^1.63.0",
+        "@stll/property-testing": "workspace:*",
         "@stll/ssr-testkit": "workspace:^",
         "@stll/typescript-config": "workspace:*",
         "@tailwindcss/vite": "catalog:",
@@ -490,6 +492,7 @@
         "better-result": "catalog:",
       },
       "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
       },
@@ -686,7 +689,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "3.5.3",
+      "version": "3.6.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -943,6 +946,7 @@
       "name": "@stll/redis-config",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/time": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },

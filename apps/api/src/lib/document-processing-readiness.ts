@@ -30,8 +30,11 @@ type DocumentOcrReadinessClient = ReturnType<typeof createRedisClient>;
 
 const createDocumentOcrReadinessClient = () =>
   createRedisClient({
-    connectionTimeout: DOCUMENT_OCR_REDIS_COMMAND_TIMEOUT_MS,
-    enableOfflineQueue: false,
+    storeClass: "cache",
+    overrides: {
+      connectionTimeout: DOCUMENT_OCR_REDIS_COMMAND_TIMEOUT_MS,
+      enableOfflineQueue: false,
+    },
   });
 
 // Both readiness clients are process-lifetime, so each is held through the

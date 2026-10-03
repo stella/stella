@@ -56,7 +56,6 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { corpusStorageMode } from "@/api/env-base";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
@@ -101,6 +100,7 @@ import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import {
   CorpusPayloadUnavailableError,
@@ -905,7 +905,9 @@ export const buildChatSystemPromptParts = async ({
     // session (e.g. anonymous prompt-preview builders) there is no
     // memory to inject.
     const memorySection =
-      env.FEATURE_AI_MEMORY && organizationId && userId
+      isDeploymentFeatureEnabled("FEATURE_AI_MEMORY") &&
+      organizationId &&
+      userId
         ? yield* Result.await(
             buildMemoryPromptParts({
               contextMatterIds,

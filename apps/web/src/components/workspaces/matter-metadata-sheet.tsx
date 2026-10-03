@@ -35,7 +35,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   useDeleteWorkspace,
   useDuplicateWorkspace,
@@ -142,8 +142,7 @@ export const MatterMetadataPanel = ({
           setNameDirty(false);
         },
         onError: (error) => {
-          const message = userErrorFromThrown(error, t("errors.actionFailed"));
-          stellaToast.add({ title: message, type: "error" });
+          notifyUserError(error, t("errors.actionFailed"));
           setNameValue(fallbackName);
           setNameDirty(false);
         },
@@ -175,9 +174,7 @@ export const MatterMetadataPanel = ({
             setReferenceError(conflict);
             return;
           }
-
-          const message = userErrorFromThrown(error, t("errors.actionFailed"));
-          stellaToast.add({ title: message, type: "error" });
+          notifyUserError(error, t("errors.actionFailed"));
           setReferenceDirty(false);
         },
       },
@@ -255,11 +252,8 @@ export const MatterMetadataPanel = ({
     await deleteWorkspace.mutateAsync(
       { workspaceId },
       {
-        onError: () => {
-          stellaToast.update(toastId, {
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"), { toastId });
         },
         onSuccess: () => {
           detached(
@@ -299,11 +293,8 @@ export const MatterMetadataPanel = ({
         includeContent: duplicateMode === "content",
       },
       {
-        onError: () => {
-          stellaToast.update(toastId, {
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"), { toastId });
         },
         onSuccess: (data) => {
           stellaToast.update(toastId, {

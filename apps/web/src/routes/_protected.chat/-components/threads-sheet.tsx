@@ -27,7 +27,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@stll/ui/sheet";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
@@ -50,6 +49,7 @@ import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -265,11 +265,8 @@ const DeleteThreadButton = ({
         workspaceId: variables.workspaceId,
       });
     },
-    onError: () => {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
     },
     onSuccess: async (_data, variables) => {
       if (activeThreadRef?.threadId === variables.threadId) {
