@@ -347,7 +347,7 @@ describe("notice publication outcomes", () => {
         formexStatus = 404;
         const gone = await buildDecision(binding, AbortSignal.timeout(5000));
         if (![404, 410].includes(status)) {
-          expect(gone?.rawHash).not.toBe(incomplete?.rawHash);
+          expect(gone?.rawHash).not.toBe(incomplete.rawHash);
         }
       }
     },
