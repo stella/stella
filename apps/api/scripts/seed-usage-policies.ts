@@ -6,6 +6,7 @@
  * empty so the public repo does not encode an operator policy.
  */
 
+import { Result } from "better-result";
 import { and, eq, notInArray } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -17,7 +18,6 @@ import {
   usagePolicies,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { MAX_CATALOG_ROWS } from "@/api/lib/usage/policy-catalog";
 
 // PostgreSQL int4 ceiling: values beyond it would fail at write time
@@ -114,15 +114,16 @@ const parseSeeds = (): UsagePolicySeed[] => {
 const seed = async (): Promise<void> => {
   const seeds = parseSeeds();
   if (seeds.length === 0) {
-    console.log("no usage policies configured");
+    console.log("usage policies: seeded=0 hidden=0");
     return;
   }
 
+  const { openMaintenanceDb } = await import("@/api/lib/db/maintenance-db");
   const db = openMaintenanceDb({ readOnly: false });
   // One transaction for upserts + retirement: a mid-run failure (e.g.
   // two seeds colliding on the unique hosted-provider reference) must
   // not leave the catalog as a partial mix of new and stale entries.
-  await db.transaction(async (tx) => {
+  const hiddenCount = await db.transaction(async (tx) => {
     for (const seedPolicy of seeds) {
       // Upsert by policyKey so edits to the config (display name, units,
       // or a newly created hostedPolicyRef) propagate to the existing row
@@ -171,13 +172,6 @@ const seed = async (): Promise<void> => {
             sortOrder: seedPolicy.sortOrder,
           },
         });
-      console.log(
-        `seeded ${seedPolicy.key}: ${seedPolicy.monthlyUsageUnits} units/seat${
-          seedPolicy.hostedPolicyRef
-            ? " (hosted policy reference configured)"
-            : ""
-        }`,
-      );
     }
 
     // The seed config is the single source of the PUBLIC catalog: rows
@@ -197,11 +191,17 @@ const seed = async (): Promise<void> => {
         ),
       )
       .returning({ policyKey: usagePolicies.policyKey });
-    for (const row of hidden) {
-      console.log(`hid retired policy ${row.policyKey} (absent from seeds)`);
-    }
+    return hidden.length;
   });
+  console.log(`usage policies: seeded=${seeds.length} hidden=${hiddenCount}`);
 };
 
-await seed();
+const result = await Result.tryPromise(seed);
+if (result.isErr()) {
+  // Driver and validation errors may contain deployment-owned policy values.
+  process.stderr.write(
+    "Usage policy seed failed; check configuration and database access.\n",
+  );
+  process.exit(1);
+}
 process.exit(0);

@@ -46,6 +46,20 @@ const buildForOutput = (output: string): string | undefined =>
       instruction.includes(`--outfile ${output} `),
   );
 
+test("the usage policy seed is available at the documented operator path", () => {
+  expect(buildForOutput("/app/seed-usage-policies.js")).toContain(
+    "apps/api/scripts/seed-usage-policies.ts",
+  );
+  expect(stage("runner")).toContain(
+    "COPY --chown=stella:stella --from=builder /app/seed-usage-policies.js /app/seed-usage-policies.js",
+  );
+  const startup = logicalInstructions(stage("runner")).filter((instruction) =>
+    /^(?:CMD|ENTRYPOINT) /u.test(instruction),
+  );
+  expect(startup.length).toBeGreaterThan(0);
+  expect(startup.join(" ")).not.toContain("seed-usage-policies");
+});
+
 test("every bundled /app entrypoint reaches the runner stage", () => {
   const built = [
     ...stage("builder").matchAll(/--outfile \/app\/([\w.-]+\.js)/gu),

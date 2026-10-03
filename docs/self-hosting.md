@@ -229,6 +229,8 @@ docker compose --env-file deploy/selfhost/.env \
   bun /app/apps/api/src/db/migrate.js
 ```
 
+After migrations, run `bun /app/seed-usage-policies.js` explicitly inside the API image with `STELLA_USAGE_POLICY_SEEDS` set to the deployment's JSON configuration; it never runs on API startup.
+
 ## Container images
 
 Releases publish multi-architecture API and web images to GitHub Container
