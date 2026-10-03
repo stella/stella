@@ -309,6 +309,9 @@ const toChatToolError = ({
         message: "The field could not be updated.",
         cause: error,
       });
+    default:
+      error.status satisfies never;
+      return panic(`Unhandled handler status: ${String(error.status)}`);
   }
 };
 
