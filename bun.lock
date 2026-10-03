@@ -686,7 +686,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "3.4.0",
+      "version": "3.5.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -878,7 +878,7 @@
     },
     "packages/mcp-kit": {
       "name": "@stll/mcp-kit",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@stll/agent-input": "workspace:^",
         "better-result": "catalog:",
@@ -905,7 +905,7 @@
     },
     "packages/money": {
       "name": "@stll/money",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "dependencies": {
         "better-result": "catalog:",
       },
