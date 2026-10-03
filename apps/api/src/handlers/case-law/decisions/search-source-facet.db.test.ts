@@ -50,8 +50,12 @@ beforeAll(
     const cap = LIMITS.caseLawSourceFacetCountCap;
     const rows = sources.flatMap((sourceId, sourceIndex) => {
       let groupCount = cap + sourceIndex - 2;
-      if (sourceIndex === 0) {groupCount = 2;}
-      if (sourceIndex === 3) {groupCount = cap + 37;}
+      if (sourceIndex === 0) {
+        groupCount = 2;
+      }
+      if (sourceIndex === 3) {
+        groupCount = cap + 37;
+      }
       return Array.from({ length: groupCount }, (_, groupIndex) => {
         const key = `shared-${groupIndex}`;
         return [
