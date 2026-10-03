@@ -233,6 +233,10 @@ const search = async ({
     json,
   };
 };
+// bun-types declares `.rejects` matchers as void, so awaiting them trips
+// type-aware lint; capture the rejection and assert on it directly.
+const rejected = (error: unknown) => error;
+
 const multiSearch = async (requests: readonly SearchOptions[]) => {
   const raw = await request(`${searchBase()}/api/v1/_elastic/_msearch`, {
     method: "POST",
@@ -592,25 +596,26 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
   });
 
   test("multi-search rejects malformed query bodies for the whole batch", async () => {
-    await expect(
-      multiSearch([
-        { query: { query_string: { query: "decision_key:40" } } },
-        { query: { bool: "invalid" } },
-      ]),
-    ).rejects.toMatchObject({
+    const rejection = await multiSearch([
+      { query: { query_string: { query: "decision_key:40" } } },
+      { query: { bool: "invalid" } },
+    ]).then(() => panic("multi-search accepted a malformed body"), rejected);
+    expect(rejection).toMatchObject({
       status: 400,
       message: expect.stringContaining("failed to parse request body"),
     });
   });
 
   test("multi-search rejects payloads above the stock one-MiB limit", async () => {
-    await expect(
-      request(`${searchBase()}/api/v1/_elastic/_msearch`, {
+    const rejection = await request(
+      `${searchBase()}/api/v1/_elastic/_msearch`,
+      {
         method: "POST",
         headers: { "content-type": "application/x-ndjson" },
         body: " ".repeat(1024 * 1024 + 1),
-      }),
-    ).rejects.toMatchObject({ status: 413 });
+      },
+    ).then(() => panic("multi-search accepted an oversized payload"), rejected);
+    expect(rejection).toMatchObject({ status: 413 });
   });
 
   test("multi-search accepts six term-filtered reads with two thousand document IDs", async () => {
