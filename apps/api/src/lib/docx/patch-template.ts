@@ -211,11 +211,16 @@ const preProcessTemplateDirectives = async (
   };
 };
 
+type FillTemplateOptions = {
+  namedConditions: NamedCondition[];
+};
+
 /** Fills a scanned template; the filled document comes back as a derived
  *  `ScannedFile`, so it can be read again without a second scan. */
 export const fillTemplate = async (
   template: ScannedFile,
   values: PatchValues | TemplateData,
+  options?: FillTemplateOptions,
 ): Promise<FillTemplateResult> => {
   let data: Buffer = Buffer.from(template.bytes);
 
@@ -226,9 +231,9 @@ export const fillTemplate = async (
   // synthesize both shapes into one list the evaluator resolves bare names
   // against; `{% if field_path %}` then resolves the field's rule. The
   // conditions come from the markers, like every other field configuration.
-  const synthesized = manifestNamedConditions(
-    deriveManifest(await discoverTemplate(template)),
-  );
+  const synthesized =
+    options?.namedConditions ??
+    manifestNamedConditions(deriveManifest(await discoverTemplate(template)));
   const namedConditions = synthesized.length > 0 ? synthesized : undefined;
 
   let effectiveValues: PatchValues;
@@ -321,12 +326,6 @@ export const fillTemplate = async (
   // Discover what the template actually contains
   const discovered = await discoverPlaceholders(data);
   const templateNames = new Set(discovered.map((p) => p.name));
-  const providedNames = new Set(Object.keys(effectiveValues));
-
-  const unmatchedPlaceholders = [...templateNames].filter(
-    (name) => !providedNames.has(name),
-  );
-
   // For unused-value detection, compare against the original
   // user-supplied keys (not the expanded __each_ keys)
   const originalKeys = new Set(Object.keys(values));
@@ -344,6 +343,12 @@ export const fillTemplate = async (
   const filled = await stripManifest(
     await fillTemplateWithValues(data, effectiveValues),
   );
+
+  // Inspect the delivered content, including rich clause patches inserted
+  // after the original template discovery and surviving conditional removal.
+  const unmatchedPlaceholders = [
+    ...new Set((await discoverPlaceholders(filled)).map(({ name }) => name)),
+  ];
 
   return {
     file: derivedScannedFile(template, filled),

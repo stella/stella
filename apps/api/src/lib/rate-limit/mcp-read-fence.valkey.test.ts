@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import { Temporal } from "@stll/time";
 
+import { createAdmissionRedis } from "@/api/lib/admission-redis";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   chargeMcpReadBytes,
@@ -43,7 +44,12 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
     const organizationId = organization();
     const userId = user();
     await client.connect();
+    const admission = createAdmissionRedis({
+      ready: async () => client,
+      close: () => client.close(),
+    });
     try {
+      const admissionClient = (await admission.ready()).unwrap();
       await run({
         client,
         organizationId,
@@ -56,12 +62,12 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             readClass: "tenant",
             policy,
             enabled: true,
-            redis: client,
+            redis: admissionClient,
             ...options,
           }),
       });
     } finally {
-      client.close();
+      admission.close();
     }
   };
   const organization = () =>
