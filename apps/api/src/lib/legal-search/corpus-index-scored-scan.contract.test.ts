@@ -660,10 +660,7 @@ describe.skipIf(!runEngineTests)(
         const read = await readScanPage({
           query,
           parsedCursor: null,
-          scanTransport: {
-            type: "scored",
-            fields: ["document_id", "chunk_id", "anchor_id"],
-          },
+          scanTransport: { type: "scored", fields: ["document_id"] },
           rankingMode: "authority-rank",
           limit: best.size,
         });
