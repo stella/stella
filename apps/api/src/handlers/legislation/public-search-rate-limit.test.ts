@@ -3,6 +3,7 @@ import { Elysia } from "elysia";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
+import { env } from "@/api/env";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import {
   InMemoryRateLimitContext,
@@ -24,6 +25,30 @@ const request = (path: string, method = "GET") =>
   new Request(`http://localhost${path}`, { method });
 
 describe("public statute search request budget", () => {
+  test("the shared development bypass skips dedicated and ordinary HTTP budgets", async () => {
+    const previous = env.E2E_DISABLE_AUTH_RATE_LIMIT;
+    const { app, searchKeys, sharedKeys, kill } = createBudgetApp();
+    env.E2E_DISABLE_AUTH_RATE_LIMIT = true;
+    try {
+      for (const path of [searchPath, "/v1/other"]) {
+        for (
+          let index = 0;
+          index <= API_RATE_LIMITS.publicStatuteSearch.max;
+          index += 1
+        ) {
+          const response = await app.handle(request(path));
+          expect(response.status).toBe(200);
+          expect(response.headers.get("RateLimit-Limit")).toBeNull();
+        }
+      }
+      expect(searchKeys).toEqual([]);
+      expect(sharedKeys).toEqual([]);
+    } finally {
+      env.E2E_DISABLE_AUTH_RATE_LIMIT = previous;
+      kill();
+    }
+  });
+
   test("charges GET and its implicit HEAD search, including the accepted trailing slash", () => {
     for (const path of [
       searchPath,

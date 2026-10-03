@@ -15,7 +15,6 @@ import {
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
-import * as v from "valibot";
 
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
 import type { StatuteQueryIntent } from "@stll/api-contract/statute-query-intent";
@@ -33,22 +32,16 @@ import {
 } from "@/components/public-law-table/public-law-filter-popover";
 import { PublicLawPager } from "@/components/public-law-table/public-law-pager";
 import {
-  publicLawPageIndex,
   publicLawPageNumber,
   publicLawPagerModel,
-  publicLawPageSearchSchema,
   publicLawPageSearchValue,
   publicLawPageSize,
-  publicLawPageSizeSearchSchema,
   publicLawPageSizeSearchValue,
   publicLawPagesToWalk,
   reachablePublicLawPage,
 } from "@/components/public-law-table/public-law-pagination.logic";
 import type { PublicLawPageSize } from "@/components/public-law-table/public-law-pagination.logic";
-import {
-  publicLawLoadMode,
-  publicLawRowsPhase,
-} from "@/components/public-law-table/public-law-results-state.logic";
+import { publicLawRowsPhase } from "@/components/public-law-table/public-law-results-state.logic";
 import type { PublicLawRouteState } from "@/components/public-law-table/public-law-results-state.logic";
 import {
   PublicLawFilterChips,
@@ -64,28 +57,28 @@ import {
   useStatuteColumnGroups,
 } from "@/features/statutes/components/statute-table";
 import {
-  createStatuteFilters,
-  readStatuteIntent,
-} from "@/features/statutes/open-statute-match";
-import {
   statuteFacetsOptions,
   statuteSearchInfiniteOptions,
   statutesInfiniteOptions,
 } from "@/features/statutes/queries/statutes";
-import type {
-  StatuteListFilters,
-  StatuteListItem,
-} from "@/features/statutes/queries/statutes";
+import type { StatuteListItem } from "@/features/statutes/queries/statutes";
 import { STATUTE_VALIDITY_LABEL_KEYS } from "@/features/statutes/statute-columns.logic";
 import { STATUTE_FILTER_KEYS } from "@/features/statutes/statute-filters.logic";
 import type { StatuteFilterKey } from "@/features/statutes/statute-filters.logic";
 import {
+  changeStatutesIndexQuery,
+  readStatuteIntent,
+  STATUTE_MAX_QUERY_LENGTH,
+  statutesIndexSearchSchema,
+  type StatutesIndexSearch,
+} from "@/features/statutes/statute-index-search.logic";
+import {
   useStatuteColumnPreferences,
   useStatuteFind,
 } from "@/features/statutes/use-statute-table";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { getTranslator } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
-import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import {
@@ -93,43 +86,16 @@ import {
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
-import {
-  ensureRouteInfiniteQueryData,
-  prefetchRouteQuery,
-} from "@/lib/react-query";
+import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { isPublicStatuteCountry } from "@/lib/statute-route";
-
-/** What the route accepts in `q`, and therefore what the field may hold. */
-const MAX_QUERY_LENGTH = 256;
+import {
+  createStatuteListFilters,
+  loadPublicStatutesIndex,
+} from "@/routes/law/-statutes-index.logic";
 
 /** Stable empties, so an unchanged page does not hand the table new arrays. */
 const EMPTY_STATUTES: readonly StatuteListItem[] = [];
 const NO_TYPES: readonly FacetSourceBucket[] = [];
-
-const optionalStringSchema = (maxLength: number) =>
-  v.optional(
-    v.pipe(
-      v.string(),
-      v.trim(),
-      v.maxLength(maxLength),
-      v.transform((value) => (value.length > 0 ? value : undefined)),
-    ),
-  );
-
-const searchSchema = v.object({
-  page: publicLawPageSearchSchema,
-  pageSize: publicLawPageSizeSearchSchema,
-  q: optionalStringSchema(MAX_QUERY_LENGTH),
-  type: optionalStringSchema(128),
-  // A link is public and may be edited by hand or by a crawler; a status this
-  // build does not know is not an error page, it is every status.
-  validity: v.fallback(
-    v.optional(v.picklist(LEGISLATION_LIST_VALIDITIES)),
-    undefined,
-  ),
-});
-
-type StatutesIndexSearch = v.InferOutput<typeof searchSchema>;
 
 /** Which facet a chip belongs to, for the label the chip carries. */
 const FILTER_KIND_LABEL_KEYS = {
@@ -163,16 +129,6 @@ const withFilter = (
   }
 };
 
-/** What the list asks the corpus for: the entry, narrowed by the filters. */
-const createStatuteListFilters = (
-  country: string,
-  search: StatutesIndexSearch,
-): StatuteListFilters => ({
-  ...createStatuteFilters(country, readStatuteIntent(country, search.q)),
-  ...(search.type === undefined ? {} : { documentType: search.type }),
-  ...(search.validity === undefined ? {} : { validity: search.validity }),
-});
-
 const activeStatuteFilterCount = (search: StatutesIndexSearch): number =>
   STATUTE_FILTER_KEYS.filter((key) => search[key] !== undefined).length;
 
@@ -185,25 +141,8 @@ const createStatutesIndexPath = (
   return q ? `${path}?q=${encodeURIComponent(q)}` : path;
 };
 
-/**
- * The page the document describes: its rows are what the crawler reads and
- * what the collection markup lists.
- */
-const shownStatutes = (
-  walked: { pages: readonly { items: StatuteListItem[] }[] } | undefined,
-  page: number | undefined,
-): StatuteListItem[] => {
-  if (walked === undefined) {
-    return [];
-  }
-  const shown = walked.pages.at(
-    publicLawPageIndex(publicLawPageNumber(page), walked.pages.length),
-  );
-  return shown ? shown.items : [];
-};
-
 export const Route = createFileRoute("/law/$country/statutes/")({
-  validateSearch: searchSchema,
+  validateSearch: statutesIndexSearchSchema,
   loaderDeps: ({ search }) => search,
   // A page the chain of cursors does not reach redirects to the deepest one
   // that does, as the case-law results do: server-side, so a crawler and a
@@ -246,73 +185,13 @@ export const Route = createFileRoute("/law/$country/statutes/")({
       });
     }
   },
-  loader: async ({ cause, context: { queryClient }, deps, params }) => {
-    const intent = readStatuteIntent(params.country, deps.q);
-    if (intent.type === "text") {
-      detached(
-        prefetchRouteQuery(
-          queryClient,
-          statuteFacetsOptions(params.country.toUpperCase()),
-          (error: unknown) => getAnalytics().captureError(error),
-        ),
-        "statutes.full-text-facets-prefetch",
-      );
-      const options = statuteSearchInfiniteOptions({
-        country: params.country.toUpperCase(),
-        query: intent.text,
-        ...(deps.type === undefined ? {} : { documentType: deps.type }),
-      });
-      if (cause === "stay") {
-        detached(
-          ensureRouteInfiniteQueryData(queryClient, options),
-          "statutes.full-text-prefetch",
-        );
-      } else {
-        await ensureRouteInfiniteQueryData(queryClient, options);
-      }
-      return { statutes: [] };
-    }
-
-    // The type filter's choices: warmed, never awaited, so a slow facet read
-    // cannot hold the list back.
-    detached(
-      prefetchRouteQuery(
-        queryClient,
-        statuteFacetsOptions(params.country.toUpperCase()),
-        (error: unknown) => {
-          getAnalytics().captureError(error);
-        },
-      ),
-      "statutes.facets-prefetch",
-    );
-    const options = statutesInfiniteOptions(
-      createStatuteListFilters(params.country, deps),
-      publicLawPageSize(deps.pageSize),
-    );
-    const cached = queryClient.getQueryData(options.queryKey);
-
-    // A filter, a search or a page step on a list that is already drawn: the
-    // components hold the previous rows and swap them in place, so awaiting
-    // here would only replace a live page with a skeleton.
-    if (
-      publicLawLoadMode({ cause, hasCachedPages: cached !== undefined }) ===
-      "background"
-    ) {
-      return { statutes: shownStatutes(cached, deps.page) };
-    }
-
-    // `beforeLoad` has already walked a deep link's chain, so this is a cache
-    // read for that case and the first fetch otherwise.
-    const walked = cached?.pages.length ?? 0;
-    const wanted = publicLawPageNumber(deps.page);
-    const pages = await ensureRouteInfiniteQueryData(queryClient, {
-      ...options,
-      ...(wanted > 1 &&
-        wanted > walked && { pages: publicLawPagesToWalk(wanted, walked) }),
-    });
-
-    return { statutes: shownStatutes(pages, deps.page) };
-  },
+  loader: ({ cause, context: { queryClient }, deps, params }) =>
+    loadPublicStatutesIndex({
+      cause,
+      country: params.country,
+      queryClient,
+      search: deps,
+    }),
   head: ({ loaderData, match, params }) => {
     const t = getTranslator();
     const title = pageTitle("statutes.title");
@@ -321,6 +200,7 @@ export const Route = createFileRoute("/law/$country/statutes/")({
 
     return createPublicLawHead({
       description,
+      indexing: match.search.q === undefined ? "default" : "noindex",
       jsonLd: createLegalCollectionJsonLd({
         t,
         canonicalUrl: createPublicLawCanonicalUrl(path),
@@ -373,6 +253,7 @@ function PublicStatutesIndex({
 }
 
 function PublicStatuteFullText({ query }: { query: string }) {
+  const hydrated = useHydrated();
   const t = useTranslations();
   const country = Route.useParams({
     select: ({ country: routeCountry }) => routeCountry,
@@ -392,22 +273,20 @@ function PublicStatuteFullText({ query }: { query: string }) {
     detached(
       navigate({
         replace: true,
-        search: (previous) => ({
-          ...previous,
-          q: value.trim() || undefined,
-          page: undefined,
-        }),
+        search: (previous) =>
+          changeStatutesIndexQuery({ country, previous, query: value }),
       }),
       "statutes.full-text-navigate",
     );
   }, 300);
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isPending } =
     useInfiniteQuery({
       ...statuteSearchInfiniteOptions({
         country: country.toUpperCase(),
         query,
         ...(search.type === undefined ? {} : { documentType: search.type }),
       }),
+      enabled: hydrated,
       throwOnError: true,
     });
   const { data: facets } = useQuery(
@@ -420,10 +299,8 @@ function PublicStatuteFullText({ query }: { query: string }) {
       navigate({
         replace: true,
         search: (previous) => ({
-          ...previous,
-          q: pending || undefined,
+          ...changeStatutesIndexQuery({ country, previous, query: pending }),
           type: documentType,
-          page: undefined,
         }),
       }),
       "statutes.full-text-filter",
@@ -436,7 +313,7 @@ function PublicStatuteFullText({ query }: { query: string }) {
       <h1 className="sr-only">{t("statutes.title")}</h1>
       <StatuteSearch
         country={country}
-        maxLength={MAX_QUERY_LENGTH}
+        maxLength={STATUTE_MAX_QUERY_LENGTH}
         query={input}
         onQueryChange={(value) => {
           setInput(value);
@@ -474,7 +351,7 @@ function PublicStatuteFullText({ query }: { query: string }) {
       <ScrollArea className="min-h-0 flex-1">
         <StatuteSearchResults
           hits={hits}
-          isLoading={isLoading}
+          isLoading={isPending}
           isFetchingNextPage={isFetchingNextPage}
           hasNextPage={hasNextPage}
           onLoadMore={() =>
@@ -531,11 +408,8 @@ function PublicStatuteList({
     detached(
       navigate({
         replace: true,
-        search: (previous) => ({
-          ...previous,
-          page: undefined,
-          q: value.trim() ? value : undefined,
-        }),
+        search: (previous) =>
+          changeStatutesIndexQuery({ country, previous, query: value }),
       }),
       "statutes.search-navigate",
     );
@@ -612,10 +486,10 @@ function PublicStatuteList({
     await navigate({
       replace: true,
       search: (previous) =>
-        nextSearch({
-          ...previous,
-          ...(pending === null ? {} : { q: pending || undefined }),
-          page: undefined,
+        changeStatutesIndexQuery({
+          country,
+          previous: nextSearch(previous),
+          query: pending ?? previous.q ?? "",
         }),
     });
   };
@@ -735,7 +609,7 @@ function PublicStatuteList({
 
       <StatuteSearch
         country={country}
-        maxLength={MAX_QUERY_LENGTH}
+        maxLength={STATUTE_MAX_QUERY_LENGTH}
         onQueryChange={handleQueryChange}
         onSubmit={openSingleMatch}
         query={queryInput}

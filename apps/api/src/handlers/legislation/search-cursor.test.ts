@@ -6,7 +6,10 @@ import {
   publicCountryUnavailable,
 } from "@stll/api-contract/public-country-capability";
 
-import { searchLegislationHandler } from "@/api/handlers/legislation/search";
+import {
+  legislationQueryFingerprint,
+  searchLegislationHandler,
+} from "@/api/handlers/legislation/search";
 import { encodeCorpusSearchCursor } from "@/api/lib/legal-search/corpus-search-cursor";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 
@@ -102,5 +105,49 @@ test.each(["corpus-index", "pg-fts"] as const)(
       response: { message: "Invalid cursor" },
     });
     expect(reads()).toBe(0);
+  },
+);
+
+test.each(["corpus-index", "pg-fts"] as const)(
+  "%s cursors reject changed queries and filters before reading",
+  async (provider) => {
+    const body = { query: "nájemné", jurisdiction: "CZE" };
+    const cursor = encodeCorpusSearchCursor({
+      dictionary: { type: "none" },
+      id: DOCUMENT_ID,
+      score: 0.5,
+      sort: "relevance",
+      target: null,
+      windowStart: 0,
+      phase: {
+        type: "strict",
+        fingerprint: legislationQueryFingerprint(body),
+        generation: provider === "pg-fts" ? null : "legislation_v2",
+      },
+    });
+    const changes = [
+      { query: "náhrada škody" },
+      { documentType: "act" },
+      { status: "current" },
+      { language: "cs" },
+      { source: DOCUMENT_ID },
+      { dateFrom: "2020-01-01" },
+      { dateTo: "2030-01-01" },
+    ];
+    for (const change of changes) {
+      const { db, reads } = unreachableDb();
+      // db-await-in-loop: each cursor replay independently tests the boundary
+      const result = await searchLegislationHandler(
+        { ...body, ...change, cursor },
+        db,
+        "unobserved",
+        { provider, loadSearchConfigs: async () => [] },
+      );
+      expect(result).toMatchObject({
+        code: 400,
+        response: { message: "Invalid cursor" },
+      });
+      expect(reads()).toBe(0);
+    }
   },
 );

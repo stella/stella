@@ -45,6 +45,8 @@
  * generation and, for relaxed results, the strict Works already returned.
  * It is unauthenticated like the enclosing cursor; continuation validation
  * compares its phase identity with the current request before using it.
+ * Postgres legislation reads use the same strict phase with a null generation:
+ * the request remains bound even when there is no serving corpus index.
  *
  * `windowStart` is a decimal rank, `dictionary` is a payload's sha256 hex or
  * `none`, `sort` is one of `SEARCH_SORTS`, and `id` is one segment — the
@@ -141,7 +143,12 @@ const phaseIdentityFields = {
   generation: v.pipe(v.string(), v.check(isCorpusIndexGeneration)),
 };
 const corpusSearchPhaseSchema = v.variant("type", [
-  v.strictObject({ type: v.literal("strict"), ...phaseIdentityFields }),
+  v.strictObject({
+    type: v.literal("strict"),
+    ...phaseIdentityFields,
+    // Postgres has no serving index generation, but shares request binding.
+    generation: v.nullable(phaseIdentityFields.generation),
+  }),
   v.strictObject({
     type: v.literal("relaxed"),
     ...phaseIdentityFields,

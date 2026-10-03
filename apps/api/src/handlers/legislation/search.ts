@@ -111,7 +111,6 @@ import {
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
-import { encodeCursor } from "@/api/lib/search/cursor";
 import {
   escapeAndHighlight,
   TS_HEADLINE_CONFIG,
@@ -861,7 +860,21 @@ const pgSearch = async (
   );
   const lastRow = read.pageRows.at(-1);
   const nextCursor =
-    read.hasMore && lastRow ? encodeCursor(lastRow.score, lastRow.keyId) : null;
+    read.hasMore && lastRow
+      ? encodeCorpusSearchCursor({
+          score: lastRow.score,
+          id: lastRow.keyId,
+          windowStart: 0,
+          dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+          sort: DEFAULT_SEARCH_SORT,
+          target: null,
+          phase: {
+            type: "strict",
+            fingerprint: legislationQueryFingerprint(body),
+            generation: null,
+          },
+        })
+      : null;
 
   const hits = read.pageRows.map((row): LegislationHit => {
     const representative = representativeByWork.get(
@@ -1160,6 +1173,7 @@ export const searchLegislationHandler = async (
     body.cursor !== undefined &&
     (parsedCursor === null ||
       !isUuid(parsedCursor.id) ||
+      parsedCursor.phase?.fingerprint !== legislationQueryFingerprint(body) ||
       isStaleCorpusSearchCursor(parsedCursor, {
         dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
         target: null,
@@ -1180,7 +1194,11 @@ export const searchLegislationHandler = async (
             )(tx, "legislation"),
         )
       : null;
-  let expectedPhase: CorpusSearchPhase | undefined;
+  let expectedPhase: CorpusSearchPhase = {
+    type: "strict",
+    fingerprint: legislationQueryFingerprint(body),
+    generation: null,
+  };
   if (serving !== null) {
     const phase = parsedCursor?.phase;
     switch (phase?.type) {
