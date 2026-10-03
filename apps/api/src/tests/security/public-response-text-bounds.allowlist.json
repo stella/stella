@@ -24,7 +24,6 @@
   "GET /v1/law/statutes/by-slug/:slug 200.documentAst": "Whole official document text by design; bounded per source at ingestion, not at the response; a windowed reader contract is a separate change.",
   "GET /v1/law/statutes/by-slug/:slug 200.fulltext": "Whole official document text by design; bounded per source at ingestion, not at the response; a windowed reader contract is a separate change.",
   "GET /v1/law/statutes/by-slug/:slug 200.sections[].text": "Whole official document text by design; bounded per source at ingestion, not at the response; a windowed reader contract is a separate change.",
-  "GET /v1/mcp/oauth/client-metadata.json response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
   "GET /v1/public/knowledge/playbook-starters response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
   "GET /v1/public/knowledge/playbook-starters/:id response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
   "GET /v1/public/knowledge/template-packs response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
