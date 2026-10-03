@@ -19,6 +19,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
+import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tDefaultVarchar,
@@ -68,6 +69,7 @@ const config = {
 } satisfies HandlerConfig;
 
 export type CreateWorkspaceHandlerProps = {
+  userEmail: string;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -79,12 +81,16 @@ export type CreateWorkspaceHandlerProps = {
 // `save_matter` MCP tool, so both emit identical audit events and
 // search-index writes.
 export const createWorkspaceHandler = async function* ({
+  userEmail,
   safeDb,
   organizationId,
   userId,
   recordAuditEvent,
   body,
 }: CreateWorkspaceHandlerProps) {
+  if (body.clientId !== undefined && (body.memberUserIds?.length ?? 0) > 0) {
+    yield* checkDemoAccountOperation(userEmail);
+  }
   const txResult = yield* Result.await(
     resultTx(safeDb, async (tx) => {
       // New personal matters (no clientId) start with exactly one
@@ -328,6 +334,7 @@ const createWorkspaces = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, body, recordAuditEvent }) {
     return yield* createWorkspaceHandler({
+      userEmail: user.email,
       safeDb,
       organizationId: session.activeOrganizationId,
       userId: user.id,

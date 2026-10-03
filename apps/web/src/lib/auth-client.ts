@@ -12,7 +12,6 @@ import { Result } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import { ac, roles } from "@stll/permissions";
-import { stellaToast } from "@stll/ui/toast";
 
 import {
   discardBootPrefetch,
@@ -21,6 +20,7 @@ import {
 } from "@/boot-prefetch";
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
 import { browserAuthBaseUrl } from "@/lib/api-url";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { getSignedOauthQueryFromHash } from "@/lib/oauth-provider";
 
 export const HTTP_TOO_MANY_REQUESTS = 429;
@@ -160,10 +160,7 @@ export const authClient = createAuthClient({
     onError: (context) => {
       if (context.response.status === HTTP_TOO_MANY_REQUESTS) {
         const t = getTranslator();
-        stellaToast.add({
-          title: t("auth.rateLimitExceeded"),
-          type: "error",
-        });
+        notifyUserError(context.error, t("auth.rateLimitExceeded"));
       }
     },
   },

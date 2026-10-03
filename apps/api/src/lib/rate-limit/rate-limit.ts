@@ -56,6 +56,7 @@ export type RateLimitOptions = {
   errorResponse?: RateLimitErrorResponse;
   generator: RateLimitGenerator;
   max: number;
+  onLimit?: () => void;
   skip?: (request: Request) => MaybePromise<boolean>;
 };
 
@@ -177,7 +178,7 @@ type RateLimitRequestState =
 
 type RateLimitApplicationPhase = "before_handler" | "early_failure";
 
-const DEFAULT_RATE_LIMIT_ERROR_RESPONSE = "rate-limit reached";
+export const DEFAULT_RATE_LIMIT_ERROR_RESPONSE = "rate-limit reached";
 
 /**
  * Before-handle hooks `rateLimit` installed. The composed-route census asserts
@@ -202,9 +203,19 @@ const writeRateLimitHeaders = ({
   retryAfter: boolean;
   set: RateLimitResponseSet;
 }): void => {
-  set.headers["RateLimit-Limit"] = String(max);
-  set.headers["RateLimit-Remaining"] = String(remaining);
-  set.headers["RateLimit-Reset"] = String(reset);
+  const previousRemaining = Number(set.headers["RateLimit-Remaining"]);
+  const previousReset = Number(set.headers["RateLimit-Reset"]);
+  // Keep one complete policy tuple: the tightest remaining budget wins,
+  // with the earliest reset breaking ties between equally tight budgets.
+  if (
+    set.headers["RateLimit-Remaining"] === undefined ||
+    remaining < previousRemaining ||
+    (remaining === previousRemaining && reset < previousReset)
+  ) {
+    set.headers["RateLimit-Limit"] = String(max);
+    set.headers["RateLimit-Remaining"] = String(remaining);
+    set.headers["RateLimit-Reset"] = String(reset);
+  }
   if (retryAfter) {
     set.headers["Retry-After"] = String(reset);
   }
@@ -239,6 +250,7 @@ export const rateLimit = ({
   errorResponse = DEFAULT_RATE_LIMIT_ERROR_RESPONSE,
   generator,
   max,
+  onLimit,
   skip = () => false,
 }: RateLimitOptions) => {
   context.init({ duration });
@@ -291,6 +303,7 @@ export const rateLimit = ({
     });
 
     if (exceeded) {
+      onLimit?.();
       requestState.set(request, { type: "limited" });
       set.status = 429;
       return errorResponse;

@@ -35,8 +35,8 @@ type PublisherStore = {
 };
 
 const withStore = async (run: (store: PublisherStore) => Promise<void>) => {
-  const first = createRedisClient();
-  const second = createRedisClient();
+  const first = createRedisClient({ storeClass: "cache" });
+  const second = createRedisClient({ storeClass: "cache" });
   const slot = `publisher-backoff-test:${Bun.randomUUIDv7()}`;
   const { key, cooldownKey } = publisherGateKeys(slot);
   try {
@@ -133,6 +133,35 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
   });
 } else {
   describe("publisher backoff (valkey)", () => {
+    test("immediate reservations share queued slots across clients without extending a busy gate", async () => {
+      await withStore(async ({ first, second, key, gate }) => {
+        const firstGate = gate({ client: first, intervalMs: COOLDOWN_MS });
+        const secondGate = gate({ client: second, intervalMs: COOLDOWN_MS });
+        expect(await firstGate.tryReserve()).toBe(true);
+        const reserved = await first.send("GET", [key]);
+        expect(await secondGate.tryReserve()).toBe(false);
+        expect(await first.send("GET", [key])).toBe(reserved);
+        const waits: number[] = [];
+        await gate({
+          client: second,
+          intervalMs: COOLDOWN_MS,
+          sleep: async (wait) => {
+            waits.push(wait);
+          },
+        })();
+        expect(waits.at(0)).toBeGreaterThan(0);
+        expect(await firstGate.tryReserve()).toBe(false);
+      });
+    });
+
+    test("immediate reservations respect shared cooldown without spending a slot", async () => {
+      await withStore(async ({ first, second, key, gate }) => {
+        await gate({ client: first }).defer(COOLDOWN_MS);
+        expect(await gate({ client: second }).tryReserve()).toBe(false);
+        expect(await first.send("GET", [key])).toBeNull();
+      });
+    });
+
     test("the public cooldown reader observes the real publisher gate deadline and expiry", async () => {
       await withStore(async ({ first, second }) => {
         const publisherKey = "cellar-eu";

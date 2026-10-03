@@ -3,11 +3,18 @@ import { type BunRedisRawClient, createBunRedisClient } from "bullmq";
 import { type RedisOptions, RedisClient, sleep } from "bun";
 
 import { redisConnectionConfig } from "@stll/redis-config";
+import {
+  createStorePolicy,
+  STORE_POLICY_MESSAGE,
+  StoreUnavailableError,
+  type StoreClass,
+} from "@stll/redis-config/store-policy";
 
 import { envBase } from "@/api/env-base";
 import { RedisClientClosedError } from "@/api/lib/errors/tagged-errors";
 import { connectionErrorFields } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { emitAdmissionStorePolicyMetric } from "@/api/lib/observability/request-metrics";
 import { redisConnectionOptions } from "@/api/lib/redis-options";
 
 // Re-exported so existing consumers keep one import site for "is this Valkey
@@ -161,10 +168,100 @@ class ConfiguredRedisClient
   }
 }
 
+type ClassifiedRedisClientOptions = {
+  storeClass: StoreClass;
+  overrides?: RedisClientOverrides | undefined;
+};
+
+const createClassifiedRedisClient = (
+  url: string,
+  { storeClass, overrides }: ClassifiedRedisClientOptions,
+): ConfiguredRedisClient => {
+  const raw = new ConfiguredRedisClient(url, overrides);
+  const policy = createStorePolicy({
+    storeClass,
+    inspect: async () => {
+      if (!raw.connected) {
+        await raw.connect();
+      }
+      const reply: unknown = await raw.send("INFO", ["memory"]);
+      return reply;
+    },
+    observe: (status) => {
+      emitAdmissionStorePolicyMetric(status === "refused");
+      if (status === "refused") {
+        logger.error("coordination_store.eviction_policy_refused", {
+          "operator.action": STORE_POLICY_MESSAGE,
+          storeClass,
+        });
+      } else if (status === "unknown") {
+        logger.warn("coordination_store.eviction_policy_unknown", {
+          "operator.action":
+            "Ensure maxmemory-policy noeviction is configured; INFO memory did not report the policy.",
+          storeClass,
+        });
+      }
+    },
+  });
+  raw.onReconnect(policy.invalidate);
+  // Bind native methods to the raw object: Bun's native receiver and this
+  // class's private callback sets cannot be accessed through a Proxy receiver.
+  // All command methods, including future Bun methods, cross the policy gate.
+  return new Proxy(raw, {
+    set: (target, key, value: unknown) => {
+      if (key === "onconnect" && typeof value === "function") {
+        return Reflect.set(
+          target,
+          key,
+          () => {
+            policy.invalidate();
+            Reflect.apply(value, target, []);
+          },
+          target,
+        );
+      }
+      return Reflect.set(target, key, value, target);
+    },
+    get: (target, key) => {
+      if (key === "duplicate") {
+        return async () =>
+          await Promise.resolve(
+            createClassifiedRedisClient(url, { storeClass, overrides }),
+          );
+      }
+      const value: unknown = Reflect.get(target, key, target);
+      if (typeof value !== "function") {
+        return value;
+      }
+      if (
+        key === "close" ||
+        key === "onClose" ||
+        key === "onReconnect" ||
+        key === "onconnect" ||
+        key === "onclose" ||
+        key === "constructor"
+      ) {
+        const bound: unknown = value.bind(target);
+        return bound;
+      }
+      return async (...args: unknown[]) => {
+        if (key === "connect") {
+          await target.connect();
+          await policy.assertAllowed();
+          return undefined;
+        }
+        await policy.assertAllowed();
+        const result: unknown = Reflect.apply(value, target, args);
+        return await result;
+      };
+    },
+  });
+};
+
 export const createRedisClient = (
-  overrides?: RedisClientOverrides,
+  options: ClassifiedRedisClientOptions,
 ): ConfiguredRedisClient =>
-  new ConfiguredRedisClient(configuredRedisUrl(), overrides);
+  createClassifiedRedisClient(configuredRedisUrl(), options);
 
 // On a Railway cold start the API container can win the race against its
 // own Redis/Valkey service, so the very first connection attempt hits
@@ -195,6 +292,9 @@ export const connectWithColdStartRetries = async (
     });
     if (result.isOk()) {
       return;
+    }
+    if (StoreUnavailableError.is(result.error)) {
+      await Promise.reject(result.error);
     }
     logger.warn(
       "redis.cold_start_reconnect",
@@ -348,15 +448,21 @@ const withColdStartConnectRetries = (
  * change with `prefix: "{stella}"` set here. Until that cutover, do not
  * introduce a prefix, and do not add unhashtagged keys anywhere else.
  */
-export const createBullMqConnection = (
-  overrides?: RedisClientOverrides,
-): ReturnType<typeof createBunRedisClient> => {
+export const createBullMqConnection = ({
+  storeClass,
+  overrides,
+}: ClassifiedRedisClientOptions & {
+  storeClass: "durable-coordination";
+}): ReturnType<typeof createBunRedisClient> => {
   // BullMQ's adapter owns command buffering across a reconnect (it schedules
   // its own and replays what it holds), so the connection states the offline
   // queue it needs rather than inheriting whatever the factory leaves unset. A
   // queue that wants its enqueues to fail fast still says so through
   // `overrides`.
-  const raw = createRedisClient({ enableOfflineQueue: true, ...overrides });
+  const raw = createRedisClient({
+    storeClass,
+    overrides: { enableOfflineQueue: true, ...overrides },
+  });
   const connection = createBunRedisClient(raw, {
     // Railway's Redis proxy can trigger Bun's eager adapter read path before
     // BullMQ has completed its own readiness flow. Let BullMQ connect lazily.

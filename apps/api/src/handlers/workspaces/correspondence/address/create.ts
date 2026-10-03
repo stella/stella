@@ -10,6 +10,7 @@ import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  accountAccess: "standard",
   description:
     "Rotate a matter's inbound address; the previous address stops accepting mail immediately.",
   permissions: { workspace: ["update"] },

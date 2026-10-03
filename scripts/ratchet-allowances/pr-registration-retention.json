@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 2,
+  "reason": "apps/api/src/lib/auth.ts: the client-activity and verification hooks run inside Better Auth's database adapter, which reports a refusal only through a thrown APIError."
+}
