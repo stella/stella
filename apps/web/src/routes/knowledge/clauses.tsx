@@ -5,13 +5,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   clauseCategoriesOptions,
   clausesOptions,
@@ -253,9 +253,7 @@ function RouteComponent() {
       }
 
       if (error) {
-        stellaToast.add({
-          type: "error",
-          title: t("clauses.loadFailed"),
+        notifyUserError(error, t("clauses.loadFailed"), {
           description: userErrorMessage(error, t("common.unexpectedError")),
         });
         return;

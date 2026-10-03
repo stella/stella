@@ -51,6 +51,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -516,9 +517,8 @@ export const ExistingFileOrganizerDialog = ({
       })
       .catch((error: unknown) => {
         analytics.captureError(error);
-        stellaToast.update(toastId, {
-          type: "error",
-          title: t("workspaces.importOrganizer.failed"),
+        notifyUserError(error, t("workspaces.importOrganizer.failed"), {
+          toastId,
           timeout: undefined,
         });
       });

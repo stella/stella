@@ -71,7 +71,7 @@ export type LatestDecision = {
 export type LatestDecisionsByCourt = {
   court: string;
   /** The seeded rank label the court matched (`constitutional`, `supreme`). */
-  tierLabel: string;
+  tierLabel: ShelfCourt["tierLabel"];
   decisions: LatestDecision[];
 };
 

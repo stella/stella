@@ -32,6 +32,7 @@ import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { useAddWorkspaceMember } from "@/lib/workspaces/mutations/workspace-members";
 import { workspacesKeys } from "@/lib/workspaces/queries";
@@ -150,11 +151,8 @@ const MemberRow = ({
             "members-section.invalidate",
           );
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -255,11 +253,8 @@ export const AddMemberDialog = ({
           setIsOpen(false);
           setSelectedUserId(null);
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );

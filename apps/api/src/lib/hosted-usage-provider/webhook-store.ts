@@ -23,15 +23,19 @@ import {
   createBackgroundAuditRecorder,
   type AuditAction,
   type AuditEvent,
-  type AuditResourceType,
+  type NonChatAuditResourceType,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { HostedUsageWebhookEvent } from "@/api/lib/hosted-usage-provider/event-schemas";
+import { minimalWebhookRecord } from "@/api/lib/hosted-usage-provider/webhook-record";
 import { isRecord } from "@/api/lib/type-guards";
 
 type InsertWebhookEventInput = {
   eventId: string;
   eventType: string;
   payload: Record<string, unknown>;
+  rawBody: string;
+  event: HostedUsageWebhookEvent | null;
   /**
    * Initial `result` to write on insert. Most callers want
    * "ok" — the receive pipeline overwrites it inside the same
@@ -63,43 +67,17 @@ const NUL_SYMBOL = "\u2400";
 const markNul = (value: string): string =>
   value.replaceAll(NUL, () => NUL_SYMBOL);
 
-/**
- * Keys without a NUL keep their names. A key with one takes its marked name,
- * and when an original key already holds that name, the first free
- * `<marked>~<n>` from 2 upward, in payload order. Every value is kept.
- */
 const storableRecord = (
   record: Record<string, unknown>,
-): Record<string, unknown> => {
-  const entries = Object.entries(record);
-  const taken = new Set(
-    entries.map(([key]) => key).filter((key) => !key.includes(NUL)),
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(record).map(([key, value]) => [key, storableJson(value)]),
   );
-  const storedKey = (key: string): string => {
-    if (!key.includes(NUL)) {
-      return key;
-    }
-    const marked = markNul(key);
-    let candidate = marked;
-    for (let suffix = 2; taken.has(candidate); suffix++) {
-      candidate = `${marked}~${suffix}`;
-    }
-    taken.add(candidate);
-    return candidate;
-  };
-  return Object.fromEntries(
-    entries.map(([key, entry]): [string, unknown] => [
-      storedKey(key),
-      storableJson(entry),
-    ]),
-  );
-};
 
 /**
  * The payload as a jsonb column stores it. Postgres text and jsonb values
- * carry no NUL character, so each one in a key or string is stored as the
- * NUL symbol (U+2400), and distinct keys stay distinct (see
- * `storableRecord`).
+ * carry no NUL character. Minimal records have schema-owned keys; strings
+ * replace NUL with the NUL symbol (U+2400).
  */
 const storableJson = (value: unknown): unknown => {
   if (typeof value === "string") {
@@ -116,6 +94,8 @@ export const insertWebhookEventInTx = async ({
   eventId,
   eventType,
   payload,
+  rawBody,
+  event,
   initialResult,
 }: InsertWebhookEventInput & {
   tx: Transaction;
@@ -125,7 +105,9 @@ export const insertWebhookEventInTx = async ({
     .values({
       eventId,
       eventType: markNul(eventType),
-      payload: storableRecord(payload),
+      payload: storableRecord(
+        minimalWebhookRecord({ rawBody, payload, event }),
+      ),
       result: initialResult,
     })
     .onConflictDoNothing({ target: hostedUsageWebhookEvents.eventId })
@@ -184,11 +166,11 @@ type WebhookAuditEventInput = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
   action: AuditAction;
-  resourceType: AuditResourceType;
+  resourceType: NonChatAuditResourceType;
   resourceId: string;
   /**
    * Provider event id. Lets a reviewer cross-reference the audit row
-   * with `usage_provider_webhook_events.event_id` and the raw payload.
+   * with `usage_provider_webhook_events.event_id` and its minimal record.
    */
   eventId: string;
   /**

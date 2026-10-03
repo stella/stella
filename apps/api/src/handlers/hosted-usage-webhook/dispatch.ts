@@ -1187,7 +1187,7 @@ export const handleHostedAllocation = async ({
     };
   }
 
-  // Addon allocation events must carry the org_id and usage_policy_id we
+  // Addon allocation events must carry the organization mapping we
   // attached at hosted setup creation. Anything missing falls through
   // to ignored; we never invent ownership from account_ref.
   const organizationIdRaw = payload.metadata?.organization_id;

@@ -86,16 +86,24 @@ describe("public statute routes", () => {
     env.FEATURE_PUBLIC_LAW = false;
 
     try {
+      const absent = await publicLegislationRoute.handle(
+        new Request("http://localhost/law/absent-route"),
+      );
+      const absentBody = await absent.text();
       for (const path of [
         "/law/statutes?country=CZE",
         "/law/statutes/search?country=CZE&query=text",
+        // Malformed input must not reach validation and answer 422.
+        "/law/statutes/search",
       ]) {
         const response = await publicLegislationRoute.handle(
           new Request(`http://localhost${path}`),
         );
-        // Valid requests to a disabled public surface are not found.
-        expect(response.status, path).toBe(404);
-        expect(await response.json()).toEqual({ message: "Not Found" });
+        // A disabled public surface is indistinguishable from an absent route.
+        expect(
+          { status: response.status, body: await response.text() },
+          path,
+        ).toEqual({ status: absent.status, body: absentBody });
       }
     } finally {
       restoreRuntimeMode();

@@ -14,6 +14,9 @@ import {
   isNativeToolEnabledForOrg,
   mcpConnectorCatalogMetadata,
 } from "@/api/lib/mcp-connectors/catalog-metadata";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
+
+import createMcpConnector from "./create-connector";
 
 const config = {
   permissions: { workspace: ["read"] },
@@ -71,7 +74,10 @@ const listMcpConnectors = createSafeRootHandler(
     const nativeToolOverrides = settings?.nativeToolOverrides ?? {};
 
     return Result.ok({
-      canManageCustomConnectors: ["admin", "owner"].includes(memberRole.role),
+      canManageCustomConnectors: hasMemberPermission(
+        memberRole,
+        createMcpConnector.config.permissions,
+      ),
       connectors: uniqueConnectorsByUrl(connectors).map((connector) => {
         const metadata = mcpConnectorCatalogMetadata(connector);
         return {

@@ -4,7 +4,7 @@ import { status, t } from "elysia";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import { createSafeBoundedPublicHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
@@ -104,7 +104,7 @@ export const readProvisionPreviewHandler = async ({
   return preview;
 };
 
-const readProvisionPreview = createSafePublicHandler(
+const readProvisionPreview = createSafeBoundedPublicHandler(
   config,
   async function* ({ params: { documentId, anchor }, query }) {
     const response = yield* Result.await(

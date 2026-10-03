@@ -48,7 +48,7 @@ runtime validation, or integration tests.
 
 ### Security, identity, files, and external boundaries
 
-- [`auth-lifecycle`](./auth-lifecycle.ts) (`after-remove-member-revokes-artifacts`, `no-direct-auth-artifact-delete`): keeps authentication-artifact deletion behind the lifecycle that revokes all member-owned credentials; tables and the helper resolve by import, and a helper call in unreachable code does not count.
+- [`auth-lifecycle`](./auth-lifecycle.ts) (`member-removal-revokes-artifacts`, `no-direct-auth-artifact-delete`): keeps authentication-artifact deletion behind the lifecycle that revokes all member-owned credentials; tables, root database, and helper resolve by import; member removal must await the owning operation unconditionally inside the before hook’s root transaction.
 - [`mcp-security`](./mcp-security.ts) (`redact-oauth-registration-response`, `no-direct-oauth-client-join`): redacts OAuth registration secrets and confines OAuth client joins to the authorized MCP boundary.
 - [`no-auth-token-in-web-storage`](./no-auth-token-in-web-storage.ts) (`no-auth-token-in-web-storage`): rejects credential-like keys (literal, `const`, or imported) and serialized credential fields written to browser storage, directly or through a local forwarding helper; authentication secrets belong in server-set secure cookies.
 - [`no-body-ownership-ids`](./no-body-ownership-ids.ts) (`no-body-ownership-ids`): prevents request bodies and query strings from supplying trusted workspace or organization ownership IDs.
@@ -101,6 +101,7 @@ runtime validation, or integration tests.
 - [`no-raw-decision-text-fields`](./no-raw-decision-text-fields.ts) (`no-raw-decision-text-fields`): enforces the explicit decision-text boundary on adapter payloads, including aliased metadata and dynamic writes.
 - [`no-direct-field-write`](./no-direct-field-write.ts) (`no-direct-field-write`): keeps `fields` and `cellMetadata` inserts/updates/deletes in `apps/api/src` behind `lib/fields/write-field.ts` (a member's cell edit) and a reviewed list of modules that write them for other operations.
 - [`no-direct-property-table-write`](./no-direct-property-table-write.ts) (`no-direct-property-table-write`): keeps direct `properties` table inserts/updates behind the property handlers and lib modules that own its derived columns (kinds).
+- [`no-direct-legislation-revision-write`](./no-direct-legislation-revision-write.ts) (`no-direct-legislation-revision-write`): confines legislation revision writes to ingestion and limits partial owners to their declared unrelated columns.
 - [`no-direct-template-version-write`](./no-direct-template-version-write.ts) (`no-direct-template-version-write`): keeps template-version mutations behind the initial-template creator and existing-template write coordinator that own DOCX publication and cleanup intents.
 - [`no-direct-pdf-save`](./no-direct-pdf-save.ts) (`no-direct-pdf-save`): routes stored or downloaded PDF writes in `apps/api/src` through `savePdfRewrite`, and reports other PDF writer packages and PDF-rewriting command lines; syntax-only, by binding name within a file.
 - [`require-buffer-cleanup-intent-status`](./require-buffer-cleanup-intent-status.ts) (`require-buffer-cleanup-intent-status`): requires a non-undefined `status` on direct object-literal cleanup-intent inserts, including every direct object in an array; variable-built payloads are outside this syntax-only guard.
@@ -310,3 +311,7 @@ implies a hazard that is gone.
 - [no-parser-validator-calls](./no-parser-validator-calls.ts): `no-parser-validator-calls` confines text-retention validation to the ingestion pipeline, with a shrinking legacy import/call ledger.
 
 - [`no-unvalidated-clause-write`](./no-unvalidated-clause-write.ts) (`no-unvalidated-clause-write`): confines clause, variant, and version body writes to their owning operations and requires a preceding `yield*` of the shared directive validator, or legacy inspection in the import/restore owners. Working-copy updates validate when publishing; draft persistence remains allowed. This syntactic check does not prove control-flow dominance. Search index maintenance may write only its static `searchVector` column.
+
+- [`no-direct-error-toast`](./no-direct-error-toast.ts) (`no-direct-error-toast`): confines error toast creation, updates, and promise handling to the shared notifier.
+
+- [`no-discarded-toast-error`](./no-discarded-toast-error.ts) (`no-discarded-toast-error`): preserves original caught errors through shared notification.

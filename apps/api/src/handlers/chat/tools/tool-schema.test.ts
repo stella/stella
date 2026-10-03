@@ -293,7 +293,7 @@ const buildFullCoverageChatTools = (
   return getChatTools({
     orgAIConfig: null,
     managedAIResidency: "eu" as const,
-    memberRole: "owner",
+    memberRole: sessionMemberRole("owner"),
     organizationId,
     requestWorkspaceId: workspaceId,
     thirdPartyBoundary,
@@ -385,7 +385,7 @@ const autoApplyBaseArgs = {
 const buildAutoApplySuggestChangesChatTools = () =>
   getChatTools({
     ...autoApplyBaseArgs,
-    memberRole: "owner",
+    memberRole: sessionMemberRole("owner"),
     editApplyMode: "auto",
     workspaceStatusById: new Map([[workspaceId, "active"]]),
   });
@@ -841,7 +841,7 @@ describe("chat tool schemas", () => {
     const tools = getChatTools({
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" },
@@ -912,7 +912,7 @@ describe("chat tool schemas", () => {
     const baseArgs = {
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
-      memberRole: "owner" as const,
+      memberRole: sessionMemberRole("owner"),
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" as const },
@@ -952,7 +952,7 @@ describe("chat tool schemas", () => {
     const baseArgs = {
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" },
@@ -1114,7 +1114,7 @@ describe("chat tool schemas", () => {
     const tools = getChatTools({
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" },
@@ -1174,7 +1174,7 @@ describe("chat tool schemas", () => {
     const tools = getChatTools({
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" },
@@ -1220,7 +1220,7 @@ describe("chat tool schemas", () => {
     const tools = getChatTools({
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" },
@@ -2251,7 +2251,7 @@ describe("chat tool schemas", () => {
     test("registers create_matter_document for a role with entity:create in an active matter", () => {
       const tools = getChatTools({
         ...baseArgs,
-        memberRole: "owner",
+        memberRole: sessionMemberRole("owner"),
         workspaceStatusById: new Map([[workspaceId, "active"]]),
       });
       expect(tools).toHaveProperty(CREATE_MATTER_DOCUMENT_TOOL_NAME);
@@ -2264,7 +2264,7 @@ describe("chat tool schemas", () => {
     test("does not register create_matter_document for a role without entity:create", () => {
       const tools = getChatTools({
         ...baseArgs,
-        memberRole: "intern",
+        memberRole: sessionMemberRole("intern"),
         workspaceStatusById: new Map([[workspaceId, "active"]]),
       });
       expect(tools).not.toHaveProperty(CREATE_MATTER_DOCUMENT_TOOL_NAME);
@@ -2294,7 +2294,7 @@ describe("chat tool schemas", () => {
     test("does not register create_matter_document for an archived matter", () => {
       const tools = getChatTools({
         ...baseArgs,
-        memberRole: "owner",
+        memberRole: sessionMemberRole("owner"),
         workspaceStatusById: new Map([[workspaceId, "archived"]]),
       });
       expect(tools).not.toHaveProperty(CREATE_MATTER_DOCUMENT_TOOL_NAME);
@@ -2303,7 +2303,7 @@ describe("chat tool schemas", () => {
     test("does not register create_matter_document when no workspace status is known", () => {
       const tools = getChatTools({
         ...baseArgs,
-        memberRole: "owner",
+        memberRole: sessionMemberRole("owner"),
       });
       expect(tools).not.toHaveProperty(CREATE_MATTER_DOCUMENT_TOOL_NAME);
     });
@@ -2351,7 +2351,7 @@ describe("chat tool schemas", () => {
       expectApplyVariant(
         getChatTools({
           ...autoApplyBaseArgs,
-          memberRole: "owner",
+          memberRole: sessionMemberRole("owner"),
           editApplyMode: "auto",
           workspaceStatusById: new Map([[workspaceId, "active"]]),
         }),
@@ -2364,7 +2364,7 @@ describe("chat tool schemas", () => {
     test("does not register suggest_changes for a role without entity:update", () => {
       const tools = getChatTools({
         ...autoApplyBaseArgs,
-        memberRole: "intern",
+        memberRole: sessionMemberRole("intern"),
         editApplyMode: "auto",
         workspaceStatusById: new Map([[workspaceId, "active"]]),
       });
@@ -2374,7 +2374,7 @@ describe("chat tool schemas", () => {
     test("does not register suggest_changes for an archived matter", () => {
       const tools = getChatTools({
         ...autoApplyBaseArgs,
-        memberRole: "owner",
+        memberRole: sessionMemberRole("owner"),
         editApplyMode: "auto",
         workspaceStatusById: new Map([[workspaceId, "archived"]]),
       });
@@ -2385,7 +2385,7 @@ describe("chat tool schemas", () => {
     test("does not register suggest_changes when no workspace status is known", () => {
       const tools = getChatTools({
         ...autoApplyBaseArgs,
-        memberRole: "owner",
+        memberRole: sessionMemberRole("owner"),
         editApplyMode: "auto",
       });
       expect(tools).not.toHaveProperty(SUGGEST_CHANGES_TOOL_NAME);
@@ -2395,7 +2395,7 @@ describe("chat tool schemas", () => {
       const tools = getChatTools({
         ...autoApplyBaseArgs,
         activeFile: { entityId: autoApplyActiveFile.entityId },
-        memberRole: "owner",
+        memberRole: sessionMemberRole("owner"),
         editApplyMode: "auto",
         workspaceStatusById: new Map([[workspaceId, "active"]]),
       });
@@ -2409,7 +2409,7 @@ describe("chat tool schemas", () => {
           entityId: autoApplyActiveFile.entityId,
           supportsDocxEdits: true,
         },
-        memberRole: "owner",
+        memberRole: sessionMemberRole("owner"),
         editApplyMode: "auto",
         workspaceStatusById: new Map([[workspaceId, "active"]]),
       });
@@ -2422,7 +2422,7 @@ describe("chat tool schemas", () => {
     describe("mutual exclusion between the apply and queue variants", () => {
       const mutualExclusionArgs = {
         ...autoApplyBaseArgs,
-        memberRole: "owner" as const,
+        memberRole: sessionMemberRole("owner"),
         hasActiveDocxEditClient: true,
         workspaceStatusById: new Map([[workspaceId, "active" as const]]),
       };
@@ -2489,7 +2489,7 @@ describe("registry write tool approval policy", () => {
     getChatTools({
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" },
@@ -2578,7 +2578,7 @@ describe("registry write tool approval policy", () => {
     const tools = getChatTools({
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" },
@@ -2619,13 +2619,13 @@ describe("a subagent's code-mode script", () => {
   test("is told a tool its projection dropped is unavailable, not that it can call it directly", async () => {
     const full = getChatTools({
       ...autoApplyBaseArgs,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       editApplyMode: "manual",
       delegationDepth: 1,
     });
     const tools = getChatTools({
       ...autoApplyBaseArgs,
-      memberRole: "owner",
+      memberRole: sessionMemberRole("owner"),
       editApplyMode: "manual",
       delegationDepth: 1,
       projectToolSet: (registered) =>
