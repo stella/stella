@@ -237,7 +237,8 @@ const fillTemplateToWorkspace = createSafeHandler(
 
     if ("error" in filled) {
       return Result.err(
-        new HandlerError({ status: 400, message: filled.error }),
+        filled.storedTemplateError ??
+          new HandlerError({ status: 400, message: filled.error }),
       );
     }
 
@@ -345,6 +346,7 @@ const fillTemplateToWorkspace = createSafeHandler(
       fileName: created.value.fileName,
       unmatchedPlaceholders: filled.unmatchedPlaceholders,
       unusedValues: filled.unusedValues,
+      clauseWarnings: filled.clauseWarnings,
       // Fields whose AI draft failed: unfilled in the saved document, so the
       // person who filled the template has to write them.
       aiFieldErrors: filled.aiFieldErrors,

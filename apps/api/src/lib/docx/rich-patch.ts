@@ -15,7 +15,7 @@ import {
   substitutionKey,
 } from "@stll/template-conditions";
 
-import { isElement, paragraphText, W_NS } from "./ooxml";
+import { isElement, paragraphText, removeBlockUnit, W_NS } from "./ooxml";
 import type { RichPatchValue } from "./types";
 
 // Canonical pattern from @stll/template-conditions (markers.ts) — the single
@@ -305,7 +305,11 @@ const setStandaloneValue = (
   }
 
   const paragraphs = richParagraphs(value);
-  if (paragraphs.length <= 1) {
+  if (paragraphs.length === 0) {
+    removeBlockUnit(paragraph);
+    return;
+  }
+  if (paragraphs.length === 1) {
     const sourceRunProps = firstRunProps(paragraph);
     clearParagraphContent(paragraph);
     const firstParagraph = paragraphs.at(0);

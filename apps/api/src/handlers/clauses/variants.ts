@@ -10,6 +10,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
+import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -121,6 +122,8 @@ export const createVariantHandler = async function* ({
   body,
   recordAuditEvent,
 }: CreateVariantProps) {
+  yield* validateClauseBodyDirectives(body.body);
+
   const clauseResult = await verifyClauseOwnership(
     safeDb,
     clauseId,
@@ -214,6 +217,10 @@ export const updateVariantHandler = async function* ({
   body,
   recordAuditEvent,
 }: UpdateVariantProps) {
+  if (body.body !== undefined) {
+    yield* validateClauseBodyDirectives(body.body);
+  }
+
   const clauseResult = await verifyClauseOwnership(
     safeDb,
     clauseId,

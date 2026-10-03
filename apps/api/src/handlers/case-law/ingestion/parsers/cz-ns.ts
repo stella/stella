@@ -31,6 +31,8 @@ import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import {
   inlinesToPlainText,
+  isExcludedHtmlTag,
+  ownTableRows,
   walkInlines as walkInlinesShared,
 } from "./shared-inlines";
 
@@ -505,7 +507,7 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
     const tag = node.tagName.toLowerCase();
     const $node = $(node);
 
-    if (tag === "style" || tag === "script" || tag === "input") {
+    if (isExcludedHtmlTag(tag) || tag === "input") {
       return;
     }
 
@@ -516,7 +518,7 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
         flushInlines(walkInlines($, $(caption)), false);
       });
       const rows: TableCell[][] = [];
-      $node.find("tr").each((_, tr) => {
+      ownTableRows($node).each((_, tr) => {
         const row: TableCell[] = [];
         $(tr)
           .children("td, th")
