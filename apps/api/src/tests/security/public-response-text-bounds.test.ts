@@ -161,7 +161,159 @@ const publicRouteUnboundedFields = (
   return [...new Set(fields)].toSorted();
 };
 
+const WHOLE_DOCUMENT_TEXT_REASON =
+  "Whole official document text by design; bounded per source at ingestion, not at the response; a windowed reader contract is a separate change.";
+
+// Only the complete text on existing reader routes can refine a coarse exception.
+const isWholeReaderRefinement = ({
+  field,
+  reason,
+  prior,
+  current,
+}: {
+  field: string;
+  reason: string;
+  prior: SchemaNode;
+  current: SchemaNode;
+}): boolean => {
+  const match =
+    /^(GET \/v1\/(law\/statutes|case\/decisions)\/(?:by-eli|by-slug\/:slug|:documentId|:decisionId)) 200\.(?:fulltext|documentAst|sections\[\]\.text)$/u.exec(
+      field,
+    );
+  const route = match?.at(1);
+  const family = match?.at(2);
+  if (route === undefined || family === undefined) {
+    return false;
+  }
+  const coarse = `${route} response-schema`;
+  return (
+    reason === WHOLE_DOCUMENT_TEXT_REASON &&
+    coarse in prior &&
+    !(coarse in current)
+  );
+};
+
+const forbiddenLedgerAdditions = (
+  prior: SchemaNode,
+  current: Record<string, string>,
+) =>
+  Object.entries(current)
+    .filter(
+      ([field, reason]) =>
+        !(field in prior) &&
+        !isWholeReaderRefinement({ field, reason, prior, current }),
+    )
+    .map(([field]) => field);
+
 describe("anonymous response text bounds", () => {
+  test("reader refinements replace an existing same-route coarse exception", () => {
+    const field = "GET /v1/law/statutes/:documentId 200.fulltext";
+    const coarse = "GET /v1/law/statutes/:documentId response-schema";
+    const reason = WHOLE_DOCUMENT_TEXT_REASON;
+    const refinement = {
+      field,
+      reason,
+      prior: { [coarse]: "existing" },
+      current: { [field]: reason },
+    };
+    expect(isWholeReaderRefinement(refinement)).toBe(true);
+    // A newly added route cannot inherit another route's exception.
+    expect(
+      isWholeReaderRefinement({
+        ...refinement,
+        field: "GET /v1/law/statutes/by-eli 200.fulltext",
+      }),
+    ).toBe(false);
+    expect(isWholeReaderRefinement({ ...refinement, prior: {} })).toBe(false);
+    expect(
+      isWholeReaderRefinement({
+        ...refinement,
+        current: { [coarse]: "existing", [field]: reason },
+      }),
+    ).toBe(false);
+  });
+
+  test("reader refinements require whole-document fields and their exact reason", () => {
+    const coarse = "GET /v1/law/statutes/:documentId response-schema";
+    const reason = WHOLE_DOCUMENT_TEXT_REASON;
+    const refinement = {
+      field: "GET /v1/law/statutes/:documentId 200.documentAst",
+      reason,
+      prior: { [coarse]: "existing" },
+      current: {},
+    };
+    expect(isWholeReaderRefinement(refinement)).toBe(true);
+    for (const field of [
+      "title",
+      "sourceUrl",
+      "sections[].title",
+      "documentAst.*",
+      "preview",
+    ]) {
+      expect(
+        isWholeReaderRefinement({
+          ...refinement,
+          field: `GET /v1/law/statutes/:documentId 200.${field}`,
+        }),
+      ).toBe(false);
+    }
+    expect(isWholeReaderRefinement({ ...refinement, reason: "" })).toBe(false);
+    expect(
+      isWholeReaderRefinement({ ...refinement, reason: "whole text" }),
+    ).toBe(false);
+    expect(
+      isWholeReaderRefinement({
+        ...refinement,
+        field: "GET /v1/law/statutes/:documentId 503.fulltext",
+      }),
+    ).toBe(false);
+    expect(
+      isWholeReaderRefinement({
+        ...refinement,
+        field: "GET /v1/law/statutes/search 200.fulltext",
+        prior: { "GET /v1/law/statutes/search response-schema": "existing" },
+      }),
+    ).toBe(false);
+  });
+
+  test("case-law refinements use the same exact whole-document reason", () => {
+    const route = "GET /v1/case/decisions/:decisionId";
+    const reason = WHOLE_DOCUMENT_TEXT_REASON;
+    for (const path of ["fulltext", "documentAst", "sections[].text"]) {
+      expect(
+        isWholeReaderRefinement({
+          field: `${route} 200.${path}`,
+          reason,
+          prior: { [`${route} response-schema`]: "existing" },
+          current: {},
+        }),
+      ).toBe(true);
+    }
+    expect(
+      isWholeReaderRefinement({
+        field: `${route} 200.fulltext`,
+        reason: "Whole official decision text by design",
+        prior: { [`${route} response-schema`]: "existing" },
+        current: {},
+      }),
+    ).toBe(false);
+  });
+
+  test("ordinary ledger entries remain strictly shrink-only", () => {
+    const existing = "GET /existing 200.message";
+    const prior = { [existing]: "existing bound gap" };
+    expect(forbiddenLedgerAdditions(prior, {})).toEqual([]);
+    expect(forbiddenLedgerAdditions(prior, prior)).toEqual([]);
+    const added = "GET /new response-schema";
+    expect(
+      forbiddenLedgerAdditions(prior, { ...prior, [added]: "new" }),
+    ).toEqual([added]);
+    const metadata = "GET /existing 200.title";
+    expect(forbiddenLedgerAdditions(prior, { [metadata]: "new" })).toEqual([
+      metadata,
+    ]);
+  });
+
   test("every mounted public response string has a finite byte bound or an existing exception", async () => {
     const { default: api } = await import("@/api/server");
     await api.modules;
@@ -208,9 +360,7 @@ describe("anonymous response text bounds", () => {
     if (!isSchemaNode(existing)) {
       return;
     }
-    expect(
-      Object.keys(allowlist).filter((field) => !(field in existing)),
-    ).toEqual([]);
+    expect(forbiddenLedgerAdditions(existing, allowlist)).toEqual([]);
   });
 
   test.each([
