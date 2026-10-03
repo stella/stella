@@ -101,6 +101,19 @@ const QUICKWIT_CANONICAL_MATURATION_PERIOD = {
 type CorpusIndexMaturationPeriod =
   keyof typeof QUICKWIT_CANONICAL_MATURATION_PERIOD;
 
+const HOUR_MS = 60 * 60 * 1000;
+const MATURATION_PERIOD_MS = {
+  "4h": 4 * HOUR_MS,
+  "4hours": 4 * HOUR_MS,
+  "7d": 7 * 24 * HOUR_MS,
+  "7days": 7 * 24 * HOUR_MS,
+} as const satisfies Record<CorpusIndexMaturationPeriod, number>;
+
+/** How long a new split waits before the engine applies deletes to it. */
+export const corpusIndexMaturationPeriodMs = (
+  value: CorpusIndexMaturationPeriod,
+): number => MATURATION_PERIOD_MS[value];
+
 /** Render the manifest value exactly as Quickwit's metadata API does. */
 export const canonicalCorpusIndexMaturationPeriod = (
   value: CorpusIndexMaturationPeriod,

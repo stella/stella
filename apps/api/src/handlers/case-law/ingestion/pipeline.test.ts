@@ -61,6 +61,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   observedDocketOf,
   sanitizeResult,
@@ -130,10 +131,15 @@ const cursorOnlyDb =
         caseLawDecisions: { findFirst: async () => undefined },
       },
       select: () => ({
-        from: () => ({
+        from: (table: unknown) => ({
           where: () => ({
             for: () => ({ limit: async () => await Promise.resolve([]) }),
-            limit: async () => await Promise.resolve([]),
+            limit: async () =>
+              await Promise.resolve(
+                table === caseLawSources
+                  ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
+                  : [],
+              ),
           }),
         }),
       }),
@@ -802,10 +808,15 @@ describe("runIngestionPipeline — database timeouts", () => {
         // write. This suite asserts the decision row, so it reports no prior
         // identity and the citation-graph branch stays out of the way.
         select: () => ({
-          from: () => ({
+          from: (table: unknown) => ({
             where: () => ({
               for: () => ({ limit: async () => await Promise.resolve([]) }),
-              limit: async () => await Promise.resolve([]),
+              limit: async () =>
+                await Promise.resolve(
+                  table === caseLawSources
+                    ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
+                    : [],
+                ),
             }),
           }),
         }),
@@ -859,7 +870,7 @@ describe("runIngestionPipeline — failure records", () => {
   /**
    * A page of one decision whose write fails with an ordinary error, so the
    * page collects one failure record. The first database call orders the
-   * observation; the second is the decision's write; later calls reach the
+   * observation; the second reads its source; the third is the decision's write; later calls reach the
    * failure-record insert and the cursor update.
    */
   const failingDecisionDb = (insertError: Error | null) => {
@@ -870,11 +881,21 @@ describe("runIngestionPipeline — failure records", () => {
     let calls = 0;
     const scopedDb: ScopedDb = async (callback) => {
       calls++;
-      if (calls === 2) {
+      if (calls === 3) {
         throw new Error("decision rejected\u0000at byte 12");
       }
 
       const tx = {
+        select: () => ({
+          from: (table: unknown) => ({
+            where: () => ({
+              limit: async () =>
+                table === caseLawSources
+                  ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
+                  : [],
+            }),
+          }),
+        }),
         insert: () => ({
           values: async (rows: FailureRow[]) => {
             if (insertError !== null) {
@@ -1050,10 +1071,15 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
         // write. This suite asserts the decision row, so it reports no prior
         // identity and the citation-graph branch stays out of the way.
         select: () => ({
-          from: () => ({
+          from: (table: unknown) => ({
             where: () => ({
               for: () => ({ limit: async () => await Promise.resolve([]) }),
-              limit: async () => await Promise.resolve([]),
+              limit: async () =>
+                await Promise.resolve(
+                  table === caseLawSources
+                    ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
+                    : [],
+                ),
             }),
           }),
         }),
@@ -1529,7 +1555,12 @@ describe("processDecision — corpus storage off", () => {
                     table === caseLawSources ? [{ id: sourceId }] : [],
                   ),
               }),
-              limit: async () => await Promise.resolve([]),
+              limit: async () =>
+                await Promise.resolve(
+                  table === caseLawSources
+                    ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
+                    : [],
+                ),
             }),
           }),
         }),
@@ -1630,7 +1661,12 @@ describe("processDecision — the decision's judges", () => {
                     table === caseLawSources ? [{ id: sourceId }] : [],
                   ),
               }),
-              limit: async () => await Promise.resolve([]),
+              limit: async () =>
+                await Promise.resolve(
+                  table === caseLawSources
+                    ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
+                    : [],
+                ),
             }),
           }),
         }),
@@ -1770,7 +1806,12 @@ describe("processDecision — fields on an existing row", () => {
                               ],
                         ),
                     }),
-                    limit: async () => await Promise.resolve([]),
+                    limit: async () =>
+                      await Promise.resolve(
+                        table === caseLawSources
+                          ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
+                          : [],
+                      ),
                   }),
                 },
         }),
@@ -1899,10 +1940,15 @@ describe("processDecision — source raw upload failure", () => {
         // write. This suite asserts the decision row, so it reports no prior
         // identity and the citation-graph branch stays out of the way.
         select: () => ({
-          from: () => ({
+          from: (table: unknown) => ({
             where: () => ({
               for: () => ({ limit: async () => await Promise.resolve([]) }),
-              limit: async () => await Promise.resolve([]),
+              limit: async () =>
+                await Promise.resolve(
+                  table === caseLawSources
+                    ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
+                    : [],
+                ),
             }),
           }),
         }),
@@ -1980,10 +2026,15 @@ describe("processDecision — source raw upload failure", () => {
         // write. This suite asserts the decision row, so it reports no prior
         // identity and the citation-graph branch stays out of the way.
         select: () => ({
-          from: () => ({
+          from: (table: unknown) => ({
             where: () => ({
               for: () => ({ limit: async () => await Promise.resolve([]) }),
-              limit: async () => await Promise.resolve([]),
+              limit: async () =>
+                await Promise.resolve(
+                  table === caseLawSources
+                    ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
+                    : [],
+                ),
             }),
           }),
         }),

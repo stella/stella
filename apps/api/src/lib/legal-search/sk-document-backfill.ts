@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch processing uses the atomic claim snapshot; parsing is unchanged.
 /**
  * Fetch and parse the PDFs behind Slovak court decisions.
  *
@@ -133,6 +134,13 @@ export type PendingDocument = {
   decisionDate: string | null;
   decisionType: string | null;
   documentUrl: string | null;
+};
+
+const claimedPendingDocument = Symbol("claimedPendingDocument");
+
+type ClaimedPendingDocument = PendingDocument & {
+  readonly [claimedPendingDocument]: true;
+  readonly sourceHash: string | null;
 };
 
 /**
@@ -1087,7 +1095,7 @@ const CLAIM_TTL_SECONDS = 120;
  * worker that dies mid-download still leaves a record of having tried.
  */
 /**
- * A won claim, carrying the source hash the row had when it was won.
+ * A won claim carries the decision snapshot read by the atomic update.
  * The store pins that hash, so a source refresh landing mid-fetch takes
  * the store out of scope rather than being overwritten by a document
  * parsed from what the source used to say.
@@ -1095,7 +1103,7 @@ const CLAIM_TTL_SECONDS = 120;
 export type DocumentFetchClaim =
   | {
       status: "claimed";
-      sourceHash: string | null;
+      decision: ClaimedPendingDocument;
       /** Attempts counted so far, this one included. */
       attempts: number;
     }
@@ -1114,41 +1122,40 @@ export const claimDocumentFetch = async (
       return { status: "held" };
     }
 
-    // Raw statement rather than the query builder: the claim has to
-    // read and write `document_fetch_attempted_at` in one round trip,
-    // and it deliberately leaves `updated_at` alone — an attempt is not
-    // a change to the decision, and the public reads key their
-    // freshness off that column.
+    // An attempt preserves the decision's public freshness timestamp.
     // audit: skip — public case-law document fetch; no user action
-    const claimed: unknown = await tx.execute(sql`
-      UPDATE ${caseLawDecisions}
-      SET document_fetch_attempted_at = now(),
-          document_fetch_attempts = document_fetch_attempts + 1
-      WHERE id = ${decisionId}
-        AND redacted_at IS NULL
-        AND fulltext IS NULL
-        AND (
-          document_fetch_attempted_at IS NULL
-          OR document_fetch_attempted_at
-             < now() - ${`${CLAIM_TTL_SECONDS} seconds`}::interval
+    const claimedRow = (
+      await tx
+        .update(caseLawDecisions)
+        .set({
+          documentFetchAttemptedAt: sql`now()`,
+          documentFetchAttempts: sql`${caseLawDecisions.documentFetchAttempts} + 1`,
+          updatedAt: sql`${caseLawDecisions.updatedAt}`,
+        })
+        .where(
+          and(
+            eq(caseLawDecisions.id, decisionId),
+            isNull(caseLawDecisions.redactedAt),
+            isNull(caseLawDecisions.fulltext),
+            or(
+              isNull(caseLawDecisions.documentFetchAttemptedAt),
+              sql`${caseLawDecisions.documentFetchAttemptedAt} < now() - ${`${CLAIM_TTL_SECONDS} seconds`}::interval`,
+            ),
+          ),
         )
-      RETURNING source_hash AS "sourceHash",
-                document_fetch_attempts AS "attempts"
-    `);
-
-    const claimedRow = executedRows(claimed).at(0);
-    if (!isRecord(claimedRow)) {
+        .returning({
+          ...PENDING_DOCUMENT_COLUMNS,
+          sourceHash: caseLawDecisions.sourceHash,
+          attempts: caseLawDecisions.documentFetchAttempts,
+        })
+    ).at(0);
+    if (claimedRow === undefined) {
       return { status: "held" };
     }
-
-    const sourceHash = claimedRow["sourceHash"];
-    const attempts = claimedRow["attempts"];
-    if (typeof attempts !== "number") {
-      return panic("document_fetch_attempts is a NOT NULL integer");
-    }
+    const { attempts, ...snapshot } = claimedRow;
     return {
       status: "claimed",
-      sourceHash: typeof sourceHash === "string" ? sourceHash : null,
+      decision: { ...snapshot, [claimedPendingDocument]: true },
       attempts,
     };
   });
@@ -1389,9 +1396,8 @@ export type FetchDecisionDocumentOptions = {
 };
 
 type ParseFetchedDocumentOptions = {
-  decision: PendingDocument;
+  decision: ClaimedPendingDocument;
   bytes: Uint8Array;
-  claimedSourceHash: string | null;
   scopedDb: ScopedDb;
 };
 
@@ -1412,7 +1418,6 @@ type ParseFetchedDocumentResult =
  */
 const parseFetchedDocument = async ({
   bytes,
-  claimedSourceHash,
   decision,
   scopedDb,
 }: ParseFetchedDocumentOptions): Promise<ParseFetchedDocumentResult> => {
@@ -1439,7 +1444,7 @@ const parseFetchedDocument = async ({
     throw parsed.error;
   }
   const parked = await parkDocumentFetch({
-    claimedSourceHash,
+    claimedSourceHash: decision.sourceHash,
     decisionId: decision.id,
     scopedDb,
   });
@@ -1449,16 +1454,38 @@ const parseFetchedDocument = async ({
 };
 
 const runDecisionDocumentFetch = async ({
-  decision,
+  decision: { id },
   fetchDocument,
   scopedDb,
   signal,
 }: FetchDecisionDocumentOptions): Promise<DecisionDocumentOutcome> => {
-  const claim = await claimDocumentFetch(decision.id, scopedDb);
+  const claim = await claimDocumentFetch(id, scopedDb);
   if (claim.status === "held") {
     return { status: "claimed" };
   }
 
+  return await processClaimedDocument({
+    claim,
+    fetchDocument,
+    scopedDb,
+    signal,
+  });
+};
+
+type ProcessClaimedDocumentOptions = {
+  claim: Extract<DocumentFetchClaim, { status: "claimed" }>;
+  fetchDocument: SkDocumentFetch;
+  scopedDb: ScopedDb;
+  signal: AbortSignal;
+};
+
+const processClaimedDocument = async ({
+  claim,
+  fetchDocument,
+  scopedDb,
+  signal,
+}: ProcessClaimedDocumentOptions): Promise<DecisionDocumentOutcome> => {
+  const { decision } = claim;
   const fetched: PdfFetchResult = decision.documentUrl
     ? await fetchPdfBytes({
         documentUrl: decision.documentUrl,
@@ -1478,7 +1505,6 @@ const runDecisionDocumentFetch = async ({
     fetched.type === "document"
       ? await parseFetchedDocument({
           bytes: fetched.bytes,
-          claimedSourceHash: claim.sourceHash,
           decision,
           scopedDb,
         })
@@ -1502,7 +1528,7 @@ const runDecisionDocumentFetch = async ({
   const { document } = parsed;
   if (!document) {
     await markDocumentUnavailable({
-      claimedSourceHash: claim.sourceHash,
+      claimedSourceHash: decision.sourceHash,
       decisionId: decision.id,
       scopedDb,
     });
@@ -1513,7 +1539,7 @@ const runDecisionDocumentFetch = async ({
     decision,
     document,
     scopedDb,
-    claimedSourceHash: claim.sourceHash,
+    claimedSourceHash: decision.sourceHash,
   });
   if (stored === "superseded") {
     return { status: "superseded" };
