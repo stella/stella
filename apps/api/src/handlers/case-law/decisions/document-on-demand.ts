@@ -219,6 +219,9 @@ const runFetch = async ({
       case "pacing-unavailable":
         deps.recordPacingOutcome(decision.id, budgeted.status);
         return null;
+      case "failed":
+        recordFailure(budgeted.error, decision.id);
+        return null;
       case "completed":
         return budgeted.value.status === "filled"
           ? budgeted.value.document

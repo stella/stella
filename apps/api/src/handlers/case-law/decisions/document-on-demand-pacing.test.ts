@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import { expect, jest, mock, test } from "bun:test";
 import fc from "fast-check";
 
@@ -67,7 +68,10 @@ const pacedDeps = ({
       }),
     fetchDocument: async (pending, adapterKey) => {
       // The fetch boundary takes the immediate shared reservation.
-      await reservePublisherSlot(adapterKey);
+      const reservation = await reservePublisherSlot(adapterKey);
+      if (Result.isError(reservation)) {
+        throw reservation.error;
+      }
       fetched.push(pending.id);
       return { status: "claimed" };
     },
@@ -189,10 +193,9 @@ for (const mode of ["throws", "rejects", "pending", "connecting"] as const) {
                           );
                         case "pending":
                           return new Promise(() => {});
-                        case "connecting":
-                          throw new Error("Connection must not reach send");
                         default:
                           mode satisfies never;
+                          return panic("Unhandled gate failure mode");
                       }
                     },
                   },
@@ -260,4 +263,19 @@ test("a pacing capture failure still resolves the read", async () => {
     }),
   ).toBeNull();
   expect(fetched).toEqual([]);
+});
+
+test("an immediate publisher operation reports its failure", async () => {
+  const failure = new Error("Document operation failed");
+  const result = await withImmediatePublisherSlot({
+    adapterKey: "sk-courts",
+    dependencies: {
+      redis: () => ({ send: () => 1 }),
+      sleep: async () => {},
+    },
+    operation: async () => {
+      throw failure;
+    },
+  });
+  expect(result).toEqual({ status: "failed", error: failure });
 });

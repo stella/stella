@@ -377,7 +377,8 @@ class PublisherPacingStopped extends TaggedError("PublisherPacingStopped")<{
 
 export type ImmediatePublisherSlotResult<T> =
   | { status: "completed"; value: T }
-  | { status: PublisherPacingOutcome };
+  | { status: PublisherPacingOutcome }
+  | { status: "failed"; error: unknown };
 
 export const withImmediatePublisherSlot = async <T>({
   adapterKey,
@@ -402,7 +403,7 @@ export const withImmediatePublisherSlot = async <T>({
   if (PublisherPacingStopped.is(result.error)) {
     return { status: result.error.status };
   }
-  throw result.error;
+  return { status: "failed", error: result.error };
 };
 
 const getPublisherGateSlot = (gateId: PublisherGateId) => {
@@ -457,14 +458,17 @@ export const withPublisherRequestRateLimit = async <T>({
 export const reservePublisherSlot = async (
   adapterKey: AdapterKey,
   signal?: AbortSignal,
-): Promise<void> => {
-  await reservePublisherGateSlot(ADAPTER_PUBLISHER_GATES[adapterKey], signal);
-};
+): Promise<Result<void, PublisherPacingStopped>> => 
+  await reservePublisherGateSlot(
+    ADAPTER_PUBLISHER_GATES[adapterKey],
+    signal,
+  )
+;
 
 export const reservePublisherGateSlot = async (
   gateId: PublisherGateId,
   signal?: AbortSignal,
-): Promise<void> => {
+): Promise<Result<void, PublisherPacingStopped>> => {
   const immediate = immediateRequestGate.getStore();
   if (immediate?.gateId === gateId) {
     const reserved = await Result.tryPromise({
@@ -472,29 +476,34 @@ export const reservePublisherGateSlot = async (
       catch: (error) => error,
     });
     if (Result.isError(reserved)) {
-      throw new PublisherPacingStopped({
-        message: "Publisher pacing unavailable",
-        status: "pacing-unavailable",
-        cause: reserved.error,
-      });
+      return Result.err(
+        new PublisherPacingStopped({
+          message: "Publisher pacing unavailable",
+          status: "pacing-unavailable",
+          cause: reserved.error,
+        }),
+      );
     }
     if (!reserved.value) {
-      throw new PublisherPacingStopped({
-        message: "Publisher pacing deferred",
-        status: "pacing-deferred",
-      });
+      return Result.err(
+        new PublisherPacingStopped({
+          message: "Publisher pacing deferred",
+          status: "pacing-deferred",
+        }),
+      );
     }
-    return;
+    return Result.ok();
   }
   const runLimit = runPublisherLimit.getStore();
   if (runLimit?.gateId === gateId) {
     await runLimit.gateSlot(signal);
-    return;
+    return Result.ok();
   }
   if (!publisherGateReserves()) {
-    return;
+    return Result.ok();
   }
   await getPublisherGateSlot(gateId)(signal);
+  return Result.ok();
 };
 
 export const deferPublisherGate = async (
