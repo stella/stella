@@ -736,107 +736,114 @@ const oversizedUnicode = fc
   })
   .map((atoms) => atoms.join("").repeat(6000));
 
-test.each(["pg-fts", "corpus-index"] as const)(
-  "legislation %s search bounds oversized Unicode display fields",
-  async (provider) => {
-    const propertyId = `legislation ${provider} search bounds oversized Unicode display fields`;
-    await assertProperty(
-      propertyId,
-      fc.asyncProperty(oversizedUnicode, async (text) => {
-        expect(Buffer.byteLength(text, "utf-8")).toBeGreaterThan(
-          LIMITS.legislationSearchTextBytes.title,
-        );
-        expect(Buffer.byteLength(text, "utf-8")).toBeGreaterThan(
-          LIMITS.legislationSearchTextBytes.headline,
-        );
-        const fulltext = `bytecapfixture ${"漢".repeat(250)} `.repeat(30);
-        if (provider === "pg-fts") {
-          const raw = await db.execute(sql`SELECT ts_headline(
+const oversizedDisplayFieldProperty = (provider: "pg-fts" | "corpus-index") =>
+  fc.asyncProperty(oversizedUnicode, async (text) => {
+    expect(Buffer.byteLength(text, "utf-8")).toBeGreaterThan(
+      LIMITS.legislationSearchTextBytes.title,
+    );
+    expect(Buffer.byteLength(text, "utf-8")).toBeGreaterThan(
+      LIMITS.legislationSearchTextBytes.headline,
+    );
+    const fulltext = `bytecapfixture ${"漢".repeat(250)} `.repeat(30);
+    if (provider === "pg-fts") {
+      const raw = await db.execute(sql`SELECT ts_headline(
           'public.stella_unaccent'::regconfig,
           ${fulltext},
           plainto_tsquery('simple', 'bytecapfixture'),
           ${TS_HEADLINE_CONFIG}
         ) AS headline`);
-          const headline = raw.rows.at(0)?.["headline"];
-          if (typeof headline !== "string") {
-            panic("byte-cap fixture did not yield a Postgres headline");
-          }
-          expect(Buffer.byteLength(headline, "utf-8")).toBeGreaterThan(
-            LIMITS.legislationSearchTextBytes.headline,
-          );
-        }
-        await db
-          .update(legislationDocuments)
-          .set({ title: text, fulltext })
-          .where(eq(legislationDocuments.id, byteCapVersion.id));
-        const corpusClient = getCorpusIndexClient("q09");
-        const engineSearch =
-          provider === "corpus-index"
-            ? spyOn(corpusClient, "search").mockImplementation(async () =>
-                Result.ok({
-                  numHits: 1,
-                  hits: [{ document_id: String(byteCapVersion.id) }],
-                  snippets: [{ text: [`<b>${text}</b>`] }],
-                }),
-              )
-            : null;
-        try {
-          const response = await searchLegislationHandler(
-            { query: "bytecapfixture", jurisdiction: "CZE", limit: 20 },
-            legislationDb,
-            "unobserved",
+      const headline = raw.rows.at(0)?.["headline"];
+      if (typeof headline !== "string") {
+        panic("byte-cap fixture did not yield a Postgres headline");
+      }
+      expect(Buffer.byteLength(headline, "utf-8")).toBeGreaterThan(
+        LIMITS.legislationSearchTextBytes.headline,
+      );
+    }
+    await db
+      .update(legislationDocuments)
+      .set({ title: text, fulltext })
+      .where(eq(legislationDocuments.id, byteCapVersion.id));
+    const corpusClient = getCorpusIndexClient("q09");
+    const engineSearch =
+      provider === "corpus-index"
+        ? spyOn(corpusClient, "search").mockImplementation(async () =>
+            Result.ok({
+              numHits: 1,
+              hits: [{ document_id: String(byteCapVersion.id) }],
+              snippets: [{ text: [`<b>${text}</b>`] }],
+            }),
+          )
+        : null;
+    try {
+      const response = await searchLegislationHandler(
+        { query: "bytecapfixture", jurisdiction: "CZE", limit: 20 },
+        legislationDb,
+        "unobserved",
+        {
+          provider,
+          loadSearchConfigs: async () => [
             {
-              provider,
-              loadSearchConfigs: async () => [
-                {
-                  regconfig: "simple",
-                  useUnaccent: false,
-                  includeDefault: true,
-                  languages: [],
-                },
-              ],
-              readServingGeneration: async () => ({
-                family: "legislation",
-                generation: GENERATION,
-                cluster: "q09",
-              }),
+              regconfig: "simple",
+              useUnaccent: false,
+              includeDefault: true,
+              languages: [],
             },
-          );
-          if (!("items" in response)) {
-            panic("byte-cap fixture search was refused");
-          }
-          expect(response.items).toHaveLength(1);
-          const hit = response.items.at(0);
-          if (hit === undefined) {
-            panic("byte-cap fixture did not yield a search hit");
-          }
-          if (hit.headline === null) {
-            panic("byte-cap fixture did not yield a highlighted search hit");
-          }
-          expect(hit.documentId).toBe(String(byteCapVersion.id));
-          expect(hit.title).not.toBe(text);
-          expect(Buffer.byteLength(hit.title, "utf-8")).toBeLessThanOrEqual(
-            LIMITS.legislationSearchTextBytes.title,
-          );
-          expect(Buffer.byteLength(hit.headline, "utf-8")).toBeLessThanOrEqual(
-            LIMITS.legislationSearchTextBytes.headline,
-          );
-          expect(hit.title.isWellFormed()).toBe(true);
-          expect(hit.headline.isWellFormed()).toBe(true);
-          let depth = 0;
-          for (const tag of hit.headline.matchAll(/<\/?mark>/gu)) {
-            depth += tag[0] === "<mark>" ? 1 : -1;
-            expect(depth).toBeGreaterThanOrEqual(0);
-          }
-          expect(depth).toBe(0);
-          expect(
-            Buffer.byteLength(JSON.stringify(response), "utf-8"),
-          ).toBeLessThanOrEqual(PUBLIC_LEGISLATION_SEARCH_RESPONSE_MAX_BYTES);
-        } finally {
-          engineSearch?.mockRestore();
-        }
-      }),
-      { numRuns: 12 },
-    );
-  },
-);
+          ],
+          readServingGeneration: async () => ({
+            family: "legislation",
+            generation: GENERATION,
+            cluster: "q09",
+          }),
+        },
+      );
+      if (!("items" in response)) {
+        panic("byte-cap fixture search was refused");
+      }
+      expect(response.items).toHaveLength(1);
+      const hit = response.items.at(0);
+      if (hit === undefined) {
+        panic("byte-cap fixture did not yield a search hit");
+      }
+      if (hit.headline === null) {
+        panic("byte-cap fixture did not yield a highlighted search hit");
+      }
+      expect(hit.documentId).toBe(String(byteCapVersion.id));
+      expect(hit.title).not.toBe(text);
+      expect(Buffer.byteLength(hit.title, "utf-8")).toBeLessThanOrEqual(
+        LIMITS.legislationSearchTextBytes.title,
+      );
+      expect(Buffer.byteLength(hit.headline, "utf-8")).toBeLessThanOrEqual(
+        LIMITS.legislationSearchTextBytes.headline,
+      );
+      expect(hit.title.isWellFormed()).toBe(true);
+      expect(hit.headline.isWellFormed()).toBe(true);
+      let depth = 0;
+      for (const tag of hit.headline.matchAll(/<\/?mark>/gu)) {
+        depth += tag[0] === "<mark>" ? 1 : -1;
+        expect(depth).toBeGreaterThanOrEqual(0);
+      }
+      expect(depth).toBe(0);
+      expect(
+        Buffer.byteLength(JSON.stringify(response), "utf-8"),
+      ).toBeLessThanOrEqual(PUBLIC_LEGISLATION_SEARCH_RESPONSE_MAX_BYTES);
+    } finally {
+      engineSearch?.mockRestore();
+    }
+  });
+
+test("legislation pg-fts search bounds oversized Unicode display fields", async () => {
+  await assertProperty(
+    "legislation pg-fts search bounds oversized Unicode display fields",
+    oversizedDisplayFieldProperty("pg-fts"),
+    { numRuns: 12 },
+  );
+});
+
+test("legislation corpus-index search bounds oversized Unicode display fields", async () => {
+  await assertProperty(
+    "legislation corpus-index search bounds oversized Unicode display fields",
+    oversizedDisplayFieldProperty("corpus-index"),
+    { numRuns: 12 },
+  );
+});
