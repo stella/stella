@@ -390,7 +390,7 @@ const searchResult = async (
         : markCorpusFragment({
             text,
             tokens: snippetTokens,
-            language: stemming?.language ?? null,
+            language: fields.stemming?.language ?? null,
           });
     },
     // Upper bound for the pagination early-stop: scanning may end only once
