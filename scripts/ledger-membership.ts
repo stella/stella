@@ -147,10 +147,10 @@ export const runLedgerMembershipGuard = ({
     parseLedger,
   });
   if (comparison.type === "unresolved-base") {
-    log(
-      `${label} ledger: membership check skipped; base ${baseRef} could not be resolved.`,
+    error(
+      `${label} ledger: base ${baseRef} could not be resolved; fetch the comparison ref before checking membership.`,
     );
-    return 0;
+    return 1;
   }
   const { added } = comparison;
   if (added.length === 0) {
