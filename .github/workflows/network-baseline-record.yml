@@ -1,89 +1,45 @@
 name: Record network baseline
 
-# Runs pull request code: no secrets, contents: read tokens, and checkouts with
-# persist-credentials: false. Everything it uploads is untrusted PR data: the
-# recorded JSON reflects the PR's own code, the build's version.json commit
-# only catches mixed-up artifacts, and the fork patch needs ordinary diff
-# review before anyone applies it. The deliver workflow validates the JSON
-# with main's script and opens a review thread on each commit it pushes.
+# Main owns recordings. PR checks never write the shared JSON.
 on:
-  pull_request:
-    types: [labeled]
+  push:
+    branches: [main]
+    paths:
+      - apps/web/**
+      - apps/api/**
+      - packages/**
+      - .github/actions/**
+      - .github/workflows/network-baseline-*.yml
+      - scripts/network-baseline-scope.ts
+      - bun.lock
+  schedule:
+    - cron: "17 2 * * *"
   workflow_dispatch:
     inputs:
-      pr:
-        description: Pull request number
-        required: true
-        type: number
-      all:
-        description: Allow updating every baseline entry
-        required: false
-        default: false
-        type: boolean
+      mode:
+        description: Merge observed budgets or tighten them with a fresh snapshot
+        type: choice
+        default: write
+        options: [write, rewrite]
 
-# A newer recording for the same pull request supersedes the running one.
-# Other labels get their own group, so adding one never cancels a recording.
 concurrency:
-  group: ${{ github.workflow }}-${{ (github.event_name == 'pull_request') && format('pr-{0}-label-{1}', github.event.pull_request.number || github.ref, github.event.label.name) || format('run-{0}', github.run_id) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions: {}
 
 jobs:
-  resolve:
-    if: >-
-      (github.event_name == 'pull_request' && github.event.label.name == 'baseline:record')
-      || (github.event_name == 'workflow_dispatch'
-          && github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    permissions:
-      pull-requests: read
-    outputs:
-      pr: ${{ steps.pr.outputs.pr }}
-      head: ${{ steps.pr.outputs.head }}
-      base: ${{ steps.pr.outputs.base }}
-      same-repo: ${{ steps.pr.outputs.same-repo }}
-    steps:
-      - name: Resolve current pull request head
-        id: pr
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr }}
-          EVENT_HEAD: ${{ github.event.pull_request.head.sha }}
-          REPOSITORY: ${{ github.repository }}
-          BASE_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          set -euo pipefail
-          pr=$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER")
-          if [[ "$(jq -r '.state' <<< "$pr")" != open || "$(jq -r '.base.ref' <<< "$pr")" != "$BASE_BRANCH" ]]; then
-            echo "::error::The pull request must be open against $BASE_BRANCH"
-            exit 1
-          fi
-          head=$(jq -r '.head.sha' <<< "$pr")
-          base=$(jq -r '.base.sha' <<< "$pr")
-          if [[ -n "$EVENT_HEAD" && "$EVENT_HEAD" != "$head" ]]; then
-            echo "::error::The pull request head moved after the label event"
-            exit 1
-          fi
-          {
-            echo "pr=$PR_NUMBER"
-            echo "head=$head"
-            echo "base=$base"
-            echo "same-repo=$(jq -r --arg repo "$REPOSITORY" '.head.repo.full_name == $repo' <<< "$pr")"
-          } >> "$GITHUB_OUTPUT"
-
   build:
-    needs: resolve
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
     steps:
-      - name: Checkout pull request head
+      - name: Checkout main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.resolve.outputs.head }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Setup Bun
@@ -109,16 +65,17 @@ jobs:
           retention-days: 1
 
   record:
-    needs: [resolve, build]
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
+      actions: read
     steps:
-      - name: Checkout pull request head
+      - name: Checkout main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.resolve.outputs.head }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -136,7 +93,7 @@ jobs:
         id: stack
         uses: ./.github/actions/setup-production-e2e
         with:
-          expected-sha: ${{ needs.resolve.outputs.head }}
+          expected-sha: ${{ github.sha }}
 
       - name: Require a ready stack
         if: steps.stack.outputs.status != 'ready'
@@ -144,81 +101,32 @@ jobs:
           echo "::error::Network baseline recording needs a ready E2E stack"
           exit 1
 
+      - name: Seed write mode from the latest published recording
+        if: (inputs.mode || 'write') == 'write'
+        uses: ./.github/actions/prepare-network-baseline
+        with:
+          base-sha: ${{ github.sha }}
+          token: ${{ github.token }}
+          purpose: recording
+
       - name: Record network baseline
         env:
           E2E_EXECUTION_PROFILE: network-baseline
           E2E_EXPECT_DEV_ROUTES: "false"
-          E2E_NETWORK_BASELINE: write
+          E2E_NETWORK_BASELINE: ${{ inputs.mode || 'write' }}
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-network-baseline.zip
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- route-smoke.spec.ts
 
-      - name: Limit baseline changes to new or edited routes
-        env:
-          BASE_SHA: ${{ needs.resolve.outputs.base }}
-          HEAD_SHA: ${{ needs.resolve.outputs.head }}
-          WORKFLOW_SHA: ${{ github.workflow_sha }}
-          ALL_ROUTES: ${{ github.event_name == 'workflow_dispatch' && inputs.all || false }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
-          git fetch --no-tags origin "$BASE_SHA"
-          git show "$BASE_SHA:apps/web/e2e/network-baseline.json" > "$RUNNER_TEMP/base-baseline.json"
-          # Use the workflow-owned physical-route projection as delivery. Revision
-          # routes are data; neither revision's scripts or configuration run.
-          git fetch --no-tags origin "$WORKFLOW_SHA"
-          trusted="$RUNNER_TEMP/record-route-validator"
-          mkdir -p "$trusted/apps/web/scripts"
-          git show "$WORKFLOW_SHA:apps/web/scripts/network-baseline-route-tree.ts" > "$trusted/apps/web/scripts/network-baseline-route-tree.ts"
-          git show "$WORKFLOW_SHA:apps/web/route-tree.config.ts" > "$trusted/apps/web/route-tree.config.ts"
-          git show "$WORKFLOW_SHA:apps/web/package.json" | jq '{private: true, type: "module", dependencies: {"@tanstack/router-generator": .devDependencies["@tanstack/router-generator"]}}' > "$trusted/package.json"
-          (cd "$trusted" && bun install --ignore-scripts --no-cache --no-save)
-          (cd "$trusted" && bun --no-install --no-env-file apps/web/scripts/network-baseline-route-tree.ts "$GITHUB_WORKSPACE" "$BASE_SHA" "$RUNNER_TEMP/base-route-tree.gen.ts")
-          (cd "$trusted" && bun --no-install --no-env-file apps/web/scripts/network-baseline-route-tree.ts "$GITHUB_WORKSPACE" "$HEAD_SHA" "$RUNNER_TEMP/head-route-tree.gen.ts")
-          git diff --name-only --no-renames "$BASE_SHA"..."$HEAD_SHA" -- apps/web/src/routes > "$RUNNER_TEMP/changed-routes"
-          args=()
-          if [[ "$ALL_ROUTES" == true ]]; then args+=(--all); fi
-          bun scripts/network-baseline-scope.ts scope \
-            --base "$RUNNER_TEMP/base-baseline.json" \
-            --recorded apps/web/e2e/network-baseline.json \
-            --changed "$RUNNER_TEMP/changed-routes" \
-            --base-route-tree "$RUNNER_TEMP/base-route-tree.gen.ts" \
-            --route-tree "$RUNNER_TEMP/head-route-tree.gen.ts" "${args[@]}"
-          unexpected=$(git diff --name-only "$HEAD_SHA" -- . ':(exclude)apps/web/e2e/network-baseline.json')
-          untracked=$(git ls-files --others --exclude-standard)
-          if [[ -n "${unexpected}${untracked}" ]]; then
-            echo "::error::Recording changed files outside network-baseline.json"
-            git status --short
-            exit 1
-          fi
-          git diff --check -- apps/web/e2e/network-baseline.json
-          git diff --binary -- apps/web/e2e/network-baseline.json > "$RUNNER_TEMP/network-baseline.patch"
+      - name: Validate recorded baseline
+        run: bun scripts/network-baseline-scope.ts validate apps/web/e2e/network-baseline.json
 
       - name: Upload recorded JSON
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: network-baseline-record-${{ needs.resolve.outputs.pr }}-${{ needs.resolve.outputs.head }}-${{ needs.resolve.outputs.base }}-${{ github.event_name == 'workflow_dispatch' && inputs.all || false }}
+          name: network-baseline-record-${{ github.sha }}
           path: apps/web/e2e/network-baseline.json
           if-no-files-found: error
           retention-days: 7
-
-      - name: Upload patch for manual application
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: network-baseline-patch-${{ needs.resolve.outputs.pr }}-${{ needs.resolve.outputs.head }}
-          path: ${{ runner.temp }}/network-baseline.patch
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Explain fork delivery
-        if: needs.resolve.outputs.same-repo != 'true'
-        env:
-          PR_NUMBER: ${{ needs.resolve.outputs.pr }}
-          HEAD_SHA: ${{ needs.resolve.outputs.head }}
-        run: |
-          {
-            echo "### Network baseline for pull request #$PR_NUMBER"
-            echo "Download the network-baseline-patch-$PR_NUMBER-$HEAD_SHA artifact, review it like any other diff, then run \`git apply network-baseline.patch\` on the pull request branch. The patch was produced by this pull request's code; review its budgets as budget changes. The JSON artifact contains the complete result."
-          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload failure diagnostics
         if: failure()

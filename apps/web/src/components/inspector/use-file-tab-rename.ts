@@ -1,7 +1,6 @@
 import { useCallback, useLayoutEffect, useState } from "react";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type {
   FileTab,
   InspectorTab,
@@ -61,18 +60,11 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
       return;
     }
 
-    const previousLabel = tab.label;
-    useInspectorTabsStore.getState().updateLabel(tab.id, newName);
-    renameEntity.mutate(
-      { workspaceId: tab.workspaceId, entityId: tab.entityId, name: newName },
-      {
-        // Roll back the optimistic label; the shared rename hook
-        // surfaces the failure toast.
-        onError: () => {
-          useInspectorTabsStore.getState().updateLabel(tab.id, previousLabel);
-        },
-      },
-    );
+    renameEntity.mutate({
+      workspaceId: tab.workspaceId,
+      entityId: tab.entityId,
+      name: newName,
+    });
   };
 
   return {

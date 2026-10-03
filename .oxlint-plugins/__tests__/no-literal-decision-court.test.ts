@@ -140,4 +140,19 @@ describe.serial("no-literal-decision-court", () => {
 
     expect(await lint(source)).toEqual([]);
   });
+
+  test("an absent court requires an explicit quarantined listing identity", async () => {
+    const source = [
+      'const quarantine = { court: "", isListingOnly: true, caseNumberIsPlaceholder: true };',
+      'const full = { court: "" };',
+      'const listing = { court: "", isListingOnly: true };',
+      'const placeholder = { court: "", caseNumberIsPlaceholder: true };',
+      'const published = { court: "", isListingOnly: false, caseNumberIsPlaceholder: true };',
+      'const named = { court: "Nejvyšší soud", isListingOnly: true, caseNumberIsPlaceholder: true };',
+      'const overwritten = { court: "", isListingOnly: true, caseNumberIsPlaceholder: true, ...unknown };',
+      'const duplicate = { court: "", isListingOnly: true, caseNumberIsPlaceholder: true, isListingOnly: false };',
+      'const computed = { court: "", [isListingOnly]: true, caseNumberIsPlaceholder: true };',
+    ].join("\n");
+    expect(await lint(source)).toEqual([2, 3, 4, 5, 6, 7, 8, 9]);
+  });
 });

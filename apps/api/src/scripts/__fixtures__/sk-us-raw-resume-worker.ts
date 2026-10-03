@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { appendFileSync } from "node:fs";
 import { open, readFile } from "node:fs/promises";
 import * as v from "valibot";
 
@@ -104,6 +105,14 @@ const result = await runSkUsRawBatch({
         return "completed";
       },
     });
+  },
+  // The script writes this line to stdout; the worker keeps it beside its
+  // other evidence files.
+  record: (cursor, outcome) => {
+    appendFileSync(
+      `${config.directory}/records.jsonl`,
+      `${JSON.stringify({ id: cursor.id, outcome })}\n`,
+    );
   },
   journal: async (cursor, outcome) => {
     await journalSkUsRawOutcome({ checkpointPath, sourceId, cursor, outcome });

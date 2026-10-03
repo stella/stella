@@ -7,7 +7,7 @@ Every safe handler the API exposes, grouped by domain: how it is classified
 (read/write, destructive) and how it is reachable — as a curated MCP tool,
 covered by one, or only through the generic `invoke_capability` path (shown
 here as its CLI form). Projected from the same handler enumeration that builds
-`packages/cli/capability-catalog.json`; see
+`packages/cli/capabilities/*.json`; see
 `apps/api/scripts/export-capability-catalog.ts`.
 
 ## Naming
@@ -378,6 +378,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
+| `rates.arrangement.get` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability rates arrangement-get` |
+| `rates.arrangement.summary.get` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability rates arrangement-summary-get` |
+| `rates.arrangement.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates arrangement-update` |
 | `rates.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates create` |
 | `rates.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates delete` |
 | `rates.entries.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates entries-create` |
@@ -668,11 +671,11 @@ mechanics, and similar), not gaps in coverage.
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
-| hosted_billing | 6 |
+| hosted_billing | 7 |
 | mcp_transport | 11 |
 | native_tool_ui | 9 |
 | provider_secret | 27 |
-| public_indexing | 7 |
+| public_indexing | 8 |
 | realtime_stream | 4 |
 | search_ui | 15 |
 | session_token_exchange | 20 |

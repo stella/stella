@@ -128,6 +128,7 @@ const fakePublisher = ({
       minRequestIntervalMs: INTERVAL_MS,
       pageTimeoutMs: 1000,
       reconciliation: {
+        revisionOf: (payload) => payload,
         firstSlice: FIRST_SLICE,
         sliceOf: toUtcDateString,
         nextSlice: (slice) => {

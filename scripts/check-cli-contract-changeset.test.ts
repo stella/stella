@@ -17,7 +17,10 @@ import {
 } from "./check-cli-contract-changeset";
 import { CLI_CONTRACT_SURFACE_PATHS } from "./check-cli-release-coupling";
 
-const REPO_ROOT = path.resolve(import.meta.dirname, "..");
+const CATALOG_SHARD = "capabilities/matters.list.json";
+const CONTRACT_PATHS = CLI_CONTRACT_SURFACE_PATHS.map((part) =>
+  part === "capability-catalog.json" ? CATALOG_SHARD : part,
+);
 
 const input = (
   changedFiles: readonly string[],
@@ -53,12 +56,17 @@ const withGitFixture = (
       path.join(root, "packages/cli/package.json"),
       '{"name":"@stll/cli","version":"1.2.13"}\n',
     );
-    for (const part of CLI_CONTRACT_SURFACE_PATHS) {
+    for (const part of CONTRACT_PATHS) {
       const file = path.join(root, "packages/cli", part);
       mkdirSync(path.dirname(file), { recursive: true });
+      const generatedContent = part.endsWith(".json")
+        ? "{}\n"
+        : "export const contract = {};\n";
       writeFileSync(
         file,
-        part.endsWith(".json") ? "{}\n" : "export const contract = {};\n",
+        part === CATALOG_SHARD
+          ? '{"id":"matters.list","inputSchema":{}}\n'
+          : generatedContent,
       );
     }
     writeFileSync(
@@ -95,8 +103,8 @@ const withGitFixture = (
 
 const changeCatalogAndCommit = (root: string, version?: string): void => {
   writeFileSync(
-    path.join(root, "packages/cli/capability-catalog.json"),
-    '[{"id":"changed"}]\n',
+    path.join(root, "packages/cli", CATALOG_SHARD),
+    '{"id":"matters.list","inputSchema":{"changed":true}}\n',
   );
   if (version !== undefined) {
     const packagePath = path.join(root, "packages/cli/package.json");
@@ -112,24 +120,21 @@ const changeCatalogAndCommit = (root: string, version?: string): void => {
 
 const changeCatalogFormattingOnly = (root: string): void => {
   writeFileSync(
-    path.join(root, "packages/cli/capability-catalog.json"),
-    "{ }\n",
+    path.join(root, "packages/cli", CATALOG_SHARD),
+    '{ "inputSchema": {}, "id": "matters.list" }\n',
   );
   runGit(root, ["add", "."]);
   runGit(root, ["commit", "-m", "format catalog"]);
 };
 
 describe("CLI contract changeset guard", () => {
-  test.each(CLI_CONTRACT_SURFACE_PATHS)(
-    "requires release metadata for %s",
-    (part) => {
-      const partName = part;
-      expect(input([`packages/cli/${partName}`])).toEqual({
-        status: "missing",
-        changedParts: [partName],
-      });
-    },
-  );
+  test.each(CONTRACT_PATHS)("requires release metadata for %s", (part) => {
+    const partName = part;
+    expect(input([`packages/cli/${partName}`])).toEqual({
+      status: "missing",
+      changedParts: [partName],
+    });
+  });
 
   test("ignores unrelated files", () => {
     expect(input(["packages/cli/src/cli.ts", "apps/api/src/index.ts"])).toEqual(
@@ -141,10 +146,7 @@ describe("CLI contract changeset guard", () => {
 
   test("accepts a non-empty CLI changeset", () => {
     expect(
-      input(
-        ["packages/cli/capability-catalog.json"],
-        [".changeset/bright-cats.md"],
-      ),
+      input([`packages/cli/${CATALOG_SHARD}`], [".changeset/bright-cats.md"]),
     ).toEqual({
       status: "satisfied-changeset",
       changesets: [".changeset/bright-cats.md"],
@@ -172,7 +174,7 @@ describe("CLI contract changeset guard", () => {
   test("accepts a real CLI version advance without a changeset", () => {
     expect(
       decideCliContractChange({
-        changedFiles: ["packages/cli/capability-catalog.json"],
+        changedFiles: [`packages/cli/${CATALOG_SHARD}`],
         cliChangesets: [],
         baseCliVersion: "1.2.13",
         headCliVersion: "1.2.14",
@@ -187,7 +189,7 @@ describe("CLI contract changeset guard", () => {
   test("does not accept an unchanged or downgraded version", () => {
     expect(
       decideCliContractChange({
-        changedFiles: ["packages/cli/capability-catalog.json"],
+        changedFiles: [`packages/cli/${CATALOG_SHARD}`],
         cliChangesets: [],
         baseCliVersion: "1.2.13",
         headCliVersion: "1.2.12",
@@ -208,15 +210,21 @@ describe("CLI contract changeset guard", () => {
 
 describe("CLI contract changeset guard integration", () => {
   test("covers every committed generated CLI output except the version file", () => {
-    const paths = generatedContractPaths(REPO_ROOT, "HEAD");
-    expect(paths).toContain("packages/cli/capability-catalog.json");
-    expect(paths).toContain(
-      "packages/cli/src/generated/resources-snapshot.json",
-    );
-    expect(paths).toContain(
-      "packages/cli/src/generated/document-version-upload-transport.ts",
-    );
-    expect(paths).not.toContain("packages/cli/src/generated/cli-version.ts");
+    withGitFixture((root) => {
+      writeFileSync(
+        path.join(root, "packages/cli/src/generated/cli-version.ts"),
+        'export const CLI_VERSION = "1.2.13";\n',
+      );
+      runGit(root, ["add", "."]);
+      runGit(root, ["commit", "-m", "generated version"]);
+      expect(generatedContractPaths(root, "HEAD").toSorted()).toEqual(
+        [
+          ...CONTRACT_PATHS.map((part) => `packages/cli/${part}`),
+          "packages/cli/src/generated/resources-snapshot.json",
+          "packages/cli/src/generated/document-version-upload-transport.ts",
+        ].toSorted(),
+      );
+    });
   });
 
   test("rejects an empty changeset", () => {
@@ -304,8 +312,8 @@ describe("CLI contract changeset guard integration", () => {
     withGitFixture((root) => {
       changeCatalogAndCommit(root);
       writeFileSync(
-        path.join(root, "packages/cli/capability-catalog.json"),
-        "{}\n",
+        path.join(root, "packages/cli", CATALOG_SHARD),
+        '{"id":"matters.list","inputSchema":{}}\n',
       );
       expect(runCliContractGuard({ root, base: "main" })).toBe(1);
     });
@@ -326,12 +334,31 @@ describe("CLI contract changeset guard integration", () => {
     });
   });
 
+  test.each(["added", "deleted"])(
+    "requires release metadata when a capability shard is %s",
+    (operation) => {
+      withGitFixture((root) => {
+        if (operation === "added") {
+          writeFileSync(
+            path.join(root, "packages/cli/capabilities/matters.get.json"),
+            '{"id":"matters.get","inputSchema":{}}\n',
+          );
+        } else {
+          rmSync(path.join(root, "packages/cli", CATALOG_SHARD));
+        }
+        runGit(root, ["add", "."]);
+        runGit(root, ["commit", "-m", "change shard membership"]);
+        expect(runCliContractGuard({ root, base: "main" })).toBe(1);
+      });
+    },
+  );
+
   test("treats a renamed generated contract as a contract change", () => {
     withGitFixture((root) => {
       runGit(root, [
         "mv",
-        "packages/cli/capability-catalog.json",
-        "packages/cli/capability-catalog-renamed.json",
+        `packages/cli/${CATALOG_SHARD}`,
+        "packages/cli/capabilities/renamed.json",
       ]);
       runGit(root, ["commit", "-am", "rename generated contract"]);
       expect(runCliContractGuard({ root, base: "main" })).toBe(1);

@@ -16,6 +16,7 @@ import {
   decisionLanguageIdentityOf,
 } from "@/api/lib/legal-search/decision-language-identity";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 /** The key every decision was grouped by before the policy existed. */
 const historicalKey = ({
@@ -89,7 +90,7 @@ describe("decision language identity", () => {
   });
 
   test("refuses a decision of such a jurisdiction without its document identity", () => {
-    const decision = {
+    const decision = plainTextIngestionResult({
       caseNumber: "347 U.S. 483",
       court: "Supreme Court of the United States",
       country: "USA",
@@ -98,7 +99,7 @@ describe("decision language identity", () => {
       textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
       rawHash: "raw-hash",
       documentAst: {},
-    };
+    });
     expect(
       sanitizeResult({ ...decision, sourceDocumentId: "cluster-1" })
         .sourceDocumentId,

@@ -1,0 +1,14 @@
+[
+  "packages/api-contract/src/mcp.ts",
+  "packages/scripts/src/tsgo-compiler-options.ts",
+  "packages/scripts/src/typescript-program.ts",
+  "scripts/db-await-in-loop.ts",
+  "scripts/generated-artifacts.ts",
+  "scripts/lint-suppressions.ts",
+  "scripts/ownership.ts",
+  "scripts/parse-memo.ts",
+  "scripts/ratchet.ts",
+  "scripts/result-boundary-globs.ts",
+  "scripts/root-connection-shapes.ts",
+  "scripts/source-globs.ts"
+]

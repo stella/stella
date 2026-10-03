@@ -260,6 +260,9 @@ describe("changed-file autofix boundary", () => {
     );
     expect(
       ordered.findIndex(({ id }) => id === "capability-catalog"),
+    ).toBeLessThan(ordered.findIndex(({ id }) => id === "capability-runtime"));
+    expect(
+      ordered.findIndex(({ id }) => id === "capability-runtime"),
     ).toBeLessThan(ordered.findIndex(({ id }) => id === "cli-registry"));
     expect(ordered.findIndex(({ id }) => id === "cli-registry")).toBeLessThan(
       ordered.findIndex(({ id }) => id === "cli-runtime"),
@@ -267,6 +270,7 @@ describe("changed-file autofix boundary", () => {
     expect(ordered.map(({ id }) => id).toSorted()).toEqual(
       [
         "capability-catalog",
+        "capability-runtime",
         "cli-registry",
         "cli-runtime",
         "mcp-app-bundles",

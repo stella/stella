@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, expect, test } from "bun:test";
 /**
  * A decision's citation rows are its references as the writer publishes them.
  *
@@ -11,8 +12,6 @@
  * `resolveDecisionReference` gives over its holders. The unchanged refresh
  * must touch no row, and the changed one only the rows that differ.
  */
-
-import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -47,6 +46,7 @@ import { POLARITY, RULE_SOURCE } from "@/api/handlers/case-law/polarity/consts";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import {
   atRisFixture,
@@ -301,23 +301,24 @@ const withText = (
   base: IngestionResult,
   paragraphs: readonly string[],
   rawHash: string,
-): IngestionResult => ({
-  ...base,
-  decisionDate: "2026-05-28",
-  sourceRaw: undefined,
-  sourceRawBytes: undefined,
-  sourceRawObjects: undefined,
-  sourceRawContentType: undefined,
-  rawHash,
-  fulltext: paragraphs.join("\n\n"),
-  sections: paragraphs.map((text, index) => ({
-    index,
-    type: "argumentation",
-    title: null,
-    text,
-  })),
-  documentAst: EMPTY_AST,
-});
+): IngestionResult =>
+  plainTextIngestionResult({
+    ...base,
+    decisionDate: "2026-05-28",
+    sourceRaw: undefined,
+    sourceRawBytes: undefined,
+    sourceRawObjects: undefined,
+    sourceRawContentType: undefined,
+    rawHash,
+    fulltext: paragraphs.join("\n\n"),
+    sections: paragraphs.map((text, index) => ({
+      index,
+      type: "argumentation",
+      title: null,
+      text,
+    })),
+    documentAst: EMPTY_AST,
+  });
 
 let order = 0n;
 const ingest = async (

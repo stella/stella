@@ -469,6 +469,16 @@ export const envApiServerSchema = {
     ),
   ),
   FEATURE_ORG_SERVICE_BUDGETS: featureFlagSchema,
+  FEATURE_CONFIGURED_ACCESS: featureFlagSchema,
+  PAYMENT_RETRY_WINDOW_MS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
   SERVICE_ACTIONS_EVALUATION_PERIOD_ACTIONS: v.optional(
     v.pipe(
       v.string(),
@@ -770,6 +780,9 @@ type EnvApiInvariantInput = {
   FEATURE_ACTION_ADMISSION?: boolean | undefined;
   FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
   FEATURE_ORG_SERVICE_BUDGETS?: boolean | undefined;
+  FEATURE_CONFIGURED_ACCESS?: boolean | undefined;
+  FEATURE_USAGE?: boolean | undefined;
+  PAYMENT_RETRY_WINDOW_MS?: number | undefined;
   FRONTEND_URL: string;
   GOTENBERG_URL: string;
   MICROSOFT_AUTH_CLIENT_ID?: string | undefined;
@@ -835,6 +848,9 @@ export const envApiInvariantViolation = ({
   FEATURE_ACTION_ADMISSION,
   FEATURE_ORG_ACCESS_STATE,
   FEATURE_ORG_SERVICE_BUDGETS,
+  FEATURE_CONFIGURED_ACCESS,
+  FEATURE_USAGE,
+  PAYMENT_RETRY_WINDOW_MS,
   FRONTEND_URL,
   GOTENBERG_URL,
   MICROSOFT_AUTH_CLIENT_ID,
@@ -852,6 +868,17 @@ export const envApiInvariantViolation = ({
   nodeEnv,
   runtimeMode,
 }: EnvApiInvariantInput): string | null => {
+  if (
+    FEATURE_CONFIGURED_ACCESS &&
+    ![
+      FEATURE_ORG_ACCESS_STATE,
+      FEATURE_ORG_SERVICE_BUDGETS,
+      FEATURE_USAGE,
+      PAYMENT_RETRY_WINDOW_MS !== undefined,
+    ].every(Boolean)
+  ) {
+    return "FEATURE_CONFIGURED_ACCESS requires FEATURE_ORG_ACCESS_STATE, FEATURE_ORG_SERVICE_BUDGETS, FEATURE_USAGE and PAYMENT_RETRY_WINDOW_MS.";
+  }
   const managedViolation = managedProviderCheckInvariantViolation({
     AI_PROVIDER,
     FEATURE_MANAGED_PROVIDER_CHECKS,

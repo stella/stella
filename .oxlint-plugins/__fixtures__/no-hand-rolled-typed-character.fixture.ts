@@ -37,6 +37,20 @@ function menuFor(event: KeyboardEvent) {
   }
 }
 
+// oxlint-disable-next-line no-hand-rolled-typed-character/no-hand-rolled-typed-character -- fixture: literal trigger sets must be rejected
+const triggerSet = (event: KeyboardEvent) =>
+  !event.altKey && ["@", "/"].includes(event.key);
+
+// oxlint-disable-next-line no-hand-rolled-typed-character/no-hand-rolled-typed-character -- fixture: inverted length checks must be rejected
+const lengthVeto = (event: KeyboardEvent) =>
+  event.altKey || event.key.length !== 1;
+
+// expect-clean: no-hand-rolled-typed-character/no-hand-rolled-typed-character
+const commandSet = (event: KeyboardEvent) =>
+  (event.metaKey || event.ctrlKey) &&
+  !event.altKey &&
+  ["c", "v"].includes(event.key);
+
 // The helper decides; the handler only compares what it returns.
 // expect-clean: no-hand-rolled-typed-character/no-hand-rolled-typed-character
 const triggerFromHelper = (event: KeyboardEvent) =>
@@ -96,6 +110,9 @@ const hasPrimaryModifier = ({
 }: Modifiers) => (metaKey || ctrlKey) && !altKey && !altGraphKey;
 
 export const __noHandRolledTypedCharacterFixture: readonly unknown[] = [
+  triggerSet,
+  lengthVeto,
+  commandSet,
   isEditKey,
   triggerFor,
   menuFor,
