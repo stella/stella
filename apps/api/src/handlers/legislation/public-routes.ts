@@ -44,13 +44,13 @@ import {
   listStatuteVersionsParamsSchema,
   listStatuteVersionsQuerySchema,
 } from "@/api/handlers/legislation/versions";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import { createSafeBoundedPublicHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { isPublicLawEnabled } from "@/api/lib/legal-search/public-law-feature";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 
-const listStatutes = createSafePublicHandler(
+const listStatutes = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -67,7 +67,7 @@ const listStatutes = createSafePublicHandler(
   },
 );
 
-const readLegislationShelf = createSafePublicHandler(
+const readLegislationShelf = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -85,7 +85,7 @@ const readLegislationShelf = createSafePublicHandler(
   },
 );
 
-const readLegislationFacets = createSafePublicHandler(
+const readLegislationFacets = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -103,7 +103,7 @@ const readLegislationFacets = createSafePublicHandler(
   },
 );
 
-const readStatuteByEli = createSafePublicHandler(
+const readStatuteByEli = createSafeBoundedPublicHandler(
   {
     mcp: { type: "covered", by: "read_statute" },
     cache: { kind: "none" },
@@ -121,7 +121,7 @@ const readStatuteByEli = createSafePublicHandler(
   },
 );
 
-const resolveStatutes = createSafePublicHandler(
+const resolveStatutes = createSafeBoundedPublicHandler(
   {
     // The batch form of `by-eli`: one read per Work is what `read_statute`
     // already answers, so an agent gains nothing from a second tool.
@@ -140,7 +140,7 @@ const resolveStatutes = createSafePublicHandler(
   },
 );
 
-const readStatuteBySlug = createSafePublicHandler(
+const readStatuteBySlug = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -163,7 +163,7 @@ const readStatuteBySlug = createSafePublicHandler(
   },
 );
 
-const readStatute = createSafePublicHandler(
+const readStatute = createSafeBoundedPublicHandler(
   {
     mcp: { type: "covered", by: "read_statute" },
     cache: { kind: "none" },
@@ -184,7 +184,7 @@ const readStatute = createSafePublicHandler(
   },
 );
 
-const listStatuteVersions = createSafePublicHandler(
+const listStatuteVersions = createSafeBoundedPublicHandler(
   {
     mcp: { type: "covered", by: "read_statute" },
     cache: { kind: "none" },
@@ -207,7 +207,7 @@ const listStatuteVersions = createSafePublicHandler(
   },
 );
 
-const readProvisionHistory = createSafePublicHandler(
+const readProvisionHistory = createSafeBoundedPublicHandler(
   {
     mcp: { type: "tool", name: "read_provision_history" },
     cache: { kind: "none" },
@@ -231,7 +231,7 @@ const readProvisionHistory = createSafePublicHandler(
   },
 );
 
-const listStatuteSitemapShards = createSafePublicHandler(
+const listStatuteSitemapShards = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -248,7 +248,7 @@ const listStatuteSitemapShards = createSafePublicHandler(
   },
 );
 
-const listStatuteSitemapStatutes = createSafePublicHandler(
+const listStatuteSitemapStatutes = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },

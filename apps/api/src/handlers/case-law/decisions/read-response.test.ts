@@ -136,6 +136,7 @@ const decisionWithText = (text: string) => {
         decisionDate: text,
         language: text,
         slug: text,
+        hasDocument: true,
       },
     ],
   } satisfies Parameters<typeof projectDecisionReader>[0];

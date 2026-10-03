@@ -5,7 +5,7 @@ import { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/co
 import { coverageResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
 import {
   safePublicHandlerResponseSchemasWithStatusText,
-  createSafePublicHandler,
+  createSafeBoundedPublicHandler,
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -24,7 +24,7 @@ const config = {
 } satisfies PublicHandlerConfig;
 
 /** The corpus's own coverage, every country in one answer. */
-const readCaseLawCoverage = createSafePublicHandler(
+const readCaseLawCoverage = createSafeBoundedPublicHandler(
   config,
   async function* ({ set }) {
     const response = yield* Result.await(

@@ -9,7 +9,7 @@ import type {
   PublicHandlerContext,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import { createSafeBoundedPublicHandler } from "@/api/lib/api-handlers";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type {
@@ -86,7 +86,7 @@ const buildGatedSubjectHandler = <
   followUp,
 }: SubjectHandlerOptions<TConfig, TRead> &
   FollowUpOptions<TConfig, TRead, TResult>) => {
-  const definition = createSafePublicHandler(
+  const definition = createSafeBoundedPublicHandler(
     config,
     async function* (
       ctx: PublicHandlerContext<TConfig>,
