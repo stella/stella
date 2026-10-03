@@ -593,6 +593,7 @@ export const scopedCommands = (
     if (!rootChecks.has(ROOT_CHECKS.rootScriptLint)) {
       commands.push(["bun", "run", "generate"]);
       commands.push(["bun", "--cwd=packages/cli", "run", "codegen:runtime"]);
+      commands.push(["bun", "apps/api/scripts/generate-capability-runtime.ts"]);
     }
     commands.push([
       "bun",

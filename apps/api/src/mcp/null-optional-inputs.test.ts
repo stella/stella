@@ -3,10 +3,12 @@ import { readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 import * as v from "valibot";
 
-import capabilityCatalog from "@stll/cli/capability-catalog.json";
+import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 
 import { withNullOptionalsOmitted } from "@/api/mcp/input-normalization";
 import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+
+import { parseCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-load";
 
 /**
  * A strict tool-schema client must send every property a tool declares, so it
@@ -66,6 +68,11 @@ const optionalProperties = (schema: unknown): string[] => {
         .map(([name]) => name)
     : [];
 };
+
+const capabilityCatalog = parseCapabilityCatalog(readCapabilityCatalog());
+if (capabilityCatalog === null) {
+  throw new TypeError("Invalid capability catalog");
+}
 
 describe("MCP tool inputs read null as an omitted optional property", () => {
   test("every valibot-defined tool parses through the null-as-absent wrapper", () => {

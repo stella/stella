@@ -43,6 +43,7 @@ FROM deps AS builder
 ARG TARGETARCH
 ENV NODE_ENV=production
 COPY --from=pruner /app/out/full/ .
+RUN bun apps/api/scripts/generate-capability-runtime.ts
 # Build the server unminified: `bun build --minify` can break Elysia's AOT
 # handler codegen (minified variable renames vs Sucrose). See elysiajs/elysia#1711.
 RUN bun build \

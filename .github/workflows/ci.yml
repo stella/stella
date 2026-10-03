@@ -926,13 +926,14 @@ jobs:
           cd ../web
           cp .env.example .env
 
-      - name: CLI committed registry and derived runtime guard
+      - name: CLI sharded registry and derived runtime guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # The CLI and shared chat-policy projections must match the live MCP
         # registry: regenerate all of them and fail on any diff so a registry
         # change cannot silently ship stale CLI, web approval, or skill behavior.
         # Regenerate: `bun run codegen` in packages/cli.
         run: |
+          bun apps/api/scripts/generate-capability-runtime.ts
           (cd packages/cli && bun run codegen)
           (cd packages/cli && bun run codegen:runtime)
           git diff --exit-code -- \
@@ -1929,6 +1930,10 @@ jobs:
       - name: Test CLI runtime package parity
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
+
+      - name: Test capability shard merge and package parity
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/capability-shard-merge.test.ts scripts/capability-shard-pack.test.ts
 
       - name: Test CLI contract changeset guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -2943,6 +2948,7 @@ jobs:
         # The guard calls tsc directly (no turbo), so the generated inputs
         # that turbo's typecheck pipeline would produce must exist first.
         run: |
+          bun --filter @stll/api generate:capability-runtime
           bun run generate
           bun run typegen
 
@@ -2954,6 +2960,10 @@ jobs:
           (
             cd "$base_dir"
             bash scripts/retry.sh bun ci --ignore-scripts
+            # Older merge bases still commit the runtime aggregates.
+            if [[ -f apps/api/scripts/generate-capability-runtime.ts ]]; then
+              bun --filter @stll/api generate:capability-runtime
+            fi
             # Older bases commit the snapshot. Generate only when the base
             # owns an untracked output, using its cached producer if present.
             if [[ ! -f apps/web/src/generated/api-routes.gen.ts ]]; then
