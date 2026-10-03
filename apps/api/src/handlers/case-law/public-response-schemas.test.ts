@@ -99,20 +99,22 @@ const unicode = fc
   })
   .map((parts) => parts.join(""));
 
-for (const [family, schema] of Object.entries(responseContracts)) {
-  const title = `public case-law ${family} bounds serialized multibyte responses`;
-  test(title, () => {
-    assertProperty(
-      title,
-      fc.property(unicode, fc.integer({ min: 0, max: 20 }), (text, choice) => {
+test("every public case-law response family bounds serialized multibyte responses", () => {
+  assertProperty(
+    "every public case-law response family bounds serialized multibyte responses",
+    fc.property(
+      fc.constantFrom(...Object.values(responseContracts)),
+      unicode,
+      fc.integer({ min: 0, max: 20 }),
+      (schema, text, choice) => {
         const input = stressResponse(schema, text.repeat(16_385), choice);
         const output = projectResponseText(input, schema);
         expect(Value.Check(schema, output)).toBe(true);
         expect(
           Buffer.byteLength(JSON.stringify(output), "utf-8"),
         ).toBeLessThanOrEqual(responseByteBound(schema));
-      }),
-      { numRuns: 30 },
-    );
-  });
-}
+      },
+    ),
+    { numRuns: 30 * Object.keys(responseContracts).length },
+  );
+});
