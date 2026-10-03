@@ -2,8 +2,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/toast";
-
 import { hideSessionDocument } from "@/lib/account/session-document";
 import { signalSessionChange } from "@/lib/account/session-signal";
 import { releaseUserStorage } from "@/lib/account/user-scoped-storage";
@@ -11,7 +9,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { rootKeys } from "@/lib/auth-queries";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 /**
  * Signs out. Whatever the server answers, this browser keeps nothing of the
@@ -45,13 +43,10 @@ export const useSignOut = () => {
         // Still signed in: read the session again so this tab keeps the
         // user's storage instead of the visitor's.
         await queryClient.refetchQueries({ queryKey: rootKeys.session });
-        stellaToast.add({
-          title: userErrorFromThrown(
-            toAuthClientError(result.error),
-            t("errors.actionFailed"),
-          ),
-          type: "error",
-        });
+        notifyUserError(
+          toAuthClientError(result.error),
+          t("errors.actionFailed"),
+        );
         throw toAuthClientError(result.error);
       }
 

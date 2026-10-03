@@ -59,6 +59,25 @@ const lint = async (sourcePath: string) =>
     sourcePath,
   });
 
+test("provider receipt persistence remains confined to its owner", async () => {
+  const entry = OWNERSHIP.find(({ id }) => id === "provider-event-records");
+  expect(entry).toBeDefined();
+  const source = 'import { hostedUsageWebhookEvents } from "@/api/db/schema";';
+  const options = { ruleOptions: { entries: [entry] } };
+  expect(
+    await lintSingleRule("confine-owner", source, {
+      ...options,
+      sourcePath: "apps/api/src/lib/receipt-writer.ts",
+    }),
+  ).toEqual([1]);
+  expect(
+    await lintSingleRule("confine-owner", source, {
+      ...options,
+      sourcePath: "apps/api/src/lib/hosted-usage-provider/webhook-store.ts",
+    }),
+  ).toEqual([]);
+});
+
 describe.serial("confine-owner member-call rows", () => {
   test("reports a call of the method inside the scoped paths", async () => {
     expect(await lint("apps/api/src/lib/sweep.ts")).toEqual([1, 2]);
@@ -71,6 +90,26 @@ describe.serial("confine-owner member-call rows", () => {
 
   test("leaves files outside the scoped paths alone", async () => {
     expect(await lint("apps/web/src/store.ts")).toEqual([]);
+  });
+});
+
+describe.serial("member authority context ownership", () => {
+  test("allows construction only in declared context builders", async () => {
+    const source =
+      'import { hasMemberPermission, sessionMemberRole } from "@/api/lib/permission-authorization";\nhasMemberPermission(sessionMemberRole("admin"), { entity: ["update"] });';
+    const options = { ruleOptions: { entries: OWNERSHIP } };
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ...options,
+        sourcePath: "apps/api/src/handlers/example.ts",
+      }),
+    ).toEqual([1]);
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ...options,
+        sourcePath: "apps/api/src/lib/auth.ts",
+      }),
+    ).toEqual([]);
   });
 });
 

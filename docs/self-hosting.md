@@ -232,6 +232,20 @@ docker compose --env-file deploy/selfhost/.env \
   bun /app/apps/api/src/db/migrate.js
 ```
 
+After migrations, run the usage policy seed explicitly inside the API image with `STELLA_USAGE_POLICY_SEEDS` set to the deployment's JSON configuration; it never runs on API startup.
+
+<!-- usage-policy-seed-command -->
+
+```bash
+docker compose --env-file deploy/selfhost/.env \
+  -f docker-compose.selfhost.yml run --rm --no-deps api \
+  bun /app/seed-usage-policies.js --results /tmp/policy-results.jsonl
+```
+
+The results file stays inside the one-off API container and is removed with it by `--rm`; capture stdout to retain the printed results.
+
+The seed writes JSON Lines containing each policy key and its `inserted`, `updated`, `unchanged`, `hidden`, or `failed` outcome (with a redacted failure reason), even when its transaction rolls back; failures exit non-zero. Omit `--results` for a timestamped path in `/tmp`; an existing results file is never overwritten. The command prints the path and the same rows in a fenced JSON Lines block, so operators can retrieve one-off ECS task results from its CloudWatch stdout logs after the container exits.
+
 ## Container images
 
 Releases publish multi-architecture API and web images to GitHub Container

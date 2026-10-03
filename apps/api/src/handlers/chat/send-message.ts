@@ -1508,7 +1508,7 @@ type PrepareValidatedIncomingMessageOptions = {
   };
   authorization: {
     accessibleWorkspaceIds: SafeId<"workspace">[];
-    memberRole: { role: ChatToolsInput["memberRole"] };
+    memberRole: ChatToolsInput["memberRole"];
     pinServerValidatedWorkspaceId: ChatToolsInput["pinServerValidatedWorkspaceId"];
     requestedContextMatterIds: SafeId<"workspace">[];
     workspaceStatusById: NonNullable<ChatToolsInput["workspaceStatusById"]>;
@@ -1650,7 +1650,7 @@ const prepareValidatedIncomingMessage = async ({
     // explicit user or administrator opt-in.
     const validationTools = getChatValidationTools({
       organizationId,
-      memberRole: memberRole.role,
+      memberRole,
       orgAIConfig,
       managedAIResidency,
       pinServerValidatedWorkspaceId,
@@ -2594,7 +2594,7 @@ export const createSendMessage = (
           activeFile: activeFileForTools,
           editApplyMode,
           hasActiveDocxEditClient,
-          memberRole: memberRole.role,
+          memberRole,
           recordAuditEventAvailable: true,
           requestWorkspaceId: workspaceId,
           toolWorkspaceIds,
@@ -2625,7 +2625,7 @@ export const createSendMessage = (
         const chatToolContext = {
           createAIAbortSignal: createMeteredAIAbortSignal,
           organizationId: session.activeOrganizationId,
-          memberRole: memberRole.role,
+          memberRole,
           orgAIConfig,
           managedAIResidency,
           promptCachingEnabled,
@@ -2719,9 +2719,7 @@ export const createSendMessage = (
           sendMode: body.sendMode,
           toolAvailability: {
             docxEditMode: registeredDocxEditMode,
-            templateAuthoring: areTemplateAuthoringToolsRegistered(
-              memberRole.role,
-            ),
+            templateAuthoring: areTemplateAuthoringToolsRegistered(memberRole),
             webResearch: areWebResearchToolsRegistered({
               webSearchEnabled: thread.data.webSearchEnabled,
               webSearchProviders,

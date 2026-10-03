@@ -98,6 +98,7 @@ runtime validation, or integration tests.
 - [`no-direct-buffer-cleanup-intent-delete`](./no-direct-buffer-cleanup-intent-delete.ts) (`no-direct-buffer-cleanup-intent-delete`): keeps publication-time cleanup-intent retirement behind the transaction-owned reconciliation helper; tests and the owning reconciliation module may delete directly.
 - [`no-direct-ingestion-checkpoint-write`](./no-direct-ingestion-checkpoint-write.ts) (`no-direct-ingestion-checkpoint-write`): keeps checkpoint writes behind the replay-safe ingestion coordination helper.
 - [`no-literal-decision-court`](./no-literal-decision-court.ts) (`no-literal-decision-court`): rejects a string or template literal written into a case-law adapter's `court`; a publisher is not a court, so the deciding court is resolved from the record's own ECLI and court field through `apps/api/src/lib/case-law/cz-ecli-courts.ts`.
+- [`no-raw-parser-html`](./no-raw-parser-html.ts) (`no-raw-parser-html`): confines visible HTML text, table-row ownership and script/style exclusions to `shared-inlines.ts`; rejects raw Cheerio text getters, descendant row/cell selectors and ad hoc exclusion comparisons, lists or selectors in case-law and legislation parsers. XML-only parsers and independent test oracles are outside the HTML scope.
 - [`no-raw-decision-text-fields`](./no-raw-decision-text-fields.ts) (`no-raw-decision-text-fields`): enforces the explicit decision-text boundary on adapter payloads, including aliased metadata and dynamic writes.
 - [`no-direct-property-table-write`](./no-direct-property-table-write.ts) (`no-direct-property-table-write`): keeps direct `properties` table inserts/updates behind the property handlers and lib modules that own its derived columns (kinds).
 - [`no-direct-legislation-revision-write`](./no-direct-legislation-revision-write.ts) (`no-direct-legislation-revision-write`): confines legislation revision writes to ingestion and limits partial owners to their declared unrelated columns.
@@ -310,3 +311,7 @@ implies a hazard that is gone.
 - [no-parser-validator-calls](./no-parser-validator-calls.ts): `no-parser-validator-calls` confines text-retention validation to the ingestion pipeline, with a shrinking legacy import/call ledger.
 
 - [`no-unvalidated-clause-write`](./no-unvalidated-clause-write.ts) (`no-unvalidated-clause-write`): confines clause, variant, and version body writes to their owning operations and requires a preceding `yield*` of the shared directive validator, or legacy inspection in the import/restore owners. Working-copy updates validate when publishing; draft persistence remains allowed. This syntactic check does not prove control-flow dominance. Search index maintenance may write only its static `searchVector` column.
+
+- [`no-direct-error-toast`](./no-direct-error-toast.ts) (`no-direct-error-toast`): confines error toast creation, updates, and promise handling to the shared notifier.
+
+- [`no-discarded-toast-error`](./no-discarded-toast-error.ts) (`no-discarded-toast-error`): preserves original caught errors through shared notification.

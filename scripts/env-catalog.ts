@@ -57,6 +57,9 @@ export type EnvCatalogEntry = {
 type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
+  "UNUSED_CLIENT_RETENTION_DAYS",
+  "AGENT_REGISTRATION_DAILY_LIMIT",
+  "OPEN_CLIENT_REGISTRATION_DAILY_LIMIT",
   "ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY",
   "ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY",
   "ACTION_ADMISSION_LEASE_MS",
@@ -187,6 +190,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS",
   "STELLA_API_PORT",
   "STELLA_API_URL",
+  "STELLA_CLIENT_ADDRESS_FORMAT",
   "STELLA_CLIENT_ADDRESS_HEADER",
   "STELLA_COLLAB_MODE",
   "STELLA_COLLAB_PORT",
@@ -262,6 +266,14 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  UNUSED_CLIENT_RETENTION_DAYS:
+    "Age in days before unused client registrations expire (1–365; default 30).",
+  AGENT_REGISTRATION_DAILY_LIMIT:
+    "Maximum agent registrations per UTC day (1–1000000; default 10000).",
+  OPEN_CLIENT_REGISTRATION_DAILY_LIMIT:
+    "Maximum open client registrations per UTC day (1–1000000; default 10000).",
+  HOSTED_USAGE_WEBHOOK_RETENTION_DAYS:
+    "Retention in days for completed provider event details; unset disables redaction.",
   AGENT_CLIENT_STORAGE_V1_ENABLED:
     "Enable the shared agent client storage format.",
   ACTION_LIMIT_CONTACT_URL:
@@ -462,7 +474,11 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
   STELLA_CLIENT_ADDRESS_HEADER:
-    "Header the edge sets to the viewer address with its port (e.g. cloudfront-viewer-address). Read only from STELLA_TRUSTED_PROXY_CIDRS peers; set only when every route to the API adds it.",
+    "Header the edge sets to the viewer address (e.g. cloudfront-viewer-address; see STELLA_CLIENT_ADDRESS_FORMAT). Read only from STELLA_TRUSTED_PROXY_CIDRS peers; set only when every route to the API adds it.",
+  STELLA_CLIENT_ADDRESS_FORMAT:
+    "How STELLA_CLIENT_ADDRESS_HEADER spells the address: with-port (default, e.g. cloudfront-viewer-address) or bare.",
+  STELLA_ORIGIN_VERIFY_SECRET:
+    "Comma-separated values the edge sends in x-stella-origin-verify (current, then next during a rotation). When set, the client address header is read only from requests carrying one of them.",
   STELLA_TRUSTED_PROXY_CIDRS:
     "Comma-separated CIDRs for proxies directly in front of the API. Never trust public client ranges.",
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS:
@@ -563,6 +579,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   ACTION_REQUEST_MAX_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_RESPONSE_MAX_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_CLIENT_STORAGE_V1_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  AGENT_REGISTRATION_DAILY_LIMIT: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_SANDBOX_DOCKER_NETWORK: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_SANDBOX_DOCKER_SOCKET: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_SANDBOX_HARNESS_API_KEY: ENV_CREDENTIAL_KIND.credential,
@@ -664,6 +681,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   HOSTED_USAGE_PROVIDER_API_KEY: ENV_CREDENTIAL_KIND.credential,
   HOSTED_USAGE_PROVIDER_API_VERSION: ENV_CREDENTIAL_KIND.notCredential,
   HOSTED_USAGE_PROVIDER_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  HOSTED_USAGE_WEBHOOK_RETENTION_DAYS: ENV_CREDENTIAL_KIND.notCredential,
   HOSTED_USAGE_WEBHOOK_SECRET: ENV_CREDENTIAL_KIND.credential,
   HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS: ENV_CREDENTIAL_KIND.credential,
   HUGGINGFACE_API_KEY: ENV_CREDENTIAL_KIND.credential,
@@ -695,6 +713,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   OPENROUTER_WIF_AUDIENCE: ENV_CREDENTIAL_KIND.notCredential,
   OPENROUTER_WIF_POLICY_ID: ENV_CREDENTIAL_KIND.notCredential,
   OPENROUTER_WIF_STS_REGION: ENV_CREDENTIAL_KIND.notCredential,
+  OPEN_CLIENT_REGISTRATION_DAILY_LIMIT: ENV_CREDENTIAL_KIND.notCredential,
   ORG_EVALUATION_PERIOD_DAYS: ENV_CREDENTIAL_KIND.notCredential,
   PAYMENT_RETRY_WINDOW_MS: ENV_CREDENTIAL_KIND.notCredential,
   PDF_SIGNING_TSA_TRUST_PEM: ENV_CREDENTIAL_KIND.notCredential,
@@ -746,6 +765,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_API_PORT: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_API_URL: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_CLIENT_ADDRESS_FORMAT: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_CLIENT_ADDRESS_HEADER: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_COLLAB_MODE: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_COLLAB_PORT: ENV_CREDENTIAL_KIND.notCredential,
@@ -753,6 +773,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_COLLAB_SERVICE_TOKEN: ENV_CREDENTIAL_KIND.credential,
   STELLA_COMMIT_SHA: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_OCR_PDF_FONT_PATH: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_ORIGIN_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_TRUSTED_PROXY_CIDRS: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_USAGE_POLICY_SEEDS: ENV_CREDENTIAL_KIND.notCredential,
@@ -764,6 +785,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   TRANSACTIONAL_EMAIL_FROM: ENV_CREDENTIAL_KIND.notCredential,
   TYPESAFE_API_KEY: ENV_CREDENTIAL_KIND.credential,
   TYPESAFE_MODEL: ENV_CREDENTIAL_KIND.notCredential,
+  UNUSED_CLIENT_RETENTION_DAYS: ENV_CREDENTIAL_KIND.notCredential,
   USAGE_ENFORCEMENT_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   USE_MOCK_AI: ENV_CREDENTIAL_KIND.notCredential,
   VITE_API_URL: ENV_CREDENTIAL_KIND.notCredential,

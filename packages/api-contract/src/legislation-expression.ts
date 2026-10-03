@@ -54,6 +54,16 @@ export type LegislationWindowDispositionBasis =
   (typeof LEGISLATION_WINDOW_DISPOSITION_BASES)[keyof typeof LEGISLATION_WINDOW_DISPOSITION_BASES][number];
 
 /**
+ * Every basis as one tuple. Schema builders need a tuple to keep the literal
+ * union; a flattened array widens it. Totality is checked in the test.
+ */
+export const LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES = [
+  ...LEGISLATION_WINDOW_DISPOSITION_BASES["never-in-force"],
+  ...LEGISLATION_WINDOW_DISPOSITION_BASES["invalid-window"],
+  ...LEGISLATION_WINDOW_DISPOSITION_BASES.withdrawn,
+] as const satisfies readonly LegislationWindowDispositionBasis[];
+
+/**
  * Whether each kind's window can answer "which text applied then". Total over
  * the kinds, so a kind added above fails to compile here until someone
  * decides. A promulgated text sits next to the consolidation that opens the

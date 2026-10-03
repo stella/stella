@@ -137,6 +137,7 @@ import { startManagedProviderChecks } from "@/api/lib/chat/managed-provider-chec
 import {
   resolveClientAddress,
   resolveSignupRateLimitClientIp,
+  sealEdgeHeaders,
   stampClientAddressHeader,
 } from "@/api/lib/client-ip";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
@@ -332,6 +333,7 @@ const api = new Elysia()
         context.server ?? null,
       ),
     });
+    sealEdgeHeaders(request, clientAddress);
 
     // Stamp the receipt on every response from the central header point, next
     // to the security headers, so REST callers always get an `x-request-id`
