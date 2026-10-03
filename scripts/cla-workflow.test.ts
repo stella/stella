@@ -81,6 +81,11 @@ class FixtureApiError extends TaggedError("FixtureApiError")<{
   status: number;
 }> {}
 
+type QueuePage = {
+  baseCommit: { oid: string };
+  headCommit: { oid: string };
+  pullRequest: { number: number };
+}[];
 type FixtureOptions = {
   event?: string;
   payload?: Record<string, unknown>;
@@ -107,11 +112,9 @@ type FixtureOptions = {
   membershipError?: number;
   storeError?: number;
   apiError?: { route: string; status: number };
-  queuePages?: {
-    baseCommit: { oid: string };
-    headCommit: { oid: string };
-    pullRequest: { number: number };
-  }[][];
+  queuePages?: QueuePage[];
+  // Served to every queue read after the first: the group was rebuilt.
+  rebuiltQueuePages?: QueuePage[];
 };
 const fixture = ({
   event = "pull_request_target",
@@ -148,7 +151,9 @@ const fixture = ({
       },
     ],
   ],
+  rebuiltQueuePages,
 }: FixtureOptions = {}) => {
+  let queueReads = 0;
   const requests: {
     route: string;
     params: Record<string, unknown>;
@@ -452,13 +457,18 @@ const fixture = ({
       );
       expect(params["branch"]).toBe("main");
       const page = params["cursor"] === null ? 0 : Number(params["cursor"]);
+      if (page === 0) {
+        queueReads++;
+      }
+      const served =
+        queueReads > 1 ? (rebuiltQueuePages ?? queuePages) : queuePages;
       return {
         repository: {
           mergeQueue: {
             entries: {
-              nodes: queuePages.at(page) ?? [],
+              nodes: served.at(page) ?? [],
               pageInfo: {
-                hasNextPage: page + 1 < queuePages.length,
+                hasNextPage: page + 1 < served.length,
                 endCursor: String(page + 1),
               },
             },
@@ -1231,12 +1241,78 @@ describe("contributor signature workflow", () => {
     const changed = fixture({ ...options, groupAncestor: BASE });
     await changed.execute();
     expect(changed.errors).toEqual(["CLA_GROUP_PULL_CHANGED"]);
+    expect(lastOutput(changed).conclusion).toBe("failure");
     const extra = fixture({
       ...options,
       groupedCommits: [commit(), commit({ sha: "2".repeat(40) })],
     });
     await extra.execute();
     expect(extra.errors).toEqual(["CLA_GROUP_COMMIT_SNAPSHOT_CHANGED"]);
+  });
+
+  test("a group rebuilt during verification ends neutral; a group still queued fails", async () => {
+    const groupHead = "f".repeat(40);
+    const predecessor = "1".repeat(40);
+    const group = [
+      {
+        baseCommit: { oid: predecessor },
+        headCommit: { oid: groupHead },
+        pullRequest: { number: 17 },
+      },
+      {
+        baseCommit: { oid: BASE },
+        headCommit: { oid: predecessor },
+        pullRequest: { number: 18 },
+      },
+    ];
+    const options = {
+      event: "merge_group",
+      payload: {
+        merge_group: {
+          head_sha: groupHead,
+          base_sha: BASE,
+          base_ref: "refs/heads/main",
+          head_ref: "refs/heads/gh-readonly-queue/main/pr-17-deadbeef",
+        },
+      },
+      pulls: [pull(), pull(18, author, OTHER_HEAD)],
+      signatures: [signature()],
+      queuePages: [group],
+      // #18 left the queue; GitHub rebuilt #17 alone on the base.
+      rebuiltQueuePages: [
+        [
+          {
+            baseCommit: { oid: BASE },
+            headCommit: { oid: "2".repeat(40) },
+            pullRequest: { number: 17 },
+          },
+        ],
+      ],
+    } satisfies FixtureOptions;
+    for (const changes of [
+      { groupAncestor: BASE },
+      { groupedCommits: [commit(), commit({ sha: "3".repeat(40) })] },
+      { pulls: [pull(), { ...pull(18, author, OTHER_HEAD), state: "closed" }] },
+    ]) {
+      const rebuilt = fixture({ ...options, ...changes });
+      await rebuilt.execute();
+      expect(rebuilt.errors, JSON.stringify(changes)).toEqual([]);
+      expect(lastOutput(rebuilt).conclusion).toBe("neutral");
+      expect(lastOutput(rebuilt).output.title).toBe("CLA_GROUP_SUPERSEDED");
+      const queued = fixture({
+        ...options,
+        ...changes,
+        rebuiltQueuePages: [group],
+      });
+      await queued.execute();
+      expect(queued.errors).toHaveLength(1);
+      expect(lastOutput(queued).conclusion).toBe("failure");
+    }
+    // Only membership changes end neutral: an unsigned author in a rebuilt
+    // group still fails.
+    const unsigned = fixture({ ...options, signatures: [] });
+    await unsigned.execute();
+    expect(lastOutput(unsigned).conclusion).toBe("failure");
   });
 
   test("a 250 commit PR and its synthetic queue commit verify across comparison pages", async () => {
