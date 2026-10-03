@@ -12,10 +12,12 @@ import {
   type CorpusProvisionMention,
   readCorpusProvisionMentions,
 } from "@/api/lib/legal-search/corpus-provision-mentions";
-import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
+import {
+  CORPUS_QUERY_VARIANT_POLICY,
+  type CorpusIndexQueryVariant,
+} from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { functionWordKey } from "@/api/lib/legal-search/morphology/function-words";
-import { stemSlovakUpstream } from "@/api/lib/legal-search/morphology/slovak";
 import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
 
@@ -203,7 +205,7 @@ export const partitionCorpusQueryTokens = ({
   jurisdiction,
 }: PartitionCorpusQueryTokensOptions): PartitionCorpusQueryTokensResult => {
   const profile =
-    queryVariant === "provision-refs" &&
+    CORPUS_QUERY_VARIANT_POLICY[queryVariant].provisions &&
     (jurisdiction === "SVK" || jurisdiction === "CZE")
       ? PROVISION_CITATION_PROFILES[jurisdiction]
       : null;
@@ -323,24 +325,36 @@ const stemLeaves = (
   return stemming.fields.map((field) => `${field}:${quoteCorpusValue(stem)}`);
 };
 
-/** Query-only compatibility with faithful stems already stored in Slovak passages. */
-const slovakLegacyStemLeaves = (
-  token: CorpusQueryToken,
-  fields: readonly string[],
-): string[] => {
+export type CorpusLegacyStemming = {
+  fields: readonly string[];
+  stemTerm: (term: string) => string;
+};
+
+type LegacyStemLeavesOptions = {
+  token: CorpusQueryToken;
+  legacyStemming: CorpusLegacyStemming;
+  stemming: CorpusStemming | null;
+};
+
+/** Query compatibility with stems already stored by an older projection. */
+const legacyStemLeaves = ({
+  token,
+  legacyStemming: { fields, stemTerm },
+  stemming,
+}: LegacyStemLeavesOptions): string[] => {
   if (token.type === "phrase") {
     return [];
   }
   const faithful = corpusTokens(token.value)
     .map((term) => {
       const normalized = term.normalize("NFC").toLowerCase();
-      return stemSlovakUpstream(normalized) || normalized;
+      return stemTerm(normalized) || normalized;
     })
     .join(" ");
-  if (faithful === stemCorpusText(token.value, "sk")) {
-    return [];
-  }
-  return fields.map((field) => `${field}:${quoteCorpusValue(faithful)}`);
+  const primaryLeaves = new Set(stemLeaves(token.value, stemming));
+  return fields
+    .map((field) => `${field}:${quoteCorpusValue(faithful)}`)
+    .filter((leaf) => !primaryLeaves.has(leaf));
 };
 
 /**
@@ -493,6 +507,11 @@ type TokenLeaves = {
   typed: string;
 };
 
+type CoreStemLeaves = {
+  primary: string[];
+  faithful: string[];
+};
+
 type BudgetedToken = {
   granted: Record<LeafGroup, readonly string[]>;
   token: TokenLeaves;
@@ -535,7 +554,71 @@ const spendLeafBudget = (
   return budgeted;
 };
 
-const SLOVAK_LEGACY_STEM_FIELDS = new Set(["text_stem", "headnote_stem"]);
+type ReserveCoreStemLeavesOptions = {
+  tokens: readonly CorpusQueryToken[];
+  leavesForTokens: TokenLeaves[];
+  reserved: number;
+  queryVariant: CorpusIndexQueryVariant;
+  stemming: CorpusStemming | null;
+  legacyStemming: CorpusLegacyStemming | null;
+};
+
+/** Reserve passage stems across all tokens before optional fields spend headroom. */
+const reserveCoreStemLeaves = ({
+  tokens,
+  leavesForTokens,
+  reserved,
+  queryVariant,
+  stemming,
+  legacyStemming,
+}: ReserveCoreStemLeavesOptions) => {
+  const coreReserved: CoreStemLeaves[] = tokens.map(() => ({
+    primary: [],
+    faithful: [],
+  }));
+  let coreCount = 0;
+  if (
+    CORPUS_QUERY_VARIANT_POLICY[queryVariant].coreStemsFirst &&
+    legacyStemming !== null &&
+    legacyStemming.fields.length > 0
+  ) {
+    // Give every token its primary stem before spending on faithful variants.
+    // Typed leaves remain mandatory even for all-token queries above the ceiling.
+    for (const kind of ["primary", "faithful"] as const) {
+      for (const [index, token] of tokens.entries()) {
+        const leaves = leavesForTokens.at(index);
+        const core = coreReserved.at(index);
+        if (leaves === undefined || core === undefined) {
+          return panic("Required corpus token has no core reservation");
+        }
+        const leaf =
+          kind === "primary"
+            ? leaves.alternatives.stem.at(0)
+            : legacyStemLeaves({ token, legacyStemming, stemming }).at(0);
+        if (
+          leaf === undefined ||
+          core.primary.includes(leaf) ||
+          core.faithful.includes(leaf) ||
+          tokens.length + reserved + coreCount >= CORPUS_QUERY_LEAF_BUDGET
+        ) {
+          continue;
+        }
+        core[kind].push(leaf);
+        coreCount += 1;
+      }
+    }
+    for (const [index, leaves] of leavesForTokens.entries()) {
+      const core = coreReserved.at(index);
+      if (core === undefined) {
+        return panic("Corpus token has no core reservation");
+      }
+      leaves.alternatives.stem = leaves.alternatives.stem.filter(
+        (leaf) => !core.primary.includes(leaf) && !core.faithful.includes(leaf),
+      );
+    }
+  }
+  return { coreReserved, coreCount };
+};
 
 const sameWork = (left: WorkIdentifier, right: WorkIdentifier): boolean =>
   left.number === right.number &&
@@ -716,8 +799,8 @@ export type CorpusFreeTextOptions = {
   jurisdiction?: string | undefined;
   /** Whether content tokens are all required or ranked by coverage. */
   match?: "all" | "any" | undefined;
-  /** Case-law SVK compatibility; paid only from baseline allocation headroom. */
-  slovakLegacyStemFields?: readonly string[] | undefined;
+  /** Declared compatibility fields and algorithm; the variant controls reservation. */
+  legacyStemming?: CorpusLegacyStemming | null | undefined;
   expand?: CorpusTermExpander | undefined;
   stemming?: CorpusStemming | null | undefined;
   /**
@@ -785,7 +868,7 @@ export const corpusFreeTextClause = (
     keywordFields = [],
     functionWords = null,
     legalAlternatives = null,
-    slovakLegacyStemFields = [],
+    legacyStemming = null,
   }: CorpusFreeTextOptions = {},
 ): string | null => {
   const tokens = tokenizeCorpusFreeText(text);
@@ -831,10 +914,20 @@ export const corpusFreeTextClause = (
       : null;
   const required = provisionGroups?.required ?? partitionRequired;
   const reserved = provisionGroups?.reserved ?? 0;
-  const budgeted = spendLeafBudget(required.map(leavesForToken), reserved);
+  const tokenLeaves = required.map(leavesForToken);
+  const { coreReserved, coreCount } = reserveCoreStemLeaves({
+    tokens: required,
+    leavesForTokens: tokenLeaves,
+    reserved,
+    queryVariant,
+    stemming,
+    legacyStemming,
+  });
+  const budgeted = spendLeafBudget(tokenLeaves, reserved + coreCount);
 
   let used =
     reserved +
+    coreCount +
     budgeted.length +
     budgeted.reduce(
       (total, { granted }) =>
@@ -846,11 +939,18 @@ export const corpusFreeTextClause = (
       0,
     );
   const clauses = budgeted.map(({ granted, token }, index) => {
-    const extras = LEAF_EMIT_ORDER.flatMap((group) => granted[group]);
-    // Baseline grants are immutable: compatibility spends only what all four passes left.
+    const core = coreReserved.at(index);
+    if (core === undefined) {
+      return panic("Budgeted corpus token has no core reservation");
+    }
+    const extras = LEAF_EMIT_ORDER.flatMap((group) =>
+      group === "stem" ? core.primary.concat(granted[group]) : granted[group],
+    );
+    extras.push(...core.faithful);
+    // Additional compatibility fields spend only what the ordinary passes left.
     if (
-      stemming?.language === "sk" &&
-      slovakLegacyStemFields.length > 0 &&
+      legacyStemming !== null &&
+      legacyStemming.fields.length > 0 &&
       granted.stem.length > 0 &&
       used < CORPUS_QUERY_LEAF_BUDGET
     ) {
@@ -860,7 +960,7 @@ export const corpusFreeTextClause = (
       }
       const faithful = [
         ...new Set(
-          slovakLegacyStemLeaves(requiredToken, slovakLegacyStemFields),
+          legacyStemLeaves({ token: requiredToken, legacyStemming, stemming }),
         ),
       ].filter((leaf) => !extras.includes(leaf));
       if (used + faithful.length <= CORPUS_QUERY_LEAF_BUDGET) {
@@ -913,6 +1013,7 @@ export type CaseLawCorpusQueryOptions = {
   /** Query scope, independent of whether the target index needs a filter clause. */
   jurisdiction: string | undefined;
   filters: CaseLawCorpusFilters;
+  legacyStemming?: CorpusLegacyStemming | null | undefined;
   expand?: CorpusTermExpander | undefined;
   stemming?: CorpusStemming | null | undefined;
   surfaceFields?: readonly string[] | undefined;
@@ -939,6 +1040,7 @@ export const caseLawCorpusQuery = ({
   keywordFields,
   functionWords,
   legalAlternatives,
+  legacyStemming,
 }: CaseLawCorpusQueryOptions): string | null => {
   const freeText = corpusFreeTextClause(text, {
     jurisdiction,
@@ -949,12 +1051,7 @@ export const caseLawCorpusQuery = ({
     keywordFields,
     functionWords,
     legalAlternatives,
-    slovakLegacyStemFields:
-      jurisdiction === "SVK" && stemming?.language === "sk"
-        ? stemming.fields.filter((field) =>
-            SLOVAK_LEGACY_STEM_FIELDS.has(field),
-          )
-        : [],
+    legacyStemming,
   });
   if (freeText === null) {
     return null;

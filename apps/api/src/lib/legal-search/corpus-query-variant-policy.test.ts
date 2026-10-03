@@ -52,7 +52,7 @@ test("ranking and query variants distinguish every cursor target while off prese
   }
 });
 
-test("a cursor minted under either query variant is stale under the other", () => {
+test("a cursor minted under any query variant is stale under every other value", () => {
   const ranking = {
     dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
     sort: "relevance",
