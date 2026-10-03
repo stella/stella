@@ -264,8 +264,12 @@ const createBudgetApp = () => {
     createRedisBinding: (options) => {
       bindings.push(options);
       const context = (() => {
-        if (options.scope === "api") {return sharedCounter;}
-        if (options.scope === "public-statute-search") {return searchCounter;}
+        if (options.scope === "api") {
+          return sharedCounter;
+        }
+        if (options.scope === "public-statute-search") {
+          return searchCounter;
+        }
         return new InMemoryRateLimitContext();
       })();
       if (context instanceof InMemoryRateLimitContext) {
