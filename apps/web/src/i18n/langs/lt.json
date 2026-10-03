@@ -1753,6 +1753,7 @@
     "organization": "Organizacija",
     "organizationName": "Organizacijos pavadinimas",
     "page": "{page} psl.",
+    "paymentRetryNotice": "Mokėjimo problema. Kad išlaikytumėte prieigą, atnaujinkite mokėjimo būdą iki {date}.",
     "pin": "Prisegti",
     "playbooks": "Peržiūros vadovai",
     "preparing": "Ruošiama…",

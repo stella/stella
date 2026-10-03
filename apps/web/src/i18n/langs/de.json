@@ -1753,6 +1753,7 @@
     "organization": "Organisation",
     "organizationName": "Organisationsname",
     "page": "Seite {page}",
+    "paymentRetryNotice": "Zahlungsproblem. Aktualisieren Sie Ihre Zahlungsmethode bis zum {date}, um den Zugriff zu behalten.",
     "pin": "Anheften",
     "playbooks": "Playbooks",
     "preparing": "Wird vorbereitet…",

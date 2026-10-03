@@ -1753,6 +1753,7 @@
     "organization": "Organizácia",
     "organizationName": "Názov organizácie",
     "page": "Stránka {page}",
+    "paymentRetryNotice": "Problém s platbou. Ak chcete zachovať prístup, aktualizujte spôsob platby do {date}.",
     "pin": "Pripnúť",
     "playbooks": "Playbooky",
     "preparing": "Pripravuje sa…",
