@@ -672,7 +672,7 @@ mechanics, and similar), not gaps in coverage.
 | deploy_mechanics | 1 |
 | document_processing | 25 |
 | hosted_billing | 7 |
-| mcp_transport | 11 |
+| mcp_transport | 12 |
 | native_tool_ui | 9 |
 | provider_secret | 27 |
 | public_indexing | 8 |
