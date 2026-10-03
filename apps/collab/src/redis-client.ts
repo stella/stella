@@ -23,7 +23,7 @@ type CollabRedisClientOptions = Parameters<
 };
 
 type ClassifiedRedisClientOptions = {
-  connectionOptions: RedisOptions;
+  connectionOptions: ReturnType<typeof collabRedisConnectionOptions>;
   storeClass: StoreClass;
   onPolicyStatus?: CollabRedisClientOptions["onPolicyStatus"];
 };
