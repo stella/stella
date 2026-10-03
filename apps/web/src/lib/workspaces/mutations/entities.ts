@@ -230,7 +230,7 @@ export const useRenameEntity = (
       if (reconciled.isErr()) {
         analytics.captureError(reconciled.error);
       }
-      context?.release();
+      context.release();
       // Refetches repair caches independently of the committed mutation's settlement.
       detached(
         (async () => {
@@ -307,7 +307,7 @@ export const useRenameEntity = (
       completion?: RenameEntityCompletion,
     ) =>
       mutation.mutate({ ...variables, ...(completion ? { completion } : {}) }),
-    mutateAsync: (
+    mutateAsync: async (
       variables: RenameEntityVars,
       completion?: RenameEntityCompletion,
     ) =>

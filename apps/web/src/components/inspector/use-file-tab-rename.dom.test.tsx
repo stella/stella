@@ -8,6 +8,7 @@ import { immer } from "zustand/middleware/immer";
 import { stellaToast } from "@stll/ui/toast";
 
 import type { FileTab } from "@/components/inspector/inspector-store-types";
+import englishMessages from "@/i18n/langs/en.json";
 
 import type { InspectorTabsStore } from "./inspector-store-types";
 
@@ -55,7 +56,11 @@ globalThis.fetch = Object.assign(
   async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url.includes("/rename")) {
-      const body = JSON.parse(String(init?.body));
+      const requestBody = init?.body;
+      if (typeof requestBody !== "string") {
+        throw new TypeError("Expected a JSON string body for entity rename");
+      }
+      const body = JSON.parse(requestBody);
       const answer = Promise.withResolvers<Response>();
       requests.push({ name: body.name, answer });
       return await answer.promise;
@@ -118,7 +123,7 @@ const mount = (
           { client },
           React.createElement(IntlProvider, {
             locale: "en",
-            messages: { errors: { actionFailed: "Action failed" } },
+            messages: englishMessages,
             children: React.createElement(AuthenticatedUserProvider, {
               user: {
                 activeOrganizationId: "org",

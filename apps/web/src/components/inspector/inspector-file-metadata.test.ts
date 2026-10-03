@@ -24,6 +24,9 @@ test("file metadata updates are atomic and preserve field identity", () => {
         pdfFileId: null,
       });
       const before = store.getState().tabs.at(0);
+      if (before?.type !== "pdf") {
+        throw new Error("Expected the opened file tab");
+      }
       const observations: unknown[] = [];
       const unsubscribe = store.subscribe((state) => {
         observations.push(state.tabs.at(0));
@@ -67,7 +70,10 @@ test("renamed file metadata keeps only supported attachment facets", () => {
           pdfFileId: null,
         });
         store.getState().setFileFacet("field", "attachments");
-        expect(store.getState().tabs.at(0)?.facet).toBe("attachments");
+        expect(store.getState().tabs.at(0)).toMatchObject({
+          type: "pdf",
+          facet: "attachments",
+        });
         const observations: unknown[] = [];
         const unsubscribe = store.subscribe((state) => {
           observations.push(state.tabs.at(0));

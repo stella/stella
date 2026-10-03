@@ -17,7 +17,11 @@ globalThis.fetch = Object.assign(
   async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url.includes("/rename")) {
-      const body = JSON.parse(String(init?.body));
+      const requestBody = init?.body;
+      if (typeof requestBody !== "string") {
+        throw new TypeError("Expected a JSON string body for entity rename");
+      }
+      const body = JSON.parse(requestBody);
       const answer = Promise.withResolvers<Response>();
       requests.push({ ...body, answer });
       return await answer.promise;
@@ -149,8 +153,8 @@ const mount = async (Component: () => ReactNode) => {
     getParentRoute: () => viewRoute,
     path: "document",
     validateSearch: (search: Record<string, unknown>) => ({
-      entity: typeof search.entity === "string" ? search.entity : "A",
-      field: typeof search.field === "string" ? search.field : "field-A",
+      entity: typeof search["entity"] === "string" ? search["entity"] : "A",
+      field: typeof search["field"] === "string" ? search["field"] : "field-A",
     }),
     component: Component,
   });
