@@ -132,13 +132,16 @@ const VERSION_SOURCE_SQL_VALUES = sql.join(
   sql`, `,
 );
 
+export const PLAYBOOK_DOCUMENT_TYPE_CONSTRAINT =
+  "playbook_definitions_document_type_fk";
+
 /**
  * An org-scoped playbook definition: a saved, reusable set of graded
  * Positions. It joins clauses and templates under the org-level
  * knowledge area; runs (materialized columns, findings, redlines) are
  * workspace-scoped and resolved separately. `positions` is the
- * version-tagged JSONB container; `scope` is reserved for later
- * doc-type / counterparty / matter targeting.
+ * version-tagged JSONB container; `scope` targets document types,
+ * counterparties, and matters.
  */
 export const playbookDefinitions = p.pgTable(
   "playbook_definitions",
@@ -154,6 +157,9 @@ export const playbookDefinitions = p.pgTable(
     starterId: p.varchar("starter_id", { length: 64 }),
     description: p.text(),
     scope: jsonb().$type<PlaybookScope>(),
+    documentTypeKey: p
+      .text("document_type_key")
+      .generatedAlwaysAs(sql`"scope"->>'documentTypeKey'`),
     positions: jsonb().$type<PlaybookPositions>().notNull(),
     // Advisory approval status (v1): "draft" | "approved". Editing
     // (`update-by-id.ts`) always reverts this to "draft"; approving
@@ -177,6 +183,14 @@ export const playbookDefinitions = p.pgTable(
     p
       .index("playbook_definitions_organization_id_idx")
       .on(table.organizationId),
+    p
+      .index("playbook_definitions_org_document_type_idx")
+      .on(table.organizationId, table.documentTypeKey),
+    p.foreignKey({
+      name: PLAYBOOK_DOCUMENT_TYPE_CONSTRAINT,
+      columns: [table.organizationId, table.documentTypeKey],
+      foreignColumns: [documentTypes.organizationId, documentTypes.key],
+    }),
     p
       .index("playbook_definitions_org_created_at_idx")
       .on(table.organizationId, table.createdAt),
