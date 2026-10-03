@@ -16,7 +16,7 @@ declare const tag: string;
 table.text();
 // oxlint-disable-next-line no-raw-parser-html/no-raw-parser-html -- chained raw text has the same defect
 table.clone().find("p").first().text();
-// oxlint-disable-next-line no-raw-parser-html/no-raw-parser-html -- computed getter is still a raw text read
+// oxlint-disable-next-line no-raw-parser-html/no-raw-parser-html, dot-notation -- computed getter is still a raw text read
 table["text"]();
 // oxlint-disable-next-line no-raw-parser-html/no-raw-parser-html -- descendant rows include nested tables
 table.find("tr");
@@ -56,6 +56,6 @@ table.attr("style");
 // expect-clean: no-raw-parser-html/no-raw-parser-html
 table.text("fixture text");
 // expect-clean: no-raw-parser-html/no-raw-parser-html
-Bun.file("fixture.html").text();
+void Bun.file("fixture.html").text();
 // expect-clean: no-raw-parser-html/no-raw-parser-html
 new Response("fixture text").text();
