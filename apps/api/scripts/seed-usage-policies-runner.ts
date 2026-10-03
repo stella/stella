@@ -7,14 +7,7 @@
  */
 
 import { Result } from "better-result";
-import {
-  and,
-  eq,
-  inArray,
-  notInArray,
-  sql,
-  getTableColumns,
-} from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql, getColumns } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { openSync, closeSync, writeFileSync } from "node:fs";
 import * as v from "valibot";
@@ -135,7 +128,7 @@ const seedPolicies = async ({ db, seeds }: SeedPoliciesOptions) => {
   const rows: SeedRowResult[] = [];
   let pendingKey = seeds.at(0)?.key;
   let pendingHiddenKeys: string[] = [];
-  const result = await Result.tryPromise(() =>
+  const result = await Result.tryPromise(async () =>
     db.transaction(async (tx) => {
       for (const seedPolicy of seeds) {
         pendingKey = seedPolicy.key;
@@ -162,7 +155,7 @@ const seedPolicies = async ({ db, seeds }: SeedPoliciesOptions) => {
         const { policyKey: _policyKey, ...set } = values;
         // Derive comparison columns from the update projection: newly seeded
         // fields automatically participate in unchanged detection.
-        const changed = Object.entries(getTableColumns(usagePolicies))
+        const changed = Object.entries(getColumns(usagePolicies))
           .filter(([key]) => key in set)
           .map(
             ([, column]) =>
