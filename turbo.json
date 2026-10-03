@@ -180,7 +180,9 @@
       "cache": false
     },
     "typecheck": {
-      "dependsOn": ["transit"],
+      // A package type-checking @stll/api source needs its generated capability
+      // runtime modules first.
+      "dependsOn": ["transit", "^generate:capability-runtime"],
       // These files live outside each workspace but can change dependency
       // resolution or the shared compiler program. Hash them explicitly so a
       // linked worktree never restores a stale lint or TypeScript result.
@@ -268,7 +270,9 @@
       ]
     },
     "lint": {
-      "dependsOn": ["transit"],
+      // A package type-checking @stll/api source needs its generated capability
+      // runtime modules first.
+      "dependsOn": ["transit", "^generate:capability-runtime"],
       // Type-aware lint reads the same external install and compiler inputs as
       // TypeScript, in addition to Oxlint's root config and plugins.
       "inputs": [
@@ -489,6 +493,9 @@
         "$TURBO_ROOT$/.github/workflows/scheduled-run-alerts.yml"
       ]
     },
+    // Lets dependents name `^generate:capability-runtime`; only @stll/api has
+    // the script, configured below.
+    "generate:capability-runtime": {},
     "@stll/api#generate:capability-runtime": {
       "inputs": [
         "scripts/generate-capability-runtime.ts",
