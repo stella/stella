@@ -53,16 +53,16 @@ const extractLegacyCustom = (
     return undefined;
   }
 
-  const custom: JsonObject = {};
-  if (isRecord(current.custom)) {
-    Object.assign(custom, toJsonObject(current.custom));
-  }
-
-  for (const [key, value] of Object.entries(current)) {
-    if (!CONTACT_METADATA_KEYS.has(key) && key !== "custom") {
-      custom[key] = toJsonValue(value);
-    }
-  }
+  const custom: JsonObject = {
+    ...(isRecord(current.custom) ? toJsonObject(current.custom) : {}),
+    ...Object.fromEntries(
+      Object.entries(current).flatMap(([key, value]) =>
+        !CONTACT_METADATA_KEYS.has(key) && key !== "custom"
+          ? [[key, toJsonValue(value)] as const]
+          : [],
+      ),
+    ),
+  };
 
   return Object.keys(custom).length > 0 ? custom : undefined;
 };

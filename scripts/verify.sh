@@ -339,7 +339,7 @@ run_step "Lockfile workspace-version guard" bun scripts/check-lockfile-workspace
 run_step "Quarantine-exclude guards" run_quarantine_exclude_guard
 run_step "Standalone lockfile guard" run_standalone_lockfile_guard
 run_step "Policy evidence" bun run policies:check
-run_step "Marketing content evidence" bun run marketing:check
+run_step "Marketing content check" bun run marketing:check
 run_step "Marketing recording verification self-test" bun test \
   scripts/check-marketing-recordings.test.ts
 run_step "Environment tooling self-test" bun test scripts/env-tool.test.ts

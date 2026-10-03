@@ -1,9 +1,17 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  AUTO_INSTALL_DISABLED,
   checkStandaloneLockfiles,
   isTrackedLockfile,
   requiresMalwareScan,
@@ -12,6 +20,7 @@ import {
 
 const ROOT_BUNFIG = `
 [install]
+auto = "disable"
 minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
   "@stll/native",
@@ -53,7 +62,8 @@ const STANDALONE_LOCK = `{
   }
 }`;
 
-const QUARANTINED_BUNFIG = "[install]\nminimumReleaseAge = 432_000\n";
+const QUARANTINED_BUNFIG =
+  '[install]\nauto = "disable"\nminimumReleaseAge = 432_000\n';
 
 let roots: string[] = [];
 
@@ -119,7 +129,8 @@ describe("standalone lockfile guard", () => {
     const result = checkStandaloneLockfiles(
       fixture({
         ...covered,
-        "tools/docs/bunfig.toml": "[install]\nminimumReleaseAge = 86_400\n",
+        "tools/docs/bunfig.toml":
+          '[install]\nauto = "disable"\nminimumReleaseAge = 86_400\n',
       }),
     );
 
@@ -301,6 +312,28 @@ jobs:
     ]);
   });
 
+  test("fails every bunfig.toml that lets Bun install at run time", () => {
+    const result = checkStandaloneLockfiles(
+      fixture({
+        ...covered,
+        "apps/web/bunfig.toml": '[test]\npreload = ["./setup.ts"]\n',
+        "bunfig.toml": ROOT_BUNFIG.replace('auto = "disable"\n', ""),
+        "tools/docs/bunfig.toml": QUARANTINED_BUNFIG.replace(
+          '"disable"',
+          '"fallback"',
+        ),
+      }),
+    );
+
+    const problem = (file: string, dir: string) =>
+      `${file} must set [install] auto = "${AUTO_INSTALL_DISABLED}": Bun reads it for every process started in ${dir}, and otherwise installs a missing import at run time instead of failing.`;
+    expect(result.errors.toSorted()).toEqual([
+      problem("apps/web/bunfig.toml", "apps/web"),
+      problem("bunfig.toml", "the repository root"),
+      problem("tools/docs/bunfig.toml", "tools/docs"),
+    ]);
+  });
+
   test("ignores lockfiles under node_modules", () => {
     const result = checkStandaloneLockfiles(
       fixture({ "node_modules/pkg/yarn.lock": "" }),
@@ -357,4 +390,159 @@ test("all guarded lock formats and manifests select the malware gate at every de
     expect(requiresMalwareScan([file])).toBe(false);
   }
   expect(requiresMalwareScan([])).toBe(false);
+});
+
+describe("Bun under the repository's bunfig.toml files", () => {
+  // Hermetic: the registry is a local server that records every request and
+  // serves nothing, the package cache starts empty, and the home directory
+  // holds no global bunfig. A run that would fetch shows up as a request.
+  const PROBE_PACKAGE = "stella-auto-install-probe";
+  const DISABLED_LINE = `auto = "${AUTO_INSTALL_DISABLED}"`;
+  const repoRoot = path.resolve(import.meta.dir, "..");
+
+  const trackedBunfigs = (): string[] => {
+    const listed = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: repoRoot });
+    expect(listed.exitCode).toBe(0);
+    return listed.stdout
+      .toString()
+      .split("\0")
+      .filter(
+        (file) =>
+          path.posix.basename(file) === "bunfig.toml" &&
+          !file.split("/").includes("node_modules"),
+      );
+  };
+
+  type ProbeRun = {
+    readonly exitCode: number;
+    readonly requests: readonly string[];
+    readonly stderr: string;
+  };
+
+  type ProbeOptions = {
+    /** bunfig.toml contents, by directory relative to the fixture root. */
+    readonly bunfigs: Readonly<Record<string, string>>;
+    /** The directory Bun starts in. */
+    readonly cwd: string;
+    /** The probe script, relative to the fixture root. */
+    readonly script: string;
+  };
+
+  /** Runs a script that imports a package no directory provides. */
+  const runProbe = async ({
+    bunfigs,
+    cwd,
+    script,
+  }: ProbeOptions): Promise<ProbeRun> => {
+    const root = mkdtempSync(path.join(tmpdir(), "bun-auto-install-"));
+    roots.push(root);
+    // Bun never installs at run time below a node_modules directory, which
+    // would make the control runs below prove nothing.
+    for (let dir = root; dir !== path.dirname(dir); dir = path.dirname(dir)) {
+      expect(existsSync(path.join(dir, "node_modules"))).toBe(false);
+    }
+    for (const [dir, content] of Object.entries(bunfigs)) {
+      mkdirSync(path.join(root, dir), { recursive: true });
+      writeFileSync(path.join(root, dir, "bunfig.toml"), content);
+    }
+    mkdirSync(path.dirname(path.join(root, script)), { recursive: true });
+    writeFileSync(
+      path.join(root, script),
+      `import probe from "${PROBE_PACKAGE}";\nconsole.log(probe);\n`,
+    );
+    mkdirSync(path.join(root, cwd), { recursive: true });
+    const home = path.join(root, ".home");
+    mkdirSync(home);
+
+    const requests: string[] = [];
+    const registry = Bun.serve({
+      fetch: (request) => {
+        requests.push(new URL(request.url).pathname);
+        return new Response("not found", { status: 404 });
+      },
+      hostname: "127.0.0.1",
+      port: 0,
+    });
+    const registryUrl = registry.url.href;
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        path.relative(path.join(root, cwd), path.join(root, script)),
+      ],
+      {
+        cwd: path.join(root, cwd),
+        env: {
+          BUN_CONFIG_REGISTRY: registryUrl,
+          BUN_INSTALL_CACHE_DIR: path.join(root, ".cache"),
+          HOME: home,
+          NPM_CONFIG_REGISTRY: registryUrl,
+          PATH: process.env["PATH"] ?? "",
+          XDG_CONFIG_HOME: home,
+        },
+        stderr: "pipe",
+        stdout: "pipe",
+        timeout: 60_000,
+      },
+    );
+    const [exitCode, stderr] = await Promise.all([
+      child.exited,
+      new Response(child.stderr).text(),
+    ]);
+    await registry.stop(true);
+    return { exitCode, requests, stderr };
+  };
+
+  const expectFailureWithoutRequest = (run: ProbeRun) => {
+    expect(run.requests).toEqual([]);
+    expect(run.exitCode).not.toBe(0);
+    expect(run.stderr).toContain(`Cannot find package '${PROBE_PACKAGE}'`);
+  };
+
+  test("finds the root bunfig.toml among the tracked files", () => {
+    expect(trackedBunfigs()).toContain("bunfig.toml");
+  });
+
+  test.each(trackedBunfigs())(
+    "%s makes a missing import fail without a registry request",
+    async (file) => {
+      const dir = path.posix.dirname(file);
+      const content = readFileSync(path.join(repoRoot, file), "utf-8");
+      const script = path.posix.join(dir, "probe.ts");
+
+      expectFailureWithoutRequest(
+        await runProbe({ bunfigs: { [dir]: content }, cwd: dir, script }),
+      );
+
+      // Control: the same file with run-time installs left on does reach the
+      // registry, so the run above failed because of the setting.
+      expect(content.split(DISABLED_LINE)).toHaveLength(2);
+      const enabled = await runProbe({
+        bunfigs: { [dir]: content.replace(DISABLED_LINE, 'auto = "auto"') },
+        cwd: dir,
+        script,
+      });
+      expect(enabled.requests).toContain(`/${PROBE_PACKAGE}`);
+      expect(enabled.exitCode).not.toBe(0);
+    },
+  );
+
+  test("only the bunfig.toml of the directory Bun starts in applies", async () => {
+    const content = readFileSync(path.join(repoRoot, "bunfig.toml"), "utf-8");
+    const script = "tools/probe/probe.ts";
+
+    // Started at the root, a script in a subdirectory is covered.
+    expectFailureWithoutRequest(
+      await runProbe({ bunfigs: { ".": content }, cwd: ".", script }),
+    );
+
+    // Started in a subdirectory without its own bunfig.toml, Bun does not
+    // read the root's. Hence a copy wherever a bunfig.toml exists, and the
+    // install-free CI guard checking imports whatever the directory.
+    const fromSubdirectory = await runProbe({
+      bunfigs: { ".": content },
+      cwd: "tools/probe",
+      script,
+    });
+    expect(fromSubdirectory.requests).toContain(`/${PROBE_PACKAGE}`);
+  });
 });

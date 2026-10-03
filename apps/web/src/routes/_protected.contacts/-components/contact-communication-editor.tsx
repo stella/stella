@@ -133,7 +133,6 @@ export const ContactCommunicationEditor = ({
     saveContactPatch(
       {
         metadata: {
-          ...metadata,
           dataBoxes: [
             ...dataBoxes,
             {
@@ -163,7 +162,6 @@ export const ContactCommunicationEditor = ({
   const removeDataBox = (id: string) => {
     saveContactPatch({
       metadata: {
-        ...metadata,
         dataBoxes: dataBoxes.filter((dataBox) => dataBox.id !== id),
       },
     });

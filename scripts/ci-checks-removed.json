@@ -22,5 +22,17 @@
   {
     "name": "Web API types drift guard",
     "reason": "Replaced by the determinism guard; the generated API types file is no longer committed"
+  },
+  {
+    "name": "Marketing content evidence",
+    "reason": "Renamed to Marketing content check; it now runs with the package checks, after the dependency install"
+  },
+  {
+    "name": "Release marketing freshness warning",
+    "reason": "Renamed to Release marketing staleness warning; it now runs with the package checks, after the dependency install"
+  },
+  {
+    "name": "Model catalog snapshot drift guard",
+    "reason": "Renamed to Model catalog snapshot drift check; it now runs with the package checks, after the dependency install"
   }
 ]

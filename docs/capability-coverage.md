@@ -378,6 +378,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
+| `rates.arrangement.get` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability rates arrangement-get` |
+| `rates.arrangement.summary.get` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability rates arrangement-summary-get` |
+| `rates.arrangement.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates arrangement-update` |
 | `rates.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates create` |
 | `rates.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates delete` |
 | `rates.entries.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates entries-create` |

@@ -12,7 +12,10 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import { lockWorkspacesForEntityCap } from "./entity-cap-lock";
+import {
+  lockWorkspacesForEntityCap,
+  lockWorkspacesForEntityTransfer,
+} from "./entity-cap-lock";
 
 /**
  * Every entity-creating path shares `lockWorkspacesForEntityCap` so
@@ -66,6 +69,27 @@ const createOrderTrackingTx = () => {
 describe("lockWorkspacesForEntityCap ordering", () => {
   const wsLow = toSafeId<"workspace">("00000000-0000-0000-0000-00000000000a");
   const wsHigh = toSafeId<"workspace">("00000000-0000-0000-0000-00000000000b");
+
+  test("transfer locks retain ordered exclusion while allowing FK key-share locks", async () => {
+    const queries: string[] = [];
+    const { tx, lockedOrder } = createOrderTrackingTx();
+    const transferTx = {
+      execute: async (query: SQL) => {
+        queries.push(pgDialect.sqlToQuery(query).sql);
+        return await tx.execute(query);
+      },
+    };
+    await lockWorkspacesForEntityTransfer(asTestRaw<Transaction>(transferTx), [
+      wsHigh,
+      wsLow,
+      wsHigh,
+    ]);
+    expect(lockedOrder).toEqual([wsLow, wsHigh]);
+    expect(queries).toHaveLength(2);
+    for (const query of queries) {
+      expect(query).toContain("FOR NO KEY UPDATE");
+    }
+  });
 
   test("locks a single workspace exactly once", async () => {
     const { execute, lockedOrder, tx } = createOrderTrackingTx();

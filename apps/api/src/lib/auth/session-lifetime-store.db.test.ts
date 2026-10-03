@@ -684,7 +684,7 @@ const createHttpSession = async (cacheEnabled: boolean) => {
         await Promise.resolve();
       }),
       before: createAuthMiddleware(async (ctx) => {
-        lifetime.prepare(ctx.context.internalAdapter);
+        lifetime.prepare(ctx.context);
         if (ctx.headers?.get("x-stella-test-authoritative") === "1") {
           const resolved = await getAuthoritativeSessionFromCtx(ctx);
           authoritativeToken = resolved?.session.token ?? null;
@@ -795,10 +795,13 @@ describe("native authentication session responses", () => {
         return counter.count;
       });
     expect(await requestCount(false)).toBe(0);
-    expect(await requestCount(true)).toBe(3);
+    // An uncached read observes the session row once and reuses it, reading
+    // only its user: two statements. Past the activity interval it adds the
+    // one activity write.
+    expect(await requestCount(true)).toBe(2);
     fixture.advance(5 * 60 * 1000);
-    expect(await requestCount(true)).toBe(4);
     expect(await requestCount(true)).toBe(3);
+    expect(await requestCount(true)).toBe(2);
   });
   test("global before-hook authoritative resolution observes startup policy before plugin hooks", async () => {
     const fixture = await createHttpSession(true);

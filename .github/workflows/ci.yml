@@ -1393,7 +1393,8 @@ jobs:
       - name: Policy evidence
         run: bun run policies:check
 
-      - name: Marketing content evidence
+      - name: Marketing content check
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun run marketing:check
 
       - name: Railway template shape
@@ -1490,10 +1491,11 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: bun scripts/sql-perf-suppressions.ts
 
-      - name: Release marketing freshness warning
+      - name: Release marketing staleness warning
         if: >-
-          github.event_name == 'pull_request'
-          || github.event_name == 'merge_group'
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && (github.event_name == 'pull_request'
+          || github.event_name == 'merge_group')
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: |
@@ -1695,8 +1697,10 @@ jobs:
           bun scripts/chat-fixture-guard.ts --self-test
           bun scripts/chat-fixture-guard.ts
 
-      - name: Model catalog snapshot drift guard
-        if: needs.ci-plan.outputs.model_catalog_drift_required == 'true'
+      - name: Model catalog snapshot drift check
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.model_catalog_drift_required == 'true'
         # These fetch models.dev and OpenRouter and byte-compare the
         # deterministic output with the committed snapshots, so hand-editing a
         # `.gen.ts` row instead of regenerating it cannot ship: only the
@@ -1909,6 +1913,9 @@ jobs:
           scripts/check-release-upload-retry.test.ts
           scripts/check-base-image-pulls.test.ts
           scripts/dependabot-changeset.test.ts
+
+      - name: Test install-free CI commands
+        run: bun test scripts/install-free-ci.test.ts
 
       # Needs the installed workspace (fast-check, property-testing), so it
       # cannot join the no-install invariants step above.
