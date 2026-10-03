@@ -318,17 +318,17 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
       try {
         expect(await slot.tryAcquire()).toEqual(Result.ok(true));
         await held.run();
-        expect(held.failures).toEqual([]);
-        expect((await checkpoint()).batch.holdUntil).not.toBeNull();
-        expect(
-          await operator.unsafe(
-            `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
-          ),
-        ).toHaveLength(0);
       } finally {
         await slot.close();
         session.release();
       }
+      expect(held.failures).toEqual([]);
+      expect((await checkpoint()).batch.holdUntil).not.toBeNull();
+      expect(
+        await operator.unsafe(
+          `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
+        ),
+      ).toHaveLength(0);
       const resumed = createTask({ phase: "resumed" });
       await resumed.run();
       expect(resumed.failures).toEqual([]);
