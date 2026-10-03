@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { DEMO_ACCOUNT_OTP_ROTATION_WARNING_EVENT } from "@/api/lib/demo-account-otp-policy";
+import { DEMO_ACCOUNT_OTP_WARNING_EVENT } from "@/api/lib/demo-account-otp-policy";
 
 const baseEnv = {
   DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella",
@@ -73,85 +73,50 @@ const readDerivedDatabaseUrl = (env: Record<string, string | undefined>) => {
 };
 
 describe("API environment", () => {
-  test("demo rotation metadata does not change startup availability", () => {
-    for (const rotatedAt of [
-      undefined,
-      "invalid-date",
-      "2021-03-04T10:00:00Z",
-      "2999-03-04T10:00:00Z",
-    ]) {
-      const result = bootApiEnvironment({
-        ...baseEnv,
-        DEMO_ACCOUNT_OTP: "654321",
-        DEMO_ACCOUNT_OTP_ROTATED_AT: rotatedAt,
-      });
-      expect(result.exitCode, result.stderr.toString()).toBe(0);
-    }
-  });
-
-  test("demo configuration affects its override while readiness remains available", () => {
-    const timeModuleUrl = new URL(
-      "../../../packages/time/src/index.ts",
-      import.meta.url,
-    ).href;
+  test("configured sign-in codes preserve readiness and bounded warnings", () => {
     const otpModuleUrl = new URL("lib/demo-account-otp.ts", import.meta.url)
       .href;
     const routesModuleUrl = new URL(
       "handlers/health/routes.ts",
       import.meta.url,
     ).href;
-    const script = `import { Temporal } from ${JSON.stringify(timeModuleUrl)};
-      Temporal.Now.instant = () => Temporal.Instant.from("2021-03-12T10:00:00Z");
-      const { getDemoAccountOtpOverride } = await import(${JSON.stringify(otpModuleUrl)});
+    const script = `const { getDemoAccountOtpOverride } = await import(${JSON.stringify(otpModuleUrl)});
       const { createHealthRoute } = await import(${JSON.stringify(routesModuleUrl)});
-      const otp = getDemoAccountOtpOverride({ email: "account@example.test", type: "sign-in" });
+      const codes = [" Account@Example.Test ", "standard@example.test", "standard@example.test", "account@example.test"].map(email => getDemoAccountOtpOverride({ email, type: "sign-in" }) ?? null);
       const route = createHealthRoute({ probeReadiness: async () => ({ status: "ready" }) });
       const response = await route.handle(new Request("http://localhost/ready"));
-      console.log(JSON.stringify({ status: response.status, otp: otp ?? null }));`;
-    for (const rotatedAt of [
-      undefined,
-      "invalid-date",
-      "2021-03-04T10:00:00Z",
-      "2021-03-13T10:00:00Z",
-      "2021-03-12T10:00:00Z",
-    ]) {
-      const result = spawnApiEnvironment(
-        {
-          ...baseEnv,
-          DEMO_ACCOUNT_EMAIL: "account@example.test",
-          DEMO_ACCOUNT_OTP: "654321",
-          DEMO_ACCOUNT_OTP_ROTATED_AT: rotatedAt,
-        },
-        script,
-      );
-      expect(result.exitCode, result.stderr.toString()).toBe(0);
-      const lines = result.stdout.toString().trim().split("\n");
-      const response = lines.at(-1);
-      expect(response).toBeDefined();
-      if (response === undefined) {
-        throw new Error("Response must be present");
-      }
-      const fresh = rotatedAt === "2021-03-12T10:00:00Z";
-      expect(JSON.parse(response)).toEqual({
-        status: 200,
-        otp: fresh ? "654321" : null,
+      console.log(JSON.stringify({ status: response.status, codes }));`;
+    const result = spawnApiEnvironment(
+      {
+        ...baseEnv,
+        DEMO_ACCOUNT_EMAIL: " Account@Example.Test ",
+        DEMO_ACCOUNT_OTP: "654321",
+      },
+      script,
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    const response = result.stdout.toString().trim().split("\n").at(-1);
+    expect(response).toBeDefined();
+    if (response === undefined) {
+      throw new Error("Response must be present");
+    }
+    expect(JSON.parse(response)).toEqual({
+      status: 200,
+      codes: ["654321", null, null, "654321"],
+    });
+    const warnings = result.stderr
+      .toString()
+      .trim()
+      .split("\n")
+      .filter((line) => line.includes(DEMO_ACCOUNT_OTP_WARNING_EVENT));
+    expect(warnings).toHaveLength(1);
+    for (const warning of warnings) {
+      expect(JSON.parse(warning)).toMatchObject({
+        severity: "WARN",
+        message: DEMO_ACCOUNT_OTP_WARNING_EVENT,
       });
-      const warnings = result.stderr
-        .toString()
-        .trim()
-        .split("\n")
-        .filter((line) =>
-          line.includes(DEMO_ACCOUNT_OTP_ROTATION_WARNING_EVENT),
-        );
-      expect(warnings).toHaveLength(fresh ? 0 : 1);
-      for (const warning of warnings) {
-        expect(JSON.parse(warning)).toMatchObject({
-          severity: "WARN",
-          message: DEMO_ACCOUNT_OTP_ROTATION_WARNING_EVENT,
-        });
-        expect(warning).not.toContain("account@example.test");
-        expect(warning).not.toContain("654321");
-      }
+      expect(warning).not.toContain("example.test");
+      expect(warning).not.toContain("654321");
     }
   });
 

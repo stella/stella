@@ -218,17 +218,3 @@ test("Microsoft claim configuration defaults to disabled", () => {
   expect(v.parse(schema, "true")).toBe(true);
   expect(v.safeParse(schema, "invalid").success).toBe(false);
 });
-
-test("rotation metadata remains optional instance configuration", () => {
-  for (const value of [
-    undefined,
-    "invalid-date",
-    "2021-03-04",
-    "2021-03-04T10:00:00Z",
-  ]) {
-    expect(
-      v.safeParse(envApiServerSchema.DEMO_ACCOUNT_OTP_ROTATED_AT, value)
-        .success,
-    ).toBe(true);
-  }
-});

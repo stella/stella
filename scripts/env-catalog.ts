@@ -119,7 +119,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DB_SSLMODE",
   "DB_USER",
   "DEBUG_UNREDACTED_ERRORS",
-  "DEMO_ACCOUNT_OTP_ROTATED_AT",
   "DEV_PUBLIC_LAW_CONNECT_COMMAND",
   "DOCUMENT_OCR_BATCH_INTERVAL_MINUTES",
   "DOCUMENT_OCR_MODEL_DIR",
@@ -271,8 +270,6 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
-  DEMO_ACCOUNT_OTP_ROTATED_AT:
-    "ISO date (UTC midnight) or timestamp of the last DEMO_ACCOUNT_OTP rotation. Strict mode uses the fixed code only with a valid rotation within seven days; otherwise normal email OTP delivery applies.",
   AGENT_CLIENT_STORAGE_V1_ENABLED:
     "Enable the shared agent client storage format.",
   ACTION_LIMIT_CONTACT_URL:
@@ -628,7 +625,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   DEMO_ACCOUNT_EMAIL: ENV_CREDENTIAL_KIND.notCredential,
   DEMO_ACCOUNT_ORGANIZATION_ID: ENV_CREDENTIAL_KIND.notCredential,
   DEMO_ACCOUNT_OTP: ENV_CREDENTIAL_KIND.credential,
-  DEMO_ACCOUNT_OTP_ROTATED_AT: ENV_CREDENTIAL_KIND.notCredential,
   DEV_PUBLIC_LAW_CONNECT_COMMAND: ENV_CREDENTIAL_KIND.notCredential,
   DOCUMENT_OCR_BATCH_INTERVAL_MINUTES: ENV_CREDENTIAL_KIND.notCredential,
   DOCUMENT_OCR_MODEL_DIR: ENV_CREDENTIAL_KIND.notCredential,

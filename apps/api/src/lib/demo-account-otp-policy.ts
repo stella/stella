@@ -1,12 +1,5 @@
-import { Result } from "better-result";
-
-import type { RuntimeMode } from "@stll/runtime-mode";
-
-import { validateDemoAccountOtpRotation } from "@/api/lib/demo-account-otp-rotation";
-import type { DemoAccountOtpConfigurationError } from "@/api/lib/demo-account-otp-rotation";
-
-export const DEMO_ACCOUNT_OTP_ROTATION_WARNING_EVENT =
-  "auth.demo_credential_override_disabled";
+export const DEMO_ACCOUNT_OTP_WARNING_EVENT =
+  "auth.demo_credential_override_skipped";
 
 export type DemoAccountOtpArgs = {
   email: string;
@@ -16,10 +9,7 @@ export type DemoAccountOtpArgs = {
 type ResolveDemoAccountOtpOptions = DemoAccountOtpArgs & {
   demoEmail: string | undefined;
   demoOtp: string | undefined;
-  rotatedAt: string | undefined;
-  runtimeMode: RuntimeMode;
-  now: number;
-  warn: (error: DemoAccountOtpConfigurationError) => void;
+  warn: () => void;
 };
 
 /**
@@ -36,25 +26,13 @@ export const resolveDemoAccountOtp = ({
   type,
   demoEmail,
   demoOtp,
-  rotatedAt,
-  runtimeMode,
-  now,
   warn,
 }: ResolveDemoAccountOtpOptions): string | undefined => {
   if (type !== "sign-in" || !demoEmail || !demoOtp) {
     return undefined;
   }
-  if (email.trim().toLowerCase() !== demoEmail) {
-    return undefined;
-  }
-  const rotation = validateDemoAccountOtpRotation({
-    demoOtp,
-    rotatedAt,
-    runtimeMode,
-    now,
-  });
-  if (Result.isError(rotation)) {
-    warn(rotation.error);
+  if (email.trim().toLowerCase() !== demoEmail.trim().toLowerCase()) {
+    warn();
     return undefined;
   }
   return demoOtp;

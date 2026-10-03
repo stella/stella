@@ -302,7 +302,6 @@ export const envApiServerSchema = {
     v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
   ),
   DEMO_ACCOUNT_OTP: v.optional(v.pipe(v.string(), v.digits(), v.length(6))),
-  DEMO_ACCOUNT_OTP_ROTATED_AT: v.optional(v.string()),
   DEMO_ACCOUNT_ORGANIZATION_ID: v.optional(
     v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
   ),
