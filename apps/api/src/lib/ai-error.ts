@@ -505,12 +505,19 @@ export const aiHandlerError = (
       ? new ProviderCallError({
           model: { provider: error.provider, keySource: error.keySource },
           status: mapped.status,
+          code: error.code,
           kind: error.kind,
           requestId: error.requestId,
           facts:
             error.providerStatus === undefined
               ? undefined
-              : { status: error.providerStatus },
+              : {
+                  status: error.providerStatus,
+                  ...(isRecord(error.cause) &&
+                  typeof error.cause["isRetryable"] === "boolean"
+                    ? { isRetryable: error.cause["isRetryable"] }
+                    : {}),
+                },
         })
       : mapped;
   return kind === "unknown"

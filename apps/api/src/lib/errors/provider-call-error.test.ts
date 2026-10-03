@@ -5,6 +5,7 @@ import {
   classifyAIError,
   providerStatusCode,
 } from "@/api/lib/ai-error";
+import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import { PROVIDER_CALL_ERROR_MESSAGE } from "@/api/lib/errors/provider-call-error";
 import { createProviderCallError } from "@/api/lib/errors/provider-call-failure";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -102,4 +103,26 @@ describe("provider call error structural contract", () => {
     });
     expect(JSON.stringify(error)).not.toContain(SENTINEL);
   });
+
+  for (const isRetryable of [true, false]) {
+    test(`preserves managed unavailable code and retry disposition when mapped (${isRetryable})`, () => {
+      const error = createProviderCallError({
+        model: { provider: "openrouter", keySource: "instance" },
+        status: 503,
+        code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+        evidence: { status: 503, isRetryable },
+      });
+
+      const mapped = aiHandlerError(error, {
+        status: 502,
+        message: "Generation failed",
+      });
+
+      expect(mapped).toMatchObject({
+        status: 502,
+        code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+        cause: { status: 503, isRetryable },
+      });
+    });
+  }
 });

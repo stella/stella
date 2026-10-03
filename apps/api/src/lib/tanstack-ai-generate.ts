@@ -29,6 +29,7 @@ import type {
 } from "@/api/lib/ai-config";
 import {
   classifyAIError,
+  type AIErrorKind,
   providerErrorBody,
   providerStatusCode,
 } from "@/api/lib/ai-error";
@@ -633,7 +634,19 @@ type RecoveredProviderStatusOptions = {
   abortSignal?: AbortSignal | undefined;
 };
 
-const withRecoveredProviderStatus = ({
+const PROVIDER_OWNED_ERROR_KIND = {
+  quota_exhausted: true,
+  provider_billing: true,
+  provider_credentials_rejected: true,
+  model_unavailable: true,
+  provider_unavailable: true,
+  provider_stream_incomplete: true,
+  loop_detected: false,
+  empty_completion: false,
+  unknown: false,
+} as const satisfies Record<AIErrorKind, boolean>;
+
+export const withRecoveredProviderStatus = ({
   error,
   model,
   abortSignal,
@@ -645,7 +658,7 @@ const withRecoveredProviderStatus = ({
     return error;
   }
   if (!(error instanceof Error)) {
-    return createProviderCallError({ model, status: 500, evidence: error });
+    return error;
   }
   if (hasManagedProviderUnavailableCode(error)) {
     return classifyFailure(
@@ -659,13 +672,21 @@ const withRecoveredProviderStatus = ({
     );
   }
   const body = providerErrorBody(error.message);
+  const evidence =
+    body === undefined
+      ? error
+      : { cause: body, requestId: providerRequestIdFrom(error) };
+  const kind = classifyAIError(evidence);
+  if (
+    !hasProviderFailureInCauseChain(evidence) &&
+    !PROVIDER_OWNED_ERROR_KIND[kind]
+  ) {
+    return error;
+  }
   return createProviderCallError({
     model,
-    status: classifyAIError(body ?? error) === "unknown" ? 500 : 502,
-    evidence:
-      body === undefined
-        ? error
-        : { cause: body, requestId: providerRequestIdFrom(error) },
+    status: kind === "unknown" ? 500 : 502,
+    evidence,
   });
 };
 
@@ -708,6 +729,23 @@ const hasManagedProviderUnavailableCode = (error: unknown): boolean => {
   return false;
 };
 
+const hasProviderFailureInCauseChain = (error: unknown): boolean => {
+  let current = error;
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth += 1) {
+    if (!isRecord(current)) {
+      return false;
+    }
+    if (
+      current instanceof ProviderCallError ||
+      providerStatusCode(current) !== null
+    ) {
+      return true;
+    }
+    current = current["cause"];
+  }
+  return false;
+};
+
 const providerErrorInCauseChain = (
   error: unknown,
 ): { record: Record<string, unknown>; statusCode: number } | null => {
@@ -740,7 +778,7 @@ const providerErrorInCauseChain = (
  * provider's verdict however it was spelled.
  */
 const isUnattributedRunError = (error: unknown): boolean =>
-  HandlerError.is(error) &&
+  error instanceof ProviderCallError &&
   error.status === 502 &&
   classifyAIError(error) === "unknown";
 
