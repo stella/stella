@@ -3,21 +3,30 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 import { Elysia } from "elysia";
 import fc from "fast-check";
+import JSZip from "jszip";
 
 import { CLAUSE_VERSION_LIMIT_ERROR_CODE } from "@stll/api-contract";
 import { assertProperty } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { clauses, clauseVersions } from "@/api/db/schema";
+import {
+  clauses,
+  clauseVersions,
+  templates,
+  templateClauses,
+} from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { type ClauseBody, isClauseBody } from "@/api/lib/clauses/types";
+import { resolveClauseSlotSources } from "@/api/lib/docx/resolve-clause-slots";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { fillTemplateDocx } from "@/api/lib/templates/template-fill-service";
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -27,6 +36,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+import { importHandler } from "./import";
 import { getClauseHandler } from "./read";
 import updateClause, { updateClauseHandler } from "./update";
 import restoreClauseVersion from "./versions/restore";
@@ -606,4 +616,392 @@ describe("clause body preconditions", () => {
     ).toBe(LIMITS.clauseVersionsPerClause);
     expect(audits).toBe(0);
   });
+});
+
+test("an incomplete working copy persists and reloads while publication refuses it", async () => {
+  const clauseId = await seedClause();
+  const body: ClauseBody = [{ text: "{% if %}" }];
+  const save = async (snapshotVersion: boolean) =>
+    await Result.gen(() =>
+      updateClauseHandler({
+        safeDb,
+        organizationId: ids.orgA,
+        clauseId,
+        body: { body, snapshotVersion },
+        recordAuditEvent: async () => undefined,
+      }),
+    );
+  expect(Result.isOk(await save(false))).toBe(true);
+  expect(
+    (await testDb.query.clauses.findFirst({ where: { id: { eq: clauseId } } }))
+      ?.body,
+  ).toEqual(body);
+  const published = await save(true);
+  expect(Result.isError(published)).toBe(true);
+  if (Result.isError(published)) {
+    expect(published.error).toMatchObject({
+      code: "clause_directives_invalid",
+      status: 422,
+    });
+  }
+  expect(
+    await testDb.$count(clauseVersions, eq(clauseVersions.clauseId, clauseId)),
+  ).toBe(0);
+});
+
+test("snapshot without a supplied body preserves an invalid working copy without publishing it", async () => {
+  const body: ClauseBody = [{ text: "{% if enabled %}" }];
+  const clauseId = await seedClause(body);
+  const result = await Result.gen(() =>
+    updateClauseHandler({
+      safeDb,
+      organizationId: ids.orgA,
+      clauseId,
+      body: { snapshotVersion: true },
+      recordAuditEvent: async () => undefined,
+    }),
+  );
+  expect(Result.isOk(result)).toBe(true);
+  expect(
+    (await testDb.query.clauses.findFirst({ where: { id: { eq: clauseId } } }))
+      ?.body,
+  ).toEqual(body);
+  expect(
+    await testDb.$count(clauseVersions, eq(clauseVersions.clauseId, clauseId)),
+  ).toBe(0);
+});
+
+test("historical legacy content restores with a typed warning and retains the exact stored body", async () => {
+  const clauseId = await seedClause();
+  const versionId = createSafeId<"clauseVersion">();
+  const body: ClauseBody = [
+    { text: '{{ num("section") }}' },
+    { text: "{% if enabled %}" },
+  ];
+  await testDb.insert(clauseVersions).values({
+    id: versionId,
+    clauseId,
+    organizationId: ids.orgA,
+    version: 1,
+    body,
+  });
+  const result = await restoreClauseVersion.handler(
+    createTestHandlerContext<
+      Parameters<typeof restoreClauseVersion.handler>[0]
+    >({
+      safeDb,
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userA1 },
+      params: { clauseId, versionId },
+      body: { expectedBody: initialBody },
+      recordAuditEvent: async () => undefined,
+    }),
+  );
+  expect(result).toMatchObject({
+    body,
+    currentVersion: 2,
+    clauseWarnings: [
+      {
+        code: "CLAUSE_LEGACY_DIRECTIVES",
+        clauseName: "Clause precondition",
+        version: 1,
+      },
+    ],
+  });
+  expect(
+    (await testDb.query.clauses.findFirst({ where: { id: { eq: clauseId } } }))
+      ?.body,
+  ).toEqual(body);
+});
+
+test("JSON imports inspect every legacy clause and variant without refusing the stored content", async () => {
+  const titles = [
+    "Imported valid",
+    "Imported legacy second",
+    "Imported variant third",
+  ] as const;
+  const malformed: ClauseBody = [{ text: "{% if enabled %}" }];
+  const result = await Result.gen(() =>
+    importHandler({
+      safeDb,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      body: {
+        file: new File(
+          [
+            JSON.stringify({
+              version: 1,
+              exportedAt: "2026-10-03",
+              clauses: [
+                { title: titles.at(0), body: initialBody },
+                { title: titles.at(1), body: malformed },
+                {
+                  title: titles.at(2),
+                  body: initialBody,
+                  variants: [{ label: "Legacy", body: malformed }],
+                },
+              ],
+            }),
+          ],
+          "clauses.json",
+        ),
+      },
+      recordAuditEvent: async () => undefined,
+    }),
+  );
+  expect(Result.isOk(result)).toBe(true);
+  if (Result.isOk(result)) {
+    expect(result.value).toMatchObject({
+      created: 3,
+      clauseWarnings: [
+        {
+          code: "CLAUSE_LEGACY_DIRECTIVES",
+          clauseName: titles.at(1),
+          version: 1,
+        },
+        {
+          code: "CLAUSE_LEGACY_DIRECTIVES",
+          clauseName: `${titles[2]} (Legacy)`,
+          version: null,
+        },
+      ],
+    });
+  }
+  const imported = await testDb.query.clauses.findMany({
+    where: { organizationId: { eq: ids.orgA }, title: { in: [...titles] } },
+    limit: 3,
+  });
+  clauseIds.push(...imported.map(({ id }) => id));
+  expect(imported).toHaveLength(3);
+  expect(imported.find(({ title }) => title === titles.at(1))?.body).toEqual(
+    malformed,
+  );
+});
+
+test("stored legacy versions fill literal markers with warnings and remain tenant scoped", async () => {
+  const legacyBodies: ClauseBody[] = [
+    [{ text: '{{ num("section") }}' }],
+    [{ text: '{{ ref("section") }}' }],
+    [{ text: '{{ clause("Nested") }}' }],
+    [{ text: "{{ name | ai(adapt=true) }}" }],
+    [{ text: "{% if enabled %}" }, { text: "Legacy" }],
+  ];
+  for (const body of legacyBodies) {
+    const clauseId = await seedClause(body);
+    const versionId = createSafeId<"clauseVersion">();
+    await testDb.insert(clauseVersions).values({
+      id: versionId,
+      clauseId,
+      organizationId: ids.orgA,
+      version: 1,
+      body,
+    });
+    const templateId = createSafeId<"template">();
+    await testDb.insert(templates).values({
+      id: templateId,
+      organizationId: ids.orgA,
+      name: "Legacy template",
+      fileName: "legacy.docx",
+      s3Key: "legacy.docx",
+      sizeBytes: 1,
+      createdBy: ids.userA1,
+    });
+    await testDb.insert(templateClauses).values({
+      id: createSafeId<"templateClause">(),
+      organizationId: ids.orgA,
+      templateId,
+      clauseId,
+      clauseVersionId: versionId,
+      slotName: "Terms",
+    });
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>{{ clause("Terms") }}</w:t></w:r></w:p></w:body></w:document>',
+    );
+    const file = testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+    const scopedDb = asTestRaw<ScopedDb>(
+      createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    );
+    const result = await fillTemplateDocx({
+      source: {
+        name: "Legacy template",
+        fileName: "legacy.docx",
+        file,
+        templateId,
+      },
+      scopedDb,
+      organizationId: ids.orgA,
+      values: {},
+      requiredFields: "enforce",
+      useRecording: "caller",
+    });
+    expect(result).toHaveProperty("file");
+    if (!("file" in result)) {
+      throw new TypeError("Expected literal legacy fill");
+    }
+    expect(result.clauseWarnings).toMatchObject([
+      {
+        code: "CLAUSE_LEGACY_DIRECTIVES",
+        clauseName: "Clause precondition",
+        version: 1,
+        clauseId,
+      },
+    ]);
+    const output = await JSZip.loadAsync(result.file.bytes);
+    const xml = await output.file("word/document.xml")?.async("string");
+    for (const paragraph of body) {
+      expect(xml).toContain(paragraph.text);
+    }
+    const slots = [{ name: "Terms", patchKey: "@clause:Terms" }];
+    const otherOrg = asTestRaw<ScopedDb>(
+      createScopedDb(testDb, [ids.wsB1], ids.orgB, ids.userB1),
+    );
+    expect(
+      (await resolveClauseSlotSources(templateId, slots, otherOrg, ids.orgB))
+        .size,
+    ).toBe(0);
+    await testDb.delete(templates).where(eq(templates.id, templateId));
+  }
+});
+
+test("clause resolution scopes relation reads even without the RLS backstop", async () => {
+  const clauseId = createSafeId<"clause">();
+  clauseIds.push(clauseId);
+  await testDb.insert(clauses).values({
+    id: clauseId,
+    organizationId: ids.orgB,
+    title: "Foreign clause",
+    body: initialBody,
+    createdBy: ids.userB1,
+  });
+  const versionId = createSafeId<"clauseVersion">();
+  await testDb.insert(clauseVersions).values({
+    id: versionId,
+    clauseId,
+    organizationId: ids.orgB,
+    version: 1,
+    body: initialBody,
+  });
+  const templateId = createSafeId<"template">();
+  await testDb.insert(templates).values({
+    id: templateId,
+    organizationId: ids.orgA,
+    name: "Scoped template",
+    fileName: "scoped.docx",
+    s3Key: "scoped.docx",
+    sizeBytes: 1,
+    createdBy: ids.userA1,
+  });
+  await testDb.insert(templateClauses).values({
+    id: createSafeId<"templateClause">(),
+    organizationId: ids.orgA,
+    templateId,
+    clauseId,
+    clauseVersionId: versionId,
+    slotName: "Terms",
+  });
+  const readRows: unknown[] = [];
+  const observedDb = {
+    query: {
+      ...testDb.query,
+      templateClauses: {
+        findMany: async (
+          options: Parameters<typeof testDb.query.templateClauses.findMany>[0],
+        ) => {
+          const rows = await testDb.query.templateClauses.findMany(options);
+          readRows.push(...rows);
+          return rows;
+        },
+      },
+    },
+    select: testDb.select.bind(testDb),
+  };
+  const unrestricted = asTestRaw<ScopedDb>(
+    async <T>(fn: (tx: typeof observedDb) => Promise<T>) =>
+      await fn(observedDb),
+  );
+  const resolved = await resolveClauseSlotSources(
+    templateId,
+    [{ name: "Terms", patchKey: "@clause:Terms" }],
+    unrestricted,
+    ids.orgA,
+  );
+  expect(resolved.size).toBe(0);
+  expect(readRows).toHaveLength(1);
+  expect(readRows.at(0)).toMatchObject({ clauseId, clause: null });
+  await testDb.delete(templates).where(eq(templates.id, templateId));
+});
+
+test("resolved clause provenance names latest, pinned and explicit saved versions", async () => {
+  const clauseId = await seedClause();
+  const versionId = createSafeId<"clauseVersion">();
+  await testDb
+    .update(clauses)
+    .set({ currentVersion: 2 })
+    .where(eq(clauses.id, clauseId));
+  await testDb.insert(clauseVersions).values([
+    {
+      id: versionId,
+      clauseId,
+      organizationId: ids.orgA,
+      version: 1,
+      body: initialBody,
+    },
+    {
+      id: createSafeId<"clauseVersion">(),
+      clauseId,
+      organizationId: ids.orgA,
+      version: 2,
+      body: nextBody,
+    },
+  ]);
+  const templateId = createSafeId<"template">();
+  await testDb.insert(templates).values({
+    id: templateId,
+    organizationId: ids.orgA,
+    name: "Versioned",
+    fileName: "versioned.docx",
+    s3Key: "versioned.docx",
+    sizeBytes: 1,
+    createdBy: ids.userA1,
+  });
+  await testDb.insert(templateClauses).values({
+    id: createSafeId<"templateClause">(),
+    organizationId: ids.orgA,
+    templateId,
+    clauseId,
+    clauseVersionId: versionId,
+    slotName: "Terms",
+  });
+  const scopedDb = asTestRaw<ScopedDb>(
+    createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+  );
+  const sources = await resolveClauseSlotSources(
+    templateId,
+    [
+      { name: "Terms", patchKey: "@clause:Terms" },
+      {
+        name: "Terms",
+        patchKey: "@clause:Terms:latest",
+        versionModifier: "latest",
+      },
+      { name: "Terms", patchKey: "@clause:Terms:v1", versionModifier: "v1" },
+    ],
+    scopedDb,
+    ids.orgA,
+  );
+  expect(sources.get("@clause:Terms")).toMatchObject({
+    body: initialBody,
+    clause: { resolution: "pinned", version: 1 },
+  });
+  expect(sources.get("@clause:Terms:latest")).toMatchObject({
+    body: nextBody,
+    clause: { resolution: "latest", version: 2 },
+  });
+  expect(sources.get("@clause:Terms:v1")).toMatchObject({
+    body: initialBody,
+    clause: { resolution: "explicit", version: 1 },
+  });
+  await testDb.delete(templates).where(eq(templates.id, templateId));
 });
