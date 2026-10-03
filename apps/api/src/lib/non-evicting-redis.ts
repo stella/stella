@@ -20,6 +20,7 @@ type CheckedConnection = {
   client: RedisCommands;
   policy: StorePolicyObservation;
   checking: Promise<void> | undefined;
+  generation: number;
 };
 
 export type StorePolicyObservation =
@@ -59,33 +60,41 @@ export const nonEvictingRedis = ({
 
   const check = (state: CheckedConnection) => {
     state.checking ??= (async () => {
-      const reply = await Result.tryPromise(() =>
-        withCommandTimeout({
-          command: state.client.send("INFO", ["memory"]),
-          commandTimeoutMs: POLICY_COMMAND_TIMEOUT_MS,
-          label: "admission-store-policy",
-        }),
-      );
-      if (current !== state) {
+      for (;;) {
+        if (current !== state) {return;}
+        const generation = state.generation;
+        const reply = await Result.tryPromise(() =>
+          withCommandTimeout({
+            command: state.client.send("INFO", ["memory"]),
+            commandTimeoutMs: POLICY_COMMAND_TIMEOUT_MS,
+            label: "admission-store-policy",
+          }),
+        );
+        if (current !== state) {
+          return;
+        }
+        if (generation !== state.generation) {
+          continue;
+        }
+        const reported =
+          Result.isOk(reply) && typeof reply.value === "string"
+            ? /^maxmemory_policy:([^\r\n]+)\r?$/mu
+                .exec(reply.value)
+                ?.at(1)
+                ?.trim()
+            : undefined;
+        // Proxies and managed services may deny INFO or omit the field. That
+        // cannot establish an unsafe policy; warn without blocking deployments.
+        if (reported === undefined || reported.length === 0) {
+          state.policy = { status: "unknown" };
+        } else if (reported === "noeviction") {
+          state.policy = { status: "allowed" };
+        } else {
+          state.policy = { status: "refused" };
+        }
+        observe(state.policy);
         return;
       }
-      const reported =
-        Result.isOk(reply) && typeof reply.value === "string"
-          ? /^maxmemory_policy:([^\r\n]+)\r?$/mu
-              .exec(reply.value)
-              ?.at(1)
-              ?.trim()
-          : undefined;
-      // Proxies and managed services may deny INFO or omit the field. That
-      // cannot establish an unsafe policy; warn without blocking deployments.
-      if (reported === undefined || reported.length === 0) {
-        state.policy = { status: "unknown" };
-      } else if (reported === "noeviction") {
-        state.policy = { status: "allowed" };
-      } else {
-        state.policy = { status: "refused" };
-      }
-      observe(state.policy);
     })().finally(() => {
       state.checking = undefined;
     });
@@ -96,9 +105,17 @@ export const nonEvictingRedis = ({
     const client = await connection.ready();
     if (current?.client !== client) {
       cancelReconnect?.();
-      current = { client, policy: { status: "unknown" }, checking: undefined };
+      current = {
+        client,
+        policy: { status: "unknown" },
+        checking: undefined,
+        generation: 0,
+      };
       const state = current;
       cancelReconnect = client.onReconnect?.(() => {
+        // A reconnect supersedes the pending reply; the shared inspection
+        // finishes with one check of the current connection before releasing callers.
+        state.generation += 1;
         detached(check(state), "admission-store.inspect-policy");
       });
       // A replacement connection must not inherit the previous server's check.

@@ -229,4 +229,50 @@ describe("non-evicting admission coordination", () => {
     store.close();
     expect(disposed).toBe(true);
   });
+  test("reconnect during an inspection waits for a fresh policy after the old timeout", async () => {
+    const f = fixture("maxmemory_policy:noeviction\n");
+    const old = Promise.withResolvers<string>();
+    let reconnect = () => {};
+    let refresh = () => {};
+    const observations: StorePolicyObservation[] = [];
+    const client = {
+      ...f.client,
+      onReconnect: (callback: () => void) => {
+        reconnect = callback;
+        return () => {};
+      },
+    };
+    const store = nonEvictingRedis({
+      connection: { ready: async () => client, close: () => {} },
+      observe: (observation) => observations.push(observation),
+      scheduleRefresh: (callback) => {
+        refresh = callback;
+        return () => {};
+      },
+    });
+    try {
+      const facade = await store.ready();
+      f.change(old.promise);
+      refresh();
+      expect(f.stats().infoCalls).toBe(2);
+      f.change("maxmemory_policy:allkeys-lru\n");
+      reconnect();
+      reconnect();
+      const waiting = facade.send("EVAL", []);
+      await expect(waiting).rejects.toBeInstanceOf(ActionAdmissionError);
+      expect(f.stats()).toMatchObject({ infoCalls: 3, commands: 0 });
+      expect(observations).toEqual([
+        { status: "allowed" },
+        { status: "refused" },
+      ]);
+      old.resolve("maxmemory_policy:noeviction\n");
+      await Promise.resolve();
+      await expect(facade.send("EVAL", [])).rejects.toBeInstanceOf(
+        ActionAdmissionError,
+      );
+      expect(f.stats()).toMatchObject({ infoCalls: 3, commands: 0 });
+    } finally {
+      store.close();
+    }
+  });
 });
