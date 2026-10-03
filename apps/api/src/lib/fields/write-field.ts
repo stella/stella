@@ -213,6 +213,9 @@ const isEmptyContent = (content: FieldWriteContent): boolean => {
     case "money":
     case "clip":
       return false;
+    default:
+      content satisfies never;
+      return panic("Unhandled field content type");
   }
 };
 
