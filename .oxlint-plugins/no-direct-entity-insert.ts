@@ -57,9 +57,7 @@ export default eslintCompatPlugin({
         const isEntitiesTable = (node: unknown): boolean => {
           const table = resolveImport(context, node);
           return (
-            table !== null &&
-            table.imported === TABLE_NAME &&
-            SCHEMA_MODULES.has(table.moduleId)
+            table?.imported === TABLE_NAME && SCHEMA_MODULES.has(table.moduleId)
           );
         };
 

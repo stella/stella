@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { truncateEntityName } from "@stll/api-contract";
 import { assertProperty } from "@stll/property-testing";
 
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -34,13 +35,11 @@ test("sibling names retain free originals and select the lowest free bounded suf
       fc.boolean(),
       fc.constantFrom("document", "folder"),
       (rawName, arbitrarySiblings, numbers, occupied, kind) => {
-        const name = sanitizeFilename(rawName);
+        const name = rawName;
         const dot = kind === "document" ? name.lastIndexOf(".") : -1;
         const base = dot > 0 ? name.slice(0, dot) : name;
         const extension = dot > 0 ? name.slice(dot) : "";
-        const siblingNames = new Set<string>(
-          arbitrarySiblings.map(sanitizeFilename),
-        );
+        const siblingNames = new Set<string>(arbitrarySiblings);
         for (const number of numbers) {
           siblingNames.add(`${base}_${number}${extension}`);
         }
@@ -54,7 +53,7 @@ test("sibling names retain free originals and select the lowest free bounded suf
         expect(result.length).toBeLessThanOrEqual(255);
         expect(result.toWellFormed()).toBe(result);
         if (!siblingNames.has(name)) {
-          expect(result).toBe(String(name));
+          expect(result).toBe(name);
           return;
         }
         expect(result.startsWith(`${base}_`)).toBe(true);
@@ -118,7 +117,7 @@ test("folder dots remain part of the complete name", () => {
   ).toBe("v1.2_1");
 });
 
-test("document names are sanitized before checking siblings", () => {
+test("display names retain filename characters when the label is free", () => {
   expect(
     String(
       resolveSiblingName({
@@ -127,7 +126,7 @@ test("document names are sanitized before checking siblings", () => {
         siblingNames: new Set(["brief_.md"]),
       }),
     ),
-  ).toBe("brief__1.md");
+  ).toBe("brief?.md");
 });
 
 test("bounded names preserve well formed characters and free suffixes", () => {
@@ -183,19 +182,21 @@ test("long Unicode names remain bounded and free for arbitrary siblings", () => 
       fc.array(longName, { maxLength: 20 }),
       fc.boolean(),
       (rawName, names, occupied) => {
-        const name = sanitizeFilename(rawName);
-        const siblingNames = new Set<string>(names.map(sanitizeFilename));
+        const name = truncateEntityName(rawName, 255);
+        const siblingNames = new Set<string>(
+          names.map((value) => truncateEntityName(value, 255)),
+        );
         if (occupied) {
           siblingNames.add(name);
         }
         const result = String(
-          resolveSiblingName({ name: rawName, kind: "document", siblingNames }),
+          resolveSiblingName({ name, kind: "document", siblingNames }),
         );
         expect(siblingNames.has(result)).toBe(false);
         expect(result.length).toBeLessThanOrEqual(255);
         expect(result.toWellFormed()).toBe(result);
         if (!siblingNames.has(name)) {
-          expect(result).toBe(String(name));
+          expect(result).toBe(name);
         } else {
           expect(result).toMatch(/_[1-9]\d*(?:\.[^.]*)?$/u);
         }
@@ -246,3 +247,23 @@ test("bounded Unicode document and folder names select gaps without moving exten
     ),
   );
 });
+
+test.each(["Client: Smith", "Question?", "a*.docx", ".hidden"])(
+  "copy labels preserve %s before resolving exact display collisions",
+  (name) => {
+    expect(
+      String(
+        resolveSiblingName({ name, kind: "document", siblingNames: new Set() }),
+      ),
+    ).toBe(name);
+    const resolved = resolveSiblingName({
+      name,
+      kind: "document",
+      siblingNames: new Set([name]),
+    });
+    expect(resolved).not.toBe(name);
+    expect(String(resolved)).toContain(
+      name.startsWith(".") ? name : (name.split(".")[0] ?? name),
+    );
+  },
+);

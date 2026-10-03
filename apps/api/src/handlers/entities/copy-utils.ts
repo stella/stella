@@ -14,11 +14,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import type { EntityStamp } from "@/api/lib/document-counter";
 import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
-import type { ResolvedSiblingName } from "@/api/lib/entities/sibling-name";
 import {
   createSiblingNamePlan,
   resolveSiblingNameForInsert,
   type NamedEntityInsert,
+  type ResolvedSiblingNames,
 } from "@/api/lib/entities/sibling-name-insert";
 import {
   lockWorkspacesForEntityCap,
@@ -46,7 +46,6 @@ import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
 import type { S3PresignError } from "@/api/lib/s3-presign";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
   nativeExtractionRunRequestForFields,
   requestNativeExtractionRuns,
@@ -57,6 +56,7 @@ import type {
   SearchIndexOwner,
 } from "@/api/lib/search/process-extraction";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { findExtractionFileFieldRow } from "@/api/lib/search/types";
 
 export type EntityFieldSnapshot = {
   id: SafeId<"field">;
@@ -633,7 +633,7 @@ type CopyEntitiesProps = {
   sourceEntities: WritableEntitySnapshot[];
   /** Stable root identity supplied by a replay-safe same-matter duplicate. */
   targetRootEntityId?: SafeId<"entity"> | undefined;
-  /** Caller-selected name for the root copy; descendants retain their names. */
+  /** Caller-selected root label; descendants resolve against their copied siblings. */
   targetRootName?: string | undefined;
   /** Source workspace ID for audit log (cross-workspace only). */
   sourceWorkspaceId?: SafeId<"workspace">;
@@ -748,7 +748,7 @@ const resolveRootCopyName = async ({
   targetParentId,
   targetRootName,
   targetWorkspaceId,
-}: ResolveRootCopyNameOptions): Promise<ResolvedSiblingName | undefined> =>
+}: ResolveRootCopyNameOptions): Promise<ResolvedSiblingNames | undefined> =>
   rootSource === undefined
     ? undefined
     : await resolveEntityName({
@@ -1189,13 +1189,14 @@ type CopyPlan = CopyRows & { rootEntityId: SafeId<"entity"> };
 type CopyTarget = {
   entityId: SafeId<"entity">;
   parentId: SafeId<"entity"> | null;
-  name: ResolvedSiblingName;
+  name: ResolvedSiblingNames["name"];
+  fileName: ResolvedSiblingNames["fileName"];
 };
 
 type ResolveCopyTargetOptions = {
   scope: CopyScope;
   source: WritableEntitySnapshot;
-  rootCopyName: ResolvedSiblingName | undefined;
+  rootCopyName: ResolvedSiblingNames | undefined;
   targetIdBySourceId: ReadonlyMap<SafeId<"entity">, SafeId<"entity">>;
   resolvePlannedName: Awaited<ReturnType<typeof createSiblingNamePlan>>;
 };
@@ -1216,7 +1217,7 @@ const resolveCopyTarget = ({
     return {
       entityId: targetRootEntityId ?? createSafeId<"entity">(),
       parentId: targetParentId,
-      name: rootCopyName ?? panic("Copy root name was not resolved"),
+      ...(rootCopyName ?? panic("Copy root name was not resolved")),
     };
   }
 
@@ -1229,7 +1230,7 @@ const resolveCopyTarget = ({
   return {
     entityId: createSafeId<"entity">(),
     parentId,
-    name: resolvePlannedName({
+    ...resolvePlannedName({
       name: source.name,
       kind: source.kind,
       parentId,
@@ -1301,16 +1302,13 @@ type AppendFieldRowsOptions = {
  */
 const appendFieldRows = ({
   rows,
-  scope: { sourceEntityId, targetRootName, targetWorkspaceId, fieldMapping },
+  scope: { targetWorkspaceId, fieldMapping },
   source,
   target,
   currentVersion,
   targetVersionIds,
 }: AppendFieldRowsOptions): CopiedFieldInsert[] => {
-  const renamedRootFileFieldId =
-    source.id === sourceEntityId && targetRootName !== undefined
-      ? currentVersion.fields.find(({ content }) => content.type === "file")?.id
-      : undefined;
+  const primaryFile = findExtractionFileFieldRow(currentVersion.fields);
 
   const currentFieldRows: CopiedFieldInsert[] = [];
   for (const version of source.versions) {
@@ -1346,10 +1344,10 @@ const appendFieldRows = ({
       }
 
       const content =
-        field.id === renamedRootFileFieldId && field.content.type === "file"
+        isCurrentVersion && primaryFile !== null && field.id === primaryFile.id
           ? {
-              ...field.content,
-              fileName: sanitizeFilename(target.name),
+              ...primaryFile.content,
+              fileName: target.fileName,
             }
           : field.content;
       const fieldRow = {
@@ -1460,7 +1458,7 @@ type PlanEntityCopiesOptions = {
   scope: CopyScope;
   sourceEntities: WritableEntitySnapshot[];
   documentStamps: EntityStamp[];
-  rootCopyName: ResolvedSiblingName | undefined;
+  rootCopyName: ResolvedSiblingNames | undefined;
 };
 
 /**

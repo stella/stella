@@ -400,12 +400,12 @@ export const createEntityFromBuffer = async ({
           name: requestedFileName,
           kind: "document",
         });
-        fileName = resolvedName;
+        fileName = resolvedName.fileName;
 
         await insertNamedEntity(tx, {
           id: entityId,
           workspaceId,
-          name: resolvedName,
+          name: resolvedName.name,
           parentId: parentId ?? null,
           createdBy: userId,
           docSequence: entityStamp.docSequence,

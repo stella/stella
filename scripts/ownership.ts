@@ -343,7 +343,7 @@ export const OWNERSHIP = [
       "apps/api/src/lib/entities/sibling-name-insert.ts",
     ],
     summary:
-      "The insert owner reads current matter and parent names, reserves pending batch names, and supplies branded names to single and batch inserts. The pure producer is confined to that owner so callers cannot substitute an empty sibling set.",
+      "The insert owner reads current matter and parent names, reserves pending batch names, and supplies a resolved display name plus a derived sanitized file name to single and batch inserts. The existing typed extraction-file selector identifies each current version's primary file; secondary attachment names remain independent. The pure producer is confined to that owner so callers cannot substitute an empty sibling set.",
     enforcement: {
       kind: "import",
       specifiers: ["@/api/lib/entities/sibling-name"],

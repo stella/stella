@@ -7,11 +7,8 @@ import {
   type EntityKind,
 } from "@stll/api-contract";
 
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-
 const resolvedSiblingNameSchema = v.pipe(
   v.string(),
-  v.brand("SanitizedFileName"),
   v.brand("ResolvedSiblingName"),
 );
 
@@ -26,11 +23,10 @@ type ResolveSiblingNameOptions = {
 };
 
 export const resolveSiblingName = ({
-  name: requestedName,
+  name,
   kind,
   siblingNames,
 }: ResolveSiblingNameOptions): ResolvedSiblingName => {
-  const name = sanitizeFilename(requestedName);
   if (!siblingNames.has(name)) {
     return v.parse(resolvedSiblingNameSchema, name);
   }
@@ -47,9 +43,7 @@ export const resolveSiblingName = ({
       base,
       ENTITY_NAME_MAX_LENGTH - suffix.length - boundedExtension.length,
     );
-    const candidate = sanitizeFilename(
-      `${boundedBase}${suffix}${boundedExtension}`,
-    );
+    const candidate = `${boundedBase}${suffix}${boundedExtension}`;
     if (!siblingNames.has(candidate)) {
       return v.parse(resolvedSiblingNameSchema, candidate);
     }

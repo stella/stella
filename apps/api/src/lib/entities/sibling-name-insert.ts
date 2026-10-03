@@ -7,6 +7,22 @@ import {
   resolveSiblingName,
   type ResolvedSiblingName,
 } from "@/api/lib/entities/sibling-name";
+import {
+  sanitizeFilename,
+  type SanitizedFileName,
+} from "@/api/lib/sanitize-filename";
+
+export type ResolvedSiblingNames = {
+  name: ResolvedSiblingName;
+  fileName: SanitizedFileName;
+};
+
+const resolveSiblingNames = (
+  options: Parameters<typeof resolveSiblingName>[0],
+): ResolvedSiblingNames => {
+  const name = resolveSiblingName(options);
+  return { name, fileName: sanitizeFilename(name) };
+};
 
 type SiblingScope = {
   tx: Transaction;
@@ -51,13 +67,13 @@ export const resolveSiblingNameForInsert = async ({
   tx,
   workspaceId,
   parentId,
-}: ResolveSiblingNameForInsertOptions): Promise<ResolvedSiblingName> => {
+}: ResolveSiblingNameForInsertOptions): Promise<ResolvedSiblingNames> => {
   const siblings = await readSiblingNames({
     tx,
     workspaceId,
     scope: { type: "parent", parentId },
   });
-  return resolveSiblingName({
+  return resolveSiblingNames({
     name,
     kind,
     siblingNames: new Set(siblings.map(({ name: sibling }) => sibling)),
@@ -99,8 +115,8 @@ export const createSiblingNamePlan = async ({
       siblingNames = new Set();
       namesByParent.set(parentId, siblingNames);
     }
-    const resolvedName = resolveSiblingName({ name, kind, siblingNames });
-    siblingNames.add(resolvedName);
+    const resolvedName = resolveSiblingNames({ name, kind, siblingNames });
+    siblingNames.add(resolvedName.name);
     return resolvedName;
   };
 };

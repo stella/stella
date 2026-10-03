@@ -411,7 +411,7 @@ const createDirectoryRows = async ({
       workspaceId,
       kind: "folder",
       parentId,
-      name: resolvedName,
+      name: resolvedName.name,
       createdBy: userId,
     });
     currentVersions.push({ entityId, versionId: entityVersionId });
@@ -425,7 +425,7 @@ const createDirectoryRows = async ({
           old: null,
           new: {
             kind: "folder",
-            name: resolvedName,
+            name: resolvedName.name,
             parentId,
           },
         },

@@ -100,7 +100,11 @@ export const resolveEntityCreateFileName = async ({
     name,
     kind: "document",
   });
-  return { renamed: value !== name, value };
+  return {
+    renamed: String(value.name) !== name,
+    value: value.fileName,
+    name: value.name,
+  };
 };
 
 export type ValidateEntityCreateProps = {
@@ -608,7 +612,7 @@ export const finalizeEntityCreate = async function* ({
       id: entityId,
       workspaceId,
       parentId,
-      name: renamed.value,
+      name: renamed.name,
       createdBy: userId,
       docSequence: entityStamp.docSequence,
     });

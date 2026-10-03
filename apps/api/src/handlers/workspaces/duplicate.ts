@@ -72,6 +72,7 @@ import {
   enqueueEntitySearchRepairs,
   enqueueWorkspaceSearchRepairs,
 } from "@/api/lib/search/projection-repair-queue";
+import { findExtractionFileFieldRow } from "@/api/lib/search/types";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { portableLayout } from "@/api/lib/views/utils";
@@ -839,16 +840,20 @@ export const createDuplicateWorkspace = (
               ? (entityIdMap.get(source.parentId) ?? null)
               : null;
 
+            const resolvedName = resolvePlannedName({
+              parentId: newParentId,
+              name: source.name,
+              kind: source.kind,
+            });
+            const primaryFile = findExtractionFileFieldRow(
+              source.currentVersion.fields,
+            );
             entityRows.push({
               id: newEntityId,
               workspaceId: targetWorkspaceId,
               kind: source.kind,
               parentId: newParentId,
-              name: resolvePlannedName({
-                parentId: newParentId,
-                name: source.name,
-                kind: source.kind,
-              }),
+              name: resolvedName.name,
               createdBy: user.id,
               lastEditedBy: user.id,
               docSequence: entityStamp?.docSequence ?? null,
@@ -904,7 +909,15 @@ export const createDuplicateWorkspace = (
                   workspaceId: targetWorkspaceId,
                   propertyId,
                   entityVersionId: newVersionId,
-                  content: remapFieldContent(field.content, fileIdMap),
+                  content: remapFieldContent(
+                    primaryFile !== null && field === primaryFile
+                      ? {
+                          ...primaryFile.content,
+                          fileName: resolvedName.fileName,
+                        }
+                      : field.content,
+                    fileIdMap,
+                  ),
                 },
               ];
             });
