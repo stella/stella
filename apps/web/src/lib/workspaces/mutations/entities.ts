@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { useTranslations } from "use-intl";
 import type { StoreApi } from "zustand";
 
@@ -190,7 +190,7 @@ export const useRenameEntity = (
       });
       if (optimistic.isErr()) {
         release();
-        throw optimistic.error;
+        panic("Inspector optimistic rename failed", optimistic.error);
       }
       return optimistic.value;
     },

@@ -888,6 +888,7 @@ export const createInspectorTabsSlice = (
       }
       tab.label = label;
       tab.fileName = fileName;
+      normalizeFileTabFacet(tab);
     }),
 
   updateLabel: (tabId, label) =>

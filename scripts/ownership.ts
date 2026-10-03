@@ -206,7 +206,7 @@ export const ROOT_CONNECTION_DOORS = [
         "apps/api/src/handlers/entities/copy.ts",
         "apps/api/src/handlers/entities/create.ts",
         "apps/api/src/handlers/entities/duplicate.ts",
-        "apps/api/src/handlers/entities/rename.ts",
+        "apps/api/src/handlers/entities/rename-operation.ts",
         "apps/api/src/handlers/entities/versions/delete.ts",
         "apps/api/src/handlers/fields/kanban-placement/update.ts",
         "apps/api/src/handlers/fields/upsert.ts",

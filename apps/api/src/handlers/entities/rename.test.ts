@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
-import { createRenameEntityHandler } from "@/api/handlers/entities/rename";
+import { createRenameEntityHandler } from "@/api/handlers/entities/rename-operation";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -114,11 +114,15 @@ test("returns the same file metadata it commits without replacing field identity
   expect(entity?.name).toBe(result.value.name);
   expect(entity?.currentVersionId).toBe(before?.currentVersionId);
   expect(file?.id).toBe(result.value.file?.fieldId);
+  const beforeContent = before?.currentVersion?.fields.find(
+    (field) => field.content.type === "file",
+  )?.content;
+  if (beforeContent?.type !== "file" || !result.value.file) {
+    panic("Fixture rename must include file metadata");
+  }
   expect(file?.content).toEqual({
-    ...before?.currentVersion?.fields.find(
-      (field) => field.content.type === "file",
-    )?.content,
-    fileName: result.value.file?.fileName,
+    ...beforeContent,
+    fileName: result.value.file.fileName,
   });
   expect(enqueue).toHaveBeenCalledTimes(1);
   expect(flush).toHaveBeenCalledWith([fixture.ids.entityA1]);
