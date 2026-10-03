@@ -28,13 +28,13 @@ import { processDocumentReviewRun } from "@/api/lib/document-review/run-queue";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   createRootMembershipScopedDb,
-  createRootScopedDb,
+  createRootRunActor,
 } from "@/api/lib/root-scoped-db";
+import { brandPersistedDocumentReviewRunId } from "@/api/lib/safe-id-boundaries";
 import * as modelTransport from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -44,10 +44,6 @@ const { testDb, ids } = await getRlsFixture();
 const database = asTestRaw<RlsDatabase<Transaction>>(testDb);
 const scope = { organizationId: ids.orgA, userId: ids.userA1 };
 const inputDb = createRootMembershipScopedDb(scope, database);
-const scopedDb = createRootScopedDb(
-  { ...scope, workspaceIds: [ids.wsA1] },
-  database,
-);
 const runId = createSafeId<"documentReviewRun">();
 const originalField = await testDb.query.fields.findFirst({
   where: { id: { eq: ids.fieldA2 } },
@@ -106,14 +102,11 @@ const basis = {
   perspective: NEUTRAL_PERSPECTIVE,
 } satisfies DocumentReviewRunBasis;
 
-const actor = {
-  ...scope,
-  runId,
-  workspaceId: ids.wsA1,
-  scopedDb,
-  inputDb,
-  safeDb: toSafeDbMock(scopedDb),
-};
+const actor = createRootRunActor(
+  { ...scope, runId, workspaceId: ids.wsA1 },
+  brandPersistedDocumentReviewRunId,
+  database,
+);
 
 const preparationSpy = spyOn(preparation, "fetchAndPrepareReviewFiles");
 const modelSpy = spyOn(modelTransport, "generateTanStackTextForRole");
