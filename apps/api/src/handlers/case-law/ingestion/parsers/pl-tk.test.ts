@@ -457,10 +457,10 @@ test("excludes script and style from ruling metadata", () => {
   );
   expect(ruling?.textHtml).toBe("<p>Visible decision</p>");
   expect(ruling?.subject).toBe("Visible subject");
-  expect(ruling?.publications).toEqual([
-    {
-      text: "Dz.U. 2026",
-      links: [{ text: "ISAP", url: "https://example.org/" }],
-    },
-  ]);
+  expect(ruling?.publications).toHaveLength(1);
+  const publication = ruling?.publications.at(0);
+  expect(publication?.text).toBe("Dz.U. 2026");
+  expect(publication?.links).toHaveLength(1);
+  expect(publication?.links.at(0)?.text).toBe("ISAP");
+  expect(publication?.links.at(0)?.url).toBe("https://example.org/");
 });

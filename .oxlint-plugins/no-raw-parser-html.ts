@@ -1,5 +1,5 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import type { Variable } from "@oxlint/plugins";
+import type { ESTree, Variable } from "@oxlint/plugins";
 
 import type { AstNode, ScopeContext } from "./utils.ts";
 import {
@@ -134,7 +134,7 @@ class ParserHtmlProvenance {
     this.context = context;
   }
 
-  readProgram(node: AstNode): void {
+  readProgram(node: ESTree.Program): void {
     this.typeNames.clear();
     this.namespaces.clear();
     this.programNodes = everyNode(node);
@@ -150,7 +150,7 @@ class ParserHtmlProvenance {
           !Array.isArray(load.arguments) ||
           !this.isXmlOptions(load.arguments.at(1)),
       );
-    for (const statement of Array.isArray(node.body) ? node.body : []) {
+    for (const statement of node.body) {
       if (
         statement.type !== "ImportDeclaration" ||
         staticStringValue(statement.source) !== "cheerio"
@@ -252,7 +252,10 @@ class ParserHtmlProvenance {
     }
     const variable = resolveVariable(this.context, object);
     const initializer = variable === null ? null : stableInitializer(variable);
-    if (initializer?.type !== "ObjectExpression") {
+    if (
+      initializer?.type !== "ObjectExpression" ||
+      !Array.isArray(initializer.properties)
+    ) {
       return null;
     }
     const writesMember = this.programNodes.some((candidate) => {
