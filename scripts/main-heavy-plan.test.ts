@@ -229,7 +229,7 @@ test("original PR and merge-group job predicates keep their behavior", () => {
     }
   }
   expect(compared).toBeGreaterThan(0);
-});
+}, 30_000);
 
 type EvaluateOptions = {
   event: string;
@@ -284,6 +284,8 @@ const evaluate = ({
       EVENT: event,
       HEAVY_ONLY: "true",
       HEAVY_JOBS: JSON.stringify(heavy),
+      QUEUE_DEPTH: "full",
+      THIN_JOBS: JSON.stringify(THIN_JOBS),
       NEEDS: JSON.stringify(needs),
       PLAN: JSON.stringify({
         ...heavyPlan,

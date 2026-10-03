@@ -42,6 +42,7 @@ import {
   EMPTY_CORPUS_CONTENT_HASHES,
 } from "@/api/lib/legal-search/corpus-storage";
 import {
+  claimDocumentFetch,
   markDocumentUnavailable,
   pendingDocumentPredicate,
   storeBackfilledDocument,
@@ -172,19 +173,14 @@ if (!databaseUrl || !runPostgresTests) {
       return row.id;
     };
 
-    const decisionFor = (
-      id: SafeId<"caseLawDecision">,
-      caseNumber: string,
-    ) => ({
-      id,
-      caseNumber,
-      ecli: null,
-      court: "Okresný súd",
-      country: "SVK",
-      decisionDate: null,
-      decisionType: null,
-      documentUrl: "https://example.test/corpus.pdf",
-    });
+    const claimFor = async (id: SafeId<"caseLawDecision">) => {
+      const claim = await claimDocumentFetch(id, scopedDb);
+      expect(claim.status).toBe("claimed");
+      if (claim.status !== "claimed") {
+        throw new Error("expected claimed snapshot");
+      }
+      return claim.decision;
+    };
 
     const parsedDocument = {
       fulltext: "Rozsudok\n\nOdôvodnenie:\n\nText.",
@@ -246,7 +242,7 @@ if (!databaseUrl || !runPostgresTests) {
       const hashesDuringWrite: (string | null)[] = [];
 
       await storeBackfilledDocument({
-        decision: decisionFor(id, caseNumber),
+        decision: await claimFor(id),
         document: parsedDocument,
         scopedDb,
         transfer: {
@@ -315,7 +311,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       await storeBackfilledDocument({
-        decision: decisionFor(id, caseNumber),
+        decision: await claimFor(id),
         document: parsedDocument,
         scopedDb,
         transfer: null,
@@ -347,7 +343,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       await storeBackfilledDocument({
-        decision: decisionFor(id, caseNumber),
+        decision: await claimFor(id),
         document: parsedDocument,
         scopedDb,
         transfer: landingTransfer,
@@ -390,7 +386,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       const outcome = await storeBackfilledDocument({
-        decision: decisionFor(id, caseNumber),
+        decision: await claimFor(id),
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
@@ -440,8 +436,10 @@ if (!databaseUrl || !runPostgresTests) {
         mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
       });
 
+      const decision = await claimFor(id);
+
       await storeBackfilledDocument({
-        decision: decisionFor(id, caseNumber),
+        decision,
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
@@ -450,9 +448,7 @@ if (!databaseUrl || !runPostgresTests) {
 
       // The attempt that was overtaken, finishing with nothing to store.
       await markDocumentUnavailable({
-        // The fixture rows carry no source hash.
-        claimedSourceHash: null,
-        decisionId: id,
+        decision,
         scopedDb,
       });
 
@@ -486,9 +482,10 @@ if (!databaseUrl || !runPostgresTests) {
         caseNumber,
         mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
       });
+      const decision = await claimFor(id);
       const store = async () =>
         await storeBackfilledDocument({
-          decision: decisionFor(id, caseNumber),
+          decision,
           document: parsedDocument,
           mode: "canonical",
           scopedDb,
@@ -525,7 +522,7 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await stillPending()).toBe(true);
 
       await storeBackfilledDocument({
-        decision: decisionFor(id, caseNumber),
+        decision: await claimFor(id),
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
@@ -543,7 +540,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       await storeBackfilledDocument({
-        decision: decisionFor(id, caseNumber),
+        decision: await claimFor(id),
         document: parsedDocument,
         mode: "dual-write",
         scopedDb,
@@ -575,7 +572,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       await storeBackfilledDocument({
-        decision: decisionFor(id, caseNumber),
+        decision: await claimFor(id),
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
@@ -607,7 +604,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       const outcome = await storeBackfilledDocument({
-        decision: decisionFor(id, caseNumber),
+        decision: await claimFor(id),
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
@@ -687,10 +684,15 @@ if (!databaseUrl || !runPostgresTests) {
     test("deferred backfill cannot restore a redacted decision", async () => {
       const caseNumber = `corpus-redacted-backfill-${suffix}`;
       const redactedAt = new Date("2026-07-31T12:00:00.000Z");
-      const id = await insertDecision({ caseNumber, redactedAt });
+      const id = await insertDecision({ caseNumber });
+      const decision = await claimFor(id);
+      await db
+        .update(caseLawDecisions)
+        .set({ redactedAt })
+        .where(eq(caseLawDecisions.id, id));
 
       const outcome = await storeBackfilledDocument({
-        decision: decisionFor(id, caseNumber),
+        decision,
         document: parsedDocument,
         scopedDb,
         transfer: null,

@@ -236,6 +236,56 @@ test("the measured base overrides stale headroom and explicit merge-group bases"
   });
 }, 30_000);
 
+test("--head measures a commit as data with that commit's allowances", () => {
+  withClone((root) => {
+    const base = git(root, "rev-parse", "HEAD");
+    git(root, "checkout", "-b", "raise");
+    write({ root, relative: FIRST, contents: casts(3) });
+    // The head's own checker would pass anything; only the base's may run.
+    write({
+      root,
+      relative: "scripts/ratchet.ts",
+      contents: "process.exit(0);\n",
+    });
+    commit(root, "raise with a permissive checker");
+    const raised = git(root, "rev-parse", "HEAD");
+    git(root, "checkout", "--quiet", base);
+    const headCheck = (head: string) =>
+      run(root, [
+        process.execPath,
+        "scripts/ratchet.ts",
+        "--check",
+        "--base",
+        base,
+        "--head",
+        head,
+      ]);
+    const rejected = headCheck(raised);
+    expect(rejected.code, rejected.output).toBe(1);
+    expect(rejected.output).toContain("as-casts: 6 -> 7");
+    const hint =
+      /Add (scripts\/ratchet-allowances\/\S+\.json) so added deltas total exactly 1: (\{.*\})$/mu.exec(
+        rejected.output,
+      );
+    const [, allowancePath, allowance] = hint ?? [];
+    if (allowancePath === undefined || allowance === undefined) {
+      throw new Error(`no allowance hint in: ${rejected.output}`);
+    }
+    // An allowance in the worktree funds nothing; the head's commit decides.
+    write({ root, relative: allowancePath, contents: `${allowance}\n` });
+    expect(headCheck(raised).code).toBe(1);
+    rmSync(path.join(root, allowancePath));
+    git(root, "checkout", "--quiet", "raise");
+    write({ root, relative: allowancePath, contents: `${allowance}\n` });
+    commit(root, "fund the increase");
+    const funded = git(root, "rev-parse", "HEAD");
+    git(root, "checkout", "--quiet", base);
+    const accepted = headCheck(funded);
+    expect(accepted.code, accepted.output).toBe(0);
+    expect(accepted.output).toContain("ratchet --check: OK");
+  });
+}, 30_000);
+
 test("a counter cannot supply an inflated total detached from its files", () => {
   expect(() =>
     scanAll(ROOT, {

@@ -68,6 +68,7 @@ if (import.meta.main) {
   if (!source) {
     panic("Expected workflow path");
   }
+  console.log(`thin_jobs=${JSON.stringify(THIN_JOBS)}`);
   console.log(
     `heavy_jobs=${JSON.stringify(mainHeavyJobs(Bun.YAML.parse(readFileSync(source, "utf-8"))))}`,
   );
