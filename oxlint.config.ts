@@ -1240,6 +1240,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-adhoc-loader.ts",
     "./.oxlint-plugins/no-shared-suspense-query.ts",
     "./.oxlint-plugins/no-bare-chrome-query.ts",
+    "./.oxlint-plugins/query-data-requires-state.ts",
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
@@ -1858,6 +1859,14 @@ export default defineConfig({
       files: [".oxlint-plugins/__fixtures__/no-bare-chrome-query.fixture.tsx"],
       rules: {
         "no-bare-chrome-query/no-bare-chrome-query": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/query-data-requires-state.fixture.tsx",
+      ],
+      rules: {
+        "query-data-requires-state/query-data-requires-state": "error",
       },
     },
     {
@@ -3420,6 +3429,12 @@ export default defineConfig({
       ],
       rules: {
         "no-shared-suspense-query/no-shared-suspense-query": "error",
+      },
+    },
+    {
+      files: ["apps/web/src/**"],
+      rules: {
+        "query-data-requires-state/query-data-requires-state": "error",
       },
     },
     {

@@ -1677,6 +1677,14 @@ jobs:
           bun test scripts/design-lint-baseline.test.ts scripts/oxlint-config-inputs.test.ts
           bun scripts/design-lint-baseline.ts --check
 
+      - name: Query data state baseline
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        run: |
+          bun test scripts/query-data-state-baseline.test.ts
+          bun run check:query-data-state
+
       - name: SQL performance baseline
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         env:

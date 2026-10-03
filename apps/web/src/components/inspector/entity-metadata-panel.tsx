@@ -12,7 +12,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
@@ -29,6 +29,7 @@ import { UserIdentity } from "@/components/user-avatar";
 import { CreateProperty } from "@/components/workspaces/create-property";
 import { EditableField } from "@/components/workspaces/editable-field";
 import { Justification } from "@/components/workspaces/justification";
+import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -164,7 +165,20 @@ const EntityMetadataContent = ({
 }: EntityMetadataContentProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
+  const workflowView = useIsWorkflowRunning(workspaceId);
+  let knownWorkflowRunning: boolean | null = null;
+  switch (workflowView.type) {
+    case "pending":
+    case "error":
+    case "empty":
+      break;
+    case "items":
+      knownWorkflowRunning = workflowView.items;
+      break;
+    default:
+      workflowView satisfies never;
+      panic("Unhandled workflow query state");
+  }
   const sawWorkflowRunning = useRef(false);
   const propertiesQuery = useQuery(propertiesOptions(workspaceId));
   const properties = propertiesQuery.data ?? EMPTY_PROPERTIES;
@@ -216,7 +230,10 @@ const EntityMetadataContent = ({
   }, [queryClient, workspaceId]);
 
   useExternalSyncEffect(() => {
-    if (isWorkflowRunning) {
+    if (knownWorkflowRunning === null) {
+      return;
+    }
+    if (knownWorkflowRunning) {
       sawWorkflowRunning.current = true;
       return;
     }
@@ -230,7 +247,7 @@ const EntityMetadataContent = ({
       refreshEntityFields(),
       "entity-metadata-panel.refresh-entity-fields",
     );
-  }, [isWorkflowRunning, refreshEntityFields]);
+  }, [knownWorkflowRunning, refreshEntityFields]);
 
   const entityFieldPropertyIds = new Set(
     entity.fields.map((field) => field.propertyId),
@@ -500,6 +517,7 @@ const EntityMetadataContent = ({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <WorkflowQueryFeedback view={workflowView} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <SectionHeading>{t("inspector.metadata.stellaHeading")}</SectionHeading>
         <div className="flex flex-col gap-px px-2 pb-2">
