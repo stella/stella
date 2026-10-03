@@ -129,7 +129,7 @@ describe("upstream metadata binding", () => {
           new URL(tokenEndpoint).origin,
         );
         expect(endpointsRequiringConfirmation(review.value)).toEqual(
-          tokenEndpoint.includes("example.net")
+          new URL(tokenEndpoint).hostname === "tokens.example.net"
             ? ["https://tokens.example.net"]
             : [],
         );
