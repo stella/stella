@@ -8,7 +8,7 @@ import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry } from "@stll/sanctions";
 
 import { member } from "@/api/db/auth-schema";
-import type { ScopedDb } from "@/api/db/safe-db";
+import { rlsDb } from "@/api/db/root";
 import {
   auditLogs,
   contacts,
@@ -44,7 +44,6 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(120_000);
@@ -130,7 +129,11 @@ const dispatch = async ({
     return {
       ok: response.ok,
       status: response.status,
-      payload: await response.json(),
+      payload: response.headers
+        .get("content-type")
+        ?.includes("application/json")
+        ? await response.json()
+        : await response.text(),
     };
   }
   const session = await getAuth().api.getSession({
@@ -369,13 +372,11 @@ test("contact monitoring endpoint and capability perform the requested transitio
           })
           .returning()
       ).at(0) ?? panic("Contact fixture missing");
-    const scopedDb = asTestRaw<ScopedDb>(
-      createMembershipScopedDb(db, {
-        organizationId,
-        userId: toSafeId<"user">(browser.userId),
-        serverValidatedWorkspaceIds: [],
-      }),
-    );
+    const scopedDb = createMembershipScopedDb(rlsDb, {
+      organizationId,
+      userId: toSafeId<"user">(browser.userId),
+      serverValidatedWorkspaceIds: [],
+    });
     const drain = async () =>
       await drainSanctionsContactMarks({
         db: scopedDb,
