@@ -336,6 +336,22 @@ const MODEL_REQUEST_NAMES = [
 
 export const OWNERSHIP = [
   {
+    id: "entity-sibling-naming",
+    capability: "Resolving names for new sibling entities",
+    owner: [
+      "apps/api/src/lib/entities/sibling-name.ts",
+      "apps/api/src/lib/entities/sibling-name-insert.ts",
+    ],
+    summary:
+      "The insert owner reads current matter and parent names, reserves pending batch names, and supplies branded names to single and batch inserts. The pure producer is confined to that owner so callers cannot substitute an empty sibling set.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/entities/sibling-name"],
+      names: ["resolveSiblingName"],
+      allowed: [],
+    },
+  },
+  {
     id: "api-test-memory-planner",
     capability: "Measured API test memory and batch composition",
     owner: ["apps/api/scripts/test-batch-plan.ts"],

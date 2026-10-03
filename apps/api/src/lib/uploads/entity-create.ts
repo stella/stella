@@ -19,9 +19,8 @@
  *   + extraction enqueues.
  */
 import { Result, panic } from "better-result";
-import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, ne, or, sql } from "drizzle-orm";
 
-import { jsonField } from "@/api/db/json-utils";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import type {
@@ -30,7 +29,6 @@ import type {
 } from "@/api/db/schema";
 import {
   entities,
-  entityVersions,
   fields,
   pendingUploads,
   properties,
@@ -44,7 +42,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
-import { resolveSiblingName } from "@/api/lib/entities/sibling-name";
+import {
+  insertNamedEntity,
+  resolveSiblingNameForInsert,
+} from "@/api/lib/entities/sibling-name-insert";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -82,7 +83,6 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 type ResolveFileNameProps = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
-  propertyId: SafeId<"property">;
   parentId: SafeId<"entity"> | null;
   name: SanitizedFileName;
 };
@@ -90,39 +90,17 @@ type ResolveFileNameProps = {
 export const resolveEntityCreateFileName = async ({
   tx,
   workspaceId,
-  propertyId,
   parentId,
   name,
 }: ResolveFileNameProps) => {
-  const siblingParentFilter =
-    parentId === null
-      ? isNull(entities.parentId)
-      : eq(entities.parentId, parentId);
-
-  const siblings = await tx
-    .select({ name: jsonField(fields.content, "v1")("fileName") })
-    .from(fields)
-    .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
-    .innerJoin(
-      entities,
-      and(
-        eq(entityVersions.entityId, entities.id),
-        eq(entities.currentVersionId, entityVersions.id),
-      ),
-    )
-    .where(
-      and(
-        eq(fields.workspaceId, workspaceId),
-        eq(fields.propertyId, propertyId),
-        eq(entities.workspaceId, workspaceId),
-        siblingParentFilter,
-      ),
-    );
-  const value = resolveSiblingName({
+  const value = await resolveSiblingNameForInsert({
+    tx,
+    workspaceId,
+    parentId,
     name,
-    siblingNames: new Set(siblings.map(({ name: sibling }) => sibling)),
+    kind: "document",
   });
-  return { renamed: value !== name, value: sanitizeFilename(value) };
+  return { renamed: value !== name, value };
 };
 
 export type ValidateEntityCreateProps = {
@@ -620,14 +598,13 @@ export const finalizeEntityCreate = async function* ({
     const renamed = await resolveEntityCreateFileName({
       tx,
       workspaceId,
-      propertyId: targetResult.value.propertyId,
       parentId,
       name: sanitizedName,
     });
 
     const entityStamp = await allocateEntityStamp(tx, workspaceId);
 
-    await tx.insert(entities).values({
+    await insertNamedEntity(tx, {
       id: entityId,
       workspaceId,
       parentId,

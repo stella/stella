@@ -37,6 +37,7 @@ import { getGeneratedDocumentDraftState } from "@/api/lib/chat/created-draft";
 import { expandThreadDataScopeOnTx } from "@/api/lib/chat/data-scope";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { insertNamedEntity } from "@/api/lib/entities/sibling-name-insert";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -1006,13 +1007,12 @@ const uploadEntityHandler = async function* ({
           tx,
           workspaceId,
           parentId: null,
-          propertyId,
           name,
         });
 
         const entityStamp = await allocateEntityStamp(tx, workspaceId);
 
-        await tx.insert(entities).values({
+        await insertNamedEntity(tx, {
           id: entityId,
           workspaceId,
           name: resolvedName.value,

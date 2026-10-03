@@ -1,6 +1,17 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
+import { sql, TransactionRollbackError } from "drizzle-orm";
 
+import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -9,20 +20,28 @@ import {
   entities,
   entityVersions,
   fields,
+  workspaces,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createSiblingNamePlan } from "@/api/lib/entities/sibling-name-insert";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
+import type {
+  TestDatabase,
+  TestDatabaseTransaction,
+} from "@/api/tests/security/test-utils";
 
 import { copyFileObject, resolveEntityName } from "./copy-utils";
 import { createDuplicateEntity } from "./duplicate";
@@ -237,56 +256,306 @@ const createContext = ({
 };
 
 describe("duplicate name collisions", () => {
-  test("reserves room for the collision suffix and extension", async () => {
-    const requestedName = `${"a".repeat(250)}.docx`;
-    const firstCollisionName = `${"a".repeat(248)}_1.docx`;
-    const tx = {
-      select: () => ({
-        from: () => ({
-          where: async () => [
-            { name: requestedName },
-            { name: firstCollisionName },
-          ],
-        }),
-      }),
-    };
+  let nameDb: TestDatabase;
 
-    const resolved = await resolveEntityName({
-      tx: asTestRaw<Transaction>(tx),
-      workspaceId,
-      parentId: null,
-      name: requestedName,
-    });
+  beforeAll(
+    async () => {
+      nameDb = await getTestDb();
+    },
+    { timeout: 30_000 },
+  );
 
-    expect(resolved).toBe(`${"a".repeat(248)}_2.docx`);
-    expect(resolved).toHaveLength(255);
+  afterAll(async () => {
+    await releaseTestDb();
   });
 
-  test("detects collisions after truncating an oversized extension", async () => {
-    const extension = `.${"x".repeat(253)}`;
-    const requestedName = `a${extension}`;
-    const boundedExtension = extension.slice(0, 253);
-    const firstCollisionName = `_1${boundedExtension}`;
-    const tx = {
-      select: () => ({
-        from: () => ({
-          where: async () => [
-            { name: requestedName },
-            { name: firstCollisionName },
-          ],
+  const withNameTransaction = async (
+    check: (tx: TestDatabaseTransaction) => Promise<void>,
+  ) => {
+    const result = await Result.tryPromise({
+      try: async () =>
+        await nameDb.transaction(async (tx) => {
+          await tx.execute(sql.raw("RESET ROLE"));
+          await check(tx);
+          return tx.rollback();
         }),
-      }),
-    };
-
-    const resolved = await resolveEntityName({
-      tx: asTestRaw<Transaction>(tx),
-      workspaceId,
-      parentId: null,
-      name: requestedName,
+      catch: (error) => error,
     });
+    if (Result.isOk(result)) {
+      throw new TypeError("Expected the name fixture transaction to roll back");
+    }
+    if (!(result.error instanceof TransactionRollbackError)) {
+      throw result.error;
+    }
+  };
 
-    expect(resolved).toBe(`_2${boundedExtension}`);
-    expect(resolved).toHaveLength(255);
+  const seedNameScope = async (tx: TestDatabaseTransaction) => {
+    const seededOrganizationId = mintAuthProviderId<"organization">();
+    const targetWorkspaceId = toSafeId<"workspace">(Bun.randomUUIDv7());
+    const otherWorkspaceId = toSafeId<"workspace">(Bun.randomUUIDv7());
+    const targetParentId = toSafeId<"entity">(Bun.randomUUIDv7());
+    const otherParentId = toSafeId<"entity">(Bun.randomUUIDv7());
+    await tx.insert(organization).values({
+      id: seededOrganizationId,
+      name: "Copy name test",
+      slug: `copy-name-${Bun.randomUUIDv7()}`,
+      createdAt: new Date(),
+    });
+    await tx.insert(workspaces).values([
+      {
+        id: targetWorkspaceId,
+        organizationId: seededOrganizationId,
+        name: "Target matter",
+        reference: "copy-target",
+      },
+      {
+        id: otherWorkspaceId,
+        organizationId: seededOrganizationId,
+        name: "Other matter",
+        reference: "copy-other",
+      },
+    ]);
+    await tx.insert(entities).values([
+      {
+        id: targetParentId,
+        workspaceId: targetWorkspaceId,
+        name: "Target folder",
+        kind: "folder",
+      },
+      {
+        id: otherParentId,
+        workspaceId: targetWorkspaceId,
+        name: "Other folder",
+        kind: "folder",
+      },
+    ]);
+    return {
+      targetWorkspaceId,
+      otherWorkspaceId,
+      targetParentId,
+      otherParentId,
+    };
+  };
+
+  test("keeps free names across parent and matter boundaries", async () => {
+    await withNameTransaction(async (tx) => {
+      const scope = await seedNameScope(tx);
+      await tx.insert(entities).values([
+        {
+          workspaceId: scope.targetWorkspaceId,
+          parentId: scope.otherParentId,
+          name: "contract.md",
+        },
+        {
+          workspaceId: scope.otherWorkspaceId,
+          parentId: null,
+          name: "contract.md",
+        },
+        {
+          workspaceId: scope.otherWorkspaceId,
+          parentId: scope.targetParentId,
+          name: "contract.md",
+        },
+        {
+          workspaceId: scope.targetWorkspaceId,
+          parentId: scope.targetParentId,
+          name: "contract_final.md",
+        },
+        {
+          workspaceId: scope.targetWorkspaceId,
+          parentId: null,
+          name: "contract_final.md",
+        },
+      ]);
+      for (const parentId of [null, scope.targetParentId]) {
+        const resolved = await resolveEntityName({
+          tx: asTestRaw<Transaction>(tx),
+          workspaceId: scope.targetWorkspaceId,
+          parentId,
+          name: "contract.md",
+          kind: "document",
+        });
+        expect(String(resolved)).toBe("contract.md");
+      }
+    });
+  });
+
+  test("uses the lowest free copy suffix among all sibling kinds", async () => {
+    await withNameTransaction(async (tx) => {
+      const scope = await seedNameScope(tx);
+      await tx.insert(entities).values([
+        {
+          workspaceId: scope.targetWorkspaceId,
+          parentId: scope.targetParentId,
+          name: "contract.md",
+          kind: "folder",
+        },
+        {
+          workspaceId: scope.targetWorkspaceId,
+          parentId: scope.targetParentId,
+          name: "contract_2.md",
+          kind: "task",
+        },
+        {
+          workspaceId: scope.targetWorkspaceId,
+          parentId: scope.otherParentId,
+          name: "contract_1.md",
+        },
+        {
+          workspaceId: scope.otherWorkspaceId,
+          parentId: scope.targetParentId,
+          name: "contract_1.md",
+        },
+      ]);
+      const resolved = await resolveEntityName({
+        tx: asTestRaw<Transaction>(tx),
+        workspaceId: scope.targetWorkspaceId,
+        parentId: scope.targetParentId,
+        name: "contract.md",
+        kind: "document",
+      });
+      expect(String(resolved)).toBe("contract_1.md");
+    });
+  });
+
+  test("retains numeric names when copying", async () => {
+    await withNameTransaction(async (tx) => {
+      const scope = await seedNameScope(tx);
+      await tx.insert(entities).values([
+        { workspaceId: scope.targetWorkspaceId, name: "report_2024.docx" },
+        { workspaceId: scope.targetWorkspaceId, name: "x_1", kind: "folder" },
+      ]);
+      const cases = [
+        {
+          name: "report_2024.docx",
+          kind: "document",
+          expected: "report_2024_1.docx",
+        },
+        { name: "x_1", kind: "folder", expected: "x_1_1" },
+      ] as const;
+      for (const { name, kind, expected } of cases) {
+        const resolved = await resolveEntityName({
+          tx: asTestRaw<Transaction>(tx),
+          workspaceId: scope.targetWorkspaceId,
+          parentId: null,
+          name,
+          kind,
+        });
+        expect(String(resolved)).toBe(expected);
+      }
+    });
+  });
+
+  test("appends the copy suffix after a dotted folder name", async () => {
+    await withNameTransaction(async (tx) => {
+      const scope = await seedNameScope(tx);
+      await tx.insert(entities).values({
+        workspaceId: scope.targetWorkspaceId,
+        name: "v1.2",
+        kind: "folder",
+      });
+      const resolved = await resolveEntityName({
+        tx: asTestRaw<Transaction>(tx),
+        workspaceId: scope.targetWorkspaceId,
+        parentId: null,
+        name: "v1.2",
+        kind: "folder",
+      });
+      expect(String(resolved)).toBe("v1.2_1");
+    });
+  });
+
+  test("copy batches reserve sanitized names within each target parent", async () => {
+    await withNameTransaction(async (tx) => {
+      const scope = await seedNameScope(tx);
+      await tx.insert(entities).values([
+        {
+          workspaceId: scope.targetWorkspaceId,
+          parentId: scope.targetParentId,
+          name: "a_.docx",
+        },
+        {
+          workspaceId: scope.targetWorkspaceId,
+          parentId: scope.targetParentId,
+          name: "a__2.docx",
+        },
+        {
+          workspaceId: scope.otherWorkspaceId,
+          parentId: scope.otherParentId,
+          name: "a_.docx",
+        },
+      ]);
+      const resolvePlannedName = await createSiblingNamePlan({
+        tx: asTestRaw<Transaction>(tx),
+        workspaceId: scope.targetWorkspaceId,
+      });
+      const [first, second] = await Promise.all([
+        resolvePlannedName({
+          parentId: scope.targetParentId,
+          name: "a?.docx",
+          kind: "document",
+        }),
+        resolvePlannedName({
+          parentId: scope.targetParentId,
+          name: "a*.docx",
+          kind: "document",
+        }),
+      ]);
+      const otherParent = resolvePlannedName({
+        parentId: scope.otherParentId,
+        name: "a*.docx",
+        kind: "document",
+      });
+      const otherParentPending = resolvePlannedName({
+        parentId: scope.otherParentId,
+        name: "a?.docx",
+        kind: "document",
+      });
+      expect([
+        String(first),
+        String(second),
+        String(otherParent),
+        String(otherParentPending),
+      ]).toEqual(["a__1.docx", "a__3.docx", "a_.docx", "a__1.docx"]);
+    });
+  });
+
+  test("reserves room for suffixes and finds truncated-extension collisions", async () => {
+    await withNameTransaction(async (tx) => {
+      const scope = await seedNameScope(tx);
+      const extension = `.${"x".repeat(253)}`;
+      const boundedExtension = extension.slice(0, 253);
+      await tx.insert(entities).values([
+        {
+          workspaceId: scope.targetWorkspaceId,
+          name: `${"a".repeat(250)}.docx`,
+        },
+        {
+          workspaceId: scope.targetWorkspaceId,
+          name: `${"a".repeat(248)}_1.docx`,
+        },
+        { workspaceId: scope.targetWorkspaceId, name: `a${extension}` },
+        { workspaceId: scope.targetWorkspaceId, name: `_1${boundedExtension}` },
+      ]);
+      const cases = [
+        {
+          name: `${"a".repeat(250)}.docx`,
+          expected: `${"a".repeat(248)}_2.docx`,
+        },
+        { name: `a${extension}`, expected: `_2${boundedExtension}` },
+      ];
+      for (const { name, expected } of cases) {
+        const resolved = await resolveEntityName({
+          tx: asTestRaw<Transaction>(tx),
+          workspaceId: scope.targetWorkspaceId,
+          parentId: null,
+          name,
+          kind: "document",
+        });
+        expect(String(resolved)).toBe(expected);
+        expect(resolved).toHaveLength(255);
+      }
+    });
   });
 });
 
@@ -562,6 +831,7 @@ describe("duplicate entity", () => {
     const insertedFields: unknown[] = [];
     const insertedAuditLogs: unknown[] = [];
     let nextDocumentSequence = 0;
+    let siblingReads = 0;
 
     const tx = {
       query: {
@@ -576,8 +846,13 @@ describe("duplicate entity", () => {
       $count: async () => sourceEntities.length,
       select: () => ({
         from: () => ({
+          // Descendant target parents are new folders with no persisted children.
           where: async () =>
-            sourceEntities.map((entity) => ({ name: entity.name })),
+            siblingReads++ === 0
+              ? sourceEntities
+                  .filter(({ parentId }) => parentId === null)
+                  .map(({ name }) => ({ name }))
+              : [],
         }),
       }),
       insert: (table: unknown) => ({

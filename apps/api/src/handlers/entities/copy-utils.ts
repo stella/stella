@@ -14,7 +14,12 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import type { EntityStamp } from "@/api/lib/document-counter";
 import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
-import { resolveSiblingName } from "@/api/lib/entities/sibling-name";
+import type { ResolvedSiblingName } from "@/api/lib/entities/sibling-name";
+import {
+  createSiblingNamePlan,
+  resolveSiblingNameForInsert,
+  type NamedEntityInsert,
+} from "@/api/lib/entities/sibling-name-insert";
 import {
   lockWorkspacesForEntityCap,
   lockWorkspacesForEntityTransfer,
@@ -538,33 +543,7 @@ export const rollbackS3Copies = async (keys: string[]): Promise<void> => {
   }
 };
 
-type ResolveEntityNameProps = {
-  tx: Transaction;
-  workspaceId: SafeId<"workspace">;
-  parentId: SafeId<"entity"> | null;
-  name: string;
-};
-
-export const resolveEntityName = async ({
-  tx,
-  workspaceId,
-  parentId,
-  name,
-}: ResolveEntityNameProps): Promise<string> => {
-  const parentCondition = parentId
-    ? eq(entities.parentId, parentId)
-    : isNull(entities.parentId);
-
-  const siblings = await tx
-    .select({ name: entities.name })
-    .from(entities)
-    .where(and(eq(entities.workspaceId, workspaceId), parentCondition));
-
-  return resolveSiblingName({
-    name,
-    siblingNames: new Set(siblings.map(({ name: sibling }) => sibling)),
-  });
-};
+export const resolveEntityName = resolveSiblingNameForInsert;
 
 export const getFolderSubtree = <
   TEntity extends Pick<EntitySnapshot, "id" | "parentId">,
@@ -769,7 +748,7 @@ const resolveRootCopyName = async ({
   targetParentId,
   targetRootName,
   targetWorkspaceId,
-}: ResolveRootCopyNameOptions): Promise<string | undefined> =>
+}: ResolveRootCopyNameOptions): Promise<ResolvedSiblingName | undefined> =>
   rootSource === undefined
     ? undefined
     : await resolveEntityName({
@@ -777,6 +756,7 @@ const resolveRootCopyName = async ({
         workspaceId: targetWorkspaceId,
         parentId: targetParentId,
         name: targetRootName ?? rootSource.name,
+        kind: rootSource.kind,
       });
 
 type ValidateCopySourcesOptions = {
@@ -1191,7 +1171,7 @@ type CopyScope = Pick<
 
 /** Every row and result a copy produces, built before the first insert. */
 type CopyRows = {
-  entityRows: (typeof entities.$inferInsert)[];
+  entityRows: NamedEntityInsert[];
   versionRows: ReturnType<typeof targetVersionValues>[];
   versionTransfers: VersionTransfer[];
   currentVersions: CurrentVersionAssignment[];
@@ -1209,26 +1189,28 @@ type CopyPlan = CopyRows & { rootEntityId: SafeId<"entity"> };
 type CopyTarget = {
   entityId: SafeId<"entity">;
   parentId: SafeId<"entity"> | null;
-  name: string;
+  name: ResolvedSiblingName;
 };
 
 type ResolveCopyTargetOptions = {
   scope: CopyScope;
   source: WritableEntitySnapshot;
-  rootCopyName: string | undefined;
+  rootCopyName: ResolvedSiblingName | undefined;
   targetIdBySourceId: ReadonlyMap<SafeId<"entity">, SafeId<"entity">>;
+  resolvePlannedName: Awaited<ReturnType<typeof createSiblingNamePlan>>;
 };
 
 /**
  * The root takes the caller's parent and resolved name, and the caller's id
- * when a replay-safe duplicate supplies one. Every descendant keeps its name
- * under the copy of its parent.
+ * when a replay-safe duplicate supplies one. Descendants reserve their names
+ * among the siblings planned under each copied parent.
  */
 const resolveCopyTarget = ({
   scope: { sourceEntityId, targetParentId, targetRootEntityId },
   source,
   rootCopyName,
   targetIdBySourceId,
+  resolvePlannedName,
 }: ResolveCopyTargetOptions): CopyTarget => {
   if (source.id === sourceEntityId) {
     return {
@@ -1244,7 +1226,15 @@ const resolveCopyTarget = ({
   if (parentId === undefined) {
     panic("Copy source parent order was not validated");
   }
-  return { entityId: createSafeId<"entity">(), parentId, name: source.name };
+  return {
+    entityId: createSafeId<"entity">(),
+    parentId,
+    name: resolvePlannedName({
+      name: source.name,
+      kind: source.kind,
+      parentId,
+    }),
+  };
 };
 
 type AppendVersionRowsOptions = {
@@ -1466,10 +1456,11 @@ const appendCopiedEntity = ({
 };
 
 type PlanEntityCopiesOptions = {
+  tx: Transaction;
   scope: CopyScope;
   sourceEntities: WritableEntitySnapshot[];
   documentStamps: EntityStamp[];
-  rootCopyName: string | undefined;
+  rootCopyName: ResolvedSiblingName | undefined;
 };
 
 /**
@@ -1477,12 +1468,17 @@ type PlanEntityCopiesOptions = {
  * writes them in one batch. Sources arrive parents first, so every parent
  * resolves from the ids already minted.
  */
-const planEntityCopies = ({
+const planEntityCopies = async ({
+  tx,
   scope,
   sourceEntities,
   documentStamps,
   rootCopyName,
-}: PlanEntityCopiesOptions): CopyPlan => {
+}: PlanEntityCopiesOptions): Promise<CopyPlan> => {
+  const resolvePlannedName = await createSiblingNamePlan({
+    tx,
+    workspaceId: scope.targetWorkspaceId,
+  });
   const rows: CopyRows = {
     entityRows: [],
     versionRows: [],
@@ -1507,6 +1503,7 @@ const planEntityCopies = ({
 
   for (const source of sourceEntities) {
     const target = resolveCopyTarget({
+      resolvePlannedName,
       scope,
       source,
       rootCopyName,
@@ -1672,7 +1669,8 @@ export const copyEntities = async ({
     targetWorkspaceId,
   });
 
-  const plan = planEntityCopies({
+  const plan = await planEntityCopies({
+    tx,
     scope: {
       organizationId,
       targetWorkspaceId,

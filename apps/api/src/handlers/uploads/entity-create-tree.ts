@@ -5,7 +5,6 @@ import type { Static } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
 import {
-  type entities,
   pendingUploads,
   type PendingUploadPurposeData,
   workspaces,
@@ -19,6 +18,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
+import {
+  createSiblingNamePlan,
+  type NamedEntityInsert,
+} from "@/api/lib/entities/sibling-name-insert";
 import {
   type CurrentVersionAssignment,
   insertEntityBatch,
@@ -381,7 +384,8 @@ const createDirectoryRows = async ({
   const auditEvents: AuditEvent[] = [];
   // Ids are minted here and each parent resolves from an earlier directory, so
   // the loop only builds rows and `insertEntityBatch` writes them after it.
-  const entityRows: (typeof entities.$inferInsert)[] = [];
+  const entityRows: NamedEntityInsert[] = [];
+  const resolvePlannedName = await createSiblingNamePlan({ tx, workspaceId });
   const currentVersions: CurrentVersionAssignment[] = [];
 
   for (const directory of directories) {
@@ -397,12 +401,17 @@ const createDirectoryRows = async ({
     const entityId = createSafeId<"entity">();
     const entityVersionId = createSafeId<"entityVersion">();
 
+    const resolvedName = resolvePlannedName({
+      parentId,
+      name: directory.name,
+      kind: "folder",
+    });
     entityRows.push({
       id: entityId,
       workspaceId,
       kind: "folder",
       parentId,
-      name: directory.name,
+      name: resolvedName,
       createdBy: userId,
     });
     currentVersions.push({ entityId, versionId: entityVersionId });
@@ -416,7 +425,7 @@ const createDirectoryRows = async ({
           old: null,
           new: {
             kind: "folder",
-            name: directory.name,
+            name: resolvedName,
             parentId,
           },
         },

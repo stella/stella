@@ -318,7 +318,6 @@ const seedWorkspace = async (
 type ResolveFileNameInTestTxOptions = {
   tx: TestDatabaseTransaction;
   seededWorkspaceId: SafeId<"workspace">;
-  seededPropertyId: SafeId<"property">;
   seededParentId: SafeId<"entity"> | null;
   fileName: string;
 };
@@ -326,7 +325,6 @@ type ResolveFileNameInTestTxOptions = {
 const resolveFileNameInTestTx = async ({
   tx,
   seededWorkspaceId,
-  seededPropertyId,
   seededParentId,
   fileName,
 }: ResolveFileNameInTestTxOptions) =>
@@ -335,7 +333,6 @@ const resolveFileNameInTestTx = async ({
     // the production Bun SQL transaction and the PGlite test transaction.
     tx: asTestRaw<Transaction>(tx),
     workspaceId: seededWorkspaceId,
-    propertyId: seededPropertyId,
     parentId: seededParentId,
     name: sanitizeFilename(fileName),
   });
@@ -642,7 +639,6 @@ describe("entity-create filename conflicts", () => {
       return await resolveFileNameInTestTx({
         tx,
         seededWorkspaceId: seeded.workspaceId,
-        seededPropertyId: seeded.propertyId,
         seededParentId: seeded.folderBId,
         fileName: "brief.md",
       });
@@ -666,7 +662,6 @@ describe("entity-create filename conflicts", () => {
       return await resolveFileNameInTestTx({
         tx,
         seededWorkspaceId: seeded.workspaceId,
-        seededPropertyId: seeded.propertyId,
         seededParentId: seeded.folderAId,
         fileName: "brief.md",
       });
@@ -681,36 +676,27 @@ test("upload names are free among exact current siblings", async () => {
   await assertProperty(
     "upload names are free among exact current siblings",
     fc.asyncProperty(
-      fc.constantFrom(
-        "contract.docx",
-        `${"a".repeat(250)}.docx`,
-        "contract_2.docx",
-      ),
-      fc.array(fc.integer({ min: 1, max: 15 }), { maxLength: 12 }),
+      fc.string({ minLength: 1, maxLength: 80 }),
+      fc.array(fc.string({ minLength: 1, maxLength: 80 }), { maxLength: 8 }),
       fc.boolean(),
-      async (requested, suffixes, occupied) => {
+      async (rawRequested, arbitraryNames, occupied) => {
         await runRolledBack(async (tx) => {
           const seeded = await seedWorkspace(tx);
-          const dot = requested.lastIndexOf(".");
-          const base = requested.slice(0, dot).replace(/_\d+$/u, "");
-          const extension = requested.slice(dot);
-          const siblings = new Set(
-            suffixes.map((n) => {
-              const suffix = `_${n}`;
-              return `${base.slice(0, 255 - suffix.length - extension.length)}${suffix}${extension}`;
-            }),
+          const other = await seedWorkspace(tx);
+          const requested = sanitizeFilename(rawRequested);
+          const siblings = new Set<string>(
+            arbitraryNames.map(sanitizeFilename),
           );
           if (occupied) {
             siblings.add(requested);
           }
-          siblings.add("contract_final.docx");
-          for (const fileName of siblings) {
-            await seedFileEntity({
-              tx,
-              seededWorkspaceId: seeded.workspaceId,
-              seededPropertyId: seeded.propertyId,
-              seededParentId: seeded.folderAId,
-              fileName,
+          for (const name of siblings) {
+            await tx.insert(entities).values({
+              id: toSafeId<"entity">(Bun.randomUUIDv7()),
+              workspaceId: seeded.workspaceId,
+              parentId: seeded.folderAId,
+              kind: "task",
+              name,
             });
           }
           await seedFileEntity({
@@ -720,58 +706,100 @@ test("upload names are free among exact current siblings", async () => {
             seededParentId: seeded.folderBId,
             fileName: requested,
           });
-          const historic = await seedFileEntity({
-            tx,
-            seededWorkspaceId: seeded.workspaceId,
-            seededPropertyId: seeded.propertyId,
-            seededParentId: seeded.folderAId,
-            fileName: requested,
-          });
-          const currentId = toSafeId<"entityVersion">(Bun.randomUUIDv7());
-          await tx.insert(entityVersions).values({
-            id: currentId,
-            entityId: historic.entityId,
-            workspaceId: seeded.workspaceId,
-            versionNumber: 2,
-          });
-          await tx
-            .update(entities)
-            .set({ currentVersionId: currentId })
-            .where(eq(entities.id, historic.entityId));
-          const otherPropertyId = toSafeId<"property">(Bun.randomUUIDv7());
-          await tx.insert(properties).values({
-            id: otherPropertyId,
-            workspaceId: seeded.workspaceId,
-            name: "Other file",
-            content: { type: "file", version: 1 },
-            tool: { type: "manual-input", version: 1 },
-            status: "fresh",
-          });
           await seedFileEntity({
             tx,
-            seededWorkspaceId: seeded.workspaceId,
-            seededPropertyId: otherPropertyId,
+            seededWorkspaceId: other.workspaceId,
+            seededPropertyId: other.propertyId,
             seededParentId: seeded.folderAId,
             fileName: requested,
           });
           const resolved = await resolveFileNameInTestTx({
             tx,
             seededWorkspaceId: seeded.workspaceId,
-            seededPropertyId: seeded.propertyId,
             seededParentId: seeded.folderAId,
             fileName: requested,
           });
           expect(siblings.has(resolved.value)).toBe(false);
           expect(resolved.value.length).toBeLessThanOrEqual(255);
           if (!siblings.has(requested)) {
-            expect(String(resolved.value)).toBe(requested);
+            expect(String(resolved.value)).toBe(String(requested));
           }
           return true;
         });
       },
     ),
-    { numRuns: 25 },
+    { numRuns: 20 },
   );
+});
+
+test("entity names collide across properties and absent current fields", async () => {
+  await runRolledBack(async (tx) => {
+    const seeded = await seedWorkspace(tx);
+    const otherPropertyId = toSafeId<"property">(Bun.randomUUIDv7());
+    await tx.insert(properties).values({
+      id: otherPropertyId,
+      workspaceId: seeded.workspaceId,
+      name: "Other file",
+      content: { type: "file", version: 1 },
+      tool: { type: "manual-input", version: 1 },
+      status: "fresh",
+    });
+    const historic = await seedFileEntity({
+      tx,
+      seededWorkspaceId: seeded.workspaceId,
+      seededPropertyId: otherPropertyId,
+      seededParentId: seeded.folderAId,
+      fileName: "brief.md",
+    });
+    const currentId = toSafeId<"entityVersion">(Bun.randomUUIDv7());
+    await tx.insert(entityVersions).values({
+      id: currentId,
+      entityId: historic.entityId,
+      workspaceId: seeded.workspaceId,
+      versionNumber: 2,
+    });
+    await tx
+      .update(entities)
+      .set({ currentVersionId: currentId })
+      .where(eq(entities.id, historic.entityId));
+    await tx.insert(entities).values({
+      id: toSafeId<"entity">(Bun.randomUUIDv7()),
+      workspaceId: seeded.workspaceId,
+      parentId: seeded.folderAId,
+      kind: "folder",
+      name: "brief_1.md",
+    });
+    const resolved = await resolveFileNameInTestTx({
+      tx,
+      seededWorkspaceId: seeded.workspaceId,
+      seededParentId: seeded.folderAId,
+      fileName: "brief.md",
+    });
+    expect(String(resolved.value)).toBe("brief_2.md");
+    return true;
+  });
+});
+
+test("root names exclude entities from another matter", async () => {
+  await runRolledBack(async (tx) => {
+    const seeded = await seedWorkspace(tx);
+    const other = await seedWorkspace(tx);
+    await seedFileEntity({
+      tx,
+      seededWorkspaceId: other.workspaceId,
+      seededPropertyId: other.propertyId,
+      seededParentId: null,
+      fileName: "brief.md",
+    });
+    const resolved = await resolveFileNameInTestTx({
+      tx,
+      seededWorkspaceId: seeded.workspaceId,
+      seededParentId: null,
+      fileName: "brief.md",
+    });
+    expect(String(resolved.value)).toBe("brief.md");
+    return true;
+  });
 });
 
 test("multipart upload resolves names against current root siblings", async () => {

@@ -6,7 +6,6 @@ import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import { resultTx } from "@/api/db/safe-db";
 import {
-  type entities,
   type fields,
   properties,
   propertyDependencies,
@@ -30,6 +29,10 @@ import {
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
+import {
+  createSiblingNamePlan,
+  type NamedEntityInsert,
+} from "@/api/lib/entities/sibling-name-insert";
 import {
   type CurrentVersionAssignment,
   insertEntityBatch,
@@ -806,7 +809,11 @@ export const createDuplicateWorkspace = (
           // Ids are minted here and parents resolve from `entityIdMap`, so the
           // loop only builds rows and `insertEntityBatch` writes them after it;
           // `orderEntitiesForDuplicate` puts parents first.
-          const entityRows: (typeof entities.$inferInsert)[] = [];
+          const entityRows: NamedEntityInsert[] = [];
+          const resolvePlannedName = await createSiblingNamePlan({
+            tx,
+            workspaceId: targetWorkspaceId,
+          });
           const versionRows: EntityVersionValues[] = [];
           const currentVersions: CurrentVersionAssignment[] = [];
           const fieldRows: (typeof fields.$inferInsert)[] = [];
@@ -837,7 +844,11 @@ export const createDuplicateWorkspace = (
               workspaceId: targetWorkspaceId,
               kind: source.kind,
               parentId: newParentId,
-              name: source.name,
+              name: resolvePlannedName({
+                parentId: newParentId,
+                name: source.name,
+                kind: source.kind,
+              }),
               createdBy: user.id,
               lastEditedBy: user.id,
               docSequence: entityStamp?.docSequence ?? null,

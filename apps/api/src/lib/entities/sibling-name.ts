@@ -1,22 +1,43 @@
-import { ENTITY_NAME_MAX_LENGTH, truncateEntityName } from "@stll/api-contract";
+import { panic } from "better-result";
+import * as v from "valibot";
+
+import {
+  ENTITY_NAME_MAX_LENGTH,
+  truncateEntityName,
+  type EntityKind,
+} from "@stll/api-contract";
+
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+
+const resolvedSiblingNameSchema = v.pipe(
+  v.string(),
+  v.brand("SanitizedFileName"),
+  v.brand("ResolvedSiblingName"),
+);
+
+export type ResolvedSiblingName = v.InferOutput<
+  typeof resolvedSiblingNameSchema
+>;
 
 type ResolveSiblingNameOptions = {
   name: string;
+  kind: EntityKind;
   siblingNames: ReadonlySet<string>;
 };
 
 export const resolveSiblingName = ({
-  name,
+  name: requestedName,
+  kind,
   siblingNames,
-}: ResolveSiblingNameOptions): string => {
+}: ResolveSiblingNameOptions): ResolvedSiblingName => {
+  const name = sanitizeFilename(requestedName);
   if (!siblingNames.has(name)) {
-    return name;
+    return v.parse(resolvedSiblingNameSchema, name);
   }
-  const lastDot = name.lastIndexOf(".");
-  const rawBase = lastDot > 0 ? name.slice(0, lastDot) : name;
+  const lastDot = kind === "document" ? name.lastIndexOf(".") : -1;
+  const base = lastDot > 0 ? name.slice(0, lastDot) : name;
   const extension = lastDot > 0 ? name.slice(lastDot) : "";
-  const base = rawBase.replace(/_\d+$/u, "");
-  for (let number = 1; ; number += 1) {
+  for (let number = 1; number <= siblingNames.size + 1; number += 1) {
     const suffix = `_${number}`;
     const boundedExtension = truncateEntityName(
       extension,
@@ -26,9 +47,12 @@ export const resolveSiblingName = ({
       base,
       ENTITY_NAME_MAX_LENGTH - suffix.length - boundedExtension.length,
     );
-    const candidate = `${boundedBase}${suffix}${boundedExtension}`;
+    const candidate = sanitizeFilename(
+      `${boundedBase}${suffix}${boundedExtension}`,
+    );
     if (!siblingNames.has(candidate)) {
-      return candidate;
+      return v.parse(resolvedSiblingNameSchema, candidate);
     }
   }
+  return panic("Finite siblings exhausted every distinct name candidate");
 };
