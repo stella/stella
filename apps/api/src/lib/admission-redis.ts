@@ -1,8 +1,11 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
+import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import type { RedisClientClosedError } from "@/api/lib/errors/tagged-errors";
 import {
   NON_EVICTING_STORE_MESSAGE,
   nonEvictingRedis,
+  type NonEvictingRedisClient,
 } from "@/api/lib/non-evicting-redis";
 import { logger } from "@/api/lib/observability/logger";
 import { emitAdmissionStorePolicyMetric } from "@/api/lib/observability/request-metrics";
@@ -45,7 +48,32 @@ export const createAdmissionRedis = (
           return;
         default:
           status satisfies never;
-          return panic("Unhandled admission store policy observation");
+          panic("Unhandled admission store policy observation");
       }
     },
   });
+
+export type AdmissionRedisClient =
+  | {
+      send: (command: string, args: string[]) => Promise<unknown>;
+      type?: never;
+    }
+  | NonEvictingRedisClient;
+export type AdmissionRedisReady = () => Promise<
+  AdmissionRedisClient | Result<NonEvictingRedisClient, RedisClientClosedError>
+>;
+
+export const resolveAdmissionRedisClient = async (
+  ready: AdmissionRedisReady,
+): Promise<Result<AdmissionRedisClient, RedisClientClosedError>> => {
+  const connection = await ready();
+  return "send" in connection ? Result.ok(connection) : connection;
+};
+
+export const sendAdmissionRedisCommand = async (
+  client: AdmissionRedisClient,
+  args: string[],
+): Promise<Result<unknown, ActionAdmissionError | RedisClientClosedError>> =>
+  client.type === "checked"
+    ? await client.send("EVAL", args)
+    : Result.ok(await client.send("EVAL", args));
