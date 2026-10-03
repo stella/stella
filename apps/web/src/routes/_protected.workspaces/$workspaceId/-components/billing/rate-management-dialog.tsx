@@ -22,7 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
-import { stellaToast } from "@stll/ui/toast";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -32,6 +31,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { localISODate } from "@/lib/local-iso-date";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { organizationOptions } from "@/lib/organization/queries";
@@ -175,11 +175,8 @@ const RateTablesView = ({
     updateTable.mutate(
       { workspaceId, id, isDefault: true },
       {
-        onError: () => {
-          stellaToast.add({
-            title: t("common.somethingWentWrong"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("common.somethingWentWrong"));
         },
       },
     );
@@ -189,11 +186,8 @@ const RateTablesView = ({
     deleteTable.mutate(
       { workspaceId, id },
       {
-        onError: () => {
-          stellaToast.add({
-            title: t("common.somethingWentWrong"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("common.somethingWentWrong"));
         },
       },
     );
@@ -221,11 +215,8 @@ const RateTablesView = ({
               { workspaceId, ...values },
               {
                 onSuccess: () => setShowForm(false),
-                onError: () => {
-                  stellaToast.add({
-                    title: t("common.somethingWentWrong"),
-                    type: "error",
-                  });
+                onError: (error) => {
+                  notifyUserError(error, t("common.somethingWentWrong"));
                 },
               },
             );
@@ -494,11 +485,8 @@ const RateEntriesView = ({
     deleteEntry.mutate(
       { workspaceId, rateTableId, id },
       {
-        onError: () => {
-          stellaToast.add({
-            title: t("common.somethingWentWrong"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("common.somethingWentWrong"));
         },
       },
     );
@@ -548,11 +536,8 @@ const RateEntriesView = ({
               { workspaceId, rateTableId, ...values },
               {
                 onSuccess: () => setShowForm(false),
-                onError: () => {
-                  stellaToast.add({
-                    title: t("common.somethingWentWrong"),
-                    type: "error",
-                  });
+                onError: (error) => {
+                  notifyUserError(error, t("common.somethingWentWrong"));
                 },
               },
             );

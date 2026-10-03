@@ -4,13 +4,13 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
-import { stellaToast } from "@stll/ui/toast";
 
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { type APIError, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
 /** Client-observed ceiling for a model-selection PATCH: long enough for a
@@ -101,10 +101,7 @@ export const useChatModelSelection = ({
 
     if (Result.isError(result)) {
       if (isLatest) {
-        stellaToast.add({
-          title: t("common.somethingWentWrong"),
-          type: "error",
-        });
+        notifyUserError(result.error, t("common.somethingWentWrong"));
       }
       return Result.err(
         new ClientOperationError({
@@ -117,10 +114,10 @@ export const useChatModelSelection = ({
     if (result.value.error) {
       const error = toAPIError(result.value.error);
       if (isLatest) {
-        stellaToast.add({
-          title: t("common.somethingWentWrong"),
-          type: "error",
-        });
+        notifyUserError(
+          toAPIError(result.value.error),
+          t("common.somethingWentWrong"),
+        );
       }
       return Result.err(error);
     }

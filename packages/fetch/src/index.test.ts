@@ -12,6 +12,66 @@ const waitForAbort = async (signal: AbortSignal): Promise<void> => {
 };
 
 describe("createFetchWithTimeout", () => {
+  for (const code of [
+    "ConnectionRefused",
+    "FailedToOpenSocket",
+    "ConnectionClosed",
+    "ENOTFOUND",
+    "ETIMEDOUT",
+  ]) {
+    test(`preserves raw transport error identity for ${code}`, async () => {
+      const cause = Object.assign(new TypeError("Recorded transport failure"), {
+        code,
+      });
+      const request = createFetchWithTimeout(async () => {
+        throw cause;
+      });
+      expect(
+        await request("https://example.com", { timeoutMs: 1000 }).then(
+          () => undefined,
+          (error: unknown) => error,
+        ),
+      ).toBe(cause);
+    });
+  }
+
+  test("caller cancellation retains its original reason", async () => {
+    const controller = new AbortController();
+    const cause = new DOMException("Cycle ended", "AbortError");
+    controller.abort(cause);
+    const request = createFetchWithTimeout(async () => {
+      throw cause;
+    });
+    expect(
+      await request("https://example.com", {
+        timeoutMs: 1000,
+        signal: controller.signal,
+      }).then(
+        () => undefined,
+        (error: unknown) => error,
+      ),
+    ).toBe(cause);
+  });
+
+  for (const cause of [
+    Object.assign(new Error("Unexpected redirect"), {
+      code: "UnexpectedRedirect",
+    }),
+    new TypeError("Invalid URL"),
+    new TypeError("Invalid HTTP method"),
+  ]) {
+    test(`preserves non-transport failure: ${cause.message}`, async () => {
+      const request = createFetchWithTimeout(async () => {
+        throw cause;
+      });
+      expect(
+        await request("https://example.com", { timeoutMs: 1000 }).then(
+          () => undefined,
+          (error: unknown) => error,
+        ),
+      ).toBe(cause);
+    });
+  }
   test("forwards request options through the configured fetcher", async () => {
     let capturedInit: RequestInit | undefined;
     const fetchWithTimeout = createFetchWithTimeout(async (_input, init) => {

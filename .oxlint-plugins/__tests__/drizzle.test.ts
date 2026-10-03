@@ -165,3 +165,26 @@ describe("Drizzle mutation where enforcement", () => {
     expect(unsafeThenSafe).toHaveLength(1);
   });
 });
+
+describe("entity parent mutation ownership", () => {
+  test("routes explicit parent updates to the serialized move owner", async () => {
+    const source = [
+      "tx.update(entities).set({ parentId }).where(filter);",
+      "tx.update(entities).set({ name }).where(filter);",
+      "tx.update(otherTable).set({ parentId }).where(filter);",
+      "tx.update(entities).set({ ['parentId']: id }).where(filter);",
+    ].join("\n");
+    expect(
+      await lintSingleRule("no-direct-entity-reparent", source, {
+        plugin: PLUGIN_NAME,
+        sourcePath: "apps/api/src/handlers/entities/other.ts",
+      }),
+    ).toEqual([1, 4]);
+    expect(
+      await lintSingleRule("no-direct-entity-reparent", source, {
+        plugin: PLUGIN_NAME,
+        sourcePath: "apps/api/src/handlers/entities/move.ts",
+      }),
+    ).toEqual([]);
+  });
+});

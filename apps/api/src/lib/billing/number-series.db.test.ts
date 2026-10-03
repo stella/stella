@@ -22,6 +22,7 @@ import updateNumberSeries from "@/api/handlers/number-series/update";
 import { allocateNumber } from "@/api/lib/billing/number-series";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -149,7 +150,7 @@ describe("number series allocation", () => {
       route: "/v1/number-series/:numberSeriesId",
       safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
       session: { activeOrganizationId: ids.orgA },
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       user: { id: ids.userA1 },
       recordAuditEvent: async () => {},
     });
@@ -207,7 +208,7 @@ describe("number series allocation", () => {
         route: "/v1/number-series",
         safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
         session: { activeOrganizationId: ids.orgA },
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         user: { id: ids.userA1 },
         recordAuditEvent: async () => {},
       });

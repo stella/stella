@@ -198,6 +198,7 @@ export const exportHandler = async function* ({
 };
 
 const config = {
+  accountAccess: "standard",
   description:
     "Download the organization's clauses as a single file: JSON by default, " +
     "carrying each clause with its variants, metadata, and category path, or " +

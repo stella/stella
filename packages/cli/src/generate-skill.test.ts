@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
+import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import {
   CAPABILITY_NAMESPACE,
   capabilityDomainsOf,
   insertCapabilities,
-  type CapabilityCatalogEntry,
 } from "./generate-capability-tree.js";
 import { generateRouteMap } from "./generate-route-map.js";
 import { generateCliSkill, SKILL_NAME } from "./generate-skill.js";
@@ -27,9 +28,10 @@ const listings: readonly RegistryToolListing[] =
 // way `codegen.ts` does. Worked capability examples in the generated skill
 // (see generate-skill.ts) resolve a real leaf out of this tree, so the test
 // input has to carry one instead of a hand-trimmed stand-in.
-const catalogUrl = new URL("../capability-catalog.json", import.meta.url);
-const catalog: readonly CapabilityCatalogEntry[] =
-  await Bun.file(catalogUrl).json();
+const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+if (catalog === null) {
+  throw new TypeError("Invalid capability catalog");
+}
 const { tree: mergedTree, stats: capabilityStats } = insertCapabilities({
   tree: generateRouteMap(listings, TOOL_ANNOTATIONS),
   entries: catalog,

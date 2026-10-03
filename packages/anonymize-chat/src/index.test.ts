@@ -7,6 +7,7 @@ import type {
   NativeStaticRedactionResult,
   PipelineConfig,
 } from "@stll/anonymize-wasm";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   buildChatAnonPipelineConfig,
@@ -485,34 +486,48 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     );
   });
 
-  test("fails closed when native redaction leaves a forced value", () => {
+  test("fails closed when native redaction leaves a forced value", async () => {
     const forcedValue = "ORDER-123";
     const runtime = buildRuntime([]);
 
     expect(
-      runChatAnonPipeline({
-        runtime,
-        dictionaries,
-        text: forcedValue,
-        workspaceId: "ws-1",
-        forcedSensitiveValues: [forcedValue],
-      }),
-    ).rejects.toThrow("forced sensitive value remained after anonymization");
+      await rejectionOf(
+        runChatAnonPipeline({
+          runtime,
+          dictionaries,
+          text: forcedValue,
+          workspaceId: "ws-1",
+          forcedSensitiveValues: [forcedValue],
+        }),
+      ),
+    ).toHaveProperty(
+      "message",
+      expect.stringContaining(
+        "forced sensitive value remained after anonymization",
+      ),
+    );
   });
 
-  test("fails closed when a resolved entity covers only part of a forced value", () => {
+  test("fails closed when a resolved entity covers only part of a forced value", async () => {
     const forcedValue = "ORDER-123";
     const runtime = buildRuntime([makeEntity("XORDER", "misc")]);
 
     expect(
-      runChatAnonPipeline({
-        runtime,
-        dictionaries,
-        text: `X${forcedValue}`,
-        workspaceId: "ws-1",
-        forcedSensitiveValues: [forcedValue],
-      }),
-    ).rejects.toThrow("forced sensitive value remained after anonymization");
+      await rejectionOf(
+        runChatAnonPipeline({
+          runtime,
+          dictionaries,
+          text: `X${forcedValue}`,
+          workspaceId: "ws-1",
+          forcedSensitiveValues: [forcedValue],
+        }),
+      ),
+    ).toHaveProperty(
+      "message",
+      expect.stringContaining(
+        "forced sensitive value remained after anonymization",
+      ),
+    );
   });
 
   test("accepts self-overlapping forced occurrences removed by one full span", async () => {
@@ -531,19 +546,26 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     expect(result.redactionMap).toEqual(new Map([["[MISC_1]", forcedValue]]));
   });
 
-  test("rejects a self-overlapping forced run with an uncovered occurrence", () => {
+  test("rejects a self-overlapping forced run with an uncovered occurrence", async () => {
     const forcedValue = "aaa";
     const runtime = buildRuntime([makeEntity(forcedValue, "misc")]);
 
     expect(
-      runChatAnonPipeline({
-        runtime,
-        dictionaries,
-        text: "aaaaaa",
-        workspaceId: "ws-1",
-        forcedSensitiveValues: [forcedValue],
-      }),
-    ).rejects.toThrow("forced sensitive value remained after anonymization");
+      await rejectionOf(
+        runChatAnonPipeline({
+          runtime,
+          dictionaries,
+          text: "aaaaaa",
+          workspaceId: "ws-1",
+          forcedSensitiveValues: [forcedValue],
+        }),
+      ),
+    ).toHaveProperty(
+      "message",
+      expect.stringContaining(
+        "forced sensitive value remained after anonymization",
+      ),
+    );
   });
 
   test("accepts forced source text contained only in generated placeholders", async () => {
@@ -590,33 +612,37 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     );
   });
 
-  test("bounds caller-supplied forced values before building a pipeline", () => {
+  test("bounds caller-supplied forced values before building a pipeline", async () => {
     const runtime = buildRuntime([]);
 
     expect(
-      runChatAnonPipeline({
-        runtime,
-        dictionaries,
-        text: "sensitive",
-        workspaceId: "ws-1",
-        forcedSensitiveValues: Array.from(
-          { length: FORCED_SENSITIVE_VALUES_MAX + 1 },
-          (_, index) => `sensitive-${String(index)}`,
-        ),
-      }),
-    ).rejects.toBeInstanceOf(ChatAnonInputLimitError);
+      await rejectionOf(
+        runChatAnonPipeline({
+          runtime,
+          dictionaries,
+          text: "sensitive",
+          workspaceId: "ws-1",
+          forcedSensitiveValues: Array.from(
+            { length: FORCED_SENSITIVE_VALUES_MAX + 1 },
+            (_, index) => `sensitive-${String(index)}`,
+          ),
+        }),
+      ),
+    ).toBeInstanceOf(ChatAnonInputLimitError);
 
     expect(
-      runChatAnonPipeline({
-        runtime,
-        dictionaries,
-        text: "sensitive",
-        workspaceId: "ws-1",
-        forcedSensitiveValues: [
-          "x".repeat(FORCED_SENSITIVE_VALUE_MAX_LENGTH + 1),
-        ],
-      }),
-    ).rejects.toBeInstanceOf(ChatAnonInputLimitError);
+      await rejectionOf(
+        runChatAnonPipeline({
+          runtime,
+          dictionaries,
+          text: "sensitive",
+          workspaceId: "ws-1",
+          forcedSensitiveValues: [
+            "x".repeat(FORCED_SENSITIVE_VALUE_MAX_LENGTH + 1),
+          ],
+        }),
+      ),
+    ).toBeInstanceOf(ChatAnonInputLimitError);
   });
 
   test("passes all entities through when no exclusions are provided", async () => {

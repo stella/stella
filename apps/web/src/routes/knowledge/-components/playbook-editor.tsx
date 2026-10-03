@@ -56,8 +56,9 @@ import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, APIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   duplicatePosition,
   extractToGraded,
@@ -673,9 +674,8 @@ const PlaybookEditorForm = ({
         "playbook-editor.refetch-after-conflict",
       );
     }
-    stellaToast.add({
-      type: "error",
-      ...failure,
+    notifyUserError(undefined, failure.title, {
+      description: failure.description,
       ...(onReload
         ? {
             action: {
@@ -696,10 +696,7 @@ const PlaybookEditorForm = ({
     const trimmedName = name.trim();
     if (trimmedName === "") {
       setAttemptedSave(true);
-      stellaToast.add({
-        type: "error",
-        title: t("knowledge.playbooks.nameRequired"),
-      });
+      notifyUserError(undefined, t("knowledge.playbooks.nameRequired"));
       return false;
     }
 
@@ -722,10 +719,10 @@ const PlaybookEditorForm = ({
         }
         return next;
       });
-      stellaToast.add({
-        type: "error",
-        title: t("knowledge.playbooks.fixErrorsBeforeSaving"),
-      });
+      notifyUserError(
+        undefined,
+        t("knowledge.playbooks.fixErrorsBeforeSaving"),
+      );
       return false;
     }
 
@@ -745,7 +742,9 @@ const PlaybookEditorForm = ({
         reportVersionConflict(failure);
         return;
       }
-      stellaToast.add({ type: "error", ...failure });
+      notifyUserError(toAPIError(error), failure.title, {
+        description: failure.description,
+      });
     };
 
     // Each branch awaits its own Eden call and inspects `.error` before
@@ -817,14 +816,16 @@ const PlaybookEditorForm = ({
     setSaving(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("knowledge.playbooks.deleteFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
+      notifyUserError(
+        toAPIError(response.error),
+        t("knowledge.playbooks.deleteFailed"),
+        {
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        },
+      );
       return;
     }
 
@@ -882,7 +883,9 @@ const PlaybookEditorForm = ({
         reportVersionConflict(failure);
         return;
       }
-      stellaToast.add({ type: "error", ...failure });
+      notifyUserError(error, failure.title, {
+        description: failure.description,
+      });
     },
   });
 

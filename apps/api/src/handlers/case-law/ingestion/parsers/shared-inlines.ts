@@ -1,3 +1,22 @@
+// parser-output-unchanged: [cz-regional] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [sk-courts] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [sk-us] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [pl-sn] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [pl-nsa] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-courts] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-vfgh] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-vwgh] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-bvwg] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-lvwg] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-asylgh] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-ubas] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-uvs] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-verg] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-umse] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [at-bks] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [hu-bhgy] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [pl-uodo] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
+// parser-output-unchanged: [us-courtlistener] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
 /**
  * Shared inline-tree utilities for case-law HTML parsers.
  *
@@ -16,6 +35,31 @@ import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 import type { Inline } from "@/api/handlers/case-law/document-ast";
 import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
+
+const EXCLUDED_HTML_TAGS = ["script", "style"];
+const EXCLUDED_HTML_SELECTOR = EXCLUDED_HTML_TAGS.join(", ");
+
+/** Content outside the decision text axis. */
+export const isExcludedHtmlTag = (tag: string): boolean =>
+  EXCLUDED_HTML_TAGS.includes(tag);
+
+/** Read text without mutating the source DOM or retaining non-content tags. */
+export const visibleHtmlText = (el: cheerio.Cheerio<AnyNode>): string => {
+  const copy = el.clone();
+  copy.find(EXCLUDED_HTML_SELECTOR).remove();
+  return copy.not(EXCLUDED_HTML_SELECTOR).text();
+};
+
+/** Repair-only projection for quarantine identities stored before visible text. */
+export const legacyQuarantineHtmlText = (
+  el: cheerio.Cheerio<AnyNode>,
+): string => el.text();
+
+/** Nested table text belongs to the outer cell's inline tree, once. */
+export const ownTableRows = (table: cheerio.Cheerio<AnyNode>) =>
+  table
+    .children("tr")
+    .add(table.children("thead, tbody, tfoot").children("tr"));
 
 /**
  * Append text to an inline list, dropping empty strings and coalescing
@@ -129,7 +173,7 @@ export const walkInlines = (
 
       const tag = child.tagName.toLowerCase();
       // isTag() also matches <script>/<style>; never emit their raw text.
-      if (tag === "script" || tag === "style") {
+      if (isExcludedHtmlTag(tag)) {
         return;
       }
 

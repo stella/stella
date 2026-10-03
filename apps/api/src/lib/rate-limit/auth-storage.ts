@@ -119,8 +119,11 @@ export const createAuthRateLimitStorage = (
   const redis: AuthRateLimitRedisClient =
     options.redis ??
     createRedisClient({
-      connectionTimeout: COMMAND_TIMEOUT_MS,
-      enableOfflineQueue: false,
+      storeClass: "durable-coordination",
+      overrides: {
+        connectionTimeout: COMMAND_TIMEOUT_MS,
+        enableOfflineQueue: false,
+      },
     });
   const commandTimer = options.commandTimer ?? DEFAULT_COMMAND_TIMER;
   const scheduleTimeout: ScheduleTimeout = (callback, delayMs) => {

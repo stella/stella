@@ -96,6 +96,7 @@ export const releaseTestDb = async (): Promise<void> => {
   });
   // Preserve the failure for this release call, but recover the shared chain
   // so one failed initialization or close cannot poison every later test.
+  // swallow-ok: recovers the shared close chain; this release still awaits the original close failure below
   dbClosePromise = closePromise.catch(() => undefined);
   await closePromise;
 };

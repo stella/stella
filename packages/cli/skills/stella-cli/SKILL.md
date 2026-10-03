@@ -208,7 +208,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --clause-id, --version-id, --category-id, --query, --include-categories
 - `stella clause save`
   - optional: --clause-id, --title, --category-id, --language, --description, --usage-notes, --snapshot-version
-  - via `--input` only: body, metadata
+  - via `--input` only: body, expected_body, metadata
 - `stella contact check-counterparty`
   - `--check` — cz-insolvency: ISIR proceedings, company ID or person with full birth date. cz-vat-reliability: unreliable payer and bank accounts, tax ID or derived CZ+IČO. sanctions: all EU, UN and national lists; company ID, organization name, or person with any known birth date and nationalities. Use an advertised value; case and surrounding whitespace are normalized. (enum: cz-insolvency, cz-vat-reliability, sanctions)
   - via `--input` only: subject
@@ -392,7 +392,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 398
+Beyond the curated commands above, the CLI generates 402
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through the generic `invoke_capability`
 path. Every generated command lives at `stella capability <domain> <action>`;

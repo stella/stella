@@ -24,6 +24,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { NalusRateLimitedError } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
@@ -45,6 +46,8 @@ type ResultRow = {
   ecli?: string | undefined;
   textUrl?: string | null | undefined;
   textActionLabel?: string | undefined;
+  primaryExtraHtml?: string;
+  actionsExtraHtml?: string;
 };
 
 /**
@@ -178,10 +181,10 @@ const makeResultsPage = (
       return `
 <tr class='resultData${(index + renderPositionOffset) % 2}'>
   <td></td>
-  <td><a href='${detailUrl}'>${row.listedCaseNumber ?? row.caseNumber}${counterLabel}</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
+  <td><a href='${detailUrl}'>${row.listedCaseNumber ?? row.caseNumber}${counterLabel}</a><br />${row.ecli ?? ""}<br />Jan Novák${row.primaryExtraHtml ?? ""}</td>
 </tr>
 <tr class='resultData${(index + renderPositionOffset) % 2}' valign="top">
-  <td>${textAction}</td>
+  <td>${textAction}${row.actionsExtraHtml ?? ""}</td>
 </tr>`;
     })
     .join("");
@@ -232,6 +235,8 @@ type MockSearchOptions = {
   rangeFrom?: number;
   reported?: number;
   empty?: boolean;
+  documentText?: string;
+  recordCardSuffix?: string;
   abstract?: string;
   legalSentence?: string;
   abstractStatus?: number;
@@ -287,6 +292,8 @@ const installSearchMock = ({
   rangeFrom = 1,
   reported = rows.length,
   empty = false,
+  documentText = "Lorem ipsum dolor sit amet.",
+  recordCardSuffix = "",
   abstract = "",
   legalSentence = "",
   abstractStatus = 200,
@@ -375,6 +382,9 @@ const installSearchMock = ({
                       row.caseNumber,
                       row.date,
                       counterText === undefined ? {} : { counter: counterText },
+                    ).replace(
+                      "Lorem ipsum dolor sit amet.",
+                      () => documentText,
                     ),
                 { status: detailStatus },
               )
@@ -391,7 +401,7 @@ const installSearchMock = ({
                 makeRecordCardPage(row.caseNumber, row.date, {
                   rapporteur,
                   dissenters,
-                }),
+                }) + recordCardSuffix,
               )
             : new Response("no card", {
                 status: recordCardStatus === 200 ? 404 : recordCardStatus,
@@ -502,9 +512,12 @@ describe("czUsAdapter.fetchPage", () => {
     expect(submitted?.get("ctl00$MainContent$resultsPageSize")).toBe(
       String(RESULTS_PAGE_SIZE),
     );
-    expect(page.decisions.map(({ caseNumber }) => caseNumber)).toEqual(
-      rows.map(({ caseNumber }) => caseNumber),
-    );
+    expect(
+      Bun.deepEquals(
+        page.decisions.map(({ caseNumber }) => caseNumber),
+        rows.map(({ caseNumber }) => caseNumber),
+      ),
+    ).toBe(true);
     expect(
       page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
     ).toEqual(["nalus-record:1001", "nalus-record:1002", "nalus-record:1003"]);
@@ -587,17 +600,21 @@ describe("czUsAdapter.fetchPage", () => {
       await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
 
-    expect(page.decisions.map(({ caseNumber }) => caseNumber)).toEqual([
-      "I.ÚS 42/24",
-      "I.ÚS 42/24",
-    ]);
+    expect(
+      Bun.deepEquals(
+        page.decisions.map(({ caseNumber }) => caseNumber),
+        ["I.ÚS 42/24", "I.ÚS 42/24"],
+      ),
+    ).toBe(true);
     expect(
       page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
     ).toEqual(["nalus-record:2001", "nalus-record:2002"]);
-    expect(page.decisions.map(({ ecli }) => ecli)).toEqual([
-      "ECLI:CZ:US:2024:1.US.42.24.1",
-      "ECLI:CZ:US:2024:1.US.42.24.2",
-    ]);
+    expect(
+      Bun.deepEquals(
+        page.decisions.map(({ ecli }) => ecli),
+        ["ECLI:CZ:US:2024:1.US.42.24.1", "ECLI:CZ:US:2024:1.US.42.24.2"],
+      ),
+    ).toBe(true);
     expect(
       page.decisions.map(({ legacySourceUrls }) => legacySourceUrls),
     ).toEqual([
@@ -622,9 +639,12 @@ describe("czUsAdapter.fetchPage", () => {
       await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
 
-    expect(page.decisions.map(({ ecli }) => ecli)).toEqual([
-      "ECLI:CZ:US:2024:Pl.US.18.24.1",
-    ]);
+    expect(
+      Bun.deepEquals(
+        page.decisions.map(({ ecli }) => ecli),
+        ["ECLI:CZ:US:2024:Pl.US.18.24.1"],
+      ),
+    ).toBe(true);
   });
 
   test("names the counted ECLI an earlier release built when NALUS lists one without a counter", async () => {
@@ -645,13 +665,16 @@ describe("czUsAdapter.fetchPage", () => {
     );
 
     expect(
-      page.decisions.map(({ ecli, legacyEcli }) => ({ ecli, legacyEcli })),
-    ).toEqual([
-      {
-        ecli: "ECLI:CZ:US:2025:2.US.1030.25",
-        legacyEcli: "ECLI:CZ:US:2025:2.US.1030.25.1",
-      },
-    ]);
+      Bun.deepEquals(
+        page.decisions.map(({ ecli, legacyEcli }) => ({ ecli, legacyEcli })),
+        [
+          {
+            ecli: "ECLI:CZ:US:2025:2.US.1030.25",
+            legacyEcli: "ECLI:CZ:US:2025:2.US.1030.25.1",
+          },
+        ],
+      ),
+    ).toBe(true);
   });
 
   test("names no earlier ECLI when NALUS lists a counted one", async () => {
@@ -726,14 +749,18 @@ describe("czUsAdapter.fetchPage", () => {
       await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
 
-    expect(page.decisions.map(({ court }) => court)).toEqual([
-      "Ústavní soud",
-      "Ústavní soud",
-    ]);
-    expect(page.decisions.map(({ metadata }) => metadata["court"])).toEqual([
-      "Ústavní soud",
-      "Ústavní soud",
-    ]);
+    expect(
+      Bun.deepEquals(
+        page.decisions.map(({ court }) => court),
+        ["Ústavní soud", "Ústavní soud"],
+      ),
+    ).toBe(true);
+    expect(
+      Bun.deepEquals(
+        page.decisions.map(({ metadata }) => metadata["court"]),
+        ["Ústavní soud", "Ústavní soud"],
+      ),
+    ).toBe(true);
   });
 
   test("does not synthesize colliding ECLI aliases from unsafe counters", async () => {
@@ -1041,7 +1068,7 @@ describe("czUsAdapter.fetchPage", () => {
         await czUsAdapter.fetchPage(historicalCursor(2024), {}),
       );
       expect(page.decisions).toHaveLength(1);
-      expect(page.decisions[0]?.caseNumber).toBe("I.ÚS 1/24");
+      expect(page.decisions[0]?.caseNumber === "I.ÚS 1/24").toBe(true);
       expect(page.decisions[0]?.isListingOnly).toBeUndefined();
       expect(page.decisions[0]?.fulltext).toContain("Lorem ipsum");
       expect(page.decisions[0]?.sourceRawContentType).toBe(
@@ -1058,7 +1085,9 @@ describe("czUsAdapter.fetchPage", () => {
       ).not.toHaveProperty("abstract");
       // A server error says nothing about the abstract: the row states the
       // recoverable gap, which the reconciliation reads again.
-      expect(page.decisions[0]?.metadata["abstractState"]).toBe("unavailable");
+      expect(
+        page.decisions[0]?.metadata["abstractState"] === "unavailable",
+      ).toBe(true);
       expect(readAgainByReconciliation(page.decisions[0])).toBe(true);
       expect(
         logs
@@ -1144,11 +1173,16 @@ describe("czUsAdapter.fetchPage", () => {
       await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
     expect(page.decisions[0]?.isListingOnly).toBeUndefined();
-    expect(page.decisions[0]?.metadata["abstractState"]).toBe("absent");
-    expect(readAgainByReconciliation(page.decisions[0])).toBe(false);
-    expect(page.decisions[0]?.textFields.abstract).toEqual(
-      absentDecisionTextFields(TEXT_ABSENCE_REASON.PARSE_FAILED).abstract,
+    expect(page.decisions[0]?.metadata["abstractState"] === "absent").toBe(
+      true,
     );
+    expect(readAgainByReconciliation(page.decisions[0])).toBe(false);
+    expect(
+      Bun.deepEquals(
+        page.decisions[0]?.textFields.abstract,
+        absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED).abstract,
+      ),
+    ).toBe(true);
   });
 
   test("enriches listed decisions with abstracts and legal sentences", async () => {
@@ -1173,11 +1207,13 @@ describe("czUsAdapter.fetchPage", () => {
       await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
     const decision = page.decisions.at(0);
-    expect(decision?.textFields).toEqual({
-      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      abstract: { type: TEXT_FIELD_TYPE.PRESENT, text: abstract },
-      legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: legalSentence },
-    });
+    expect(
+      Bun.deepEquals(decision?.textFields, {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        abstract: { type: TEXT_FIELD_TYPE.PRESENT, text: abstract },
+        legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: legalSentence },
+      }),
+    ).toBe(true);
     expect(decision?.sourceRawContentType).toBe(
       SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     );
@@ -1186,7 +1222,7 @@ describe("czUsAdapter.fetchPage", () => {
       document: expect.stringContaining("lblRegistrySign"),
       abstract: expect.stringContaining(abstract),
     });
-    expect(decision?.metadata["abstractState"]).toBe("read");
+    expect(decision?.metadata["abstractState"] === "read").toBe(true);
     expect(readAgainByReconciliation(decision)).toBe(false);
   });
 
@@ -1216,6 +1252,86 @@ describe("czUsAdapter.fetchPage", () => {
     expect(first?.rawHash).not.toBe(second?.rawHash);
   });
 
+  test("ignores hidden ASP.NET request state in the source hash", async () => {
+    const rows = [
+      {
+        id: "9101",
+        sz: "raw-hash_1",
+        caseNumber: "Fixture 1",
+        date: "1. 1. 2024",
+      },
+    ];
+    const captures = [];
+    for (const state of ["first", "second"]) {
+      installSearchMock({
+        rows,
+        recordCardSuffix: `<input type="hidden" name="__VIEWSTATE" value="${state} > token" /><input name="__EVENTVALIDATION" value="${state}" type="hidden"><input type="hidden" name="__VIEWSTATEGENERATOR" value="${state}">`,
+      });
+      captures.push(
+        unwrap(
+          await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+        ).decisions.at(0),
+      );
+    }
+    const [first, second] = captures;
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    expect(first?.sourceRaw).not.toBe(second?.sourceRaw);
+    expect(first?.rawHash).toBe(second?.rawHash);
+  });
+
+  for (const payload of ["document", "record-card"] as const) {
+    test(`moves the source hash when publisher ${payload} bytes change`, async () => {
+      const rows = [
+        {
+          id: "9101",
+          sz: "raw-hash_1",
+          caseNumber: "Fixture 1",
+          date: "1. 1. 2024",
+        },
+      ];
+      installSearchMock({ rows });
+      const first = unwrap(
+        await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+      ).decisions.at(0);
+      installSearchMock({
+        rows,
+        ...(payload === "document"
+          ? { documentText: "Corrected publisher decision text." }
+          : { recordCardSuffix: "<!-- Publisher card revision -->" }),
+      });
+      const second = unwrap(
+        await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+      ).decisions.at(0);
+      expect(first).toBeDefined();
+      expect(second).toBeDefined();
+      expect(first?.sourceRaw).not.toBe(second?.sourceRaw);
+      expect(first?.rawHash).not.toBe(second?.rawHash);
+      if (second?.sourceRaw === undefined) {
+        return;
+      }
+      const replay = await czUsAdapter.reparseStoredRaw?.({
+        raw: new TextEncoder().encode(second.sourceRaw),
+        contentType: second.sourceRawContentType ?? null,
+        caseNumber: second.caseNumber,
+        sourceDocumentId: second.sourceDocumentId ?? null,
+        language: second.language,
+        court: second.court,
+        ecli: second.ecli ?? null,
+        decisionDate: second.decisionDate ?? null,
+        decisionType: second.decisionType ?? null,
+        sourceUrl: second.sourceUrl ?? null,
+        documentUrl: second.documentUrl ?? null,
+        metadata: second.metadata,
+      });
+      expect(replay?.type).toBe("parsed");
+      if (replay?.type !== "parsed") {
+        return;
+      }
+      expect(replay.result.rawHash).toBe(second.rawHash);
+    });
+  }
+
   test("stores no headnote where the court prints that it has none", async () => {
     // Both cells are always filled: with the text, or with a sentence saying
     // there is none. The second is longer than any length threshold, so before
@@ -1237,17 +1353,19 @@ describe("czUsAdapter.fetchPage", () => {
     const page = unwrap(
       await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
-    expect(page.decisions.at(0)?.textFields).toEqual({
-      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      abstract: {
-        type: TEXT_FIELD_TYPE.ABSENT,
-        reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
-      },
-      legalSentence: {
-        type: TEXT_FIELD_TYPE.ABSENT,
-        reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
-      },
-    });
+    expect(
+      Bun.deepEquals(page.decisions.at(0)?.textFields, {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        abstract: {
+          type: TEXT_FIELD_TYPE.ABSENT,
+          reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+        },
+        legalSentence: {
+          type: TEXT_FIELD_TYPE.ABSENT,
+          reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+        },
+      }),
+    ).toBe(true);
     // The page the sentences came from is still stored, so a later reading
     // can recover whatever the court served.
     expect(
@@ -1300,14 +1418,18 @@ describe("czUsAdapter.fetchPage", () => {
     if (outcome.type !== "parsed") {
       return;
     }
-    expect(outcome.result.textFields.abstract).toEqual({
-      text: "Analytická právní věta\n\nPlošné shromažďování údajů je nepřípustné.\n\nNávrh a řízení před Ústavním soudem\n\nPlénum návrhu vyhovělo.",
-      type: TEXT_FIELD_TYPE.PRESENT,
-    });
-    expect(outcome.result.textFields.legalSentence).toEqual({
-      text: "První právní věta.\n\nDruhá právní věta.",
-      type: TEXT_FIELD_TYPE.PRESENT,
-    });
+    expect(
+      Bun.deepEquals(outcome.result.textFields.abstract, {
+        text: "Analytická právní věta\n\nPlošné shromažďování údajů je nepřípustné.\n\nNávrh a řízení před Ústavním soudem\n\nPlénum návrhu vyhovělo.",
+        type: TEXT_FIELD_TYPE.PRESENT,
+      }),
+    ).toBe(true);
+    expect(
+      Bun.deepEquals(outcome.result.textFields.legalSentence, {
+        text: "První právní věta.\n\nDruhá právní věta.",
+        type: TEXT_FIELD_TYPE.PRESENT,
+      }),
+    ).toBe(true);
     expect(outcome.result.sourceRaw).toContain("abstractHtml");
   });
 
@@ -1345,7 +1467,7 @@ describe("czUsAdapter.fetchPage", () => {
     const decision = page.decisions[0];
     expect(decision?.sourceDocumentId).toBe("nalus-record:6001");
     expect(decision?.legacySourceUrls).toBeUndefined();
-    expect(decision?.decisionType).toBe("usnesení");
+    expect(decision?.decisionType === "usnesení").toBe(true);
     expect(decision?.metadata).toMatchObject({
       judge: "Nováková Jana",
       parallelQuotation: "NALUS 14/24",
@@ -1383,10 +1505,12 @@ describe("czUsAdapter.fetchPage", () => {
     const page = unwrap(
       await czUsAdapter.fetchPage(historicalCursor(2002), {}),
     );
-    expect(page.decisions[0]?.identifiers).toEqual([
-      { type: "reporter-citation", value: "234/2002 Sb." },
-      { type: "reporter-citation", value: "N 53/26 SbNU 73" },
-    ]);
+    expect(
+      Bun.deepEquals(page.decisions[0]?.identifiers, [
+        { type: "reporter-citation", value: "234/2002 Sb." },
+        { type: "reporter-citation", value: "N 53/26 SbNU 73" },
+      ]),
+    ).toBe(true);
   });
 
   test("rejects corrupt search cursors instead of silently restarting", async () => {
@@ -1748,10 +1872,12 @@ describe("czUsAdapter.fetchPage", () => {
       ({ sourceDocumentId }) => sourceDocumentId,
     );
 
-    expect(page.decisions.map(({ caseNumber }) => caseNumber)).toEqual([
-      "Pl.ÚS 15/24",
-      "Pl.ÚS 15/24",
-    ]);
+    expect(
+      Bun.deepEquals(
+        page.decisions.map(({ caseNumber }) => caseNumber),
+        ["Pl.ÚS 15/24", "Pl.ÚS 15/24"],
+      ),
+    ).toBe(true);
     expect(new Set(quarantineIds).size).toBe(2);
   });
 
@@ -1837,6 +1963,48 @@ describe("czUsAdapter.fetchPage", () => {
       quarantined?.sourceDocumentId,
     );
   });
+
+  test.each(["script", "style"])(
+    "retains stored raw-text quarantine fingerprints as repair-only aliases for %s",
+    async (tag) => {
+      const row = {
+        sz: "",
+        caseNumber: "Pl.ÚS 12/24",
+        date: "4. 1. 2024",
+        textUrl: null,
+        primaryExtraHtml: `<${tag}>oldPrimary()</${tag}>`,
+        actionsExtraHtml: `<${tag}>oldAction()</${tag}>`,
+      };
+      // The digest is pinned to the pre-cutover projection, independent of
+      // the current text reader and alias construction.
+      const legacyId = `nalus-quarantine:${hashContent(
+        JSON.stringify({
+          stablePrimaryText: "Jan NovákoldPrimary()",
+          stableActionsText: "oldAction()",
+          stableDetailText: "Pl.ÚS 12/24",
+          stableCounterText: "1",
+        }),
+      )}`;
+      installSearchMock({ rows: [row] });
+      const quarantined = unwrap(
+        await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+      ).decisions.at(0);
+      expect(quarantined?.sourceDocumentId).not.toBe(legacyId);
+      expect(quarantined?.sourceDocumentIdRepairAliases).toBeUndefined();
+
+      installSearchMock({
+        rows: [{ ...row, sz: "Pl-12-24_1", textUrl: undefined }],
+      });
+      const recovered = unwrap(
+        await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+      ).decisions.at(0);
+      expect(recovered?.sourceDocumentIdRepairAliases).toContain(legacyId);
+      expect(recovered?.sourceDocumentIdRepairAliases).toContain(
+        quarantined?.sourceDocumentId,
+      );
+      expect(recovered?.sourceDocumentIdAliases).not.toContain(legacyId);
+    },
+  );
 
   test("recovers a missing listed docket from the decision detail", async () => {
     installSearchMock({
@@ -2217,21 +2385,25 @@ describe("czUsAdapter judges", () => {
       dissenters: ["Dvořák Petr", "Mgr. Svobodová Eva"],
     });
 
-    expect(decision?.judges).toEqual([
-      { role: "rapporteur", nameAsPrinted: "Nováková Jana" },
-      { role: "dissenting", nameAsPrinted: "Dvořák Petr" },
-      { role: "dissenting", nameAsPrinted: "Svobodová Eva" },
-    ]);
+    expect(
+      Bun.deepEquals(decision?.judges, [
+        { role: "rapporteur", nameAsPrinted: "Nováková Jana" },
+        { role: "dissenting", nameAsPrinted: "Dvořák Petr" },
+        { role: "dissenting", nameAsPrinted: "Svobodová Eva" },
+      ]),
+    ).toBe(true);
     // The facts row still reads one name, from the same source field.
-    expect(decision?.metadata["judge"]).toBe("Nováková Jana");
+    expect(decision?.metadata["judge"] === "Nováková Jana").toBe(true);
   });
 
   test("carries only the rapporteur where no separate opinion was filed", async () => {
     const decision = await decisionWithCard({ dissenters: [] });
 
-    expect(decision?.judges).toEqual([
-      { role: "rapporteur", nameAsPrinted: "Nováková Jana" },
-    ]);
+    expect(
+      Bun.deepEquals(decision?.judges, [
+        { role: "rapporteur", nameAsPrinted: "Nováková Jana" },
+      ]),
+    ).toBe(true);
   });
 
   test("stores the card beside the document so a re-read costs no request", async () => {
@@ -2250,7 +2422,7 @@ describe("czUsAdapter judges", () => {
     const decision = await decisionWithCard({ recordCardStatus: 500 });
 
     expect(decision?.judges).toBeUndefined();
-    expect(decision?.metadata["recordCard"]).toBe("unavailable");
+    expect(decision?.metadata["recordCard"] === "unavailable").toBe(true);
     expect(
       decodeSourceRawEnvelope(decision?.sourceRaw ?? ""),
     ).not.toHaveProperty("detail");
@@ -2262,7 +2434,7 @@ describe("czUsAdapter judges", () => {
     const decision = await decisionWithCard({ recordCardStatus: 404 });
 
     expect(decision?.judges).toBeUndefined();
-    expect(decision?.metadata["recordCard"]).toBe("absent");
+    expect(decision?.metadata["recordCard"] === "absent").toBe(true);
   });
 
   test("states an empty bench where the card names no judge", async () => {
@@ -2295,6 +2467,35 @@ describe("czUsAdapter.reparseStoredRaw", () => {
 
   const textPage = makeTextPage("Pl.ÚS 9/26", "3. 2. 2026", { counter: 1 });
 
+  for (const [state, reason] of [
+    ["absent", TEXT_ABSENCE_REASON.NOT_PUBLISHED],
+    ["unavailable", TEXT_ABSENCE_REASON.PARSE_FAILED],
+  ] as const) {
+    test(`replays the ${state} abstract answer with its absence reason`, async () => {
+      const stored = storedInput(
+        JSON.stringify({ version: 1, parts: { document: textPage } }),
+        SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      );
+      const outcome = await czUsAdapter.reparseStoredRaw?.({
+        ...stored,
+        metadata: { ...stored.metadata, abstractState: state },
+      });
+      expect(outcome?.type).toBe("parsed");
+      if (outcome?.type !== "parsed") {
+        return;
+      }
+      expect(outcome.result.textFields.abstract).toEqual({
+        type: TEXT_FIELD_TYPE.ABSENT,
+        reason,
+      });
+      expect(outcome.result.textFields.legalSentence).toEqual({
+        type: TEXT_FIELD_TYPE.ABSENT,
+        reason,
+      });
+      expect(outcome.result.metadata).toMatchObject({ abstractState: state });
+    });
+  }
+
   test("reads the judges back out of an envelope without contacting the court", async () => {
     const stored = storedInput(
       JSON.stringify({
@@ -2312,12 +2513,15 @@ describe("czUsAdapter.reparseStoredRaw", () => {
     const outcome = await czUsAdapter.reparseStoredRaw?.(stored);
     expect(outcome?.type).toBe("parsed");
     expect(
-      outcome?.type === "parsed" ? outcome.result.judges : undefined,
-    ).toEqual([
-      { role: "rapporteur", nameAsPrinted: "Nováková Jana" },
-      { role: "dissenting", nameAsPrinted: "Dvořák Petr" },
-      { role: "dissenting", nameAsPrinted: "Svobodová Eva" },
-    ]);
+      Bun.deepEquals(
+        outcome?.type === "parsed" ? outcome.result.judges : undefined,
+        [
+          { role: "rapporteur", nameAsPrinted: "Nováková Jana" },
+          { role: "dissenting", nameAsPrinted: "Dvořák Petr" },
+          { role: "dissenting", nameAsPrinted: "Svobodová Eva" },
+        ],
+      ),
+    ).toBe(true);
   });
 
   test("still reads a payload stored before the envelope, and states no judges for it", async () => {
@@ -2332,7 +2536,7 @@ describe("czUsAdapter.reparseStoredRaw", () => {
     // A plain payload holds the document alone. Nothing invents judges from
     // its prose, and the row keeps whatever it already stored.
     expect(outcome.result.judges).toBeUndefined();
-    expect(outcome.result.caseNumber).toBe("Pl.ÚS 9/26");
+    expect(outcome.result.caseNumber === "Pl.ÚS 9/26").toBe(true);
   });
 
   test("keeps the page text of a document the parser cannot read and reports it", async () => {
@@ -2381,4 +2585,16 @@ describe("czUsAdapter.reparseStoredRaw", () => {
       logs.restore();
     }
   });
+});
+
+test("record card ignores excluded HTML in every label and value", async () => {
+  const html = await recordCardFixture("cz-us-record-card-dissents.html.gz");
+  const contaminated = html.replaceAll(
+    "</td>",
+    "<script>hidden-script</script><style>hidden-style</style></td>",
+  );
+  expect(contaminated).not.toBe(html);
+  const expected = parseNalusDetail(html);
+  expect(expected).not.toBeNull();
+  expect(parseNalusDetail(contaminated)).toEqual(expected);
 });

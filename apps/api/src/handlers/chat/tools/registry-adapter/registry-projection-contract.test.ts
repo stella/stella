@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
+  SEARCH_PAGINATION_COMPLETE,
   countedSearchTotal,
+  LEGISLATION_SEARCH_MATCH_TYPES,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
@@ -27,6 +29,7 @@ import { deriveRefMediationEntry } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -181,7 +184,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
     async (run: (transaction: unknown) => unknown) => await run(tx),
   );
   return buildMcpContextFromChat({
-    memberRole: "owner",
+    memberRole: sessionMemberRole("owner"),
     organizationId: ORGANIZATION_ID,
     safeDb: toSafeDbMock(scopedDb),
     scopedDb,
@@ -1349,6 +1352,7 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ country: "CZE", queries: ["dobré mravy"] }),
       setup: () => {
         searchDecisionsHandlerMock.mockResolvedValue({
+          paginationOutcome: SEARCH_PAGINATION_COMPLETE,
           facets: null,
           hits: [
             {
@@ -1558,35 +1562,38 @@ const CONTRACT_CORPUS = {
       expectRefPaths: [],
     },
   ],
-  search_legislation: [
-    {
-      mode: "search",
-      buildArgs: () => ({ country: "CZE", query: "náhrada škody" }),
-      setup: () => {
-        searchLegislationHandlerMock.mockResolvedValue({
-          items: [
-            {
-              documentId: uid(70),
-              eli: "/eli/cz/sb/2012/89",
-              title: "89/2012 Sb., občanský zákoník",
-              country: "CZE",
-              language: "cs",
-              documentType: "act",
-              status: "in_force",
-              effectiveDate: "2014-01-01",
-              // GUID-bearing publisher URL; see the statute fixture above.
-              sourceUrl: `https://example.test/89-2012/${uid(95)}`,
-              headline: "<mark>náhrada škody</mark>",
-              score: 1.5,
-            },
-          ],
-          nextCursor: null,
-          total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
-        });
-      },
-      expectRefPaths: [],
+  search_legislation: LEGISLATION_SEARCH_MATCH_TYPES.map((matchType) => ({
+    mode: `search-${matchType}`,
+    buildArgs: () => ({ country: "CZE", query: "náhrada škody" }),
+    setup: () => {
+      searchLegislationHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        items: [
+          {
+            documentId: uid(70),
+            eli: "/eli/cz/sb/2012/89",
+            title: "89/2012 Sb., občanský zákoník",
+            country: "CZE",
+            language: "cs",
+            match: { type: matchType },
+            documentType: "act",
+            status: "in_force",
+            effectiveDate: "2014-01-01",
+            // GUID-bearing publisher URL; see the statute fixture above.
+            sourceUrl: `https://example.test/89-2012/${uid(95)}`,
+            headline: "<mark>náhrada škody</mark>",
+            score: 1.5,
+          },
+        ],
+        nextCursor: null,
+        total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
+      });
     },
-  ],
+    expectRefPaths: [],
+    expectPayloadContains: [
+      JSON.stringify({ match: { type: matchType } }).slice(1, -1),
+    ],
+  })),
   read_statute: [
     {
       mode: "read",

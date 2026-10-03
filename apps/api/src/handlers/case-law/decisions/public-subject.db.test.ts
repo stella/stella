@@ -7,6 +7,7 @@ import Elysia, { t } from "elysia";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { projectionDigest } from "@stll/legal-ast/projection-digest";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import {
@@ -620,12 +621,14 @@ test(
       { createdAt: new Date("2000-01-01T00:00:00Z") },
     ]) {
       expect(
-        db
-          .update(caseLawDecisionAliases)
-          .set(patch)
-          .where(eq(caseLawDecisionAliases.retiredDecisionId, first))
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .update(caseLawDecisionAliases)
+            .set(patch)
+            .where(eq(caseLawDecisionAliases.retiredDecisionId, first))
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: {
           message: expect.stringContaining(
             "Decision alias identity is immutable",
@@ -634,40 +637,48 @@ test(
       });
     }
     expect(
-      db
-        .update(caseLawDecisionAliases)
-        .set({ canonicalDecisionId: final })
-        .where(eq(caseLawDecisionAliases.retiredDecisionId, first))
-        .execute(),
-    ).rejects.toMatchObject({
+      await rejectionOf(
+        db
+          .update(caseLawDecisionAliases)
+          .set({ canonicalDecisionId: final })
+          .where(eq(caseLawDecisionAliases.retiredDecisionId, first))
+          .execute(),
+      ),
+    ).toMatchObject({
       cause: {
         message: expect.stringContaining("Conflicting decision alias target"),
       },
     });
     expect(
-      db
-        .insert(caseLawDecisionAliases)
-        .values({ retiredDecisionId: middle, canonicalDecisionId: first })
-        .execute(),
-    ).rejects.toMatchObject({
+      await rejectionOf(
+        db
+          .insert(caseLawDecisionAliases)
+          .values({ retiredDecisionId: middle, canonicalDecisionId: first })
+          .execute(),
+      ),
+    ).toMatchObject({
       cause: { message: expect.stringContaining("Decision alias cycle") },
     });
     expect(
-      db
-        .insert(caseLawDecisionAliases)
-        .values({ retiredDecisionId: middle, canonicalDecisionId: missingId })
-        .execute(),
-    ).rejects.toMatchObject({
+      await rejectionOf(
+        db
+          .insert(caseLawDecisionAliases)
+          .values({ retiredDecisionId: middle, canonicalDecisionId: missingId })
+          .execute(),
+      ),
+    ).toMatchObject({
       cause: {
         message: expect.stringContaining("Decision alias target is not live"),
       },
     });
     expect(
-      db
-        .delete(caseLawDecisions)
-        .where(eq(caseLawDecisions.id, middle))
-        .execute(),
-    ).rejects.toMatchObject({
+      await rejectionOf(
+        db
+          .delete(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, middle))
+          .execute(),
+      ),
+    ).toMatchObject({
       cause: {
         code: "23001",
         message: expect.stringContaining(
@@ -701,11 +712,13 @@ test(
         .where(eq(caseLawDecisionAliases.retiredDecisionId, later)),
     ).toEqual([{ target: final }]);
     expect(
-      db
-        .delete(caseLawDecisions)
-        .where(eq(caseLawDecisions.id, final))
-        .execute(),
-    ).rejects.toMatchObject({
+      await rejectionOf(
+        db
+          .delete(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, final))
+          .execute(),
+      ),
+    ).toMatchObject({
       cause: {
         code: "23001",
         message: expect.stringContaining(
@@ -743,35 +756,41 @@ test(
     });
     for (const role of ["stella", "stella_public_law_reader"]) {
       expect(
-        db.transaction(async (tx) => {
-          await tx.execute(sql.raw(`SET LOCAL ROLE ${role}`));
-          await tx
-            .select({ id: caseLawDecisionAliases.retiredDecisionId })
-            .from(caseLawDecisionAliases);
-        }),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db.transaction(async (tx) => {
+            await tx.execute(sql.raw(`SET LOCAL ROLE ${role}`));
+            await tx
+              .select({ id: caseLawDecisionAliases.retiredDecisionId })
+              .from(caseLawDecisionAliases);
+          }),
+        ),
+      ).toMatchObject({
         cause: { message: expect.stringContaining("permission denied") },
       });
     }
     expect(
-      db.transaction(async (tx) => {
-        await tx.execute(sql`SET LOCAL ROLE stella_public_law_reader`);
-        await tx
-          .update(caseLawDecisionAliases)
-          .set({ canonicalDecisionId: variantId })
-          .where(eq(caseLawDecisionAliases.retiredDecisionId, retiredId));
-      }),
-    ).rejects.toMatchObject({
+      await rejectionOf(
+        db.transaction(async (tx) => {
+          await tx.execute(sql`SET LOCAL ROLE stella_public_law_reader`);
+          await tx
+            .update(caseLawDecisionAliases)
+            .set({ canonicalDecisionId: variantId })
+            .where(eq(caseLawDecisionAliases.retiredDecisionId, retiredId));
+        }),
+      ),
+    ).toMatchObject({
       cause: { message: expect.stringContaining("permission denied") },
     });
     expect(
-      db.transaction(async (tx) => {
-        await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
-        await tx
-          .delete(caseLawDecisionAliases)
-          .where(eq(caseLawDecisionAliases.retiredDecisionId, retiredId));
-      }),
-    ).rejects.toMatchObject({
+      await rejectionOf(
+        db.transaction(async (tx) => {
+          await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+          await tx
+            .delete(caseLawDecisionAliases)
+            .where(eq(caseLawDecisionAliases.retiredDecisionId, retiredId));
+        }),
+      ),
+    ).toMatchObject({
       cause: { message: expect.stringContaining("permission denied") },
     });
   },
@@ -793,14 +812,16 @@ test(
       },
     ]) {
       expect(
-        db
-          .insert(caseLawDecisionAliases)
-          .values({
-            retiredDecisionId,
-            canonicalDecisionId: openId,
-          })
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .insert(caseLawDecisionAliases)
+            .values({
+              retiredDecisionId,
+              canonicalDecisionId: openId,
+            })
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: { message: expect.stringContaining(message) },
       });
       expect(

@@ -20,10 +20,12 @@ import {
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assembleCzRegionalDecision,
+  buildCzRegionalDecision,
   czRegionalAdapter,
   czRegionalEnvelopeWithChain,
   czRegionalListingIdentity,
   isCzRegionalApiItem,
+  listCzRegionalDayPage,
   readCzRegionalChain,
   readCzRegionalDocument,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
@@ -200,21 +202,23 @@ describe("the stored payload is an envelope of every response read", () => {
     ).toEqual(["chain", "document", "listing"]);
     // The affecting document's own id is the one thing the forward edge in
     // the other decision's payload never states.
-    expect(decision.metadata["affectingDocs"]).toEqual([
-      {
-        uuid: "e53d0e6b-949a-44b1-8224-5a3d63a27571",
-        caseNumber: {
-          senate: 26,
-          registry: "Co",
-          index: 43,
-          year: 2025,
-          pageNumber: 49,
+    expect(
+      Bun.deepEquals(decision.metadata["affectingDocs"], [
+        {
+          uuid: "e53d0e6b-949a-44b1-8224-5a3d63a27571",
+          caseNumber: {
+            senate: 26,
+            registry: "Co",
+            index: 43,
+            year: 2025,
+            pageNumber: 49,
+          },
+          courtCode: "KSHK",
+          affectedDate: "2025-03-11",
+          affectedTypes: ["CONFIRM"],
         },
-        courtCode: "KSHK",
-        affectedDate: "2025-03-11",
-        affectedTypes: ["CONFIRM"],
-      },
-    ]);
+      ]),
+    ).toBe(true);
   });
 
   test("a payload stored before the envelope is reported, not guessed at", async () => {
@@ -251,9 +255,9 @@ describe("what the publisher states reaches the row", () => {
       document: APPELLATE_DOCUMENT,
     });
 
-    expect(decision.caseNumber).toBe("26 Co 43/2025");
-    expect(decision.sheetNumber).toBe("49");
-    expect(decision.ecli).toBe("ECLI:CZ:KSHK:2025:26.Co.43.2025.1");
+    expect(decision.caseNumber === "26 Co 43/2025").toBe(true);
+    expect(decision.sheetNumber === "49").toBe(true);
+    expect(decision.ecli === "ECLI:CZ:KSHK:2025:26.Co.43.2025.1").toBe(true);
     expect(decision.decisionDate).toBe("2025-03-11");
     expect(decision.sourceDocumentId).toBe(
       "e53d0e6b-949a-44b1-8224-5a3d63a27571",
@@ -280,9 +284,11 @@ describe("what the publisher states reaches the row", () => {
       document: APPELLATE_DOCUMENT,
     });
 
-    expect(decision.judges).toEqual([
-      { role: "rapporteur", nameAsPrinted: "Dana Mazáková" },
-    ]);
+    expect(
+      Bun.deepEquals(decision.judges, [
+        { role: "rapporteur", nameAsPrinted: "Dana Mazáková" },
+      ]),
+    ).toBe(true);
     // How that one judge sat is the court's own word for it and stays on the
     // verbatim blob rather than becoming a role of its own.
     expect(decision.metadata["solver"]).toMatchObject({
@@ -296,9 +302,11 @@ describe("what the publisher states reaches the row", () => {
       docket: DISTRICT_DOCKET,
     });
 
-    expect(decision.judges).toEqual([
-      { role: "rapporteur", nameAsPrinted: "Eva Tabetová" },
-    ]);
+    expect(
+      Bun.deepEquals(decision.judges, [
+        { role: "rapporteur", nameAsPrinted: "Eva Tabetová" },
+      ]),
+    ).toBe(true);
   });
 
   test("the publisher's own relation graph becomes cited cases", async () => {
@@ -308,7 +316,9 @@ describe("what the publisher states reaches the row", () => {
       document: APPELLATE_DOCUMENT,
     });
 
-    expect(decision.publisherCitedCases).toEqual(["18 C 130/2024"]);
+    expect(
+      Bun.deepEquals(decision.publisherCitedCases, ["18 C 130/2024"]),
+    ).toBe(true);
     // The relation kind has nowhere to go on a list of case numbers, so the
     // typed edge is kept beside it.
     expect(decision.metadata["affectedDocs"]).toMatchObject([
@@ -445,9 +455,9 @@ describe("the decision type is the publisher's enum in the local language", () =
       chain: null,
     });
 
-    expect(built.type === "built" && built.decision.decisionType).toBe(
-      "trestní příkaz",
-    );
+    expect(
+      built.type === "built" && built.decision.decisionType?.toString(),
+    ).toBe("trestní příkaz");
     // The synthesized heading is keyed on the same local word, so a type the
     // map missed would leave the document without its own title.
     expect(
@@ -510,9 +520,11 @@ describe("document metadata the publisher sends null or reshaped", () => {
     async (_part, solver, printed) => {
       const decision = await builtWith({ solver });
 
-      expect(decision.judges).toEqual([
-        { role: "rapporteur", nameAsPrinted: printed },
-      ]);
+      expect(
+        Bun.deepEquals(decision.judges, [
+          { role: "rapporteur", nameAsPrinted: printed },
+        ]),
+      ).toBe(true);
     },
   );
 
@@ -647,22 +659,172 @@ describe("the crawl keeps a refused row as its listing", () => {
         count: 1,
       });
       expect(
-        page.decisions.map(({ caseNumber, isListingOnly }) => ({
-          caseNumber,
-          isListingOnly,
-        })),
-      ).toEqual([
-        { caseNumber: "18 C 130/2024", isListingOnly: true },
-        { caseNumber: "26 Co 43/2025", isListingOnly: undefined },
-      ]);
+        Bun.deepEquals(
+          page.decisions.map(({ caseNumber, isListingOnly }) => ({
+            caseNumber,
+            isListingOnly,
+          })),
+          [
+            { caseNumber: "18 C 130/2024", isListingOnly: true },
+            { caseNumber: "26 Co 43/2025", isListingOnly: undefined },
+          ],
+        ),
+      ).toBe(true);
       expect(page.nextCursor).toBe("2025-06-11:1");
     });
   }
   test("accepts a small valid empty listing", async () => {
-    globalThis.fetch = asFetchMock(async () => new Response('{"items":[]}'));
+    globalThis.fetch = asFetchMock(
+      async () => new Response('{"items":[],"totalPages":0}'),
+    );
     const result = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
     expect(result.unwrap().decisions).toEqual([]);
   });
+  test("listing pagination requires a stated total page count", async () => {
+    globalThis.fetch = asFetchMock(async () => new Response('{"items":[]}'));
+    const result = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(PublisherPageError);
+    }
+    const rejection: unknown = await czRegionalAdapter.reconciliation
+      .listSlicePage({ slice: "2025-06-11", page: 0 })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(rejection).toBeInstanceOf(PublisherPageError);
+  });
+
+  test.each([
+    { autor: 7 },
+    { autor: { value: "publisher value" } },
+    { autor: [7] },
+    { predmetRizeni: { value: "publisher value" } },
+    { datumVydani: 7 },
+    { klicovaSlova: [7] },
+    { zminenaUstanoveni: "publisher value" },
+    { odkaz: 7 },
+    { odkaz: { value: "publisher value" } },
+    { odkaz: [7] },
+  ])(
+    "a mistyped optional listing field keeps its raw identity and payload (%j)",
+    async (drift) => {
+      const item = await itemByDocket(LISTING, DISTRICT_DOCKET);
+      const raw = { ...item, ...drift };
+      expect(isCzRegionalApiItem(raw)).toBe(false);
+      const listing = JSON.stringify({ items: [raw], totalPages: 1 });
+      const document = await readFixture(DISTRICT_DOCUMENT);
+      const documentFetch = mock(async () => new Response(document));
+      globalThis.fetch = asFetchMock(async (input: string) =>
+        input === item.odkaz ? await documentFetch() : new Response(listing),
+      );
+      const hasValidLink = !("odkaz" in drift);
+      const identity =
+        "odkaz" in drift
+          ? ({
+              type: "case-number",
+              caseNumber: "18 C 130/2024",
+              language: "cs",
+            } as const satisfies ReturnType<typeof czRegionalListingIdentity>)
+          : ({
+              type: "document",
+              sourceDocumentId: "e21716f9-8855-4a85-a7e6-9af23622661b",
+            } as const satisfies ReturnType<typeof czRegionalListingIdentity>);
+      expect(czRegionalListingIdentity(raw)).toEqual(identity);
+      const listed = await listCzRegionalDayPage({
+        date: "2025-06-11",
+        page: 0,
+      });
+      expect(listed.items).toEqual([raw]);
+      const repaired = await buildCzRegionalDecision(raw);
+      expect(repaired.type).toBe(hasValidLink ? "built" : "detail-unavailable");
+      if (repaired.type !== "unkeyable") {
+        expect(repaired.decision.isListingOnly).toBe(
+          hasValidLink ? undefined : true,
+        );
+        if (hasValidLink) {
+          expect(repaired.decision.fulltext).toBeTruthy();
+          expect(
+            decodeSourceRawEnvelope(repaired.decision.sourceRaw ?? "")?.[
+              "document"
+            ],
+          ).toBe(document);
+        }
+        expect(
+          JSON.parse(
+            decodeSourceRawEnvelope(repaired.decision.sourceRaw ?? "")?.[
+              "listing"
+            ] ?? "null",
+          ),
+        ).toEqual(raw);
+      }
+      expect(await czRegionalAdapter.reconciliation.buildDecision(raw)).toEqual(
+        repaired,
+      );
+      const slice = await czRegionalAdapter.reconciliation.listSlicePage({
+        slice: "2025-06-11",
+        page: 0,
+      });
+      expect(slice.items).toEqual([{ identity, payload: raw }]);
+      const page = (
+        await czRegionalAdapter.fetchPage("2025-06-11:0", {})
+      ).unwrap();
+      expect(page.decisions).toHaveLength(1);
+      expect(page.decisions.at(0)?.isListingOnly).toBe(
+        hasValidLink ? undefined : true,
+      );
+      expect(documentFetch).toHaveBeenCalledTimes(hasValidLink ? 3 : 0);
+      if (hasValidLink) {
+        const decision =
+          page.decisions.at(0) ?? panic("Crawled decision absent");
+        expect(decision.fulltext).toBeTruthy();
+        const replayed = await czRegionalAdapter.reparseStoredRaw?.({
+          raw: new TextEncoder().encode(decision.sourceRaw),
+          contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+          sourceDocumentId: decision.sourceDocumentId ?? null,
+          caseNumber: decision.caseNumber,
+          language: decision.language,
+          court: decision.court,
+          ecli: decision.ecli ?? null,
+          decisionDate: decision.decisionDate ?? null,
+          decisionType: decision.decisionType ?? null,
+          sourceUrl: decision.sourceUrl ?? null,
+          documentUrl: decision.documentUrl ?? null,
+          metadata: decision.metadata,
+        });
+        expect(replayed?.type).toBe("parsed");
+        if (replayed?.type === "parsed") {
+          expect(replayed.result.isListingOnly).toBeUndefined();
+          expect(replayed.result.sourceRaw).toBe(decision.sourceRaw);
+          expect(replayed.result.fulltext).toBe(decision.fulltext);
+        }
+        const storedRaw =
+          decodeSourceRawEnvelope(page.decisions.at(0)?.sourceRaw ?? "")?.[
+            "listing"
+          ] ?? panic("Stored listing absent");
+        const recovered = await buildCzRegionalDecision(JSON.parse(storedRaw));
+        expect(recovered.type).toBe("built");
+        if (recovered.type === "built") {
+          expect(recovered.decision.isListingOnly).toBeUndefined();
+          expect(recovered.decision.fulltext).toBe(
+            repaired.type === "built" ? repaired.decision.fulltext : undefined,
+          );
+        }
+      }
+      expect(
+        JSON.parse(
+          decodeSourceRawEnvelope(page.decisions.at(0)?.sourceRaw ?? "")?.[
+            "listing"
+          ] ?? "null",
+        ),
+      ).toEqual(raw);
+      expect(page.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 1,
+      });
+    },
+  );
   test("a malformed listing member does not reject its valid sibling", async () => {
     const item = await itemByDocket(LISTING, DISTRICT_DOCKET);
     const listing = JSON.stringify({
@@ -752,14 +914,17 @@ describe("the crawl keeps a refused row as its listing", () => {
       count: 1,
     });
     expect(
-      decisions.map(({ caseNumber, isListingOnly }) => ({
-        caseNumber,
-        isListingOnly,
-      })),
-    ).toEqual([
-      { caseNumber: "18 C 130/2024", isListingOnly: true },
-      { caseNumber: "26 Co 43/2025", isListingOnly: undefined },
-    ]);
+      Bun.deepEquals(
+        decisions.map(({ caseNumber, isListingOnly }) => ({
+          caseNumber,
+          isListingOnly,
+        })),
+        [
+          { caseNumber: "18 C 130/2024", isListingOnly: true },
+          { caseNumber: "26 Co 43/2025", isListingOnly: undefined },
+        ],
+      ),
+    ).toBe(true);
     // The raw listing row is what a later replay or reconciliation rebuilds it
     // from, so the listing-only row carries it and nothing else.
     expect(
@@ -793,14 +958,17 @@ describe("the crawl keeps a refused row as its listing", () => {
       const page = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
 
       expect(
-        page.unwrap().decisions.map(({ caseNumber, isListingOnly }) => ({
-          caseNumber,
-          isListingOnly,
-        })),
-      ).toEqual([
-        { caseNumber: "18 C 130/2024", isListingOnly: true },
-        { caseNumber: "26 Co 43/2025", isListingOnly: true },
-      ]);
+        Bun.deepEquals(
+          page.unwrap().decisions.map(({ caseNumber, isListingOnly }) => ({
+            caseNumber,
+            isListingOnly,
+          })),
+          [
+            { caseNumber: "18 C 130/2024", isListingOnly: true },
+            { caseNumber: "26 Co 43/2025", isListingOnly: true },
+          ],
+        ),
+      ).toBe(true);
       expect(
         logs
           .at("WARN")

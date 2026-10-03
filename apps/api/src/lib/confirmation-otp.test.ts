@@ -96,6 +96,7 @@ describe("consumeConfirmationOtp (burn survives an enclosing rollback)", () => {
       .transaction(async () => {
         throw new Error("simulated abort of the destructive deletion work");
       })
+      // swallow-ok: injected transaction abort exercises rollback; persisted OTP consumption is asserted below
       .catch(() => undefined);
 
     expect(await countOtp(identifier)).toBe(0);

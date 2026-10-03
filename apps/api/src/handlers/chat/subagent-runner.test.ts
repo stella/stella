@@ -145,9 +145,9 @@ const runScriptedSubagent = async (
     },
     {
       // The resolved model stays real; only its transport is scripted.
-      resolveModel: (options) =>
+      resolveModel: async (options) =>
         asTestRaw<ResolvedTanStackTextModel>({
-          ...resolveTanStackTextModel(options),
+          ...(await resolveTanStackTextModel(options)),
           adapter,
         }),
     },

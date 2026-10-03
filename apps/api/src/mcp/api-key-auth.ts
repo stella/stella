@@ -9,7 +9,10 @@ import {
   parseMachineApiKeyPermissions,
 } from "@/api/lib/machine-api-key-config";
 import { isMemberRole } from "@/api/lib/member-roles";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import {
+  hasMemberPermission,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 import type { McpSession } from "@/api/mcp/auth";
 import type { McpMode } from "@/api/mcp/constants";
@@ -139,10 +142,11 @@ export const resolveMachineApiKeySession = async (
 
   // The escalation guard, evaluated against the role the owner holds *now*
   // rather than the one they held at creation. A key can only ever be a subset
-  // of its owner's current authority.
+  // of its owner's current authority, so the check reads the owner's role
+  // as a session would.
   if (
     !hasMemberPermission(
-      { role: authorization.role },
+      sessionMemberRole(authorization.role),
       parsedPermissions.permissions,
     )
   ) {

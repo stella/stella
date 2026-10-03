@@ -1,12 +1,12 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
 import { entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ReviewFile } from "@/api/lib/document-review/prepare-review-files";
 import { readReferencePassageTexts } from "@/api/lib/document-review/reference-passages";
 import type { DocumentReviewRunErrorCode } from "@/api/lib/document-review/run-contract";
+import type { MembershipScopedDb } from "@/api/lib/root-scoped-db";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /** A pinned document, as recorded on the run. */
@@ -32,7 +32,7 @@ type ResolveRunInputsArgs = {
 
 /** Resolve the complete input set in one caller-scoped transaction. */
 export const resolveDocumentReviewRunInputs = async (
-  scopedDb: ScopedDb,
+  scopedDb: MembershipScopedDb,
   { pins, passageIds }: ResolveRunInputsArgs,
 ): Promise<ResolveRunInputsResult> =>
   scopedDb(async (tx) => {

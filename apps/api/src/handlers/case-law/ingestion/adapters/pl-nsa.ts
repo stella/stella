@@ -1,3 +1,6 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+import { Result, panic } from "better-result";
 /**
  * Polish administrative courts, imported from the Hugging Face dataset
  * `JuDDGES/pl-nsa` (CC BY 4.0).
@@ -14,8 +17,6 @@
  * next row to read; past the last shard it parks and asks for nothing. The
  * reconciliation slices are the shards themselves, listed by id alone.
  */
-
-import { Result, panic } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -55,6 +56,7 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plAdministrativeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-administrative-ruling-keys";
 import {
   huggingFaceShardSource,
@@ -96,8 +98,12 @@ import {
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { PL_NSA_METADATA_URL_SCHEMA } from "./pl-nsa.metadata-urls";
 
 const PL_NSA_LANGUAGE = "pl";
 
@@ -956,46 +962,49 @@ const quarantined = ({
   const caseNumber =
     docket?.caseNumber ?? `orzeczenia.nsa.gov.pl/doc/${identity.id}`;
   const decisionDate = warsawDate(row.judgment_date);
-  return {
-    caseNumber,
-    ...(docket === null ? { caseNumberIsPlaceholder: true } : {}),
-    isListingOnly: true,
-    sourceDocumentId: identity.id,
-    ...(identity.kind === "quarantine"
-      ? {}
-      : { sourceDocumentIdRepairAliases: [plNsaQuarantineId(source)] }),
-    court: PL_NSA_UNSTATED_COURT,
-    country: PL_NSA_COUNTRY,
-    language: PL_NSA_LANGUAGE,
-    decisionDate,
-    sourceUrl:
-      identity.kind === "portal" ? plNsaPortalUrl(identity.id) : undefined,
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: checkedDecisionMetadata({
+  return plainTextIngestionResult(
+    {
       caseNumber,
+      ...(docket === null ? { caseNumberIsPlaceholder: true } : {}),
+      isListingOnly: true,
+      sourceDocumentId: identity.id,
+      ...(identity.kind === "quarantine"
+        ? {}
+        : { sourceDocumentIdRepairAliases: [plNsaQuarantineId(source)] }),
+      court: PL_NSA_UNSTATED_COURT,
+      country: PL_NSA_COUNTRY,
+      language: PL_NSA_LANGUAGE,
       decisionDate,
-      documentId: identity.id,
-      identityKind: identity.kind,
-      docketAsPublished: row.docket_number ?? undefined,
-      courtAsPublished: row.court_name ?? undefined,
-      decisionForm: row.judgment_type ?? undefined,
-      quarantine: {
-        reason,
-        ...(fields === undefined ? {} : { fields: [...fields] }),
-      },
-      dataset: {
-        ...snapshotPart,
-        country: row.country,
-        courtType: row.court_type,
-        source: row.source,
-      },
-    }),
-    rawHash: hashContent(sourceRaw),
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_NSA],
-    documentAst: EMPTY_AST,
-    sourceRaw,
-    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+      sourceUrl:
+        identity.kind === "portal" ? plNsaPortalUrl(identity.id) : undefined,
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      metadata: checkedDecisionMetadata({
+        caseNumber,
+        decisionDate,
+        documentId: identity.id,
+        identityKind: identity.kind,
+        docketAsPublished: row.docket_number ?? undefined,
+        courtAsPublished: row.court_name ?? undefined,
+        decisionForm: row.judgment_type ?? undefined,
+        quarantine: {
+          reason,
+          ...(fields === undefined ? {} : { fields: [...fields] }),
+        },
+        dataset: {
+          ...snapshotPart,
+          country: row.country,
+          courtType: row.court_type,
+          source: row.source,
+        },
+      }),
+      rawHash: hashContent(sourceRaw),
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_NSA],
+      documentAst: EMPTY_AST,
+      sourceRaw,
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    PL_NSA_METADATA_URL_SCHEMA,
+  );
 };
 
 const judgesOf = (row: PlNsaRow): DecisionJudgeInput[] | undefined => {
@@ -1123,97 +1132,112 @@ export const assemblePlNsaDecision = ({
     reference: row.full_text,
   });
 
-  const decision: IngestionResult = {
-    caseNumber,
-    ...(docket === null ? { caseNumberIsPlaceholder: true } : {}),
-    ...(rangeMembers.length === 0
-      ? {}
-      : { identifiers: docketIdentifiers(caseNumber, rangeMembers) }),
-    sourceDocumentId: identity.id,
-    ...(identity.kind === "quarantine"
-      ? {}
-      : { sourceDocumentIdRepairAliases: [plNsaQuarantineId(source)] }),
-    court: court.name,
-    country: PL_NSA_COUNTRY,
-    language: PL_NSA_LANGUAGE,
-    decisionDate,
-    decisionType: kind.type,
-    fulltext: parsed.fulltext,
-    sourceUrl,
-    // The thesis is the court's own statement of the point of law, printed
-    // above the decision; the source carries no other summary.
-    textFields: {
-      abstract: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      headnote: sourceTextField(ADAPTER_KEYS.PL_NSA, row.thesis),
-      legalSentence: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      summary: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    },
-    judges: judgesOf(row),
-    metadata: checkedDecisionMetadata({
+  const decision: IngestionResult = plainTextIngestionResult(
+    {
       caseNumber,
+      ...(docket === null ? { caseNumberIsPlaceholder: true } : {}),
+      ...(rangeMembers.length === 0
+        ? {}
+        : { identifiers: docketIdentifiers(caseNumber, rangeMembers) }),
+      sourceDocumentId: identity.id,
+      ...(identity.kind === "quarantine"
+        ? {}
+        : { sourceDocumentIdRepairAliases: [plNsaQuarantineId(source)] }),
       court: court.name,
-      courtAsPublished: row.court_name ?? undefined,
-      courtStatedBy: court.statedBy,
-      courtLevel: court.level,
-      courtSeat: court.seat,
-      courtBranch: court.branch,
-      courtEra: court.era,
+      country: PL_NSA_COUNTRY,
+      language: PL_NSA_LANGUAGE,
       decisionDate,
       decisionType: kind.type,
-      decisionForm: row.judgment_type ?? undefined,
-      bench: kind.bench,
-      documentId: identity.id,
-      identityKind: identity.kind,
-      docketAsPublished: row.docket_number ?? undefined,
-      docketRecognised: docket?.recognised,
-      docketRangeMembers: rangeMembers.length === 0 ? undefined : rangeMembers,
-      finality: plNsaFinality(row.finality, snapshot.snapshotDate),
-      filedDate: warsawDate(row.submission_date),
-      judges: row.judges ?? undefined,
-      presiding: row.presiding_judge ?? undefined,
-      rapporteur: row.judge_rapporteur ?? undefined,
-      caseSymbols: row.case_type_description?.map(caseSymbol),
-      keywords: row.keywords ?? undefined,
-      relatedDecisions: row.related_docket_numbers?.map((related) => {
-        const relatedId = plNsaDocumentId(related.judgment_id);
-        return {
-          documentId: relatedId?.id ?? null,
-          caseNumber: normalizeDocket(related.docket_number),
-          decisionDate: warsawDate(related.judgment_date) ?? null,
-          decisionForm: related.judgment_type,
-          sourceUrl:
-            relatedId?.portal === true ? plNsaPortalUrl(relatedId.id) : null,
-        };
-      }),
-      rulingKeys: plAdministrativeCourtRulingKeys({
-        caseNumber,
-        court: court.name,
-        decisionDate,
-        decisionType: kind.type,
-        portalDocumentId: identity.kind === "portal" ? identity.id : undefined,
-      }),
-      challengedAuthority: nonEmpty(row.challenged_authority) ?? undefined,
-      outcome: row.decision ?? undefined,
-      citedProvisions: row.extracted_legal_bases ?? undefined,
-      officialCollection: row.official_collection ?? undefined,
-      glossInformation: row.glosa_information ?? undefined,
-      textSections: sectionPresence(row),
-      textComplete: parsed.validation.ok,
-      textSource: parsed.textSource,
-      dataset: {
-        ...snapshotPart,
-        country: row.country,
-        courtType: row.court_type,
-        source: row.source,
+      fulltext: parsed.fulltext,
+      sourceUrl,
+      // The thesis is the court's own statement of the point of law, printed
+      // above the decision; the source carries no other summary.
+      textFields: {
+        abstract: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        headnote: sourceTextField(ADAPTER_KEYS.PL_NSA, row.thesis),
+        legalSentence: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        summary: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
       },
-    }),
-    rawHash: hashContent(sourceRaw),
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_NSA],
-    documentAst: parsed.documentAst ?? EMPTY_AST,
-    sections: parsed.sections,
-    sourceRaw,
-    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+      judges: judgesOf(row),
+      metadata: checkedDecisionMetadata(
+        {
+          caseNumber,
+          court: court.name,
+          courtAsPublished: row.court_name ?? undefined,
+          courtStatedBy: court.statedBy,
+          courtLevel: court.level,
+          courtSeat: court.seat,
+          courtBranch: court.branch,
+          courtEra: court.era,
+          decisionDate,
+          decisionType: kind.type,
+          decisionForm: row.judgment_type ?? undefined,
+          bench: kind.bench,
+          documentId: identity.id,
+          identityKind: identity.kind,
+          docketAsPublished: row.docket_number ?? undefined,
+          docketRecognised: docket?.recognised,
+          docketRangeMembers:
+            rangeMembers.length === 0 ? undefined : rangeMembers,
+          finality: plNsaFinality(row.finality, snapshot.snapshotDate),
+          filedDate: warsawDate(row.submission_date),
+          judges: row.judges ?? undefined,
+          presiding: row.presiding_judge ?? undefined,
+          rapporteur: row.judge_rapporteur ?? undefined,
+          caseSymbols: row.case_type_description?.map(caseSymbol),
+          keywords: row.keywords ?? undefined,
+          relatedDecisions: row.related_docket_numbers?.map((related) => {
+            const relatedId = plNsaDocumentId(related.judgment_id);
+            return {
+              documentId: relatedId?.id ?? null,
+              caseNumber: normalizeDocket(related.docket_number),
+              decisionDate: warsawDate(related.judgment_date) ?? null,
+              decisionForm: related.judgment_type,
+              sourceUrl: toMetadataUrl(
+                relatedId?.portal === true
+                  ? plNsaPortalUrl(relatedId.id)
+                  : null,
+                "constructed",
+              ),
+            };
+          }),
+          rulingKeys: plAdministrativeCourtRulingKeys({
+            caseNumber,
+            court: court.name,
+            decisionDate,
+            decisionType: kind.type,
+            portalDocumentId:
+              identity.kind === "portal" ? identity.id : undefined,
+          }),
+          challengedAuthority: nonEmpty(row.challenged_authority) ?? undefined,
+          outcome: row.decision ?? undefined,
+          citedProvisions: row.extracted_legal_bases?.map((provision) => ({
+            ...provision,
+            link: toMetadataUrl(provision.link, "transport-json"),
+          })),
+          officialCollection: row.official_collection ?? undefined,
+          glossInformation: row.glosa_information ?? undefined,
+          textSections: sectionPresence(row),
+          textComplete: parsed.validation.ok,
+          textSource: parsed.textSource,
+          dataset: {
+            ...snapshotPart,
+            country: row.country,
+            courtType: row.court_type,
+            source: row.source,
+          },
+        },
+        PL_NSA_METADATA_URL_SCHEMA,
+      ),
+      rawHash: hashContent(sourceRaw),
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_NSA],
+      documentAst: parsed.documentAst ?? EMPTY_AST,
+      sections: parsed.sections,
+      sourceRaw,
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    PL_NSA_METADATA_URL_SCHEMA,
+  );
 
   return { type: "built", decision };
 };
@@ -1558,15 +1582,46 @@ export const createPlNsaCrawler = ({
     if (taken.length === 0) {
       return panic(`${target.path} holds no row ${at.row}`);
     }
-    const decisions = taken.map((rowSource, offset) =>
-      build(rowSource, { shard: target, row: at.row + offset }),
-    );
+    const decisions: IngestionResult[] = [];
+    let itemBuildFailures = 0;
+    for (const [offset, rowSource] of taken.entries()) {
+      const captured = await buildPlainTextItem({
+        adapterKey: ADAPTER_KEYS.PL_NSA,
+
+        rawListing: JSON.stringify(rowSource),
+        decisionOf: (decision) => decision,
+        build: async () =>
+          await Promise.resolve(
+            build(rowSource, { shard: target, row: at.row + offset }),
+          ),
+      });
+      switch (captured.type) {
+        case "built":
+          decisions.push(captured.value);
+          break;
+        case "item_build_failed":
+          itemBuildFailures += 1;
+          decisions.push(captured.decision);
+          break;
+        default:
+          captured satisfies never;
+          panic(`Unhandled pl-nsa item build: ${JSON.stringify(captured)}`);
+      }
+    }
     const next = settle(
       { shard: at.shard, row: at.row + taken.length },
       snapshot,
     );
     return Result.ok({
       decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
       sourceUrl: plNsaShardUrl(snapshot, target),
       nextCursor: encodePlNsaCursor(next, snapshot),
     });
@@ -1686,6 +1741,7 @@ const productionCrawler = (config: Record<string, unknown>): PlNsaCrawler => {
 const lastSlice = sliceName(PL_NSA_SNAPSHOT.shards.length - 1);
 
 export const plNsaAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_NSA,
   language: PL_NSA_LANGUAGE,
   minRequestIntervalMs: publisherRequestIntervalMs(ADAPTER_KEYS.PL_NSA),
@@ -1714,6 +1770,13 @@ export const plNsaAdapter = defineSourceAdapter({
   },
 
   reconciliation: {
+    // Only the listed identity is a row signal; dataset revision and shard/row coordinates describe the snapshot.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            identity: payload["identity"],
+          }
+        : null,
     firstSlice: sliceName(0),
     // A snapshot has no present: its newest slice is its last shard.
     sliceOf: () => lastSlice,

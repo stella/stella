@@ -32,7 +32,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
-  getTanStackTextModelForRole,
+  getTanStackTextModelInfoForRole,
   requireTanStackAIAvailableForRole,
 } from "@/api/lib/tanstack-ai-models";
 
@@ -95,7 +95,7 @@ const runGeneration = async ({
   });
 
   try {
-    const { modelId } = getTanStackTextModelForRole("fast", orgAIConfig, {
+    const { modelId } = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
       dataClass: "public_corpus",
       organizationId,
     });

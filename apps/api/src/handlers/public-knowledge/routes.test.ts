@@ -290,6 +290,7 @@ describe("public knowledge routes", () => {
               new FileScanRejectedError({
                 message: rejection.message,
                 rejection,
+                inspectionFailures: [],
               }),
             ),
           );

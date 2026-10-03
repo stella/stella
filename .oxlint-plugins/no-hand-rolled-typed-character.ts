@@ -8,9 +8,17 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // Heuristic, per function (nested functions are judged on their own): it
 // reads `.altKey` or calls `getModifierState("AltGraph")`, and it compares a
 // `.key` read with a one-character, non-whitespace string literal (`===`,
-// `!==`, a switch case) or tests `.key.length === 1`. A function that requires the Mod chord,
+// `!==`, a switch case), tests `.key.length === 1` / `!== 1`, or uses
+// a literal character array with `.includes(event.key)`. A function requiring
+// the Mod chord,
 // `metaKey || ctrlKey` negated (`if (!(e.metaKey || e.ctrlKey)) return`) or as
 // an `&&` operand, is a command shortcut and stays exempt.
+// Known limits: destructured/aliased event fields, computed property reads,
+// constants standing for character literals, codePointAt/regex predicates,
+// and interprocedural checks require binding or data-flow analysis. The Mod
+// exemption is function-wide; an unrelated Mod shortcut can hide a text veto.
+// This heuristic cannot distinguish intentional unmodified character shortcuts
+// from text input; named shortcut bindings currently avoid that ambiguity.
 
 import {
   filenameForContext,
@@ -86,6 +94,22 @@ const isKeyLengthOne = (left: unknown, right: unknown): boolean => {
 };
 
 const comparesTypedCharacter = (node: AstNode): boolean => {
+  if (node.type === "CallExpression" && Array.isArray(node.arguments)) {
+    const callee = unwrapExpression(node.callee);
+    const array =
+      callee?.type === "MemberExpression"
+        ? unwrapExpression(callee.object)
+        : null;
+    return (
+      memberName(callee) === "includes" &&
+      array?.type === "ArrayExpression" &&
+      Array.isArray(array.elements) &&
+      array.elements.length > 0 &&
+      array.elements.every(isSingleCharacterLiteral) &&
+      node.arguments.length === 1 &&
+      isKeyRead(node.arguments.at(0))
+    );
+  }
   if (node.type === "SwitchStatement") {
     return (
       isKeyRead(node.discriminant) &&

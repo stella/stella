@@ -10,7 +10,10 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import { AssistantSetup } from "@/components/assistant-setup";
 import { externalApiOrigin } from "@/lib/api-origins";
-import { mcpConnectionsOptions } from "@/lib/knowledge/queries";
+import {
+  mcpConnectorsOptions,
+  mcpConnectionsOptions,
+} from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import {
@@ -45,6 +48,10 @@ export const Route = createFileRoute(
       ensureRouteQueryData(
         context.queryClient,
         mcpConnectionsOptions(organizationId, context.user.id),
+      ),
+      ensureRouteQueryData(
+        context.queryClient,
+        mcpConnectorsOptions(organizationId),
       ),
     ]);
   },

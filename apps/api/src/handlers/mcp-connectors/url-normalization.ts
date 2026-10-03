@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { canonicalMcpResourceUrl } from "@/api/lib/mcp-upstream/url-safety";
 
 export const normalizeMcpConnectorUrl = (
   rawUrl: string,
@@ -39,12 +40,6 @@ const ensureHttpScheme = (rawUrl: string): string =>
 const normalizeUrl = (rawUrl: string): string => {
   const url = new URL(ensureHttpScheme(rawUrl.trim()));
   url.hash = "";
-  while (url.pathname.length > 1 && url.pathname.endsWith("/")) {
-    url.pathname = url.pathname.slice(0, -1);
-  }
-
-  const normalized = url.toString();
-  return url.pathname === "/" && url.search.length === 0
-    ? normalized.replace(/\/$/u, "")
-    : normalized;
+  const normalized = canonicalMcpResourceUrl(url.toString());
+  return url.search.length === 0 ? normalized.replace(/\/$/u, "") : normalized;
 };

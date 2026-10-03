@@ -5,8 +5,11 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 
 import { InlinePill } from "@/components/inline-pill";
-import { MatterIcon } from "@/components/matter-icon";
-import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
+import {
+  ReferenceChip,
+  ReferenceIcon,
+} from "@/components/references/reference-chip";
+import type { ChatReference } from "@/components/references/reference.logic";
 import type { ChatHistoryItem } from "@/features/chat/queries";
 import { useFormatter } from "@/i18n/formatting-context";
 
@@ -16,29 +19,27 @@ type ThreadContext = ChatHistoryItem["context"];
 type ThreadContextMatter = ThreadContext["matters"][number];
 type ThreadContextFile = ThreadContext["files"][number];
 
-const ICON_CLASS = "size-3 shrink-0";
 // Chips shrink with the row and truncate their label; the cap keeps one long
-// name from taking the whole line from its neighbours.
-const CHIP_CLASS = "max-w-32 min-w-0 shrink font-normal";
+// name from taking the whole line from its neighbours. The column stretches
+// the chip to the slot, so the chip's own label truncation applies.
+const CHIP_SLOT_CLASS = "flex max-w-32 min-w-0 shrink flex-col";
 
-const MatterGlyph = ({ matter }: { matter: ThreadContextMatter }) => (
-  <MatterIcon
-    className={ICON_CLASS}
-    matter={{ color: matter.color, id: matter.id }}
-  />
-);
+const matterReference = (matter: ThreadContextMatter): ChatReference => ({
+  type: "matter",
+  matterId: matter.id,
+  label: matter.name,
+});
 
-const FileGlyph = ({ file }: { file: ThreadContextFile }) => (
-  <EntityIcon
-    className={ICON_CLASS}
-    source={{
-      fileName: file.name,
-      kind: file.kind,
-      mimeType: file.mimeType,
-      type: "resolved",
-    }}
-  />
-);
+// The context carries the file's kind, so the chip draws it without a read;
+// no matter is named, so the glyph keeps its neutral colour.
+const fileReference = (file: ThreadContextFile): ChatReference => ({
+  type: "entity",
+  entityId: file.id,
+  matterId: null,
+  label: file.name,
+  entityKind: file.kind,
+  mimeType: file.mimeType,
+});
 
 /**
  * The quiet context line under a chat history title: the matters and files
@@ -66,24 +67,17 @@ export const ThreadContextLine = ({ context }: { context: ThreadContext }) => {
   return (
     <span className="flex min-w-0 shrink items-center gap-1 overflow-hidden">
       {layout.inline.matters.map((matter) => (
-        <InlinePill
-          className={CHIP_CLASS}
-          key={`matter-${matter.id}`}
-          leadingIcon={<MatterGlyph matter={matter} />}
-          truncate
-        >
-          <BidiText as="span">{matter.name}</BidiText>
-        </InlinePill>
+        <span className={CHIP_SLOT_CLASS} key={`matter-${matter.id}`}>
+          <ReferenceChip
+            interactive={false}
+            reference={matterReference(matter)}
+          />
+        </span>
       ))}
       {layout.inline.files.map((file) => (
-        <InlinePill
-          className={CHIP_CLASS}
-          key={`file-${file.id}`}
-          leadingIcon={<FileGlyph file={file} />}
-          truncate
-        >
-          <BidiText as="span">{file.name}</BidiText>
-        </InlinePill>
+        <span className={CHIP_SLOT_CLASS} key={`file-${file.id}`}>
+          <ReferenceChip interactive={false} reference={fileReference(file)} />
+        </span>
       ))}
       {layout.overflowCount > 0 ? (
         <InlinePill className="shrink-0 tabular-nums">
@@ -117,7 +111,7 @@ export const ThreadContextTooltip = ({
         <ThreadContextSection title={t("common.matters")}>
           {context.matters.map((matter) => (
             <ThreadContextEntry
-              icon={<MatterGlyph matter={matter} />}
+              icon={<ReferenceIcon reference={matterReference(matter)} />}
               key={matter.id}
               name={matter.name}
             />
@@ -128,7 +122,7 @@ export const ThreadContextTooltip = ({
         <ThreadContextSection title={t("common.files")}>
           {context.files.map((file) => (
             <ThreadContextEntry
-              icon={<FileGlyph file={file} />}
+              icon={<ReferenceIcon reference={fileReference(file)} />}
               key={file.id}
               name={file.name}
             />

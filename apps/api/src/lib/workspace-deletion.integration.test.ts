@@ -27,6 +27,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import { auditEventChanges } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -552,7 +553,10 @@ describe("workspace deletion", () => {
       expect(result.value).toEqual({ status: "deleted" });
     }
     expect(auditEvents).toHaveLength(1);
-    expect(auditEvents.at(0)?.changes?.["deleted"]?.old).toMatchObject({
+    expect(
+      (auditEvents[0] ? auditEventChanges(auditEvents[0]) : null)?.["deleted"]
+        ?.old,
+    ).toMatchObject({
       id: fixture.targetWorkspaceId,
       status: "active",
     });

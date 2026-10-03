@@ -27,6 +27,7 @@ const option = ({
         category,
         kind: "document",
         mimeType: null,
+        matterId: "matter-1",
       };
     case "workspace":
       return {

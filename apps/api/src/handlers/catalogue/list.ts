@@ -9,7 +9,6 @@ import {
   type CatalogueSetup,
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
-import { isOrganizationManagementRole } from "@stll/permissions";
 
 import {
   agentSkills,
@@ -17,7 +16,6 @@ import {
   mcpUserConnections,
 } from "@/api/db/schema";
 import type { McpConnectorAuthType } from "@/api/db/schema";
-import { env } from "@/api/env";
 import {
   computeCatalogueInstallState,
   type CatalogueInstallState,
@@ -28,8 +26,10 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { LIMITS } from "@/api/lib/limits";
 import { NATIVE_TOOL_SLUGS } from "@/api/lib/mcp-connectors/catalog-metadata";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
 
 import { resolveCatalogueSkillHandleMaps } from "./skill-handles";
@@ -124,7 +124,7 @@ const listCatalogue = createSafeRootHandler(
   async function* ({ memberRole, safeDb, session, user }) {
     const entries = loadCatalogue().filter(
       (entry) =>
-        env.FEATURE_PUBLIC_TOOLS ||
+        isDeploymentFeatureEnabled("FEATURE_PUBLIC_TOOLS") ||
         entry.kind !== "skill" ||
         entry.source !== "github",
     );
@@ -325,7 +325,9 @@ const listCatalogue = createSafeRootHandler(
     // - MCP connectors: `DELETE /mcp/connectors/:slug` only deletes
     //   org-owned rows, so globally-curated connectors (organizationId
     //   = null) never produce a usable slug.
-    const canDeleteTeamSkills = isOrganizationManagementRole(memberRole.role);
+    const canDeleteTeamSkills = hasManagementPermission(memberRole, {
+      agentSkill: ["delete"],
+    });
     const skillHandles = resolveCatalogueSkillHandleMaps({
       canManageTeamSkills: canDeleteTeamSkills,
       rows: visibleSkillRows,

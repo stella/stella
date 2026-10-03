@@ -3,28 +3,51 @@ import { toolDefinition } from "@tanstack/ai";
 import { createMCPClient } from "@tanstack/ai-mcp";
 import type { MCPClient } from "@tanstack/ai-mcp";
 import { panic, Result } from "better-result";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  mcpConnectorAuthorizationReviews,
   mcpConnectors,
   mcpOAuthClients,
   mcpUserConnections,
 } from "@/api/db/schema";
-import type { CachedMcpToolDefinition } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import type {
+  CachedMcpToolDefinition,
+  McpConnectionStatus,
+} from "@/api/db/schema";
+import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
+import {
+  recordMcpAuthorizationReview,
+  resolveMcpIssuerBinding,
+} from "@/api/lib/mcp-upstream/authorization-review";
 import {
   decryptMcpSecret,
   encryptMcpSecret,
 } from "@/api/lib/mcp-upstream/crypto";
 import {
+  MCP_OAUTH_BINDING_FAILURE_CODE,
+  MCP_OAUTH_INVALID_GRANT_CODE,
+  discoverOAuthMetadata,
+  discoverOAuthMetadataForApproval,
+  getOAuthEndpointOrigins,
   refreshOAuthToken,
   tokenExpiresAt,
 } from "@/api/lib/mcp-upstream/oauth";
+import type {
+  ApprovedMcpIssuerBinding,
+  BoundOAuthMetadata,
+  McpIssuerBinding,
+} from "@/api/lib/mcp-upstream/oauth";
+import { mcpResourceMatchesConnector } from "@/api/lib/mcp-upstream/url-safety";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   safeOutboundFetchStream,
   validateOutboundFetchTarget,
@@ -43,6 +66,57 @@ export const MCP_TOOL_EXECUTION_REQUEST_TIMEOUT_MS = 5 * 60_000;
 const MCP_HTTP_RESPONSE_MAX_BYTES = 10_000_000;
 const MCP_CALL_TOOL_METHOD = "tools/call";
 const TOKEN_REFRESH_SKEW_MS = 60_000;
+const MCP_REFRESH_LEASE_MS = 90_000;
+const MCP_REFRESH_WAIT_ATTEMPTS = 4;
+const MCP_REFRESH_WAIT_INTERVAL_MS = 500;
+export const MCP_REFRESH_BACKOFF_MS = 30_000;
+
+const CONNECTION_LOAD_FAILED = failureSink({
+  event: "mcp_upstream.connection_load_failed",
+  expected: [],
+});
+const CLIENT_SETUP_FAILED = failureSink({
+  event: "mcp_upstream.client_setup_failed",
+  expected: [],
+});
+const TOOL_CACHE_REFRESH_FAILED = failureSink({
+  event: "mcp_upstream.tool_cache_refresh_failed",
+  expected: [],
+});
+const TOKEN_REFRESH_FAILED = failureSink({
+  event: "mcp_upstream.token_refresh_failed",
+  expected: [],
+});
+const CONNECTION_STATUS_WRITE_FAILED = failureSink({
+  event: "mcp_upstream.connection_status_write_failed",
+  expected: [],
+});
+
+type McpAuthorizationReviewRecorderOptions = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+};
+
+// Discovery during a tool call or token refresh can find that the connector's
+// authorization changed; the review is recorded for the user whose request
+// observed it.
+const mcpAuthorizationReviewRecorder = ({
+  organizationId,
+  userId,
+}: McpAuthorizationReviewRecorderOptions) =>
+  createBackgroundAuditRecorder({
+    organizationId,
+    workspaceId: null,
+    userId,
+    execution: {
+      performer: {
+        type: "service",
+        id: "mcp-authorization-review",
+        name: "MCP authorization review",
+      },
+      trigger: { type: "system", source: "mcp_authorization_review" },
+    },
+  });
 
 type OutboundFetchDependencies = {
   safeOutboundFetchStream: typeof safeOutboundFetchStream;
@@ -50,15 +124,21 @@ type OutboundFetchDependencies = {
 };
 
 type ConnectionDependencies = {
+  now?: () => Date;
+  wait?: (milliseconds: number) => Promise<void>;
   createMCPClient: typeof createMCPClient;
   decryptMcpSecret: typeof decryptMcpSecret;
   encryptMcpSecret: typeof encryptMcpSecret;
   refreshOAuthToken: typeof refreshOAuthToken;
+  discoverOAuthMetadata: typeof discoverOAuthMetadata;
+  discoverOAuthMetadataForApproval: typeof discoverOAuthMetadataForApproval;
   tokenExpiresAt: typeof tokenExpiresAt;
 };
 
 const DEFAULT_CONNECTION_DEPENDENCIES: ConnectionDependencies = {
   createMCPClient,
+  discoverOAuthMetadata,
+  discoverOAuthMetadataForApproval,
   decryptMcpSecret,
   encryptMcpSecret,
   refreshOAuthToken,
@@ -84,6 +164,10 @@ type RawConnectionRow = {
   oauthClientSecretIv: Buffer | null;
   oauthResourceUrl: string | null;
   oauthAuthorizationServerUrl: string | null;
+  oauthConnectorIssuer: string | null;
+  oauthConnectorConfirmedEndpointOrigins: string[] | null;
+  oauthReviewApprovedIssuer: string | null;
+  oauthReviewApprovedEndpointOrigins: string[] | null;
   refreshTokenEncrypted: Buffer | null;
   refreshTokenIv: Buffer | null;
   slug: string;
@@ -115,6 +199,7 @@ export type LoadedMcpConnection =
       accessTokenIv: Buffer;
       expiresAt: Date | null;
       oauthAuthorizationServerUrl: string;
+      oauthIssuerBinding: McpIssuerBinding;
       oauthClientId: string;
       oauthClientSecretEncrypted: Buffer | null;
       oauthClientSecretIv: Buffer | null;
@@ -123,6 +208,36 @@ export type LoadedMcpConnection =
       refreshTokenIv: Buffer | null;
       type: "oauth2";
     });
+
+const boundMcpConnection = Symbol("BoundMcpConnection");
+
+type BoundMcpConnection = Readonly<LoadedMcpConnection> & {
+  readonly [boundMcpConnection]: true;
+};
+
+const bindMcpConnection = (
+  row: LoadedMcpConnection,
+): Result<BoundMcpConnection, HandlerError<502>> => {
+  if (row.type === "oauth2") {
+    const matches = Result.try(() =>
+      mcpResourceMatchesConnector({
+        resourceUrl: row.oauthResourceUrl,
+        connectorUrl: row.url,
+      }),
+    );
+    if (Result.isError(matches) || !matches.value) {
+      return Result.err(
+        new HandlerError({
+          status: 502,
+          message: "MCP connection resource does not match the connector URL",
+        }),
+      );
+    }
+  }
+  return Result.ok(
+    Object.freeze({ ...row, [boundMcpConnection]: true as const }),
+  );
+};
 
 const selectConnectionFields = {
   userConnectionId: mcpUserConnections.id,
@@ -142,6 +257,12 @@ const selectConnectionFields = {
   expiresAt: mcpUserConnections.expiresAt,
   oauthResourceUrl: mcpUserConnections.resourceUrl,
   oauthAuthorizationServerUrl: mcpUserConnections.authorizationServerUrl,
+  oauthConnectorIssuer: mcpConnectors.oauthIssuer,
+  oauthConnectorConfirmedEndpointOrigins:
+    mcpConnectors.oauthConfirmedEndpointOrigins,
+  oauthReviewApprovedIssuer: mcpConnectorAuthorizationReviews.approvedIssuer,
+  oauthReviewApprovedEndpointOrigins:
+    mcpConnectorAuthorizationReviews.approvedEndpointOrigins,
   oauthClientId: mcpOAuthClients.clientId,
   oauthClientSecretEncrypted: mcpOAuthClients.clientSecretEncrypted,
   oauthClientSecretIv: mcpOAuthClients.clientSecretIv,
@@ -165,6 +286,13 @@ export const loadActiveMcpConnectionsForUser = async ({
         eq(mcpConnectors.id, mcpUserConnections.connectorId),
       )
       .leftJoin(
+        mcpConnectorAuthorizationReviews,
+        and(
+          eq(mcpConnectorAuthorizationReviews.connectorId, mcpConnectors.id),
+          eq(mcpConnectorAuthorizationReviews.organizationId, organizationId),
+        ),
+      )
+      .leftJoin(
         mcpOAuthClients,
         and(
           eq(mcpOAuthClients.connectorId, mcpConnectors.id),
@@ -181,6 +309,10 @@ export const loadActiveMcpConnectionsForUser = async ({
           eq(mcpUserConnections.userId, userId),
           eq(mcpUserConnections.enabled, true),
           eq(mcpUserConnections.status, "connected"),
+          or(
+            isNull(mcpConnectorAuthorizationReviews.status),
+            eq(mcpConnectorAuthorizationReviews.status, "approved"),
+          ),
         ),
       )
       .orderBy(asc(mcpUserConnections.createdAt), asc(mcpUserConnections.id))
@@ -188,13 +320,15 @@ export const loadActiveMcpConnectionsForUser = async ({
   );
 
   if (Result.isError(rowsResult)) {
-    captureError(rowsResult.error, { source: "mcp-upstream-connections" });
+    observeFailure(rowsResult.error, { sink: CONNECTION_LOAD_FAILED });
     return [];
   }
 
   return await normalizeConnectionRows({
+    organizationId,
     rows: rowsResult.value,
     safeDb,
+    userId,
   });
 };
 
@@ -218,6 +352,13 @@ export const loadMcpConnectionById = async ({
         eq(mcpConnectors.id, mcpUserConnections.connectorId),
       )
       .leftJoin(
+        mcpConnectorAuthorizationReviews,
+        and(
+          eq(mcpConnectorAuthorizationReviews.connectorId, mcpConnectors.id),
+          eq(mcpConnectorAuthorizationReviews.organizationId, organizationId),
+        ),
+      )
+      .leftJoin(
         mcpOAuthClients,
         and(
           eq(mcpOAuthClients.connectorId, mcpConnectors.id),
@@ -234,30 +375,42 @@ export const loadMcpConnectionById = async ({
           eq(mcpUserConnections.organizationId, organizationId),
           eq(mcpUserConnections.userId, userId),
           eq(mcpUserConnections.status, "connected"),
+          or(
+            isNull(mcpConnectorAuthorizationReviews.status),
+            eq(mcpConnectorAuthorizationReviews.status, "approved"),
+          ),
         ),
       )
       .limit(1),
   );
 
   if (Result.isError(rowsResult)) {
-    captureError(rowsResult.error, { source: "mcp-upstream-connections" });
+    observeFailure(rowsResult.error, { sink: CONNECTION_LOAD_FAILED });
     return null;
   }
 
   const normalized = await normalizeConnectionRows({
+    organizationId,
     rows: rowsResult.value,
     safeDb,
+    userId,
   });
   return normalized.at(0) ?? null;
 };
 
-const normalizeConnectionRows = async ({
-  rows,
-  safeDb,
-}: {
+type NormalizeConnectionRowsOptions = {
+  organizationId: SafeId<"organization">;
   rows: RawConnectionRow[];
   safeDb: SafeDb;
-}): Promise<LoadedMcpConnection[]> => {
+  userId: SafeId<"user">;
+};
+
+const normalizeConnectionRows = async ({
+  organizationId,
+  rows,
+  safeDb,
+  userId,
+}: NormalizeConnectionRowsOptions): Promise<LoadedMcpConnection[]> => {
   const loaded: LoadedMcpConnection[] = [];
   const needsReauthIds: SafeId<"mcpUserConnection">[] = [];
   for (const rawRow of rows) {
@@ -280,7 +433,13 @@ const normalizeConnectionRows = async ({
     }
   }
   // Every malformed OAuth row is repaired by one statement.
-  await markConnectionsNeedReauth({ connectionIds: needsReauthIds, safeDb });
+  await markConnectionsStatus({
+    connectionIds: needsReauthIds,
+    organizationId,
+    safeDb,
+    status: "needs_reauth",
+    userId,
+  });
   return loaded;
 };
 
@@ -299,9 +458,30 @@ export const createMcpClientForConnection = async ({
   safeDb: SafeDb;
   userId: SafeId<"user">;
 }): Promise<MCPClient | null> => {
+  const bound = bindMcpConnection(row);
+  if (Result.isError(bound)) {
+    observeFailure(bound.error, { sink: CLIENT_SETUP_FAILED });
+    const review = await recordMcpAuthorizationReview({
+      safeDb,
+      organizationId,
+      userId,
+      connectorId: row.connectorId,
+      connection: { type: "mark" },
+      recordAuditEvent: mcpAuthorizationReviewRecorder({
+        organizationId,
+        userId,
+      }),
+      observedIssuer:
+        row.type === "oauth2" ? row.oauthAuthorizationServerUrl : row.url,
+    });
+    if (Result.isError(review)) {
+      observeFailure(review.error, { sink: CLIENT_SETUP_FAILED });
+    }
+    return null;
+  }
   const token = await resolveAuthorizationToken({
     organizationId,
-    row,
+    row: bound.value,
     safeDb,
     userId,
     dependencies,
@@ -310,26 +490,39 @@ export const createMcpClientForConnection = async ({
     return null;
   }
 
-  const target = await outboundFetch.validateOutboundFetchTarget(row.url);
+  const target = await outboundFetch.validateOutboundFetchTarget(
+    bound.value.url,
+  );
   if (Result.isError(target)) {
-    captureError(target.error, {
-      source: "mcp-upstream-client",
-      connectorSlug: row.slug,
-    });
+    observeFailure(target.error, { sink: CLIENT_SETUP_FAILED });
     return null;
   }
 
   return await dependencies.createMCPClient({
-    transport: {
-      type: "http",
-      url: target.value.url.toString(),
-      fetch: createSafeMcpFetch(outboundFetch.safeOutboundFetchStream),
-      ...(token.value === null
-        ? {}
-        : { headers: { Authorization: `Bearer ${token.value}` } }),
-    },
+    transport: createBoundMcpTransport({
+      row: bound.value,
+      token: token.value,
+      safeFetch: outboundFetch.safeOutboundFetchStream,
+    }),
   });
 };
+
+type BoundMcpTransportOptions = {
+  row: BoundMcpConnection;
+  token: string | null;
+  safeFetch: typeof safeOutboundFetchStream;
+};
+
+const createBoundMcpTransport = ({
+  row,
+  token,
+  safeFetch,
+}: BoundMcpTransportOptions) => ({
+  type: "http" as const,
+  url: new URL(row.url).toString(),
+  fetch: createSafeMcpFetch(safeFetch),
+  ...(token === null ? {} : { headers: { Authorization: `Bearer ${token}` } }),
+});
 
 /** Metadata the upstream server reports during the MCP `initialize`
  * handshake. `null` when no authenticated client could be opened. */
@@ -428,10 +621,10 @@ export const refreshCachedMcpToolsForConnection = async ({
         .where(eq(mcpUserConnections.id, connectionId));
     });
     if (Result.isError(updated)) {
-      captureError(updated.error, { source: "mcp-upstream-cache-refresh" });
+      observeFailure(updated.error, { sink: TOOL_CACHE_REFRESH_FAILED });
     }
   } catch (error) {
-    captureError(error, { source: "mcp-upstream-cache-refresh" });
+    observeFailure(error, { sink: TOOL_CACHE_REFRESH_FAILED });
   }
 };
 
@@ -637,19 +830,195 @@ const normalizeMcpFetchBody = (body: unknown): SafeOutboundFetchBody => {
   return panic("Unsupported MCP request body type");
 };
 
+type RefreshLeaseFence =
+  | {
+      type: "claimable";
+      organizationId: SafeId<"organization">;
+      userId: SafeId<"user">;
+      now: Date;
+    }
+  | { type: "held"; leaseExpiresAt: Date };
+
+// An update sets only the columns its write changes: a lease claim or release
+// leaves the connection status as it is.
+type RefreshLeaseWriteValues = Partial<
+  Pick<
+    typeof mcpUserConnections.$inferInsert,
+    | "accessTokenEncrypted"
+    | "accessTokenIv"
+    | "expiresAt"
+    | "refreshLeaseExpiresAt"
+    | "refreshRetryAfter"
+    | "refreshTokenEncrypted"
+    | "refreshTokenIv"
+    | "status"
+    | "updatedAt"
+  >
+>;
+
+type WriteUnderRefreshLeaseOptions = {
+  safeDb: SafeDb;
+  connectionId: SafeId<"mcpUserConnection">;
+  fence: RefreshLeaseFence;
+  values: RefreshLeaseWriteValues;
+};
+
+const refreshLeaseCondition = (fence: RefreshLeaseFence) => {
+  switch (fence.type) {
+    case "claimable": {
+      const now = sql`${fence.now.toISOString()}::timestamptz`;
+      return and(
+        eq(mcpUserConnections.organizationId, fence.organizationId),
+        eq(mcpUserConnections.userId, fence.userId),
+        or(
+          isNull(mcpUserConnections.refreshLeaseExpiresAt),
+          lte(mcpUserConnections.refreshLeaseExpiresAt, now),
+        ),
+        or(
+          isNull(mcpUserConnections.refreshRetryAfter),
+          lte(mcpUserConnections.refreshRetryAfter, now),
+        ),
+        or(
+          isNull(mcpUserConnections.expiresAt),
+          lte(
+            mcpUserConnections.expiresAt,
+            sql`${new Date(fence.now.getTime() + TOKEN_REFRESH_SKEW_MS).toISOString()}::timestamptz`,
+          ),
+        ),
+      );
+    }
+    case "held":
+      return eq(
+        mcpUserConnections.refreshLeaseExpiresAt,
+        sql`${fence.leaseExpiresAt.toISOString()}::timestamptz`,
+      );
+    default: {
+      fence satisfies never;
+      return panic(`Unhandled refresh lease fence: ${JSON.stringify(fence)}`);
+    }
+  }
+};
+
+/**
+ * Every write that coordinates or completes a token refresh: claiming the
+ * lease, releasing it with a retry time, storing rotated tokens, or marking the
+ * connection for reconnection once the grant is gone. A held fence matches only
+ * the lease its holder claimed, so a writer whose lease expired changes nothing.
+ */
+const writeUnderRefreshLease = async ({
+  safeDb,
+  connectionId,
+  fence,
+  values,
+}: WriteUnderRefreshLeaseOptions) =>
+  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+  await safeDb((tx) => {
+    // audit: skip — refresh coordination and token rotation for the caller's existing MCP connection
+    return tx
+      .update(mcpUserConnections)
+      .set(values)
+      .where(
+        and(
+          eq(mcpUserConnections.id, connectionId),
+          eq(mcpUserConnections.status, "connected"),
+          refreshLeaseCondition(fence),
+        ),
+      )
+      .returning({
+        id: mcpUserConnections.id,
+        expiresAt: mcpUserConnections.refreshLeaseExpiresAt,
+      });
+  });
+
+type ClaimMcpRefreshLeaseOptions = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  connectionId: SafeId<"mcpUserConnection">;
+  now: Date;
+};
+
+export const claimMcpRefreshLease = async ({
+  safeDb,
+  organizationId,
+  userId,
+  connectionId,
+  now,
+}: ClaimMcpRefreshLeaseOptions) =>
+  (
+    await writeUnderRefreshLease({
+      safeDb,
+      connectionId,
+      fence: { type: "claimable", organizationId, userId, now },
+      values: {
+        refreshLeaseExpiresAt: new Date(now.getTime() + MCP_REFRESH_LEASE_MS),
+      },
+    })
+  ).map((rows) => rows.at(0)?.expiresAt ?? null);
+
+type ReleaseMcpRefreshLeaseOptions = {
+  safeDb: SafeDb;
+  connectionId: SafeId<"mcpUserConnection">;
+  leaseExpiresAt: Date;
+  retryAfter: Date;
+};
+
+export const releaseMcpRefreshLease = async ({
+  safeDb,
+  connectionId,
+  leaseExpiresAt,
+  retryAfter,
+}: ReleaseMcpRefreshLeaseOptions) =>
+  await writeUnderRefreshLease({
+    safeDb,
+    connectionId,
+    fence: { type: "held", leaseExpiresAt },
+    values: { refreshLeaseExpiresAt: null, refreshRetryAfter: retryAfter },
+  });
+
+type DeferMcpRefreshOptions = {
+  safeDb: SafeDb;
+  connectionId: SafeId<"mcpUserConnection">;
+  leaseExpiresAt: Date;
+  now: Date;
+};
+
+const deferMcpRefresh = async ({
+  safeDb,
+  connectionId,
+  leaseExpiresAt,
+  now,
+}: DeferMcpRefreshOptions) => {
+  const released = await releaseMcpRefreshLease({
+    safeDb,
+    connectionId,
+    leaseExpiresAt,
+    retryAfter: new Date(now.getTime() + MCP_REFRESH_BACKOFF_MS),
+  });
+  if (Result.isError(released)) {
+    observeFailure(released.error, { sink: TOKEN_REFRESH_FAILED });
+  }
+};
+
+type ResolveAuthorizationTokenOptions = {
+  dependencies: ConnectionDependencies;
+  organizationId: SafeId<"organization">;
+  row: BoundMcpConnection;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+};
+
+type ResolvedAuthorizationToken =
+  | { type: "ok"; value: string | null }
+  | { type: "skip" };
+
 const resolveAuthorizationToken = async ({
   dependencies,
   organizationId,
   row,
   safeDb,
   userId,
-}: {
-  dependencies: ConnectionDependencies;
-  organizationId: SafeId<"organization">;
-  row: LoadedMcpConnection;
-  safeDb: SafeDb;
-  userId: SafeId<"user">;
-}): Promise<{ type: "ok"; value: string | null } | { type: "skip" }> => {
+}: ResolveAuthorizationTokenOptions): Promise<ResolvedAuthorizationToken> => {
   if (row.type === "none") {
     return { type: "ok", value: null };
   }
@@ -668,10 +1037,300 @@ const resolveAuthorizationToken = async ({
     };
   }
 
+  return await resolveOAuthAuthorizationToken({
+    dependencies,
+    organizationId,
+    row,
+    safeDb,
+    userId,
+  });
+};
+
+type ResolveOAuthAuthorizationTokenOptions = Omit<
+  ResolveAuthorizationTokenOptions,
+  "row"
+> & {
+  row: Extract<BoundMcpConnection, { type: "oauth2" }>;
+};
+
+/**
+ * A connector configured before issuers were stored has neither a connector
+ * issuer nor a review, so nothing could approve its connections. Discovery
+ * records what the connector uses now as a pending review; the review alone
+ * keeps the connector's connections from loading, and the observing
+ * connection keeps its tokens so it resumes once an administrator approves.
+ */
+const requestUnconfiguredIssuerReview = async ({
+  dependencies,
+  organizationId,
+  row,
+  safeDb,
+  userId,
+}: ResolveOAuthAuthorizationTokenOptions): Promise<void> => {
+  const observed = await dependencies.discoverOAuthMetadataForApproval(row.url);
+  if (Result.isError(observed)) {
+    // Without observed metadata there is nothing to approve: no review is
+    // recorded and the connection stays unused until discovery succeeds.
+    observeFailure(observed.error, { sink: CLIENT_SETUP_FAILED });
+    return;
+  }
+  const review = await recordMcpAuthorizationReview({
+    safeDb,
+    organizationId,
+    userId,
+    connectorId: row.connectorId,
+    connection: { type: "unchanged" },
+    recordAuditEvent: mcpAuthorizationReviewRecorder({
+      organizationId,
+      userId,
+    }),
+    observedIssuer: observed.value.authorizationServer.issuer,
+    observedEndpointOrigins: getOAuthEndpointOrigins(observed.value),
+  });
+  if (Result.isError(review)) {
+    observeFailure(review.error, { sink: CLIENT_SETUP_FAILED });
+  }
+};
+
+/**
+ * The approved issuer the stored connection may use, or null when it cannot
+ * be used: its connector awaits review or it was authorized by another issuer.
+ */
+const approvedStoredMcpIssuer = async (
+  options: ResolveOAuthAuthorizationTokenOptions,
+): Promise<ApprovedMcpIssuerBinding | null> => {
+  const { organizationId, row, safeDb, userId } = options;
+  const binding = row.oauthIssuerBinding;
+  switch (binding.type) {
+    case "unconfigured":
+      await requestUnconfiguredIssuerReview(options);
+      return null;
+    case "approved":
+      break;
+    default: {
+      binding satisfies never;
+      return panic("Unhandled MCP issuer binding");
+    }
+  }
+  if (binding.issuer === row.oauthAuthorizationServerUrl) {
+    return binding;
+  }
+  await markConnectionsStatus({
+    connectionIds: [row.userConnectionId],
+    organizationId,
+    safeDb,
+    status: "needs_approval",
+    userId,
+  });
+  return null;
+};
+
+type ResolveMcpTokenDuringRefreshOptions =
+  ResolveOAuthAuthorizationTokenOptions & {
+    now: Date;
+  };
+
+const resolveMcpTokenDuringRefresh = async ({
+  dependencies,
+  organizationId,
+  row,
+  safeDb,
+  userId,
+  now,
+}: ResolveMcpTokenDuringRefreshOptions): Promise<ResolvedAuthorizationToken> => {
+  if (row.expiresAt && row.expiresAt.getTime() > now.getTime()) {
+    return {
+      type: "ok",
+      value: await dependencies.decryptMcpSecret({
+        ciphertext: row.accessTokenEncrypted,
+        connectorId: row.connectorId,
+        iv: row.accessTokenIv,
+        organizationId,
+        purpose: "mcp_access_token",
+        userId,
+      }),
+    };
+  }
+  for (let attempt = 0; attempt < MCP_REFRESH_WAIT_ATTEMPTS; attempt += 1) {
+    await (dependencies.wait?.(MCP_REFRESH_WAIT_INTERVAL_MS) ??
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, MCP_REFRESH_WAIT_INTERVAL_MS);
+      }));
+    // db-await-in-loop: bounded wait for a concurrent refresh; each attempt re-reads one row after a pause
+    const refreshedRow = await loadMcpConnectionById({
+      connectionId: row.userConnectionId,
+      organizationId,
+      safeDb,
+      userId,
+    });
+    if (!refreshedRow || refreshedRow.type !== "oauth2") {
+      return { type: "skip" };
+    }
+    const currentTime =
+      dependencies.now?.() ??
+      new Date(Temporal.Now.instant().epochMilliseconds);
+    if (
+      refreshedRow.expiresAt &&
+      refreshedRow.expiresAt.getTime() <= currentTime.getTime()
+    ) {
+      continue;
+    }
+    const bound = bindMcpConnection(refreshedRow);
+    if (Result.isError(bound)) {
+      observeFailure(bound.error, { sink: TOKEN_REFRESH_FAILED });
+      return { type: "skip" };
+    }
+    if (bound.value.type !== "oauth2") {
+      return panic("Expected an OAuth connection after binding");
+    }
+    if (
+      (await approvedStoredMcpIssuer({
+        dependencies,
+        organizationId,
+        row: bound.value,
+        safeDb,
+        userId,
+      })) === null
+    ) {
+      return { type: "skip" };
+    }
+    return {
+      type: "ok",
+      value: await dependencies.decryptMcpSecret({
+        ciphertext: refreshedRow.accessTokenEncrypted,
+        connectorId: refreshedRow.connectorId,
+        iv: refreshedRow.accessTokenIv,
+        organizationId,
+        purpose: "mcp_access_token",
+        userId,
+      }),
+    };
+  }
+  return { type: "skip" };
+};
+
+type DiscoverMcpRefreshMetadataOptions =
+  ResolveOAuthAuthorizationTokenOptions & {
+    issuerBinding: ApprovedMcpIssuerBinding;
+    leaseExpiresAt: Date;
+    deferRefresh: () => Promise<void>;
+  };
+
+const discoverMcpRefreshMetadata = async ({
+  dependencies,
+  organizationId,
+  row,
+  safeDb,
+  userId,
+  issuerBinding,
+  leaseExpiresAt,
+  deferRefresh,
+}: DiscoverMcpRefreshMetadataOptions): Promise<BoundOAuthMetadata | null> => {
+  const metadata = await dependencies.discoverOAuthMetadata(
+    row.url,
+    undefined,
+    issuerBinding.endpointOrigins,
+  );
+  const recordAuditEvent = mcpAuthorizationReviewRecorder({
+    organizationId,
+    userId,
+  });
+  if (Result.isError(metadata)) {
+    observeFailure(metadata.error, { sink: TOKEN_REFRESH_FAILED });
+    if (metadata.error.code === "mcp_authorization_approval_required") {
+      const observed = await dependencies.discoverOAuthMetadataForApproval(
+        row.url,
+      );
+      if (Result.isError(observed)) {
+        observeFailure(observed.error, { sink: TOKEN_REFRESH_FAILED });
+        await deferRefresh();
+        return null;
+      }
+      const review = await recordMcpAuthorizationReview({
+        safeDb,
+        organizationId,
+        userId,
+        connectorId: row.connectorId,
+        recordAuditEvent,
+        observedIssuer: observed.value.authorizationServer.issuer,
+        observedEndpointOrigins: getOAuthEndpointOrigins(observed.value),
+        connection: {
+          type: "leased",
+          connectionId: row.userConnectionId,
+          expiresAt: leaseExpiresAt,
+        },
+      });
+      if (Result.isError(review)) {
+        observeFailure(review.error, { sink: TOKEN_REFRESH_FAILED });
+      }
+    } else if (metadata.error.code === MCP_OAUTH_BINDING_FAILURE_CODE) {
+      const review = await recordMcpAuthorizationReview({
+        safeDb,
+        organizationId,
+        userId,
+        connectorId: row.connectorId,
+        recordAuditEvent,
+        observedIssuer: row.oauthAuthorizationServerUrl,
+        connection: {
+          type: "leased",
+          connectionId: row.userConnectionId,
+          expiresAt: leaseExpiresAt,
+        },
+      });
+      if (Result.isError(review)) {
+        observeFailure(review.error, { sink: TOKEN_REFRESH_FAILED });
+      }
+    } else {
+      await deferRefresh();
+    }
+    return null;
+  }
+  if (metadata.value.authorizationServer.issuer !== issuerBinding.issuer) {
+    const review = await recordMcpAuthorizationReview({
+      safeDb,
+      organizationId,
+      userId,
+      connectorId: row.connectorId,
+      recordAuditEvent,
+      observedIssuer: metadata.value.authorizationServer.issuer,
+      observedEndpointOrigins: getOAuthEndpointOrigins(metadata.value),
+      connection: {
+        type: "leased",
+        connectionId: row.userConnectionId,
+        expiresAt: leaseExpiresAt,
+      },
+    });
+    if (Result.isError(review)) {
+      observeFailure(review.error, { sink: TOKEN_REFRESH_FAILED });
+    }
+    return null;
+  }
+
+  return metadata.value;
+};
+
+const resolveOAuthAuthorizationToken = async ({
+  dependencies,
+  organizationId,
+  row,
+  safeDb,
+  userId,
+}: ResolveOAuthAuthorizationTokenOptions): Promise<ResolvedAuthorizationToken> => {
+  const issuerBinding = await approvedStoredMcpIssuer({
+    dependencies,
+    organizationId,
+    row,
+    safeDb,
+    userId,
+  });
+  if (issuerBinding === null) {
+    return { type: "skip" };
+  }
+  const now =
+    dependencies.now?.() ?? new Date(Temporal.Now.instant().epochMilliseconds);
   if (
     !row.expiresAt ||
-    row.expiresAt.getTime() >
-      Temporal.Now.instant().epochMilliseconds + TOKEN_REFRESH_SKEW_MS
+    row.expiresAt.getTime() > now.getTime() + TOKEN_REFRESH_SKEW_MS
   ) {
     return {
       type: "ok",
@@ -687,7 +1346,57 @@ const resolveAuthorizationToken = async ({
   }
 
   if (!row.refreshTokenEncrypted || !row.refreshTokenIv) {
-    await markNeedsReauth({ connectionId: row.userConnectionId, safeDb });
+    await markNeedsReauth({
+      connectionId: row.userConnectionId,
+      organizationId,
+      safeDb,
+      userId,
+    });
+    return { type: "skip" };
+  }
+
+  const lease = await claimMcpRefreshLease({
+    safeDb,
+    organizationId,
+    userId,
+    connectionId: row.userConnectionId,
+    now,
+  });
+  if (Result.isError(lease)) {
+    observeFailure(lease.error, { sink: TOKEN_REFRESH_FAILED });
+    return { type: "skip" };
+  }
+  if (lease.value === null) {
+    return await resolveMcpTokenDuringRefresh({
+      dependencies,
+      organizationId,
+      row,
+      safeDb,
+      userId,
+      now,
+    });
+  }
+  const leaseExpiresAt = lease.value;
+  const deferRefresh = async () =>
+    await deferMcpRefresh({
+      safeDb,
+      connectionId: row.userConnectionId,
+      leaseExpiresAt,
+      now:
+        dependencies.now?.() ??
+        new Date(Temporal.Now.instant().epochMilliseconds),
+    });
+  const metadata = await discoverMcpRefreshMetadata({
+    dependencies,
+    organizationId,
+    row,
+    safeDb,
+    userId,
+    issuerBinding,
+    leaseExpiresAt,
+    deferRefresh,
+  });
+  if (!metadata) {
     return { type: "skip" };
   }
 
@@ -710,15 +1419,25 @@ const resolveAuthorizationToken = async ({
         })
       : null;
   const refreshed = await dependencies.refreshOAuthToken({
-    authorizationServerUrl: row.oauthAuthorizationServerUrl,
+    metadata,
     clientId: row.oauthClientId,
     clientSecret,
     refreshToken,
-    resourceUrl: row.oauthResourceUrl,
   });
 
   if (Result.isError(refreshed)) {
-    await markNeedsReauth({ connectionId: row.userConnectionId, safeDb });
+    if (refreshed.error.code === MCP_OAUTH_INVALID_GRANT_CODE) {
+      await markNeedsReauth({
+        connectionId: row.userConnectionId,
+        organizationId,
+        safeDb,
+        userId,
+        leaseExpiresAt,
+      });
+    } else {
+      observeFailure(refreshed.error, { sink: TOKEN_REFRESH_FAILED });
+      await deferRefresh();
+    }
     return { type: "skip" };
   }
 
@@ -739,26 +1458,29 @@ const resolveAuthorizationToken = async ({
       })
     : null;
 
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-  const persistResult = await safeDb((tx) => {
-    // audit: skip — OAuth token refresh metadata for an existing MCP connection
-    return tx
-      .update(mcpUserConnections)
-      .set({
-        accessTokenEncrypted: encryptedAccess.ciphertext,
-        accessTokenIv: encryptedAccess.iv,
-        refreshTokenEncrypted:
-          encryptedRefresh?.ciphertext ?? row.refreshTokenEncrypted,
-        refreshTokenIv: encryptedRefresh?.iv ?? row.refreshTokenIv,
-        expiresAt: dependencies.tokenExpiresAt(refreshed.value),
-        status: "connected",
-        updatedAt: new Date(),
-      })
-      .where(eq(mcpUserConnections.id, row.userConnectionId));
+  const persistResult = await writeUnderRefreshLease({
+    safeDb,
+    connectionId: row.userConnectionId,
+    fence: { type: "held", leaseExpiresAt },
+    values: {
+      accessTokenEncrypted: encryptedAccess.ciphertext,
+      accessTokenIv: encryptedAccess.iv,
+      refreshTokenEncrypted:
+        encryptedRefresh?.ciphertext ?? row.refreshTokenEncrypted,
+      refreshTokenIv: encryptedRefresh?.iv ?? row.refreshTokenIv,
+      expiresAt: dependencies.tokenExpiresAt(refreshed.value),
+      status: "connected",
+      refreshLeaseExpiresAt: null,
+      refreshRetryAfter: null,
+      updatedAt: new Date(),
+    },
   });
 
   if (Result.isError(persistResult)) {
-    captureError(persistResult.error, { source: "mcp-upstream-token-refresh" });
+    observeFailure(persistResult.error, { sink: TOKEN_REFRESH_FAILED });
+    return { type: "skip" };
+  }
+  if (persistResult.value.length === 0) {
     return { type: "skip" };
   }
 
@@ -826,6 +1548,15 @@ const normalizeMcpConnectionRow = (
       accessTokenIv: rawRow.accessTokenIv,
       expiresAt: rawRow.expiresAt,
       oauthAuthorizationServerUrl: rawRow.oauthAuthorizationServerUrl,
+      oauthIssuerBinding: resolveMcpIssuerBinding({
+        curatedApproval: getCuratedMcpOAuthApproval(rawRow.url),
+        connectorIssuer: rawRow.oauthConnectorIssuer,
+        connectorConfirmedEndpointOrigins:
+          rawRow.oauthConnectorConfirmedEndpointOrigins,
+        reviewApprovedIssuer: rawRow.oauthReviewApprovedIssuer,
+        reviewApprovedEndpointOrigins:
+          rawRow.oauthReviewApprovedEndpointOrigins,
+      }),
       oauthClientId: rawRow.oauthClientId,
       oauthClientSecretEncrypted: rawRow.oauthClientSecretEncrypted,
       oauthClientSecretIv: rawRow.oauthClientSecretIv,
@@ -837,35 +1568,80 @@ const normalizeMcpConnectionRow = (
   };
 };
 
-const markNeedsReauth = async ({
-  connectionId,
-  safeDb,
-}: {
+type MarkNeedsReauthOptions = {
   connectionId: SafeId<"mcpUserConnection">;
+  organizationId: SafeId<"organization">;
   safeDb: SafeDb;
-}) => {
-  await markConnectionsNeedReauth({ connectionIds: [connectionId], safeDb });
+  userId: SafeId<"user">;
+  leaseExpiresAt?: Date;
 };
 
-const markConnectionsNeedReauth = async ({
-  connectionIds,
+const markNeedsReauth = async ({
+  connectionId,
+  organizationId,
   safeDb,
-}: {
+  userId,
+  leaseExpiresAt,
+}: MarkNeedsReauthOptions) => {
+  if (!leaseExpiresAt) {
+    await markConnectionsStatus({
+      connectionIds: [connectionId],
+      organizationId,
+      safeDb,
+      status: "needs_reauth",
+      userId,
+    });
+    return;
+  }
+  const result = await writeUnderRefreshLease({
+    safeDb,
+    connectionId,
+    fence: { type: "held", leaseExpiresAt },
+    values: {
+      status: "needs_reauth",
+      refreshLeaseExpiresAt: null,
+      updatedAt: new Date(),
+    },
+  });
+  if (Result.isError(result)) {
+    observeFailure(result.error, { sink: CONNECTION_STATUS_WRITE_FAILED });
+  }
+};
+
+type MarkConnectionsStatusOptions = {
   connectionIds: readonly SafeId<"mcpUserConnection">[];
+  organizationId: SafeId<"organization">;
   safeDb: SafeDb;
-}) => {
+  status: Extract<McpConnectionStatus, "needs_approval" | "needs_reauth">;
+  userId: SafeId<"user">;
+};
+
+const markConnectionsStatus = async ({
+  connectionIds,
+  organizationId,
+  safeDb,
+  status,
+  userId,
+}: MarkConnectionsStatusOptions) => {
   if (connectionIds.length === 0) {
     return;
   }
   // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
   const result = await safeDb((tx) => {
-    // audit: skip — derived MCP connection reauth status from failed token validation
+    // audit: skip — derived status for the caller's existing MCP connections once stored credentials or authorization no longer apply
     return tx
       .update(mcpUserConnections)
-      .set({ status: "needs_reauth", updatedAt: new Date() })
-      .where(inArray(mcpUserConnections.id, connectionIds));
+      .set({ status, refreshLeaseExpiresAt: null, updatedAt: new Date() })
+      .where(
+        and(
+          inArray(mcpUserConnections.id, connectionIds),
+          eq(mcpUserConnections.organizationId, organizationId),
+          eq(mcpUserConnections.userId, userId),
+          eq(mcpUserConnections.status, "connected"),
+        ),
+      );
   });
   if (Result.isError(result)) {
-    captureError(result.error, { source: "mcp-upstream-mark-needs-reauth" });
+    observeFailure(result.error, { sink: CONNECTION_STATUS_WRITE_FAILED });
   }
 };

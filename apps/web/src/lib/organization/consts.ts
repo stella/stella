@@ -1,49 +1,31 @@
-import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
-
 import type { TranslationKey } from "@/i18n/types";
 import type { Role } from "@/lib/auth-client";
 
-export const managementRoles: readonly Role[] = ["owner", "admin"];
-
-export const ORGANIZATION_MEMBERS_LIMIT =
-  BETTER_AUTH_ORGANIZATION_OPTIONS.membershipLimit;
-
-export const roleTranslationKeys = [
-  {
+export const roleTranslationKeys = {
+  owner: {
     descriptionKey: "organization.roles.descriptions.owner",
     labelKey: "organization.roles.owner",
-    value: "owner",
   },
-  {
+  admin: {
     descriptionKey: "organization.roles.descriptions.admin",
     labelKey: "organization.roles.admin",
-    value: "admin",
   },
-  {
+  member: {
     descriptionKey: "organization.roles.descriptions.member",
     labelKey: "organization.roles.member",
-    value: "member",
   },
-  {
+  intern: {
     descriptionKey: "organization.roles.descriptions.intern",
     labelKey: "organization.roles.intern",
-    value: "intern",
   },
-  {
+  external: {
     descriptionKey: "organization.roles.descriptions.external",
     labelKey: "organization.roles.external",
-    value: "external",
   },
-] as const satisfies readonly {
-  descriptionKey: TranslationKey;
-  labelKey: TranslationKey;
-  value: Role;
-}[];
-
-export const rolePriority = {
-  owner: 0,
-  admin: 1,
-  member: 2,
-  intern: 3,
-  external: 4,
-} as const satisfies Record<Role, number>;
+} as const satisfies Record<
+  Role,
+  {
+    descriptionKey: TranslationKey;
+    labelKey: TranslationKey;
+  }
+>;
