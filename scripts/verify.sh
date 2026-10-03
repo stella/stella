@@ -404,7 +404,7 @@ run_step "Module-mock ledger membership" run_module_mock_ledger_guard
 run_step "Suppression waiver ledger" run_suppression_waiver_guard
 run_step "Crawl posture guard" run_crawl_posture_guard
 run_step "Custom lint rule coverage self-tests" bun test scripts/check-oxlint-rule-coverage.test.ts
-run_step "Custom lint rule coverage" bun scripts/check-oxlint-rule-coverage.ts
+run_step "Custom lint rule coverage" env BASE_SHA="$base_ref" bun scripts/check-oxlint-rule-coverage.ts
 run_step "Documentation source policy rule" bun run check:docs-sources
 run_step "Instruction references" run_instruction_reference_guard
 run_step "exactMirror route guard" run_exact_mirror_guard

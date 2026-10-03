@@ -258,19 +258,21 @@ export const readBaseRules = async (base: string): Promise<string[]> => {
   }
 };
 
+export const CUSTOM_LINT_TEST_ARGS = [
+  "test",
+  "./.oxlint-plugins/__tests__",
+] as const;
+
 const main = async (): Promise<number> => {
   const directory = mkdtempSync(path.join(tmpdir(), "oxlint-rule-coverage-"));
   const coveragePath = path.join(directory, "coverage.jsonl");
   try {
-    const tests = Bun.spawnSync(
-      [process.execPath, "test", "./.oxlint-plugins/__tests__"],
-      {
-        cwd: repoRoot,
-        env: { ...process.env, OXLINT_RULE_COVERAGE_PATH: coveragePath },
-        stdout: "inherit",
-        stderr: "inherit",
-      },
-    );
+    const tests = Bun.spawnSync([process.execPath, ...CUSTOM_LINT_TEST_ARGS], {
+      cwd: repoRoot,
+      env: { ...process.env, OXLINT_RULE_COVERAGE_PATH: coveragePath },
+      stdout: "inherit",
+      stderr: "inherit",
+    });
     if (!tests.success) {
       return 1;
     }
