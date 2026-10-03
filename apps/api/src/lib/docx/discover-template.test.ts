@@ -4,6 +4,7 @@ import JSZip from "jszip";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
+import { deriveManifest } from "./derived-manifest";
 import { discoverTemplate } from "./discover-template";
 
 // ── Helpers ──────────────────────────────────────────────
@@ -841,4 +842,35 @@ describe("row-form block markers", () => {
         ?.visibleWhen,
     ).toBe("penalty");
   });
+});
+
+test("derived manifests cache every distinct clause slot target from template content", async () => {
+  const zip = new JSZip();
+  zip.file(
+    "word/document.xml",
+    WRAP(
+      [
+        P('{{ clause("Terms") }}'),
+        P('{{ clause("Terms", "v2") }}'),
+        P('{{ clause("Terms") }}'),
+      ].join(""),
+    ),
+  );
+  zip.file(
+    "word/header1.xml",
+    `<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${P(
+      '{{ clause("Header", "latest") }}',
+    )}</w:hdr>`,
+  );
+  const file = testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  const manifest = deriveManifest(await discoverTemplate(file));
+  expect(manifest.clauseSlots).toEqual([
+    { name: "Terms", versionModifier: undefined, patchKey: "@clause:Terms" },
+    { name: "Terms", versionModifier: "v2", patchKey: "@clause:Terms:v2" },
+    {
+      name: "Header",
+      versionModifier: "latest",
+      patchKey: "@clause:Header:latest",
+    },
+  ]);
 });
