@@ -11,10 +11,7 @@ import {
   readPublisherCooldown,
   withPublisherRequestRateLimit,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import {
-  connectedGateClient,
-  publisherGateKeys,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
+import { publisherGateKeys } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import {
   fetchPublisher,
   fetchWithRetry,
@@ -479,86 +476,5 @@ describe("a run-scoped publisher rate limit", () => {
         error instanceof Error ? error.message : String(error),
     );
     expect(refusal).toContain("at most 2");
-  });
-});
-
-describe("the gate's own Redis client", () => {
-  it("connects before it issues the first reservation", async () => {
-    const calls: string[] = [];
-    const client = {
-      connect: async () => {
-        calls.push("connect");
-      },
-      send: () => {
-        calls.push("send");
-        return 0;
-      },
-    };
-    const gateClient = connectedGateClient(async () => client);
-
-    (await gateClient()).send("EVAL", []);
-    (await gateClient()).send("EVAL", []);
-
-    // One connect, and it precedes every command: the offline queue is off,
-    // so a command issued before the handshake is rejected, not queued.
-    expect(calls).toEqual(["connect", "send", "send"]);
-  });
-
-  it("builds one client for reservations that race the first connection", async () => {
-    // Every adapter runs its own loop, so the first reservations arrive
-    // together. A second client installed over the first would be handed out
-    // unconnected, and its command rejected, because the handshake being
-    // awaited belongs to the client it replaced.
-    let clients = 0;
-    const createClient = async () => {
-      clients += 1;
-      await Promise.resolve();
-      let connected = false;
-      return {
-        connect: async () => {
-          await Promise.resolve();
-          connected = true;
-        },
-        send: () => {
-          if (!connected) {
-            throw new Error(
-              "Connection is closed and offline queue is disabled",
-            );
-          }
-          return 0;
-        },
-      };
-    };
-    const gateClient = connectedGateClient(createClient);
-
-    const waits = await Promise.all(
-      Array.from({ length: 8 }, async () =>
-        (await gateClient()).send("EVAL", []),
-      ),
-    );
-
-    expect(clients).toBe(1);
-    expect(waits).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
-  });
-
-  it("retries the connection on the next reservation after one fails", async () => {
-    let attempts = 0;
-    const client = {
-      connect: async () => {
-        attempts += 1;
-        if (attempts === 1) {
-          throw new Error("connection refused");
-        }
-      },
-      send: () => 0,
-    };
-    const gateClient = connectedGateClient(async () => client);
-
-    const rejection = await rejectionOf(gateClient());
-    expect(rejection).toMatchObject({ message: "connection refused" });
-
-    await gateClient();
-
-    expect(attempts).toBe(2);
   });
 });

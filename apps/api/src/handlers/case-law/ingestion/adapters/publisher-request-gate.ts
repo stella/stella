@@ -3,7 +3,7 @@ import { TaggedError } from "better-result";
 
 import { Temporal } from "@stll/time";
 
-import type * as RedisClientModule from "@/api/lib/redis-client";
+import type * as RedisClientModule from "@/api/lib/admission-redis";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { isLocalDevOpen, isLocalTestRun } from "@/api/runtime-mode";
 
@@ -103,60 +103,20 @@ export const abortableSleep = async (
   }
 };
 
-/** The deployed client, which the gate connects itself. */
-type ConnectableGateClient = PublisherGateClient & {
-  connect: () => Promise<unknown>;
-};
-
-/**
- * The deployed gate client, connected before it is handed out.
- *
- * The offline queue is off, so Bun rejects a command issued before the first
- * connection completes — and the first reservation after every process start
- * is exactly that command. Connect once; a failed connect is forgotten so the
- * next reservation retries it instead of inheriting a rejected promise
- * forever. `createClient` is the seam: the connect-then-send order is what a
- * test asserts, without a Redis.
- *
- * Every adapter runs its own loop, so the reservations that race this are
- * concurrent. Memoise the client's *promise*, not the client: awaiting the
- * construction before storing it lets a second caller start a second client
- * and install it over the first, while `connected` still tracks the first
- * one's handshake — so that caller awaits a connection its own client never
- * opened and its command is rejected, and each racing caller leaves another
- * connection behind. One promise is one client, and the connection it awaits
- * is that client's.
- */
-export const connectedGateClient = (
-  createClient: () => Promise<ConnectableGateClient>,
-): (() => Promise<PublisherGateClient>) => {
-  let clientPromise: Promise<ConnectableGateClient> | undefined;
-  let connected: Promise<unknown> | undefined;
-  return async () => {
-    clientPromise ??= createClient().catch((error: unknown) => {
-      clientPromise = undefined;
-      throw error;
-    });
-    const redis = await clientPromise;
-    connected ??= redis.connect().catch((error: unknown) => {
-      connected = undefined;
-      throw error;
-    });
-    await connected;
-    return redis;
-  };
-};
-
 let redisClientModulePromise: Promise<typeof RedisClientModule> | undefined;
 const loadRedisClient = async () => {
-  redisClientModulePromise ??= import("@/api/lib/redis-client");
+  redisClientModulePromise ??= import("@/api/lib/admission-redis");
   return await redisClientModulePromise;
 };
 
-const deployedGateClient = connectedGateClient(async () => {
-  const { createRedisClient } = await loadRedisClient();
-  return createRedisClient({ enableOfflineQueue: false });
-});
+let deployedStore:
+  | ReturnType<typeof RedisClientModule.createAdmissionRedis>
+  | undefined;
+const deployedGateClient = async () => {
+  const { createAdmissionRedis } = await loadRedisClient();
+  deployedStore ??= createAdmissionRedis();
+  return await deployedStore.ready();
+};
 
 const defaultDependencies = (
   intervalMs: number,

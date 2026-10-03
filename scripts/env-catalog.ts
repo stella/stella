@@ -418,7 +418,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Leave on unless the endpoint presents a certificate no trust anchor can " +
     "validate and the private network is the boundary instead.",
   REDIS_URL:
-    "Valkey or Redis URL used for cross-instance broadcasts and rate limits. Treated as secret because it may contain credentials.",
+    "Valkey or Redis URL used for cross-instance broadcasts and rate limits. Set maxmemory-policy noeviction on the server for admission, reservations, and fences. Treated as secret because it may contain credentials.",
   S3_ACCESS_KEY_ID:
     'S3 access-key ID. Required with S3_CREDENTIALS_PROVIDER="env"; otherwise omit it with the secret to use the selected provider.',
   S3_BUCKET: "S3 bucket for uploaded files.",

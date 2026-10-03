@@ -5,6 +5,7 @@ import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
+import { createAdmissionRedis } from "@/api/lib/admission-redis";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   ActionAdmissionError,
@@ -28,10 +29,6 @@ import {
   type ActionPeriodPolicy,
 } from "@/api/lib/rate-limit/action-period-budget";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
-import {
-  createLazyRedisClient,
-  createRedisClient,
-} from "@/api/lib/redis-client";
 import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
 import {
   runObservedAction,
@@ -60,14 +57,10 @@ const RELEASE_FAILURE = failureSink({
   event: "action_admission.release_failed",
   expected: [],
 });
-const admissionRedis = createLazyRedisClient(() =>
-  createRedisClient({
-    connectionTimeout: REDIS_COMMAND_TIMEOUT_MS,
-    enableOfflineQueue: false,
-  }),
-);
+const admissionRedis = createAdmissionRedis();
 
 export const closeActionAdmissionRedis = () => admissionRedis.close();
+export const startActionAdmissionRedis = () => admissionRedis.ready();
 
 export { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 
@@ -374,11 +367,13 @@ const createAdmissionExecutor = ({
         );
       },
       catch: (error: unknown) =>
-        new ActionAdmissionError({
-          message: "Action admission is unavailable",
-          reason: "unavailable",
-          cause: error,
-        }),
+        ActionAdmissionError.is(error)
+          ? error
+          : new ActionAdmissionError({
+              message: "Action admission is unavailable",
+              reason: "unavailable",
+              cause: error,
+            }),
     });
 
     return Result.isError(outcome) ? outcome : outcome.value;

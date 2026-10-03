@@ -502,6 +502,35 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "admission-redis",
+    capability: "Non-evicting admission coordination",
+    owner: [
+      "apps/api/src/lib/admission-redis.ts",
+      "apps/api/src/lib/non-evicting-redis.ts",
+    ],
+    summary:
+      "Admission, reservations, and fences use a checked command facade. A reported evicting policy refuses work; uninspectable policies warn. These callers cannot import the unchecked connection factory.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/admission-redis"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/rate-limit/action-admission.ts",
+          reason:
+            "Shared concurrency leases, period reservations, and service budgets.",
+        },
+        {
+          path: "apps/api/src/lib/rate-limit/mcp-read-fence.ts",
+          reason: "Shared emitted-byte windows and cancellation fences.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts",
+          reason: "Shared publisher pacing reservations and cooldowns.",
+        },
+      ],
+    },
+  },
+  {
     id: "redis-client",
     capability: "Valkey/Redis connections for ephemeral coordination",
     owner: ["apps/api/src/lib/redis-client.ts"],
@@ -514,6 +543,11 @@ export const OWNERSHIP = [
       kind: "import",
       specifiers: ["@/api/lib/redis-client"],
       allowed: [
+        {
+          path: "apps/api/src/lib/admission-redis.ts",
+          reason:
+            "Admission clients check and periodically refresh the non-eviction policy before issuing coordination commands.",
+        },
         {
           path: "apps/api/src/lib/bullmq-queue.ts",
           reason:
@@ -605,16 +639,6 @@ export const OWNERSHIP = [
             "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
         },
         {
-          path: "apps/api/src/lib/rate-limit/action-admission.ts",
-          reason:
-            "TTL'd shared action leases; admission fails closed when Valkey is unreachable.",
-        },
-        {
-          path: "apps/api/src/lib/rate-limit/mcp-read-fence.ts",
-          reason:
-            "TTL'd shared emitted-byte windows; authenticated reads fail closed when Valkey is unreachable.",
-        },
-        {
           path: "apps/api/src/lib/rate-limit/auth-storage.ts",
           reason:
             "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
@@ -646,11 +670,6 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/health/readiness.ts",
           reason: "Liveness probe: PINGs the connection it is reporting on.",
-        },
-        {
-          path: "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts",
-          reason:
-            "Publisher pacing: uses an expiring shared reservation, fails closed on a deployed outage to protect the publisher, and uses a process-local gate outside deployed environments.",
         },
       ],
     },

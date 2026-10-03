@@ -3,15 +3,12 @@ import { Result } from "better-result";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
+import { createAdmissionRedis } from "@/api/lib/admission-redis";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
-import {
-  createLazyRedisClient,
-  createRedisClient,
-} from "@/api/lib/redis-client";
 import { coordinationKey } from "@/api/lib/redis-keys";
 import type { McpReadClass } from "@/api/mcp/tool-types";
 
@@ -27,20 +24,18 @@ const COMMAND_TIMEOUT_MS = 500;
 // server deadline prevents delayed commands from charging a refused output.
 const CHARGE_DEADLINE_MS = 400;
 const CANCELLATION_MARGIN_MS = 500;
-const fenceRedis = createLazyRedisClient(() =>
-  createRedisClient({
-    connectionTimeout: COMMAND_TIMEOUT_MS,
-    enableOfflineQueue: false,
-  }),
-);
+const fenceRedis = createAdmissionRedis();
 export const closeMcpReadFenceRedis = () => fenceRedis.close();
+export const startMcpReadFenceRedis = () => fenceRedis.ready();
 
 const unavailable = (cause?: unknown) =>
-  new ActionAdmissionError({
-    message: "Read coordination is unavailable",
-    reason: "unavailable",
-    cause,
-  });
+  ActionAdmissionError.is(cause)
+    ? cause
+    : new ActionAdmissionError({
+        message: "Read coordination is unavailable",
+        reason: "unavailable",
+        cause,
+      });
 
 export const resolveMcpReadFencePolicy = (): Result<
   McpReadFencePolicy,
