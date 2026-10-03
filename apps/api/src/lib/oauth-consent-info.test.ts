@@ -62,4 +62,84 @@ describe("OAuth consent app details", () => {
       ),
     ).toMatchObject({ clientIdHost: "connector.example", unverified: true });
   });
+
+  const redirectUnverified = (uri: string) =>
+    getOAuthConsentInfo(
+      {
+        clientId: "example-client",
+        name: "Example connector",
+        redirectUris: [uri],
+        clientDiscoveryId: null,
+      },
+      origins,
+    ).unverified;
+
+  test("recognizes documented redirects of common assistants", () => {
+    for (const uri of [
+      "https://claude.ai/api/mcp/auth_callback",
+      "https://chatgpt.com/connector_platform_oauth_redirect",
+      "https://chatgpt.com/connector/oauth/abc123",
+      "https://teams.microsoft.com/api/platform/v1.0/oAuthRedirect",
+      "https://global.consent.azure-apim.net/redirect",
+      "https://global.consent.azure-apim.net/redirect/sample-connector-5f98284236",
+      "https://vertexaisearch.cloud.google.com/oauth-redirect",
+    ]) {
+      expect(redirectUnverified(uri)).toBe(false);
+    }
+  });
+
+  test("keeps every other location unverified", () => {
+    for (const uri of [
+      "https://claude.ai/api/mcp/other_callback",
+      "https://claude.ai/api/mcp/auth_callback/",
+      "https://claude.ai/api/mcp/auth_callback?next=1",
+      "http://claude.ai/api/mcp/auth_callback",
+      "https://claude.ai.example/api/mcp/auth_callback",
+      "https://chatgpt.com/connector/oauth/",
+      "https://chatgpt.com/connector/oauth/a/b",
+      "https://chatgpt.com/connector/oauth/..",
+      "https://chatgpt.com/connector/oauth/a%2Fb",
+      "https://global.consent.azure-apim.net/other",
+      "https://user@chatgpt.com/connector_platform_oauth_redirect",
+    ]) {
+      expect(redirectUnverified(uri)).toBe(true);
+    }
+  });
+
+  test("an app is verified only when every redirect is", () => {
+    expect(
+      getOAuthConsentInfo(
+        {
+          clientId: "example-client",
+          name: "Example connector",
+          redirectUris: [
+            "https://claude.ai/api/mcp/auth_callback",
+            "https://connector.example/callback",
+          ],
+          clientDiscoveryId: null,
+        },
+        origins,
+      ).unverified,
+    ).toBe(true);
+  });
+
+  test("recognizes documented client metadata documents", () => {
+    for (const [clientId, unverified] of [
+      ["https://claude.ai/oauth/claude-code-client-metadata", false],
+      ["https://chatgpt.com/oauth/client.json", false],
+      ["https://claude.ai/oauth/other-client-metadata", true],
+    ] as const) {
+      expect(
+        getOAuthConsentInfo(
+          {
+            clientId,
+            name: "Example connector",
+            redirectUris: ["http://localhost/callback"],
+            clientDiscoveryId: "cimd",
+          },
+          origins,
+        ).unverified,
+      ).toBe(unverified);
+    }
+  });
 });
