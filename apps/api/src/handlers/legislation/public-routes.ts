@@ -26,6 +26,7 @@ import {
   readProvisionHistoryHandler,
 } from "@/api/handlers/legislation/provision-history";
 import readProvisionPreview from "@/api/handlers/legislation/provision-preview";
+import searchPublicStatutes from "@/api/handlers/legislation/public-search";
 import {
   resolveStatutesBodySchema,
   resolveStatutesHandler,
@@ -275,16 +276,19 @@ const listStatuteSitemapStatutes = createSafePublicHandler(
 export const publicLegislationRoute = new Elysia({
   prefix: "/law",
 })
-  .onBeforeHandle(({ set }) => {
+  .onBeforeHandle(({ status }) => {
     if (isLocalDevOpen() || env.FEATURE_PUBLIC_LAW) {
       return undefined;
     }
 
-    set.status = 404;
-    return { error: "Not Found" } as const;
+    return status(404, { message: "Not Found" });
   })
   .get("/statutes", listStatutes.handler, {
     query: listStatutes.config.query,
+  })
+  .get("/statutes/search", searchPublicStatutes.handler, {
+    query: searchPublicStatutes.config.query,
+    response: searchPublicStatutes.config.response,
   })
   // Ahead of `/statutes/:documentId` for the same reason as `by-eli` below.
   .get("/statutes/shelf", readLegislationShelf.handler, {

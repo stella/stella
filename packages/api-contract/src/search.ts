@@ -18,6 +18,9 @@ export type SearchSort = (typeof SEARCH_SORTS)[number];
 
 export const DEFAULT_SEARCH_SORT = SEARCH_SORTS[0];
 
+/** Public statute HTTP pages and their web client share the same bound. */
+export const PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX = 20;
+
 /**
  * How much of the matched passage a result carries.
  *

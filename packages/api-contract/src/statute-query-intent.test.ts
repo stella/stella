@@ -291,6 +291,7 @@ describe("reading act references inside a full-text query", () => {
       "občanský život se týká sousedských vztahů",
       "tr. čin musí být prokázán svědeckou výpovědí",
       "sr je součást označení souboru v seznamu",
+      "občan SR podává žádost o vydání průkazu",
       "listina obsahuje podpis občana a datum",
       "občiansky preukaz sa vydáva občanovi",
       "ústava upravuje základné princípy štátu",
@@ -398,6 +399,20 @@ describe("reading act references inside a full-text query", () => {
         readStatuteQueryReferences("cze", `výklad 89/2012 ${suffix}`),
       ).toEqual([]);
     }
+  });
+
+  test("SR is a whole-query alias rather than a country abbreviation pin", () => {
+    for (const typed of ["SR", "sr", "Sr"]) {
+      expect(readStatuteQueryReferences("cze", typed)).toEqual([
+        { country: "cze", ...STATUTE_ALIASES.cze.sr },
+      ]);
+      expect(
+        readStatuteQueryReferences("cze", `občan ${typed} podává žádost`),
+      ).toEqual([]);
+    }
+    expect(readStatuteQueryReferences("cze", "výklad SŘ pro řízení")).toEqual(
+      [],
+    );
   });
 
   test("required Czech abbreviations resolve with and without diacritics", () => {

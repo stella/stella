@@ -209,7 +209,7 @@ const EMBEDDED_ALIAS_POLICY = {
     tr: ["TR"],
     osr: ["OSŘ", "OSR"],
     srs: ["SŘS", "SRS"],
-    sr: ["SŘ", "SR"],
+    sr: "whole-query",
     insz: ["InsZ", "INSZ"],
     iz: ["IZ"],
     zdp: ["ZDP"],
