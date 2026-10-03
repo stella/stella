@@ -17,7 +17,10 @@ import {
   DESKTOP_REGISTRY_PERMISSION,
 } from "@/api/lib/business-registries/desktop/config";
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import {
+  hasMemberPermission,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 
 const FORMAT_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -25,9 +28,9 @@ test("registering desktop routes preserves the grant authorization contract", ()
   desktopRegistryRoute.compile();
 
   expect(grant.config.permissions).toEqual(DESKTOP_ACCOUNT_PERMISSION);
-  expect(hasMemberPermission({ role: "owner" }, grant.config.permissions)).toBe(
-    true,
-  );
+  expect(
+    hasMemberPermission(sessionMemberRole("owner"), grant.config.permissions),
+  ).toBe(true);
 });
 
 describe("the desktop request body union", () => {
@@ -78,19 +81,23 @@ test("desktop account linking preserves document access for each supported role"
     "intern",
     "external",
   ] as const) {
-    expect(hasMemberPermission({ role }, grant.config.permissions)).toBe(true);
-    const webWriteAllowed = hasMemberPermission(
-      { role },
-      { entity: ["update"] },
-    );
+    expect(
+      hasMemberPermission(sessionMemberRole(role), grant.config.permissions),
+    ).toBe(true);
+    const webWriteAllowed = hasMemberPermission(sessionMemberRole(role), {
+      entity: ["update"],
+    });
     expect(
       hasMemberPermission(
-        { role },
+        sessionMemberRole(role),
         createDesktopEditHandoff.config.permissions,
       ),
     ).toBe(webWriteAllowed);
     expect(
-      hasMemberPermission({ role }, createPdfSigningHandoff.config.permissions),
+      hasMemberPermission(
+        sessionMemberRole(role),
+        createPdfSigningHandoff.config.permissions,
+      ),
     ).toBe(webWriteAllowed);
     expect(
       canWriteWorkspaceEntities({
@@ -100,10 +107,16 @@ test("desktop account linking preserves document access for each supported role"
     ).toBe(webWriteAllowed);
   }
   expect(
-    hasMemberPermission({ role: "external" }, grant.config.permissions),
+    hasMemberPermission(
+      sessionMemberRole("external"),
+      grant.config.permissions,
+    ),
   ).toBe(true);
   expect(
-    hasMemberPermission({ role: "external" }, DESKTOP_REGISTRY_PERMISSION),
+    hasMemberPermission(
+      sessionMemberRole("external"),
+      DESKTOP_REGISTRY_PERMISSION,
+    ),
   ).toBe(false);
 });
 

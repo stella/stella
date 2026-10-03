@@ -1,3 +1,7 @@
+// Empty and constant fallback handlers discard failures. Item loops must
+// surface them; tests must assert outcomes or explain an intentional swallow
+// on the catch line or directly above it. Reasons document intent, not proof
+// that an arbitrary handler observes every failure.
 import type { ESTree } from "@oxlint/plugins";
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import { panic } from "better-result";
@@ -13,6 +17,45 @@ import {
 } from "./utils.ts";
 
 const RULE_NAME = "no-swallowed-item-error";
+const MIN_REASON_LENGTH = 12;
+const SWALLOW_OK_PREFIX = "swallow-ok:";
+const PLACEHOLDER_OPENERS = new Set(["todo", "fixme", "tbd"]);
+const PLACEHOLDER_PHRASES = new Set([
+  "placeholder",
+  "placeholder reason",
+  "reason here",
+  "reason goes here",
+  "explain why",
+  "explain here",
+  "best effort",
+  "best-effort",
+  "best effort cleanup",
+  "best-effort cleanup",
+  "ignore",
+  "ignore errors",
+  "ignore failures",
+  "test",
+  "test only",
+  "cleanup",
+]);
+const TRAILING_FILLER = new Set([".", "!", " "]);
+
+/** A reason that names no cause: an opener such as "todo", or a stock phrase. */
+const isPlaceholderReason = (reason: string): boolean => {
+  const words = reason
+    .toLowerCase()
+    .split(/\s/u)
+    .filter((word) => word !== "");
+  const opener = /^[a-z]+/u.exec(words[0] ?? "")?.[0];
+  if (opener !== undefined && PLACEHOLDER_OPENERS.has(opener)) {
+    return true;
+  }
+  let phrase = words.join(" ");
+  while (TRAILING_FILLER.has(phrase.at(-1) ?? "")) {
+    phrase = phrase.slice(0, -1);
+  }
+  return PLACEHOLDER_PHRASES.has(phrase);
+};
 const ITERATION_METHODS = new Set([
   "map",
   "flatMap",
@@ -147,6 +190,92 @@ const swallowedBody = (node: unknown): boolean => {
 export default eslintCompatPlugin({
   meta: { name: RULE_NAME },
   rules: {
+    "no-test-swallowed-error": {
+      meta: {
+        type: "problem",
+        schema: [],
+        messages: {
+          swallowed:
+            "Assert the promise outcome or place // swallow-ok: <specific reason> (at least 12 characters) on the catch line or directly above it.",
+        },
+      },
+      createOnce(context) {
+        let reasonLines = new Set<number>();
+        let precedingReasonLines = new Set<number>();
+        const report = (node: ESTree.CatchClause | ESTree.CallExpression) => {
+          const callee =
+            node.type === "CallExpression"
+              ? unwrapExpression(node.callee)
+              : null;
+          const anchor =
+            isAstNode(callee) &&
+            callee.type === "MemberExpression" &&
+            isAstNode(callee.property)
+              ? callee.property
+              : node;
+          const line = context.sourceCode.getLocFromIndex(anchor.range[0]).line;
+          if (reasonLines.has(line) || precedingReasonLines.has(line - 1)) {
+            return;
+          }
+          context.report({ node: anchor, messageId: "swallowed" });
+        };
+        return {
+          before() {
+            reasonLines = new Set();
+            precedingReasonLines = new Set();
+          },
+          Program() {
+            for (const comment of context.sourceCode.getAllComments()) {
+              if (comment.type !== "Line") {
+                continue;
+              }
+              const text = comment.value.trimStart();
+              const reason = text.startsWith(SWALLOW_OK_PREFIX)
+                ? text.slice(SWALLOW_OK_PREFIX.length).trim()
+                : undefined;
+              if (
+                reason !== undefined &&
+                reason.length >= MIN_REASON_LENGTH &&
+                !isPlaceholderReason(reason) &&
+                /\p{L}/u.test(reason) &&
+                new Set(reason).size > 1
+              ) {
+                const { line, column } = context.sourceCode.getLocFromIndex(
+                  comment.range[0],
+                );
+                reasonLines.add(line);
+                const prefix = context.sourceCode.text.slice(
+                  comment.range[0] - column,
+                  comment.range[0],
+                );
+                if (prefix.trim() === "") {
+                  precedingReasonLines.add(line);
+                }
+              }
+            }
+          },
+          CatchClause(node) {
+            if (node.body.body.length === 0) {
+              report(node);
+            }
+          },
+          CallExpression(node) {
+            const callee = unwrapExpression(node.callee);
+            const callback = unwrapExpression(node.arguments.at(0));
+            if (
+              isAstNode(callee) &&
+              callee.type === "MemberExpression" &&
+              memberPropertyName(callee) === "catch" &&
+              isAstNode(callback) &&
+              FUNCTION_TYPES.has(callback.type) &&
+              swallowedBody(callback.body)
+            ) {
+              report(node);
+            }
+          },
+        };
+      },
+    },
     [RULE_NAME]: {
       meta: {
         type: "problem",

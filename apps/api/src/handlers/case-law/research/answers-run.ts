@@ -19,6 +19,7 @@ import { createRootSafeDb } from "@/api/lib/root-scoped-db";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
+  access: "write",
   description:
     "Queue answers for the given decisions in the given question columns " +
     "(every column the organization keeps, when none is named). Cells that " +

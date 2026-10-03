@@ -28,7 +28,7 @@
  *   bun run eval:create-document -- --runs 3 --task en-nda --json out.json --sources-dir out/sources
  *
  * Model ids use `provider::modelId` or a bare id resolved through the
- * default provider chain (see `getTanStackTextModelById`).
+ * default provider chain (see `resolveTanStackTextModel`).
  */
 import { EventType, maxIterations } from "@tanstack/ai";
 import type { TokenUsage } from "@tanstack/ai";
@@ -643,22 +643,28 @@ const renderReport = (runs: readonly EvalRun[]): string => {
 const resolveModels = async (
   modelIds: readonly string[],
 ): Promise<{ id: string; model: ResolvedTanStackTextModel }[]> => {
-  const { getTanStackTextModelById, hasTanStackInstanceProvider } =
+  const { resolveTanStackTextModel } =
+    await import("@/api/lib/tanstack-ai-generate");
+  const { hasTanStackInstanceProvider } =
     await import("@/api/lib/tanstack-ai-models");
   if (!hasTanStackInstanceProvider()) {
     return panic(
       "No instance AI provider is configured; set a provider key in .env",
     );
   }
-  return modelIds.map((id) => ({
-    id,
-    model: getTanStackTextModelById(id, null, {
-      dataClass: "customer",
-      managedAIResidency: "eu",
-      role: "fast",
-      organizationId: null,
-    }),
-  }));
+  return await Promise.all(
+    modelIds.map(async (id) => ({
+      id,
+      model: await resolveTanStackTextModel({
+        modelId: id,
+        orgAIConfig: null,
+        dataClass: "customer",
+        managedAIResidency: "eu",
+        role: "fast",
+        organizationId: null,
+      }),
+    })),
+  );
 };
 
 const writeSources = async (dir: string, runs: readonly EvalRun[]) => {

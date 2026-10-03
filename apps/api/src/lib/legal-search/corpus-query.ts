@@ -1,9 +1,23 @@
 import { panic } from "better-result";
 
+import type {
+  JurisdictionProfile,
+  WorkIdentifier,
+} from "@stll/legal-atlas/provision-citation-profile";
+import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
+import { foldToAscii } from "@stll/text-normalize";
+
 import { COURT_PARTITION_FIELD } from "@/api/lib/legal-search/corpus-index-group-contract";
+import {
+  type CorpusProvisionMention,
+  readCorpusProvisionMentions,
+} from "@/api/lib/legal-search/corpus-provision-mentions";
+import {
+  CORPUS_QUERY_VARIANT_POLICY,
+  type CorpusIndexQueryVariant,
+} from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { functionWordKey } from "@/api/lib/legal-search/morphology/function-words";
-import { stemSlovakUpstream } from "@/api/lib/legal-search/morphology/slovak";
 import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
 
@@ -169,6 +183,53 @@ export const partitionCorpusFunctionWords = (
   return { required, dropped };
 };
 
+type PartitionCorpusQueryTokensOptions = {
+  tokens: readonly CorpusQueryToken[];
+  functionWords: ReadonlySet<string> | null;
+  queryVariant: CorpusIndexQueryVariant;
+  jurisdiction: string | undefined;
+};
+
+type PartitionCorpusQueryTokensResult = {
+  baseline: CorpusQueryPartition;
+  partition: CorpusQueryPartition;
+  profile: JurisdictionProfile | null;
+  mentions: readonly CorpusProvisionMention[];
+};
+
+/** Share original provision spans between clause construction and query reporting. */
+export const partitionCorpusQueryTokens = ({
+  tokens,
+  functionWords,
+  queryVariant,
+  jurisdiction,
+}: PartitionCorpusQueryTokensOptions): PartitionCorpusQueryTokensResult => {
+  const profile =
+    CORPUS_QUERY_VARIANT_POLICY[queryVariant].provisions &&
+    (jurisdiction === "SVK" || jurisdiction === "CZE")
+      ? PROVISION_CITATION_PROFILES[jurisdiction]
+      : null;
+  const mentions =
+    profile === null ? [] : readCorpusProvisionMentions(tokens, profile);
+  const baseline = partitionCorpusFunctionWords(tokens, functionWords);
+  if (mentions.length === 0 || baseline.dropped.length === 0) {
+    return { baseline, partition: baseline, profile, mentions };
+  }
+  const retained = new Set(baseline.required);
+  for (const { consumedRange } of mentions) {
+    for (const token of tokens.slice(consumedRange.start, consumedRange.end)) {
+      retained.add(token);
+    }
+  }
+  const partition = {
+    required: tokens.filter((token) => retained.has(token)),
+    dropped: tokens.flatMap((token) =>
+      token.type === "term" && !retained.has(token) ? [token.value] : [],
+    ),
+  };
+  return { baseline, partition, profile, mentions };
+};
+
 /**
  * Tokens written back as a query string.
  *
@@ -264,24 +325,36 @@ const stemLeaves = (
   return stemming.fields.map((field) => `${field}:${quoteCorpusValue(stem)}`);
 };
 
-/** Query-only compatibility with faithful stems already stored in Slovak passages. */
-const slovakLegacyStemLeaves = (
-  token: CorpusQueryToken,
-  fields: readonly string[],
-): string[] => {
+export type CorpusLegacyStemming = {
+  fields: readonly string[];
+  stemTerm: (term: string) => string;
+};
+
+type LegacyStemLeavesOptions = {
+  token: CorpusQueryToken;
+  legacyStemming: CorpusLegacyStemming;
+  stemming: CorpusStemming | null;
+};
+
+/** Query compatibility with stems already stored by an older projection. */
+const legacyStemLeaves = ({
+  token,
+  legacyStemming: { fields, stemTerm },
+  stemming,
+}: LegacyStemLeavesOptions): string[] => {
   if (token.type === "phrase") {
     return [];
   }
   const faithful = corpusTokens(token.value)
     .map((term) => {
       const normalized = term.normalize("NFC").toLowerCase();
-      return stemSlovakUpstream(normalized) || normalized;
+      return stemTerm(normalized) || normalized;
     })
     .join(" ");
-  if (faithful === stemCorpusText(token.value, "sk")) {
-    return [];
-  }
-  return fields.map((field) => `${field}:${quoteCorpusValue(faithful)}`);
+  const primaryLeaves = new Set(stemLeaves(token.value, stemming));
+  return fields
+    .map((field) => `${field}:${quoteCorpusValue(faithful)}`)
+    .filter((leaf) => !primaryLeaves.has(leaf));
 };
 
 /**
@@ -434,6 +507,11 @@ type TokenLeaves = {
   typed: string;
 };
 
+type CoreStemLeaves = {
+  primary: string[];
+  faithful: string[];
+};
+
 type BudgetedToken = {
   granted: Record<LeafGroup, readonly string[]>;
   token: TokenLeaves;
@@ -449,12 +527,15 @@ type BudgetedToken = {
  * allocates stems left to right and leaves the remaining tokens bare, which
  * is what every token got before this pass existed.
  */
-const spendLeafBudget = (tokens: readonly TokenLeaves[]): BudgetedToken[] => {
+const spendLeafBudget = (
+  tokens: readonly TokenLeaves[],
+  reserved = 0,
+): BudgetedToken[] => {
   const budgeted: BudgetedToken[] = tokens.map((token) => ({
     granted: { stem: [], surface: [], keywords: [], legal: [] },
     token,
   }));
-  let leaves = tokens.length;
+  let leaves = tokens.length + reserved;
 
   for (const pass of LEAF_BUDGET_PASSES) {
     for (const entry of budgeted) {
@@ -473,11 +554,253 @@ const spendLeafBudget = (tokens: readonly TokenLeaves[]): BudgetedToken[] => {
   return budgeted;
 };
 
-const SLOVAK_LEGACY_STEM_FIELDS = new Set(["text_stem", "headnote_stem"]);
+type ReserveCoreStemLeavesOptions = {
+  tokens: readonly CorpusQueryToken[];
+  leavesForTokens: TokenLeaves[];
+  reserved: number;
+  queryVariant: CorpusIndexQueryVariant;
+  stemming: CorpusStemming | null;
+  legacyStemming: CorpusLegacyStemming | null;
+};
+
+/** Reserve passage stems across all tokens before optional fields spend headroom. */
+const reserveCoreStemLeaves = ({
+  tokens,
+  leavesForTokens,
+  reserved,
+  queryVariant,
+  stemming,
+  legacyStemming,
+}: ReserveCoreStemLeavesOptions) => {
+  const coreReserved: CoreStemLeaves[] = tokens.map(() => ({
+    primary: [],
+    faithful: [],
+  }));
+  let coreCount = 0;
+  if (
+    CORPUS_QUERY_VARIANT_POLICY[queryVariant].coreStemsFirst &&
+    legacyStemming !== null &&
+    legacyStemming.fields.length > 0
+  ) {
+    // Give every token its primary stem before spending on faithful variants.
+    // Typed leaves remain mandatory even for all-token queries above the ceiling.
+    for (const kind of ["primary", "faithful"] as const) {
+      for (const [index, token] of tokens.entries()) {
+        const leaves = leavesForTokens.at(index);
+        const core = coreReserved.at(index);
+        if (leaves === undefined || core === undefined) {
+          return panic("Required corpus token has no core reservation");
+        }
+        const leaf =
+          kind === "primary"
+            ? leaves.alternatives.stem.at(0)
+            : legacyStemLeaves({ token, legacyStemming, stemming }).at(0);
+        if (
+          leaf === undefined ||
+          core.primary.includes(leaf) ||
+          core.faithful.includes(leaf) ||
+          tokens.length + reserved + coreCount >= CORPUS_QUERY_LEAF_BUDGET
+        ) {
+          continue;
+        }
+        core[kind].push(leaf);
+        coreCount += 1;
+      }
+    }
+    for (const [index, leaves] of leavesForTokens.entries()) {
+      const core = coreReserved.at(index);
+      if (core === undefined) {
+        return panic("Corpus token has no core reservation");
+      }
+      leaves.alternatives.stem = leaves.alternatives.stem.filter(
+        (leaf) => !core.primary.includes(leaf) && !core.faithful.includes(leaf),
+      );
+    }
+  }
+  return { coreReserved, coreCount };
+};
+
+const sameWork = (left: WorkIdentifier, right: WorkIdentifier): boolean =>
+  left.number === right.number &&
+  left.year === right.year &&
+  left.collection === right.collection;
+
+// Historical gazette numbers leave first; the typed act is always retained.
+// Headnotes are optional, so their stem phrase leaves before passage stems.
+const PROVISION_LEAF_DROP_ORDER = [
+  "predecessorGazette",
+  "headnoteStem",
+  "stem",
+  "surface",
+  "titles",
+  "gazette",
+  "aliases",
+] as const;
+
+type ProvisionLeafDropGroup = (typeof PROVISION_LEAF_DROP_ORDER)[number];
+
+type CorpusProvisionGroupsOptions = {
+  tokens: readonly CorpusQueryToken[];
+  requiredTokens: readonly CorpusQueryToken[];
+  mentions: readonly CorpusProvisionMention[];
+  profile: JurisdictionProfile;
+  stemming: CorpusStemming | null;
+  surfaceFields: readonly string[];
+  leavesForToken: (token: CorpusQueryToken) => TokenLeaves;
+};
+
+/** Reserve act alternatives before the ordinary allocator spends any leaves. */
+const corpusProvisionGroups = ({
+  tokens,
+  requiredTokens,
+  mentions,
+  profile,
+  stemming,
+  surfaceFields,
+  leavesForToken,
+}: CorpusProvisionGroupsOptions) => {
+  if (mentions.length === 0) {
+    return null;
+  }
+  const retained = new Set(requiredTokens);
+  const required: CorpusQueryToken[] = [];
+  const groups: {
+    index: number;
+    leaves: string[];
+    dropGroups: Record<ProvisionLeafDropGroup, readonly string[]>;
+    typedLeaf: string;
+  }[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    const mention = mentions.find(
+      ({ consumedRange }) => consumedRange.start === index,
+    );
+    if (mention === undefined) {
+      const token = tokens.at(index);
+      if (token === undefined) {
+        return panic("Corpus provision token index is missing");
+      }
+      if (retained.has(token)) {
+        required.push(token);
+      }
+      continue;
+    }
+    const typed = tokens
+      .slice(mention.actTokenRange.start, mention.actTokenRange.end)
+      .map(({ value }) => value)
+      .join(" ");
+    const namesForWorks = (entries: JurisdictionProfile["titles"]) =>
+      entries
+        .filter(({ identifier }) =>
+          mention.works.some((work) => sameWork(identifier, work)),
+        )
+        .flatMap(({ spellings }) =>
+          spellings.map((spelling) =>
+            quoteCorpusValue(corpusTokens(spelling).join(" ")),
+          ),
+        );
+    const typedLeaf = quoteCorpusValue(typed);
+    const titles = namesForWorks(profile.titles).filter(
+      (leaf) => leaf !== typedLeaf,
+    );
+    const aliases = namesForWorks(profile.aliases);
+    const gazetteLeaf = ({ number, year }: WorkIdentifier) =>
+      quoteCorpusValue(corpusTokens(`${number} ${year}`).join(" "));
+    const gazette = mention.works.map(gazetteLeaf);
+    const key = foldToAscii(typed).toLowerCase();
+    // Only the spelling actually cited determines succession. An older act's
+    // explicit historical title may itself have an unbounded citation window.
+    const citedEntries = [...profile.titles, ...profile.aliases].filter(
+      ({ spellings }) =>
+        spellings.some(
+          (spelling) =>
+            foldToAscii(corpusTokens(spelling).join(" ")).toLowerCase() === key,
+        ),
+    );
+    const predecessorGazette = mention.works
+      .filter((work) => {
+        const entries = citedEntries.filter(({ identifier }) =>
+          sameWork(identifier, work),
+        );
+        return (
+          entries.length > 0 &&
+          entries.every(({ citedUntil }) => citedUntil !== undefined)
+        );
+      })
+      .map(gazetteLeaf);
+    const surface = surfaceFieldLeaves(typed, surfaceFields);
+    const stems = stemLeaves(typed, stemming);
+    const leaves = [
+      ...new Set([
+        typedLeaf,
+        ...titles,
+        ...surface,
+        ...stems,
+        ...aliases,
+        ...gazette,
+      ]),
+    ];
+    const dropGroups = {
+      predecessorGazette,
+      headnoteStem: stems.filter((leaf) => leaf.startsWith("headnote_stem:")),
+      stem: stems.filter((leaf) => !leaf.startsWith("headnote_stem:")),
+      surface: surface.toReversed(),
+      titles: titles.toReversed(),
+      gazette: gazette.filter((leaf) => !predecessorGazette.includes(leaf)),
+      aliases: aliases.toReversed(),
+    } satisfies Record<ProvisionLeafDropGroup, readonly string[]>;
+    groups.push({ index: required.length, leaves, dropGroups, typedLeaf });
+    index = mention.consumedRange.end - 1;
+  }
+  const tokenLeaves = required.map(leavesForToken);
+  // Preserve baseline stem coverage; the remaining optional alternatives use
+  // the ordinary whole-group allocator after the act reservation.
+  const baseline =
+    tokenLeaves.length +
+    tokenLeaves.reduce(
+      (count, token) => count + token.alternatives.stem.length,
+      0,
+    );
+  let reserved = groups.reduce(
+    (count, group) => count + group.leaves.length,
+    0,
+  );
+  for (const kind of PROVISION_LEAF_DROP_ORDER) {
+    for (const group of groups.toReversed()) {
+      for (const leaf of group.dropGroups[kind]) {
+        if (baseline + reserved <= CORPUS_QUERY_LEAF_BUDGET) {
+          break;
+        }
+        const index = group.leaves.indexOf(leaf);
+        if (index !== -1 && leaf !== group.typedLeaf) {
+          group.leaves.splice(index, 1);
+          reserved -= 1;
+        }
+      }
+    }
+  }
+  if (baseline + reserved > CORPUS_QUERY_LEAF_BUDGET) {
+    return null;
+  }
+  return {
+    required,
+    reserved,
+    groups: groups.map(({ index, leaves }) => ({
+      index,
+      clause:
+        leaves.length === 1
+          ? (leaves.at(0) ?? panic("Empty provision group"))
+          : `(${leaves.join(" OR ")})`,
+    })),
+  };
+};
 
 export type CorpusFreeTextOptions = {
-  /** Case-law SVK compatibility; paid only from baseline allocation headroom. */
-  slovakLegacyStemFields?: readonly string[] | undefined;
+  queryVariant?: CorpusIndexQueryVariant | undefined;
+  jurisdiction?: string | undefined;
+  /** Whether content tokens are all required or ranked by coverage. */
+  match?: "all" | "any" | undefined;
+  /** Declared compatibility fields and algorithm; the variant controls reservation. */
+  legacyStemming?: CorpusLegacyStemming | null | undefined;
   expand?: CorpusTermExpander | undefined;
   stemming?: CorpusStemming | null | undefined;
   /**
@@ -530,44 +853,81 @@ export type CorpusFreeTextOptions = {
  *
  * With no expander, no extra fields and no stemming this emits exactly what it
  * emitted before any of them existed, byte for byte; the wider forms differ
- * only by OR groups in the positions those features chose.
+ * only by OR groups in the positions those features chose. The query variant
+ * off, or a query with no provision mention, keeps the existing path byte-identical.
  */
 export const corpusFreeTextClause = (
   text: string,
   {
+    match = "all",
+    queryVariant = "off",
+    jurisdiction,
     expand = noTermExpansion,
     stemming = null,
     surfaceFields = [],
     keywordFields = [],
     functionWords = null,
     legalAlternatives = null,
-    slovakLegacyStemFields = [],
+    legacyStemming = null,
   }: CorpusFreeTextOptions = {},
 ): string | null => {
-  const { required } = partitionCorpusFunctionWords(
-    tokenizeCorpusFreeText(text),
-    functionWords,
+  const tokens = tokenizeCorpusFreeText(text);
+  const { baseline, partition, profile, mentions } = partitionCorpusQueryTokens(
+    {
+      tokens,
+      functionWords,
+      queryVariant,
+      jurisdiction,
+    },
   );
-  if (required.length === 0) {
+  const partitionRequired =
+    match === "any"
+      ? baseline.required.slice(0, CORPUS_QUERY_LEAF_BUDGET)
+      : baseline.required;
+  if (partitionRequired.length === 0) {
     return null;
   }
 
-  const budgeted = spendLeafBudget(
-    required.map((token) => ({
-      alternatives: {
-        stem: stemLeaves(token.value, stemming),
-        surface: [
-          ...expansionLeaves(token, expand),
-          ...surfaceFieldLeaves(token.value, surfaceFields),
-        ],
-        keywords: surfaceFieldLeaves(token.value, keywordFields),
-        legal: legalAlternativeLeaves(token, legalAlternatives, stemming),
-      },
-      typed: quoteCorpusValue(token.value),
-    })),
-  );
+  const leavesForToken = (token: CorpusQueryToken): TokenLeaves => ({
+    alternatives: {
+      stem: stemLeaves(token.value, stemming),
+      surface: [
+        ...expansionLeaves(token, expand),
+        ...surfaceFieldLeaves(token.value, surfaceFields),
+      ],
+      keywords: surfaceFieldLeaves(token.value, keywordFields),
+      legal: legalAlternativeLeaves(token, legalAlternatives, stemming),
+    },
+    typed: quoteCorpusValue(token.value),
+  });
+  const provisionGroups =
+    profile !== null
+      ? corpusProvisionGroups({
+          tokens,
+          requiredTokens: partition.required,
+          mentions,
+          profile,
+          stemming,
+          surfaceFields,
+          leavesForToken,
+        })
+      : null;
+  const required = provisionGroups?.required ?? partitionRequired;
+  const reserved = provisionGroups?.reserved ?? 0;
+  const tokenLeaves = required.map(leavesForToken);
+  const { coreReserved, coreCount } = reserveCoreStemLeaves({
+    tokens: required,
+    leavesForTokens: tokenLeaves,
+    reserved,
+    queryVariant,
+    stemming,
+    legacyStemming,
+  });
+  const budgeted = spendLeafBudget(tokenLeaves, reserved + coreCount);
 
   let used =
+    reserved +
+    coreCount +
     budgeted.length +
     budgeted.reduce(
       (total, { granted }) =>
@@ -579,11 +939,18 @@ export const corpusFreeTextClause = (
       0,
     );
   const clauses = budgeted.map(({ granted, token }, index) => {
-    const extras = LEAF_EMIT_ORDER.flatMap((group) => granted[group]);
-    // Baseline grants are immutable: compatibility spends only what all four passes left.
+    const core = coreReserved.at(index);
+    if (core === undefined) {
+      return panic("Budgeted corpus token has no core reservation");
+    }
+    const extras = LEAF_EMIT_ORDER.flatMap((group) =>
+      group === "stem" ? core.primary.concat(granted[group]) : granted[group],
+    );
+    extras.push(...core.faithful);
+    // Additional compatibility fields spend only what the ordinary passes left.
     if (
-      stemming?.language === "sk" &&
-      slovakLegacyStemFields.length > 0 &&
+      legacyStemming !== null &&
+      legacyStemming.fields.length > 0 &&
       granted.stem.length > 0 &&
       used < CORPUS_QUERY_LEAF_BUDGET
     ) {
@@ -593,7 +960,7 @@ export const corpusFreeTextClause = (
       }
       const faithful = [
         ...new Set(
-          slovakLegacyStemLeaves(requiredToken, slovakLegacyStemFields),
+          legacyStemLeaves({ token: requiredToken, legacyStemming, stemming }),
         ),
       ].filter((leaf) => !extras.includes(leaf));
       if (used + faithful.length <= CORPUS_QUERY_LEAF_BUDGET) {
@@ -607,7 +974,12 @@ export const corpusFreeTextClause = (
     return `(${[token.typed, ...extras].join(" OR ")})`;
   });
 
-  return `(${clauses.join(" AND ")})`;
+  if (provisionGroups !== null) {
+    for (const { index, clause } of provisionGroups.groups.toReversed()) {
+      clauses.splice(index, 0, clause);
+    }
+  }
+  return `(${clauses.join(match === "all" ? " AND " : " OR ")})`;
 };
 
 /**
@@ -636,10 +1008,12 @@ export type CaseLawCorpusFilters = {
 };
 
 export type CaseLawCorpusQueryOptions = {
+  queryVariant?: CorpusIndexQueryVariant | undefined;
   text: string;
   /** Query scope, independent of whether the target index needs a filter clause. */
   jurisdiction: string | undefined;
   filters: CaseLawCorpusFilters;
+  legacyStemming?: CorpusLegacyStemming | null | undefined;
   expand?: CorpusTermExpander | undefined;
   stemming?: CorpusStemming | null | undefined;
   surfaceFields?: readonly string[] | undefined;
@@ -658,6 +1032,7 @@ export type CaseLawCorpusQueryOptions = {
 export const caseLawCorpusQuery = ({
   text,
   jurisdiction,
+  queryVariant,
   filters,
   expand,
   stemming,
@@ -665,20 +1040,18 @@ export const caseLawCorpusQuery = ({
   keywordFields,
   functionWords,
   legalAlternatives,
+  legacyStemming,
 }: CaseLawCorpusQueryOptions): string | null => {
   const freeText = corpusFreeTextClause(text, {
+    jurisdiction,
+    queryVariant,
     expand,
     stemming,
     surfaceFields,
     keywordFields,
     functionWords,
     legalAlternatives,
-    slovakLegacyStemFields:
-      jurisdiction === "SVK" && stemming?.language === "sk"
-        ? stemming.fields.filter((field) =>
-            SLOVAK_LEGACY_STEM_FIELDS.has(field),
-          )
-        : [],
+    legacyStemming,
   });
   if (freeText === null) {
     return null;

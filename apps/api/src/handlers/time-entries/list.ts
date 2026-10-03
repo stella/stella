@@ -52,6 +52,7 @@ const UNPROJECTED_TIME_ENTRY_LIST_COLUMNS = [
   // Invoicing and split bookkeeping; the list reports billing through
   // `status`, and a split entry reads as an ordinary entry.
   "invoiceId",
+  "invoiceAttachment",
   "splitGroupId",
 ] as const satisfies readonly (keyof TimeEntryRow)[];
 

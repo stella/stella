@@ -17,6 +17,7 @@ import {
   test,
 } from "bun:test";
 
+import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -35,7 +36,10 @@ const listItem = (index: number) => ({
 
 type Recorded = { listings: URL[]; details: URL[] };
 
-const stubPublisher = (dayHoldings: Record<string, number>): Recorded => {
+const stubPublisher = (
+  dayHoldings: Record<string, number>,
+  poisonIndex?: number,
+): Recorded => {
   const recorded: Recorded = { listings: [], details: [] };
 
   globalThis.fetch = asFetchMock((input: string | URL | Request) => {
@@ -71,7 +75,12 @@ const stubPublisher = (dayHoldings: Record<string, number>): Recorded => {
     const start = (Math.max(1, Number.parseInt(page, 10)) - 1) * size;
     const items = Array.from(
       { length: Math.max(0, Math.min(size, total - start)) },
-      (_, offset) => listItem(start + offset),
+      (_, offset) => {
+        const item = listItem(start + offset);
+        return start + offset === poisonIndex
+          ? { ...item, spisovaZnacka: "\\rtf1 rejected" }
+          : item;
+      },
     );
     return Promise.resolve(
       new Response(
@@ -102,6 +111,31 @@ describe("the sk-courts steady-state frontier", () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
     setSystemTime();
+  });
+
+  test("a poison listing label is quarantined and its healthy sibling advances the page", async () => {
+    stubPublisher({ [YESTERDAY]: 2 }, 0);
+    const page = await fetchAt(`frontier:${TWO_DAYS_BACK}:0`);
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
+    expect(page.decisions).toHaveLength(2);
+    const rejected = page.decisions.find(
+      (decision) => decision.metadata["detailStatus"] === "item_build_failed",
+    );
+    expect(rejected?.isListingOnly).toBe(true);
+    expect(rejected?.caseNumberIsPlaceholder).toBe(true);
+    expect(rejected?.sourceDocumentId).toBe(listItem(0).guid);
+    expect(
+      decodeSourceRawEnvelope(rejected?.sourceRaw ?? "")?.["listing"],
+    ).toContain("\\\\rtf1 rejected");
+    expect(
+      page.decisions.some(
+        (decision) => decision.caseNumber === listItem(1).spisovaZnacka,
+      ),
+    ).toBe(true);
+    expect(page.nextCursor).toBe(`frontier:${YESTERDAY}:0`);
   });
 
   test("a cycle with no day closed since the last one spends nothing", async () => {

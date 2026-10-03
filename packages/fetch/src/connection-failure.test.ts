@@ -1,0 +1,81 @@
+import { describe, expect, test } from "bun:test";
+
+import { isConnectionFailure } from "./connection-failure";
+
+describe("connection failure classification", () => {
+  test("recognizes the runtime error from a closed local port", async () => {
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () => new Response(null, { status: 204 }),
+    });
+    const url = server.url;
+    await server.stop(true);
+    const cause = await fetch(url).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(cause).toBeInstanceOf(TypeError);
+    expect(cause).toMatchObject({ code: expect.any(String) });
+    expect(isConnectionFailure(cause)).toBe(true);
+  });
+
+  for (const code of [
+    "ConnectionRefused",
+    "FailedToOpenSocket",
+    "ConnectionClosed",
+    "ENOTFOUND",
+    "EAI_AGAIN",
+    "ECONNREFUSED",
+    "ECONNRESET",
+    "ETIMEDOUT",
+    "ESOCKETTIMEDOUT",
+    "ERR_SSL_WRONG_VERSION_NUMBER",
+    "ERR_TLS_CERT_ALTNAME_INVALID",
+    "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+    "UND_ERR_CONNECT_TIMEOUT",
+  ]) {
+    test(`classifies the recorded ${code} shape without reading its message`, () => {
+      const cause = Object.assign(new TypeError("message omitted"), { code });
+      expect(isConnectionFailure(cause)).toBe(true);
+      expect(isConnectionFailure(new Error("Request failed", { cause }))).toBe(
+        true,
+      );
+    });
+  }
+
+  test("uses messages only when there is no runtime code", () => {
+    expect(isConnectionFailure(new TypeError("Unable to connect"))).toBe(true);
+    expect(
+      isConnectionFailure(
+        Object.assign(new TypeError("Unable to connect"), {
+          code: "ERR_INVALID_URL",
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  test("an abort with connection-looking text remains an abort", () => {
+    expect(
+      isConnectionFailure(new DOMException("Unable to connect", "AbortError")),
+    ).toBe(false);
+    expect(
+      isConnectionFailure(
+        new DOMException("Unable to connect", "TimeoutError"),
+      ),
+    ).toBe(false);
+    expect(
+      isConnectionFailure(
+        new TypeError("Unable to connect", {
+          cause: new DOMException("Stopped", "AbortError"),
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  test("terminates on a cyclic cause without classifying a programming failure", () => {
+    const cause = new TypeError("Invalid request");
+    cause.cause = cause;
+    expect(isConnectionFailure(cause)).toBe(false);
+  });
+});

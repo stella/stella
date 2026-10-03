@@ -1,6 +1,6 @@
 {
   "name": "@stll/cli",
-  "version": "3.3.4",
+  "version": "3.6.0",
   "description": "Stella command-line client",
   "keywords": [
     "cli",
@@ -22,7 +22,7 @@
     "stella": "./dist/cli.js"
   },
   "files": [
-    "capability-catalog.json",
+    "capabilities",
     "dist",
     "src",
     "skills",
@@ -32,7 +32,9 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/cli.ts",
-    "./capability-catalog.json": "./capability-catalog.json"
+    "./capability-catalog-data": "./src/capability-catalog-data.ts",
+    "./client-metadata-document": "./src/auth/client-metadata-document.ts",
+    "./capabilities/*.json": "./capabilities/*.json"
   },
   "publishConfig": {
     "access": "public"

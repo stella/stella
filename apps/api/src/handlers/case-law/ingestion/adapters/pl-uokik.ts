@@ -1,3 +1,4 @@
+import { Result, panic } from "better-result";
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK) adapter.
  *
@@ -53,13 +54,12 @@
  * The shared fetch identifies itself as Stella's ingestion agent, and the
  * publisher gate spaces requests two seconds apart.
  */
-
-import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -102,7 +102,8 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
@@ -121,6 +122,7 @@ import type {
   PlUokikRulingHeader,
   PlUokikRulingUnread,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
+import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -129,9 +131,13 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+import { MetadataUrlDefect, toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { PL_UOKIK_METADATA_URL_SCHEMA } from "./pl-uokik.metadata-urls";
 
 // ── Publisher boundary ───────────────────────────────────
 
@@ -260,6 +266,7 @@ const isRefusedRedirect = (error: unknown): boolean =>
   error.code === "UnexpectedRedirect";
 
 type RequestOptions = {
+  fetchStage: DocumentFetchStage;
   cursor: string;
   url: string;
   accept: string;
@@ -283,6 +290,7 @@ type Answer =
 const request = async ({
   accept,
   cursor,
+  fetchStage,
   maxBytes,
   signal,
   timeoutMs,
@@ -301,7 +309,7 @@ const request = async ({
       await fetchWithRetry(
         address,
         { headers: { Accept: accept }, redirect: "error" },
-        { adapterKey: ADAPTER_KEYS.PL_UOKIK, signal, timeoutMs },
+        { fetchStage, adapterKey: ADAPTER_KEYS.PL_UOKIK, signal, timeoutMs },
       ),
     catch: (error: unknown) => error,
   });
@@ -360,9 +368,7 @@ const PRINTED_DATE = /^(?<day>\d{2})\.(?<month>\d{2})\.(?<year>\d{4})$/u;
 
 /** Markup text as a reader sees it: entities decoded, spacing collapsed. */
 const textOf = (markup: string): string =>
-  cheerio
-    .load(`<body>${markup}</body>`)("body")
-    .text()
+  visibleHtmlText(cheerio.load(`<body>${markup}</body>`)("body"))
     .replace(/\s+/gu, " ")
     .trim();
 
@@ -547,6 +553,7 @@ const readView = async ({
 }: ReadViewOptions): Promise<Result<ViewRead, AdapterFetchError>> => {
   const answered = await request({
     cursor,
+    fetchStage: "listing",
     url: viewUrl(start, count, reverse),
     accept: "application/json",
     maxBytes: VIEW_MAX_BYTES,
@@ -714,7 +721,7 @@ export const parsePlUokikDetail = (html: string): PlUokikDetail | null => {
       }
       const valueCell = cells.eq(1);
       const label = nonEmpty(
-        labelCell.text().replace(/\s+/gu, " ").replace(/:\s*$/u, ""),
+        visibleHtmlText(labelCell).replace(/\s+/gu, " ").replace(/:\s*$/u, ""),
       );
       const files = valueCell
         .find("a[href]")
@@ -727,14 +734,14 @@ export const parsePlUokikDetail = (html: string): PlUokikDetail | null => {
         });
       fields.push({
         label,
-        text: valueCell.text().replace(/\s+/gu, " ").trim(),
+        text: visibleHtmlText(valueCell).replace(/\s+/gu, " ").trim(),
         files,
       });
     });
   if (!fields.some(({ label }) => label === PL_UOKIK_LABEL.NUMBER)) {
     return null;
   }
-  return { title: nonEmpty($("title").first().text()), fields };
+  return { title: nonEmpty(visibleHtmlText($("title").first())), fields };
 };
 
 const fieldText = (
@@ -875,6 +882,7 @@ const fetchDetail = async ({
 }: FetchDetailOptions): Promise<Result<FetchedDetail, AdapterFetchError>> => {
   const answered = await request({
     cursor,
+    fetchStage: "document",
     url: plUokikDetailUrl(unid),
     accept: "text/html",
     maxBytes: DETAIL_MAX_BYTES,
@@ -955,6 +963,7 @@ const fetchFile = async ({
   }
   const answered = await request({
     cursor,
+    fetchStage: "document",
     url,
     accept: "application/pdf",
     maxBytes: FILE_MAX_BYTES,
@@ -1275,16 +1284,21 @@ type PageMetadataOptions = {
   files: readonly PlUokikFetchedFile[];
 };
 
-const addressOf = (id: string | undefined, file: PlUokikFile) =>
-  id === undefined ? undefined : (plUokikFileUrl(id, file.name) ?? undefined);
+const metadataAddressOf = (id: string | undefined, file: PlUokikFile) => {
+  if (id === undefined) {
+    return undefined;
+  }
+  const address = plUokikFileUrl(id, file.name);
+  return address === null
+    ? new MetadataUrlDefect({
+        message: "Attachment name cannot construct a safe metadata URL",
+        reason: "invalid-url",
+      })
+    : toMetadataUrl(address, "constructed");
+};
 
 /** What the decision page states, under the keys the inventory names. */
-const pageMetadataOf = ({
-  detail,
-  files,
-  id,
-  row,
-}: PageMetadataOptions): Record<string, unknown> => {
+const pageMetadataOf = ({ detail, files, id, row }: PageMetadataOptions) => {
   const practices = listOf(
     fieldText(detail, PL_UOKIK_LABEL.PRACTICE)?.replaceAll("\n", ";"),
   );
@@ -1324,7 +1338,7 @@ const pageMetadataOf = ({
         return {
           name: file.name,
           title: file.title,
-          documentUrl: addressOf(id, file),
+          documentUrl: metadataAddressOf(id, file),
           status: fetched?.status,
           sha256:
             fetched?.bytes === undefined ? undefined : sha256(fetched.bytes),
@@ -1337,7 +1351,7 @@ const pageMetadataOf = ({
     appealRulings: fieldFiles(detail, PL_UOKIK_LABEL.RULINGS).map((file) => ({
       name: file.name,
       title: file.title,
-      documentUrl: addressOf(id, file),
+      documentUrl: metadataAddressOf(id, file),
       sourceDocumentId:
         id === undefined ? undefined : plUokikRulingId(id, file.name),
     })),
@@ -1460,67 +1474,73 @@ export const assemblePlUokikDecision = async ({
   // never published under no authority.
   const courtUnknown = detail !== undefined && court === undefined;
   const listingOnly = missing !== undefined || courtUnknown;
-  const decision: IngestionResult = {
-    caseNumber,
-    ...(placeholder
-      ? { caseNumberIsPlaceholder: true }
-      : { identifiers: plUokikDecisionIdentifiers(caseNumber) }),
-    sourceDocumentId: id,
-    ...(quarantined ? {} : repairAliasesOf(row)),
-    court: authority,
-    country: PL_UOKIK_COUNTRY,
-    language: PL_UOKIK_LANGUAGE,
-    ...(decisionDate === undefined ? {} : { decisionDate }),
-    decisionType: PL_UOKIK_DECISION_TYPE,
-    ...(document === null ? {} : { fulltext: document.fulltext }),
-    ...(listingOnly ? { isListingOnly: true } : {}),
-    ...(sourceUrl === undefined ? {} : { sourceUrl }),
-    ...(firstFileUrl === undefined ? {} : { documentUrl: firstFileUrl }),
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: checkedDecisionMetadata({
+  const decision: IngestionResult = plainTextIngestionResult(
+    {
       caseNumber,
+      ...(placeholder
+        ? { caseNumberIsPlaceholder: true }
+        : { identifiers: plUokikDecisionIdentifiers(caseNumber) }),
+      sourceDocumentId: id,
+      ...(quarantined ? {} : repairAliasesOf(row)),
       court: authority,
-      decisionDate,
+      country: PL_UOKIK_COUNTRY,
+      language: PL_UOKIK_LANGUAGE,
+      ...(decisionDate === undefined ? {} : { decisionDate }),
       decisionType: PL_UOKIK_DECISION_TYPE,
-      unid: row.unid,
-      noteId: row.noteId,
-      register,
-      decisionNumber: number.length === 0 ? undefined : number,
-      decisionNumberAsListed: row.decisionNumber,
-      decisionDateAsListed: row.datePrinted,
-      ...pageMetadataOf({
-        detail,
-        row,
-        id: quarantined ? undefined : id,
-        files,
-      }),
-      ...(missing === undefined ? {} : { detailStatus: missing }),
-      ...(courtUnknown ? { quarantineReason: "court-not-stated" } : {}),
-      ...appealWatchOf(detail),
-      ...documentStateOf({
-        listingOnly,
-        read,
-        files,
-        listed: decisionFiles.length,
-      }),
-    }),
-    // The files are stored beside the envelope rather than in it, so a
-    // corrected file under an unchanged page has to change the hash too.
-    rawHash: hashContent(
-      [sourceRaw, ...kept.map(({ bytes }) => sha256(bytes))].join("\n"),
-    ),
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK],
-    documentAst,
-    sourceRaw,
-    ...(kept.length === 0
-      ? {}
-      : {
-          sourceRawObjects: Object.fromEntries(
-            kept.map((file, index) => [plUokikFileObjectName(index), file]),
-          ),
-        }),
-    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+      ...(document === null ? {} : { fulltext: document.fulltext }),
+      ...(listingOnly ? { isListingOnly: true } : {}),
+      ...(sourceUrl === undefined ? {} : { sourceUrl }),
+      ...(firstFileUrl === undefined ? {} : { documentUrl: firstFileUrl }),
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      metadata: checkedDecisionMetadata(
+        {
+          caseNumber,
+          court: authority,
+          decisionDate,
+          decisionType: PL_UOKIK_DECISION_TYPE,
+          unid: row.unid,
+          noteId: row.noteId,
+          register,
+          decisionNumber: number.length === 0 ? undefined : number,
+          decisionNumberAsListed: row.decisionNumber,
+          decisionDateAsListed: row.datePrinted,
+          ...pageMetadataOf({
+            detail,
+            row,
+            id: quarantined ? undefined : id,
+            files,
+          }),
+          ...(missing === undefined ? {} : { detailStatus: missing }),
+          ...(courtUnknown ? { quarantineReason: "court-not-stated" } : {}),
+          ...appealWatchOf(detail),
+          ...documentStateOf({
+            listingOnly,
+            read,
+            files,
+            listed: decisionFiles.length,
+          }),
+        },
+        PL_UOKIK_METADATA_URL_SCHEMA,
+      ),
+      // The files are stored beside the envelope rather than in it, so a
+      // corrected file under an unchanged page has to change the hash too.
+      rawHash: hashContent(
+        [sourceRaw, ...kept.map(({ bytes }) => sha256(bytes))].join("\n"),
+      ),
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK],
+      documentAst,
+      sourceRaw,
+      ...(kept.length === 0
+        ? {}
+        : {
+            sourceRawObjects: Object.fromEntries(
+              kept.map((file, index) => [plUokikFileObjectName(index), file]),
+            ),
+          }),
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    PL_UOKIK_METADATA_URL_SCHEMA,
+  );
   return listingOnly
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };
@@ -1639,58 +1659,61 @@ export const assemblePlUokikRuling = async ({
     [RULING_NAME_PART]: file.name,
   });
   const caseNumber = read?.caseNumber ?? id;
-  return {
-    caseNumber,
-    ...(read === undefined ? { caseNumberIsPlaceholder: true } : {}),
-    sourceDocumentId: id,
-    court: read?.court ?? "",
-    country: PL_UOKIK_COUNTRY,
-    language: PL_UOKIK_LANGUAGE,
-    ...(read === undefined
-      ? {}
-      : { decisionDate: read.decisionDate, decisionType: read.decisionType }),
-    ...(parsed === undefined ? {} : { fulltext: parsed.fulltext }),
-    // A ruling whose header could not be read is kept, not published: what
-    // it is keyed and filed by would otherwise be a guess.
-    ...(read === undefined ? { isListingOnly: true } : {}),
-    sourceUrl,
-    ...(documentUrl === undefined ? {} : { documentUrl }),
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: checkedDecisionMetadata({
+  return plainTextIngestionResult(
+    {
       caseNumber,
+      ...(read === undefined ? { caseNumberIsPlaceholder: true } : {}),
+      sourceDocumentId: id,
       court: read?.court ?? "",
-      decisionDate: read?.decisionDate,
-      decisionType: read?.decisionType,
-      recordClass: "court-ruling",
-      uokikDecision: decision,
-      attachmentName: file.name,
-      attachmentTitle: file.title,
-      attachmentStatus: fetched.status,
-      attachmentSha256: kept === undefined ? undefined : sha256(kept.bytes),
+      country: PL_UOKIK_COUNTRY,
+      language: PL_UOKIK_LANGUAGE,
       ...(read === undefined
-        ? { rulingStatus: status }
-        : {
-            divisionAsPrinted: read.divisionAsPrinted,
-            rulingKeys: rulingKeysOf(read),
-          }),
-    }),
-    rawHash: hashContent(
-      [sourceRaw, ...(kept === undefined ? [] : [sha256(kept.bytes)])].join(
-        "\n",
+        ? {}
+        : { decisionDate: read.decisionDate, decisionType: read.decisionType }),
+      ...(parsed === undefined ? {} : { fulltext: parsed.fulltext }),
+      // A ruling whose header could not be read is kept, not published: what
+      // it is keyed and filed by would otherwise be a guess.
+      ...(read === undefined ? { isListingOnly: true } : {}),
+      sourceUrl,
+      ...(documentUrl === undefined ? {} : { documentUrl }),
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      metadata: checkedDecisionMetadata({
+        caseNumber,
+        court: read?.court ?? "",
+        decisionDate: read?.decisionDate,
+        decisionType: read?.decisionType,
+        recordClass: "court-ruling",
+        uokikDecision: decision,
+        attachmentName: file.name,
+        attachmentTitle: file.title,
+        attachmentStatus: fetched.status,
+        attachmentSha256: kept === undefined ? undefined : sha256(kept.bytes),
+        ...(read === undefined
+          ? { rulingStatus: status }
+          : {
+              divisionAsPrinted: read.divisionAsPrinted,
+              rulingKeys: rulingKeysOf(read),
+            }),
+      }),
+      rawHash: hashContent(
+        [sourceRaw, ...(kept === undefined ? [] : [sha256(kept.bytes)])].join(
+          "\n",
+        ),
       ),
-    ),
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK],
-    documentAst: parsed?.documentAst ?? EMPTY_AST,
-    sourceRaw,
-    ...(kept === undefined
-      ? {}
-      : {
-          sourceRawObjects: {
-            [RULING_OBJECT]: kept,
-          },
-        }),
-    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK],
+      documentAst: parsed?.documentAst ?? EMPTY_AST,
+      sourceRaw,
+      ...(kept === undefined
+        ? {}
+        : {
+            sourceRawObjects: {
+              [RULING_OBJECT]: kept,
+            },
+          }),
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    PL_UOKIK_METADATA_URL_SCHEMA,
+  );
 };
 
 type BuildOptions = {
@@ -1703,6 +1726,7 @@ type BuildOptions = {
 type PlUokikObservation = {
   built: PlUokikBuildResult;
   rulings: IngestionResult[];
+  itemBuildFailures: number;
 };
 
 /**
@@ -1723,9 +1747,11 @@ const buildPlUokikDecision = async ({
         rawParts: plUokikRawPartsOf(entry, undefined),
       }),
       rulings: [],
+      itemBuildFailures: 0,
     });
   }
-  const fetched = await fetchDetail({ cursor, unid: row.unid, signal });
+  const unid = row.unid;
+  const fetched = await fetchDetail({ cursor, unid, signal });
   if (Result.isError(fetched)) {
     return fetched;
   }
@@ -1737,6 +1763,7 @@ const buildPlUokikDecision = async ({
         detailStatus: fetched.value.status,
       }),
       rulings: [],
+      itemBuildFailures: 0,
     });
   }
   const { html } = fetched.value;
@@ -1759,7 +1786,7 @@ const buildPlUokikDecision = async ({
     files,
   });
   if (built.type !== "built") {
-    return Result.ok({ built, rulings: [] });
+    return Result.ok({ built, rulings: [], itemBuildFailures: 0 });
   }
   const decision: PlUokikDecisionLink = {
     sourceDocumentId: row.unid,
@@ -1767,24 +1794,36 @@ const buildPlUokikDecision = async ({
     decisionDate: built.decision.decisionDate,
   };
   const rulings: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   for (const file of fieldFiles(detail ?? undefined, PL_UOKIK_LABEL.RULINGS)) {
     // One file at a time, behind the publisher's gate.
     const got = await fetchFile({ cursor, unid: row.unid, file, signal });
     if (Result.isError(got)) {
       return got;
     }
-    rulings.push(
-      await assemblePlUokikRuling({
-        entry,
-        detailHtml: html,
-        unid: row.unid,
-        file,
-        fetched: got.value,
-        decision,
-      }),
-    );
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_UOKIK,
+
+      rawListing: JSON.stringify({ entry, file }),
+      decisionOf: (ruling) => ruling,
+      build: async () =>
+        await assemblePlUokikRuling({
+          entry,
+          detailHtml: html,
+          unid,
+          file,
+          fetched: got.value,
+          decision,
+        }),
+    });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      rulings.push(captured.decision);
+      continue;
+    }
+    rulings.push(captured.value);
   }
-  return Result.ok({ built, rulings });
+  return Result.ok({ built, rulings, itemBuildFailures });
 };
 
 /**
@@ -2141,7 +2180,11 @@ const readPastAnchor = async (
   return Result.ok(null);
 };
 
-type Collected = { decisions: IngestionResult[]; aborted: boolean };
+type Collected = {
+  decisions: IngestionResult[];
+  itemBuildFailures: number;
+  aborted: boolean;
+};
 
 const collectDecisions = async (
   entries: readonly Record<string, unknown>[],
@@ -2149,20 +2192,54 @@ const collectDecisions = async (
   signal?: AbortSignal,
 ): Promise<Result<Collected, AdapterFetchError>> => {
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   for (const entry of entries) {
     if (signal?.aborted) {
-      return Result.ok({ decisions, aborted: true });
+      return Result.ok({ decisions, itemBuildFailures, aborted: true });
     }
     // One decision at a time, behind the publisher's gate.
-    const attempted = await buildPlUokikDecision({
-      cursor,
-      entry,
-      signal,
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_UOKIK,
+
+      rawListing: JSON.stringify(entry),
+      decisionOf: (result) => {
+        if (result.isErr()) {
+          return undefined;
+        }
+        const outcome = result.value.built;
+        switch (outcome.type) {
+          case "built":
+          case "detail-unavailable":
+            return outcome.decision;
+          case "unkeyable":
+            return undefined;
+          default:
+            outcome satisfies never;
+            return panic("Unhandled pl-uokik decision projection");
+        }
+      },
+      build: async () =>
+        await buildPlUokikDecision({
+          cursor,
+          entry,
+          signal,
+        }),
     });
+    const attempted = captured.value;
     if (Result.isError(attempted)) {
       return attempted;
     }
-    const { built, rulings } = attempted.value;
+    const {
+      built,
+      rulings,
+      itemBuildFailures: rulingFailures,
+    } = attempted.value;
+    itemBuildFailures += rulingFailures;
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision, ...rulings);
+      continue;
+    }
     switch (built.type) {
       case "built":
       case "detail-unavailable":
@@ -2184,7 +2261,7 @@ const collectDecisions = async (
       }
     }
   }
-  return Result.ok({ decisions, aborted: false });
+  return Result.ok({ decisions, itemBuildFailures, aborted: false });
 };
 
 /**
@@ -2288,11 +2365,23 @@ const plUokikFetchPage = async (
   if (Result.isError(collected)) {
     return collected;
   }
-  const { aborted, decisions } = collected.value;
+  const { aborted, decisions, itemBuildFailures } = collected.value;
   if (aborted) {
     // The cycle stopped partway through, so it says nothing about the rows
     // it never reached; the page is read again next cycle.
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: encoded });
+    return Result.ok({
+      decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
+      sourceUrl: url,
+      nextCursor: encoded,
+    });
   }
   // A page of rows stating no UNID has nothing to anchor on; the cursor
   // still moves past them by position, or the walk would read them forever.
@@ -2310,6 +2399,14 @@ const plUokikFetchPage = async (
         };
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: url,
     nextCursor: encodePlUokikCursor(
       reachedTop
@@ -2571,6 +2668,7 @@ const countPlUokikDecisions = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const plUokikAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_UOKIK,
   language: PL_UOKIK_LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,
@@ -2593,6 +2691,14 @@ export const plUokikAdapter = defineSourceAdapter({
   getTotalCount: countPlUokikDecisions,
 
   reconciliation: {
+    // The view position moves on every publication; the UNID and column describe this decision.
+    revisionOf: (payload) => {
+      if (!isRecord(payload)) {
+        return null;
+      }
+      const row = normalizePlUokikRow(payload);
+      return { unid: row.unid, noteId: row.noteId, column: row.column };
+    },
     firstSlice: PL_UOKIK_UNDATED_SLICE,
     sliceOf: yearOf,
     nextSlice: plUokikNextSlice,

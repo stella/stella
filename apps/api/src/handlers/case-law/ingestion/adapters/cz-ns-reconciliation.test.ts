@@ -530,9 +530,12 @@ describe("cz-ns listSlicePage", () => {
         });
         expect(identifiers.map(({ value }) => value)).toEqual(dockets);
         expect(identifiers.every(isDecisionIdentifier)).toBe(true);
-        expect(built.decision.metadata["additionalCaseNumbers"] ?? []).toEqual(
-          dockets.slice(1),
-        );
+        expect(
+          Bun.deepEquals(
+            built.decision.metadata["additionalCaseNumbers"] ?? [],
+            dockets.slice(1),
+          ),
+        ).toBe(true);
         expect(built.decision.sourceDocumentId).toBe(UNID.CO_SETTLED);
         expect(built.decision.caseNumber.length).toBeLessThanOrEqual(
           caseLawDecisions.caseNumber.length ?? 0,
@@ -563,12 +566,17 @@ describe("cz-ns listSlicePage", () => {
     if (first.type !== "built") {
       return;
     }
-    expect(first.decision.identifiers?.map(({ value }) => value)).toEqual([
-      DOCKET.SECOND,
-    ]);
-    expect(first.decision.metadata["additionalCaseNumbers"]).toEqual([
-      DOCKET.SECOND,
-    ]);
+    expect(
+      Bun.deepEquals(
+        first.decision.identifiers?.map(({ value }) => value),
+        [DOCKET.SECOND],
+      ),
+    ).toBe(true);
+    expect(
+      Bun.deepEquals(first.decision.metadata["additionalCaseNumbers"], [
+        DOCKET.SECOND,
+      ]),
+    ).toBe(true);
   });
 
   test("a lone hit, which the publisher states no count for, still lists", async () => {
@@ -700,10 +708,10 @@ describe("cz-ns buildDecision", () => {
     if (built.type !== "built") {
       return;
     }
-    expect(built.decision.caseNumber).toBe(DOCKET.FIRST);
+    expect(built.decision.caseNumber === DOCKET.FIRST).toBe(true);
     expect(built.decision.language).toBe("cs");
     expect(built.decision.decisionDate).toBe("2026-05-28");
-    expect(built.decision.decisionType).toBe("rozsudek");
+    expect(built.decision.decisionType === "rozsudek").toBe(true);
     expect(built.decision.sourceUrl).toContain(UNID.FIRST);
   });
 
@@ -776,11 +784,13 @@ describe("cz-ns buildDecision", () => {
       legalSentence: HEADNOTE,
     });
 
-    expect(decision.textFields).toEqual({
-      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      abstract: { type: TEXT_FIELD_TYPE.PRESENT, text: ANNOTATION },
-      legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: HEADNOTE },
-    });
+    expect(
+      Bun.deepEquals(decision.textFields, {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        abstract: { type: TEXT_FIELD_TYPE.PRESENT, text: ANNOTATION },
+        legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: HEADNOTE },
+      }),
+    ).toBe(true);
     expect(decision.metadata).not.toHaveProperty("abstract");
     expect(decision.metadata).not.toHaveProperty("legalSentence");
   });
@@ -788,10 +798,12 @@ describe("cz-ns buildDecision", () => {
   test("an annotation and an absent headnote remain distinct", async () => {
     const decision = await crawledWithSummary({ abstract: ANNOTATION });
 
-    expect(decision.textFields).toEqual({
-      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      abstract: { type: TEXT_FIELD_TYPE.PRESENT, text: ANNOTATION },
-    });
+    expect(
+      Bun.deepEquals(decision.textFields, {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        abstract: { type: TEXT_FIELD_TYPE.PRESENT, text: ANNOTATION },
+      }),
+    ).toBe(true);
     expect(decision.metadata).not.toHaveProperty("abstract");
     expect(decision.metadata).not.toHaveProperty("legalSentence");
   });
@@ -801,9 +813,12 @@ describe("cz-ns buildDecision", () => {
 
     // The headnote row is on every page; where the court wrote nothing it
     // holds a one-pixel spacer image, which must not be stored as a sentence.
-    expect(decision.textFields).toEqual(
-      absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    );
+    expect(
+      Bun.deepEquals(
+        decision.textFields,
+        absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      ),
+    ).toBe(true);
     expect(decision.metadata).not.toHaveProperty("abstract");
     expect(decision.metadata).not.toHaveProperty("legalSentence");
   });
@@ -838,7 +853,7 @@ describe("cz-ns buildDecision", () => {
     // written before it existed, because the refresh check skips a row whose
     // hash stands still. The literal is here so the next such move is a
     // decision somebody makes rather than a side effect of editing the parser.
-    expect(decision.metadata["zverejnenoNaWebu"]).toBe("2026-06-10");
+    expect(decision.metadata["zverejnenoNaWebu"] === "2026-06-10").toBe(true);
     expect(decision.rawHash).toBe(
       hashContent(
         `${JSON.stringify([DOCKET.FIRST])}|ECLI:CZ:NS:2026:30.CDO.3000.2025.1|Nejvyšší soud|28. 5. 2026|2026-06-10`,
@@ -990,13 +1005,18 @@ describe("cz-ns stored-raw replay", () => {
     if (outcome.type !== "parsed") {
       return;
     }
-    expect(outcome.result.caseNumber).toBe(DOCKET.FIRST);
-    expect(outcome.result.identifiers?.map(({ value }) => value)).toEqual([
-      DOCKET.SECOND,
-    ]);
-    expect(outcome.result.metadata["additionalCaseNumbers"]).toEqual([
-      DOCKET.SECOND,
-    ]);
+    expect(outcome.result.caseNumber === DOCKET.FIRST).toBe(true);
+    expect(
+      Bun.deepEquals(
+        outcome.result.identifiers?.map(({ value }) => value),
+        [DOCKET.SECOND],
+      ),
+    ).toBe(true);
+    expect(
+      Bun.deepEquals(outcome.result.metadata["additionalCaseNumbers"], [
+        DOCKET.SECOND,
+      ]),
+    ).toBe(true);
   });
 
   test("malformed persisted aliases are rejected instead of dropped", async () => {

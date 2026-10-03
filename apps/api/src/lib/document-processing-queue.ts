@@ -1391,8 +1391,11 @@ type DocumentProcessingCandidate = {
  */
 const reconciliationRedis = createLazyRedisClient(() =>
   createRedisClient({
-    connectionTimeout: REPAIR_SCAN_CURSOR_COMMAND_TIMEOUT_MS,
-    enableOfflineQueue: false,
+    storeClass: "cache",
+    overrides: {
+      connectionTimeout: REPAIR_SCAN_CURSOR_COMMAND_TIMEOUT_MS,
+      enableOfflineQueue: false,
+    },
   }),
 );
 
@@ -3101,6 +3104,9 @@ export const abortDocumentProcessingWorkerBeforeClose = async ({
   await closeWorker();
 };
 
+export const createDocumentProcessingWorkerConnection = () =>
+  createBullMqConnection({ storeClass: "durable-coordination" });
+
 export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
   const lifecycle = new AbortController();
   const ocrConfigured = isLocalDocumentOcrConfigured();
@@ -3121,7 +3127,7 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
       }
     },
     {
-      connection: createBullMqConnection(),
+      connection: createDocumentProcessingWorkerConnection(),
       concurrency: WORKER_CONCURRENCY,
       lockDuration: 35 * 60 * 1000,
       stalledInterval: 60_000,

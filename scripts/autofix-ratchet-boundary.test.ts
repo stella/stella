@@ -23,9 +23,9 @@ const command = restriction
   .map((line) => line.replace(/^ {10}/u, ""))
   .join("\n");
 
-type BoundaryCase = { written: string; baseline: string; trusted: boolean };
+type BoundaryCase = { written: string; baseline: string };
 
-const runBoundary = ({ written, baseline, trusted }: BoundaryCase) => {
+const runBoundary = ({ written, baseline }: BoundaryCase) => {
   const root = mkdtempSync(path.join(tmpdir(), "ratchet-autofix-boundary-"));
   try {
     mkdirSync(path.join(root, "scripts"));
@@ -36,9 +36,7 @@ const runBoundary = ({ written, baseline, trusted }: BoundaryCase) => {
       path.join(root, "bin/git"),
       `#!/bin/bash
 if [[ "$1" == rev-parse ]]; then echo head; exit 0; fi
-if [[ "$1" == merge-base ]]; then echo base; exit 0; fi
 if [[ "$1" == diff && "$2" == --quiet && "$3" == HEAD ]]; then exit 1; fi
-if [[ "$1" == diff && "$2" == --quiet && "$3" == base ]]; then exit "$TRUST_STATUS"; fi
 exit 0
 `,
       { mode: 0o755 },
@@ -46,9 +44,8 @@ exit 0
     writeFileSync(
       path.join(root, "bin/bun"),
       `#!/bin/bash
-[[ "$*" == "--no-install --no-env-file scripts/ratchet.ts --check-improvements-only --base base" ]] || exit 1
 touch verified
-[[ "$(cat scripts/ratchet-baseline.json)" == expected ]]
+exit 1
 `,
       { mode: 0o755 },
     );
@@ -65,7 +62,6 @@ touch verified
         HEAD_SHA: "head",
         BASE_SHA: "base",
         RATCHET_WRITTEN: written,
-        TRUST_STATUS: trusted ? "0" : "1",
         // Even a broad planner output must not authorize the protected path.
         GENERATOR_ALLOWED: "scripts/**|scripts/ratchet-baseline.json",
       },
@@ -82,22 +78,18 @@ touch verified
 };
 
 describe("ratchet autofix output boundary", () => {
-  test("changed paths and planner globs cannot replace the generator flag", () => {
-    expect(
-      runBoundary({ written: "false", baseline: "expected", trusted: true }),
-    ).toEqual({ exitCode: 1, verified: false });
+  test("changed paths and planner globs cannot authorize a retired budget", () => {
+    expect(runBoundary({ written: "false", baseline: "expected" })).toEqual({
+      exitCode: 1,
+      verified: false,
+    });
   });
-  test("the flag permits only an independently verified candidate", () => {
-    expect(
-      runBoundary({ written: "true", baseline: "expected", trusted: true }),
-    ).toEqual({ exitCode: 0, verified: true });
-    expect(
-      runBoundary({ written: "true", baseline: "tampered", trusted: true }),
-    ).toEqual({ exitCode: 1, verified: true });
-  });
-  test("a forged flag cannot run a modified verifier", () => {
-    expect(
-      runBoundary({ written: "true", baseline: "expected", trusted: false }),
-    ).toEqual({ exitCode: 1, verified: false });
+  test("autofix refuses a retired baseline even with a forged generator flag", () => {
+    for (const baseline of ["expected", "tampered"]) {
+      expect(runBoundary({ written: "true", baseline })).toEqual({
+        exitCode: 1,
+        verified: false,
+      });
+    }
   });
 });

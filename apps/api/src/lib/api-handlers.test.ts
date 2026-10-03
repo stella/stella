@@ -21,12 +21,21 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { PROVIDER_CALL_ERROR_MESSAGE } from "@/api/lib/errors/provider-call-error";
 import {
   DatabaseError,
   DatabaseRlsError,
   HandlerError,
   UsageLimitExceededError,
 } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import {
+  instanceWireErrorModel,
+  providerCallErrorCassettes,
+  providerCallErrorSentinel,
+} from "@/api/tests/helpers/provider-call-error-wire";
+import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -69,7 +78,7 @@ describe("createSafeHandler workspace audit binding", () => {
           "019e7000-0000-7000-8000-000000000002",
         ),
       },
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       safeDb,
       scopedDb: async () => {
         throw new DatabaseError({ message: "scopedDb should not be called" });
@@ -262,7 +271,7 @@ const createContext = (
         "019e7000-0000-7000-8000-000000000002",
       ),
     },
-    memberRole: { role },
+    memberRole: sessionMemberRole(role),
     safeDb,
     scopedDb: async () => {
       throw new DatabaseError({ message: "scopedDb should not be called" });
@@ -633,6 +642,34 @@ describe("a mapped status survives the transport wrapper", () => {
     });
   });
 
+  test("clause directive refusals preserve linked identity at the HTTP boundary", async () => {
+    const clause = { slotKey: "@clause:Terms", id: "cls_1", name: "Terms" };
+    const response = await runEndpoint(async function* () {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          code: "clause_directives_invalid",
+          retryable: false,
+          message:
+            "Clause Terms (cls_1) in slot @clause:Terms has invalid directives.",
+          hint: "Use list_clauses with clause_id, then save_clause with snapshot_version=true.",
+          clause,
+          issues: [{ path: "body.2", message: "Paragraph 3: unclosed if" }],
+        }),
+      );
+    });
+    expect(response).toMatchObject({
+      code: 422,
+      response: {
+        code: "clause_directives_invalid",
+        retryable: false,
+        clause,
+        hint: "Use list_clauses with clause_id, then save_clause with snapshot_version=true.",
+        issues: [{ path: "body.2", message: "Paragraph 3: unclosed if" }],
+      },
+    });
+  });
+
   // Result.tryPromise answers a throw with UnhandledException, so an upstream
   // status mapped deep inside the wrapped call reaches the boundary nested.
   test("a status thrown through Result.tryPromise is answered, not graded 500", async () => {
@@ -897,4 +934,75 @@ describe("assertRunSizeConfirmedForHandler", () => {
       expect(outcome).toBeNull();
     });
   });
+});
+
+describe("provider failure HTTP response", () => {
+  for (const cassette of providerCallErrorCassettes()) {
+    test(`provider failure returns a fixed HTTP message with ${cassette.scenario}/${cassette.variant ?? "base"}`, async () => {
+      const replay = installProviderWireReplay({ retryAfterMs: 1 });
+      const analytics = installRecordingAnalytics();
+      const logs = installRecordingLogger();
+      const previousMockAI = env.USE_MOCK_AI;
+      env.USE_MOCK_AI = false;
+      try {
+        replay.serve(cassette);
+        const model = instanceWireErrorModel(cassette.model);
+        const endpoint = createSafeRootHandler(
+          {
+            permissions: { workspace: ["read"] },
+            mcp: { type: "internal", reason: "health_infra" },
+          },
+          async function* () {
+            const generated = await Result.tryPromise(async () =>
+              generateTanStackTextForRole({
+                tenantWorkspaceIds: [],
+                caching: { enabled: false, reason: "org-disabled" },
+                serviceTier: "standard",
+                orgAIConfig: null,
+                dataClass: "public_corpus",
+                role: "chat",
+                organizationId: null,
+                prompt: "Draft a memo",
+                finishPolicy: "require-complete",
+                resolveTextModel: async () => model,
+              }),
+            );
+            if (Result.isError(generated)) {
+              if (!(generated.error.cause instanceof HandlerError)) {
+                throw generated.error;
+              }
+              return Result.err(generated.error.cause);
+            }
+            return Result.ok({ text: generated.value });
+          },
+        );
+        const safeDb: SafeDb = async <T>() =>
+          Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+        const response = await endpoint.handler(
+          createContext(endpoint, safeDb),
+        );
+        if (!("code" in response)) {
+          throw new TypeError("The fixture returns a status response");
+        }
+        expect(response.code).toBe(502);
+        expect(response.response).toMatchObject({
+          message: PROVIDER_CALL_ERROR_MESSAGE,
+        });
+        expect(replay.requests().length).toBeGreaterThan(0);
+        expect(logs.records.length).toBeGreaterThan(0);
+        expect(
+          JSON.stringify({
+            response,
+            logs: logs.records,
+            analytics: analytics.events,
+          }),
+        ).not.toContain(providerCallErrorSentinel(cassette));
+      } finally {
+        env.USE_MOCK_AI = previousMockAI;
+        logs.restore();
+        analytics.restore();
+        replay.restore();
+      }
+    });
+  }
 });

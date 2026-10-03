@@ -17,10 +17,11 @@ import {
   serializeCoverageDoc,
   type CoverageDocEntry,
 } from "../apps/api/scripts/lib/capability-catalog";
+import { readCapabilityCatalog } from "../packages/cli/src/capability-catalog-data";
+import { parseCapabilityCatalog } from "../packages/cli/src/capability-catalog-load";
 import {
   capabilityDomainsOf,
   insertCapabilities,
-  type CapabilityCatalogEntry,
 } from "../packages/cli/src/generate-capability-tree";
 import { generateRouteMap } from "../packages/cli/src/generate-route-map";
 import { generateCliSkill } from "../packages/cli/src/generate-skill";
@@ -41,9 +42,10 @@ const outputs = [
 const registry: RegistryToolListing[] = await Bun.file(
   path.join(root, "packages/cli/src/generated/registry-snapshot.json"),
 ).json();
-const catalog: CapabilityCatalogEntry[] = await Bun.file(
-  path.join(root, "packages/cli/capability-catalog.json"),
-).json();
+const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+if (catalog === null) {
+  panic("Capability shards do not match the expected entry shape");
+}
 const { tree, stats } = insertCapabilities({
   tree: generateRouteMap(registry, TOOL_ANNOTATIONS),
   entries: catalog,

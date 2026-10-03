@@ -7,7 +7,7 @@ Every safe handler the API exposes, grouped by domain: how it is classified
 (read/write, destructive) and how it is reachable — as a curated MCP tool,
 covered by one, or only through the generic `invoke_capability` path (shown
 here as its CLI form). Projected from the same handler enumeration that builds
-`packages/cli/capability-catalog.json`; see
+`packages/cli/capabilities/*.json`; see
 `apps/api/scripts/export-capability-catalog.ts`.
 
 ## Naming
@@ -378,6 +378,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
+| `rates.arrangement.get` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability rates arrangement-get` |
+| `rates.arrangement.summary.get` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability rates arrangement-summary-get` |
+| `rates.arrangement.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates arrangement-update` |
 | `rates.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates create` |
 | `rates.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates delete` |
 | `rates.entries.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability rates entries-create` |
@@ -533,7 +536,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `templates.condition-decisions.get` | read | stella:templates | — | curated tool `preview_template_conditions` |
 | `templates.create` | write | stella:templates | — | curated tool `create_template` |
 | `templates.delete` | write, destructive | stella:templates | — | generic invoke → `stella capability templates delete` |
-| `templates.discover` | read | stella:templates | — | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. templates.get covers part of this: returns the discovered fields of a template already stored; it cannot inspect a newly supplied DOCX |
+| `templates.discover` | read | stella:templates | — | generic invoke → `stella capability templates discover` (JSON mode only: `file` cannot be supplied) |
 | `templates.document.update` | write | stella:templates | — | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. No JSON-transport alternative: the new template version IS the edited DOCX body; no capability accepts that body as JSON |
 | `templates.fields.suggest` | write | stella:templates | — | generic invoke → `stella capability templates fields-suggest` |
 | `templates.fill` | write | stella:templates | — | curated tool `fill_template` |
@@ -576,7 +579,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `time-entries.internal.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries internal-create` |
 | `time-entries.ledes.export` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries ledes-export` |
 | `time-entries.list` | read | stella:read | FEATURE_TIME_BILLING | curated tool `list_time_entries` |
+| `time-entries.me.daily-target.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries me-daily-target-update` |
 | `time-entries.me.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries me-list` |
+| `time-entries.members.daily-target.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries members-daily-target-update` |
 | `time-entries.pdf.export` | read | stella:read | FEATURE_TIME_BILLING | not runnable over the generic transport: returns bytes, which the generic transport cannot serialize. time-entries.csv.export covers part of this: returns the same entries as CSV text (time-entries.ledes.export returns LEDES instead); the rendered PDF is not produced |
 | `time-entries.split` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries split` |
 | `time-entries.suggestions.decisions.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries suggestions-decisions-create` |
@@ -660,14 +665,14 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 16 |
-| auth_plumbing | 17 |
+| auth_plumbing | 18 |
 | billing_ui | 1 |
 | chat_thread_ui | 2 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
-| hosted_billing | 6 |
-| mcp_transport | 11 |
+| hosted_billing | 7 |
+| mcp_transport | 12 |
 | native_tool_ui | 9 |
 | provider_secret | 27 |
 | public_indexing | 8 |
@@ -675,5 +680,5 @@ mechanics, and similar), not gaps in coverage.
 | search_ui | 15 |
 | session_token_exchange | 20 |
 | ui_navigation_state | 10 |
-| upload_mechanics | 15 |
+| upload_mechanics | 19 |
 | url_preview | 2 |

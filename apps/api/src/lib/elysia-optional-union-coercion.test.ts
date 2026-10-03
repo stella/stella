@@ -42,4 +42,18 @@ describe("Elysia optional union coercion (canary)", () => {
     );
     expect(received).toBeUndefined();
   });
+
+  test("t.Optional(t.Enum(...)) leaves an absent derived choice undefined", async () => {
+    const choices = ["a", "b"] as const;
+    const received = await absentField(
+      t.Object({
+        field: t.Optional(
+          t.Enum(
+            Object.fromEntries(choices.map((value) => [value, value] as const)),
+          ),
+        ),
+      }),
+    );
+    expect(received).toBeUndefined();
+  });
 });

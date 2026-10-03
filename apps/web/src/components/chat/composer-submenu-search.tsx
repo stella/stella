@@ -1,3 +1,7 @@
+import { useCallback } from "react";
+
+import { panic } from "better-result";
+
 import { SearchIcon } from "@stll/ui/icons";
 import {
   InputGroup,
@@ -5,14 +9,18 @@ import {
   InputGroupInput,
   InputGroupText,
 } from "@stll/ui/input-group";
+import { typedCharacter } from "@stll/ui/typed-character";
 
 import {
   isMenuNavigationKey,
   isTabPick,
   isTriggerErase,
+  POPUP_KEY_ROUTE,
+  routePopupKey,
   scheduleSearchFocus,
 } from "@/components/chat/composer-submenu-search.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 
 /** The editor character that opened this search as a shortcut popup. The
  *  field leads with it instead of the magnifier, so the "/" or "@" the user
@@ -36,40 +44,95 @@ export const ComposerSubmenuSearch = ({
   ref,
   trigger,
   value,
-}: ComposerSubmenuSearchProps) => (
-  <div className="px-2 pt-1.5 pb-2">
-    <InputGroup>
-      <InputGroupAddon>
-        {trigger ? (
-          <InputGroupText aria-hidden="true">{trigger.char}</InputGroupText>
-        ) : (
-          <SearchIcon />
-        )}
-      </InputGroupAddon>
-      <InputGroupInput
-        aria-label={placeholder}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-        onKeyDown={(event) => {
-          if (trigger && isTriggerErase(event.key, value)) {
-            event.preventDefault();
-            event.stopPropagation();
-            trigger.onErase();
-            return;
-          }
-          if (!isMenuNavigationKey(event.key)) {
-            event.stopPropagation();
-          }
-        }}
-        placeholder={placeholder}
-        ref={ref}
-        size="sm"
-        value={value}
-      />
-    </InputGroup>
-  </div>
-);
+}: ComposerSubmenuSearchProps) => {
+  // A key pressed while a hovered row (or the popup) holds focus: editing
+  // keys go back to the field, so the query never stops taking input.
+  const routeStrayKey = useLatestCallback((event: KeyboardEvent) => {
+    const field = ref.current;
+    if (!field || event.defaultPrevented || event.target === field) {
+      return;
+    }
+    const route = routePopupKey({
+      character: typedCharacter(event),
+      hasTrigger: trigger !== undefined,
+      key: event.key,
+      value: field.value,
+    });
+    switch (route) {
+      case POPUP_KEY_ROUTE.eraseTrigger:
+        event.preventDefault();
+        event.stopPropagation();
+        trigger?.onErase();
+        return;
+      case POPUP_KEY_ROUTE.search:
+        // Focusing during keydown hands the key's default action (the
+        // character, the deletion) to the field. Stopping the event keeps
+        // the menu's typeahead from moving focus back onto a row.
+        event.stopPropagation();
+        field.focus();
+        return;
+      case POPUP_KEY_ROUTE.menu:
+        return;
+      default:
+        route satisfies never;
+        panic(`Unhandled popup key route: ${String(route)}`);
+    }
+  });
+  // Listens on the popup's own node: a nested submenu is a separate portal,
+  // so its keys never reach this listener. Stable identity, so the listener
+  // attaches once per popup rather than once per render.
+  const bindPopupKeys = useCallback(
+    (node: HTMLDivElement | null) => {
+      const popup = node?.closest('[role="menu"]');
+      if (!(popup instanceof HTMLElement)) {
+        return undefined;
+      }
+      const controller = new AbortController();
+      popup.addEventListener("keydown", routeStrayKey, {
+        signal: controller.signal,
+      });
+      return () => {
+        controller.abort();
+      };
+    },
+    [routeStrayKey],
+  );
+
+  return (
+    <div className="px-2 pt-1.5 pb-2" ref={bindPopupKeys}>
+      <InputGroup>
+        <InputGroupAddon>
+          {trigger ? (
+            <InputGroupText aria-hidden="true">{trigger.char}</InputGroupText>
+          ) : (
+            <SearchIcon />
+          )}
+        </InputGroupAddon>
+        <InputGroupInput
+          aria-label={placeholder}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            if (trigger && isTriggerErase(event.key, value)) {
+              event.preventDefault();
+              event.stopPropagation();
+              trigger.onErase();
+              return;
+            }
+            if (!isMenuNavigationKey(event.key)) {
+              event.stopPropagation();
+            }
+          }}
+          placeholder={placeholder}
+          ref={ref}
+          size="sm"
+          value={value}
+        />
+      </InputGroup>
+    </div>
+  );
+};
 
 /** Popup `onKeyDown` for the composer pickers: Tab picks the highlighted row
  *  the way Enter does, so a keyboard user can accept a match with either. */

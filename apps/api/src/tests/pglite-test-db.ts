@@ -209,6 +209,10 @@ export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
   "reported_total_origin",
   "stored_total",
   "stored_total_as_of",
+  "stored_total_attempted_at",
+  "stored_total_next_refresh_at",
+  "stored_total_held_since",
+  "stored_total_warned_slot",
 ] as const;
 
 /**
@@ -279,6 +283,9 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT SELECT, INSERT, UPDATE, DELETE
       ON ALL TABLES IN SCHEMA public TO stella
+  `,
+  `
+    REVOKE DELETE ON TABLE "time_daily_targets" FROM stella
   `,
   `
     REVOKE ALL PRIVILEGES ON TABLE "case_law_search_backfill_failures"

@@ -6,6 +6,11 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  credentialPermissionsForContext,
+  readAuthorizedMemberRole,
+  roleForDisplay,
+} from "@/api/lib/permission-authorization";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
 import type { McpToolHandler, McpToolResponse } from "@/api/mcp/tool-types";
@@ -335,6 +340,32 @@ describe("save_time_entry threads backing handler errors correctly", () => {
     expect(capturedExceptionProperties()).toMatchObject([
       { "error.class": "HandlerError", source: "mcp" },
     ]);
+  });
+
+  // The backing handler decides peer and override access from this field, so
+  // a narrowed credential must arrive narrowed rather than as the bare role.
+  test("hands the backing handler the credential's narrowed authority", async () => {
+    createTimeEntryHandlerMock.mockImplementation(async function* () {
+      yield* [];
+      return Result.err(new HandlerError({ status: 400, message: "stop" }));
+    });
+
+    await BILLING_TOOL_HANDLERS.save_time_entry({
+      args: TIME_ENTRY_CREATE_ARGS,
+      context: {
+        ...createFailingDbContext(),
+        credentialPermissions: { timeEntry: ["create"] },
+      },
+    });
+
+    expect(createTimeEntryHandlerMock).toHaveBeenCalledTimes(1);
+    const forwarded = readAuthorizedMemberRole(
+      createTimeEntryHandlerMock.mock.calls.at(0)?.at(0) ?? {},
+    );
+    expect(forwarded === null ? null : roleForDisplay(forwarded)).toBe("owner");
+    expect(
+      forwarded === null ? null : credentialPermissionsForContext(forwarded),
+    ).toEqual({ timeEntry: ["create"] });
   });
 });
 
