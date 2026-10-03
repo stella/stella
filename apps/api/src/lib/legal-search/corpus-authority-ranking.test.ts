@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
@@ -268,10 +269,7 @@ test("authority reads share the full query and keep only complete positive cutof
         ranked: blendStableCitationAuthority({
           candidates,
           authorityById: new Map(
-            authority.map((hit) => [
-              hit.document_id,
-              hit.citation_authority ?? 0,
-            ]),
+            authority.map((hit) => [hit.document_id, hit.citation_authority]),
           ),
           rankingMode: effectiveRankingMode,
         }),
@@ -577,10 +575,7 @@ test("language representatives remain unique across pages of the admitted univer
             ? authority.toReversed()
             : authority;
         const authorityById = new Map(
-          authority.map((hit) => [
-            hit.document_id,
-            hit.citation_authority ?? 0,
-          ]),
+          authority.map((hit) => [hit.document_id, hit.citation_authority]),
         );
         setEngine({ lexical, authority: orderedAuthority });
         const read = async (cursor: SearchCursor | null) =>
@@ -670,7 +665,7 @@ test("authority cursors reject a different ranking mode", async () => {
   if (first.nextCursor === null) {
     throw new Error("a one-hit page of two candidates must have a cursor");
   }
-  await expect(
+  const result = await Result.tryPromise(async () =>
     readCorpusIndexSearchPage({
       observer: "unobserved",
       cluster: "q09",
@@ -695,7 +690,11 @@ test("authority cursors reject a different ranking mode", async () => {
         }),
       }),
     }),
-  ).rejects.toBeInstanceOf(HandlerError);
+  );
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.cause).toBeInstanceOf(HandlerError);
+  }
 });
 
 test("authority mode has an explicit schema, eligibility, and cursor target", () => {
