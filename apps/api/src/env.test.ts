@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { Temporal } from "@stll/time";
+import { DEMO_ACCOUNT_OTP_ROTATION_WARNING_EVENT } from "@/api/lib/demo-account-otp-policy";
 
 const baseEnv = {
   DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella",
@@ -73,42 +73,86 @@ const readDerivedDatabaseUrl = (env: Record<string, string | undefined>) => {
 };
 
 describe("API environment", () => {
-  test("checks demo rotation at startup with typed configuration messages", () => {
-    const now = Temporal.Instant.from("2021-03-12T10:00:00Z").epochMilliseconds;
+  test("demo rotation metadata does not change startup availability", () => {
+    for (const rotatedAt of [
+      undefined,
+      "invalid-date",
+      "2021-03-04T10:00:00Z",
+      "2999-03-04T10:00:00Z",
+    ]) {
+      const result = bootApiEnvironment({
+        ...baseEnv,
+        DEMO_ACCOUNT_OTP: "654321",
+        DEMO_ACCOUNT_OTP_ROTATED_AT: rotatedAt,
+      });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+    }
+  });
+
+  test("demo configuration affects its override while readiness remains available", () => {
     const timeModuleUrl = new URL(
       "../../../packages/time/src/index.ts",
       import.meta.url,
     ).href;
-    const bootScript = `import { Temporal } from ${JSON.stringify(timeModuleUrl)}; Temporal.Now.instant = () => Temporal.Instant.fromEpochMilliseconds(${now}); ${FREEZE_SCRIPT}`;
-    const configured = { ...baseEnv, DEMO_ACCOUNT_OTP: "654321" };
+    const otpModuleUrl = new URL("lib/demo-account-otp.ts", import.meta.url)
+      .href;
+    const routesModuleUrl = new URL(
+      "handlers/health/routes.ts",
+      import.meta.url,
+    ).href;
+    const script = `import { Temporal } from ${JSON.stringify(timeModuleUrl)};
+      Temporal.Now.instant = () => Temporal.Instant.from("2021-03-12T10:00:00Z");
+      const { getDemoAccountOtpOverride } = await import(${JSON.stringify(otpModuleUrl)});
+      const { createHealthRoute } = await import(${JSON.stringify(routesModuleUrl)});
+      const otp = getDemoAccountOtpOverride({ email: "account@example.test", type: "sign-in" });
+      const route = createHealthRoute({ probeReadiness: async () => ({ status: "ready" }) });
+      const response = await route.handle(new Request("http://localhost/ready"));
+      console.log(JSON.stringify({ status: response.status, otp: otp ?? null }));`;
     for (const rotatedAt of [
       undefined,
+      "invalid-date",
       "2021-03-04T10:00:00Z",
       "2021-03-13T10:00:00Z",
+      "2021-03-12T10:00:00Z",
     ]) {
       const result = spawnApiEnvironment(
-        { ...configured, DEMO_ACCOUNT_OTP_ROTATED_AT: rotatedAt },
-        bootScript,
+        {
+          ...baseEnv,
+          DEMO_ACCOUNT_EMAIL: "account@example.test",
+          DEMO_ACCOUNT_OTP: "654321",
+          DEMO_ACCOUNT_OTP_ROTATED_AT: rotatedAt,
+        },
+        script,
       );
-      expect(result.exitCode).not.toBe(0);
-      expect(result.stderr.toString()).toContain(
-        "DemoAccountOtpConfigurationError",
-      );
-      expect(result.stderr.toString()).toContain("DEMO_ACCOUNT_OTP");
-      expect(result.stderr.toString()).not.toContain(
-        configured.DEMO_ACCOUNT_OTP,
-      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      const lines = result.stdout.toString().trim().split("\n");
+      const response = lines.at(-1);
+      expect(response).toBeDefined();
+      if (response === undefined) {
+        throw new Error("Response must be present");
+      }
+      const fresh = rotatedAt === "2021-03-12T10:00:00Z";
+      expect(JSON.parse(response)).toEqual({
+        status: 200,
+        otp: fresh ? "654321" : null,
+      });
+      const warnings = result.stderr
+        .toString()
+        .trim()
+        .split("\n")
+        .filter((line) =>
+          line.includes(DEMO_ACCOUNT_OTP_ROTATION_WARNING_EVENT),
+        );
+      expect(warnings).toHaveLength(fresh ? 0 : 1);
+      for (const warning of warnings) {
+        expect(JSON.parse(warning)).toMatchObject({
+          severity: "WARN",
+          message: DEMO_ACCOUNT_OTP_ROTATION_WARNING_EVENT,
+        });
+        expect(warning).not.toContain("account@example.test");
+        expect(warning).not.toContain("654321");
+      }
     }
-    const fresh = spawnApiEnvironment(
-      { ...configured, DEMO_ACCOUNT_OTP_ROTATED_AT: "2021-03-12T10:00:00Z" },
-      bootScript,
-    );
-    expect(fresh.exitCode, fresh.stderr.toString()).toBe(0);
-    const local = spawnApiEnvironment(
-      { ...configured, ...LOCAL_DEV_ENV },
-      bootScript,
-    );
-    expect(local.exitCode, local.stderr.toString()).toBe(0);
   });
 
   test("preserves structured stdout when loading the environment", () => {

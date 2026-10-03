@@ -25,11 +25,11 @@ export const demoAccountOtpRotatedAtSchema = v.pipe(
 
 export class DemoAccountOtpConfigurationError extends TaggedError(
   "DemoAccountOtpConfigurationError",
-)<{ message: string; reason: "missing" | "expired" | "future" }> {}
+)<{ message: string; reason: "missing" | "invalid" | "expired" | "future" }> {}
 
 type DemoAccountOtpRotationOptions = {
   demoOtp: string | undefined;
-  rotatedAt: v.InferOutput<typeof demoAccountOtpRotatedAtSchema> | undefined;
+  rotatedAt: string | undefined;
   runtimeMode: RuntimeMode;
   now: number;
 };
@@ -55,7 +55,17 @@ export const validateDemoAccountOtpRotation = ({
       }),
     );
   }
-  const age = now - rotationInstant(rotatedAt).epochMilliseconds;
+  const parsed = v.safeParse(demoAccountOtpRotatedAtSchema, rotatedAt);
+  if (!parsed.success) {
+    return Result.err(
+      new DemoAccountOtpConfigurationError({
+        reason: "invalid",
+        message:
+          "DEMO_ACCOUNT_OTP_ROTATED_AT must be a valid ISO date or timestamp.",
+      }),
+    );
+  }
+  const age = now - rotationInstant(parsed.output).epochMilliseconds;
   if (age < 0) {
     return Result.err(
       new DemoAccountOtpConfigurationError({
@@ -74,29 +84,3 @@ export const validateDemoAccountOtpRotation = ({
   }
   return Result.ok(undefined);
 };
-
-type DemoAccountOtpRotationProbeOptions = Omit<
-  DemoAccountOtpRotationOptions,
-  "now"
-> & {
-  now: () => number;
-};
-
-export const createDemoAccountOtpRotationProbe =
-  ({
-    demoOtp,
-    rotatedAt,
-    runtimeMode,
-    now,
-  }: DemoAccountOtpRotationProbeOptions) =>
-  async (): Promise<void> => {
-    const rotation = validateDemoAccountOtpRotation({
-      demoOtp,
-      rotatedAt,
-      runtimeMode,
-      now: now(),
-    });
-    if (Result.isError(rotation)) {
-      await Promise.reject(rotation.error);
-    }
-  };

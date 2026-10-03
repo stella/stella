@@ -24,7 +24,6 @@ import {
   resolveEmailProvider,
 } from "../apps/api/src/env-schema";
 import { EMPTY_VALUE_VARIABLES } from "../apps/api/src/lib/configuration-placeholders";
-import { validateDemoAccountOtpRotation } from "../apps/api/src/lib/demo-account-otp-rotation";
 import { collabEnvInvariantViolation } from "../apps/collab/src/env-schema";
 import { envWebInvariantViolation } from "../apps/web/src/env-schema";
 import {
@@ -32,7 +31,6 @@ import {
   LOCAL_DEV_OPT_IN,
   resolveRuntimeMode,
 } from "../packages/runtime-mode/src/index";
-import { Temporal } from "../packages/time/src/index";
 import {
   AMBIENT_ENV_KEYS,
   API_ENV_SCHEMA,
@@ -965,15 +963,6 @@ const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
   const emailProvider = resolveEmailProvider(parsed.output);
   const output = { ...parsed.output, EMAIL_PROVIDER: emailProvider };
   const issues: string[] = [];
-  const rotation = validateDemoAccountOtpRotation({
-    demoOtp: output.DEMO_ACCOUNT_OTP,
-    rotatedAt: output.DEMO_ACCOUNT_OTP_ROTATED_AT,
-    runtimeMode,
-    now: Temporal.Now.instant().epochMilliseconds,
-  });
-  if (Result.isError(rotation)) {
-    issues.push(rotation.error.message);
-  }
   const baseIssue = envBaseInvariantViolation({ ...output, runtimeMode });
   if (baseIssue !== null) {
     issues.push(baseIssue);

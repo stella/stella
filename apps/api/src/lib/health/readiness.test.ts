@@ -1,14 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import * as v from "valibot";
 
-import { RUNTIME_MODE } from "@stll/runtime-mode";
-import { Temporal } from "@stll/time";
-
-import {
-  createDemoAccountOtpRotationProbe,
-  demoAccountOtpRotatedAtSchema,
-  DEMO_ACCOUNT_OTP_MAX_AGE_MS,
-} from "@/api/lib/demo-account-otp-rotation";
 import type {
   ReadinessDependency,
   ReadinessProbes,
@@ -57,9 +48,6 @@ afterAll(() => {
 });
 
 const successfulProbes = (calls: ReadinessDependency[]): ReadinessProbes => ({
-  [READINESS_DEPENDENCY.demoCredentials]: async () => {
-    calls.push(READINESS_DEPENDENCY.demoCredentials);
-  },
   [READINESS_DEPENDENCY.database]: async () => {
     calls.push(READINESS_DEPENDENCY.database);
   },
@@ -94,30 +82,6 @@ describe("the Redis readiness probe", () => {
 });
 
 describe("API dependency readiness", () => {
-  test("rechecks credential age on every readiness probe", async () => {
-    const rotatedAt = v.parse(
-      demoAccountOtpRotatedAtSchema,
-      "2021-03-04T10:00:00Z",
-    );
-    let now = Temporal.Instant.from(rotatedAt).epochMilliseconds;
-    const probes = successfulProbes([]);
-    probes[READINESS_DEPENDENCY.demoCredentials] =
-      createDemoAccountOtpRotationProbe({
-        demoOtp: "654321",
-        rotatedAt,
-        runtimeMode: { mode: RUNTIME_MODE.strict },
-        now: () => now,
-      });
-    expect(await runReadinessProbes(probes)).toEqual({ status: "ready" });
-    now += DEMO_ACCOUNT_OTP_MAX_AGE_MS;
-    expect(await runReadinessProbes(probes)).toEqual({ status: "ready" });
-    now += 1;
-    expect(await runReadinessProbes(probes)).toEqual({
-      status: "not-ready",
-      failed: [READINESS_DEPENDENCY.demoCredentials],
-    });
-  });
-
   test("provisions a readable marker without requiring bucket listing", async () => {
     const calls: string[] = [];
     let markerExists = false;

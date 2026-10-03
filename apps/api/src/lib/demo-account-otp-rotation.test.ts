@@ -56,6 +56,12 @@ describe("demo credential rotation", () => {
       { ...configured, now: rotatedAtMs - 1, reason: "future" },
       {
         ...configured,
+        rotatedAt: "invalid-date",
+        now: rotatedAtMs,
+        reason: "invalid",
+      },
+      {
+        ...configured,
         now: rotatedAtMs + DEMO_ACCOUNT_OTP_MAX_AGE_MS + 1,
         reason: "expired",
       },
@@ -102,4 +108,27 @@ describe("demo credential rotation", () => {
       ),
     ).toBe(true);
   });
+});
+
+test("rotation dates use valid ISO calendar values", () => {
+  for (const value of [
+    "2021-03-04",
+    "2021-03-04T10:00:00Z",
+    "2021-03-04T10:00:00+01:00",
+  ]) {
+    expect(v.safeParse(demoAccountOtpRotatedAtSchema, value).success).toBe(
+      true,
+    );
+  }
+  for (const value of [
+    "March 4 2021",
+    "2021-02-30",
+    "2021-02-30T10:00:00Z",
+    "2021-13-04",
+    "2021-03-04T25:00:00Z",
+  ]) {
+    expect(v.safeParse(demoAccountOtpRotatedAtSchema, value).success).toBe(
+      false,
+    );
+  }
 });

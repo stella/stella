@@ -1,40 +1,14 @@
+import { Temporal } from "@stll/time";
+
 import { env } from "@/api/env";
+import {
+  DEMO_ACCOUNT_OTP_ROTATION_WARNING_EVENT,
+  resolveDemoAccountOtp,
+} from "@/api/lib/demo-account-otp-policy";
+import type { DemoAccountOtpArgs } from "@/api/lib/demo-account-otp-policy";
+import { logger } from "@/api/lib/observability/logger";
+import { runtimeMode } from "@/api/runtime-mode";
 
-type DemoAccountOtpArgs = {
-  email: string;
-  type: "sign-in" | "email-verification" | "forget-password" | "change-email";
-};
-
-type ResolveDemoAccountOtpOptions = DemoAccountOtpArgs & {
-  demoEmail: string | undefined;
-  demoOtp: string | undefined;
-};
-
-/**
- * Fixed-OTP override for the single designated demo account
- * (`DEMO_ACCOUNT_EMAIL` + `DEMO_ACCOUNT_OTP`), for external evaluations that
- * need working credentials without inbox access. Deliberately narrow: both
- * variables must be set, only the exact configured address matches, and only
- * the `sign-in` type is overridden, so password-reset and change-email flows
- * can never ride on the fixed code. The returned code is stored and verified
- * like any generated OTP, so the attempt limit and expiry keep applying.
- */
-export const resolveDemoAccountOtp = ({
-  email,
-  type,
-  demoEmail,
-  demoOtp,
-}: ResolveDemoAccountOtpOptions): string | undefined => {
-  if (type !== "sign-in" || !demoEmail || !demoOtp) {
-    return undefined;
-  }
-  if (email.trim().toLowerCase() !== demoEmail) {
-    return undefined;
-  }
-  return demoOtp;
-};
-
-/** Env-wired form of {@link resolveDemoAccountOtp}. */
 export const getDemoAccountOtpOverride = ({
   email,
   type,
@@ -44,4 +18,9 @@ export const getDemoAccountOtpOverride = ({
     type,
     demoEmail: env.DEMO_ACCOUNT_EMAIL,
     demoOtp: env.DEMO_ACCOUNT_OTP,
+    rotatedAt: env.DEMO_ACCOUNT_OTP_ROTATED_AT,
+    runtimeMode: runtimeMode(),
+    now: Temporal.Now.instant().epochMilliseconds,
+    warn: ({ reason }) =>
+      logger.warn(DEMO_ACCOUNT_OTP_ROTATION_WARNING_EVENT, { reason }),
   });
