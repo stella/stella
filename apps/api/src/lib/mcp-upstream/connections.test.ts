@@ -224,7 +224,17 @@ const makeSafeDb = () => {
         return [];
       }
       const row = oauthRow();
-      return [{ ...row, authType: row.type, ...persisted }];
+      return [
+        {
+          ...row,
+          authType: row.type,
+          oauthConnectorIssuer: "https://auth.example.com",
+          oauthConnectorConfirmedEndpointOrigins: null,
+          oauthReviewApprovedIssuer: null,
+          oauthReviewApprovedEndpointOrigins: null,
+          ...persisted,
+        },
+      ];
     },
   };
   const tx = {
