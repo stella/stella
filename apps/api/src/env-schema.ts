@@ -369,16 +369,9 @@ export const envApiServerSchema = {
   MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: featureFlagSchema,
 
   // Launch feature flags. Keep default-off; deployment must opt in.
-  FEATURE_CHAT: featureFlagSchema,
   CHAT_RUN_LOG_SHADOW: v.optional(v.pipe(v.string(), v.parseBoolean())),
   FEATURE_USAGE: featureFlagSchema,
-  FEATURE_KNOWLEDGE_TEMPLATES: featureFlagSchema,
-  FEATURE_CASE_LAW: featureFlagSchema,
   FEATURE_PUBLIC_LAW: featureFlagSchema,
-  FEATURE_CONTACTS: featureFlagSchema,
-  FEATURE_CALENDAR: featureFlagSchema,
-  FEATURE_TODOS: featureFlagSchema,
-  FEATURE_MCP: featureFlagSchema,
   FEATURE_ACTION_ADMISSION: featureFlagSchema,
   FEATURE_MCP_READ_FENCE: featureFlagSchema,
   MCP_READ_WINDOW_MS: v.optional(
@@ -575,7 +568,6 @@ export const envApiServerSchema = {
       v.maxValue(Number.MAX_SAFE_INTEGER),
     ),
   ),
-  FEATURE_DESKTOP_EDITING: featureFlagSchema,
   FEATURE_TIME_BILLING: featureFlagSchema,
   /** Dark-launch tenant-scoped AI memory until product and performance review. */
   FEATURE_AI_MEMORY: featureFlagSchema,

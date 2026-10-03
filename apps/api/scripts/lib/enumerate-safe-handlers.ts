@@ -246,9 +246,16 @@ export type DiscoveredFile = {
   kinds: HandlerKind[];
 };
 
+const ELYSIA_INSTANCE_PATTERN = /\bnew Elysia\s*\(/u;
+
 export type SafeHandlerDiscovery = {
   endpoints: DiscoveredEndpoint[];
   files: DiscoveredFile[];
+  /**
+   * Every handler-tree file that builds an Elysia instance, whatever its name
+   * and whether or not it defines handlers itself: route hooks live there.
+   */
+  routeFiles: { id: string; source: string }[];
   importErrors: { id: string; message: string }[];
 };
 
@@ -268,6 +275,7 @@ export const discoverSafeHandlers = async (): Promise<SafeHandlerDiscovery> => {
 
   const endpoints: DiscoveredEndpoint[] = [];
   const files: DiscoveredFile[] = [];
+  const routeFiles: { id: string; source: string }[] = [];
   const importErrors: { id: string; message: string }[] = [];
 
   for await (const abs of glob.scan({ cwd: REPO_ROOT, absolute: true })) {
@@ -275,11 +283,14 @@ export const discoverSafeHandlers = async (): Promise<SafeHandlerDiscovery> => {
       continue;
     }
     const source = await Bun.file(abs).text();
+    const id = toEndpointIdentifier(abs, REPO_ROOT);
+    if (ELYSIA_INSTANCE_PATTERN.test(source)) {
+      routeFiles.push({ id, source });
+    }
     const callCount = (source.match(SAFE_HANDLER_CALL_PATTERN) ?? []).length;
     if (callCount === 0) {
       continue;
     }
-    const id = toEndpointIdentifier(abs, REPO_ROOT);
     let mod: unknown;
     try {
       mod = await import(abs);
@@ -308,5 +319,6 @@ export const discoverSafeHandlers = async (): Promise<SafeHandlerDiscovery> => {
 
   endpoints.sort((a, b) => a.id.localeCompare(b.id));
   files.sort((a, b) => a.id.localeCompare(b.id));
-  return { endpoints, files, importErrors };
+  routeFiles.sort((a, b) => a.id.localeCompare(b.id));
+  return { endpoints, files, routeFiles, importErrors };
 };

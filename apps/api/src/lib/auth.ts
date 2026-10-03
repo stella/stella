@@ -62,7 +62,7 @@ import {
   AUTH_SESSION_STORAGE_OPTIONS,
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
-import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
+import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
@@ -1625,10 +1625,6 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
             const organizationId = brandPersistedOrganizationId(org.id);
             const userId = brandPersistedUserId(removedMember.userId);
             await rootDb.transaction(async (tx) => {
-              await revokeOrganizationMemberAuthArtifacts(tx, {
-                organizationId,
-                userId,
-              });
               await clearOrganizationCorrespondenceAssignments({
                 tx,
                 organizationId,
@@ -1662,17 +1658,13 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
                     throw timerClose.error;
                   }
                   // Better Auth deletes the member after this hook, outside this
-                  // transaction. Remove the exact row here so a timer cannot start
-                  // between the timer check and membership removal.
-                  await tx
-                    .delete(member)
-                    .where(
-                      and(
-                        eq(member.id, removedMember.id),
-                        eq(member.organizationId, organizationId),
-                        eq(member.userId, userId),
-                      ),
-                    );
+                  // transaction. Remove the exact row (and its credentials) here
+                  // so a timer cannot start between the timer check and removal.
+                  await removeOrganizationMemberWithAuthArtifacts(tx, {
+                    memberId: removedMember.id,
+                    organizationId,
+                    userId,
+                  });
                 }),
               catch: mapMembershipInvariantError,
             });
