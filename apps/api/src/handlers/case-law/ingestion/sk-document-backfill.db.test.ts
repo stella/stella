@@ -8,6 +8,7 @@
  * Runs in the nightly Postgres job; skipped elsewhere.
  */
 
+import { PDF } from "@libpdf/core";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -643,11 +644,16 @@ if (!databaseUrl || !runPostgresTests) {
 
       const claim = await claimDocumentFetch(id, scopedDb);
 
-      expect(claim).toEqual({
-        status: "claimed",
+      expect(claim.status).toBe("claimed");
+      if (claim.status !== "claimed") {
+        throw new Error("expected claimed snapshot");
+      }
+      expect(claim.decision).toMatchObject({
+        id,
         sourceHash: "hash-at-claim",
-        attempts: 1,
+        documentUrl: "https://example.test/claim-hash.pdf",
       });
+      expect(claim.attempts).toBe(1);
     });
 
     test("a run just attempted is left alone until its cooldown passes", async () => {
@@ -811,6 +817,89 @@ if (!databaseUrl || !runPostgresTests) {
           documentUrl: PUBLISHER_URL,
           documentFetchAttempts,
         });
+
+      test("buffered decisions use the claimed URL and metadata for every old response", async () => {
+        const pdf = PDF.create();
+        pdf
+          .addPage({ size: "letter" })
+          .drawText("Current decision text", { x: 72, y: 720, size: 12 });
+        const bytes = await pdf.save();
+        const oldPdf = PDF.create();
+        oldPdf
+          .addPage({ size: "letter" })
+          .drawText("Old decision text", { x: 72, y: 720, size: 12 });
+        const oldBytes = await oldPdf.save();
+        const currentUrl = PUBLISHER_URL.replace("0b7e8a8e", "1b7e8a8e");
+        for (const oldStatus of [200, 404]) {
+          const label = `buffered-${oldStatus}`;
+          const id = await insertDecision({
+            caseNumber: `${label}-${suffix}`,
+            fulltext: null,
+            documentUrl: PUBLISHER_URL,
+            sourceHash: "source-v1",
+          });
+          const buffered = await db.query.caseLawDecisions.findFirst({
+            where: { id: { eq: id } },
+          });
+          if (buffered === undefined) {
+            throw new Error("expected buffered decision");
+          }
+          const metadata = {
+            caseNumber: `current-${suffix}-${oldStatus}`,
+            ecli: "ECLI:SK:OSBA1:2026:1234567890.1",
+            court: "Current court",
+            country: "SVK",
+            decisionDate: "2026-06-01",
+            decisionType: "ROZSUDOK",
+          };
+          await db
+            .update(caseLawDecisions)
+            .set({
+              ...metadata,
+              documentUrl: currentUrl,
+              sourceHash: "source-v2",
+            })
+            .where(eq(caseLawDecisions.id, buffered.id));
+          expect(buffered.documentUrl).not.toBe(currentUrl);
+          expect(buffered.caseNumber).not.toBe(metadata.caseNumber);
+          const urls: string[] = [];
+          const outcome = await fetchDecisionDocument({
+            decision: buffered,
+            fetchDocument: async (url) => {
+              urls.push(url.href);
+              return url.href === currentUrl
+                ? new Response(bytes)
+                : new Response(oldStatus === 200 ? oldBytes : null, {
+                    status: oldStatus,
+                  });
+            },
+            scopedDb,
+            signal: new AbortController().signal,
+          });
+          expect(urls).toEqual([currentUrl]);
+          expect(outcome.status).toBe("filled");
+          if (outcome.status !== "filled") {
+            throw new Error("expected current document");
+          }
+          expect(outcome.document.fulltext).toContain("Current decision text");
+          expect(outcome.document.fulltext).not.toContain("Old decision text");
+          expect(outcome.document.documentAst.metadata).toMatchObject({
+            caseNumber: metadata.caseNumber,
+            ecli: metadata.ecli,
+            court: metadata.court,
+            decisionDate: metadata.decisionDate,
+            decisionType: metadata.decisionType,
+          });
+          const stored = await db.query.caseLawDecisions.findFirst({
+            where: { id: { eq: id } },
+            columns: { fulltext: true, sourceHash: true },
+          });
+          expect(stored).toEqual({
+            fulltext: outcome.document.fulltext,
+            sourceHash: "source-v2",
+          });
+        }
+      });
 
       test("an unreadable download parks the decision instead of throwing", async () => {
         const id = await insertPending("unparseable");

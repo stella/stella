@@ -10,6 +10,8 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
+
 import { jsonb, timestamptz } from "@/api/db/columns";
 import {
   authMemberPolicies,
@@ -261,6 +263,13 @@ export const member = pgTable(
   },
   (table) => [
     index("member_organizationId_idx").on(table.organizationId),
+    check(
+      "member_single_product_role",
+      sql`${table.role} IN (${sql.join(
+        ORGANIZATION_ROLE_NAMES.map((role) => sql.raw(`'${role}'`)),
+        sql`, `,
+      )})`,
+    ),
     index("member_userId_idx").on(table.userId),
     index("member_lastActiveWorkspaceId_idx").on(table.lastActiveWorkspaceId),
     // One membership per user per organization (the auth layer already
@@ -292,6 +301,13 @@ export const invitation = pgTable(
   },
   (table) => [
     index("invitation_organizationId_idx").on(table.organizationId),
+    check(
+      "invitation_single_product_role",
+      sql`${table.role} IS NOT NULL AND ${table.role} IN (${sql.join(
+        ORGANIZATION_ROLE_NAMES.map((role) => sql.raw(`'${role}'`)),
+        sql`, `,
+      )})`,
+    ),
     index("invitation_email_idx").on(table.email),
     ...denyStellaAccessPolicies(),
   ],
