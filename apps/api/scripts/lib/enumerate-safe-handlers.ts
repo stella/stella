@@ -42,7 +42,7 @@ export const HANDLERS_GLOB = "apps/api/src/handlers/**/*.ts";
  * instantiation, so an `import { createSafeHandler }` line is never counted.
  */
 export const SAFE_HANDLER_CALL_PATTERN =
-  /createSafe(?:Root|Session|Token|Public|BoundedPublic|PublicSubject|PublicSubjectFollowUp)?Handler[<(]/gu;
+  /createSafe(?:Root|Session|Token|Public|BoundedPublic|UncheckedBoundedPublic|PublicSubject|PublicSubjectFollowUp)?Handler[<(]/gu;
 
 /**
  * The handler-scope kinds, keyed by the factory that produces them. Detection
@@ -64,6 +64,10 @@ const FACTORY_KIND_PATTERNS: { kind: HandlerKind; pattern: RegExp }[] = [
   { kind: "token", pattern: /createSafeTokenHandler[<(]/u },
   { kind: "public", pattern: /createSafePublicHandler[<(]/u },
   { kind: "public", pattern: /createSafeBoundedPublicHandler[<(]/u },
+  {
+    kind: "public",
+    pattern: /createSafeUncheckedBoundedPublicHandler[<(]/u,
+  },
   // The subject-gated public factories (case-law decisions) wrap the public
   // one; the follow-up variant runs a phase after the gated transaction.
   { kind: "public", pattern: /createSafePublicSubjectFollowUpHandler[<(]/u },

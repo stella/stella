@@ -25,6 +25,7 @@ import {
   statuteSitemapShardsSuccessResponseSchema,
   statuteSitemapStatutesSuccessResponseSchema,
 } from "@/api/handlers/legislation/catalog-response";
+import { LIMITS } from "@/api/lib/limits";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import { responseSchemaByteBound } from "@/api/tests/helpers/response-schema-byte-bound";
@@ -206,7 +207,7 @@ test("statute sitemap index bounds serialized Unicode shard metadata", () => {
             lastmod: text,
           }),
         ],
-        limit: 1,
+        limit: LIMITS.statuteSitemapIndexEntryLimit,
         nextCursor: null,
       }),
     ),
@@ -227,7 +228,7 @@ test("statute sitemap shard bounds serialized Unicode URL segments", () => {
             lastmod: text,
           }),
         ],
-        limit: 1,
+        limit: LIMITS.statuteSitemapShardUrlLimit,
         nextCursor: null,
       }),
     ),
