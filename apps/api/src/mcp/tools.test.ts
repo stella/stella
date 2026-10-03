@@ -76,6 +76,7 @@ import type { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
+import { CASE_LAW_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/stella-tools";
 import {
   findUndeclaredArguments,
   getMcpToolDefinition,
@@ -1163,7 +1164,7 @@ describe("OpenAI-compatible MCP tools", () => {
             "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
           // Derived from the engine cursor codec's own maximum times the query
           // cap, so the tool takes back the longest cursor it can emit.
-          maxLength: 1623,
+          maxLength: CASE_LAW_SEARCH_CURSOR_MAX_LENGTH,
           // An empty string is not a page boundary this tool ever issued, and
           // rejecting it is what makes the factory read it as absent.
           minLength: 1,

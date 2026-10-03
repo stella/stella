@@ -35,6 +35,7 @@ import {
   releaseCorpusProjectionCleanupSettlementTx,
   settleCorpusProjectionCleanupTx,
 } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
+import { corpusProjectionRevisionsQuery } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -321,6 +322,54 @@ const readIntents = async () =>
     .where(inArray(corpusIndexProjectionIntents.id, [...INTENT_IDS]))
     .orderBy(asc(corpusIndexProjectionIntents.id));
 
+// Counting only the first or last intent cannot prove a grouped delete.
+test("settlement counts every revision in a grouped delete task in either order", async () => {
+  await commitDelete(42);
+  const claimed = await claimOneSettlement(SETTLEMENT_LEASE_TOKEN);
+  expect(claimed.intentIds.toSorted()).toEqual([...INTENT_IDS]);
+  const survivorQuery = corpusProjectionRevisionsQuery([SECOND_INTENT_ID]);
+
+  for (const intentIds of [INTENT_IDS, INTENT_IDS.toReversed()]) {
+    const lease = { ...claimed, intentIds };
+    const searched: string[] = [];
+    const engine = {
+      ...engineWithRemaining(0),
+      search: async ({ indexId, query, maxHits }) => {
+        expect(indexId).toBe(INDEX_ID);
+        expect(maxHits).toBe(0);
+        searched.push(query);
+        return Result.ok({
+          // Only the second revision survives; a first-only count answers zero.
+          numHits: query.includes(survivorQuery) ? 3 : 0,
+          hits: [],
+          snippets: [],
+        });
+      },
+    } satisfies Pick<CorpusIndexClient, "readDeleteSettlements" | "search">;
+    const verdicts = await CorpusProjectionCleanupSettlementProof.verifyAll({
+      client: engine,
+      indexId: INDEX_ID,
+      leases: [lease],
+      testNow: LONG_AFTER_THE_TASK,
+    });
+    const verdict = verdicts.at(0) ?? panic("Expected one grouped verdict");
+    if (verdict.result.isErr()) {
+      panic("Expected a grouped settlement result", verdict.result.error);
+    }
+    const result = verdict.result.value;
+    if (result.status !== "pending" || result.reason !== "survivor") {
+      panic("Expected the remaining grouped revision to prevent settlement");
+    }
+    expect(result.remainingRevisionCount).toBe(3);
+    expect(result.reissue.intentIds).toEqual(intentIds);
+    expect(searched).toEqual([corpusProjectionRevisionsQuery(intentIds)]);
+    expect((await readIntents()).map(({ status }) => status)).toEqual([
+      "cleanup_committed",
+      "cleanup_committed",
+    ]);
+  }
+});
+
 test("a survivor goes back to cleanup, and the new delete settles", async () => {
   await commitDelete(42);
   const lease = await claimOneSettlement(SETTLEMENT_LEASE_TOKEN);
@@ -517,41 +566,59 @@ test("revisions at the reissue limit stall instead of re-issuing", async () => {
   expect(cleanup.map(({ intentId }) => intentId)).toEqual([SECOND_INTENT_ID]);
 });
 
-test("the reissue count bounds repeated survivors", async () => {
+test("the named delete reissue ceiling is three", () => {
+  expect(CORPUS_PROJECTION_DELETE_REISSUE_LIMIT).toBe(3);
+});
+
+// The four-step oracle must stay independent of the production limit.
+test("a fourth survivor stalls after exactly three reissues, including replay", async () => {
   await commitDelete(42);
   const outcomes: string[] = [];
-  for (
-    let round = 0;
-    round <= CORPUS_PROJECTION_DELETE_REISSUE_LIMIT;
-    round += 1
-  ) {
-    const result = await reissue(
-      await survivorOf(await claimOneSettlement(SETTLEMENT_LEASE_TOKEN)),
+  for (let round = 0; round < 4; round += 1) {
+    const evidence = await survivorOf(
+      await claimOneSettlement(SETTLEMENT_LEASE_TOKEN),
     );
+    const result = await reissue(evidence);
     outcomes.push(result.stalledIntentIds.length > 0 ? "stalled" : "reissued");
-    if (result.reissuedIntentIds.length > 0) {
+    const afterFirst = await readIntents();
+    expect(await reissue(evidence)).toEqual({
+      reissuedIntentIds: [],
+      stalledIntentIds: [],
+      unleasedIntentIds: [...INTENT_IDS],
+    });
+    expect(await readIntents()).toEqual(afterFirst);
+    if (round < 3) {
+      expect(result.reissuedIntentIds).toEqual([...INTENT_IDS]);
+      expect(result.stalledIntentIds).toEqual([]);
+      expect(afterFirst.map(({ deleteReissues }) => deleteReissues)).toEqual([
+        round + 1,
+        round + 1,
+      ]);
       await commitDelete(43 + round);
     }
   }
 
-  expect(outcomes).toEqual([
-    ...Array.from(
-      { length: CORPUS_PROJECTION_DELETE_REISSUE_LIMIT },
-      () => "reissued",
-    ),
-    "stalled",
-  ]);
+  expect(outcomes).toEqual(["reissued", "reissued", "reissued", "stalled"]);
   expect(
     (await readIntents()).map(({ status, deleteReissues }) => ({
       status,
       deleteReissues,
     })),
   ).toEqual(
-    INTENT_IDS.map(() => ({
-      status: "cleanup_stalled",
-      deleteReissues: CORPUS_PROJECTION_DELETE_REISSUE_LIMIT,
-    })),
+    INTENT_IDS.map(() => ({ status: "cleanup_stalled", deleteReissues: 3 })),
   );
+  expect(await claimSettlement(SUCCESSOR_LEASE_TOKEN)).toEqual([]);
+  expect(
+    await inTx(
+      async (tx) =>
+        await claimCorpusProjectionCleanupTx(tx, {
+          ...SCOPE,
+          limit: 10,
+          leaseMs: 60_000,
+          newLeaseToken: () => CLEANUP_LEASE_TOKEN,
+        }),
+    ),
+  ).toEqual([]);
 });
 
 test("the database refuses a stalled revision that holds a lease or settles", async () => {

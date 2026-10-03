@@ -2,13 +2,47 @@ import { expect, test } from "bun:test";
 
 import {
   canTransitionCorpusIndexIntent,
+  CORPUS_INDEX_INTENT_LAUNCH_DISPOSITION,
   CORPUS_INDEX_INTENT_STATUSES,
   CORPUS_INDEX_INTENT_TRANSITIONS,
   corpusIndexIntentStatusAfterUnknownAppend,
   isCorpusIndexIntentOutstanding,
   isCorpusIndexProjectionConverged,
   type CorpusIndexDesiredProjection,
+  type CorpusIndexIntentStatus,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
+
+// Treating retained cleanup as terminal would let unresolved revisions launch.
+test("every intent lifecycle state has its required launch disposition", () => {
+  const expected = {
+    reserved: "blocking",
+    append_started: "blocking",
+    append_committed: "blocking",
+    applied: "census_required",
+    cleanup_pending: "blocking",
+    cleanup_started: "blocking",
+    cleanup_committed: "blocking",
+    cleanup_stalled: "blocking",
+    settled: "terminal",
+    cancelled: "terminal",
+  } as const satisfies Record<
+    CorpusIndexIntentStatus,
+    "blocking" | "census_required" | "terminal"
+  >;
+  expect(Object.keys(expected).toSorted()).toEqual(
+    [...CORPUS_INDEX_INTENT_STATUSES].toSorted(),
+  );
+  expect(CORPUS_INDEX_INTENT_LAUNCH_DISPOSITION).toEqual(expected);
+  for (const status of CORPUS_INDEX_INTENT_STATUSES) {
+    expect(
+      isCorpusIndexIntentOutstanding({
+        status,
+        revision: "0198e331-e578-7000-8000-000000000001",
+        appliedRevision: "0198e331-e578-7000-8000-000000000001",
+      }),
+    ).toBe(expected[status] === "blocking");
+  }
+});
 
 test("intent transitions are total and never reuse an uncertain append", () => {
   expect(Object.keys(CORPUS_INDEX_INTENT_TRANSITIONS).toSorted()).toEqual(

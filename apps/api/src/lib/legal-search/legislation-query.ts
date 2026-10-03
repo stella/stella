@@ -1,12 +1,16 @@
 import {
   corpusFreeTextClause,
   quoteCorpusValue,
+  tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
 import {
   corpusMorphologyLanguage,
   documentMorphologyLanguage,
 } from "@/api/lib/legal-search/morphology/corpus-language";
-import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
+import {
+  functionWordKey,
+  functionWordsFor,
+} from "@/api/lib/legal-search/morphology/function-words";
 
 /** Dates and amounts add noise to coverage ranking; section numbers identify passages. */
 const NUMERIC_VALUE =
@@ -34,12 +38,22 @@ export const relaxedLegislationClause = ({
     });
   // Quoted designations survive function-word filtering and take the first leaves.
   const text = `${designations.map(quoteCorpusValue).join(" ")} ${rest.replace(NUMERIC_VALUE, " ")}`;
-  return corpusFreeTextClause(text, {
-    match: "any",
-    functionWords: functionWordsFor(
-      language === undefined
-        ? corpusMorphologyLanguage(jurisdiction)
-        : documentMorphologyLanguage(language),
-    ),
-  });
+  const functionWords = functionWordsFor(
+    language === undefined
+      ? corpusMorphologyLanguage(jurisdiction)
+      : documentMorphologyLanguage(language),
+  );
+  // Strict searches retain an all-function-word query; relaxing it would
+  // OR unrelated passages without a content word to anchor coverage.
+  if (
+    functionWords !== null &&
+    tokenizeCorpusFreeText(text).every(
+      (token) =>
+        token.type === "term" &&
+        functionWords.has(functionWordKey(token.value)),
+    )
+  ) {
+    return null;
+  }
+  return corpusFreeTextClause(text, { match: "any", functionWords });
 };

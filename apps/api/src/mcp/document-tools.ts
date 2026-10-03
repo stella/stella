@@ -18,7 +18,7 @@ import { createEntitiesHandler } from "@/api/handlers/entities/create";
 import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import { moveEntityHandler } from "@/api/handlers/entities/move";
-import { renameEntityHandler } from "@/api/handlers/entities/rename";
+import { renameEntityHandler } from "@/api/handlers/entities/rename-operation";
 import { loadEntityVersionDocxText } from "@/api/handlers/entities/version-diff-sources";
 import { deleteEntityVersionHandler } from "@/api/handlers/entities/versions/delete";
 import { updateVersionDescriptionHandler } from "@/api/handlers/entities/versions/description/update";

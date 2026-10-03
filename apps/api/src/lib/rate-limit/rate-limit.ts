@@ -3,6 +3,7 @@ import { Elysia, type Context } from "elysia";
 
 import { Temporal } from "@stll/time";
 
+import { env } from "@/api/env";
 import {
   type RateLimitClientAddressOptions,
   resolveRateLimitClientAddress,
@@ -259,7 +260,9 @@ export const rateLimit = ({
     server: RequestIpServer | null;
     set: RateLimitResponseSet;
   }): Promise<RateLimitErrorResponse | undefined> => {
-    if (await skip(request)) {
+    // The validated development-only switch applies to every HTTP budget,
+    // including dedicated budgets whose route policy does not define a bypass.
+    if (env.E2E_DISABLE_AUTH_RATE_LIMIT || (await skip(request))) {
       requestState.set(request, { type: "skipped" });
       return undefined;
     }
