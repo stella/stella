@@ -15,6 +15,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
+import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
@@ -63,7 +64,7 @@ type SitemapDecisionAlternate = {
   caseNumber: string;
   country: string;
   court: string;
-  id: string;
+  id: SafeId<"caseLawDecision">;
   language: string;
   slug: string | null;
   updatedAt: Date;

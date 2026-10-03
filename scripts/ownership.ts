@@ -1887,6 +1887,29 @@ export const OWNERSHIP = [
       "emissions still outside it, per file.",
     enforcement: { kind: "none" },
   },
+  {
+    id: "unchecked-public-response-handler",
+    capability: "Public route handlers without the 200-schema exactness guard",
+    owner: ["apps/api/src/lib/api-handlers.ts"],
+    summary:
+      "`createSafeBoundedPublicHandler` requires a route's 200 schema and its " +
+      "handler's success payload to be mutually assignable, so the schema Eden " +
+      "types the client from cannot be looser than the data. The unchecked " +
+      "core exists for a factory whose result type is still generic where it " +
+      "builds the handler; that factory applies the guard on its own entry points.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/api-handlers"],
+      names: ["createUncheckedBoundedPublicHandler"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/case-law/decisions/public-subject.ts",
+          reason:
+            "Builds gated subject handlers generically and guards both entry points.",
+        },
+      ],
+    },
+  },
   ...ROOT_CONNECTION_DOORS,
 ] as const satisfies readonly OwnershipEntry[];
 

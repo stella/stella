@@ -5,11 +5,12 @@ import { status } from "elysia";
 import type { PublicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 
 import type {
+  ExactSuccessSchemaGuard,
   PublicHandlerConfig,
   PublicHandlerContext,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
-import { createSafeBoundedPublicHandler } from "@/api/lib/api-handlers";
+import { createUncheckedBoundedPublicHandler } from "@/api/lib/api-handlers";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type {
@@ -86,7 +87,7 @@ const buildGatedSubjectHandler = <
   followUp,
 }: SubjectHandlerOptions<TConfig, TRead> &
   FollowUpOptions<TConfig, TRead, TResult>) => {
-  const definition = createSafeBoundedPublicHandler(
+  const definition = createUncheckedBoundedPublicHandler(
     config,
     async function* (
       ctx: PublicHandlerContext<TConfig>,
@@ -144,7 +145,8 @@ export const createSafePublicSubjectFollowUpHandler = <
   TResult extends NonNullable<unknown>,
 >(
   options: SubjectHandlerOptions<TConfig, TRead> &
-    FollowUpOptions<TConfig, TRead, TResult>,
+    FollowUpOptions<TConfig, TRead, TResult> &
+    NoInfer<ExactSuccessSchemaGuard<TConfig, TResult>>,
 ) => buildGatedSubjectHandler(options);
 
 /** The follow-up of a handler whose gated read is already the response. */
@@ -163,7 +165,8 @@ export const createSafePublicSubjectHandler = <
   TConfig extends PublicHandlerConfig,
   TRead extends NonNullable<unknown>,
 >(
-  options: SubjectHandlerOptions<TConfig, TRead>,
+  options: SubjectHandlerOptions<TConfig, TRead> &
+    NoInfer<ExactSuccessSchemaGuard<TConfig, TRead>>,
 ) =>
   buildGatedSubjectHandler({
     ...options,
