@@ -202,7 +202,6 @@ export const ROOT_CONNECTION_DOORS = [
       kind: "import",
       specifiers: ["@/api/lib/search/projection-repair-flush"],
       allowed: [
-        "apps/api/src/handlers/chat/tools/workspace-tools.ts",
         "apps/api/src/handlers/contacts/create.ts",
         "apps/api/src/handlers/contacts/delete.ts",
         "apps/api/src/handlers/contacts/import.ts",
@@ -214,7 +213,6 @@ export const ROOT_CONNECTION_DOORS = [
         "apps/api/src/handlers/entities/rename-operation.ts",
         "apps/api/src/handlers/entities/versions/delete.ts",
         "apps/api/src/handlers/fields/kanban-placement/update.ts",
-        "apps/api/src/handlers/fields/upsert.ts",
         "apps/api/src/handlers/signals/acceptances/create.ts",
         "apps/api/src/handlers/uploads/entity-create-tree.ts",
         "apps/api/src/handlers/workspaces/contacts/create.ts",
@@ -222,6 +220,7 @@ export const ROOT_CONNECTION_DOORS = [
         "apps/api/src/handlers/workspaces/create.ts",
         "apps/api/src/handlers/workspaces/duplicate.ts",
         "apps/api/src/handlers/workspaces/update.ts",
+        "apps/api/src/lib/fields/write-field.ts",
         "apps/api/src/lib/flows/flow-executor.ts",
         "apps/api/src/lib/tasks/create-task-entity.ts",
       ].map((importer) => ({
@@ -1857,6 +1856,20 @@ export const OWNERSHIP = [
       "over the uuid versions in use today. Invalid input is a typed failure, " +
       "so a reader decides for itself whether an unreadable segment is a 404 " +
       "or a value to carry through.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "field-value-write",
+    capability: "Setting a document's field value for a member",
+    owner: ["apps/api/src/lib/fields/write-field.ts"],
+    summary:
+      "REST, MCP, Kanban moves and chat all set a cell through `writeFieldValue`, " +
+      "which checks the member's effective authority, takes the entity row lock " +
+      "before the cell lock, marks the cell as manually edited and records the " +
+      "audit event in one transaction. Writes to the field tables are table " +
+      "writes, not imports, so the `no-direct-field-write/no-direct-field-write` " +
+      "rule holds this row instead of `confine-owner`; it lists the modules " +
+      "that write those tables for other operations.",
     enforcement: { kind: "none" },
   },
   {

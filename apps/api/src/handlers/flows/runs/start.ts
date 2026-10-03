@@ -20,10 +20,7 @@ import {
   FlowRunStartError,
   startFlowRun,
 } from "@/api/lib/flows/start-flow-run";
-import {
-  ActionAdmissionError,
-  actionAdmissionRefusal,
-} from "@/api/lib/rate-limit/action-admission";
+import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
@@ -135,9 +132,9 @@ const startFlowRunHandler = createSafeHandler(
 
 const toHandlerError = (
   error: FlowRunStartError | SafeDbError | ActionAdmissionError,
-): HandlerError => {
+): HandlerError | ActionAdmissionError => {
   if (ActionAdmissionError.is(error)) {
-    return new HandlerError({ ...actionAdmissionRefusal(error), cause: error });
+    return error;
   }
   if (FlowRunStartError.is(error)) {
     switch (error.reason) {
