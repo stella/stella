@@ -138,6 +138,7 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("drizzle.fixture.ts", [
     "drizzle/enforce-delete-with-where",
     "drizzle/enforce-update-with-where",
+    "drizzle/no-direct-entity-reparent",
   ]),
   ...[
     "no-swallowed-item-error.fixture.ts",
@@ -148,6 +149,9 @@ const fixtureRuleOverrides = [
       "no-swallowed-item-error/no-swallowed-item-error",
     ]),
   ),
+  fixtureRuleOverride("no-swallowed-item-error.fixture.test.ts", [
+    "no-swallowed-item-error/no-test-swallowed-error",
+  ]),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
     rules: publicSsrAmbientStateRules,
@@ -355,6 +359,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-unbounded-response-body.fixture.ts", [
     "no-unbounded-response-body/no-unbounded-response-body",
+  ]),
+  fixtureRuleOverride("no-computed-key-record-assignment.fixture.ts", [
+    "no-computed-key-record-assignment/no-computed-key-record-assignment",
   ]),
   fixtureRuleOverride("no-hand-rolled-execute-rows.fixture.ts", [
     "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows",
@@ -974,6 +981,7 @@ export default defineConfig({
     "no-raw-user-avatar-primitive/no-raw-user-avatar-primitive": "error",
     "no-shadowed-user-name-helpers/no-shadowed-user-name-helpers": "error",
     "no-hand-rolled-user-identity/no-hand-rolled-user-identity": "error",
+    "no-hand-rolled-reference-chip/no-hand-rolled-reference-chip": "error",
     "no-unpaired-playbook-verdict/no-unpaired-playbook-verdict": "error",
     "require-relative-time-helpers/require-relative-time-helpers": "error",
     "no-raw-date-input/no-raw-date-input": "error",
@@ -1206,6 +1214,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
     "./.oxlint-plugins/no-hand-rolled-user-identity.ts",
+    "./.oxlint-plugins/no-hand-rolled-reference-chip.ts",
     "./.oxlint-plugins/no-unpaired-playbook-verdict.ts",
     "./.oxlint-plugins/require-relative-time-helpers.ts",
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
@@ -1301,6 +1310,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-pagination-cursor-schema.ts",
     "./.oxlint-plugins/require-bounded-request-schema.ts",
     "./.oxlint-plugins/no-unbounded-response-body.ts",
+    "./.oxlint-plugins/no-computed-key-record-assignment.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/require-query-key-factory.ts",
@@ -3101,6 +3111,14 @@ export default defineConfig({
     },
     {
       files: [
+        "{apps,packages,scripts}/**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
+        "{apps,packages,scripts}/**/{tests,__tests__}/**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
+        ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture.test.ts",
+      ],
+      rules: { "no-swallowed-item-error/no-test-swallowed-error": "error" },
+    },
+    {
+      files: [
         "apps/api/src/handlers/case-law/ingestion/{parsers,adapters}/**/*.ts",
         "apps/api/src/lib/legal-search/parsers/**/*.ts",
         ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.ts",
@@ -3781,6 +3799,10 @@ export default defineConfig({
     },
     {
       files: ["apps/api/src/**/*.{ts,tsx}"],
+      rules: { "drizzle/no-direct-entity-reparent": "error" },
+    },
+    {
+      files: ["apps/api/src/**/*.{ts,tsx}"],
       excludeFiles: [
         "apps/api/src/**/*.test.{ts,tsx}",
         "apps/api/src/tests/**/*.{ts,tsx}",
@@ -4081,6 +4103,29 @@ export default defineConfig({
       ],
       rules: {
         "no-unbounded-response-body/no-unbounded-response-body": "error",
+      },
+    },
+    {
+      // A computed-key write onto an object literal sends `__proto__` through
+      // the prototype setter, so a record rebuilt from client, model or
+      // parsed-JSON keys loses that entry. Existing debt is carried per file
+      // in scripts/design-lint-baseline.json and switched off there by
+      // `designLintBacklogOverrides` below.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "apps/*/scripts/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        "packages/*/scripts/**/*.{ts,tsx}",
+        "scripts/*.ts",
+      ],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/tests/**",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-computed-key-record-assignment/no-computed-key-record-assignment":
+          "error",
       },
     },
     {

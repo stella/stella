@@ -26,6 +26,9 @@ export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
   // Its 25,000-row plan fixture grows PGlite's retained WASM memory; closing
   // the client cannot reclaim it, and a three-file Linux batch peaked at 2816 MB.
   "src/lib/scheduler/tasks/legislation-expression-id-backfill-plan.db.test.ts",
+  // Seeds 32,000 legislation versions; a three-file batch with it peaked at
+  // 2909 MB on Linux.
+  "src/handlers/legislation/work-names-plan.db.test.ts",
   // Keep this suite's retained database graph in its own process.
   "src/handlers/chat/thread-durable-refs.integration.test.ts",
 ]);

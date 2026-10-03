@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
@@ -425,6 +426,7 @@ const createManifestLoader = (
         redirect: "error",
       },
       {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.AT_FINDOK,
         baseDelayMs: FINDOK_REQUEST_INTERVAL_MS,
         signal,
@@ -780,6 +782,7 @@ const buildDecision = async ({
     artifactUrl(item.pathZip),
     { headers: { Accept: "application/zip" }, redirect: "error" },
     {
+      fetchStage: "document",
       adapterKey: ADAPTER_KEYS.AT_FINDOK,
       baseDelayMs: FINDOK_REQUEST_INTERVAL_MS,
       signal,
@@ -1342,6 +1345,7 @@ export const createAtFindokAdapter = (
   const dependencies = { ...DEFAULT_DEPENDENCIES, ...dependencyOverrides };
   const loadManifest = createManifestLoader(dependencies);
   return defineSourceAdapter({
+    documentStage: "inline",
     key: ADAPTER_KEYS.AT_FINDOK,
     sourceSurfaces: AT_FINDOK_SOURCE_SURFACES,
     sourceFields: {

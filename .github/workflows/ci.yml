@@ -1070,6 +1070,12 @@ jobs:
           cd ../web
           cp .env.example .env
 
+      - name: Generate web route tree
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The scriptless install does not create the derived route tree, and
+        # both knip checks resolve the router through it.
+        run: bun --filter @stll/web generate:route-tree
+
       - name: Compute affected flag
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         id: affected
@@ -1386,7 +1392,8 @@ jobs:
       - name: Policy evidence
         run: bun run policies:check
 
-      - name: Marketing content evidence
+      - name: Marketing content check
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun run marketing:check
 
       - name: Railway template shape
@@ -1483,10 +1490,11 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: bun scripts/sql-perf-suppressions.ts
 
-      - name: Release marketing freshness warning
+      - name: Release marketing staleness warning
         if: >-
-          github.event_name == 'pull_request'
-          || github.event_name == 'merge_group'
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && (github.event_name == 'pull_request'
+          || github.event_name == 'merge_group')
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: |
@@ -1688,8 +1696,10 @@ jobs:
           bun scripts/chat-fixture-guard.ts --self-test
           bun scripts/chat-fixture-guard.ts
 
-      - name: Model catalog snapshot drift guard
-        if: needs.ci-plan.outputs.model_catalog_drift_required == 'true'
+      - name: Model catalog snapshot drift check
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.model_catalog_drift_required == 'true'
         # These fetch models.dev and OpenRouter and byte-compare the
         # deterministic output with the committed snapshots, so hand-editing a
         # `.gen.ts` row instead of regenerating it cannot ship: only the
@@ -1902,6 +1912,9 @@ jobs:
           scripts/check-release-upload-retry.test.ts
           scripts/check-base-image-pulls.test.ts
           scripts/dependabot-changeset.test.ts
+
+      - name: Test install-free CI commands
+        run: bun test scripts/install-free-ci.test.ts
 
       # Needs the installed workspace (fast-check, property-testing), so it
       # cannot join the no-install invariants step above.
@@ -2946,6 +2959,9 @@ jobs:
                 bun --filter @stll/api gen:web-api-types
               fi
             fi
+            if [[ ! -f apps/web/src/routeTree.gen.ts ]]; then
+              bun --filter @stll/web generate:route-tree
+            fi
             bun run typegen
           )
           bun scripts/typecheck-baseline.ts --measure "$base_dir" "$RUNNER_TEMP/typecheck-base.json"
@@ -2977,6 +2993,37 @@ jobs:
               printf 'Generated API types are unchanged.\n'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generated route tree review diff
+        run: |
+          patch="$RUNNER_TEMP/route-tree.patch"
+          base_tree="$RUNNER_TEMP/typecheck-base/apps/web/src/routeTree.gen.ts"
+          head_tree="apps/web/src/routeTree.gen.ts"
+          test -f "$base_tree"
+          test -f "$head_tree"
+          status=0
+          diff -u --label base/routeTree.gen.ts --label head/routeTree.gen.ts \
+            "$base_tree" "$head_tree" > "$patch" || status=$?
+          if [[ "$status" -gt 1 ]]; then
+            exit "$status"
+          fi
+          {
+            printf '### Generated route tree diff\n\n'
+            if [[ -s "$patch" ]]; then
+              printf '```diff\n'
+              sed -n '1,300p' "$patch" | cut -c 1-1000
+              printf '\n```\n\nShowing at most 300 lines (1000 characters per line); the full patch is attached as an artifact.\n'
+            else
+              printf 'Generated routes are unchanged.\n'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload generated route tree review diff
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: generated-route-tree-diff
+          path: ${{ runner.temp }}/route-tree.patch
+          retention-days: 14
 
       - name: Upload generated API type review diff
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

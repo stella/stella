@@ -32,13 +32,15 @@ const run = (cwd: string, command: string[]): string => {
   return result.stdout.toString().trim();
 };
 
-// The fake scanner records the range it was asked to read, one per line.
+// The fake scanner records the range it was asked to read, one per line, and
+// every argument it received; it exits with FAKE_GITLEAKS_EXIT (default 0).
 const bin = path.join(root, "bin");
 const log = path.join(root, "ranges.log");
+const argsLog = path.join(root, "args.log");
 mkdirSync(bin);
 writeFileSync(
   path.join(bin, "gitleaks"),
-  `#!/usr/bin/env bash\nfor arg in "$@"; do\n  case "$arg" in --log-opts=*) echo "\${arg#--log-opts=}" >> "${log}" ;; esac\ndone\n`,
+  `#!/usr/bin/env bash\nfor arg in "$@"; do\n  echo "$arg" >> "${argsLog}"\n  case "$arg" in --log-opts=*) echo "\${arg#--log-opts=}" >> "${log}" ;; esac\ndone\nexit "\${FAKE_GITLEAKS_EXIT:-0}"\n`,
 );
 chmodSync(path.join(bin, "gitleaks"), 0o755);
 
@@ -58,11 +60,16 @@ const head = run(repo, ["git", "rev-parse", "HEAD"]);
 
 type ScanResult = { exitCode: number; ranges: string[]; stderr: string };
 
-const scan = (stdin: string): ScanResult => {
+const scan = (stdin: string, scannerExit = 0): ScanResult => {
   rmSync(log, { force: true });
+  rmSync(argsLog, { force: true });
   const result = Bun.spawnSync(["bash", SCRIPT], {
     cwd: repo,
-    env: { ...process.env, PATH: `${bin}:${process.env["PATH"] ?? ""}` },
+    env: {
+      ...process.env,
+      FAKE_GITLEAKS_EXIT: String(scannerExit),
+      PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+    },
     stdin: new TextEncoder().encode(stdin),
     stderr: "pipe",
   });
@@ -107,6 +114,36 @@ describe("pushed-secret scan ranges", () => {
     expect(result.exitCode).toBe(1);
     expect(result.ranges).toEqual([]);
     expect(result.stderr).toContain("cannot resolve pushed commit range");
+  });
+
+  test("every pushed ref is scanned", () => {
+    expect(
+      scannedRanges(
+        `refs/heads/x ${head} refs/heads/x ${base}\n` +
+          `refs/heads/y ${head} refs/heads/y ${ZERO_OID}\n`,
+      ),
+    ).toEqual([`${base}..${head}`, `${head} --not --remotes`]);
+  });
+
+  test("a deleted ref does not stop the refs after it", () => {
+    expect(
+      scannedRanges(
+        `(delete) ${ZERO_OID} refs/heads/old ${base}\n` +
+          `refs/heads/x ${head} refs/heads/x ${base}\n`,
+      ),
+    ).toEqual([`${base}..${head}`]);
+  });
+
+  test("a leak the scanner reports fails the push", () => {
+    const result = scan(`refs/heads/x ${head} refs/heads/x ${base}\n`, 1);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.ranges).toEqual([`${base}..${head}`]);
+  });
+
+  test("the scanner keeps its failing exit code", () => {
+    scan(`refs/heads/x ${head} refs/heads/x ${base}\n`);
+    const args = readFileSync(argsLog, "utf-8").split("\n");
+    expect(args.filter((arg) => arg.startsWith("--exit-code"))).toEqual([]);
   });
 
   test("one unresolvable ref refuses the whole push", () => {

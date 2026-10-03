@@ -68,7 +68,7 @@ const branchCouldMatch = (
     ([name, property]) =>
       !isRecord(property) ||
       !("const" in property) ||
-      !(name in value) ||
+      !Object.hasOwn(value, name) ||
       property["const"] === value[name],
   );
 };
@@ -193,13 +193,15 @@ const objectShapeTakes = (
   const required = schema["required"];
   if (
     isUnknownArray(required) &&
-    !required.every((name) => typeof name !== "string" || name in value)
+    !required.every(
+      (name) => typeof name !== "string" || Object.hasOwn(value, name),
+    )
   ) {
     return false;
   }
   const properties = isRecord(schema["properties"]) ? schema["properties"] : {};
   return Object.entries(value).every(([key, entry]) =>
-    key in properties
+    Object.hasOwn(properties, key)
       ? shapeTakes(properties[key], entry)
       : extraFieldTakes(schema, key, entry),
   );
@@ -269,7 +271,7 @@ const ownChildSchemas = (
 ): unknown[] => {
   const children: unknown[] = [];
   const properties = schema["properties"];
-  if (isRecord(properties) && key in properties) {
+  if (isRecord(properties) && Object.hasOwn(properties, key)) {
     children.push(properties[key]);
   }
   const patternProperties = schema["patternProperties"];
@@ -391,26 +393,25 @@ const omitAbsentPlaceholders = (
     return value;
   }
   const requiredNames = requiredNamesOf(schema, value);
-  const present: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    const childSchemas = objectChildSchemas(schema, key, value);
-    if (childSchemas.length === 0) {
-      present[key] = entry;
-      continue;
-    }
-    if (
-      !requiredNames.has(key) &&
-      refusesPlaceholder(schema, { entry, isAbsent, key, value })
-    ) {
-      continue;
-    }
-    let current = entry;
-    for (const childSchema of childSchemas) {
-      current = omitAbsentPlaceholders(childSchema, current, isAbsent);
-    }
-    present[key] = current;
-  }
-  return present;
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, entry]) => {
+      const childSchemas = objectChildSchemas(schema, key, value);
+      if (childSchemas.length === 0) {
+        return [[key, entry] as const];
+      }
+      if (
+        !requiredNames.has(key) &&
+        refusesPlaceholder(schema, { entry, isAbsent, key, value })
+      ) {
+        return [];
+      }
+      let current = entry;
+      for (const childSchema of childSchemas) {
+        current = omitAbsentPlaceholders(childSchema, current, isAbsent);
+      }
+      return [[key, current] as const];
+    }),
+  );
 };
 
 const isRejectedNull: AbsentPlaceholderTest = (value, schema) =>
@@ -572,39 +573,51 @@ const widenOptionals = (
   if (!isRecord(schema)) {
     return schema;
   }
-  const widened: Record<string, unknown> = { ...schema };
   const required = requiredAnywhere(schema);
   for (const name of inheritedRequired) {
     required.add(name);
   }
   const properties = schema["properties"];
-  if (isRecord(properties)) {
-    widened["properties"] = mapEntries(properties, (name, property) => {
-      const inner = widenOptionals(property, NO_NAMES);
-      return required.has(name) ? inner : admittingNull(inner);
-    });
-  }
   const patternProperties = schema["patternProperties"];
-  if (isRecord(patternProperties)) {
-    widened["patternProperties"] = mapEntries(
-      patternProperties,
-      (_name, entry) => widenOptionals(entry, NO_NAMES),
-    );
-  }
-  for (const keyword of ["additionalProperties", "items"] as const) {
-    if (isRecord(schema[keyword])) {
-      widened[keyword] = widenOptionals(schema[keyword], NO_NAMES);
-    }
-  }
-  for (const keyword of UNION_KEYWORDS) {
-    const branches = schema[keyword];
-    if (isUnknownArray(branches)) {
-      widened[keyword] = branches.map((branch) =>
-        widenOptionals(branch, required),
-      );
-    }
-  }
-  return widened;
+  return {
+    ...schema,
+    ...(isRecord(properties)
+      ? {
+          properties: mapEntries(properties, (name, property) => {
+            const inner = widenOptionals(property, NO_NAMES);
+            return required.has(name) ? inner : admittingNull(inner);
+          }),
+        }
+      : {}),
+    ...(isRecord(patternProperties)
+      ? {
+          patternProperties: mapEntries(patternProperties, (_name, entry) =>
+            widenOptionals(entry, NO_NAMES),
+          ),
+        }
+      : {}),
+    ...Object.fromEntries(
+      (["additionalProperties", "items"] as const).flatMap((keyword) => {
+        const child = schema[keyword];
+        return isRecord(child)
+          ? [[keyword, widenOptionals(child, NO_NAMES)] as const]
+          : [];
+      }),
+    ),
+    ...Object.fromEntries(
+      UNION_KEYWORDS.flatMap((keyword) => {
+        const branches = schema[keyword];
+        return isUnknownArray(branches)
+          ? [
+              [
+                keyword,
+                branches.map((branch) => widenOptionals(branch, required)),
+              ] as const,
+            ]
+          : [];
+      }),
+    ),
+  };
 };
 
 /**

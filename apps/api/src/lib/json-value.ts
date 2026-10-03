@@ -28,13 +28,13 @@ export const toJsonValue = (value: unknown): JsonValue => {
   return null;
 };
 
-export const toJsonObject = (value: Record<string, unknown>): JsonObject => {
-  const out: JsonObject = {};
-  for (const [key, nestedValue] of Object.entries(value)) {
-    out[key] = toJsonValue(nestedValue);
-  }
-  return out;
-};
+export const toJsonObject = (value: Record<string, unknown>): JsonObject =>
+  Object.fromEntries(
+    Object.entries(value).map(([key, nestedValue]) => [
+      key,
+      toJsonValue(nestedValue),
+    ]),
+  );
 
 const MAX_NULL_FOLD_DEPTH = 64;
 
@@ -47,7 +47,8 @@ const MAX_NULL_FOLD_DEPTH = 64;
  * deliberate one, so it folds both: use it to compare two spellings of the same
  * value, never to produce one that gets persisted or sent to a provider.
  *
- * Array elements keep their positions, so a null element stays null.
+ * Array elements keep their positions, so a null element stays null. Object
+ * keys stay own data properties, `__proto__` included.
  *
  * The value may come from a client, so the walk is bounded: below
  * `MAX_NULL_FOLD_DEPTH` a subtree is returned as is. A genuine tool input never
@@ -64,12 +65,11 @@ export const withNullsOmitted = (value: unknown, depth = 0): unknown => {
   if (!isRecord(value)) {
     return value;
   }
-  const present: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    if (entry === null || entry === undefined) {
-      continue;
-    }
-    present[key] = withNullsOmitted(entry, depth + 1);
-  }
-  return present;
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, entry]) =>
+      entry === null || entry === undefined
+        ? []
+        : [[key, withNullsOmitted(entry, depth + 1)] as const],
+    ),
+  );
 };

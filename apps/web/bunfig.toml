@@ -1,2 +1,6 @@
+[install]
+# Fail on a missing import instead of installing it at run time.
+auto = "disable"
+
 [test]
 preload = ["./src/test-setup.ts"]

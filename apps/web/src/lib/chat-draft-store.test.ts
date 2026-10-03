@@ -32,6 +32,7 @@ const mention: ChatMentionOption = {
   category: "entity",
   kind: "document",
   mimeType: "application/pdf",
+  matterId: "matter-1",
 };
 
 afterEach(() => {
@@ -54,6 +55,7 @@ describe("appendMentionToDraftDoc", () => {
               category: "entity",
               kind: "document",
               mimeType: "application/pdf",
+              matterId: "matter-1",
               sourceWorkspaceId: undefined,
             },
           },
@@ -263,6 +265,7 @@ describe("useChatDraftStore", () => {
             category: "entity",
             kind: "document",
             mimeType: "application/pdf",
+            matterId: "matter-1",
             sourceWorkspaceId: undefined,
           },
         },

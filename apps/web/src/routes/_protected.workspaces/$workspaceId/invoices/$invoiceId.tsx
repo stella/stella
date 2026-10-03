@@ -77,6 +77,7 @@ export const Route = createFileRoute(
       invoiceByIdOptions(params.workspaceId, params.invoiceId),
     );
   },
+  remountDeps: ({ params }) => [params.workspaceId, params.invoiceId],
 });
 
 function InvoiceDetailPage() {

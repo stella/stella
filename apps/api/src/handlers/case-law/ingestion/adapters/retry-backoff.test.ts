@@ -14,7 +14,11 @@ import {
 
 const NOW = new Date("2026-10-02T00:00:00Z").getTime();
 const URL = "https://publications.europa.eu/test";
-const INIT = { adapterKey: ADAPTER_KEYS.EU_ECJ, timeoutMs: 1000 };
+const INIT = {
+  adapterKey: ADAPTER_KEYS.EU_ECJ,
+  fetchStage: "listing",
+  timeoutMs: 1000,
+} as const;
 
 describe("publisher throttling and transient failures", () => {
   const headers = [
