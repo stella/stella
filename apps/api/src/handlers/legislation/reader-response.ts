@@ -164,7 +164,7 @@ export const provisionPreviewSuccessResponseSchema = t.Object(
       t.Object(
         {
           id: boundedString(readerTextBytes.blockId),
-          anchorId: t.Optional(boundedString(readerTextBytes.anchor)),
+          anchorId: boundedString(readerTextBytes.anchor),
           text: boundedString(readerTextBytes.previewText),
         },
         closed,
@@ -273,18 +273,9 @@ export const projectProvisionPreview = (preview: ProvisionPreview) => ({
             readerTextBytes.heading,
           ),
         },
-  blocks: preview.blocks.slice(0, PREVIEW_BLOCK_MAX).map((block) => {
-    const projected = {
-      id: truncateTextBytes(block.id, readerTextBytes.blockId),
-      text: truncateTextBytes(block.text, readerTextBytes.previewText),
-    };
-    if (block.anchorId === undefined) {
-      return projected;
-    }
-    return {
-      id: projected.id,
-      anchorId: truncateTextBytes(block.anchorId, readerTextBytes.anchor),
-      text: projected.text,
-    };
-  }),
+  blocks: preview.blocks.slice(0, PREVIEW_BLOCK_MAX).map((block) => ({
+    id: truncateTextBytes(block.id, readerTextBytes.blockId),
+    anchorId: truncateTextBytes(block.anchorId, readerTextBytes.anchor),
+    text: truncateTextBytes(block.text, readerTextBytes.previewText),
+  })),
 });
