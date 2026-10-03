@@ -138,6 +138,7 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("drizzle.fixture.ts", [
     "drizzle/enforce-delete-with-where",
     "drizzle/enforce-update-with-where",
+    "drizzle/no-direct-entity-reparent",
   ]),
   ...[
     "no-swallowed-item-error.fixture.ts",
@@ -148,6 +149,9 @@ const fixtureRuleOverrides = [
       "no-swallowed-item-error/no-swallowed-item-error",
     ]),
   ),
+  fixtureRuleOverride("no-swallowed-item-error.fixture.test.ts", [
+    "no-swallowed-item-error/no-test-swallowed-error",
+  ]),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
     rules: publicSsrAmbientStateRules,
@@ -196,6 +200,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-ad-hoc-find-shortcut.fixture.ts", [
     "no-ad-hoc-find-shortcut/no-ad-hoc-find-shortcut",
+  ]),
+  fixtureRuleOverride("no-hand-rolled-typed-character.fixture.ts", [
+    "no-hand-rolled-typed-character/no-hand-rolled-typed-character",
   ]),
   fixtureRuleOverride("no-ambient-hotkey-format.fixture.ts", [
     "no-ambient-hotkey-format/no-ambient-hotkey-format",
@@ -307,6 +314,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-unjustified-double-assertion.fixture.ts", [
     "no-unjustified-double-assertion/no-unjustified-double-assertion",
   ]),
+  fixtureRuleOverride("no-forged-plain-text.fixture.ts", [
+    "no-forged-plain-text/no-forged-plain-text",
+  ]),
   fixtureRuleOverride("no-untranslated-jsx-literal.fixture.tsx", [
     "no-untranslated-jsx-literal/no-untranslated-jsx-literal",
   ]),
@@ -328,6 +338,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("public-law-read-boundary.fixture.ts", [
     "public-law-read-boundary/require-language-alternate-counts",
     "public-law-read-boundary/require-configured-read-transaction",
+  ]),
+  fixtureRuleOverride("require-billing-cap-crossings.fixture.ts", [
+    "require-billing-cap-crossings/require-billing-cap-crossings",
   ]),
   fixtureRuleOverride("require-running-entry-guard.fixture.ts", [
     "require-running-entry-guard/require-running-entry-guard",
@@ -352,6 +365,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-unbounded-response-body.fixture.ts", [
     "no-unbounded-response-body/no-unbounded-response-body",
+  ]),
+  fixtureRuleOverride("no-computed-key-record-assignment.fixture.ts", [
+    "no-computed-key-record-assignment/no-computed-key-record-assignment",
   ]),
   fixtureRuleOverride("no-hand-rolled-execute-rows.fixture.ts", [
     "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows",
@@ -971,11 +987,13 @@ export default defineConfig({
     "no-raw-user-avatar-primitive/no-raw-user-avatar-primitive": "error",
     "no-shadowed-user-name-helpers/no-shadowed-user-name-helpers": "error",
     "no-hand-rolled-user-identity/no-hand-rolled-user-identity": "error",
+    "no-hand-rolled-reference-chip/no-hand-rolled-reference-chip": "error",
     "no-unpaired-playbook-verdict/no-unpaired-playbook-verdict": "error",
     "require-relative-time-helpers/require-relative-time-helpers": "error",
     "no-raw-date-input/no-raw-date-input": "error",
     "no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast": "error",
     "no-unjustified-double-assertion/no-unjustified-double-assertion": "error",
+    "no-forged-plain-text/no-forged-plain-text": "error",
     "no-partial-record-satisfies/no-partial-record-satisfies": "error",
     "require-contained-handler/no-portal-under-interactive-ancestor": "error",
     "require-contained-handler/require-contained-handler": "error",
@@ -1182,6 +1200,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-ad-hoc-find-shortcut.ts",
+    "./.oxlint-plugins/no-hand-rolled-typed-character.ts",
     "./.oxlint-plugins/no-ambient-hotkey-format.ts",
     "./.oxlint-plugins/no-ambient-nondeterminism.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
@@ -1202,6 +1221,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
     "./.oxlint-plugins/no-hand-rolled-user-identity.ts",
+    "./.oxlint-plugins/no-hand-rolled-reference-chip.ts",
     "./.oxlint-plugins/no-unpaired-playbook-verdict.ts",
     "./.oxlint-plugins/require-relative-time-helpers.ts",
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
@@ -1228,6 +1248,7 @@ export default defineConfig({
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
     "./.oxlint-plugins/no-unjustified-double-assertion.ts",
+    "./.oxlint-plugins/no-forged-plain-text.ts",
     "./.oxlint-plugins/no-raw-user-id-schema.ts",
     "./.oxlint-plugins/no-offset-pagination.ts",
     "./.oxlint-plugins/require-query-limit.ts",
@@ -1264,6 +1285,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-complete-compaction-generation.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-running-entry-guard.ts",
+    "./.oxlint-plugins/require-billing-cap-crossings.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-request.ts",
@@ -1297,6 +1319,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-pagination-cursor-schema.ts",
     "./.oxlint-plugins/require-bounded-request-schema.ts",
     "./.oxlint-plugins/no-unbounded-response-body.ts",
+    "./.oxlint-plugins/no-computed-key-record-assignment.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/require-query-key-factory.ts",
@@ -2733,6 +2756,16 @@ export default defineConfig({
       },
     },
     {
+      // Which character a keystroke typed is decided by `typedCharacter` in
+      // `@stll/ui/typed-character`; hand-rolled Alt checks drop text typed
+      // with Option on macOS layouts or AltGr on Windows.
+      files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-hand-rolled-typed-character/no-hand-rolled-typed-character":
+          "error",
+      },
+    },
+    {
       // Locale-aware number/date formatting. Folio is excluded: its
       // document surface stays LTR-based and formats with its own
       // resolved locales rather than the UI numbering preference.
@@ -3084,6 +3117,14 @@ export default defineConfig({
       ],
       excludeFiles: ["**/*.test.ts"],
       rules: { "no-swallowed-item-error/no-swallowed-item-error": "error" },
+    },
+    {
+      files: [
+        "{apps,packages,scripts}/**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
+        "{apps,packages,scripts}/**/{tests,__tests__}/**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
+        ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture.test.ts",
+      ],
+      rules: { "no-swallowed-item-error/no-test-swallowed-error": "error" },
     },
     {
       files: [
@@ -3636,6 +3677,17 @@ export default defineConfig({
       },
     },
     {
+      files: [
+        "apps/api/src/handlers/time-entries/**/*.ts",
+        "apps/api/src/lib/billing/time-entry-approval.ts",
+        "apps/api/src/lib/time-entry-offboarding.ts",
+      ],
+      excludeFiles: ["**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "require-billing-cap-crossings/require-billing-cap-crossings": "error",
+      },
+    },
+    {
       // Returning a failure value from a transaction callback commits the
       // partial write it was meant to reject. Scoped to the API source, where
       // `safeDb` / `.transaction(...)` open real transactions; the two session
@@ -3764,6 +3816,10 @@ export default defineConfig({
         "security-guards/no-raw-filename-write": "error",
         "no-direct-pdf-save/no-direct-pdf-save": "error",
       },
+    },
+    {
+      files: ["apps/api/src/**/*.{ts,tsx}"],
+      rules: { "drizzle/no-direct-entity-reparent": "error" },
     },
     {
       files: ["apps/api/src/**/*.{ts,tsx}"],
@@ -4067,6 +4123,29 @@ export default defineConfig({
       ],
       rules: {
         "no-unbounded-response-body/no-unbounded-response-body": "error",
+      },
+    },
+    {
+      // A computed-key write onto an object literal sends `__proto__` through
+      // the prototype setter, so a record rebuilt from client, model or
+      // parsed-JSON keys loses that entry. Existing debt is carried per file
+      // in scripts/design-lint-baseline.json and switched off there by
+      // `designLintBacklogOverrides` below.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "apps/*/scripts/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        "packages/*/scripts/**/*.{ts,tsx}",
+        "scripts/*.ts",
+      ],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/tests/**",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-computed-key-record-assignment/no-computed-key-record-assignment":
+          "error",
       },
     },
     {

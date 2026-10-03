@@ -1,3 +1,5 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, TaggedError, panic } from "better-result";
 import * as cheerio from "cheerio";
 
@@ -30,6 +32,7 @@ import {
 import type {
   EmptyAst,
   IngestionResult,
+  SyncPage,
   ListingIdentity,
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
@@ -47,6 +50,7 @@ import {
   NalusRateLimitedError,
   type NalusRequestInit,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   adapterCatch,
   hashContent,
@@ -71,7 +75,11 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
+import type {
+  RawIngestionResult,
+  DecisionJudgeInput,
+} from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1043,7 +1051,7 @@ const parseDecisionPage = ({
   // across parser changes. Matches NSS adapter pattern.
   const raw = `${sourceDocumentId}|${parsed.caseNumber}|${parsed.decisionDate ?? ""}`;
 
-  return {
+  return plainTextIngestionResult({
     caseNumber: parsed.caseNumber,
     sourceDocumentId,
     sourceDocumentIdAliases: nalusIdentities({
@@ -1102,7 +1110,7 @@ const parseDecisionPage = ({
     documentAst,
     sourceRaw: html,
     sourceRawContentType: "text/html",
-  };
+  });
 };
 
 type HistoricalCursor = {
@@ -1804,7 +1812,7 @@ const redirectsToResults = (response: Response): boolean => {
  */
 const nalusResponse = async (
   url: string,
-  init?: NalusRequestInit,
+  init: NalusRequestInit,
 ): Promise<Response> => {
   const response = await fetchNalus(url, init);
   if (Result.isError(response)) {
@@ -1846,6 +1854,7 @@ const fetchSearchPage = async ({
   signal,
 }: FetchSearchPageOptions): Promise<FetchedSearchPage | null> => {
   const first = await nalusOkResponse({
+    fetchStage: "listing",
     subject: "search form",
     url: SEARCH_URL,
     signal,
@@ -1880,6 +1889,7 @@ const fetchSearchPage = async ({
   });
   const initialCookies = cookieHeader([first]);
   const submit = await nalusResponse(SEARCH_URL, {
+    fetchStage: "listing",
     method: "POST",
     signal,
     headers: {
@@ -1911,6 +1921,7 @@ const fetchSearchPage = async ({
   const pageUrl =
     state.page === 0 ? RESULTS_URL : `${RESULTS_URL}?page=${state.page}`;
   const results = await nalusOkResponse({
+    fetchStage: "listing",
     subject: "results",
     url: pageUrl,
     headers: { Cookie: cookies },
@@ -1956,6 +1967,7 @@ export const openNalusSession = async (
   signal?: AbortSignal,
 ): Promise<NalusSession> => {
   const response = await nalusOkResponse({
+    fetchStage: "listing",
     subject: "session",
     url: SEARCH_URL,
     signal,
@@ -1993,6 +2005,7 @@ export const fetchNalusRecordCard = async (
   const url = new URL(RESULT_DETAIL_URL);
   url.searchParams.set("id", nalusRecordId);
   const response = await nalusResponse(url.href, {
+    fetchStage: "document",
     signal,
     headers: { Cookie: session.cookie },
   });
@@ -2104,7 +2117,7 @@ export const buildCzUsDecision = ({
     recordCard.type === CZ_US_RECORD_CARD_STATE.READ
       ? recordCard.html
       : undefined;
-  const decision = parseDecisionPage({
+  const decision: RawIngestionResult | null = parseDecisionPage({
     html: textHtml,
     recordCard: parsedRecordCard(recordCard),
     sourceUrl: listed.sourceUrl,
@@ -2153,7 +2166,7 @@ export const buildCzUsDecision = ({
       abstractHtml,
     }),
   );
-  return decision;
+  return plainTextIngestionResult(decision);
 };
 
 /** A page beside the document that the court did not answer for. */
@@ -2179,7 +2192,10 @@ const fetchListedDecision = async (
       decision: listedOnlyDecision(listed, "missing-text-action"),
     };
   }
-  const response = await nalusResponse(listed.sourceUrl, { signal });
+  const response = await nalusResponse(listed.sourceUrl, {
+    fetchStage: "document",
+    signal,
+  });
   if (!response.ok) {
     if (response.status === 404 || response.status === 410) {
       return {
@@ -2254,7 +2270,10 @@ const fetchListedDecision = async (
       const abstractUrl = `${ABSTRACT_URL}?${new URLSearchParams({
         sz: listed.sz ?? "",
       }).toString()}`;
-      const abstractResponse = await nalusResponse(abstractUrl, { signal });
+      const abstractResponse = await nalusResponse(abstractUrl, {
+        fetchStage: "document",
+        signal,
+      });
       if (abstractResponse.ok) {
         return {
           type: CZ_US_ABSTRACT_STATE.READ,
@@ -2348,7 +2367,7 @@ const listedOnlyDecision = (
     publisherCourt: CZ_US_PUBLISHER_COURT,
     sourceDocumentId: listed.sourceDocumentId,
   });
-  return {
+  return plainTextIngestionResult({
     caseNumber: listed.caseNumber,
     caseNumberIsPlaceholder: listed.listingDocketMissing === true,
     isListingOnly: true,
@@ -2400,33 +2419,52 @@ const listedOnlyDecision = (
       encodeSourceRawEnvelope({ listing: listed.listingHtml }),
     sourceRawContentType:
       rawSource?.sourceRawContentType ?? SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
+};
+
+type CzUsPageItems = {
+  decisions: IngestionResult[];
+  itemBuildFailures: NonNullable<SyncPage["itemBuildFailures"]>;
 };
 
 const fetchListedDecisions = async (
   listed: readonly ListedDecision[],
   session: NalusSession,
   signal: AbortSignal | undefined,
-): Promise<IngestionResult[]> => {
+): Promise<CzUsPageItems> => {
   const decisions: IngestionResult[] = [];
+  let failed = 0;
   for (let start = 0; start < listed.length; start += DOCUMENT_CONCURRENCY) {
     const batch = listed.slice(start, start + DOCUMENT_CONCURRENCY);
-    decisions.push(
-      // The crawl keeps a listing-only row for a record NALUS serves no text
-      // for: its cursor moves past that record either way, so the observation
-      // is worth more than nothing. Only the reconciliation refuses it.
-      ...(await Promise.all(
-        batch.map(
-          async (item) =>
-            (await fetchListedDecision(item, session, signal)).decision,
-        ),
-      )),
+    const built = await Promise.all(
+      batch.map(
+        async (item) =>
+          await buildPlainTextItem({
+            decisionOf: (value) => value,
+            adapterKey: ADAPTER_KEYS.CZ_US,
+
+            rawListing: item.listingHtml,
+            build: async () =>
+              (await fetchListedDecision(item, session, signal)).decision,
+          }),
+      ),
     );
+    for (const item of built) {
+      if (item.type === "item_build_failed") {
+        failed++;
+        decisions.push(item.decision);
+        continue;
+      }
+      decisions.push(item.value);
+    }
     if (start + DOCUMENT_CONCURRENCY < listed.length) {
       await Bun.sleep(100);
     }
   }
-  return decisions;
+  return {
+    decisions,
+    itemBuildFailures: { type: "item_build_failed", count: failed },
+  };
 };
 
 // ── Reconciliation ───────────────────────────────────────
@@ -2682,7 +2720,7 @@ const reparseStoredRaw = (
   const nalusRecordId = stored.metadata["nalusRecordId"];
   const nalusSz = stored.metadata["nalusSz"];
   const detailHtml = parts?.["detail"];
-  const decision = parseDecisionPage({
+  const decision: RawIngestionResult | null = parseDecisionPage({
     html: documentHtml,
     recordCard: parsedRecordCard(
       detailHtml === undefined
@@ -2731,7 +2769,7 @@ const reparseStoredRaw = (
   }
   decision.sourceRaw = raw;
   decision.sourceRawContentType = stored.contentType ?? "text/html";
-  return { type: "parsed", result: decision };
+  return { type: "parsed", result: plainTextIngestionResult(decision) };
 };
 
 // ── Adapter ──────────────────────────────────────────────
@@ -2821,6 +2859,7 @@ const NALUS_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const czUsAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.CZ_US,
   sourceSurfaces: NALUS_SOURCE_SURFACES,
   sourceFields: {
@@ -2844,7 +2883,10 @@ export const czUsAdapter = defineSourceAdapter({
    */
   async getTotalCount(signal) {
     try {
-      const first = await nalusResponse(SEARCH_URL, { signal });
+      const first = await nalusResponse(SEARCH_URL, {
+        fetchStage: "listing",
+        signal,
+      });
       if (!first.ok) {
         return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
@@ -2879,6 +2921,7 @@ export const czUsAdapter = defineSourceAdapter({
         ctl00$MainContent$but_search: "Vyhledat",
       });
       const submit = await nalusResponse(SEARCH_URL, {
+        fetchStage: "listing",
         method: "POST",
         signal,
         headers: {
@@ -2891,6 +2934,7 @@ export const czUsAdapter = defineSourceAdapter({
         return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
       const results = await nalusResponse(RESULTS_URL, {
+        fetchStage: "listing",
         signal,
         headers: { Cookie: cookies },
       });
@@ -2915,6 +2959,20 @@ export const czUsAdapter = defineSourceAdapter({
    * is held. This loop is the only writer of coverage for this source.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            caseNumber: payload["caseNumber"],
+            sourceDocumentId: payload["sourceDocumentId"],
+            nalusRecordId: payload["nalusRecordId"],
+            sourceUrl: payload["sourceUrl"],
+            sz: payload["sz"],
+            ecli: payload["ecli"],
+            counter: payload["counter"],
+            listingDocketMissing: payload["listingDocketMissing"],
+          }
+        : null,
     firstSlice: CZ_US_FIRST_SLICE,
     sliceOf: czUsSliceOf,
     nextSlice: czUsNextSlice,
@@ -3013,7 +3071,7 @@ export const czUsAdapter = defineSourceAdapter({
           };
         }
 
-        const decisions = await fetchListedDecisions(
+        const { decisions, itemBuildFailures } = await fetchListedDecisions(
           page.listed,
           page.session,
           signal,
@@ -3021,6 +3079,7 @@ export const czUsAdapter = defineSourceAdapter({
         if (sliceComplete) {
           return {
             decisions,
+            itemBuildFailures,
             nextCursor: makeCursor({
               ...state,
               pass: CRAWL_PASS.VERIFY,
@@ -3033,6 +3092,7 @@ export const czUsAdapter = defineSourceAdapter({
         }
         return {
           decisions,
+          itemBuildFailures,
           nextCursor: makeCursor({
             ...state,
             page: state.page + 1,

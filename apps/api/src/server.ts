@@ -6,6 +6,7 @@ import {
   CHAT_TURN_ID_HEADER,
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
+import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { redisConnectionConfig } from "@stll/redis-config";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
@@ -65,6 +66,7 @@ import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legalReaderRoute } from "@/api/handlers/legal-reader/routes";
 import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
+import { createPublicStatuteSearchRateLimitComposition } from "@/api/handlers/legislation/public-search-rate-limit-composition";
 import { legislationRoute } from "@/api/handlers/legislation/routes";
 import { listsRoute } from "@/api/handlers/lists/routes";
 import { handleMcpAppSandboxRequest } from "@/api/handlers/mcp-app-sandbox/routes";
@@ -109,6 +111,7 @@ import {
 import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-queue/routes";
 import { internalTimeEntriesRoute } from "@/api/handlers/time-entries/internal/routes";
 import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
+import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
 import { uploadsRoute } from "@/api/handlers/uploads/routes";
@@ -125,6 +128,7 @@ import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { detached } from "@/api/lib/analytics/capture";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
+import { createAuthResponseCookiesPlugin } from "@/api/lib/auth/auth-response-cookies";
 import {
   isAllowedBrowserOrigin,
   shouldRejectBrowserMutation,
@@ -275,7 +279,27 @@ const CORS_EXPOSED_HEADERS = [
   CHAT_TURN_ID_HEADER,
 ];
 
+const publicStatuteSearchRateLimits =
+  createPublicStatuteSearchRateLimitComposition({
+    routes: publicLegislationRoute,
+    skipShared: (request) => {
+      // The dev-only e2e walk measures navigation, not abuse budgets.
+      if (env.E2E_DISABLE_AUTH_RATE_LIMIT) {
+        return true;
+      }
+      // Other dedicated budgets also exclude their traffic from the shared bucket.
+      const { pathname } = new URL(request.url);
+      return (
+        isUploadRateLimitedPath(pathname) ||
+        isFolioCollabRateLimitedPath(pathname) ||
+        isSkillSourceRateLimitedRequest(request) ||
+        isStyleSetUploadRateLimitedRequest(request)
+      );
+    },
+  });
+
 const api = new Elysia()
+  .use(createAuthResponseCookiesPlugin())
   .mapResponse(({ responseValue, set }) =>
     finalizeResponseCachePolicy({ response: responseValue, set }),
   )
@@ -357,6 +381,7 @@ const api = new Elysia()
         "MCP-Protocol-Version",
         FORMATTING_LOCALE_HEADER,
         SESSION_ID_HEADER,
+        AUTH_SESSION_STARTUP_HEADER,
         TANSTACK_RUN_ID_HEADER,
       ],
       exposeHeaders: CORS_EXPOSED_HEADERS,
@@ -422,6 +447,7 @@ const api = new Elysia()
       .use(timeApprovalQueueRoute)
       .use(internalTimeEntriesRoute)
       .use(myTimeEntriesRoute)
+      .use(memberTimeTargetsRoute)
       .use(timeTimersRoute),
   )
   .use(localDevPublicRoutes)
@@ -430,38 +456,7 @@ const api = new Elysia()
   .group(STELLA_API_VERSION_PREFIX, (app) =>
     app
 
-      .use(
-        rateLimit({
-          duration: API_RATE_LIMITS.api.duration,
-          max: API_RATE_LIMITS.api.max,
-          ...createRedisRateLimit({
-            failurePolicy: "fail_open_local",
-            scope: "api",
-          }),
-          skip: (req) => {
-            // The e2e route walk fires hundreds of /v1 requests per minute
-            // from one IP; abuse limits are not what those runs measure. The
-            // flag is dev-only by env validation and CI's e2e job already
-            // sets it for the API it boots.
-            if (env.E2E_DISABLE_AUTH_RATE_LIMIT) {
-              return true;
-            }
-            // Endpoints with a dedicated rate-limit budget are excluded
-            // from the shared `api` bucket so unrelated `/v1` traffic on
-            // the same IP cannot drain their quota (see `upload` and
-            // `folioCollab` in API_RATE_LIMITS). Each path is matched by
-            // its canonical helper so this skip stays in lockstep with
-            // the dedicated limiter that owns it.
-            const { pathname } = new URL(req.url);
-            return (
-              isUploadRateLimitedPath(pathname) ||
-              isFolioCollabRateLimitedPath(pathname) ||
-              isSkillSourceRateLimitedRequest(req) ||
-              isStyleSetUploadRateLimitedRequest(req)
-            );
-          },
-        }),
-      )
+      .use(publicStatuteSearchRateLimits.shared)
       .use(authCapabilitiesRoute)
       .use(workspaceEventsRoute)
       .use(workspacesRoute)
@@ -533,7 +528,7 @@ const api = new Elysia()
       .use(contactsRoute)
       .use(legislationRoute)
       .use(legislationCorpusRoute)
-      .use(publicLegislationRoute)
+      .use(publicStatuteSearchRateLimits.publicLegislation)
       .use(publicKnowledgeRoute)
       .use(searchRoute)
       .use(savedSearchesRoute)

@@ -146,18 +146,34 @@ const readExcludes = (bunfig: string): Set<string> => {
   return new Set(excludes.filter((name) => typeof name === "string"));
 };
 
+/**
+ * `[install] auto`, as Bun reads it; undefined when the file sets none, which
+ * Bun treats as "auto".
+ */
+const readAutoInstall = (bunfig: string): string | undefined => {
+  const install = readInstallTable(bunfig);
+  if (install === undefined || !("auto" in install)) {
+    return undefined;
+  }
+  return typeof install.auto === "string" ? install.auto : undefined;
+};
+
 export type InstallPolicy = {
+  /** `[install] auto`: whether Bun installs a missing import at run time. */
+  readonly autoInstall: string | undefined;
   readonly excludes: ReadonlySet<string>;
   /** Seconds; undefined when the file leaves its directory unquarantined. */
   readonly minimumReleaseAge: number | undefined;
 };
 
 /**
- * What a bunfig.toml sets for the release-age gate. Every guard that asks
- * whether a directory is quarantined, or which names it exempts, reads it
+ * What a bunfig.toml sets for installs: the release-age gate and run-time
+ * installs. Every guard that asks whether a directory is quarantined, which
+ * names it exempts, or whether Bun may install there at run time reads it
  * through here, so no two of them can disagree about it.
  */
 export const readInstallPolicy = (bunfig: string): InstallPolicy => ({
+  autoInstall: readAutoInstall(bunfig),
   excludes: readExcludes(bunfig),
   minimumReleaseAge: readMinimumReleaseAgeSeconds(bunfig),
 });

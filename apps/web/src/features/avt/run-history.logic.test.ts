@@ -37,6 +37,31 @@ const makeRun = (
 });
 
 describe("run picker options", () => {
+  test("a repeated page-edge run keeps the first page's settled result", () => {
+    const settled = makeRun(1);
+    const stale = { ...settled, status: "running", finishedAt: null } as const;
+    expect(runHistoryOptions([settled, stale], LIST_A)).toEqual([
+      {
+        id: settled.id,
+        status: "completed",
+        createdAtMs: Date.UTC(2026, 8, 21, 10),
+        claimCounts: COUNTS,
+        otherList: false,
+      },
+    ]);
+  });
+
+  test("queued runs hide counts and dates retain their timezone offset", () => {
+    const queued = makeRun(1, {
+      status: "queued",
+      finishedAt: null,
+      createdAt: "2026-09-21T12:00:00.125+02:00",
+    });
+    const option = runHistoryOptions([queued], LIST_A).at(0);
+    expect(option?.claimCounts).toBeNull();
+    expect(option?.createdAtMs).toBe(Date.UTC(2026, 8, 21, 10, 0, 0, 125));
+  });
+
   test("marks a run checked against a list other than the view's", () => {
     const runs = [makeRun(1), makeRun(2, { listId: LIST_B })];
 

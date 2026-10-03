@@ -11,6 +11,7 @@ import { asc, eq, inArray } from "drizzle-orm";
 import { workspaceViews } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -71,7 +72,7 @@ const runReorder = async (
   const context = asTestRaw<ReorderCtx>({
     body: { viewIds },
     createAuditRecorder: () => async () => undefined,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     recordAuditEvent: async () => undefined,
     request: new Request(`https://example.test/workspaces/${ids.wsA1}/views`),
     route: "/test/views/reorder",

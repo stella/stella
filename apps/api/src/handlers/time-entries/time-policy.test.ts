@@ -7,6 +7,7 @@ import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   createScopedDbMock,
   createSelectQueryMock,
@@ -61,7 +62,7 @@ describe("time entry policy at API write paths", () => {
         organizationId,
         workspaceId,
         userId,
-        memberRole: { role: "member" },
+        memberRole: sessionMemberRole("member"),
         recordAuditEvent: async () => {},
         body: {
           dateWorked: "2026-09-01",
@@ -97,7 +98,7 @@ describe("time entry policy at API write paths", () => {
       updateTimeEntryHandler({
         safeDb,
         workspaceId,
-        actor: { userId, memberRole: { role: "owner" } },
+        actor: { userId, memberRole: sessionMemberRole("owner") },
         recordAuditEvent: async () => {},
         body: { id: entryId, durationMinutes: 10 },
       }),
@@ -124,7 +125,7 @@ describe("time entry policy at API write paths", () => {
       updateTimeEntryHandler({
         safeDb,
         workspaceId,
-        actor: { userId, memberRole: { role: "member" } },
+        actor: { userId, memberRole: sessionMemberRole("member") },
         recordAuditEvent: async () => {},
         body: { id: entryId, durationMinutes: 10 },
       }),
@@ -156,7 +157,7 @@ describe("time entry policy at API write paths", () => {
       updateTimeEntryHandler({
         safeDb,
         workspaceId,
-        actor: { userId, memberRole: { role: "member" } },
+        actor: { userId, memberRole: sessionMemberRole("member") },
         recordAuditEvent: async () => {},
         body: { id: entryId, timezoneId: "America/Los_Angeles" },
       }),
@@ -183,7 +184,7 @@ describe("time entry policy at API write paths", () => {
       deleteTimeEntryHandler({
         safeDb,
         workspaceId,
-        actor: { userId, memberRole: { role: "member" } },
+        actor: { userId, memberRole: sessionMemberRole("member") },
         recordAuditEvent: async () => {},
         body: { id: entryId },
       }),
@@ -220,7 +221,7 @@ describe("time entry policy at API write paths", () => {
       updateTimeEntryHandler({
         safeDb,
         workspaceId,
-        actor: { userId, memberRole: { role: "owner" } },
+        actor: { userId, memberRole: sessionMemberRole("owner") },
         recordAuditEvent: async () => {},
         body: { id: entryId, durationMinutes: 16 },
       }),

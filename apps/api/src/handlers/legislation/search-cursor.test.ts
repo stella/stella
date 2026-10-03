@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import nodePath from "node:path";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
@@ -7,7 +6,11 @@ import {
   publicCountryUnavailable,
 } from "@stll/api-contract/public-country-capability";
 
-import { searchLegislationHandler } from "@/api/handlers/legislation/search";
+import {
+  legislationQueryFingerprint,
+  searchLegislationHandler,
+} from "@/api/handlers/legislation/search";
+import { toSafeId } from "@/api/lib/branded-types";
 import { encodeCorpusSearchCursor } from "@/api/lib/legal-search/corpus-search-cursor";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 
@@ -85,36 +88,67 @@ test.each(
 // ranking of other documents entirely. The database would throw if either
 // search path started, so the refusal is proven to cost nothing as well as to
 // happen.
-test("a cursor naming a dictionary is refused, and reads nothing", async () => {
-  const { db, reads } = unreachableDb();
+test.each(["corpus-index", "pg-fts"] as const)(
+  "a cursor naming a dictionary is refused before %s reads",
+  async (provider) => {
+    const { db, reads } = unreachableDb();
 
-  const result = await searchLegislationHandler(
-    { cursor: CASE_LAW_CURSOR, query: "nájemné" },
-    db,
-    "unobserved",
-  );
+    const result = await searchLegislationHandler(
+      { cursor: CASE_LAW_CURSOR, query: "nájemné" },
+      db,
+      "unobserved",
+      { provider, loadSearchConfigs: async () => [] },
+    );
 
-  expect(result).not.toHaveProperty("items");
-  expect(result).toMatchObject({
-    code: 400,
-    response: { message: "Invalid cursor" },
-  });
-  expect(reads()).toBe(0);
-});
+    expect(result).not.toHaveProperty("items");
+    expect(result).toMatchObject({
+      code: 400,
+      response: { message: "Invalid cursor" },
+    });
+    expect(reads()).toBe(0);
+  },
+);
 
-// What makes the test above cover the corpus-index path and the pg-fts path
-// alike: the identity is checked before the provider is consulted, so neither
-// path can be the one that accepts a case-law cursor. A guard that moved below
-// the branch would have to be proven twice, once per provider, and the
-// provider is not switchable from a test.
-test("the identity is checked before either search path is chosen", async () => {
-  const source = await Bun.file(
-    nodePath.resolve(import.meta.dir, "search.ts"),
-  ).text();
-  const guard = source.indexOf("isStaleCorpusSearchCursor(");
-  const providerBranch = source.indexOf("envBase.LEGAL_SEARCH_PROVIDER");
-
-  expect(guard).toBeGreaterThan(-1);
-  expect(providerBranch).toBeGreaterThan(-1);
-  expect(guard).toBeLessThan(providerBranch);
-});
+test.each(["corpus-index", "pg-fts"] as const)(
+  "%s cursors reject changed queries and filters before reading",
+  async (provider) => {
+    const body = { query: "nájemné", jurisdiction: "CZE" };
+    const cursor = encodeCorpusSearchCursor({
+      dictionary: { type: "none" },
+      id: DOCUMENT_ID,
+      score: 0.5,
+      sort: "relevance",
+      target: null,
+      windowStart: 0,
+      phase: {
+        type: "strict",
+        fingerprint: legislationQueryFingerprint(body),
+        generation: provider === "pg-fts" ? null : "legislation_v2",
+      },
+    });
+    const changes = [
+      { query: "náhrada škody" },
+      { documentType: "act" },
+      { status: "current" },
+      { language: "cs" },
+      { source: toSafeId<"legislationSource">(DOCUMENT_ID) },
+      { dateFrom: "2020-01-01" },
+      { dateTo: "2030-01-01" },
+    ];
+    for (const change of changes) {
+      const { db, reads } = unreachableDb();
+      // db-await-in-loop: each cursor replay independently tests the boundary
+      const result = await searchLegislationHandler(
+        { ...body, ...change, cursor },
+        db,
+        "unobserved",
+        { provider, loadSearchConfigs: async () => [] },
+      );
+      expect(result).toMatchObject({
+        code: 400,
+        response: { message: "Invalid cursor" },
+      });
+      expect(reads()).toBe(0);
+    }
+  },
+);

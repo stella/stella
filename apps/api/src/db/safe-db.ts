@@ -3,7 +3,10 @@ import type { UnhandledException } from "better-result";
 import { TransactionRollbackError } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDbRetryConfig as BaseSafeDbRetryConfig } from "@/api/db/scoped";
+import type {
+  CreateIngestionDbOptions,
+  SafeDbRetryConfig as BaseSafeDbRetryConfig,
+} from "@/api/db/scoped";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { DatabaseRlsError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -14,6 +17,12 @@ import { PG_ERROR } from "@/api/lib/pg-error";
  * the owner-level database handle.
  */
 export type ScopedDb = <T>(fn: (tx: Transaction) => Promise<T>) => Promise<T>;
+
+/** Corpus operations can bound schema-lane waits; createIngestionDb honors these budgets. */
+export type IngestionScopedDb = <T>(
+  fn: (tx: Transaction) => Promise<T>,
+  options?: CreateIngestionDbOptions,
+) => Promise<T>;
 
 export type SafeDbError = DatabaseError | DatabaseRlsError | UnhandledException;
 
