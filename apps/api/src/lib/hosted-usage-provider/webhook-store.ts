@@ -23,7 +23,7 @@ import {
   createBackgroundAuditRecorder,
   type AuditAction,
   type AuditEvent,
-  type AuditResourceType,
+  type NonChatAuditResourceType,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { HostedUsageWebhookEvent } from "@/api/lib/hosted-usage-provider/event-schemas";
@@ -166,7 +166,7 @@ type WebhookAuditEventInput = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
   action: AuditAction;
-  resourceType: AuditResourceType;
+  resourceType: NonChatAuditResourceType;
   resourceId: string;
   /**
    * Provider event id. Lets a reviewer cross-reference the audit row

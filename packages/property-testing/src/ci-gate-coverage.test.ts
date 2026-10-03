@@ -36,6 +36,8 @@ const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
  * the matching package script from that workspace. The runner reads the same
  * declaration, so its runtime discovery and this guard cannot drift into
  * mirrored lists.
+ * Grep discovery steps are matched by their own environment, search directory,
+ * and include glob, so newly added matching suites need no exemption.
  *
  * Extension points:
  * - LOCAL_ONLY_GATES: a gate intentionally exercised only in local runs
@@ -55,14 +57,7 @@ const LOCAL_ONLY_GATES = new Set<string>([
 // Live-API smoke suites not wired into a workflow. Remove an entry once its
 // workflow job exists; the test below rejects entries that no longer declare a
 // gate, so this policy list cannot silently retain stale paths.
-const UNWIRED_TEST_FILES = new Set<string>([
-  // Engine suites: ci.yml's corpus-engine step discovers them by grepping for
-  // the gate rather than through a package script, which this guard does not
-  // model.
-  "apps/api/src/lib/legal-search/corpus-index-scored-scan.contract.test.ts",
-  "apps/api/src/lib/legal-search/corpus-index-delete-survivor.contract.test.ts",
-  "apps/api/src/lib/legal-search/corpus-index-query-features.contract.test.ts",
-]);
+const UNWIRED_TEST_FILES = new Set<string>();
 
 const TEST_FILE_GLOB = "{apps,packages}/**/*.test.{ts,tsx}";
 const PACKAGE_JSON_GLOB = "{apps,packages}/*/package.json";
@@ -301,6 +296,7 @@ const readWorkflows = async (): Promise<Workflow[]> => {
 
 type WorkflowStep = {
   allowsFailure: boolean;
+  env: unknown;
   isUnconditional: boolean;
   run: string;
   workingDirectory: string;
@@ -330,6 +326,9 @@ const collectWorkflowSteps = (workflow: Workflow): WorkflowStep[] => {
     const jobAllowsFailure =
       jobContinueOnError !== undefined && jobContinueOnError !== false;
     const jobCondition = job["if"];
+    if (jobCondition === false) {
+      continue;
+    }
     const jobIsUnconditional =
       jobCondition === undefined || jobCondition === true;
     const steps = job["steps"];
@@ -345,7 +344,11 @@ const collectWorkflowSteps = (workflow: Workflow): WorkflowStep[] => {
       if (typeof run === "string" && typeof workingDirectory === "string") {
         const stepContinueOnError = step["continue-on-error"];
         const stepCondition = step["if"];
+        if (stepCondition === false) {
+          continue;
+        }
         workflowSteps.push({
+          env: step["env"],
           allowsFailure:
             jobAllowsFailure ||
             (stepContinueOnError !== undefined &&
@@ -406,27 +409,30 @@ const runnerCovers = ({
   );
 };
 
+const environmentSetsGate = (
+  environment: unknown,
+  declaration: GateDeclaration,
+): boolean => {
+  if (!isRecord(environment)) {
+    return false;
+  }
+  const value = environment[declaration.gate];
+  if (
+    typeof value !== "string" &&
+    typeof value !== "number" &&
+    typeof value !== "boolean"
+  ) {
+    return false;
+  }
+  return String(value) === declaration.gateValue;
+};
+
 const workflowSetsGate = (
   workflow: Workflow,
   declaration: GateDeclaration,
 ): boolean => {
-  const environmentSetsGate = (environment: unknown): boolean => {
-    if (!isRecord(environment)) {
-      return false;
-    }
-    const value = environment[declaration.gate];
-    if (
-      typeof value !== "string" &&
-      typeof value !== "number" &&
-      typeof value !== "boolean"
-    ) {
-      return false;
-    }
-    return String(value) === declaration.gateValue;
-  };
-
   const parsed = parseWorkflow(workflow);
-  if (environmentSetsGate(parsed["env"])) {
+  if (environmentSetsGate(parsed["env"], declaration)) {
     return true;
   }
   const jobs = parsed["jobs"];
@@ -437,7 +443,7 @@ const workflowSetsGate = (
     if (!isRecord(job)) {
       continue;
     }
-    if (environmentSetsGate(job["env"])) {
+    if (environmentSetsGate(job["env"], declaration)) {
       return true;
     }
     const steps = job["steps"];
@@ -445,9 +451,66 @@ const workflowSetsGate = (
       continue;
     }
     for (const step of steps) {
-      if (isRecord(step) && environmentSetsGate(step["env"])) {
+      if (isRecord(step) && environmentSetsGate(step["env"], declaration)) {
         return true;
       }
+    }
+  }
+  return false;
+};
+
+const grepDiscoveryCovers = (
+  step: WorkflowStep,
+  declaration: GateDeclaration,
+): boolean => {
+  if (step.allowsFailure || !environmentSetsGate(step.env, declaration)) {
+    return false;
+  }
+  // Recognize the literal discovery form used by CI: grep output collected
+  // into an array that a `bun test` command in the same step runs. Dynamic
+  // shell expressions cannot establish a static search scope.
+  const commands = step.run
+    .split("\n")
+    .filter((line) => !/^\s*#/u.test(line))
+    .join("\n");
+  const discoveries = commands.matchAll(
+    /^\s*mapfile\s+-t\s+([A-Za-z_][A-Za-z0-9_]*)\s+<\s+<\(grep\s+-rl\s+--include=(?:'([^']+)'|"([^"]+)"|([^\s'"|)]+))\s+([A-Z][A-Z0-9_]*)\s+([A-Za-z0-9_./-]+)(?=\s|\)|$)/gmu,
+  );
+  const testedArrays = new Set(
+    commands
+      .split("\n")
+      .filter((line) => /^\s*bun\s+test\b/u.test(line))
+      .flatMap((line) =>
+        [...line.matchAll(/"\$\{([A-Za-z_][A-Za-z0-9_]*)\[@\]\}"/gu)].flatMap(
+          (reference) => (reference[1] === undefined ? [] : [reference[1]]),
+        ),
+      ),
+  );
+  for (const match of discoveries) {
+    const array = match[1];
+    const include = match[2] ?? match[3] ?? match[4];
+    const gate = match[5];
+    const directory = match[6];
+    if (
+      !array ||
+      !testedArrays.has(array) ||
+      !include ||
+      !directory ||
+      gate !== declaration.gate
+    ) {
+      continue;
+    }
+    const searchRoot = path.posix.join(step.workingDirectory, directory);
+    const relativeFile = path.posix.relative(searchRoot, declaration.file);
+    if (relativeFile.startsWith("../") || path.posix.isAbsolute(relativeFile)) {
+      continue;
+    }
+    // GNU grep applies --include to each basename, including nested files.
+    const included = new Bun.Glob(include).match(
+      path.posix.basename(relativeFile),
+    );
+    if (included) {
+      return true;
     }
   }
   return false;
@@ -492,11 +555,160 @@ const isWired = ({
   );
   return (
     directlyWired ||
+    workflows.some((workflow) =>
+      collectWorkflowSteps(workflow).some((step) =>
+        grepDiscoveryCovers(step, declaration),
+      ),
+    ) ||
     runners.some((runner) => runnerCovers({ declaration, runner, workflows }))
   );
 };
 
 describe("ci-gate coverage convention", () => {
+  test.each([
+    {
+      run: `mapfile -t files < <(grep -rl --include="*.test.ts" EXAMPLE_GATE src)\n          bun test "\${files[@]}"`,
+      condition: "true",
+      covered: true,
+    },
+    {
+      run: `mapfile -t files < <(grep -rl --include=*.test.ts EXAMPLE_GATE src | sort)\n          bun test --preload ./setup.ts "\${files[@]}"`,
+      condition: "true",
+      covered: true,
+    },
+    {
+      run: `mapfile -t files < <(grep -rl --include='*.test.ts' EXAMPLE_GATE src)\n          printf '%s\\n' "\${files[@]}"\n          bun test src/unrelated.test.ts`,
+      condition: "true",
+      covered: false,
+    },
+    {
+      run: `mapfile -t files < <(grep -rl --include='*.test.ts' EXAMPLE_GATE src)\n          bun test "\${other[@]}"`,
+      condition: "true",
+      covered: false,
+    },
+    {
+      run: `grep -rl --include='*.test.ts' EXAMPLE_GATE src\n          bun test`,
+      condition: "true",
+      covered: false,
+    },
+    {
+      run: `# mapfile -t files < <(grep -rl --include='*.test.ts' EXAMPLE_GATE src)\n          bun test "\${files[@]}"`,
+      condition: "true",
+      covered: false,
+    },
+    {
+      run: `mapfile -t files < <(grep -rl --include='*.test.ts' EXAMPLE_GATE src)\n          bun test "\${files[@]}"`,
+      condition: "false",
+      covered: false,
+    },
+  ])(
+    "checks discovery execution: $run (if: $condition)",
+    ({ run, condition, covered }) => {
+      const workflow = {
+        path: ".github/workflows/ci.yml",
+        text: `jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - working-directory: apps/api
+        if: ${condition}
+        env:
+          EXAMPLE_GATE: "true"
+        run: |
+          ${run}`,
+      };
+      expect(
+        isWired({
+          declaration: {
+            file: "apps/api/src/example.test.ts",
+            gate: "EXAMPLE_GATE",
+            gateValue: "true",
+          },
+          runners: [],
+          workflows: [workflow],
+        }),
+      ).toBe(covered);
+    },
+  );
+
+  test("covers grep discovery only within its step environment and search scope", () => {
+    const declaration = {
+      file: "apps/api/src/nested/example.test.ts",
+      gate: "EXAMPLE_GATE",
+      gateValue: "true",
+    };
+    const cases = [
+      {
+        file: declaration.file,
+        env: 'EXAMPLE_GATE: "true"',
+        grepGate: "EXAMPLE_GATE",
+        covered: true,
+      },
+      {
+        file: "apps/web/src/example.test.ts",
+        env: 'EXAMPLE_GATE: "true"',
+        grepGate: "EXAMPLE_GATE",
+        covered: false,
+      },
+      {
+        file: "apps/api/src-other/example.test.ts",
+        env: 'EXAMPLE_GATE: "true"',
+        grepGate: "EXAMPLE_GATE",
+        covered: false,
+      },
+      {
+        file: "apps/api/src/example.test.tsx",
+        env: 'EXAMPLE_GATE: "true"',
+        grepGate: "EXAMPLE_GATE",
+        covered: false,
+      },
+      {
+        file: declaration.file,
+        env: 'OTHER_GATE: "true"',
+        grepGate: "EXAMPLE_GATE",
+        covered: false,
+      },
+      {
+        file: declaration.file,
+        env: 'EXAMPLE_GATE: "false"',
+        grepGate: "EXAMPLE_GATE",
+        covered: false,
+      },
+      {
+        file: declaration.file,
+        env: 'EXAMPLE_GATE: "true"',
+        grepGate: "OTHER_GATE",
+        covered: false,
+      },
+    ];
+    for (const { file, env, grepGate, covered } of cases) {
+      const workflow = {
+        path: ".github/workflows/ci.yml",
+        text: `jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          EXAMPLE_GATE: "true"
+        run: echo gate belongs to another step
+      - working-directory: apps/api
+        if: \${{ !cancelled() }}
+        env:
+          ${env}
+        run: |
+          mapfile -t engine_tests < <(grep -rl --include='*.test.ts' ${grepGate} src | sort)
+          bun test "\${engine_tests[@]}"`,
+      };
+      expect(
+        isWired({
+          declaration: { ...declaration, file },
+          runners: [],
+          workflows: [workflow],
+        }),
+      ).toBe(covered);
+    }
+  });
+
   test("requires standalone runner paths", () => {
     expect(isStandaloneRunnerPath("scripts/run-postgres-tests.ts")).toBe(true);
     expect(

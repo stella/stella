@@ -739,7 +739,7 @@ describe("processDecision — canonical storage mode", () => {
     // holds no document, never by where a payload would have lived.
     expect(
       partialObservationFromMetadata(inserted?.["metadata"]),
-    ).toMatchObject({ isListingOnly: true });
+    ).toMatchObject({ detail: "listing-only" });
   });
 
   test("leaves a settled row's payload alone when only the publisher page moved", async () => {
