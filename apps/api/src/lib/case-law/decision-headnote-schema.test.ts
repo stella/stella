@@ -45,7 +45,8 @@ describe("decision headnote preview response schema", () => {
     { type: "present", text: "", truncated: false },
     {
       type: "present",
-      text: "x".repeat(LIMITS.caseLawHeadnoteMaxChars + 1),
+      // The bound is in UTF-8 bytes: four per stored character.
+      text: "x".repeat(LIMITS.caseLawHeadnoteMaxChars * 4 + 1),
       truncated: true,
     },
     {

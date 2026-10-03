@@ -2,7 +2,6 @@ import { panic } from "better-result";
 
 import { parsePlainDate, Temporal } from "@stll/time";
 
-import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import {
   CZ_REGIONAL_FEED_START,
   CZ_REGIONAL_LANGUAGE,
@@ -78,7 +77,7 @@ export type CzRegionalListingKeys = {
  * lookups stay bounded by the page rather than by its repetitions.
  */
 export const czRegionalListingKeys = (
-  items: readonly CzRegionalApiItem[],
+  items: readonly unknown[],
 ): CzRegionalListingKeys => {
   const documentIds = new Set<string>();
   const caseNumbers = new Set<string>();
@@ -114,15 +113,15 @@ export type CzRegionalHeldIdentities = {
  * page: an item lands in exactly one, and their sizes sum to the page's.
  */
 export type CzRegionalListingDiff = {
-  missing: CzRegionalApiItem[];
-  held: CzRegionalApiItem[];
-  unidentifiable: CzRegionalApiItem[];
+  missing: unknown[];
+  held: unknown[];
+  unidentifiable: unknown[];
   /** A repeat of an identity already classified on this page. */
-  duplicate: CzRegionalApiItem[];
+  duplicate: unknown[];
 };
 
 type DiffListingInput = {
-  items: readonly CzRegionalApiItem[];
+  items: readonly unknown[];
   held: CzRegionalHeldIdentities;
 };
 
@@ -203,7 +202,7 @@ export type CzRegionalRepairReport = {
   to: string;
   days: CzRegionalRepairDay[];
   /** Raw listing items, so a later run can be fed them with --items-file. */
-  missingItems: CzRegionalApiItem[];
+  missingItems: unknown[];
 };
 
 export type CzRegionalRangeCheck =

@@ -72,6 +72,7 @@ import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { filesKeys, fileOptions } from "@/lib/files/queries";
 import {
   ENTITY_VERSION_UPLOAD_RESULT,
@@ -830,19 +831,13 @@ const LoadedPDFPageOrganizer = ({
         return;
       }
       analytics.captureError(error);
-      stellaToast.add({
-        title: tErrors("actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, tErrors("actionFailed"));
     }
   };
 
   const handleAddPDFs = async (files: File[]) => {
     if (1 + addedSources.length + files.length > MAX_PAGE_EDITOR_SOURCES) {
-      stellaToast.add({
-        title: documentLimitMessage,
-        type: "error",
-      });
+      notifyUserError(undefined, documentLimitMessage);
       return;
     }
     const totalBytes =
@@ -850,10 +845,7 @@ const LoadedPDFPageOrganizer = ({
       addedSources.reduce((sum, source) => sum + source.bytes.byteLength, 0) +
       files.reduce((sum, file) => sum + file.size, 0);
     if (totalBytes > MAX_PAGE_EDITOR_SOURCE_BYTES) {
-      stellaToast.add({
-        title: tPageEditor("sourceLimit"),
-        type: "error",
-      });
+      notifyUserError(undefined, tPageEditor("sourceLimit"));
       return;
     }
 
@@ -893,16 +885,10 @@ const LoadedPDFPageOrganizer = ({
               return;
             }
             limitToastShown = true;
-            stellaToast.add({
-              title: documentLimitMessage,
-              type: "error",
-            });
+            notifyUserError(undefined, documentLimitMessage);
           },
           onUnsupported: () => {
-            stellaToast.add({
-              title: tPageEditor("unsupportedPDF"),
-              type: "error",
-            });
+            notifyUserError(undefined, tPageEditor("unsupportedPDF"));
           },
         }),
       () => setIsAddingPDF(false),

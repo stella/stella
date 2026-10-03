@@ -37,6 +37,7 @@ const SAFE_HANDLER_FACTORIES = new Set([
   "createSafeHandler",
   "createSafeRootHandler",
   "createSafePublicHandler",
+  "createSafeBoundedPublicHandler",
 ]);
 
 type CallExpressionNode = AstNode & { callee: unknown };

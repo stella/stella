@@ -34,6 +34,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import listRows from "@/api/handlers/entity-views/rows/list";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { MemberRole } from "@/api/lib/member-roles";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -249,7 +250,7 @@ type ReadWindowOptions = {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   workspaceIds: SafeId<"workspace">[];
-  role: RowsContext["memberRole"]["role"];
+  role: MemberRole;
   body: Partial<RowsBody>;
 };
 
@@ -302,7 +303,7 @@ type ReadInboxOptions = {
   userId?: SafeId<"user">;
   organizationId?: SafeId<"organization">;
   workspaceIds?: SafeId<"workspace">[];
-  role?: RowsContext["memberRole"]["role"];
+  role?: MemberRole;
   body?: Partial<RowsBody>;
 };
 

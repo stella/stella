@@ -29,7 +29,11 @@ import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  authorizedMemberRole,
+  roleForDisplay,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { withTenantActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -770,10 +774,11 @@ describe("approval with a credential narrowed below its owner's role", () => {
   const key = (
     role: "member" | "owner",
     permissions: PermissionInput,
-  ): AuthorizedMemberRole => ({
-    role,
-    credential: { type: "attenuated", permissions },
-  });
+  ): AuthorizedMemberRole =>
+    authorizedMemberRole({
+      role,
+      credential: { type: "attenuated", permissions },
+    });
   const approveWith = async (
     selected: SafeId<"timeEntry">[],
     actor: SafeId<"user">,
@@ -781,7 +786,10 @@ describe("approval with a credential narrowed below its owner's role", () => {
   ) =>
     await approve.handler(
       asTestRaw<ApproveCtx>({
-        ...context(actor, memberRole.role === "owner" ? "owner" : "member"),
+        ...context(
+          actor,
+          roleForDisplay(memberRole) === "owner" ? "owner" : "member",
+        ),
         memberRole,
         body: { ids: selected },
       }),

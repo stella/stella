@@ -25,6 +25,8 @@ describe("search total response schema", () => {
     null,
     { type: "exact" },
     { type: "exact", count: -1 },
+    { type: "exact", count: "12" },
+    { type: "estimate", count: "0".repeat(10_000) },
     { type: "estimate", count: 1.5 },
     { type: "estimate", count: Number.MAX_SAFE_INTEGER + 1 },
     { type: "not_counted", count: 0 },

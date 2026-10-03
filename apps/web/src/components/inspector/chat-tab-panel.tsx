@@ -1,3 +1,4 @@
+import { useCallback, useRef, useState } from "react";
 /**
  * Inspector chat tab — full-fat chat surface backed by the same
  * `/chat` endpoint, persistence layer, and `useChat` runtime as the
@@ -14,8 +15,6 @@
  *   - render `ChatThreadMessages` for the transcript
  *   - render the shared `PromptBar` for the composer
  */
-
-import { useCallback, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 
 import {
@@ -109,6 +108,7 @@ import {
   type ChatThreadRef,
 } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
@@ -168,10 +168,7 @@ export const ChatTabPanel = ({
         return;
       }
       getAnalytics().captureError(error);
-      stellaToast.add({
-        title: t("common.somethingWentWrong"),
-        type: "error",
-      });
+      notifyUserError(error, t("common.somethingWentWrong"));
     },
     [t],
   );

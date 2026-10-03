@@ -25,8 +25,12 @@ import listSignals from "@/api/handlers/signals/list";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { MemberRole } from "@/api/lib/member-roles";
 import { encodePaginationCursor } from "@/api/lib/pagination";
-import { SESSION_CREDENTIAL } from "@/api/lib/permission-authorization";
+import {
+  authorizedMemberRole,
+  SESSION_CREDENTIAL,
+} from "@/api/lib/permission-authorization";
 import type { CredentialAuthority } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -131,7 +135,7 @@ const runListAs = async ({
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   workspaceIds: SafeId<"workspace">[];
-  role: ListContext["memberRole"]["role"];
+  role: MemberRole;
   credential?: CredentialAuthority;
   query?: ListContext["query"];
 }) => {
@@ -146,7 +150,7 @@ const runListAs = async ({
         workspaceIds.map((id) => ({ id, status: "active" })),
       getWorkspaceAccess: async () => null,
       createAuditRecorder: () => recordAuditEvent,
-      memberRole: { role, credential },
+      memberRole: authorizedMemberRole({ role, credential }),
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       managedAIResidency: "eu" as const,
@@ -260,7 +264,7 @@ describe("signal visibility", () => {
     const getAs = async (credential: CredentialAuthority) =>
       await getSignal.handler(
         asTestRaw<Parameters<typeof getSignal.handler>[0]>({
-          memberRole: { role: "owner", credential },
+          memberRole: authorizedMemberRole({ role: "owner", credential }),
           params: { signalId: unscopedSignalA },
           safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
           scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),

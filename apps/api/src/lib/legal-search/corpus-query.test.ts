@@ -5,6 +5,7 @@ import fc from "fast-check";
 import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
 import { propertyConfig } from "@stll/property-testing";
 
+import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
   CORPUS_QUERY_LEAF_BUDGET,
   caseLawCorpusQuery,
@@ -16,7 +17,10 @@ import {
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
 import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
-import { MORPHOLOGY_LANGUAGES } from "@/api/lib/legal-search/morphology/stem";
+import {
+  LEGACY_STEMMERS,
+  MORPHOLOGY_LANGUAGES,
+} from "@/api/lib/legal-search/morphology/stem";
 
 test("free text cannot escape into the query DSL", () => {
   expect(corpusFreeTextClause('smlouva) OR (court:"X" AND text:*')).toBe(
@@ -648,11 +652,20 @@ const SK_STEMMING = {
 } as const satisfies CorpusStemming;
 
 /** Compare candidate free text with the unchanged baseline allocator. */
-const svkFreeText = (
-  text: string,
-  options: Omit<CorpusFreeTextOptions, "slovakLegacyStemFields"> = {},
-) => {
+const svkFreeText = (text: string, options: CorpusFreeTextOptions = {}) => {
+  const stemming = options.stemming ?? null;
+  const legacyStemmer =
+    stemming === null ? null : LEGACY_STEMMERS[stemming.language];
   const query = caseLawCorpusQuery({
+    legacyStemming:
+      stemming !== null && legacyStemmer !== null
+        ? {
+            fields: stemming.fields.filter((field) =>
+              STEM_FIELDS.some((declared) => declared === field),
+            ),
+            stemTerm: legacyStemmer,
+          }
+        : null,
     jurisdiction: "SVK",
     text,
     ...options,
@@ -846,19 +859,29 @@ test("Slovak compatibility preserves all baseline leaves and the actual leaf cei
   );
 });
 
-test("Slovak query scope enables compatibility even without an index jurisdiction clause", () => {
+test("declared Slovak compatibility works even without an index jurisdiction clause", () => {
   const text = "premlčanie";
   const sharedIndexQuery = caseLawCorpusQuery({
     text,
     jurisdiction: "SVK",
     filters: { jurisdiction: "SVK" },
     stemming: SK_STEMMING,
+    legacyStemming: caseLawCorpusQueryFields({
+      generation: "case_law_v7",
+      jurisdiction: "SVK",
+      language: undefined,
+    }).legacyStemming,
   });
   const singleJurisdictionQuery = caseLawCorpusQuery({
     text,
     jurisdiction: "SVK",
     filters: {},
     stemming: SK_STEMMING,
+    legacyStemming: caseLawCorpusQueryFields({
+      generation: "case_law_v7",
+      jurisdiction: "SVK",
+      language: undefined,
+    }).legacyStemming,
   });
   if (singleJurisdictionQuery === null) {
     panic("Searchable Slovak test terms must produce a query");

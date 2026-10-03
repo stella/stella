@@ -137,6 +137,7 @@ import { startManagedProviderChecks } from "@/api/lib/chat/managed-provider-chec
 import {
   resolveClientAddress,
   resolveSignupRateLimitClientIp,
+  sealEdgeHeaders,
   stampClientAddressHeader,
 } from "@/api/lib/client-ip";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
@@ -165,8 +166,14 @@ import {
   withFinalResponseCompletion,
 } from "@/api/lib/observability/request-lifecycle";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
-import { closeActionAdmissionRedis } from "@/api/lib/rate-limit/action-admission";
-import { closeMcpReadFenceRedis } from "@/api/lib/rate-limit/mcp-read-fence";
+import {
+  closeActionAdmissionRedis,
+  startActionAdmissionRedis,
+} from "@/api/lib/rate-limit/action-admission";
+import {
+  closeMcpReadFenceRedis,
+  startMcpReadFenceRedis,
+} from "@/api/lib/rate-limit/mcp-read-fence";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
@@ -326,6 +333,7 @@ const api = new Elysia()
         context.server ?? null,
       ),
     });
+    sealEdgeHeaders(request, clientAddress);
 
     // Stamp the receipt on every response from the central header point, next
     // to the security headers, so REST callers always get an `x-request-id`
@@ -676,6 +684,12 @@ const startServer = async (): Promise<void> => {
       rejectUnauthorized: envBase.REDIS_TLS_REJECT_UNAUTHORIZED,
     }).unwrap("Redis connection configuration must be valid.");
     logger.info("redis.connection.mode", { mode });
+    if (env.FEATURE_ACTION_ADMISSION) {
+      detached(startActionAdmissionRedis(), "admission-store.start");
+    }
+    if (env.FEATURE_MCP_READ_FENCE) {
+      detached(startMcpReadFenceRedis(), "read-fence-store.start");
+    }
   }
 
   startMemoryPressureHandler();
