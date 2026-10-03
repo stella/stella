@@ -205,10 +205,11 @@ const makeSafeDb = () => {
       },
       where: () => {
         const accepted = apply();
-        return Object.assign(Promise.resolve(), {
+        // Writes that skip `.returning()` await this object and ignore it.
+        return {
           returning: async () =>
             accepted ? [{ id: "conn_1", expiresAt: lease }] : [],
-        });
+        };
       },
     };
     return chain;
