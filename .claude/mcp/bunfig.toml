@@ -3,3 +3,5 @@
 # lockfile does not inherit the root's 5-day release-age quarantine. Keep the
 # same value; scripts/check-standalone-lockfiles.ts fails when they differ.
 minimumReleaseAge = 432_000
+# Fail on a missing import instead of installing it at run time.
+auto = "disable"

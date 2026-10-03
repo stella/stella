@@ -33,6 +33,7 @@ import {
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
+import { EU_ECJ_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj.metadata-urls";
 import {
   assembleSkCourtsDecision,
   skCourtsAdapter,
@@ -63,6 +64,9 @@ import {
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -82,6 +86,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 let fake: FakeS3;
 
 beforeEach(() => {
+  decisionUpdates.length = 0;
   fake = startFakeS3();
 });
 
@@ -89,8 +94,19 @@ afterEach(() => {
   fake.stop();
 });
 
+const decisionUpdates: string[] = [];
 const connect = (client: Awaited<ReturnType<typeof createTestPglite>>) =>
-  drizzle({ client, relations: { ...relations, ...authRelationsPart } });
+  drizzle({
+    client,
+    relations: { ...relations, ...authRelationsPart },
+    logger: {
+      logQuery: (query) => {
+        if (/^update "case_law_decisions"/iu.test(query)) {
+          decisionUpdates.push(query);
+        }
+      },
+    },
+  });
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof connect>;
@@ -124,6 +140,8 @@ const stubAdapter = (
   reparse: NonNullable<SourceAdapter["reparseStoredRaw"]>,
 ): SourceAdapter => ({
   key: ADAPTER_KEYS.EU_ECJ,
+  documentStage: "inline",
+  observeDocumentStage: async ({ fetchPage }) => await fetchPage(),
   sourceFields: { status: "declared", fields: {}, listSourceFields: () => [] },
   sourceSurfaces: { surfaces: {} },
   name: "replay apply stub",
@@ -137,6 +155,7 @@ const stubAdapter = (
     throw new Error("a replay must never fetch from the publisher");
   },
   reconciliation: {
+    revisionOf: (payload) => payload,
     firstSlice: "1970-01-01",
     sliceOf: () => "1970-01-01",
     nextSlice: () => null,
@@ -155,7 +174,7 @@ const stubAdapter = (
 /** Stands in for a parser that draws different text out of the payload. */
 const textChangingAdapter = stubAdapter((stored) => ({
   type: "parsed",
-  result: {
+  result: plainTextIngestionResult({
     caseNumber: stored.caseNumber,
     court: stored.court,
     country: "EU",
@@ -165,7 +184,7 @@ const textChangingAdapter = stubAdapter((stored) => ({
     rawHash: "hash-from-the-new-parser",
     fulltext: NEW_PARSER_TEXT,
     documentAst: EMPTY_AST,
-  },
+  }),
 }));
 
 test("a writing replay goes through the pipeline, and replaying again converges", async () => {
@@ -251,9 +270,7 @@ test("a writing replay goes through the pipeline, and replaying again converges"
     observationOrder: 1n,
   });
 
-  // Same payload, same parser: the second run re-derives the stored hash, so
-  // the pipeline advances the observation watermark and rewrites nothing.
-  // That fixed point is what makes a re-run safe.
+  // Same payload, same parser: the second run preserves the entire stored row.
   const second = await replay();
   if (second.type !== "ran") {
     throw new TypeError("Expected the capable adapter to run");
@@ -274,7 +291,7 @@ test("a writing replay goes through the pipeline, and replaying again converges"
     fulltext: NEW_PARSER_TEXT,
     sourceHash: "hash-from-the-new-parser",
     sourceRawS3Key: contentAddressedKey,
-    observationOrder: 2n,
+    observationOrder: 1n,
   });
   // A converged replay re-reads the payload but has nothing to store: the
   // key the row already records names an object with these exact bytes.
@@ -382,7 +399,7 @@ test("a restructure the flattened text does not show is still applied", async ()
   // version. Only the structure moved.
   const restructuringAdapter = stubAdapter((stored) => ({
     type: "parsed",
-    result: {
+    result: plainTextIngestionResult({
       caseNumber: stored.caseNumber,
       court: stored.court,
       country: "EU",
@@ -394,7 +411,7 @@ test("a restructure the flattened text does not show is still applied", async ()
       sections: STORED_SECTIONS,
       documentAst: STRUCTURED_AST,
       parserVersion: 3,
-    },
+    }),
   }));
 
   const run = await replayCaseLawSource({
@@ -740,7 +757,7 @@ const replayConvergenceFixture = async (text: string) => {
     adapterKey: `replay-convergence-${sourceId}`,
     name: "replay convergence fixture",
   });
-  const result = {
+  const result = plainTextIngestionResult({
     caseNumber: "C-10/26",
     court: "Court of Justice",
     country: "EU",
@@ -752,7 +769,7 @@ const replayConvergenceFixture = async (text: string) => {
     sections: [{ index: 0, type: "unknown" as const, title: null, text }],
     documentAst: astWithBlocks([paragraph("b1", text)]),
     parserVersion: 4,
-  };
+  });
   const sanitized = sanitizeResult(result);
   const payload = caseLawCanonicalPayload(sanitized);
   await db.insert(caseLawDecisions).values({
@@ -793,11 +810,11 @@ test("replay persists a newly derived reasons role and converges without changin
     .update(caseLawDecisions)
     .set({ decisionType: statedType })
     .where(eq(caseLawDecisions.id, fixture.id));
-  const result = {
+  const result = plainTextIngestionResult({
     ...fixture.result,
     decisionType: statedType,
     documentRole: DECISION_DOCUMENT_ROLE.REASONS,
-  };
+  });
   const sourceLease = await acquireCaseLawSourceIngestionLease({
     scopedDb,
     sourceId: fixture.sourceId,
@@ -889,7 +906,7 @@ test.each(["r o z h o d o l :", "Body text.\u0000"])(
 );
 
 test.each(["row-columns", "content-hash"])(
-  "a version-only replay stamps without payload or projection writes: %p",
+  "an identical replay never updates the decision at a newer parser version: %p",
   async (storage) => {
     const fixture = await replayConvergenceFixture("Unchanged body text.");
     await db
@@ -918,7 +935,7 @@ test.each(["row-columns", "content-hash"])(
     if (dry.type !== "ran") {
       throw new TypeError("Expected replay to run");
     }
-    expect(dry.report.outcomes[REPLAY_ROW_OUTCOME.WOULD_APPLY]).toBe(1);
+    expect(dry.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
     expect(await readRow()).toEqual(before);
     const lease = await acquireCaseLawSourceIngestionLease({
       scopedDb,
@@ -927,12 +944,14 @@ test.each(["row-columns", "content-hash"])(
     if (lease === null) {
       throw new TypeError("Expected the source ingestion lease to be free");
     }
+    const updatesBefore = decisionUpdates.length;
     const run = await fixture.replay(lease);
     if (run.type !== "ran") {
       throw new TypeError("Expected replay to run");
     }
-    expect(run.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
-    expect(await readRow()).toEqual({ ...before, parserVersion: 4 });
+    expect(run.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+    expect(decisionUpdates.slice(updatesBefore)).toEqual([]);
+    expect(await readRow()).toEqual(before);
     const [timestamp] = await db
       .select({ value: sql<string>`${caseLawDecisions.updatedAt}::text` })
       .from(caseLawDecisions)
@@ -979,7 +998,7 @@ test.each(["row-columns", "content-hash"])(
   },
 );
 
-test("a stamp cannot overwrite a version written after the row was selected", async () => {
+test("an identical replay preserves a newer version written after row selection", async () => {
   const fixture = await replayConvergenceFixture("Unchanged body text.");
   await db
     .update(caseLawDecisions)
@@ -1014,7 +1033,7 @@ test("a stamp cannot overwrite a version written after the row was selected", as
   if (run.type !== "ran") {
     throw new TypeError("Expected replay to run");
   }
-  expect(run.report.outcomes[REPLAY_ROW_OUTCOME.RETRYABLE]).toBe(1);
+  expect(run.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
   const [row] = await db
     .select({ version: caseLawDecisions.parserVersion })
     .from(caseLawDecisions)
@@ -1042,7 +1061,10 @@ test("a version bump that changes only a described column goes through the pipel
   const run = await replayCaseLawSource({
     adapter: stubAdapter(() => ({
       type: "parsed",
-      result: { ...fixture.result, decisionType: "judgment" },
+      result: plainTextIngestionResult({
+        ...fixture.result,
+        decisionType: "judgment",
+      }),
     })),
     scopedDb,
     sourceId: fixture.sourceId,
@@ -1178,4 +1200,81 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
   expect(second.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
   expect(second.report.rejections["identity-mismatch"]).toBe(1);
   await lease.release();
+});
+
+test("registered replay and its pipeline write preserve URLs and cloned diagnostic snapshots", async () => {
+  const fixture = await replayConvergenceFixture("Replay URL schema fixture.");
+  await db
+    .update(caseLawSources)
+    .set({ adapterKey: ADAPTER_KEYS.EU_ECJ })
+    .where(eq(caseLawSources.id, fixture.sourceId));
+  const href = "https://example.test/?stated=&amp;amp;&other=&#x26;";
+  const approved = approveMetadataUrls(
+    {
+      celex: "62026CJ0010",
+      manifestationUri: toMetadataUrl(href, "transport-json"),
+      languageUri: toMetadataUrl("ftp://example.test/private", "decoded"),
+      manifestations: [{ uri: toMetadataUrl(href, "decoded") }],
+    },
+    EU_ECJ_METADATA_URL_SCHEMA,
+  );
+  const result = plainTextIngestionResult(
+    {
+      ...fixture.result,
+      rawHash: "replay-url-schema-source-hash",
+      metadata: structuredClone(approved),
+    },
+    EU_ECJ_METADATA_URL_SCHEMA,
+  );
+  const sourceLease = await acquireCaseLawSourceIngestionLease({
+    scopedDb,
+    sourceId: fixture.sourceId,
+  });
+  if (sourceLease === null) {
+    panic("Expected free replay source lease");
+  }
+  const replay = async () =>
+    await replayCaseLawSource({
+      adapter: stubAdapter(() => ({ type: "parsed", result })),
+      scopedDb,
+      sourceId: fixture.sourceId,
+      sourceLease,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+      readStoredRaw: async () => new TextEncoder().encode(STORED_PAYLOAD),
+      bound: { type: "at-most", limit: 10 },
+      pageSize: 10,
+    });
+  try {
+    const first = await replay();
+    if (first.type !== "ran") {
+      panic("Expected registered replay to run");
+    }
+    expect(first.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
+    const row = (
+      await db
+        .select({ metadata: caseLawDecisions.metadata })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, fixture.id))
+        .limit(1)
+    ).at(0);
+    expect(row?.metadata).toMatchObject({
+      manifestationUri: href,
+      manifestations: [{ uri: href }],
+      metadataUrlDiagnostics: {
+        entries: [{ address: "languageUri", reason: "unsafe-protocol" }],
+        overflowCount: 0,
+      },
+    });
+    expect(row?.metadata).not.toHaveProperty("languageUri");
+    const second = await replay();
+    if (second.type !== "ran") {
+      panic("Expected repeated replay to run");
+    }
+    expect(second.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+  } finally {
+    await sourceLease.release();
+    await db
+      .delete(caseLawSources)
+      .where(eq(caseLawSources.id, fixture.sourceId));
+  }
 });

@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 /**
  * An ingestion cycle's time budget: when it runs out, and the signal that
  * fires then. The signal is derived from the same budget, so a loop cannot
@@ -30,9 +32,13 @@ export const startCycleDeadline = ({
   };
 };
 
-/** Milliseconds left in the budget; negative once it is exhausted. */
+let cycleReservations: WeakMap<CycleDeadline, number> | undefined;
+
+/** Milliseconds left after committed reservations; negative once exhausted. */
 export const remainingCycleMs = (deadline: CycleDeadline): number =>
-  deadline.expiresAt - performance.now();
+  deadline.expiresAt -
+  performance.now() -
+  (cycleReservations?.get(deadline) ?? 0);
 
 /**
  * Whether a page costing up to `pageBudgetMs` can still finish inside the
@@ -46,3 +52,22 @@ export const canStartCyclePage = (
   pageBudgetMs: number,
 ): boolean =>
   !deadline.signal.aborted && remainingCycleMs(deadline) >= pageBudgetMs;
+
+/** Charge bounded housekeeping before work; reservations last for the cycle. */
+export const reserveCycleBudget = (
+  deadline: CycleDeadline,
+  costMs: number,
+): boolean => {
+  if (!Number.isFinite(costMs) || costMs <= 0) {
+    panic("Cycle reservation must be finite and positive");
+  }
+  if (!canStartCyclePage(deadline, costMs)) {
+    return false;
+  }
+  cycleReservations ??= new WeakMap();
+  cycleReservations.set(
+    deadline,
+    (cycleReservations.get(deadline) ?? 0) + costMs,
+  );
+  return true;
+};

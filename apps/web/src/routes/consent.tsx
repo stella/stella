@@ -38,8 +38,8 @@ import {
   toOAuthScopeDisplayEntries,
   translateOAuthScopeEntry,
 } from "@/lib/oauth-scopes";
-import { managementRoles } from "@/lib/organization/consts";
 import { organizationListOptions } from "@/lib/organization/queries";
+import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { pageTitle } from "@/lib/page-title";
 import { loadAuthContext } from "@/routes/-auth-context";
 
@@ -94,7 +94,7 @@ function ConsentPage() {
     staleTime: Number.POSITIVE_INFINITY,
   });
   const canManageOrganization =
-    currentUserRole !== undefined && managementRoles.includes(currentUserRole);
+    hasOrganizationManagementAccess(currentUserRole);
 
   const clientQuery = useQuery({
     enabled: clientId !== null,

@@ -85,7 +85,9 @@ export {
   CHAT_TOOL_SCOPE,
   CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
+  REQUEST_ID_HEADER,
 } from "./chat";
+export { CLAUSE_WARNINGS_HEADER } from "./template-fill-headers";
 export {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   CHAT_TOOL_POLICY_KIND,
@@ -278,9 +280,11 @@ export type {
   GuideProgressTourId,
 } from "./guide-progress";
 export {
+  CLAUSE_VERSION_LIMIT_ERROR_CODE,
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
+  CLAUSE_DIRECTIVES_INVALID_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE,
@@ -445,14 +449,18 @@ export type {
   ContactImportVocabularyId,
 } from "./contact-import-labeled";
 export {
+  CONVERTIBLE_VIEW_LAYOUTS,
   DIRECTLY_CREATABLE_VIEW_LAYOUTS,
   isRequiredViewLayout,
+  isSingleViewLayout,
   REQUIRED_VIEW_LAYOUTS,
   VIEW_LAYOUT_TYPES,
 } from "./view-layout";
 export type {
+  ConvertibleViewLayoutType,
   DirectlyCreatableViewLayoutType,
   RequiredViewLayoutType,
+  SingleViewLayoutType,
   ViewLayoutType,
 } from "./view-layout";
 export type {

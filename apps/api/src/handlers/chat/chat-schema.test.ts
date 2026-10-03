@@ -46,6 +46,7 @@ import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { isRecord } from "@/api/lib/type-guards";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { XLSX_MIME_TYPE } from "@/api/mime-types";
 
@@ -1462,9 +1463,11 @@ describe("validateMessage", () => {
     const continueSetNote = async ({
       canonicalInput,
       echoedInput,
+      tools = noteTools,
     }: {
       canonicalInput: Record<string, unknown>;
       echoedInput: Record<string, unknown>;
+      tools?: ChatToolMap;
     }) => {
       const id = chatMessageId("msg_set_note_continuation");
       const callId = "call_set_note";
@@ -1517,10 +1520,46 @@ describe("validateMessage", () => {
         ],
         safeDb: noDbReads,
         threadId: chatThreadId("thread_set_note_continuation"),
-        tools: noteTools,
+        tools,
         userId: userId("user_set_note_continuation"),
       });
     };
+
+    const parsedRecord = (text: string): Record<string, unknown> => {
+      const parsed: unknown = JSON.parse(text);
+      if (!isRecord(parsed)) {
+        throw new Error("The fixture text must spell a JSON object");
+      }
+      return parsed;
+    };
+
+    // `JSON.parse` keeps `__proto__` as an own key; folding must too, with
+    // the tool's schema and without one (a tool this request does not
+    // register).
+    for (const [label, tools] of [
+      ["with its schema", noteTools],
+      ["without a registered schema", {}],
+    ] as const) {
+      test(`an own __proto__ key is a changed call ${label}`, async () => {
+        for (const [canonicalText, echoedText] of [
+          ['{"a":1}', '{"a":1,"__proto__":{"x":1}}'],
+          ['{"a":1,"__proto__":{"x":1}}', '{"a":1}'],
+        ] as const) {
+          const result = await continueSetNote({
+            canonicalInput: parsedRecord(canonicalText),
+            echoedInput: parsedRecord(echoedText),
+            tools,
+          });
+
+          if (Result.isOk(result)) {
+            throw new Error("expected the changed call to be refused");
+          }
+          expect(result.error.message).toBe(
+            "Chat continuation does not match its awaited interaction",
+          );
+        }
+      });
+    }
 
     test("a null a nullable field holds is the same call when echoed", async () => {
       const input = { note: null, query: "scope" };

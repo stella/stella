@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { SEARCH_PAGINATION_COMPLETE } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -19,7 +20,10 @@ import {
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
-import { currentCaseLawCorpusProjection } from "@/api/lib/legal-search/case-law-corpus-projection";
+import {
+  caseLawCorpusDocumentCanRecur,
+  currentCaseLawCorpusProjection,
+} from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import { courtPartitionsForCourtFilter } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
@@ -31,6 +35,11 @@ import {
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
 import {
+  corpusQueryRankingMode,
+  corpusRankingCursorTarget,
+} from "@/api/lib/legal-search/corpus-ranking-policy";
+import {
+  corpusSearchGroupToken,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
   isStaleCorpusSearchCursor,
@@ -43,6 +52,7 @@ import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
 import {
   blendStableCitationAuthority,
+  type ScoredCandidate,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import {
@@ -66,7 +76,7 @@ import { stripSearchHighlightMarkup } from "@/api/lib/search/highlight";
  * corpus index legal-search provider: two-stage retrieve-then-rerank.
  * corpus index returns BM25 lexical candidates (filtered by tag/fast fields
  * for split pruning); the API re-joins them to the precomputed
- * citation_authority in Postgres and blends via RRF — corpus index has no
+ * citation_authority in Postgres and adds its saturated signal; corpus index has no
  * in-engine function scoring, so the legal-domain ranking stays here.
  *
  * Case-law generations built at passage granularity return one hit per
@@ -137,6 +147,7 @@ export const rehydrateCorpusIndexProviderCandidatesQuery = (
       citationCount: caseLawDecisions.citationCount,
       citationAuthority: caseLawDecisions.citationAuthority,
       createdAt: caseLawDecisions.createdAt,
+      canRecur: caseLawCorpusDocumentCanRecur(generation),
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
@@ -157,6 +168,61 @@ export const rehydrateCorpusIndexProviderCandidates =
       options: RehydrateCorpusIndexCandidatesOptions,
     ) => await rehydrateCorpusIndexProviderCandidatesQuery(tx, options),
   );
+
+type RankCorpusIndexProviderCandidatesOptions = {
+  generation: string;
+  candidates: readonly ScoredCandidate[];
+  /** Groups earlier pages emitted (`SearchCursor.excludedGroups`). */
+  excludedGroups: readonly string[] | undefined;
+};
+
+const rankCorpusIndexProviderCandidates = async ({
+  generation,
+  candidates,
+  excludedGroups,
+}: RankCorpusIndexProviderCandidatesOptions) => {
+  const ids = candidates.map((candidate) =>
+    toSafeId<"caseLawDecision">(candidate.id),
+  );
+  const rows =
+    ids.length === 0
+      ? []
+      : await caseLawPublicReadDb(
+          async (tx) =>
+            await rehydrateCorpusIndexProviderCandidates(tx, {
+              generation,
+              ids,
+            }),
+        );
+
+  // Keyed by plain string id (candidate ids from corpus index are strings).
+  const displayById = new Map(rows.map((row) => [String(row.id), row]));
+  const authorityById = new Map(
+    rows.map((row) => [String(row.id), row.citationAuthority]),
+  );
+
+  // Drop candidates missing from Postgres (index/DB drift) so we never
+  // surface a hit we cannot render. Only documents with later physical
+  // passages need exclusions when the position window advances.
+  const excluded = new Set(excludedGroups);
+  const rendered = candidates.filter((candidate) =>
+    displayById.has(candidate.id),
+  );
+  return {
+    context: { displayById },
+    groups: rendered.flatMap((candidate) =>
+      displayById.get(candidate.id)?.canRecur
+        ? [corpusSearchGroupToken(candidate.id)]
+        : [],
+    ),
+    ranked: blendStableCitationAuthority({
+      candidates: rendered.filter(
+        (candidate) => !excluded.has(corpusSearchGroupToken(candidate.id)),
+      ),
+      authorityById,
+    }),
+  };
+};
 
 const searchResult = async (
   query: LegalSearchQuery,
@@ -195,7 +261,16 @@ const searchResult = async (
       }),
     );
   }
-  const { serving, route, contract, cursorTarget } = target.value;
+  const { serving, route, contract } = target.value;
+  const rankingMode = corpusQueryRankingMode({
+    configuredMode: envBase.CORPUS_INDEX_RANKING_MODE,
+    sort: "relevance",
+    textTokenCount: tokenizeCorpusFreeText(query.query).length,
+  });
+  const cursorTarget = corpusRankingCursorTarget(
+    target.value.cursorTarget,
+    rankingMode,
+  );
   const generation = serving.generation;
 
   // Scoped query → that jurisdiction's index, plus a jurisdiction clause when
@@ -237,7 +312,13 @@ const searchResult = async (
     text: query.query,
   });
   if (resolved.type === "empty") {
-    return Result.ok({ hits: [], facets: null, nextCursor: null, limit });
+    return Result.ok({
+      hits: [],
+      facets: null,
+      nextCursor: null,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      limit,
+    });
   }
   // This boundary has no HTTP status to answer with, so a cursor from another
   // dictionary or read target fails the read rather than paging a different
@@ -278,6 +359,12 @@ const searchResult = async (
     // owns the reader-chosen orders.
     order: RELEVANCE_ORDER,
     parsedCursor,
+    rankingMode,
+    fallbackScanTransport: { type: "native" },
+    scanTransport:
+      rankingMode === "bm25-ratio"
+        ? { type: "scored", fields: ["document_id"] }
+        : { type: "native" },
     snippetFields: ["text"],
     extractId: (hit) => {
       const id = hit["document_id"];
@@ -302,39 +389,12 @@ const searchResult = async (
     // no unseen candidate could out-blend the page cursor. Saturated
     // authority is bounded by 1, so the bound reads nothing from the corpus.
     unseenScoreUpperBound: stableBlendUpperBound,
-    rankCandidates: async (candidates) => {
-      const ids = candidates.map((candidate) =>
-        toSafeId<"caseLawDecision">(candidate.id),
-      );
-      const rows =
-        ids.length === 0
-          ? []
-          : await caseLawPublicReadDb(
-              async (tx) =>
-                await rehydrateCorpusIndexProviderCandidates(tx, {
-                  generation,
-                  ids,
-                }),
-            );
-
-      // Keyed by plain string id (candidate ids from corpus index are strings).
-      const displayById = new Map(rows.map((row) => [String(row.id), row]));
-      const authorityById = new Map(
-        rows.map((row) => [String(row.id), row.citationAuthority]),
-      );
-
-      // Drop candidates missing from Postgres (index/DB drift) so we never
-      // surface a hit we cannot render.
-      return {
-        context: { displayById },
-        ranked: blendStableCitationAuthority({
-          candidates: candidates.filter((candidate) =>
-            displayById.has(candidate.id),
-          ),
-          authorityById,
-        }),
-      };
-    },
+    rankCandidates: async (candidates) =>
+      await rankCorpusIndexProviderCandidates({
+        generation,
+        candidates,
+        excludedGroups: parsedCursor?.excludedGroups,
+      }),
   });
 
   const {
@@ -389,7 +449,13 @@ const searchResult = async (
   // Exact facet counts over broad queries are expensive in corpus index; the
   // shipped UI already tolerates null facets (returned on paginated
   // pages). corpus index aggregations are a follow-up.
-  return Result.ok({ hits, facets: null, nextCursor, limit });
+  return Result.ok({
+    hits,
+    facets: null,
+    nextCursor,
+    paginationOutcome: searchPage.paginationOutcome,
+    limit,
+  });
 };
 
 const search = async (

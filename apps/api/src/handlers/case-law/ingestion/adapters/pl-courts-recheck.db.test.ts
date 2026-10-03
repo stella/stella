@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * A SAOS judgment whose detail read failed, carried through the store and the
  * reconciliation engine: the crawl keeps the dump's text in public and states
@@ -5,8 +6,6 @@
  * that row although it is held, and a detail read that succeeds restates the
  * row as read and enriched.
  */
-
-import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -56,6 +55,7 @@ import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { planLines } from "@/api/tests/helpers/explain-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -244,7 +244,7 @@ const seedTextlessListing = async (
     throw new Error("expected the listing to build the judgment");
   }
   await processDecision({
-    input: {
+    input: plainTextIngestionResult({
       ...crawled,
       fulltext: undefined,
       sections: undefined,
@@ -255,7 +255,7 @@ const seedTextlessListing = async (
         ...crawled.metadata,
         detailReadState: "read",
       },
-    },
+    }),
     sourceId,
     scopedDb,
     observedAt: updatedAt,

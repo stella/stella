@@ -21,15 +21,18 @@ export const REPLAY_BATCH_STATUSES = [
   "failed",
   "blocked",
 ] as const;
+export const REPLAY_TERMINAL_OUTCOMES = [
+  "changed",
+  "unchanged",
+  "rejected",
+] as const;
+
 export const REPLAY_BLOCKED_REASONS = [
   "missing-payload",
-  "no-write-settled",
-  "redacted",
-  "superseded",
-  "retry-exhausted",
   ...Object.values(STORED_RAW_REPARSE_REJECTION),
 ] as const;
 
+// Unchanged rows consume read+parse work and count toward the daily row budget.
 // Reservations count toward the daily budget before applying a row. A crash
 // leaves the same stable identity available for recovery without spending twice.
 export const caseLawReplayBatches = p.pgTable.withRLS(
@@ -128,7 +131,8 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
   ],
 );
 
-// A blocked target version is never selected again until the parser advances.
+// Any terminal receipt excludes its target version until the parser advances.
+// This existing table also owns changed and unchanged terminal receipts.
 // Decision IDs intentionally have no FK: receipts survive decision cleanup.
 export const caseLawReplayBlocked = p.pgTable.withRLS(
   "case_law_replay_blocked",
@@ -139,7 +143,8 @@ export const caseLawReplayBlocked = p.pgTable.withRLS(
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
     parserVersionFrom: p.integer("parser_version_from"),
     parserVersionTo: p.integer("parser_version_to").notNull(),
-    reason: p.text({ enum: REPLAY_BLOCKED_REASONS }).notNull(),
+    outcome: p.text({ enum: REPLAY_TERMINAL_OUTCOMES }).notNull(),
+    reason: p.text({ enum: REPLAY_BLOCKED_REASONS }),
     detail: p.text(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
@@ -148,6 +153,13 @@ export const caseLawReplayBlocked = p.pgTable.withRLS(
     p
       .index("case_law_replay_blocked_source_version_idx")
       .on(t.sourceId, t.parserVersionTo, t.decisionId),
+    p.check(
+      "case_law_replay_blocked_outcome_check",
+      sql`${t.outcome} IN (${sql.join(
+        REPLAY_TERMINAL_OUTCOMES.map((outcome) => sql.raw(`'${outcome}'`)),
+        sql`, `,
+      )}) AND ((${t.outcome} = 'rejected' AND ${t.reason} IS NOT NULL) OR (${t.outcome} <> 'rejected' AND ${t.reason} IS NULL))`,
+    ),
     p.check(
       "case_law_replay_blocked_reason_check",
       sql`${t.reason} IN (${sql.join(

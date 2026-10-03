@@ -1,6 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
+import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -430,18 +431,19 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
     organizationId: ORGANIZATION_ID,
     threadId: THREAD_ID,
   });
-  void page
-    .session()
-    .sendMessage({
-      content: "Stream please",
-      id: toSafeId<"chatMessage">(USER_MESSAGE_ID),
-    })
-    .catch(() => undefined);
+  const sent = Result.tryPromise(
+    async () =>
+      await page.session().sendMessage({
+        content: "Stream please",
+        id: toSafeId<"chatMessage">(USER_MESSAGE_ID),
+      }),
+  );
   for (let wait = 0; wait < 2000 && !server.finished(); wait += 1) {
     await sleep(5);
   }
   // Let the page settle what the end of the run started.
   await sleep(100);
+  expect(await sent).toEqual(Result.ok(undefined));
   const { firstAt, lastAt } = server.burst;
   if (firstAt === undefined || lastAt === undefined) {
     return expect.unreachable(`No ${kind} event reached the page`);

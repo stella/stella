@@ -105,6 +105,7 @@ type RunInLanesOptions<TBatch extends LaneBatch> = {
   runBatch: (batch: TBatch) => Promise<number>;
   /** Once aborted, no further batch starts; running ones finish. */
   signal?: AbortSignal | undefined;
+  failurePolicy?: "serial-fast" | "complete";
 };
 
 /**
@@ -119,12 +120,13 @@ export const runInLanes = async <TBatch extends LaneBatch>({
   lanes,
   runBatch,
   signal,
+  failurePolicy = "serial-fast",
 }: RunInLanesOptions<TBatch>): Promise<LaneOutcome<TBatch>[]> => {
   if (!Number.isInteger(lanes) || lanes < 1) {
     panic("test lane count must be a positive integer");
   }
 
-  const stopAtFirstFailure = lanes === 1;
+  const stopAtFirstFailure = failurePolicy === "serial-fast" && lanes === 1;
   const exitCodes: (number | null)[] = batches.map(() => null);
   const pending = batches.map((batch, index) => ({ batch, index }));
   let failed = false;

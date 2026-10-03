@@ -42,7 +42,7 @@ if (!databaseUrl || !enabled) {
         .where(eq(caseLawSources.id, otherSourceId));
     });
 
-    test("pages only parser lag by ID and blocks only the rejected parser generation", async () => {
+    test("pages only parser lag by ID and excludes all terminal receipts in their parser generation", async () => {
       await db.insert(caseLawSources).values([
         {
           id: sourceId,
@@ -60,7 +60,24 @@ if (!databaseUrl || !enabled) {
         { parserVersion: 1, eligible: true },
         { parserVersion: 2, eligible: false },
         { parserVersion: 3, eligible: false },
-        { parserVersion: 1, eligible: false, blockedVersion: 2 },
+        {
+          parserVersion: 1,
+          eligible: false,
+          blockedVersion: 2,
+          outcome: "rejected" as const,
+        },
+        {
+          parserVersion: 1,
+          eligible: false,
+          blockedVersion: 2,
+          outcome: "changed" as const,
+        },
+        {
+          parserVersion: 1,
+          eligible: false,
+          blockedVersion: 2,
+          outcome: "unchanged" as const,
+        },
         { parserVersion: 1, eligible: true, blockedVersion: 1 },
         { parserVersion: 1, eligible: false, redacted: true },
         { parserVersion: 1, eligible: false, missingRaw: true },
@@ -93,7 +110,11 @@ if (!databaseUrl || !enabled) {
             decisionId: fixture.id,
             parserVersionFrom: fixture.parserVersion,
             parserVersionTo: fixture.blockedVersion,
-            reason: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+            outcome: fixture.outcome ?? "rejected",
+            reason:
+              fixture.outcome === "changed" || fixture.outcome === "unchanged"
+                ? null
+                : STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
           });
         }
       }

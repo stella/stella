@@ -9,7 +9,10 @@ import { describe, expect, test } from "bun:test";
 import { SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import type { SourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
+import {
+  defineSourceAdapter,
+  type SourceAdapter,
+} from "@/api/lib/legal-search/ingestion-types";
 
 import {
   SOURCE_TOTAL_POLL_OUTCOME,
@@ -24,32 +27,37 @@ const adapter = (
   getTotalCount: SourceAdapter["getTotalCount"] = async () => ({
     type: "no-count-endpoint",
   }),
-): SourceAdapter => ({
-  key,
-  sourceFields: { status: "declared", fields: {}, listSourceFields: () => [] },
-  sourceSurfaces: { surfaces: {} },
-  name: `${key} fixture`,
-  country: "CZE",
-  language: "cs",
-  minRequestIntervalMs: 1000,
-  fetchPage: () => {
-    throw new Error("fetchPage is not exercised by outcome selection");
-  },
-  getTotalCount,
-  reconciliation: {
-    firstSlice: "1970-01-01",
-    sliceOf: () => "1970-01-01",
-    nextSlice: () => null,
-    previousSlice: () => null,
-    tipWindowDays: 1,
-    listSlicePage: async () => {
-      throw new Error("outcome selection must never list a source");
+) =>
+  defineSourceAdapter({
+    key,
+    documentStage: "inline",
+    sourceFields: {
+      status: "declared",
+      fields: {},
+      listSourceFields: () => [],
     },
-    buildDecision: async () => {
-      throw new Error("outcome selection must never build a decision");
+    sourceSurfaces: { surfaces: {} },
+    language: "cs",
+    minRequestIntervalMs: 1000,
+    fetchPage: () => {
+      throw new Error("fetchPage is not exercised by outcome selection");
     },
-  },
-});
+    getTotalCount,
+    reconciliation: {
+      revisionOf: (payload) => payload,
+      firstSlice: "1970-01-01",
+      sliceOf: () => "1970-01-01",
+      nextSlice: () => null,
+      previousSlice: () => null,
+      tipWindowDays: 1,
+      listSlicePage: async () => {
+        throw new Error("outcome selection must never list a source");
+      },
+      buildDecision: async () => {
+        throw new Error("outcome selection must never build a decision");
+      },
+    },
+  });
 
 const NOW = Date.UTC(2026, 7, 11, 12, 0, 0);
 const DAY_IN_MS = 24 * 60 * 60 * 1000;

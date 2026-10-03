@@ -43,12 +43,14 @@ CREATE TABLE "case_law_replay_blocked" (
   "decision_id" uuid NOT NULL,
   "parser_version_from" integer,
   "parser_version_to" integer NOT NULL,
-  "reason" text NOT NULL,
+  "outcome" text NOT NULL,
+  "reason" text,
   "detail" text,
   "created_at" timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT "case_law_replay_blocked_decision_id_parser_version_to_pk" PRIMARY KEY ("decision_id", "parser_version_to"),
   CONSTRAINT "case_law_replay_blocked_source_id_case_law_sources_id_fk" FOREIGN KEY ("source_id") REFERENCES "public"."case_law_sources"("id") ON DELETE RESTRICT,
-  CONSTRAINT "case_law_replay_blocked_reason_check" CHECK ("reason" IN ('missing-payload', 'no-write-settled', 'redacted', 'superseded', 'retry-exhausted', 'incomplete-metadata', 'identity-mismatch', 'raw-fidelity-lost', 'unsupported-content', 'no-document', 'supplement'))
+  CONSTRAINT "case_law_replay_blocked_outcome_check" CHECK ("outcome" IN ('changed', 'unchanged', 'rejected') AND (("outcome" = 'rejected' AND "reason" IS NOT NULL) OR ("outcome" <> 'rejected' AND "reason" IS NULL))),
+  CONSTRAINT "case_law_replay_blocked_reason_check" CHECK ("reason" IN ('missing-payload', 'incomplete-metadata', 'identity-mismatch', 'raw-fidelity-lost', 'unsupported-content', 'no-document', 'supplement'))
 );--> statement-breakpoint
 CREATE INDEX "case_law_replay_blocked_source_version_idx" ON "case_law_replay_blocked" ("source_id", "parser_version_to", "decision_id");--> statement-breakpoint
 ALTER TABLE "case_law_replay_batches" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint

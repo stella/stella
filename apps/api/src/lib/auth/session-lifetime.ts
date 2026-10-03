@@ -8,6 +8,7 @@ import {
   createAuthEndpoint,
   sensitiveSessionMiddleware,
 } from "better-auth/api";
+import { parseSessionOutput, parseUserOutput } from "better-auth/db";
 import * as v from "valibot";
 
 import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
@@ -77,6 +78,19 @@ type SessionLifetimeOptions = {
   now?: () => Date;
 };
 
+const resolveObservedSession = async (
+  session: Session,
+  { internalAdapter, options }: AuthContext,
+) => {
+  const user = await internalAdapter.findUserById(session.userId);
+  return user
+    ? {
+        session: parseSessionOutput(options, session),
+        user: parseUserOutput(options, user),
+      }
+    : null;
+};
+
 export const createSessionLifetime = ({
   store,
   now = () => new Date(),
@@ -117,7 +131,8 @@ export const createSessionLifetime = ({
     }
   };
 
-  const decorate = (adapter: AuthContext["internalAdapter"]) => {
+  const decorate = (auth: AuthContext) => {
+    const { internalAdapter: adapter } = auth;
     if (decorated.has(adapter)) {
       return;
     }
@@ -134,11 +149,11 @@ export const createSessionLifetime = ({
         }
         return null;
       }
-      let resolved = await findSession(current.token);
+      let resolved = await resolveObservedSession(current, auth);
       if (!resolved) {
         forgetObservations();
         current = await observe(token);
-        resolved = current ? await findSession(current.token) : null;
+        resolved = current ? await resolveObservedSession(current, auth) : null;
       }
       if (resolved && resolved.session.token !== token) {
         const ctx = tryGetCurrentAuthEndpointContext();
@@ -272,7 +287,7 @@ export const createSessionLifetime = ({
           matcher: () => true,
           handler: createAuthMiddleware(async (ctx) => {
             // Plugin initialization rebuilds the adapter; decorate its final instance.
-            decorate(ctx.context.internalAdapter);
+            decorate(ctx.context);
             await Promise.resolve();
           }),
         },

@@ -1,7 +1,10 @@
 import type { Err } from "better-result";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 
+import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
+
+import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { rateEntries } from "@/api/db/schema";
@@ -39,7 +42,7 @@ export const resolveRatesInTransaction = async ({
 
   const defaultTable = await tx.query.rateTables.findFirst({
     where: { workspaceId: { eq: workspaceId }, isDefault: true },
-    columns: { id: true, currency: true },
+    columns: { id: true, currency: true, organizationId: true },
   });
   if (!defaultTable) {
     return resolved;
@@ -61,12 +64,37 @@ export const resolveRatesInTransaction = async ({
       latestDate = lookup.dateWorked;
     }
   }
+  const memberships = await tx
+    .select({ userId: member.userId, role: member.role })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, defaultTable.organizationId),
+        inArray(member.userId, [...uniqueUsers]),
+      ),
+    );
+  // A membership can name several roles in one comma-separated value. The
+  // roles it holds are kept in canonical order, which is their precedence for
+  // a role rate; a name outside the model selects no role rate, and the
+  // member still resolves through person and table-default rates.
+  const rolesByUser = new Map(
+    memberships.map((membership) => {
+      const held = new Set(
+        membership.role.split(",").map((role) => role.trim()),
+      );
+      return [
+        membership.userId,
+        ORGANIZATION_ROLE_NAMES.filter((role) => held.has(role)),
+      ] as const;
+    }),
+  );
   const entries = await tx
     .select({
       effectiveFrom: rateEntries.effectiveFrom,
       effectiveTo: rateEntries.effectiveTo,
       hourlyRate: rateEntries.hourlyRate,
       userId: rateEntries.userId,
+      role: rateEntries.role,
     })
     .from(rateEntries)
     .where(
@@ -83,21 +111,35 @@ export const resolveRatesInTransaction = async ({
         ),
       ),
     )
-    .orderBy(desc(rateEntries.effectiveFrom))
+    .orderBy(desc(rateEntries.effectiveFrom), desc(rateEntries.id))
     .limit(LIMITS.rateEntriesPerTable);
 
   const entriesByUser = new Map<string, typeof entries>();
+  const entriesByRole = new Map<string, typeof entries>();
+  const defaultEntries: typeof entries = [];
   for (const entry of entries) {
-    const key = entry.userId ?? "__default__";
-    const bucket = entriesByUser.get(key);
+    if (entry.userId === null && entry.role === null) {
+      defaultEntries.push(entry);
+      continue;
+    }
+    const buckets = entry.userId === null ? entriesByRole : entriesByUser;
+    const key = entry.userId ?? entry.role;
+    if (key === null) {
+      panic("Rate entry has no selector");
+    }
+    const bucket = buckets.get(key);
     if (bucket) {
       bucket.push(entry);
     } else {
-      entriesByUser.set(key, [entry]);
+      buckets.set(key, [entry]);
     }
   }
 
   for (const lookup of lookups) {
+    const roles = rolesByUser.get(lookup.userId);
+    if (roles === undefined) {
+      continue;
+    }
     const userEntry = entriesByUser
       .get(lookup.userId)
       ?.find(
@@ -106,15 +148,24 @@ export const resolveRatesInTransaction = async ({
           (entry.effectiveTo === null ||
             entry.effectiveTo >= lookup.dateWorked),
       );
-    const defaultEntry = entriesByUser
-      .get("__default__")
-      ?.find(
-        (entry) =>
-          entry.effectiveFrom <= lookup.dateWorked &&
-          (entry.effectiveTo === null ||
-            entry.effectiveTo >= lookup.dateWorked),
-      );
-    const entry = userEntry ?? defaultEntry;
+    const roleEntry = roles
+      .map((role) =>
+        entriesByRole
+          .get(role)
+          ?.find(
+            (entry) =>
+              entry.effectiveFrom <= lookup.dateWorked &&
+              (entry.effectiveTo === null ||
+                entry.effectiveTo >= lookup.dateWorked),
+          ),
+      )
+      .find((entry) => entry !== undefined);
+    const defaultEntry = defaultEntries.find(
+      (entry) =>
+        entry.effectiveFrom <= lookup.dateWorked &&
+        (entry.effectiveTo === null || entry.effectiveTo >= lookup.dateWorked),
+    );
+    const entry = userEntry ?? roleEntry ?? defaultEntry;
     if (entry) {
       resolved.set(rateLookupKey(lookup), {
         hourlyRate: entry.hourlyRate,

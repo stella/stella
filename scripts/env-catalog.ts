@@ -87,6 +87,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "TYPESAFE_MODEL",
   "AI_PROVIDER",
   "AI_PROVIDER_BASE_URL",
+  "OPENROUTER_WIF_POLICY_ID",
+  "OPENROUTER_WIF_AUDIENCE",
+  "OPENROUTER_WIF_STS_REGION",
   "AZURE_API_VERSION",
   "AZURE_BASE_URL",
   "AZURE_RESOURCE_NAME",
@@ -378,8 +381,14 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Enforce the per-organization access state before a model call falls back to the instance provider.",
   FEATURE_FILE_USAGE_LIMITS:
     "Enforce organization file byte reservations at storage writes.",
+  OPENROUTER_WIF_POLICY_ID:
+    "Workload-identity federation policy. Configure with audience and regional STS endpoint; a static key takes precedence.",
+  OPENROUTER_WIF_AUDIENCE:
+    "Audience for the workload-identity token. Required with the federation policy and STS region.",
+  OPENROUTER_WIF_STS_REGION:
+    "AWS region for workload-identity token minting. Required with the federation policy and audience.",
   FEATURE_MANAGED_PROVIDER_CHECKS:
-    "Check regional model availability before managed requests. Requires AI_PROVIDER=openrouter, OPENROUTER_API_KEY, and explicit check interval/timeout settings.",
+    "Check regional model availability before managed requests. Requires AI_PROVIDER=openrouter, a static key or complete workload-identity configuration, and explicit check interval/timeout settings.",
   MANAGED_PROVIDER_CHECK_INTERVAL_MS:
     "Regional catalog refresh interval in milliseconds. Required when FEATURE_MANAGED_PROVIDER_CHECKS is enabled; must exceed the check timeout.",
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS:
@@ -921,6 +930,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "MCP_CANARY_TOKEN",
   "MERGE_GROUP_HEAD_REF",
   "MODE",
+  "NETWORK_BASELINE_PURPOSE",
   "NETWORK_CANARY_URL",
   "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY",
   "OSV_SCANNER_MIRROR_RELEASE_URL",
@@ -972,6 +982,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "SMOKE_API_URL",
   "SMOKE_TEST",
   "STAGING_STATE",
+  // CI names the target-branch revision the statute recall floor compares to.
+  "STATUTE_RECALL_BASE_REF",
   "STELLA_AGENT_CAPTURE_LOG",
   "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
   "STELLA_COLLAB_TEST_REDIS_URL",
@@ -997,6 +1009,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STORED_AGENT_TEST_CREDENTIAL",
   "STORED_AGENT_TEST_VALUE",
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
+  "TEST_API_ERROR",
   "TURBO_HASH",
   "TURBO_SCM_BASE",
   "TURN_OUTCOME_COMBINATIONS",

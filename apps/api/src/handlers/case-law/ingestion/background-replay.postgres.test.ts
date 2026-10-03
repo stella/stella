@@ -412,76 +412,52 @@ if (!databaseUrl || !enabled) {
       return { adapter };
     };
 
-    test("canonical watermark-only replay blocks lagging rows and wraps to newly lagging earlier ids", async () => {
+    test("canonical watermark-only work stays retryable without a terminal row receipt", async () => {
       const state = await fixture(10);
-      const firstId = state.ids.at(0);
-      if (firstId === undefined) {
-        panic("Expected first fixture decision");
-      }
-      await db
-        .update(caseLawDecisions)
-        .set({ parserVersion: 2 })
-        .where(eq(caseLawDecisions.id, firstId));
       const fake = startReplayFixtureStorage();
       try {
         await withSlots({
           run: async ([slot]) => {
-            const canonical = canonicalReplay(true);
-            const first = await tick({ fixture: state, slot, canonical });
-            expect(first).toMatchObject({
-              attempted: 2,
-              applied: 0,
-              blocked: 2,
-            });
-            expect((await state.checkpoint())?.cursor).toBe(state.ids.at(-1));
-            await db
-              .update(caseLawDecisions)
-              .set({ parserVersion: 1 })
-              .where(eq(caseLawDecisions.id, firstId));
-            const wrapped = await tick({ fixture: state, slot, canonical });
-            expect(wrapped).toMatchObject({
+            expect(
+              await tick({
+                fixture: state,
+                slot,
+                canonical: canonicalReplay(true),
+                maxRows: 1,
+              }),
+            ).toMatchObject({
+              status: "failed",
               attempted: 1,
               applied: 0,
-              blocked: 1,
+              blocked: 0,
+              errors: 1,
             });
-            expect((await state.checkpoint())?.cursor).toBe(firstId);
-            expect(
-              (await tick({ fixture: state, slot, canonical })).attempted,
-            ).toBe(0);
+            expect((await state.checkpoint())?.cursor).toBeNull();
             const receipts = await db
               .select()
               .from(caseLawReplayBatches)
               .where(eq(caseLawReplayBatches.sourceId, state.source.id));
-            expect(receipts).toHaveLength(3);
+            expect(receipts).toHaveLength(1);
+            expect(receipts.at(0)).toMatchObject({
+              status: "reserved",
+              applied: 0,
+              blocked: 0,
+            });
             expect(
-              receipts.every(
-                (receipt) =>
-                  receipt.status === "blocked" &&
-                  receipt.applied === 0 &&
-                  receipt.blocked === 1,
-              ),
-            ).toBe(true);
-            const blocked = await db
-              .select()
-              .from(caseLawReplayBlocked)
-              .where(eq(caseLawReplayBlocked.sourceId, state.source.id));
-            expect(blocked).toHaveLength(3);
-            expect(
-              blocked.every((row) => row.reason === "no-write-settled"),
-            ).toBe(true);
+              await db
+                .select()
+                .from(caseLawReplayBlocked)
+                .where(eq(caseLawReplayBlocked.sourceId, state.source.id)),
+            ).toHaveLength(0);
             const decisions = await db
               .select()
               .from(caseLawDecisions)
               .where(eq(caseLawDecisions.sourceId, state.source.id));
             expect(
-              decisions.every(
-                (decision) =>
-                  decision.parserVersion === 1 &&
-                  decision.sourceObservationOrder !== null,
-              ),
+              decisions.every(({ parserVersion }) => parserVersion === 1),
             ).toBe(true);
             expect(
-              fake.requests.filter((request) => request.method === "PUT"),
+              fake.requests.filter(({ method }) => method === "PUT"),
             ).toHaveLength(0);
           },
         });
@@ -532,18 +508,20 @@ if (!databaseUrl || !enabled) {
                 await running;
               }
               expect(await running).toMatchObject({
+                status: winner === "redacted" ? "row-limit" : "failed",
                 attempted: 1,
+                errors: winner === "redacted" ? 0 : 1,
                 applied: 0,
-                blocked: 1,
+                blocked: winner === "redacted" ? 1 : 0,
               });
               const receipts = await db
                 .select()
                 .from(caseLawReplayBatches)
                 .where(eq(caseLawReplayBatches.sourceId, state.source.id));
               expect(receipts.at(0)).toMatchObject({
-                status: "blocked",
+                status: winner === "redacted" ? "blocked" : "reserved",
                 applied: 0,
-                blocked: 1,
+                blocked: winner === "redacted" ? 1 : 0,
               });
               expect(
                 (
@@ -552,7 +530,7 @@ if (!databaseUrl || !enabled) {
                     .from(caseLawReplayBlocked)
                     .where(eq(caseLawReplayBlocked.sourceId, state.source.id))
                 ).at(0)?.reason,
-              ).toBe(winner === "redacted" ? "redacted" : "no-write-settled");
+              ).toBeUndefined();
               expect(
                 (
                   await db
