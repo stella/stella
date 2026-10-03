@@ -813,6 +813,7 @@ export class RatchetRecheckError extends TaggedError("RatchetRecheckError")<{
 type RatchetFreshnessFailureOptions = {
   definitions: unknown;
   changedPaths: ReadonlySet<string>;
+  pullFiles: readonly string[];
   pullRequest: PullRequestSnapshot;
   recheckRatchet: CheckGreenResultFreshnessOptions["recheckRatchet"];
 };
@@ -820,6 +821,7 @@ type RatchetFreshnessFailureOptions = {
 const ratchetFreshnessFailure = ({
   definitions,
   changedPaths,
+  pullFiles,
   pullRequest: { headSha, baseRefName },
   recheckRatchet,
 }: RatchetFreshnessFailureOptions): string | null => {
@@ -836,14 +838,20 @@ const ratchetFreshnessFailure = ({
   if (ratchetChanges.length === 0) {
     return null;
   }
+  // The recheck runs the base's checker; a PR that edits the checker itself
+  // needs CI, which runs the merged one.
+  if (pullFiles.some((filename) => definitions.includes(filename))) {
+    return `main changed the ratchet since the green run (${ratchetChanges.join(", ")}) and this PR changes it too`;
+  }
   const recheck = recheckRatchet({ headSha, baseRefName });
   if (recheck.isOk()) {
     return null;
   }
   return (
     `main changed the ratchet since the green run (${ratchetChanges.join(", ")}) ` +
-    `and the ratchet does not pass on ${baseRefName} merged with this head: ${ 
-    recheck.error.message}`
+    `and the ratchet does not pass on ${baseRefName} merged with this head: ${
+      recheck.error.message
+    }`
   );
 };
 
@@ -867,9 +875,9 @@ type CheckGreenResultFreshnessOptions = {
   // main changed one applied different rules than the merge queue will. Read
   // from the base branch: an older checkout's copy may miss a newer helper.
   readRatchetDefinitionPaths: (baseRefName: string) => unknown;
-  // Measures the ratchet on the base branch merged with this head, as the
-  // merge queue will: a definition change on main costs one local ratchet
-  // run instead of a full CI re-run.
+  // Measures the ratchet on the base branch tip merged with this head, as the
+  // merge queue will, with the base's checker: a definition change on main
+  // costs one local ratchet run instead of a full CI re-run.
   recheckRatchet: (input: {
     headSha: string;
     baseRefName: string;
@@ -972,16 +980,17 @@ export const checkGreenResultFreshness = ({
       changedPaths.add(file["previous_filename"]);
     }
   }
+  const pullFiles = readPullFiles();
   const ratchetFailure = ratchetFreshnessFailure({
     definitions: readRatchetDefinitionPaths(pullRequest.baseRefName),
     changedPaths,
+    pullFiles,
     pullRequest,
     recheckRatchet,
   });
   if (ratchetFailure !== null) {
     return refuse(ratchetFailure);
   }
-  const pullFiles = readPullFiles();
   const overlap = pullFiles.filter((filename) => changedPaths.has(filename));
   if (overlap.length > 0) {
     return refuse(
@@ -1660,21 +1669,24 @@ const runGhJson = (args: readonly string[]): unknown => JSON.parse(runGh(args));
 
 type RecheckRatchetOptions = {
   repositoryRoot: string;
+  repo: string;
+  baseSha: string;
   headSha: string;
-  baseRefName: string;
 };
 
 /**
- * Runs `ratchet.ts --check` on a throwaway worktree of the current base tip
- * merged with the head, measured against that base tip. The worktree lives in
- * the ignored `.cache` so its scripts resolve this checkout's installed
- * dependencies; the merge is built with plumbing, so no hook runs and no ref
- * moves.
+ * Runs the base's own `ratchet.ts --check` against the base merged with the
+ * head. The pull request's tree is only measured as data (`--head` exports
+ * it), so none of its code runs; the checker runs from a worktree of the base
+ * commit under the ignored `.cache`, where it resolves this checkout's
+ * installed dependencies, with no credentials in its environment. The merge
+ * is built with plumbing, so no hook runs and no ref moves.
  */
 const recheckRatchetOnBase = ({
   repositoryRoot,
+  repo,
+  baseSha,
   headSha,
-  baseRefName,
 }: RecheckRatchetOptions): Result<void, RatchetRecheckError> => {
   const git = (args: readonly string[], env?: Record<string, string>) =>
     Bun.spawnSync(["git", ...args], {
@@ -1689,21 +1701,11 @@ const recheckRatchetOnBase = ({
         message: `${step} failed: ${(result.stderr.toString() || result.stdout.toString()).trim()}`,
       }),
     );
-  const remote = git([
-    "ls-remote",
-    "--exit-code",
-    "origin",
-    `refs/heads/${baseRefName}`,
-  ]);
-  const baseSha = /^([0-9a-f]{40})\t/u.exec(remote.stdout.toString())?.[1];
-  if (remote.exitCode !== 0 || baseSha === undefined) {
-    return fail(`reading origin/${baseRefName}`, remote);
-  }
   const fetched = git([
     "fetch",
     "--no-tags",
     "--quiet",
-    "origin",
+    `https://github.com/${repo}.git`,
     baseSha,
     headSha,
   ]);
@@ -1713,7 +1715,7 @@ const recheckRatchetOnBase = ({
   const merged = git(["merge-tree", "--write-tree", baseSha, headSha]);
   const tree = /^([0-9a-f]{40})$/mu.exec(merged.stdout.toString())?.[1];
   if (merged.exitCode !== 0 || tree === undefined) {
-    return fail(`merging ${baseRefName} into the head`, merged);
+    return fail("merging the base into the head", merged);
   }
   const committed = git(
     [
@@ -1747,19 +1749,34 @@ const recheckRatchetOnBase = ({
     "--detach",
     "--quiet",
     worktree,
-    committed.stdout.toString().trim(),
+    baseSha,
   ]);
   if (added.exitCode !== 0) {
     rmSync(worktree, { recursive: true, force: true });
-    return fail("creating the recheck worktree", added);
+    return fail("creating the base worktree", added);
   }
   try {
-    const checked = Bun.spawnSync(["bun", "scripts/ratchet.ts", "--check"], {
-      cwd: worktree,
-      env: { ...process.env, RATCHET_BASE_REF: baseSha },
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const checked = Bun.spawnSync(
+      [
+        "bun",
+        "scripts/ratchet.ts",
+        "--check",
+        "--base",
+        baseSha,
+        "--head",
+        committed.stdout.toString().trim(),
+      ],
+      {
+        cwd: worktree,
+        env: {
+          PATH: process.env["PATH"] ?? "",
+          HOME: process.env["HOME"] ?? "",
+          TMPDIR: process.env["TMPDIR"] ?? "",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
     if (checked.exitCode !== 0) {
       return fail("ratchet --check", checked);
     }
@@ -2625,10 +2642,12 @@ if (import.meta.main) {
       }),
     readRunJobs: gateway.readRunJobs,
     readRatchetDefinitionPaths: gateway.readRatchetDefinitionPaths,
-    recheckRatchet: (input) =>
+    recheckRatchet: ({ headSha, baseRefName }) =>
       recheckRatchetOnBase({
-        ...input,
         repositoryRoot: fileURLToPath(new URL("..", import.meta.url)),
+        repo: options.repo,
+        baseSha: gateway.readBranchTip(baseRefName).sha,
+        headSha,
       }),
   });
   if (freshness.isErr()) {

@@ -1935,17 +1935,39 @@ describe("green result freshness", () => {
     }
   });
 
-  test("a passing ratchet recheck still applies the overlap gate", () => {
-    const filename = "scripts/ratchet.ts";
+  test("a PR that edits the ratchet itself refuses without a recheck", () => {
     const result = checkGreenResultFreshness({
-      ...readers({ status: "ahead", ahead_by: 1, files: [{ filename }] }),
-      readPullFiles: () => [filename],
+      ...readers({
+        status: "ahead",
+        ahead_by: 1,
+        files: [{ filename: "scripts/ownership.ts" }],
+      }),
+      readPullFiles: () => ["scripts/ratchet.ts"],
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toContain(
+        "main changed the ratchet since the green run (scripts/ownership.ts) and this PR changes it too",
+      );
+    }
+  });
+
+  test("a passing ratchet recheck still applies the overlap gate", () => {
+    const result = checkGreenResultFreshness({
+      ...readers({
+        status: "ahead",
+        ahead_by: 1,
+        files: [
+          { filename: "scripts/ownership.ts" },
+          { filename: "scripts/shared.ts" },
+        ],
+      }),
       recheckRatchet: () => Result.ok(),
     });
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error.message).toContain(
-        "main changed files also touched by this PR",
+        "main changed files also touched by this PR: scripts/shared.ts",
       );
     }
   });
