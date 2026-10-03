@@ -948,7 +948,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1844,
+          "maxLength": 5348,
           "description": "Opaque cursor from a previous search_legislation call"
         }
       }
@@ -7290,7 +7290,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1844,
+          "maxLength": 5348,
           "description": "Opaque cursor from a previous search_legislation call"
         }
       }
@@ -8750,7 +8750,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1844,
+          "maxLength": 5348,
           "description": "Opaque cursor from a previous search_legislation call"
         }
       }

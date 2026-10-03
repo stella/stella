@@ -1,3 +1,4 @@
+// parser-output-unchanged: typed URL values pass through; plain strings are projected as before
 // parser-output-unchanged: Rejecting non-finite runtime numbers leaves publisher JSON metadata unchanged.
 import { Result, TaggedError } from "better-result";
 import { decodeHTMLStrict } from "entities";
@@ -7,6 +8,17 @@ import {
   containsTagLikeMarkup,
   TAG_LIKE_MARKUP_SOURCE,
 } from "@/api/lib/case-law/plain-text-markup";
+import {
+  metadataUrlChildSchema,
+  metadataUrlItemSchema,
+  rehydrateMetadataUrls,
+} from "@/api/lib/legal-search/metadata-urls";
+import {
+  MetadataUrlDefect,
+  toMetadataUrl,
+  type SafeHref,
+} from "@/api/lib/sanitize-url";
+import { isRecord } from "@/api/lib/type-guards";
 
 const plainTextBrand = Symbol("PlainText");
 const plainTextSchema = v.pipe(v.string(), v.brand(plainTextBrand));
@@ -14,6 +26,7 @@ export type PlainText = v.InferOutput<typeof plainTextSchema>;
 
 export type PlainTextMetadataValue =
   | PlainText
+  | SafeHref
   | number
   | boolean
   | null
@@ -88,7 +101,19 @@ export const toPlainText = (raw: string): Result<PlainText, PlainTextError> => {
 
 export const toPlainTextMetadata = (
   value: unknown,
+  schema?: unknown,
 ): Result<PlainTextMetadataValue, PlainTextError> => {
+  if (schema === "url") {
+    if (value === null || value === undefined) {
+      return Result.ok(value);
+    }
+    if (typeof value === "string") {
+      const approved = toMetadataUrl(value, "decoded");
+      return Result.ok(
+        approved instanceof MetadataUrlDefect ? undefined : approved,
+      );
+    }
+  }
   if (typeof value === "string") {
     return toPlainText(value);
   }
@@ -101,17 +126,14 @@ export const toPlainTextMetadata = (
     return Result.ok(value);
   }
   if (Array.isArray(value)) {
-    return Result.all(value.map(toPlainTextMetadata));
-  }
-  if (
-    typeof value === "object" &&
-    Object.getPrototypeOf(value) === Object.prototype
-  ) {
     return Result.all(
-      Object.entries(value).map(([key, entry]) =>
-        toPlainTextMetadata(entry).map((plain) => [key, plain] as const),
+      value.map((entry: unknown) =>
+        toPlainTextMetadata(entry, metadataUrlItemSchema(schema)),
       ),
-    ).map(Object.fromEntries);
+    );
+  }
+  if (isRecord(value) && Object.getPrototypeOf(value) === Object.prototype) {
+    return projectPlainMetadataObject(value, schema);
   }
   return Result.err(
     new PlainTextError({
@@ -120,3 +142,25 @@ export const toPlainTextMetadata = (
     }),
   );
 };
+
+const projectPlainMetadataObject = (
+  value: Record<string, unknown>,
+  schema?: unknown,
+): Result<Record<string, PlainTextMetadataValue>, PlainTextError> =>
+  Result.all(
+    Object.entries(value).map(([key, entry]) =>
+      toPlainTextMetadata(entry, metadataUrlChildSchema(schema, key)).map(
+        (plain) => [key, plain] as const,
+      ),
+    ),
+  ).map((entries) => Object.fromEntries(entries));
+
+/** Static schemas survive copies, clones, and persisted JSON round trips. */
+export const toPlainTextMetadataObject = (
+  value: Record<string, unknown>,
+  schema?: unknown,
+): Result<Record<string, PlainTextMetadataValue>, PlainTextError> =>
+  projectPlainMetadataObject(
+    schema === undefined ? value : rehydrateMetadataUrls(value, schema),
+    schema,
+  );

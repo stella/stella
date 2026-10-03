@@ -18,6 +18,7 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
+import type { StatuteQueryIntent } from "@stll/api-contract/statute-query-intent";
 import {
   createStatuteIndexPath,
   createStatutePath,
@@ -71,7 +72,6 @@ import type {
 import { STATUTE_VALIDITY_LABEL_KEYS } from "@/features/statutes/statute-columns.logic";
 import { STATUTE_FILTER_KEYS } from "@/features/statutes/statute-filters.logic";
 import type { StatuteFilterKey } from "@/features/statutes/statute-filters.logic";
-import type { StatuteQueryIntent } from "@/features/statutes/statute-query-intent";
 import {
   useStatuteColumnPreferences,
   useStatuteFind,

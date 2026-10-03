@@ -4,6 +4,7 @@ import assignSeat from "@/api/handlers/usage/assign-seat";
 import createHostedManagement from "@/api/handlers/usage/create-hosted-management";
 import createHostedSetup from "@/api/handlers/usage/create-hosted-setup";
 import getEntitlement from "@/api/handlers/usage/entitlement/get";
+import getAccess from "@/api/handlers/usage/get-access";
 import getLane from "@/api/handlers/usage/get-lane";
 import listPolicies from "@/api/handlers/usage/list-policies";
 import listSeatAssignments from "@/api/handlers/usage/list-seat-assignments";
@@ -24,6 +25,9 @@ export const usageRoute = new Elysia({ prefix: "/usage" })
   .guard({ validateAuth: true })
   .get("/entitlement", getEntitlement.handler, {
     permissions: getEntitlement.config.permissions,
+  })
+  .get("/access", getAccess.handler, {
+    permissions: getAccess.config.permissions,
   })
   .get("/lane", getLane.handler, {
     permissions: getLane.config.permissions,

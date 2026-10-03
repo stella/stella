@@ -48,7 +48,7 @@ import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestio
 import { RECONCILE_CONTENTION } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
-import { toPlainTextMetadata } from "@/api/lib/case-law/plain-text";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import {
   corpusCarriesDocument,
   payloadCarriesDocument,
@@ -462,6 +462,7 @@ const planCorpusPayload = ({
 };
 
 type PlanDecisionWriteOptions = {
+  metadataUrlSchema?: unknown;
   result: IngestionResult;
   existing: ExistingDecision | undefined;
   decisionId: SafeId<"caseLawDecision">;
@@ -478,6 +479,7 @@ type PlanDecisionWriteOptions = {
  * read out of the document.
  */
 export const planDecisionWrite = async ({
+  metadataUrlSchema,
   result,
   existing,
   decisionId,
@@ -563,10 +565,9 @@ export const planDecisionWrite = async ({
           ),
         }
       : ordinaryMetadata;
-  const plainMetadata = Result.all(
-    Object.entries(preparedMetadata).map(([key, value]) =>
-      toPlainTextMetadata(value).map((plain) => [key, plain] as const),
-    ),
+  const plainMetadata = toPlainTextMetadataObject(
+    preparedMetadata,
+    metadataUrlSchema,
   );
   if (plainMetadata.isErr()) {
     return Result.err(plainMetadata.error);
@@ -574,7 +575,7 @@ export const planDecisionWrite = async ({
   const preparedResult = {
     ...result,
     documentAst: finalAst,
-    metadata: Object.fromEntries(plainMetadata.value),
+    metadata: plainMetadata.value,
   };
 
   reportStoredDocumentQuality({
