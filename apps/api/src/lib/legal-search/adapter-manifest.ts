@@ -1,4 +1,4 @@
-// parser-output-unchanged: document scheduling declarations only; parsed decision output is unchanged.
+// parser-output-unchanged: the deferred-document key set is derived from manifest declarations; parsed decision output is unchanged.
 import { panic } from "better-result";
 
 import {
