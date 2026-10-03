@@ -22,10 +22,9 @@ import type { FacetBucket } from "@/api/lib/search/types";
  * largest docket cannot own the page.
  */
 
-const SHELF_TIER_LABELS: ReadonlySet<string> = new Set([
-  "constitutional",
-  "supreme",
-]);
+export const SHELF_TIER_LABEL_VALUES = ["constitutional", "supreme"] as const;
+
+const SHELF_TIER_LABELS: ReadonlySet<string> = new Set(SHELF_TIER_LABEL_VALUES);
 
 /** How many stored spellings of one apex court the candidate bound allows for. */
 const SHELF_SPELLINGS_PER_COURT = 3;

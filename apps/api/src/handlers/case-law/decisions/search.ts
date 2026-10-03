@@ -220,6 +220,8 @@ import {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { escapeAndHighlight } from "@/api/lib/search/highlight";
 
+import { projectCaseLawSearchResponse } from "./search-response";
+
 /** A scoped search reached an index group that is not attested yet. */
 const corpusIndexGroupNotReady = failureSink({
   event: "case_law.search.index_group_not_ready",
@@ -919,7 +921,7 @@ const searchPostgresDecisions = async (
         language: facetBuckets(languageResultRaw),
       };
 
-  return {
+  return projectCaseLawSearchResponse({
     hits,
     facets,
     total,
@@ -931,7 +933,7 @@ const searchPostgresDecisions = async (
       hitCount: hits.length,
       countsResultSet: parsedCursor === null,
     }),
-  };
+  });
 };
 
 // `country` is deliberately absent from the filters: it selects the index,
@@ -2114,7 +2116,7 @@ export const searchCorpusIndexDecisions = async (
         report(page.hits.length, emptyCorpusIndexScan());
         // An entry that names decisions dropped nothing to find them, so the
         // answer echoes the entry and carries no function-word warning.
-        return {
+        return projectCaseLawSearchResponse({
           ...page,
           ...searchAnswer({
             body,
@@ -2122,7 +2124,7 @@ export const searchCorpusIndexDecisions = async (
             hitCount: page.hits.length,
             countsResultSet: true,
           }),
-        };
+        });
       }
     }
   }
@@ -2142,7 +2144,7 @@ export const searchCorpusIndexDecisions = async (
   });
   if (resolved.type === "empty") {
     report(0, emptyCorpusIndexScan());
-    return {
+    return projectCaseLawSearchResponse({
       hits: [],
       facets: null,
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 0),
@@ -2154,7 +2156,7 @@ export const searchCorpusIndexDecisions = async (
         hitCount: 0,
         countsResultSet: parsedCursor === null,
       }),
-    };
+    });
   }
   // A page boundary only means something inside the ranking that produced it,
   // and both the expansion dictionary and the sort order are part of that
@@ -2309,7 +2311,7 @@ export const searchCorpusIndexDecisions = async (
         interpretation.droppedFunctionWords.length,
     });
   }
-  return {
+  return projectCaseLawSearchResponse({
     ...page,
     paginationOutcome: searchPage.paginationOutcome,
     ...searchAnswer({
@@ -2321,5 +2323,5 @@ export const searchCorpusIndexDecisions = async (
         nextCursor === null &&
         searchPage.paginationOutcome.type === "complete",
     }),
-  };
+  });
 };

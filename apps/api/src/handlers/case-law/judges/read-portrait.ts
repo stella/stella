@@ -2,11 +2,15 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import {
+  PORTRAIT_MAX_BYTES,
   readJudgePortraitObject,
   readJudgePortraitPointer,
 } from "@/api/handlers/case-law/judges/portrait";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  createSafePublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
+} from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -14,6 +18,12 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const config = {
   cache: { kind: "public", maxAge: 86_400 },
   mcp: { type: "internal", reason: "public_indexing" },
+  response: safePublicHandlerResponseSchemasWithStatusText(
+    t.String({
+      maxLength: PORTRAIT_MAX_BYTES,
+      description: "Binary portrait image, at most 4 MiB.",
+    }),
+  ),
   params: t.Object({ judgeId: tSafeId("caseLawJudge") }),
 } satisfies PublicHandlerConfig;
 
