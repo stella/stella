@@ -1,3 +1,4 @@
+// parser-output-unchanged: refusal stops are opt-in; existing response and retry semantics are unchanged.
 // parser-output-unchanged: retries and fetch-stage observation affect request scheduling and diagnostics only, not parsed output.
 /**
  * The only way a case-law adapter reaches its publisher.
