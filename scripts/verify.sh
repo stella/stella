@@ -228,7 +228,9 @@ run_mcp_coverage_guard() {
   # is orphaned, and that the `pending` baseline can only shrink. The
   # --self-test run first proves the ratchet detectors still fire.
   bun apps/api/scripts/mcp-coverage-guard.ts --self-test || return 1
-  bun apps/api/scripts/mcp-coverage-guard.ts
+  bun apps/api/scripts/mcp-coverage-guard.ts || return 1
+  bun apps/api/scripts/content-delivery-guard.ts --self-test || return 1
+  bun apps/api/scripts/content-delivery-guard.ts
 }
 
 run_cli_registry_snapshot() {

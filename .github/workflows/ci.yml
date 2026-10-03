@@ -1895,6 +1895,12 @@ jobs:
           bun apps/api/scripts/mcp-coverage-guard.ts --self-test
           bun apps/api/scripts/mcp-coverage-guard.ts
 
+      - name: Content delivery declarations
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: |
+          bun apps/api/scripts/content-delivery-guard.ts --self-test
+          bun apps/api/scripts/content-delivery-guard.ts
+
       - name: MCP surface baseline self-test
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # registry-quality.test.ts holds every MCP audience to
