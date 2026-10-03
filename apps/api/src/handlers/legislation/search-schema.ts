@@ -1,14 +1,10 @@
-import { FormatRegistry } from "@sinclair/typebox";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { LEGISLATION_SEARCH_MATCH_TYPES } from "@stll/api-contract/search";
 
-import {
-  safeHandlerErrorResponseSchema,
-  safeHandlerResponseSchemasWithStatusText,
-} from "@/api/lib/api-handlers";
+import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
 import {
   tPaginationCursor,
   tPaginationLimit,
@@ -18,6 +14,11 @@ import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-sear
 import { tPublicCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { searchPaginationOutcomeSchema } from "@/api/lib/search/pagination-outcome-schema";
+import { safePublicHandlerErrorOrStatusTextResponseSchema } from "@/api/lib/search/public-error-response";
+import {
+  boundedString,
+  nullableBoundedString,
+} from "@/api/lib/search/response-text-bounds";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
 export const PUBLIC_JURISDICTIONS_DESCRIPTION =
@@ -47,26 +48,6 @@ export const searchLegislationBodySchema = t.Object({
 });
 
 export type SearchLegislationBody = Static<typeof searchLegislationBodySchema>;
-
-const boundedString = (maxBytes: number) => {
-  const format = `legislation-search-utf8-${maxBytes}`;
-  if (!FormatRegistry.Has(format)) {
-    FormatRegistry.Set(
-      format,
-      (value) =>
-        value.isWellFormed() && Buffer.byteLength(value, "utf-8") <= maxBytes,
-    );
-  }
-  return t.String({
-    maxLength: maxBytes,
-    format,
-    "x-maxUtf8Bytes": maxBytes,
-    description: `At most ${maxBytes} UTF-8 bytes.`,
-  });
-};
-
-const nullableBoundedString = (maxBytes: number) =>
-  t.Union([boundedString(maxBytes), t.Null()]);
 
 const textBytes = LIMITS.legislationSearchTextBytes;
 
@@ -107,8 +88,11 @@ export const searchLegislationSuccessResponseSchema = t.Object(
 );
 
 export const searchLegislationResponseSchema = {
-  ...safeHandlerResponseSchemasWithStatusText(
+  ...safePublicHandlerResponseSchemasWithStatusText(
     searchLegislationSuccessResponseSchema,
   ),
-  503: t.Union([safeHandlerErrorResponseSchema, tPublicCountryUnavailable]),
+  503: t.Union([
+    safePublicHandlerErrorOrStatusTextResponseSchema,
+    tPublicCountryUnavailable,
+  ]),
 };

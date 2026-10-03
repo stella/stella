@@ -20,6 +20,10 @@ import { runRegistryWriteTool } from "@/api/handlers/chat/tools/registry-adapter
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import {
+  authorizedMemberRole,
+  SESSION_CREDENTIAL,
+} from "@/api/lib/permission-authorization";
 import { loadAccessibleMcpWorkspaces } from "@/api/mcp/context";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -166,7 +170,10 @@ describe("a write that needs a matter in an organization without one", () => {
     const result = await runRegistryWriteTool({
       args: { name: "Draft the NDA" },
       context: buildMcpContextFromChat({
-        memberRole: "owner",
+        memberRole: authorizedMemberRole({
+          role: "owner",
+          credential: SESSION_CREDENTIAL,
+        }),
         organizationId: caller.organizationId,
         pinServerValidatedWorkspaceId: () => true,
         safeDb: context.safeDb,

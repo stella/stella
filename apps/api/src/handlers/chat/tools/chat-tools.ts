@@ -4,7 +4,6 @@ import {
 } from "@stll/api-contract";
 import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
-import { roles } from "@stll/permissions";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -100,6 +99,8 @@ import type {
 } from "@/api/lib/chat/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 
 const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
@@ -156,8 +157,8 @@ export const areWebResearchToolsRegistered = ({
  * section may steer the model to the tool.
  */
 export const areTemplateAuthoringToolsRegistered = (
-  memberRole: keyof typeof roles,
-): boolean => roles[memberRole].authorize({ template: ["create"] }).success;
+  memberRole: AuthorizedMemberRole,
+): boolean => hasMemberPermission(memberRole, { template: ["create"] });
 
 type SubagentToolsRegisteredProps = {
   delegationDepth?: number | undefined;
@@ -189,7 +190,7 @@ type ResolveRegisteredDocxEditModeOptions = {
   activeFile: GetChatToolsProps["activeFile"];
   editApplyMode: ChatEditApplyMode;
   hasActiveDocxEditClient: boolean;
-  memberRole: keyof typeof roles;
+  memberRole: AuthorizedMemberRole;
   recordAuditEventAvailable: boolean;
   requestWorkspaceId: SafeId<"workspace"> | null;
   toolWorkspaceIds: AuthorizedToolWorkspaceIds;
@@ -229,9 +230,9 @@ export const resolveRegisteredDocxEditMode = ({
     return null;
   }
 
-  const canEditWorkspaceDocument = roles[memberRole].authorize({
+  const canEditWorkspaceDocument = hasMemberPermission(memberRole, {
     entity: ["update"],
-  }).success;
+  });
   return canEditWorkspaceDocument ? CHAT_EDIT_APPLY_MODE.auto : null;
 };
 
@@ -325,7 +326,7 @@ export type GetChatToolsProps = {
    * REST fill route enforces), so a role with `template: []` (e.g.
    * external) sees no template tools.
    */
-  memberRole: keyof typeof roles;
+  memberRole: AuthorizedMemberRole;
   // Required (not optional): the template tools eagerly resolve an AI model for
   // usage metering, which needs the org's BYOK config on deployments without a
   // platform provider. A missing value silently falls back and fails there, so
@@ -557,7 +558,7 @@ const createAuthorizedWorkspaceDocumentTools = ({
     recordAuditEvent === undefined ||
     !toolWorkspaceIds.includes(requestWorkspaceId) ||
     workspaceStatusById?.get(requestWorkspaceId) !== "active" ||
-    !roles[memberRole].authorize({ entity: ["create"] }).success
+    !hasMemberPermission(memberRole, { entity: ["create"] })
   ) {
     return {};
   }
@@ -937,9 +938,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ? {}
       : createRememberTools({
           canManageWorkspaceMemory:
-            roles[memberRole].authorize({
+            hasMemberPermission(memberRole, {
               workspace: ["update"],
-            }).success &&
+            }) &&
             workspaceId !== null &&
             workspaceStatusById?.get(workspaceId) === "active",
           organizationId,
@@ -969,9 +970,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // execute fns rely on org RLS alone, so gate registration on the same
   // `template: ["use"]` grant the REST fill route enforces; a
   // chat-capable role without it sees no template tools.
-  const canUseTemplates = roles[memberRole].authorize({
+  const canUseTemplates = hasMemberPermission(memberRole, {
     template: ["use"],
-  }).success;
+  });
   const templateTools = canUseTemplates
     ? createTemplateTools({
         scopedDb,

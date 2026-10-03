@@ -341,6 +341,92 @@ const MODEL_REQUEST_NAMES = [
 
 export const OWNERSHIP = [
   {
+    id: "provider-event-records",
+    capability: "Minimal verified provider event persistence",
+    owner: ["apps/api/src/lib/hosted-usage-provider/webhook-store.ts"],
+    summary:
+      "The store projects authenticated deliveries through the dispatch schema before persistence. Retention redacts completed details while preserving deduplication identifiers and unresolved records.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/db/schema", "@/api/db/schema/usage"],
+      names: ["hostedUsageWebhookEvents"],
+      allowed: [
+        {
+          path: "apps/api/src/db/schema.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/db/high-volume-tables.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/db/plan-guard-tables.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/tests/pglite-test-db.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/tests/security/schema-invariants.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/tests/security/test-utils.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/tests/security/chat-derived-scope.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/tests/pglite-role-grants.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/lib/account-deletion-coverage.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/lib/workspace-deletion-coverage.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/lib/workflow/straggler-catchup.db.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/lib/entity-filters.differential.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
+          path: "apps/api/src/handlers/hosted-usage-webhook/receive.test.ts",
+          reason: "Asserts the persisted delivery projection.",
+        },
+        {
+          path: "apps/api/src/handlers/hosted-usage-webhook/contract.postgres.test.ts",
+          reason: "Asserts dispatch and receipt outcomes in PostgreSQL.",
+        },
+        {
+          path: "apps/api/src/lib/hosted-usage-provider/webhook-retention.postgres.test.ts",
+          reason: "Asserts retention against isolated PostgreSQL receipts.",
+        },
+      ],
+    },
+  },
+  {
     id: "legislation-revision-row-write",
     capability: "Persisting a legislation revision's body and version metadata",
     owner: ["apps/api/src/handlers/legislation/ingestion.ts"],
@@ -983,6 +1069,66 @@ export const OWNERSHIP = [
     },
   },
   {
+    id: "member-authority-context",
+    capability: "Building the authority a request context carries",
+    owner: ["apps/api/src/lib/permission-authorization.ts"],
+    summary:
+      "Context builders construct opaque member authority once; handlers spend it through the permission owner.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/permission-authorization"],
+      names: ["sessionMemberRole", "authorizedMemberRole"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/auth.ts",
+          reason: "Builds the authenticated session context.",
+        },
+        {
+          path: "apps/api/src/mcp/effective-authority.ts",
+          reason: "Builds authority for the MCP request context.",
+        },
+        {
+          path: "apps/api/src/mcp/api-key-auth.ts",
+          reason:
+            "Validates a credential's grants against its current membership.",
+        },
+        {
+          path: "apps/api/src/lib/business-registries/desktop/auth.ts",
+          reason: "Builds the authenticated desktop account context.",
+        },
+        {
+          path: "apps/api/src/lib/business-registries/desktop/link-grants.ts",
+          reason: "Builds the linked desktop account context.",
+        },
+        {
+          path: "apps/api/scripts/ai-provider-canary-chat-toolsets.ts",
+          reason:
+            "Builds an owner session to assemble the full chat tool set for provider schema checks; serves no request.",
+        },
+      ],
+    },
+  },
+  {
+    id: "current-member-permission",
+    capability:
+      "Revalidating a persisted membership during an authorized operation",
+    owner: ["apps/api/src/lib/permission-authorization.ts"],
+    summary:
+      "The request spends its credential at the handler boundary; a locked membership is revalidated by the permission owner.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/permission-authorization"],
+      names: ["hasCurrentMemberPermission"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/workspace-deletion.ts",
+          reason:
+            "Revalidates the actor's locked membership after the handler authorizes deletion.",
+        },
+      ],
+    },
+  },
+  {
     id: "member-authorization",
     capability: "Deciding what a request's member role and credential may do",
     owner: [
@@ -1024,11 +1170,6 @@ export const OWNERSHIP = [
           path: "packages/scripts/src/agent-session.ts",
           reason:
             "Local development tooling seeds an owner's key with the owner's full statement set.",
-        },
-        {
-          path: "apps/api/src/handlers/chat/tools/chat-tools.ts",
-          reason:
-            "Chat tools run only inside a person's own chat session, which carries no narrower credential.",
         },
         {
           path: "apps/api/src/mcp/billing-tools.ts",

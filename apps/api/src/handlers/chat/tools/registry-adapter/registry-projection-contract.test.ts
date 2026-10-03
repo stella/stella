@@ -29,6 +29,7 @@ import { deriveRefMediationEntry } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -183,7 +184,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
     async (run: (transaction: unknown) => unknown) => await run(tx),
   );
   return buildMcpContextFromChat({
-    memberRole: "owner",
+    memberRole: sessionMemberRole("owner"),
     organizationId: ORGANIZATION_ID,
     safeDb: toSafeDbMock(scopedDb),
     scopedDb,
