@@ -358,7 +358,6 @@ const answerDecision = async (
         input.orgAIConfig,
         {
           dataClass: "customer",
-          managedAIResidency: input.managedAIResidency,
           organizationId: input.organizationId,
         },
       );

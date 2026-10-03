@@ -6,6 +6,8 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { DEFAULT_MODELS } from "@stll/ai-catalog";
+
 import { env } from "@/api/env";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { createManagedProviderAvailability } from "@/api/lib/chat/managed-provider-availability";
@@ -20,7 +22,7 @@ import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
-const MODEL = "google/gemini-2.5-flash";
+const MODEL = DEFAULT_MODELS.openrouter.chat;
 const POLICY_ID = "credential-inference-fixture";
 const AUDIENCE = "https://openrouter.ai";
 const REGION = "eu-west-1";

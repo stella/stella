@@ -128,8 +128,11 @@ const createHarness = ({
     request: StsHttpRequest;
     body: string;
   }[] = [];
-  const exchangeRequests: { url: string; body: string; init: RequestInit }[] =
-    [];
+  const exchangeRequests: {
+    url: string;
+    body: string;
+    init: Parameters<FetchExchange>[1];
+  }[] = [];
   const sleeps: number[] = [];
   let stsClients = 0;
   let destroyedStsClients = 0;
@@ -425,11 +428,10 @@ describe("managed OpenRouter credentials", () => {
   });
 
   test("bounds a hanging successful response body parse and stops after three attempts", async () => {
-    const hangingBody = new Response("{}", { status: 200 });
-    hangingBody.json = async () => await new Promise<unknown>(() => {});
     const harness = createHarness({
       timeoutMs: 5,
-      exchangeFetcher: async () => hangingBody,
+      exchangeFetcher: async () =>
+        new Response(new ReadableStream<Uint8Array>(), { status: 200 }),
     });
     managedUnavailable(await harness.provider.get());
     expect(harness.exchangeCalls).toBe(3);

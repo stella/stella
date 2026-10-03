@@ -52,10 +52,12 @@ export const createManagedProviderAvailability = ({
   fetchCatalog,
   now,
 }: ManagedProviderAvailabilityOptions) => {
-  const availability: Record<ManagedAIResidency, RegionalAvailability> = {
-    eu: { status: "unavailable" },
-    us: { status: "unavailable" },
-  };
+  const availability = new Map<ManagedAIResidency, RegionalAvailability>(
+    MANAGED_AI_RESIDENCIES.map((residency) => [
+      residency,
+      { status: "unavailable" },
+    ]),
+  );
 
   // Completed observations survive one slow refresh, but never indefinite stalling.
   const maxStalenessMs = 2 * intervalMs + timeoutMs;
@@ -71,7 +73,7 @@ export const createManagedProviderAvailability = ({
           }),
           "model_unavailable",
         );
-        availability[residency] = { status: "unavailable", cause: error };
+        availability.set(residency, { status: "unavailable", cause: error });
         return Result.err(error);
       });
     }
@@ -130,24 +132,27 @@ export const createManagedProviderAvailability = ({
           classifyFailure(error, "model_unavailable"),
         );
         if (Result.isError(result)) {
-          availability[residency] = {
+          availability.set(residency, {
             status: "unavailable",
             cause: result.error,
-          };
+          });
           return result;
         }
-        availability[residency] = {
+        availability.set(residency, {
           status: "available",
           models: result.value,
           expiresAt: now() + maxStalenessMs,
-        };
+        });
         return Result.ok(undefined);
       }),
     );
   };
 
   const check = (model: string, residency: ManagedAIResidency) => {
-    const regional = availability[residency];
+    const regional = availability.get(residency);
+    if (regional === undefined) {
+      return panic("Missing managed provider residency availability state.");
+    }
     switch (regional.status) {
       case "available":
         return now() < regional.expiresAt && regional.models.has(model)
