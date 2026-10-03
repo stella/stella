@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 2,
+  "reason": "The admission command facade implements the existing Promise-returning Redis contract. Typed unavailable-policy and closed-client errors reject that contract so the admission boundaries can refuse work and preserve the operator diagnostic."
+}
