@@ -513,30 +513,56 @@ describe("OAuth capability policy", () => {
     expectOpenGrant(grant.scope);
   });
 
-  test.each(["/oauth2/create-client", "/oauth2/update-client"])(
-    "does not serve %s",
-    async (path) => {
-      const browser = await signInHuman(
-        `client-management-${Bun.randomUUIDv7()}@example.test`,
-      );
-      const response = await getAuth().handler(
-        new Request(getAuthEndpointUrl(path.slice(1)), {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            cookie: browser.cookieHeader(),
-          },
-          body: JSON.stringify({
-            client_id: "example-client",
-            redirect_uris: ["https://connector.example/callback"],
-            scope: "stella:read stella:admin_write",
-            update: { scope: "stella:read stella:admin_write" },
-          }),
+  test("does not serve client creation to a signed-in user", async () => {
+    const browser = await signInHuman("client-creation@example.test");
+    const response = await getAuth().handler(
+      new Request(getAuthEndpointUrl("oauth2/create-client"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: browser.cookieHeader(),
+        },
+        body: JSON.stringify({
+          redirect_uris: ["https://connector.example/callback"],
+          scope: "stella:read stella:admin_write",
         }),
-      );
-      expect(response.status).toBe(404);
-    },
-  );
+      }),
+    );
+    expect(response.status).toBe(404);
+  });
+
+  test("does not serve client updates to the client's owner", async () => {
+    const browser = await signInHuman("client-update@example.test");
+    const created = await getAuth().api.createOAuthClient({
+      headers: browser.headers(),
+      body: {
+        redirect_uris: ["https://connector.example/callback"],
+        scope: "stella:read",
+      },
+    });
+    const response = await getAuth().handler(
+      new Request(getAuthEndpointUrl("oauth2/update-client"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: browser.cookieHeader(),
+        },
+        body: JSON.stringify({
+          client_id: created.client_id,
+          update: { scope: "stella:read stella:admin_write" },
+        }),
+      }),
+    );
+    expect(response.status).toBe(404);
+    const context = await getAuth().$context;
+    const stored = await context.adapter.findOne<
+      SchemaClient<readonly string[]>
+    >({
+      model: "oauthClient",
+      where: [{ field: "clientId", value: created.client_id }],
+    });
+    expect(stored?.scopes).toEqual(["stella:read"]);
+  });
 
   test("every provider endpoint has a decided policy", async () => {
     const auth = getAuth();
