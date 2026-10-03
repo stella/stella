@@ -37,7 +37,8 @@ export const prorateHourlyCents = ({
   assertNonNegativeInteger("billedMinutes", billedMinutes);
   assertNonNegativeInteger("hourlyRateCents", hourlyRateCents);
 
-  return cents(Math.floor((billedMinutes * hourlyRateCents + 30) / 60));
+  const product = BigInt(billedMinutes) * BigInt(hourlyRateCents);
+  return cents(Number((product + 30n) / 60n));
 };
 
 export type ApplyMarkupCentsInput = {
@@ -52,12 +53,15 @@ export const applyMarkupCents = ({
   assertNonNegativeInteger("amountCents", amountCents);
   assertNonNegativeInteger("markupPercent", markupPercent);
 
-  return cents(Math.floor((amountCents * (100 + markupPercent) + 50) / 100));
+  const product = BigInt(amountCents) * (100n + BigInt(markupPercent));
+  return cents(Number((product + 50n) / 100n));
 };
 
 function assertNonNegativeInteger(name: string, value: number) {
-  if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
-    panic(`${name} must be a finite non-negative integer`);
+  if (!Number.isSafeInteger(value) || value < 0) {
+    panic(
+      `${name} must be a finite non-negative integer within the safe range`,
+    );
   }
 }
 

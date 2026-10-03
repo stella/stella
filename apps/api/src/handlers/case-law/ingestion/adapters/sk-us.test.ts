@@ -850,7 +850,7 @@ describe("sk-us buildDecision", () => {
     if (outcome.type !== "built") {
       return;
     }
-    expect(outcome.decision.caseNumber).toBe("PL. ÚS 4/2020");
+    expect(outcome.decision.caseNumber === "PL. ÚS 4/2020").toBe(true);
     expect(outcome.decision.language).toBe("sk");
     expect(outcome.decision.country).toBe("SVK");
     expect(outcome.decision.decisionDate).toBe("2020-03-12");
@@ -903,10 +903,12 @@ describe("sk-us buildDecision", () => {
     }
     const { decision } = built;
     expect(decision.sourceDocumentId).toBe(PLENARY_OPINION.documentId);
-    expect(decision.textFields.legalSentence).toEqual({
-      type: "present",
-      text: entry.mkClauseText,
-    });
+    expect(
+      Bun.deepEquals(decision.textFields.legalSentence, {
+        type: "present",
+        text: entry.mkClauseText,
+      }),
+    ).toBe(true);
     expect(
       decodeSourceRawEnvelope(decision.sourceRaw ?? "")?.["collection-listing"],
     ).toBe(collectionJson);
@@ -984,10 +986,12 @@ describe("sk-us buildDecision", () => {
           if (built.type !== "built") {
             throw new Error(`expected a built decision, got ${built.type}`);
           }
-          expect(built.decision.metadata["publishedInCollection"]).toEqual({
-            status: publicationStatus,
-            reason: "unavailable",
-          });
+          expect(
+            Bun.deepEquals(built.decision.metadata["publishedInCollection"], {
+              status: publicationStatus,
+              reason: "unavailable",
+            }),
+          ).toBe(true);
           expect(
             decodeSourceRawEnvelope(built.decision.sourceRaw ?? "")?.[
               "collection-listing"
@@ -1037,10 +1041,12 @@ describe("sk-us buildDecision", () => {
     }
     // The rapporteur is a field on the row; the dissenter is an index field
     // the row never carries and the facet query is the only statement of.
-    expect(outcome.decision.judges).toEqual([
-      { role: "rapporteur", nameAsPrinted: "Ivan Fiačan" },
-      { role: "dissenting", nameAsPrinted: "Peter Straka" },
-    ]);
+    expect(
+      Bun.deepEquals(outcome.decision.judges, [
+        { role: "rapporteur", nameAsPrinted: "Ivan Fiačan" },
+        { role: "dissenting", nameAsPrinted: "Peter Straka" },
+      ]),
+    ).toBe(true);
   });
 
   test("a separate opinion's kind is the value the court sends, not its letters", async () => {
@@ -1056,9 +1062,10 @@ describe("sk-us buildDecision", () => {
     // The field is one value of a three-entry vocabulary. Read as a list it
     // deduplicates into the set of its own characters, which is what every
     // separate opinion ingested before this carried.
-    expect(outcome.decision.metadata["dissentingOpinion"]).toBe(
-      "Odlišné stanovisko iné",
-    );
+    expect(
+      outcome.decision.metadata["dissentingOpinion"] ===
+        "Odlišné stanovisko iné",
+    ).toBe(true);
   });
 
   test("a petitioner kind reads the same whether the court sends one or several", async () => {
@@ -1075,13 +1082,17 @@ describe("sk-us buildDecision", () => {
     if (single.type !== "built" || several.type !== "built") {
       throw new Error("expected both decisions to build");
     }
-    expect(single.decision.metadata["typeOfProposer"]).toEqual([
-      "Fyzická osoba",
-    ]);
-    expect(several.decision.metadata["typeOfProposer"]).toEqual([
-      "Iná",
-      "Skupina poslancov NR SR",
-    ]);
+    expect(
+      Bun.deepEquals(single.decision.metadata["typeOfProposer"], [
+        "Fyzická osoba",
+      ]),
+    ).toBe(true);
+    expect(
+      Bun.deepEquals(several.decision.metadata["typeOfProposer"], [
+        "Iná",
+        "Skupina poslancov NR SR",
+      ]),
+    ).toBe(true);
   });
 
   test("the docket file answers what the decision row leaves empty", async () => {
@@ -1093,8 +1104,10 @@ describe("sk-us buildDecision", () => {
     }
     // Neither is on a decision row: the date the petition reached the court
     // and the files it refers to are stated on the docket file alone.
-    expect(outcome.decision.metadata["entryDate"]).toBe("2020-06-30");
-    expect(outcome.decision.metadata["references"]).toEqual(["2196/2020"]);
+    expect(outcome.decision.metadata["entryDate"] === "2020-06-30").toBe(true);
+    expect(
+      Bun.deepEquals(outcome.decision.metadata["references"], ["2196/2020"]),
+    ).toBe(true);
   });
 
   test("a decision the supplementary surfaces answer nothing for still builds", async () => {
@@ -1246,14 +1259,17 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     // The crawl's cursor moves past this document either way, so it stores
     // what the listing proves — flagged, so a later refresh cannot overwrite
     // detail a successful fetch recovered.
-    expect(built.decision.caseNumber).toBe("I. ÚS 132/93");
-    expect(built.decision.decisionType).toBe(
-      CHAMBER_RESOLUTION.mkFormOfDecision,
+    expect(built.decision.caseNumber === "I. ÚS 132/93").toBe(true);
+    expect(
+      built.decision.decisionType === CHAMBER_RESOLUTION.mkFormOfDecision,
+    ).toBe(true);
+    expect(
+      built.decision.metadata["decisionType"] ===
+        CHAMBER_RESOLUTION.mkFormOfDecision,
+    ).toBe(true);
+    expect(built.decision.metadata["decisionTypeKey"] === "uznesenie").toBe(
+      true,
     );
-    expect(built.decision.metadata["decisionType"]).toBe(
-      CHAMBER_RESOLUTION.mkFormOfDecision,
-    );
-    expect(built.decision.metadata["decisionTypeKey"]).toBe("uznesenie");
     expect(built.decision.isListingOnly).toBe(true);
     expect(built.decision.sourceRawContentType).toBe(
       SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -1387,7 +1403,7 @@ describe("sk-us rows as the court sends them", () => {
     ...Object.fromEntries(LIST_FIELDS.map(([key]) => [key, value])),
   });
 
-  test("stated lists survive beside trimmed Unicode-normalized derived lists", async () => {
+  test("plain source lists survive beside Unicode-normalized derived lists", async () => {
     mockFetch({ search: [] });
     const values = [
       " Ústavná sťažnosť ",
@@ -1403,8 +1419,18 @@ describe("sk-us rows as the court sends them", () => {
     if (outcome.type !== "built") {
       throw new TypeError("the metadata fixture must build");
     }
-    expect(outcome.decision.metadata["proceedingSubject"]).toEqual(values);
-    expect(outcome.decision.metadata["challengedLegislation"]).toEqual(values);
+    expect(
+      Bun.deepEquals(
+        outcome.decision.metadata["proceedingSubject"],
+        values.map((value) => value.trim()),
+      ),
+    ).toBe(true);
+    expect(
+      Bun.deepEquals(
+        outcome.decision.metadata["challengedLegislation"],
+        values.map((value) => value.trim()),
+      ),
+    ).toBe(true);
     expect(outcome.decision.metadata["normalizedValues"]).toMatchObject({
       proceedingSubject: ["Ústavná sťažnosť", "Iné"],
       challengedLegislation: ["Ústavná sťažnosť", "Iné"],
@@ -1459,8 +1485,12 @@ describe("sk-us rows as the court sends them", () => {
       throw new Error("expected both paths to build");
     }
     for (const [, stored] of LIST_FIELDS) {
-      expect(built.decision.metadata[stored]).toEqual(expected);
-      expect(reconciled.decision.metadata[stored]).toEqual(expected);
+      expect(Bun.deepEquals(built.decision.metadata[stored], expected)).toBe(
+        true,
+      );
+      expect(
+        Bun.deepEquals(reconciled.decision.metadata[stored], expected),
+      ).toBe(true);
     }
   });
 

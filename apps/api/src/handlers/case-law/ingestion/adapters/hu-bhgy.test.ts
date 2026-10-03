@@ -15,7 +15,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   encodeHuBhgyCursor,
   huBhgyAdapter,
@@ -796,6 +799,60 @@ describe("a listed decision the download will not serve", () => {
     }
   });
 
+  test.each(["<p></p>", String.raw`{\rtf1 poisoned}`])(
+    "a rejected summary %s is quarantined while the rest of the page advances",
+    async (label) => {
+      const poison = {
+        ...rowAt(7, "2026-09-19T13:30:00+02:00"),
+        Rezume: label,
+      };
+      const cursor = "tip|head|2026-09-19T12:00:00+02:00";
+      const stub = stubPublisher((call) =>
+        isSearch(call)
+          ? searchResponse(
+              [
+                rowAt(8, "2026-09-19T14:00:00+02:00"),
+                poison,
+                rowAt(6, "2026-09-19T13:00:00+02:00"),
+              ],
+              10_000,
+            )
+          : new Response("gone", { status: 404 }),
+      );
+      try {
+        const page = (await huBhgyAdapter.fetchPage(cursor, {})).unwrap();
+        expect(
+          page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+        ).toEqual(["id-8", "id-7", "id-6"]);
+        expect(page.itemBuildFailures).toEqual({
+          type: "item_build_failed",
+          count: 1,
+        });
+        expect(page.nextCursor).not.toBe(cursor);
+        const rejected = page.decisions.find(
+          ({ sourceDocumentId }) => sourceDocumentId === "id-7",
+        );
+        expect(rejected?.isListingOnly).toBe(true);
+        expect(rejected?.metadata["detailStatus"] === "item_build_failed").toBe(
+          true,
+        );
+        expect(
+          decodeSourceRawEnvelope(rejected?.sourceRaw ?? "")?.["listing"],
+        ).toBe(JSON.stringify(poison));
+        expect(
+          page.decisions
+            .filter(({ sourceDocumentId }) => sourceDocumentId !== "id-7")
+            .every(
+              ({ metadata }) =>
+                metadata["detailStatus"] !== "item_build_failed",
+            ),
+        ).toBe(true);
+      } finally {
+        stub.restore();
+      }
+    },
+  );
+
   test("a row with no publisher key does not poison the page around it", async () => {
     const stub = stubPublisher((call) =>
       isSearch(call)
@@ -937,16 +994,18 @@ describe("what a stored row keeps", () => {
         {},
       );
       const [decision] = Result.isOk(page) ? page.value.decisions : [];
-      expect(decision?.metadata["bhgyIdentifier"]).toBe(
-        normalizeHuBhgyRow(row ?? {}).EgyediAzonosito,
-      );
-      expect(decision?.metadata["publishedAt"]).toBe(
-        normalizeHuBhgyRow(row ?? {}).IndexelesIdeje,
-      );
+      expect(
+        decision?.metadata["bhgyIdentifier"] ===
+          normalizeHuBhgyRow(row ?? {}).EgyediAzonosito,
+      ).toBe(true);
+      expect(
+        decision?.metadata["publishedAt"] ===
+          normalizeHuBhgyRow(row ?? {}).IndexelesIdeje,
+      ).toBe(true);
       expect(Array.isArray(decision?.metadata["statutes"])).toBe(true);
-      expect(decision?.court).toBe(
-        normalizeHuBhgyRow(row ?? {}).MeghozoBirosag,
-      );
+      expect(
+        decision?.court === normalizeHuBhgyRow(row ?? {}).MeghozoBirosag,
+      ).toBe(true);
     } finally {
       stub.restore();
     }

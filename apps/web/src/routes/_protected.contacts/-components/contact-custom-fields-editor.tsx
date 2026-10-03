@@ -42,7 +42,6 @@ export const ContactCustomFieldsEditor = ({
     saveContactPatch(
       {
         metadata: {
-          ...metadata,
           customFields: [
             ...customFields,
             {
@@ -79,7 +78,6 @@ export const ContactCustomFieldsEditor = ({
 
     return await saveContactPatchAsync({
       metadata: {
-        ...metadata,
         customFields: customFields.map((field) =>
           field.id === fieldId
             ? {
@@ -96,7 +94,6 @@ export const ContactCustomFieldsEditor = ({
   const removeCustomField = (fieldId: string) => {
     saveContactPatch({
       metadata: {
-        ...metadata,
         customFields: customFields.filter((field) => field.id !== fieldId),
       },
     });

@@ -8,6 +8,10 @@
 
 import { panic } from "better-result";
 
+import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+} from "@stll/legal-atlas/ingestion-cycle";
 import { DAY_IN_MS } from "@stll/time";
 
 export const CYCLE_OUTCOME = {
@@ -18,8 +22,7 @@ export const CYCLE_OUTCOME = {
 
 export type CycleOutcome = (typeof CYCLE_OUTCOME)[keyof typeof CYCLE_OUTCOME];
 
-export type CycleResult = {
-  outcome: CycleOutcome;
+type CycleCounts = {
   /** Decisions written: inserts and updates both. */
   inserted: number;
   /** Decisions the dedup short-circuit dropped as already stored, unchanged. */
@@ -35,6 +38,15 @@ export type CycleResult = {
    */
   cursorAdvanced: boolean;
 };
+
+export type CycleResult = CycleCounts &
+  (
+    | { outcome: typeof CYCLE_OUTCOME.COMPLETED; stopKind?: never }
+    | {
+        outcome: typeof CYCLE_OUTCOME.FAILED | typeof CYCLE_OUTCOME.TIMEOUT;
+        stopKind: IngestionStopKind;
+      }
+  );
 
 /**
  * Forward progress is durable movement through the source, not how the cycle
@@ -341,4 +353,62 @@ export const stepStallAlert = (
     sustained: streak,
     capture: !state.captured,
   };
+};
+
+/** The latest cycle owns the cause, including during an already captured episode. */
+type UpdateStalledAdapterOptions = {
+  adapterKey: string;
+  stallAlert: StallAlertState;
+  stopKind: IngestionStopKind;
+};
+
+export const updateStalledAdapter = (
+  stalledAdapters: Map<string, IngestionStopKind>,
+  { adapterKey, stallAlert, stopKind }: UpdateStalledAdapterOptions,
+): void => {
+  if (!stallAlert.captured) {
+    stalledAdapters.delete(adapterKey);
+    return;
+  }
+  stalledAdapters.set(adapterKey, stopKind);
+};
+
+export const cycleStopKind = (cycle: CycleResult): IngestionStopKind => {
+  switch (cycle.outcome) {
+    case CYCLE_OUTCOME.COMPLETED:
+      return INGESTION_STOP_KIND.INTERNAL_ERROR;
+    case CYCLE_OUTCOME.FAILED:
+    case CYCLE_OUTCOME.TIMEOUT:
+      return cycle.stopKind;
+    default:
+      cycle satisfies never;
+      return panic(`Unhandled cycle: ${String(cycle)}`);
+  }
+};
+
+type StepAdapterCycleHealthOptions = {
+  adapterKey: string;
+  cycle: CycleResult;
+  stallAlert: StallAlertState;
+  stalledAdapters: Map<string, IngestionStopKind>;
+  threshold: number;
+};
+
+/** One returned cycle's health transition, shared by the live loop and its wiring test. */
+export const stepAdapterCycleHealth = ({
+  adapterKey,
+  cycle,
+  stallAlert,
+  stalledAdapters,
+  threshold,
+}: StepAdapterCycleHealthOptions) => {
+  const madeProgress = cycleMadeProgress(cycle);
+  const stopKind = cycleStopKind(cycle);
+  const stall = stepStallAlert(stallAlert, madeProgress, threshold);
+  updateStalledAdapter(stalledAdapters, {
+    adapterKey,
+    stallAlert: stall.state,
+    stopKind,
+  });
+  return { madeProgress, stopKind, stall };
 };

@@ -231,9 +231,11 @@ describe("reading a record page", () => {
         documentHtml: undefined,
       }),
     );
-    expect(decision.metadata["unmappedFields"]).toEqual({
-      Publikator: "Biuletyn Zamówień Publicznych",
-    });
+    expect(
+      Bun.deepEquals(decision.metadata["unmappedFields"], {
+        Publikator: "Biuletyn Zamówień Publicznych",
+      }),
+    ).toBe(true);
   });
 });
 
@@ -255,21 +257,26 @@ describe("building a ruling from its three pages", () => {
 
   test("joined appeals: the first is the case number, the rest are identifiers", async () => {
     const decision = await joined();
-    expect(decision.caseNumber).toBe("KIO 2845/25");
-    expect(decision.identifiers).toEqual([
-      { type: "case-number", value: "KIO 2846/25" },
-    ]);
+    expect(decision.caseNumber === "KIO 2845/25").toBe(true);
+    expect(
+      Bun.deepEquals(decision.identifiers, [
+        { type: "case-number", value: "KIO 2846/25" },
+      ]),
+    ).toBe(true);
     expect(decision.sourceDocumentId).toBe("30308");
-    expect(decision.court).toBe("Krajowa Izba Odwoławcza");
+    expect(decision.court === "Krajowa Izba Odwoławcza").toBe(true);
     expect(decision.decisionDate).toBe("2025-09-01");
-    expect(decision.decisionType).toBe("wyrok");
-    expect(decision.judges).toEqual([
-      { role: "presiding", nameAsPrinted: "Ewa Sikorska" },
-    ]);
-    expect(decision.metadata["contractingAuthority"]).toBe(
-      "PKP Polskie Linie Kolejowe Spółkę akcyjną w Warszawie",
-    );
-    expect(decision.metadata["decisionDateSource"]).toBe("publisher");
+    expect(decision.decisionType === "wyrok").toBe(true);
+    expect(
+      Bun.deepEquals(decision.judges, [
+        { role: "presiding", nameAsPrinted: "Ewa Sikorska" },
+      ]),
+    ).toBe(true);
+    expect(
+      decision.metadata["contractingAuthority"] ===
+        "PKP Polskie Linie Kolejowe Spółkę akcyjną w Warszawie",
+    ).toBe(true);
+    expect(decision.metadata["decisionDateSource"] === "publisher").toBe(true);
   });
 
   test("provisions and index terms are split into items, joined or linked singly", async () => {
@@ -299,9 +306,9 @@ describe("building a ruling from its three pages", () => {
         documentHtml: await gzFixtureText("pl-kio-content-8247.html.gz"),
       }),
     );
-    expect(decision.caseNumber).toBe("VIII Ga 248/09");
-    expect(decision.court).toBe("Sąd Okręgowy w Szczecinie");
-    expect(decision.metadata["kind"]).toBe("SO");
+    expect(decision.caseNumber === "VIII Ga 248/09").toBe(true);
+    expect(decision.court === "Sąd Okręgowy w Szczecinie").toBe(true);
+    expect(decision.metadata["kind"] === "SO").toBe(true);
     expect(decision.fulltext).toContain("W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ");
     expect(decision.documentUrl).toBe(
       "https://orzeczenia.uzp.gov.pl/Home/ContentHtml/8247?Kind=SO&flection=0",
@@ -316,10 +323,10 @@ describe("building a ruling from its three pages", () => {
         documentHtml: await gzFixtureText("pl-kio-content-13694.html.gz"),
       }),
     );
-    expect(decision.caseNumber).toBe("KIO 1090/20");
+    expect(decision.caseNumber === "KIO 1090/20").toBe(true);
     expect(decision.identifiers).toBeUndefined();
     expect(decision.decisionDate).toBe("2020-07-28");
-    expect(decision.metadata["decisionDateSource"]).toBe("document");
+    expect(decision.metadata["decisionDateSource"] === "document").toBe(true);
     // The record prints "-" for the type: no type is stated, none invented.
     expect(decision.decisionType).toBeUndefined();
   });
@@ -344,10 +351,11 @@ describe("building a ruling from its three pages", () => {
     const decision = built(outcome);
     expect(decision.fulltext).toBeUndefined();
     expect(decision.isListingOnly).toBeUndefined();
-    expect(decision.caseNumber).toBe("V SA/Wa 3975/15");
-    expect(decision.metadata["challengedAuthority"]).toBe(
-      "Prezes Urzędu Zamówień Publicznych",
-    );
+    expect(decision.caseNumber === "V SA/Wa 3975/15").toBe(true);
+    expect(
+      decision.metadata["challengedAuthority"] ===
+        "Prezes Urzędu Zamówień Publicznych",
+    ).toBe(true);
   });
 
   test("a record the database no longer serves leaves a listing-only row", () => {
@@ -677,7 +685,7 @@ describe("walking a month", () => {
       for (const decision of gone.value.decisions) {
         expect(decision.isListingOnly).toBeUndefined();
         expect(decision.fulltext).toBeUndefined();
-        expect(decision.metadata["presiding"]).toBe("Ewa Sikorska");
+        expect(decision.metadata["presiding"] === "Ewa Sikorska").toBe(true);
       }
     }
 
@@ -696,7 +704,7 @@ describe("walking a month", () => {
       for (const decision of page.value.decisions) {
         expect(decision.isListingOnly).toBeUndefined();
         expect(decision.fulltext).toBeUndefined();
-        expect(decision.metadata["presiding"]).toBe("Ewa Sikorska");
+        expect(decision.metadata["presiding"] === "Ewa Sikorska").toBe(true);
       }
     }
   });
@@ -721,8 +729,10 @@ describe("walking a month", () => {
     const [quarantined, keyed] = page.value.decisions;
     expect(quarantined?.sourceDocumentId).toStartWith("uzp-quarantine:");
     expect(quarantined?.isListingOnly).toBe(true);
-    expect(quarantined?.metadata["quarantineReason"]).toBe("no-record-id");
-    expect(quarantined?.caseNumber).toBe("KIO 2681/25");
+    expect(quarantined?.metadata["quarantineReason"] === "no-record-id").toBe(
+      true,
+    );
+    expect(quarantined?.caseNumber === "KIO 2681/25").toBe(true);
     expect(keyed?.sourceDocumentId).toBe("30308");
     // Only the keyed row is asked for.
     expect(
@@ -791,9 +801,11 @@ describe("walking a month", () => {
     expect(held?.sourceDocumentId).toBe("30306");
     expect(held?.isListingOnly).toBe(true);
     expect(held?.court).not.toBe("Krajowa Izba Odwoławcza");
-    expect(held?.metadata["quarantineReason"]).toBe("court-not-stated");
+    expect(held?.metadata["quarantineReason"] === "court-not-stated").toBe(
+      true,
+    );
     expect(later?.sourceDocumentId).toBe("30308");
-    expect(later?.court).toBe("Krajowa Izba Odwoławcza");
+    expect(later?.court === "Krajowa Izba Odwoławcza").toBe(true);
     expect(later?.isListingOnly).toBeUndefined();
     expect(page.value.nextCursor).toBe("2025-10:0+0");
 

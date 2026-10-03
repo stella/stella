@@ -98,10 +98,14 @@ const readCursorCompletion = async (
     : { reason: `${name} cursor is incomplete`, type: "incomplete" };
 };
 
+type ProvisionRepairCursor =
+  | { type: "complete" }
+  | { type: "pending"; cursor: string | null };
+
 const readCursor = async (
   connection: ProvisionBackfillSession,
   name: string,
-): Promise<string | null> => {
+): Promise<ProvisionRepairCursor> => {
   await connection.execute(
     `INSERT INTO case_law_provision_repair_cursors (name)
      VALUES ($1) ON CONFLICT (name) DO NOTHING`,
@@ -109,18 +113,22 @@ const readCursor = async (
   );
   const row = (
     await connection.query(
-      `SELECT cursor_decision_id::text AS cursor
-       FROM case_law_provision_repair_cursors WHERE name = $1`,
+      `SELECT cursor_decision_id::text AS cursor,
+         completed_at IS NOT NULL AS complete
+       FROM case_law_provision_repair_cursors WHERE name = $1 FOR UPDATE`,
       [name],
     )
   ).at(0);
   if (typeof row !== "object" || row === null || !("cursor" in row)) {
     return panic(`Provision repair ${name} cursor is missing`);
   }
+  if (readBoolean(row, "complete")) {
+    return { type: "complete" };
+  }
   if (row.cursor !== null && typeof row.cursor !== "string") {
     return panic(`Provision repair ${name} cursor has an invalid shape`);
   }
-  return row.cursor;
+  return { type: "pending", cursor: row.cursor };
 };
 
 const advanceCursor = async (
@@ -186,7 +194,13 @@ const repairCursorPage = async (
   name: "scope-bootstrap" | "state-seed",
 ): Promise<ProvisionBackfillUnit> =>
   await inTransaction(connection, async () => {
-    const previous = await readCursor(connection, name);
+    const cursor = await readCursor(connection, name);
+    // Completion may have changed after the runner read it, while this unit
+    // waited for its transaction lock. The locked row decides whether to advance.
+    if (cursor.type === "complete") {
+      return;
+    }
+    const previous = cursor.cursor;
     const ids = await readDecisionPage(
       connection,
       previous,

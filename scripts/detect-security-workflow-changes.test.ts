@@ -304,7 +304,6 @@ test("a complete Git diff selects changed code and deletion paths, including ren
 
 test("both workflows gate every expensive job and run on detector failure", () => {
   for (const workflow of [codeql, migrations]) {
-    expect(workflow.on.pull_request.paths).toBeUndefined();
     const scope = v.parse(
       v.looseObject({
         outputs: v.object({ required: v.string() }),
@@ -331,6 +330,7 @@ test("both workflows gate every expensive job and run on detector failure", () =
       expect(job.if).toContain("needs.scope.outputs.required != 'false'");
     }
   }
+  expect(migrations.on.pull_request.paths).toBeUndefined();
   const triggers = v.parse(
     v.looseObject({
       push: v.object({ branches: v.array(v.string()) }),
@@ -345,4 +345,117 @@ test("both workflows gate every expensive job and run on detector failure", () =
     "*",
     "*",
   ]);
+});
+
+// The PR trigger selects source changes; supplemental data remains covered by
+// full scans on main and the nightly schedule.
+const supplementalData = new Set(["json", "yaml", "yml", "raml", "xml"]);
+const sourceFiles = (language: string) => {
+  const files = languageExtensions.get(language);
+  if (!files) {
+    panic(`Unmapped CodeQL language: ${language}`);
+  }
+  if (
+    !["javascript", "typescript", "javascript-typescript"].includes(language)
+  ) {
+    return files;
+  }
+  return files.filter(
+    (file) => !supplementalData.has(file.split(".").at(-1) ?? ""),
+  );
+};
+const triggerMatches = (file: string, paths: string[]) =>
+  paths.some((glob) => new Bun.Glob(glob).match(file));
+const expectTriggerCoverage = (language: string, paths: string[]) => {
+  const files = sourceFiles(language);
+  expect(files.length, language).toBeGreaterThan(0);
+  for (const file of files) {
+    expect(triggerMatches(file, paths), `${language}: ${file}`).toBe(true);
+  }
+};
+
+test("CodeQL PR triggers cover every analyzed language source extension", () => {
+  const paths = v.parse(v.array(v.string()), codeql.on.pull_request.paths);
+  expect(analyze.strategy.matrix.language.length).toBeGreaterThan(0);
+  for (const language of analyze.strategy.matrix.language) {
+    expectTriggerCoverage(language, paths);
+  }
+  for (const file of [
+    "source.cjs",
+    "source.xsjs",
+    "source.xsjslib",
+    "page.html.erb",
+    "page.jsp",
+    "page.html.dot",
+    "nested/PAGE.HTML",
+    "nested/SOURCE.TS",
+    ".github/codeql/config.yml",
+    ".github/workflows/codeql.yml",
+    "scripts/detect-security-workflow-changes.sh",
+  ]) {
+    expect(triggerMatches(file, paths), file).toBe(true);
+  }
+  for (const file of [
+    "README.md",
+    "docs/guide.md",
+    "scripts/fixtures/codeql-supported-versions-compilers.rst",
+    "snapshots/result.json",
+    "bun.lock",
+    "nested/package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "uv.lock",
+    "Cargo.lock",
+  ]) {
+    expect(triggerMatches(file, paths), file).toBe(false);
+  }
+});
+
+test("CodeQL trigger coverage rejects missing extensions and unknown languages", () => {
+  const paths = v.parse(v.array(v.string()), codeql.on.pull_request.paths);
+  const missingMts = paths.filter(
+    (glob) => !triggerMatches("source.mts", [glob]),
+  );
+  expect(missingMts).not.toEqual(paths);
+  expect(() => expectTriggerCoverage("javascript", missingMts)).toThrow(
+    "nested/source.mts",
+  );
+  expect(() => expectTriggerCoverage("unmapped-language", paths)).toThrow(
+    "Unmapped CodeQL language",
+  );
+});
+
+test("CodeQL retains unfiltered main, nightly and manual full scans", () => {
+  const triggers = v.parse(
+    v.looseObject({
+      push: v.looseObject({
+        branches: v.array(v.string()),
+        paths: v.optional(v.array(v.string())),
+        "paths-ignore": v.optional(v.array(v.string())),
+      }),
+      pull_request: v.looseObject({
+        branches: v.array(v.string()),
+        types: v.array(v.string()),
+        paths: v.array(v.string()),
+      }),
+      schedule: v.array(v.object({ cron: v.string() })),
+      workflow_dispatch: v.null_(),
+    }),
+    codeql.on,
+  );
+  expect(triggers.push.branches).toEqual(["main"]);
+  expect(triggers.push.paths).toBeUndefined();
+  expect(triggers.push["paths-ignore"]).toBeUndefined();
+  expect(triggers.pull_request.branches).toEqual(["main"]);
+  expect(triggers.pull_request.types).toEqual([
+    "opened",
+    "synchronize",
+    "reopened",
+    "ready_for_review",
+  ]);
+  expect(triggers.schedule).toHaveLength(1);
+  const cron = triggers.schedule.at(0)?.cron.split(" ");
+  expect(cron?.slice(2)).toEqual(["*", "*", "*"]);
+  expect(Number(cron?.at(0))).toBeGreaterThan(0);
+  expect(Number(cron?.at(0))).toBeLessThan(60);
 });
