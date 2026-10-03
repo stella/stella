@@ -10,7 +10,11 @@ const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const LEDGER_REL = BASELINE_PATHS.transferRead;
 const BOUNDED_OWNER = "apps/api/src/lib/db/read-bounded.ts";
 
-type FindingKind = "numeric-timeout" | "total-timeout-body" | "constant-limit";
+type FindingKind =
+  | "numeric-timeout"
+  | "total-timeout-body"
+  | "constant-limit"
+  | "fixed-page-size";
 export type ReadFinding = {
   file: string;
   function: string;
@@ -81,14 +85,22 @@ const isFunction = (node: ts.Node): node is ts.FunctionLikeDeclaration =>
   ts.isGetAccessorDeclaration(node) ||
   ts.isSetAccessorDeclaration(node);
 
+const bindingNames = (name: ts.BindingName): string[] => {
+  if (ts.isIdentifier(name)) {
+    return [name.text];
+  }
+  return name.elements.flatMap((element) =>
+    ts.isBindingElement(element) ? bindingNames(element.name) : [],
+  );
+};
+
 const bindingOf = (from: ts.Node, name: string): ts.Expression | undefined => {
   let scope: ts.Node | undefined = from.parent;
   while (scope !== undefined) {
     if (
       isFunction(scope) &&
-      scope.parameters.some(
-        (parameter) =>
-          ts.isIdentifier(parameter.name) && parameter.name.text === name,
+      scope.parameters.some((parameter) =>
+        bindingNames(parameter.name).includes(name),
       )
     ) {
       return undefined;
@@ -219,6 +231,417 @@ const isBodyAccess = (node: ts.Node): boolean =>
     ts.isStringLiteral(node.argumentExpression) &&
     node.argumentExpression.text === "body");
 
+const isOne = (node: ts.Expression): boolean => {
+  const value = resolve(node);
+  return ts.isNumericLiteral(value) && Number(value.text) === 1;
+};
+
+const queryChain = (node: ts.CallExpression): ts.CallExpression[] => {
+  let top = node;
+  while (
+    ts.isPropertyAccessExpression(top.parent) &&
+    top.parent.expression === top &&
+    ts.isCallExpression(top.parent.parent)
+  ) {
+    top = top.parent.parent;
+  }
+  const calls: ts.CallExpression[] = [];
+  let current = unwrap(top);
+  while (ts.isCallExpression(current)) {
+    calls.push(current);
+    const expression = unwrap(current.expression);
+    if (
+      !ts.isPropertyAccessExpression(expression) &&
+      !ts.isElementAccessExpression(expression)
+    ) {
+      break;
+    }
+    current = unwrap(expression.expression);
+  }
+  return calls;
+};
+
+const containsIdentifier = (node: ts.Node, name: string): boolean => {
+  if (ts.isIdentifier(node) && node.text === name) {
+    return true;
+  }
+  return (
+    ts.forEachChild(
+      node,
+      (child) => containsIdentifier(child, name) || undefined,
+    ) === true
+  );
+};
+
+const sameExpression = (left: ts.Expression, right: ts.Expression): boolean =>
+  resolve(left).getText().replace(/\s/gu, "") ===
+  resolve(right).getText().replace(/\s/gu, "");
+
+type ImportedCallOptions = {
+  call: ts.CallExpression;
+  module: string;
+  name: string;
+};
+
+const callsImported = ({
+  call,
+  module,
+  name,
+}: ImportedCallOptions): boolean => {
+  const expression = unwrap(call.expression);
+  if (!ts.isIdentifier(expression)) {
+    return false;
+  }
+  const source = call.getSourceFile();
+  return source.statements.some((statement) => {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== module
+    ) {
+      return false;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    return (
+      bindings !== undefined &&
+      ts.isNamedImports(bindings) &&
+      bindings.elements.some(
+        (element) =>
+          element.name.text === expression.text &&
+          (element.propertyName?.text ?? element.name.text) === name,
+      )
+    );
+  });
+};
+
+type SentinelBoundaryOptions = {
+  cap: ts.Expression;
+  boundary: ts.Expression;
+};
+
+const matchesSentinelBoundary = ({
+  cap,
+  boundary,
+}: SentinelBoundaryOptions): boolean => {
+  const value = resolve(cap);
+  if (
+    ts.isBinaryExpression(value) &&
+    value.operatorToken.kind === ts.SyntaxKind.PlusToken &&
+    isOne(value.right)
+  ) {
+    return sameExpression(boundary, value.left);
+  }
+  const compared = resolve(boundary);
+  return (
+    ts.isNumericLiteral(value) &&
+    ts.isNumericLiteral(compared) &&
+    Number(value.text) > 1 &&
+    Number(value.text) === Number(compared.text) + 1
+  );
+};
+
+const queryResultBinding = (node: ts.CallExpression) => {
+  const declaration = ts.findAncestor(node, ts.isVariableDeclaration);
+  if (declaration === undefined || !ts.isIdentifier(declaration.name)) {
+    return undefined;
+  }
+  if (
+    !ts.isVariableDeclarationList(declaration.parent) ||
+    declaration.parent.declarations.length !== 1
+  ) {
+    return undefined;
+  }
+  const chain = new Set(queryChain(node));
+  let ancestor = node.parent;
+  while (ancestor !== declaration) {
+    if (
+      ts.isCallExpression(ancestor) &&
+      !chain.has(ancestor) &&
+      !["scopedDb", "safeDb", "await", "tryPromise"].includes(
+        callName(ancestor.expression) ?? "",
+      )
+    ) {
+      return undefined;
+    }
+    ancestor = ancestor.parent;
+  }
+  const statement = ts.findAncestor(declaration, ts.isVariableStatement);
+  if (statement === undefined || !ts.isBlock(statement.parent)) {
+    return undefined;
+  }
+  const nextIndex = statement.parent.statements.indexOf(statement) + 1;
+  const following = statement.parent.statements.at(nextIndex);
+  if (following === undefined) {
+    return undefined;
+  }
+  return {
+    rowName: declaration.name.text,
+    following,
+    rest: statement.parent.statements.slice(nextIndex + 1),
+  };
+};
+
+const objectOption = (
+  options: ts.ObjectLiteralExpression,
+  name: string,
+): ts.Expression | undefined => {
+  const property = options.properties.find(
+    (candidate) =>
+      (ts.isPropertyAssignment(candidate) ||
+        ts.isShorthandPropertyAssignment(candidate)) &&
+      propertyName(candidate.name) === name,
+  );
+  if (property === undefined) {
+    return undefined;
+  }
+  if (ts.isPropertyAssignment(property)) {
+    return unwrap(property.initializer);
+  }
+  if (ts.isShorthandPropertyAssignment(property)) {
+    return property.name;
+  }
+  return undefined;
+};
+
+type CursorPageConsumptionOptions = {
+  following: ts.Statement;
+  rest: readonly ts.Statement[];
+  rowName: string;
+  cap: ts.Expression;
+};
+
+const consumesCursorPage = ({
+  following,
+  rest,
+  rowName,
+  cap,
+}: CursorPageConsumptionOptions): boolean => {
+  if (
+    !ts.isVariableStatement(following) ||
+    following.declarationList.declarations.length !== 1
+  ) {
+    return false;
+  }
+  const page = following.declarationList.declarations.at(0);
+  if (
+    page === undefined ||
+    !ts.isIdentifier(page.name) ||
+    page.initializer === undefined
+  ) {
+    return false;
+  }
+  const call = unwrap(page.initializer);
+  if (
+    !ts.isCallExpression(call) ||
+    !callsImported({
+      call,
+      module: "@/api/lib/pagination",
+      name: "createCursorPage",
+    })
+  ) {
+    return false;
+  }
+  const options = call.arguments.at(0);
+  if (options === undefined || !ts.isObjectLiteralExpression(options)) {
+    return false;
+  }
+  const rows = objectOption(options, "rows");
+  const limit = objectOption(options, "limit");
+  if (
+    rows === undefined ||
+    !ts.isIdentifier(rows) ||
+    rows.text !== rowName ||
+    limit === undefined ||
+    !matchesSentinelBoundary({ cap, boundary: limit })
+  ) {
+    return false;
+  }
+  if (rest.some((item) => containsIdentifier(item, rowName))) {
+    return false;
+  }
+  return rest.some(
+    (item) =>
+      ts.isReturnStatement(item) &&
+      containsIdentifier(item, page.name.getText()),
+  );
+};
+
+type OverflowExitOptions = {
+  following: ts.Statement;
+  rowName: string;
+  cap: ts.Expression;
+};
+
+const exitsOnOverflow = ({
+  following,
+  rowName,
+  cap,
+}: OverflowExitOptions): boolean => {
+  if (!ts.isIfStatement(following)) {
+    return false;
+  }
+  const condition = unwrap(following.expression);
+  if (
+    !ts.isBinaryExpression(condition) ||
+    condition.operatorToken.kind !== ts.SyntaxKind.GreaterThanToken
+  ) {
+    return false;
+  }
+  const length = unwrap(condition.left);
+  if (
+    !ts.isPropertyAccessExpression(length) ||
+    length.name.text !== "length" ||
+    !ts.isIdentifier(length.expression) ||
+    length.expression.text !== rowName ||
+    !matchesSentinelBoundary({ cap, boundary: condition.right })
+  ) {
+    return false;
+  }
+  const branch = following.thenStatement;
+  const exit = ts.isBlock(branch) ? branch.statements.at(-1) : branch;
+  if (exit === undefined || containsIdentifier(branch, rowName)) {
+    return false;
+  }
+  if (ts.isReturnStatement(exit) || ts.isThrowStatement(exit)) {
+    return true;
+  }
+  return (
+    ts.isExpressionStatement(exit) &&
+    ts.isCallExpression(exit.expression) &&
+    callsImported({
+      call: exit.expression,
+      module: "better-result",
+      name: "panic",
+    })
+  );
+};
+
+// A sentinel is safe only when its own result is checked against its own cap,
+// before subsequent consumers, and the overflow branch exits without rows.
+const rejectsOverflow = (
+  node: ts.CallExpression,
+  cap: ts.Expression,
+): boolean => {
+  const binding = queryResultBinding(node);
+  if (binding === undefined) {
+    return false;
+  }
+  return (
+    consumesCursorPage({ ...binding, cap }) ||
+    exitsOnOverflow({
+      following: binding.following,
+      rowName: binding.rowName,
+      cap,
+    })
+  );
+};
+
+const paginationNames = (root: ts.Node): Set<string> =>
+  new Set(
+    isFunction(root)
+      ? root.parameters.flatMap((parameter) => bindingNames(parameter.name))
+      : [],
+  );
+
+const PAGINATION_INPUT =
+  /^(?:cursor|page|offset|pageIndex|pageNumber|after|before)$/u;
+type PaginationReferenceOptions = {
+  node: ts.Node;
+  inputs: ReadonlySet<string>;
+  depth?: number;
+};
+
+const referencesPagination = ({
+  node,
+  inputs,
+  depth = 0,
+}: PaginationReferenceOptions): boolean => {
+  if (depth >= 8) {
+    return false;
+  }
+  if (ts.isIdentifier(node)) {
+    if (
+      ts.isPropertyAccessExpression(node.parent) &&
+      node.parent.name === node
+    ) {
+      return false;
+    }
+    if (inputs.has(node.text) && PAGINATION_INPUT.test(node.text)) {
+      return true;
+    }
+    const bound = bindingOf(node, node.text);
+    if (
+      bound !== undefined &&
+      referencesPagination({ node: bound, inputs, depth: depth + 1 })
+    ) {
+      return true;
+    }
+  }
+  if (
+    ts.isPropertyAccessExpression(node) &&
+    PAGINATION_INPUT.test(node.name.text) &&
+    ts.isIdentifier(node.expression) &&
+    inputs.has(node.expression.text)
+  ) {
+    return true;
+  }
+  return (
+    ts.forEachChild(
+      node,
+      (child) =>
+        referencesPagination({ node: child, inputs, depth: depth + 1 }) ||
+        undefined,
+    ) === true
+  );
+};
+
+type LimitDispositionOptions = {
+  node: ts.CallExpression;
+  cap: ts.Expression;
+  root: ts.Node;
+};
+
+const limitDisposition = ({
+  node,
+  cap,
+  root,
+}: LimitDispositionOptions):
+  | "exempt"
+  | "fixed-page-size"
+  | "constant-limit" => {
+  if (isOne(cap) || rejectsOverflow(node, cap)) {
+    return "exempt";
+  }
+  const chain = queryChain(node);
+  if (
+    chain.some(
+      (call) =>
+        callName(call.expression) === "offset" && call.arguments.length > 0,
+    )
+  ) {
+    return "exempt";
+  }
+  const inputs = paginationNames(root);
+  if (
+    chain.some(
+      (call) =>
+        callName(call.expression) === "where" &&
+        call.arguments.some((argument) =>
+          referencesPagination({ node: argument, inputs }),
+        ),
+    )
+  ) {
+    return "exempt";
+  }
+  if (
+    referencesPagination({ node: root, inputs }) ||
+    /(?:PAGE_SIZE|pageSize|pageLimit)/u.test(cap.getText())
+  ) {
+    return "fixed-page-size";
+  }
+  return "constant-limit";
+};
+
 /** Conservative syntax census: JSON/text may also carry user-sized content.
  * Existing bounded metadata and paginated reads retain explicit baseline reasons. */
 export const findTransferReads = (
@@ -327,7 +750,10 @@ export const findTransferReads = (
           cap !== undefined &&
           isConstant(cap)
         ) {
-          record("constant-limit", node);
+          const disposition = limitDisposition({ node, cap, root });
+          if (disposition !== "exempt") {
+            record(disposition, node);
+          }
         }
       }
       ts.forEachChild(node, visit);
@@ -366,7 +792,8 @@ const isBaselineEntry = (value: unknown): value is BaselineEntry =>
   "kind" in value &&
   (value.kind === "numeric-timeout" ||
     value.kind === "total-timeout-body" ||
-    value.kind === "constant-limit") &&
+    value.kind === "constant-limit" ||
+    value.kind === "fixed-page-size") &&
   "count" in value &&
   typeof value.count === "number" &&
   Number.isSafeInteger(value.count) &&
@@ -389,13 +816,24 @@ export const parseTransferBaseline = (
   return parsed;
 };
 
-export const transferMembership = (text: string, label: string): string[] =>
-  parseTransferBaseline(text, label).flatMap((entry) =>
-    Array.from(
-      { length: entry.count },
-      (_, index) => `${entryKey(entry)}::${index}`,
-    ),
+const membershipKey = (
+  entry: Pick<BaselineEntry, "file" | "function" | "kind">,
+): string =>
+  entryKey({
+    ...entry,
+    kind: entry.kind === "fixed-page-size" ? "constant-limit" : entry.kind,
+  });
+
+export const transferMembership = (text: string, label: string): string[] => {
+  const counts = new Map<string, number>();
+  for (const entry of parseTransferBaseline(text, label)) {
+    const key = membershipKey(entry);
+    counts.set(key, (counts.get(key) ?? 0) + entry.count);
+  }
+  return [...counts].flatMap(([key, count]) =>
+    Array.from({ length: count }, (_, index) => `${key}::${index}`),
   );
+};
 
 export const compareTransferBaseline = (
   found: readonly ReadFinding[],
@@ -430,7 +868,7 @@ export const scanTransferTree = async (): Promise<ReadFinding[]> => {
         continue;
       }
       const source = await Bun.file(path.join(REPO_ROOT, file)).text();
-      if (!/timeoutMs|AbortSignal|\.limit\s*\(/u.test(source)) {
+      if (!/timeoutMs|AbortSignal|\blimit\b/u.test(source)) {
         continue;
       }
       found.push(...findTransferReads(file, source));
@@ -441,7 +879,22 @@ export const scanTransferTree = async (): Promise<ReadFinding[]> => {
   );
 };
 
+const DEFAULT_REASON = {
+  "numeric-timeout":
+    "Existing total timeout; select an explicit header or idle policy at the fetch owner.",
+  "total-timeout-body":
+    "Existing total timeout; select an explicit header or idle policy at the fetch owner.",
+  "constant-limit":
+    "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract.",
+  "fixed-page-size":
+    "Existing fixed page budget; prove the cursor/page input reaches this read before treating its rows as a complete result.",
+} as const satisfies Record<FindingKind, string>;
+
 const writeBaseline = async () => {
+  const baselineFile = Bun.file(path.join(REPO_ROOT, LEDGER_REL));
+  const baseline = (await baselineFile.exists())
+    ? parseTransferBaseline(await baselineFile.text(), LEDGER_REL)
+    : undefined;
   const entries = new Map<string, BaselineEntry>();
   for (const finding of await scanTransferTree()) {
     const key = entryKey(finding);
@@ -450,10 +903,15 @@ const writeBaseline = async () => {
       existing.count += 1;
       continue;
     }
+    const previous = baseline?.find(
+      (entry) =>
+        entryKey(entry) === key ||
+        membershipKey(entry) === membershipKey(finding),
+    );
     const reason =
-      finding.kind === "constant-limit"
-        ? "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-        : "Existing total timeout; select an explicit header or idle policy at the fetch owner.";
+      (finding.kind === "fixed-page-size" && previous?.kind === "constant-limit"
+        ? undefined
+        : previous?.reason) ?? DEFAULT_REASON[finding.kind];
     entries.set(key, {
       file: finding.file,
       function: finding.function,
@@ -461,6 +919,20 @@ const writeBaseline = async () => {
       count: 1,
       reason,
     });
+  }
+  if (baseline !== undefined) {
+    const before = new Set(
+      transferMembership(JSON.stringify(baseline), LEDGER_REL),
+    );
+    const added = transferMembership(
+      JSON.stringify([...entries.values()]),
+      LEDGER_REL,
+    ).filter((entry) => !before.has(entry));
+    if (added.length > 0) {
+      return panic(
+        `Cannot grow the transfer/read baseline: ${added.join(", ")}`,
+      );
+    }
   }
   writeFileSync(
     path.join(REPO_ROOT, LEDGER_REL),

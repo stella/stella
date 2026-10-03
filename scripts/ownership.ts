@@ -722,7 +722,7 @@ export const OWNERSHIP = [
     owner: ["packages/fetch/src/index.ts"],
     summary:
       "`@stll/fetch` requires a header or idle timeout policy for new callers " +
-      "and composes caller cancellation. Idle deadlines reset per body chunk; " +
+      "and composes caller cancellation. Idle deadlines cover pending body reads; " +
       "header deadlines stop at the response. Deprecated numeric callers and " +
       "raw total deadlines on body reads are enumerated by " +
       "`scripts/transfer-read-guard.ts` with a shrink-only baseline.",

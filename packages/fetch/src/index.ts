@@ -101,37 +101,39 @@ const executeFetchWithTimeout = async (
         abort();
         return;
       }
-      reset();
     },
     async pull(stream) {
       if (stopped) {
         await cancellation;
         return;
       }
-      await reader.read().then(
-        ({ done, value }) => {
-          if (stopped) {
+      reset();
+      await reader
+        .read()
+        .finally(clear)
+        .then(
+          ({ done, value }) => {
+            if (stopped) {
+              return undefined;
+            }
+            if (done) {
+              finish();
+              reader.releaseLock();
+              stream.close();
+              return undefined;
+            }
+            stream.enqueue(value);
             return undefined;
-          }
-          if (done) {
+          },
+          (error: unknown) => {
+            if (stopped) {
+              return;
+            }
             finish();
             reader.releaseLock();
-            stream.close();
-            return undefined;
-          }
-          reset();
-          stream.enqueue(value);
-          return undefined;
-        },
-        (error: unknown) => {
-          if (stopped) {
-            return;
-          }
-          finish();
-          reader.releaseLock();
-          stream.error(error);
-        },
-      );
+            stream.error(error);
+          },
+        );
       await cancellation;
     },
     async cancel(reason: unknown) {

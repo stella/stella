@@ -47,6 +47,69 @@ afterEach(() => {
 });
 
 describe("response timeout policies", () => {
+  test("idle timeout preserves a completed body when consumption starts later", async () => {
+    jest.useFakeTimers();
+    const fixture = streamFixture();
+    fixture.chunk();
+    fixture.close();
+    const response = await fixture.request("https://example.com", {
+      timeout: { type: "idle", ms: 20 },
+    });
+    await flush();
+    await advance(100);
+    expect(fixture.signal()?.aborted).toBe(false);
+    expect(await response.text()).toBe("x");
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  test("idle timeout excludes consumer pauses while a body chunk is buffered", async () => {
+    jest.useFakeTimers();
+    const fixture = streamFixture();
+    fixture.chunk();
+    fixture.chunk();
+    fixture.close();
+    const response = await fixture.request("https://example.com", {
+      timeout: { type: "idle", ms: 20 },
+    });
+    const reader = response.body?.getReader();
+    expect(await reader?.read()).toEqual({
+      done: false,
+      value: new Uint8Array([120]),
+    });
+    await flush();
+    await advance(100);
+    expect(fixture.signal()?.aborted).toBe(false);
+    expect(await reader?.read()).toEqual({
+      done: false,
+      value: new Uint8Array([120]),
+    });
+    expect(await reader?.read()).toEqual({ done: true, value: undefined });
+    reader?.releaseLock();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  test("idle timeout still aborts an upstream read pending after buffered chunks are consumed", async () => {
+    jest.useFakeTimers();
+    const fixture = streamFixture();
+    fixture.chunk();
+    const response = await fixture.request("https://example.com", {
+      timeout: { type: "idle", ms: 20 },
+    });
+    const reader = response.body?.getReader();
+    expect(await reader?.read()).toEqual({
+      done: false,
+      value: new Uint8Array([120]),
+    });
+    const pending = reader?.read().catch((error: unknown) => error);
+    await flush();
+    await advance(19);
+    expect(fixture.signal()?.aborted).toBe(false);
+    await advance(1);
+    expect(await pending).toMatchObject({ name: "TimeoutError" });
+    expect(fixture.signal()?.aborted).toBe(true);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
   test("idle wrapper preserves response status, headers and transport metadata", async () => {
     jest.useFakeTimers();
     const original = new Response("content", {

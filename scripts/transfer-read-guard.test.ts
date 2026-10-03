@@ -228,6 +228,203 @@ test("literal, named, arithmetic and computed constant limits need a contract", 
   ).toEqual([]);
 });
 
+test("single-row reads pass only for literal or resolved constant one", () => {
+  for (const cap of ["1", "ONE", "singleton"]) {
+    expect(
+      findTransferReads(
+        file,
+        `const ONE = 1; const singleton = ONE; const lookup = () => query.limit(${cap});`,
+      ),
+    ).toEqual([]);
+  }
+  expect(
+    findTransferReads(file, "const lookup = () => query.limit(2);").map(
+      ({ kind }) => kind,
+    ),
+  ).toEqual(["constant-limit"]);
+  expect(
+    findTransferReads(
+      file,
+      "const ONE = 1; const lookup = ({ ONE }) => query.limit(ONE);",
+    ).map(({ kind }) => kind),
+  ).toEqual(["constant-limit"]);
+  expect(
+    findTransferReads(
+      file,
+      "const lookup = () => query['limit'](LIMITS.exportRowLimit);",
+    ).map(({ kind }) => kind),
+  ).toEqual(["constant-limit"]);
+});
+
+test("sentinel reads pass only with a matching early overflow decision", () => {
+  const safe = `
+    const exportRows = async () => {
+      const pageSize = LIMITS.exportRowLimit;
+      const rows = await query.limit(pageSize + 1);
+      if (rows.length > pageSize) return { type: "overflow" };
+      return makeCsv(rows);
+    };
+  `;
+  expect(findTransferReads(file, safe)).toEqual([]);
+  for (const decision of [
+    "if (rows.length > pageSize) console.log('overflow');",
+    "if (otherRows.length > pageSize) return { type: 'overflow' };",
+    "if (rows.length > OTHER_CAP) return { type: 'overflow' };",
+    "if (rows.length > pageSize) return makeCsv(rows);",
+    "if (rows.length > pageSize) { if (debug) return { type: 'overflow' }; }",
+    "",
+  ]) {
+    const source = safe.replace(
+      'if (rows.length > pageSize) return { type: "overflow" };',
+      () => decision,
+    );
+    expect(findTransferReads(file, source).map(({ kind }) => kind)).toEqual([
+      "fixed-page-size",
+    ]);
+  }
+  expect(
+    findTransferReads(
+      file,
+      `
+    const exportRows = async () => {
+      const rows = makeCsv(await query.limit(LIMITS.exportRowLimit + 1));
+      if (rows.length > LIMITS.exportRowLimit) return { type: "overflow" };
+      return rows;
+    };
+  `,
+    ).map(({ kind }) => kind),
+  ).toEqual(["constant-limit"]);
+});
+
+test("offset pagination must be on the limited query chain", () => {
+  for (const query of [
+    "tx.select().limit(LIMITS.pageSize).offset(page * LIMITS.pageSize)",
+    "tx.select().offset(page * LIMITS.pageSize).limit(LIMITS.pageSize)",
+  ]) {
+    expect(findTransferReads(file, `const list = (page) => ${query};`)).toEqual(
+      [],
+    );
+  }
+  expect(
+    findTransferReads(
+      file,
+      `
+    const exportRows = () => {
+      unrelated.offset(100);
+      return tx.select().limit(LIMITS.exportRowLimit);
+    };
+  `,
+    ).map(({ kind }) => kind),
+  ).toEqual(["constant-limit"]);
+});
+
+test("literal sentinel probes require a proven overflow exit", () => {
+  const source = `
+    import { panic } from "better-result";
+    const lookup = async () => {
+      const rows = await query.limit(2);
+      if (rows.length > 1) panic("Duplicate match");
+      return rows.at(0);
+    };
+  `;
+  expect(findTransferReads(file, source)).toEqual([]);
+  expect(
+    findTransferReads(
+      file,
+      source.replace('panic("Duplicate match")', 'log("Duplicate match")'),
+    ).map(({ kind }) => kind),
+  ).toEqual(["constant-limit"]);
+});
+
+test("canonical page construction consumes the matching sentinel result and cap", () => {
+  const source = `
+    import { createCursorPage } from "@/api/lib/pagination";
+    const list = async () => {
+      const rows = await query.limit(LIMITS.itemsMax + 1);
+      const page = createCursorPage({ rows, limit: LIMITS.itemsMax, cursorForItem: item => item.id });
+      return Result.ok(page);
+    };
+  `;
+  expect(findTransferReads(file, source)).toEqual([]);
+  for (const unsafe of [
+    source.replace("limit: LIMITS.itemsMax", "limit: OTHER_CAP"),
+    source.replace("{ rows, limit", "{ rows: otherRows, limit"),
+    source.replace("return Result.ok(page)", "return makeCsv(rows)"),
+    source.replace('from "@/api/lib/pagination"', 'from "./custom-page"'),
+  ]) {
+    expect(findTransferReads(file, unsafe).map(({ kind }) => kind)).toEqual([
+      "constant-limit",
+    ]);
+  }
+});
+
+test("cursor pagination must reach the limited query where clause", () => {
+  expect(
+    findTransferReads(
+      file,
+      `
+    const list = ({ cursor }) => tx.select().where(gt(table.id, cursor)).limit(LIMITS.pageSize);
+  `,
+    ),
+  ).toEqual([]);
+  expect(
+    findTransferReads(
+      file,
+      `
+    const list = ({ query }) => {
+      const after = decodeCursor(query.cursor);
+      const conditions = gt(table.id, after);
+      return tx.select().where(conditions).limit(LIMITS.pageSize);
+    };
+  `,
+    ),
+  ).toEqual([]);
+  expect(
+    findTransferReads(
+      file,
+      `
+    const list = ({ cursor }) => {
+      displayCursor(cursor);
+      return tx.select().where(eq(table.enabled, true)).limit(LIMITS.pageSize);
+    };
+  `,
+    ).map(({ kind }) => kind),
+  ).toEqual(["fixed-page-size"]);
+  expect(
+    findTransferReads(
+      file,
+      `
+    const list = ({ cursor }) => tx.select().where(eq(table.cursor, "fixed-value")).limit(LIMITS.pageSize);
+  `,
+    ).map(({ kind }) => kind),
+  ).toEqual(["fixed-page-size"]);
+});
+
+test("page classification consumes the old fixed-limit budget without adding headroom", () => {
+  const row = { file, function: "list", reason: "Existing fixed read." };
+  const members = (rows: unknown[]) =>
+    transferMembership(JSON.stringify(rows), "fixture");
+  const old = members([{ ...row, kind: "constant-limit", count: 2 }]);
+  const split = members([
+    { ...row, kind: "constant-limit", count: 1 },
+    { ...row, kind: "fixed-page-size", count: 1 },
+  ]);
+  expect(split).toEqual(old);
+  const enlarged = members([
+    { ...row, kind: "constant-limit", count: 1 },
+    { ...row, kind: "fixed-page-size", count: 2 },
+  ]);
+  expect(addedEntries(enlarged, old)).toHaveLength(1);
+  expect(
+    addedEntries(
+      members([
+        { ...row, function: "newList", kind: "fixed-page-size", count: 1 },
+      ]),
+      old,
+    ),
+  ).toHaveLength(1);
+});
+
 test("existing budgets match exactly and repaired functions must leave the baseline", () => {
   const findings = findTransferReads(
     file,
