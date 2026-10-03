@@ -10,6 +10,7 @@
 
 import * as cheerio from "cheerio";
 
+import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import type { Block, Inline } from "@/api/lib/case-law/document-ast";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import type { MarkupResidue } from "@/api/lib/legal-search/parsers/markup-residue";
@@ -240,10 +241,6 @@ export const validateAst = (
 
   const $ = cheerio.load(html);
   $("div[style*='-aw-headerfooter-type']").remove();
-  // A script's source and a stylesheet are never the document's text, so a
-  // parser that rightly leaves them out must not read as having lost content.
-  $("script, style").remove();
-
   // <br> is a word boundary in the rendered document, but cheerio's
   // .text() drops it outright, gluing adjacent words ("wraz<br/>z" →
   // "wrazz") and producing phantom MISSING_WORDS reports against a
@@ -266,7 +263,7 @@ export const validateAst = (
     if (cached !== undefined) {
       return cached;
     }
-    const value = $(el).text().replace(/\s+/gu, " ").trim();
+    const value = visibleHtmlText($(el)).replace(/\s+/gu, " ").trim();
     normalizedTextCache.set(el, value);
     return value;
   };

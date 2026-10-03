@@ -1263,6 +1263,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-parser-validator-calls.ts",
+    "./.oxlint-plugins/no-raw-parser-html.ts",
     "./.oxlint-plugins/no-swallowed-item-error.ts",
     "./.oxlint-plugins/no-raw-decision-text-fields.ts",
     "./.oxlint-plugins/no-unowned-file-version-write.ts",
@@ -3133,6 +3134,26 @@ export default defineConfig({
         ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture.test.ts",
       ],
       rules: { "no-swallowed-item-error/no-test-swallowed-error": "error" },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/parsers/**/*.ts",
+        "apps/api/src/handlers/legislation/**/parsers/**/*.ts",
+        "apps/api/src/lib/legal-search/parsers/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-raw-parser-html.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.ts",
+        "**/__fixtures__/**",
+        // This test support oracle checks retention independently of the
+        // production HTML helpers; sharing their reads would make it vacuous.
+        "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/test-oracle.ts",
+      ],
+      rules: { "no-raw-parser-html/no-raw-parser-html": "error" },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/no-raw-parser-html.fixture.ts"],
+      rules: { "no-raw-parser-html/no-raw-parser-html": "error" },
     },
     {
       files: [

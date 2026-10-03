@@ -445,3 +445,22 @@ for (const href of [
     );
   });
 }
+
+test("excludes script and style from ruling metadata", () => {
+  const ruling = readPlTkRuling(
+    `<div id="sprawaForm:tabView:dok_1">
+    <div class="prop"><div class="name">Dotyczy<script>bad-label</script></div><div class="value">Visible<style>bad-value</style> subject</div></div>
+    <div class="prop"><div class="name">Miejsce publikacji</div><div class="value"><table><tr><td><table><tr><td>Dz.U.<script>bad-citation</script> 2026</td><td>other register</td></tr></table></td><td><a href="https://example.org">ISAP<style>bad-link</style></a></td></tr></table></div></div>
+    <div id="tekst_1"><p>Visible decision<script>bad-script</script><style>bad-style</style></p></div>
+  </div>`,
+    "1",
+  );
+  expect(ruling?.textHtml).toBe("<p>Visible decision</p>");
+  expect(ruling?.subject).toBe("Visible subject");
+  expect(ruling?.publications).toEqual([
+    {
+      text: "Dz.U. 2026",
+      links: [{ text: "ISAP", url: "https://example.org/" }],
+    },
+  ]);
+});
