@@ -30,6 +30,10 @@ import { buildMcpContextFromChat } from "@/api/handlers/chat/tools/registry-adap
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  authorizedMemberRole,
+  SESSION_CREDENTIAL,
+} from "@/api/lib/permission-authorization";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { ensureActiveWorkspace } from "@/api/mcp/tool-utils";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -111,7 +115,10 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
         );
         const authorizedChatWorkspaceIds = new Set([ids.wsA2]);
         const context = buildMcpContextFromChat({
-          memberRole: "owner",
+          memberRole: authorizedMemberRole({
+            role: "owner",
+            credential: SESSION_CREDENTIAL,
+          }),
           organizationId: ids.orgA,
           pinServerValidatedWorkspaceId: (workspaceId) => {
             if (!authorizedChatWorkspaceIds.has(workspaceId)) {
