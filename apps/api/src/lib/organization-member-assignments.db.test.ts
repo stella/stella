@@ -26,9 +26,16 @@ beforeAll(async () => {
 afterAll(async () => {
   await releaseAgentAuthTestDb();
 });
-test.each(["unassigned", "replacement", "invalid"] as const)(
+test.each([
+  "unassigned",
+  "replacement",
+  "invalid",
+  "partial-membership",
+] as const)(
   "organization removal preserves work with %s disposition",
   async (disposition) => {
+    const refused =
+      disposition === "invalid" || disposition === "partial-membership";
     const owner = await signInHuman(
       `assignment-owner-${Bun.randomUUIDv7()}@stella.dev`,
     );
@@ -142,6 +149,16 @@ test.each(["unassigned", "replacement", "invalid"] as const)(
       originatingAttorneyId: leaver.userId,
       responsibleAttorneyId: owner.userId,
     });
+    if (disposition === "partial-membership") {
+      await db
+        .delete(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, coassigned.workspaceId),
+            eq(workspaceMembers.userId, owner.userId),
+          ),
+        );
+    }
     const headers = owner.headers();
     headers.set("content-type", "application/json");
     headers.set("origin", "http://localhost:3001");
@@ -156,20 +173,18 @@ test.each(["unassigned", "replacement", "invalid"] as const)(
             ? {}
             : {
                 reassign_to:
-                  disposition === "replacement"
-                    ? owner.userId
-                    : outsider.userId,
+                  disposition !== "invalid" ? owner.userId : outsider.userId,
               }),
         }),
       }),
     );
-    expect(response.status).toBe(disposition === "invalid" ? 400 : 200);
+    expect(response.status).toBe(refused ? 400 : 200);
     expect(await db.$count(member, eq(member.id, otherMembership.id))).toBe(1);
     expect(
       await db.$count(taskAssignees, eq(taskAssignees.entityId, otherTaskId)),
     ).toBe(1);
     expect(await db.$count(member, eq(member.id, added.id))).toBe(
-      disposition === "invalid" ? 1 : 0,
+      refused ? 1 : 0,
     );
     for (const task of tasks) {
       const assigned = await db
@@ -180,7 +195,7 @@ test.each(["unassigned", "replacement", "invalid"] as const)(
         task.id === coassigned.id
           ? [{ userId: owner.userId, role: "reviewer" }]
           : [];
-      if (disposition === "invalid") {
+      if (refused) {
         expected.push({ userId: leaver.userId, role: "assignee" });
       }
       if (disposition === "replacement" && task.id !== coassigned.id) {
@@ -194,7 +209,7 @@ test.each(["unassigned", "replacement", "invalid"] as const)(
         .from(auditLogs)
         .where(eq(auditLogs.resourceId, task.id));
       expect(history).toEqual(
-        disposition === "invalid"
+        refused
           ? []
           : [
               expect.objectContaining({
@@ -215,7 +230,7 @@ test.each(["unassigned", "replacement", "invalid"] as const)(
             eq(workspaceMembers.userId, leaver.userId),
           ),
         ),
-      ).toBe(disposition === "invalid" ? 1 : 0);
+      ).toBe(refused ? 1 : 0);
     }
     expect(
       await db
@@ -227,7 +242,7 @@ test.each(["unassigned", "replacement", "invalid"] as const)(
         .where(eq(contacts.id, contactId)),
     ).toEqual([
       {
-        originatingAttorneyId: disposition === "invalid" ? leaver.userId : null,
+        originatingAttorneyId: refused ? leaver.userId : null,
         responsibleAttorneyId: owner.userId,
       },
     ]);
@@ -236,7 +251,7 @@ test.each(["unassigned", "replacement", "invalid"] as const)(
       .from(auditLogs)
       .where(eq(auditLogs.resourceId, contactId));
     expect(history).toEqual(
-      disposition === "invalid"
+      refused
         ? []
         : [
             expect.objectContaining({

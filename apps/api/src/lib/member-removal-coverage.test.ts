@@ -9,6 +9,10 @@ import * as schema from "@/api/db/schema";
 import { ORGANIZATION_MEMBER_CLEANUP_TABLES } from "./member-assignment-offboarding";
 
 const RETAINED_MEMBER_COLUMNS = {
+  "entity_versions.collaboration_contributor_user_ids":
+    "Contribution history, not membership or write authority.",
+  "legal_list_generation_candidates.suggested_assignee_user_ids":
+    "Assignment suggestions; accepting a suggestion validates current membership.",
   "audit_logs.user_id": "Audit performer history.",
   "audit_logs.trigger_user_id": "Audit trigger history.",
   "audit_logs.approved_by_user_id": "Audit approval history.",
@@ -252,7 +256,7 @@ test("every schema member reference has an organization removal disposition", ()
     const config = getTableConfig(value);
     const memberColumns = new Set(
       config.columns
-        .filter(({ name }) => /(?:user_id|member_id)$/u.test(name))
+        .filter(({ name }) => /(?:user_ids?|member_ids?)$/u.test(name))
         .map(({ name }) => name),
     );
     for (const fk of config.foreignKeys) {
