@@ -36,7 +36,7 @@ const GUARDED_TABLES = new Set(["fields", "cellMetadata"]);
 
 const WRITE_METHODS = ["insert", "update", "delete"] as const;
 
-const OWNER_DIRECTORY_PREFIXES = ["apps/api/src/lib/fields/"];
+const OWNER_FILE = "apps/api/src/lib/fields/write-field.ts";
 
 // Writers of the field tables for operations other than a member's cell edit.
 const OTHER_OPERATION_WRITERS = new Set([
@@ -62,7 +62,7 @@ const FIXTURE_FILE_SUFFIX =
   ".oxlint-plugins/__fixtures__/no-direct-field-write.fixture.ts";
 
 const isOwnerFile = (filename: string): boolean =>
-  OWNER_DIRECTORY_PREFIXES.some((prefix) => filename.includes(prefix)) ||
+  filename.endsWith(OWNER_FILE) ||
   [...OTHER_OPERATION_WRITERS].some((writer) => filename.endsWith(writer));
 
 const isApiTestSupportFile = (filename: string): boolean =>

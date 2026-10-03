@@ -67,6 +67,12 @@ describe.serial("no-direct-field-write", () => {
     }
   });
 
+  test("reports a sibling of the owner module", async () => {
+    expect(
+      await lint(writeSource, "apps/api/src/lib/fields/another-writer.ts"),
+    ).not.toEqual([]);
+  });
+
   test("reports nothing on the API's own field writers", async () => {
     // Every production module that writes the field tables today is the
     // owner or a listed writer, so the rule holds without suppressions.
