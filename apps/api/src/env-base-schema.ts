@@ -34,7 +34,7 @@ import {
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
 
-const databasePoolMaxValueSchema = v.pipe(
+const positiveIntegerValueSchema = v.pipe(
   v.string(),
   v.digits(),
   v.toNumber(),
@@ -48,7 +48,7 @@ export const featureFlagSchema = v.optional(
 );
 
 const databasePoolMaxSchema = (fallback = "5") =>
-  v.optional(databasePoolMaxValueSchema, fallback);
+  v.optional(positiveIntegerValueSchema, fallback);
 
 const documentOcrBatchIntervalMinutesSchema = v.optional(
   v.pipe(
@@ -131,7 +131,20 @@ export const envBaseServerSchema = {
   // REMOVAL CONDITION: delete both CASE_LAW_* inputs after v0.7.22 is no
   // longer a deployable rollback target. All consumers use PUBLIC_LAW_*.
   CASE_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
-  CASE_LAW_DATABASE_POOL_MAX: v.optional(databasePoolMaxValueSchema),
+  CASE_LAW_DATABASE_POOL_MAX: v.optional(positiveIntegerValueSchema),
+  PUBLIC_CORPUS_ASSUMED_REPLICAS: v.optional(positiveIntegerValueSchema, "2"),
+  PUBLIC_CORPUS_SEARCH_P95_SECONDS: v.optional(positiveIntegerValueSchema, "1"),
+  PUBLIC_CORPUS_AGGREGATE_P95_SECONDS: v.optional(
+    positiveIntegerValueSchema,
+    "2",
+  ),
+  PUBLIC_CORPUS_SITEMAP_P95_SECONDS: v.optional(
+    positiveIntegerValueSchema,
+    "30",
+  ),
+  PUBLIC_CORPUS_SEARCH_GLOBAL_MAX: v.optional(positiveIntegerValueSchema),
+  PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX: v.optional(positiveIntegerValueSchema),
+  PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX: v.optional(positiveIntegerValueSchema),
   DATABASE_POOL_MAX_LIFETIME_S: databasePoolSecondsSchema("0"),
   DATABASE_POOL_IDLE_TIMEOUT_S: databasePoolSecondsSchema("0"),
   // Session statement_timeout for the root and RLS pools, sent when each

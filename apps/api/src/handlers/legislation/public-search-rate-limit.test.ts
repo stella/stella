@@ -145,14 +145,49 @@ describe("public statute search request budget", () => {
       const { app, bindings, searchKeys, sharedKeys, kill } = createBudgetApp();
       try {
         expect(
-          bindings.map(({ scope, failurePolicy }) => ({
-            scope,
-            failurePolicy,
-          })),
-        ).toEqual([
-          { scope: "api", failurePolicy: "fail_open_local" },
-          { scope: "public-statute-search", failurePolicy: "fail_open_local" },
-        ]);
+          bindings
+            .map(({ scope, failurePolicy }) => ({
+              scope,
+              failurePolicy,
+            }))
+            .toSorted(
+              (left, right) =>
+                Number(left.scope > right.scope) -
+                Number(left.scope < right.scope),
+            ),
+        ).toEqual(
+          [
+            { scope: "api", failurePolicy: "fail_open_local" },
+            {
+              scope: "public-statute-search",
+              failurePolicy: "fail_open_local",
+            },
+            {
+              scope: "public-corpus-aggregate",
+              failurePolicy: "fail_open_local",
+            },
+            {
+              scope: "public-corpus-sitemap",
+              failurePolicy: "fail_open_local",
+            },
+            {
+              scope: "public-corpus-global-search",
+              failurePolicy: "fail_open_local",
+            },
+            {
+              scope: "public-corpus-global-aggregate",
+              failurePolicy: "fail_open_local",
+            },
+            {
+              scope: "public-corpus-global-sitemap",
+              failurePolicy: "fail_open_local",
+            },
+          ].toSorted(
+            (left, right) =>
+              Number(left.scope > right.scope) -
+              Number(left.scope < right.scope),
+          ),
+        );
         for (let index = 0; index < 30; index += 1) {
           expect((await app.handle(request(searchPath, method))).status).toBe(
             200,
@@ -200,6 +235,7 @@ const createBudgetApp = () => {
   const searchKeys: string[] = [];
   const sharedContext = new InMemoryRateLimitContext();
   const searchContext = new InMemoryRateLimitContext();
+  const corpusContexts: InMemoryRateLimitContext[] = [];
   // One observed shared request fills its quota, so independence is checked
   // without issuing hundreds of unrelated requests per test.
   const sharedCounter: RateLimitContext = {
@@ -227,9 +263,16 @@ const createBudgetApp = () => {
       .get("/law/statutes", () => "browse"),
     createRedisBinding: (options) => {
       bindings.push(options);
-      expect(["api", "public-statute-search"]).toContain(options.scope);
+      const context = (() => {
+        if (options.scope === "api") {return sharedCounter;}
+        if (options.scope === "public-statute-search") {return searchCounter;}
+        return new InMemoryRateLimitContext();
+      })();
+      if (context instanceof InMemoryRateLimitContext) {
+        corpusContexts.push(context);
+      }
       return {
-        context: options.scope === "api" ? sharedCounter : searchCounter,
+        context,
         generator:
           options.counterKeyGenerator ?? scopedGenerator(options.scope),
       };
@@ -249,6 +292,9 @@ const createBudgetApp = () => {
     kill: () => {
       sharedContext.kill();
       searchContext.kill();
+      for (const context of corpusContexts) {
+        context.kill();
+      }
     },
   };
 };

@@ -56,6 +56,7 @@ export type RateLimitOptions = {
   errorResponse?: RateLimitErrorResponse;
   generator: RateLimitGenerator;
   max: number;
+  onLimit?: () => void;
   skip?: (request: Request) => MaybePromise<boolean>;
 };
 
@@ -177,7 +178,7 @@ type RateLimitRequestState =
 
 type RateLimitApplicationPhase = "before_handler" | "early_failure";
 
-const DEFAULT_RATE_LIMIT_ERROR_RESPONSE = "rate-limit reached";
+export const DEFAULT_RATE_LIMIT_ERROR_RESPONSE = "rate-limit reached";
 
 /**
  * Before-handle hooks `rateLimit` installed. The composed-route census asserts
@@ -239,6 +240,7 @@ export const rateLimit = ({
   errorResponse = DEFAULT_RATE_LIMIT_ERROR_RESPONSE,
   generator,
   max,
+  onLimit,
   skip = () => false,
 }: RateLimitOptions) => {
   context.init({ duration });
@@ -291,6 +293,7 @@ export const rateLimit = ({
     });
 
     if (exceeded) {
+      onLimit?.();
       requestState.set(request, { type: "limited" });
       set.status = 429;
       return errorResponse;

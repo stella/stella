@@ -20,6 +20,8 @@ import {
 } from "@stll/chat-limits";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
 
+import type { env } from "@/api/env";
+
 /** Hoisted so `versionFieldsScanLimit` can derive from it inside the same
  *  object literal instead of restating the page size. */
 const VERSIONS_PAGE_SIZE_DEFAULT = 50;
@@ -871,3 +873,74 @@ export const API_RATE_LIMITS = {
    *  confirmation OTP email request limit: 5 requests per minute. */
   twoFactorManageOtp: { duration: 60_000, max: 5 },
 } as const;
+
+export type PublicCorpusLimitsConfiguration = Pick<
+  typeof env,
+  | "PUBLIC_LAW_DATABASE_POOL_MAX"
+  | "PUBLIC_CORPUS_ASSUMED_REPLICAS"
+  | "PUBLIC_CORPUS_SEARCH_P95_SECONDS"
+  | "PUBLIC_CORPUS_AGGREGATE_P95_SECONDS"
+  | "PUBLIC_CORPUS_SITEMAP_P95_SECONDS"
+  | "PUBLIC_CORPUS_SEARCH_GLOBAL_MAX"
+  | "PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX"
+  | "PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX"
+>;
+
+/** Derive fleet request budgets from pool permits and assumed p95 latency.
+ * Defaults are initial estimates: tune replica count, latency and overrides
+ * against the first week's observations. Search may make 2–3 engine calls
+ * per request; these budgets count requests, not individual engine calls. */
+export const getPublicCorpusLimits = (
+  configuration: PublicCorpusLimitsConfiguration,
+) => {
+  const pool = configuration.PUBLIC_LAW_DATABASE_POOL_MAX;
+  const replicas = configuration.PUBLIC_CORPUS_ASSUMED_REPLICAS;
+  const totalConcurrency = 3 * pool;
+  const searchConcurrency = 2 * pool;
+  type GlobalBudgetOptions = {
+    permits: number;
+    p95Seconds: number;
+    override: number | undefined;
+  };
+  const globalBudget = ({
+    permits,
+    p95Seconds,
+    override,
+  }: GlobalBudgetOptions) => {
+    const max =
+      override ??
+      Math.max(1, Math.floor((replicas * permits * 60) / p95Seconds));
+    return { duration: 60_000, max, localMax: Math.floor(max / replicas) };
+  };
+  return {
+    totalConcurrency,
+    classes: {
+      search: {
+        concurrency: searchConcurrency,
+        global: globalBudget({
+          permits: searchConcurrency,
+          p95Seconds: configuration.PUBLIC_CORPUS_SEARCH_P95_SECONDS,
+          override: configuration.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX,
+        }),
+      },
+      aggregate: {
+        concurrency: pool,
+        address: { duration: 60_000, max: 60 },
+        global: globalBudget({
+          permits: pool,
+          p95Seconds: configuration.PUBLIC_CORPUS_AGGREGATE_P95_SECONDS,
+          override: configuration.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX,
+        }),
+      },
+      sitemap: {
+        address: { duration: 60_000, max: 10 },
+        global: globalBudget({
+          permits: totalConcurrency,
+          p95Seconds: configuration.PUBLIC_CORPUS_SITEMAP_P95_SECONDS,
+          override: configuration.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX,
+        }),
+      },
+      browse: { address: API_RATE_LIMITS.api },
+    },
+  };
+};
