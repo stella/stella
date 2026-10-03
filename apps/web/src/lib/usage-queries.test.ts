@@ -29,9 +29,9 @@ test("entitlement observers and imperative prefetches respect usage availability
   const queryClient = new QueryClient();
   const options = usageEntitlementOptions({ organizationId: "org-a" });
   expect(options.enabled).toBe(env.VITE_FEATURE_USAGE);
-  expect(await queryClient.fetchQuery(options)).toEqual(response);
+  expect(await queryClient.query(options)).toEqual(response);
   queryClient.clear();
-  await queryClient.prefetchQuery(options);
+  await queryClient.query(options);
   const cachedResponse = queryClient.getQueryData(options.queryKey);
   expect(cachedResponse).toEqual(response);
   expect(paths).toEqual(
@@ -51,9 +51,9 @@ test("lane observers and imperative prefetches respect usage availability", asyn
     userId: "user-a",
   });
   expect(options.enabled).toBe(env.VITE_FEATURE_USAGE);
-  expect(await queryClient.fetchQuery(options)).toEqual(response);
+  expect(await queryClient.query(options)).toEqual(response);
   queryClient.clear();
-  await queryClient.prefetchQuery(options);
+  await queryClient.query(options);
   const cachedResponse = queryClient.getQueryData(options.queryKey);
   expect(cachedResponse).toEqual(response);
   expect(paths).toEqual(
