@@ -11,6 +11,7 @@ import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DocxArchiveError } from "@/api/lib/docx-archive";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
@@ -39,6 +40,7 @@ type ReadEmailHtmlPreviewHandlerProps = {
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
+  recordAuditEvent: AuditRecorder;
 };
 
 export const readEmailHtmlPreviewHandler = async ({
@@ -46,6 +48,7 @@ export const readEmailHtmlPreviewHandler = async ({
   fieldId,
   organizationId,
   workspaceId,
+  recordAuditEvent,
 }: ReadEmailHtmlPreviewHandlerProps) => {
   const rows = await fileFieldQuery(scopedDb, fieldId, workspaceId);
   const row = rows.at(0);
@@ -92,6 +95,25 @@ export const readEmailHtmlPreviewHandler = async ({
     });
     return status(422, { message: "Failed to render email preview" });
   }
+
+  // The preview carries the message body; record the view once there is a
+  // preview to return.
+  await scopedDb(
+    async (tx) =>
+      await recordAuditEvent(tx, {
+        action: CONTENT_DELIVERY_AUDIT_ACTION.inline,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        resourceId: row.entityId,
+        workspaceId,
+        metadata: {
+          disposition: "inline",
+          fieldId,
+          format: "email-html",
+          mimeType: content.mimeType,
+          sizeBytes: content.sizeBytes,
+        },
+      }),
+  );
 
   return {
     ...previewResult.value,

@@ -539,6 +539,26 @@ export type NalusAbstractOutcome =
   | { type: typeof CZ_US_ABSTRACT_STATE.ABSENT }
   | { type: typeof CZ_US_ABSTRACT_STATE.UNAVAILABLE };
 
+const abstractTextFields = (outcome: NalusAbstractOutcome) => {
+  switch (outcome.type) {
+    case CZ_US_ABSTRACT_STATE.READ:
+      return extractAbstract(outcome.html);
+    case CZ_US_ABSTRACT_STATE.ABSENT:
+      return {
+        abstract: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        legalSentence: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      };
+    case CZ_US_ABSTRACT_STATE.UNAVAILABLE:
+      return {
+        abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+        legalSentence: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+      };
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled abstract outcome: ${JSON.stringify(outcome)}`);
+  }
+};
+
 // ── Record card (ResultDetail.aspx) ──────────────────────
 
 /**
@@ -1053,10 +1073,6 @@ const parseDecisionPage = ({
     });
   }
 
-  // Hash on identity fields only (not fulltext) for stability
-  // across parser changes. Matches NSS adapter pattern.
-  const raw = `${sourceDocumentId}|${parsed.caseNumber}|${parsed.decisionDate ?? ""}`;
-
   return plainTextIngestionResult({
     caseNumber: parsed.caseNumber,
     sourceDocumentId,
@@ -1111,7 +1127,7 @@ const parseDecisionPage = ({
       nalusRecordId,
       nalusSz,
     }),
-    rawHash: hashContent(raw),
+    rawHash: hashContent(html),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_US],
     documentAst,
     sourceRaw: html,
@@ -2124,6 +2140,31 @@ const parsedRecordCard = (
     : { state: CZ_US_RECORD_CARD_STATE.READ, fields };
 };
 
+type CzUsSourceHashInput = {
+  document: string;
+  detail: string | undefined;
+  abstract: string | undefined;
+  abstractState: CzUsAbstractState;
+};
+
+// Keep source bytes outside ASP.NET request state independent of projections.
+const czUsSourceHash = (payloads: CzUsSourceHashInput) => {
+  const detail = payloads.detail?.replace(
+    /<input\b(?:[^>"']|"[^"]*"|'[^']*')*>/giu,
+    (input) => {
+      const $ = cheerio.load(input);
+      const field = $("input");
+      return field.attr("type")?.toLowerCase() === "hidden" &&
+        /^__(?:VIEWSTATE(?:GENERATOR|FIELDCOUNT|\d+)?|EVENTVALIDATION)$/iu.test(
+          field.attr("name") ?? "",
+        )
+        ? ""
+        : input;
+    },
+  );
+  return hashContent(JSON.stringify({ ...payloads, detail }));
+};
+
 /**
  * Assemble one decision from the responses the court served for it.
  *
@@ -2166,24 +2207,21 @@ export const buildCzUsDecision = ({
     [CZ_US_ABSTRACT_METADATA_KEY]:
       abstractHtml === undefined ? abstractState : CZ_US_ABSTRACT_STATE.READ,
   });
-  decision.textFields =
-    abstractHtml === undefined
-      ? {
-          ...decision.textFields,
-          abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
-          legalSentence: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
-        }
-      : { ...decision.textFields, ...extractAbstract(abstractHtml) };
-  // Text-field and record-card changes must pass the pipeline's source-hash
-  // gate, which compares this hash and not the stored payload.
-  decision.rawHash = hashContent(
-    JSON.stringify({
-      abstract: decision.textFields.abstract,
-      identityHash: decision.rawHash,
-      judges: decision.judges ?? null,
-      legalSentence: decision.textFields.legalSentence,
-    }),
-  );
+  decision.textFields = {
+    ...decision.textFields,
+    ...abstractTextFields(
+      abstractHtml === undefined
+        ? { type: abstractState }
+        : { type: CZ_US_ABSTRACT_STATE.READ, html: abstractHtml },
+    ),
+  };
+  decision.rawHash = czUsSourceHash({
+    document: textHtml,
+    detail: detailHtml,
+    abstract: abstractHtml,
+    abstractState:
+      abstractHtml === undefined ? abstractState : CZ_US_ABSTRACT_STATE.READ,
+  });
   Object.assign(
     decision,
     multiResponseSourceRaw({
@@ -2706,10 +2744,10 @@ const czUsStoredRawParts = (
 };
 
 /**
- * Rebuild a NALUS decision solely from its saved source responses. Rows from
- * before the multi-page envelope retain their metadata because their raw HTML
- * has no abstract page; envelope rows re-project the original abstract block
- * breaks without contacting the publisher.
+ * Rebuild a NALUS decision solely from its saved source responses. Abstract
+ * absence is derived from the captured page or saved availability state;
+ * envelope rows re-project the original abstract block breaks without
+ * contacting the publisher.
  */
 const reparseStoredRaw = (
   stored: StoredRawReparseInput,
@@ -2784,16 +2822,31 @@ const reparseStoredRaw = (
     ...decision.metadata,
   });
   const abstractHtml = parts?.["abstract"];
+  let abstractOutcome: NalusAbstractOutcome;
   if (abstractHtml !== undefined) {
-    decision.textFields = {
-      ...decision.textFields,
-      ...extractAbstract(abstractHtml),
-    };
-    decision.metadata = checkedDecisionMetadata({
-      ...decision.metadata,
-      [CZ_US_ABSTRACT_METADATA_KEY]: CZ_US_ABSTRACT_STATE.READ,
-    });
+    abstractOutcome = { type: CZ_US_ABSTRACT_STATE.READ, html: abstractHtml };
+  } else if (
+    decision.metadata[CZ_US_ABSTRACT_METADATA_KEY] ===
+    CZ_US_ABSTRACT_STATE.ABSENT
+  ) {
+    abstractOutcome = { type: CZ_US_ABSTRACT_STATE.ABSENT };
+  } else {
+    abstractOutcome = { type: CZ_US_ABSTRACT_STATE.UNAVAILABLE };
   }
+  decision.textFields = {
+    ...decision.textFields,
+    ...abstractTextFields(abstractOutcome),
+  };
+  decision.metadata = checkedDecisionMetadata({
+    ...decision.metadata,
+    [CZ_US_ABSTRACT_METADATA_KEY]: abstractOutcome.type,
+  });
+  decision.rawHash = czUsSourceHash({
+    document: documentHtml,
+    detail: detailHtml,
+    abstract: abstractHtml,
+    abstractState: abstractOutcome.type,
+  });
   decision.sourceRaw = raw;
   decision.sourceRawContentType = stored.contentType ?? "text/html";
   return { type: "parsed", result: plainTextIngestionResult(decision) };

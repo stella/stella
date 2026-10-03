@@ -1,3 +1,4 @@
+// parser-output-unchanged: Counts recovered documents independently of secondary-read quality; fetched pages and parsed document fields are unchanged.
 // parser-output-unchanged: telemetry observation forwards the original page and publisher responses.
 import { Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -22,6 +23,10 @@ import { hasUsableAst } from "@/api/lib/case-law/document-ast";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
+import {
+  OBSERVATION_DETAIL,
+  observationDetailOf,
+} from "@/api/lib/legal-search/partial-observation-sql";
 
 type DocumentWindowContext = {
   source: AdapterKey;
@@ -328,7 +333,7 @@ export const withDocumentStageWindow = async ({
         continue;
       }
       if (
-        decision.isListingOnly === true ||
+        observationDetailOf(decision) === OBSERVATION_DETAIL.LISTING_ONLY ||
         !(
           hasUsableAst(decision.documentAst) ||
           Boolean(decision.fulltext?.trim())

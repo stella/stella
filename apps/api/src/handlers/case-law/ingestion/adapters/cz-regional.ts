@@ -3,6 +3,7 @@
 import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
+import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
@@ -104,6 +105,8 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
  * Cursor format: "YYYY-MM-DD:page" (e.g. "2026-03-01:0").
  * Pages are 0-indexed. A null cursor starts from 30 days ago.
  */
+
+const MAX_FINALDOC_RESPONSE_BYTES = 20 * 1024 * 1024;
 
 const itemBuildFailed = failureSink({
   event: "case_law.ingestion.item_build_failed",
@@ -265,7 +268,7 @@ export type CzRegionalApiItem = {
 /** Paginated response from /api/opendata/{y}/{m}/{d}. */
 type CzRegionalPageResponse = {
   items: unknown[];
-  totalPages?: number | null;
+  totalPages: number;
   pageNumber?: number | null;
 };
 
@@ -428,16 +431,110 @@ const isCzRegionalPageResponse = (
 ): value is CzRegionalPageResponse =>
   isRecord(value) &&
   Array.isArray(value["items"]) &&
-  isNullishNumber(value["totalPages"]) &&
+  Number.isInteger(value["totalPages"]) &&
+  typeof value["totalPages"] === "number" &&
+  value["totalPages"] >= 0 &&
   isNullishNumber(value["pageNumber"]);
 
+type CzRegionalPageRead =
+  | { type: "present"; page: CzRegionalPageResponse }
+  | { type: "absent" }
+  | { type: "unavailable"; error: AdapterFetchError };
+
+const readCzRegionalPage = async (
+  response: Response,
+  cursor: string | null,
+): Promise<CzRegionalPageRead> => {
+  if (response.status === 404) {
+    return { type: "absent" };
+  }
+  if (!response.ok) {
+    return {
+      type: "unavailable",
+      error: new AdapterFetchError({
+        message: `CZ Regional API error: ${response.status}`,
+        adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+        cursor,
+        httpStatus: response.status,
+      }),
+    };
+  }
+  const validatedPage = validatePublisherPage({
+    body: await response.text(),
+    headers: response.headers,
+    adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+    cursor,
+    expectation: { kind: "json", minBytes: 2, shape: isCzRegionalPageResponse },
+  });
+  if (validatedPage.isErr()) {
+    return { type: "unavailable", error: validatedPage.error };
+  }
+  const page = validatedPage.value;
+  if (!isCzRegionalPageResponse(page)) {
+    return {
+      type: "unavailable",
+      error: new AdapterFetchError({
+        message: "CZ Regional API returned an invalid payload",
+        adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+        cursor,
+      }),
+    };
+  }
+  return { type: "present", page };
+};
+
+/** Identity fields are read independently of optional metadata validation. */
+const czRegionalIdentityItem = (raw: unknown): CzRegionalApiItem | null => {
+  if (!isRecord(raw)) {
+    return null;
+  }
+  const jednaciCislo = raw["jednaciCislo"];
+  const soud = raw["soud"];
+  if (typeof jednaciCislo !== "string" || typeof soud !== "string") {
+    return null;
+  }
+  return {
+    jednaciCislo,
+    soud,
+    ...(typeof raw["odkaz"] === "string" ? { odkaz: raw["odkaz"] } : {}),
+  };
+};
+
+type CzRegionalListingRead =
+  | { type: "present"; item: CzRegionalApiItem }
+  | { type: "unidentifiable" }
+  | { type: "unavailable"; item: CzRegionalApiItem; raw: unknown };
+
+const readCzRegionalListingItem = (raw: unknown): CzRegionalListingRead => {
+  if (isCzRegionalApiItem(raw)) {
+    return { type: "present", item: raw };
+  }
+  const item = czRegionalIdentityItem(raw);
+  return item === null ||
+    czRegionalListingIdentity(item).type === "unidentifiable"
+    ? { type: "unidentifiable" }
+    : { type: "unavailable", item, raw };
+};
+
+type CzRegionalListingItem = { item: CzRegionalApiItem; raw: unknown };
+
 const readCzRegionalListingItems = (rows: unknown[]) => {
-  const items: CzRegionalApiItem[] = [];
+  const items: CzRegionalListingItem[] = [];
   let failures = 0;
   for (const row of rows) {
-    if (isCzRegionalApiItem(row)) {
-      items.push(row);
-      continue;
+    const read = readCzRegionalListingItem(row);
+    switch (read.type) {
+      case "present":
+        items.push({ item: read.item, raw: row });
+        continue;
+      case "unavailable":
+        items.push({ item: read.item, raw: read.raw });
+        break;
+      case "unidentifiable":
+        break;
+      default:
+        read satisfies never;
+        panic("Unhandled regional listing read");
     }
     failures += 1;
     observeItemBuildFailure(
@@ -552,7 +649,18 @@ const fetchFinaldoc = async (
       });
     }
 
-    const raw = await response.text();
+    const bytes =
+      response.body === null
+        ? new Uint8Array()
+        : await readCappedBytes(response.body, MAX_FINALDOC_RESPONSE_BYTES);
+    if (bytes === null) {
+      throw new AdapterFetchError({
+        message: `CZ Regional document exceeds ${MAX_FINALDOC_RESPONSE_BYTES} bytes`,
+        adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+        cursor: null,
+      });
+    }
+    const raw = new TextDecoder().decode(bytes);
     const validatedPage = validatePublisherPage({
       body: raw,
       headers: response.headers,
@@ -813,10 +921,9 @@ export const documentIdFromLink = (
  * and the operator repair all key rows the same way, and a second copy of the
  * rule would let them disagree about which rows exist.
  */
-export const czRegionalListingIdentity = (
-  item: CzRegionalApiItem,
-): ListingIdentity => {
-  if (!item.jednaciCislo || !isCourtListing(item)) {
+export const czRegionalListingIdentity = (raw: unknown): ListingIdentity => {
+  const item = czRegionalIdentityItem(raw);
+  if (!item?.jednaciCislo || !isCourtListing(item)) {
     return { type: "unidentifiable" };
   }
   const sourceDocumentId = documentIdFromLink(item.odkaz ?? undefined);
@@ -932,6 +1039,8 @@ export type CzRegionalBuildResult =
 type AssembleCzRegionalOptions = {
   /** The listing row, which is the only surface stating several fields. */
   item: CzRegionalApiItem;
+  /** The verbatim listing when optional metadata cannot be read. */
+  rawListing?: unknown;
   /** The document payload, or null where none was read. */
   document: CzRegionalDocumentPayload | null;
   /** The chain payload, which only the chain pass supplies. */
@@ -952,6 +1061,7 @@ type AssembleCzRegionalOptions = {
  */
 export const assembleCzRegionalDecision = ({
   item,
+  rawListing = item,
   document,
   chain,
 }: AssembleCzRegionalOptions): CzRegionalBuildResult => {
@@ -1019,7 +1129,7 @@ export const assembleCzRegionalDecision = ({
   const fulltext = parsed?.fulltext ?? text.plain;
 
   const sourceRaw = encodeSourceRawEnvelope({
-    [RAW_PART.LISTING]: JSON.stringify(item),
+    [RAW_PART.LISTING]: JSON.stringify(rawListing),
     ...(document === null ? {} : { [RAW_PART.DOCUMENT]: document.raw }),
     ...(chain === null ? {} : { [RAW_PART.CHAIN]: chain.raw }),
   });
@@ -1097,18 +1207,64 @@ export const assembleCzRegionalDecision = ({
   };
 };
 
+/** Preserve an identifiable row while its metadata shape remains unreadable. */
+const buildCzRegionalListingFallback = (
+  item: CzRegionalApiItem,
+  raw: unknown,
+): CzRegionalBuildResult => {
+  const built = assembleCzRegionalDecision({
+    item,
+    document: null,
+    chain: null,
+  });
+  if (built.type === "unkeyable") {
+    return built;
+  }
+  const sourceRaw = encodeSourceRawEnvelope({
+    [RAW_PART.LISTING]: JSON.stringify(raw),
+  });
+  return {
+    type: "built",
+    decision: {
+      ...built.decision,
+      // An unreadable link cannot establish that the publisher has no document.
+      isListingOnly: true,
+      sourceRaw,
+      rawHash: hashContent(sourceRaw),
+    },
+  };
+};
+
 /**
  * Fetch the document for a listed item and assemble the decision.
- *
- * The document is fetched once per row and the outcome says whether it came
- * back, because the two callers need opposite things from that: the crawl
- * stores the listing observation either way, and the reconciliation loop
- * parks a row it could not read the document for.
+ * The crawl retains identifiable rows whose metadata cannot be read;
+ * valid identity fields still drive the document fetch when optional metadata drifts.
  */
 export const buildCzRegionalDecision = async (
-  item: CzRegionalApiItem,
+  raw: unknown,
   signal?: AbortSignal,
 ): Promise<CzRegionalBuildResult> => {
+  const read = readCzRegionalListingItem(raw);
+  switch (read.type) {
+    case "unidentifiable":
+      return { type: "unkeyable" };
+    case "unavailable": {
+      if (read.item.odkaz && restrictCzRegionalFinaldocUrl(read.item.odkaz)) {
+        break;
+      }
+      const built = buildCzRegionalListingFallback(read.item, raw);
+      if (built.type === "unkeyable") {
+        return built;
+      }
+      return { type: "detail-unavailable", decision: built.decision };
+    }
+    case "present":
+      break;
+    default:
+      read satisfies never;
+      return panic("Unhandled regional listing read");
+  }
+  const item = read.item;
   if (!item.jednaciCislo || !isCourtListing(item)) {
     return { type: "unkeyable" };
   }
@@ -1123,7 +1279,12 @@ export const buildCzRegionalDecision = async (
     splitCaseReference(item.jednaciCislo).caseNumber,
     signal,
   );
-  const built = assembleCzRegionalDecision({ item, document, chain: null });
+  const built = assembleCzRegionalDecision({
+    item,
+    rawListing: raw,
+    document,
+    chain: null,
+  });
   if (document !== null || built.type !== "built") {
     return built;
   }
@@ -1321,7 +1482,8 @@ type ListCzRegionalDayPageOptions = {
 };
 
 export type CzRegionalDayPage = {
-  items: CzRegionalApiItem[];
+  /** Verbatim members, including rows whose optional metadata shape drifted. */
+  items: unknown[];
   /** 0 for a day the publisher lists nothing for (the API answers 404). */
   totalPages: number;
 };
@@ -1347,40 +1509,22 @@ export const listCzRegionalDayPage = async ({
   }
   const response = responseResult.value;
 
-  // 404 is how this API says "nothing published that day".
-  if (response.status === 404) {
-    return { items: [], totalPages: 0 };
+  const read = await readCzRegionalPage(response, cursor);
+  switch (read.type) {
+    case "absent":
+      return { items: [], totalPages: 0 };
+    case "unavailable":
+      throw read.error;
+    case "present":
+      break;
+    default:
+      read satisfies never;
+      return panic("Unhandled regional page read");
   }
-  if (!response.ok) {
-    throw new AdapterFetchError({
-      message: `CZ Regional API error: ${response.status}`,
-      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-      cursor,
-      httpStatus: response.status,
-    });
-  }
-
-  const validatedPage = validatePublisherPage({
-    body: await response.text(),
-    headers: response.headers,
-    adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-    cursor,
-    expectation: { kind: "json", minBytes: 2, shape: isCzRegionalPageResponse },
-  });
-  if (validatedPage.isErr()) {
-    throw validatedPage.error;
-  }
-  const json = validatedPage.value;
-  if (!isCzRegionalPageResponse(json)) {
-    throw new AdapterFetchError({
-      message: "CZ Regional API returned an invalid payload",
-      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-      cursor,
-    });
-  }
+  const json = read.page;
   return {
-    items: readCzRegionalListingItems(json.items).items,
-    totalPages: json.totalPages ?? 1,
+    items: json.items,
+    totalPages: json.totalPages,
   };
 };
 
@@ -1416,17 +1560,14 @@ const listCzRegionalSlicePage = async ({
 
 /**
  * Rebuild a decision from a payload the loop stored verbatim. The payload is
- * revalidated rather than trusted: it may have been parked for days, and a
- * shape the adapter no longer recognises has to be reported as unbuildable
- * instead of parsed on faith.
+ * revalidated by the shared builder; valid links are fetched even when optional
+ * metadata drifts.
  */
 const buildCzRegionalFromPayload = async (
   payload: unknown,
   signal?: AbortSignal,
 ): Promise<ReconciliationBuildOutcome> =>
-  isCzRegionalApiItem(payload)
-    ? await buildCzRegionalDecision(payload, signal)
-    : { type: "unkeyable" };
+  await buildCzRegionalDecision(payload, signal);
 
 // ── Source-field inventory ───────────────────────────────
 
@@ -1790,8 +1931,9 @@ const reparseCzRegionalStoredRaw = (
       detail: "the stored payload is not an envelope",
     };
   }
-  const item = parsedPart(parts, RAW_PART.LISTING);
-  if (!isCzRegionalApiItem(item)) {
+  const rawListing = parsedPart(parts, RAW_PART.LISTING);
+  const read = readCzRegionalListingItem(rawListing);
+  if (read.type === "unidentifiable") {
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
@@ -1802,12 +1944,18 @@ const reparseCzRegionalStoredRaw = (
   const documentRaw = parts[RAW_PART.DOCUMENT];
   const chainRaw = parts[RAW_PART.CHAIN];
 
-  const built = assembleCzRegionalDecision({
-    item,
-    document:
-      documentRaw === undefined ? null : readCzRegionalDocument(documentRaw),
-    chain: chainRaw === undefined ? null : readCzRegionalChain(chainRaw),
-  });
+  const built =
+    read.type === "unavailable" && documentRaw === undefined
+      ? buildCzRegionalListingFallback(read.item, rawListing)
+      : assembleCzRegionalDecision({
+          item: read.item,
+          rawListing,
+          document:
+            documentRaw === undefined
+              ? null
+              : readCzRegionalDocument(documentRaw),
+          chain: chainRaw === undefined ? null : readCzRegionalChain(chainRaw),
+        });
   if (built.type !== "built") {
     return {
       type: "rejected",
@@ -1916,7 +2064,7 @@ const nextCzRegionalListingCursor = ({
 };
 
 type BuildCzRegionalPageItemsOptions = {
-  items: readonly CzRegionalApiItem[];
+  items: readonly CzRegionalListingItem[];
   cursor: string | null;
   initialFailures: number;
   readBudgetSpent: () => boolean;
@@ -1955,7 +2103,10 @@ const buildCzRegionalPageItems = async ({
       item.jednaciCislo ?? undefined,
     );
   };
-  const pushListingRow = async (item: CzRegionalApiItem): Promise<void> => {
+  const pushListingRow = async ({
+    item,
+    raw,
+  }: CzRegionalListingItem): Promise<void> => {
     const attempted = await buildPlainTextItem({
       decisionOf: (value) => {
         switch (value.type) {
@@ -1971,10 +2122,12 @@ const buildCzRegionalPageItems = async ({
       },
       adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
 
-      rawListing: JSON.stringify(item),
+      rawListing: JSON.stringify(raw),
       build: async () =>
         await Promise.resolve(
-          assembleCzRegionalDecision({ item, document: null, chain: null }),
+          isCzRegionalApiItem(raw)
+            ? assembleCzRegionalDecision({ item, document: null, chain: null })
+            : buildCzRegionalListingFallback(item, raw),
         ),
     });
     if (attempted.type === "item_build_failed") {
@@ -1999,8 +2152,9 @@ const buildCzRegionalPageItems = async ({
       continue;
     }
     const built = await Promise.all(
-      batch.map(async (item) => ({
+      batch.map(async ({ item, raw }) => ({
         item,
+        raw,
         attempt: await Result.tryPromise({
           try: async () => {
             const attempted = await buildPlainTextItem({
@@ -2018,9 +2172,9 @@ const buildCzRegionalPageItems = async ({
               },
               adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
 
-              rawListing: JSON.stringify(item),
+              rawListing: JSON.stringify(raw),
               build: async () =>
-                await buildCzRegionalDecision(item, effectiveSignal),
+                await buildCzRegionalDecision(raw, effectiveSignal),
             });
             return attempted.type === "item_build_failed"
               ? attempted
@@ -2046,10 +2200,10 @@ const buildCzRegionalPageItems = async ({
       })),
     );
     signal?.throwIfAborted();
-    for (const { item, attempt } of built) {
+    for (const { item, raw, attempt } of built) {
       if (Result.isError(attempt) && attempt.error instanceof DOMException) {
         deferred += 1;
-        await pushListingRow(item);
+        await pushListingRow({ item, raw });
         continue;
       }
       if (Result.isError(attempt)) {
@@ -2065,7 +2219,7 @@ const buildCzRegionalPageItems = async ({
         // document again (and parks the refusal) instead of losing it.
         const failureCountBeforeFallback = refused;
         observeItemBuildFailure(attempt.error, item.jednaciCislo ?? undefined);
-        await pushListingRow(item);
+        await pushListingRow({ item, raw });
         if (refused === failureCountBeforeFallback) {
           refused++;
         }
@@ -2243,14 +2397,13 @@ export const czRegionalAdapter = defineSourceAdapter({
         }
         const response = responseResult.value;
 
-        if (!response.ok) {
-          // 404 means no data for this date; skip forward
-          if (response.status === 404) {
+        const read = await readCzRegionalPage(response, cursor);
+        switch (read.type) {
+          case "absent": {
             const today = todayIso();
             const empty = state.emptyDays + 1;
             const skip = gapSkipDays(empty);
             const next = advanceDate(state.date, skip);
-
             return {
               decisions: [],
               nextCursor:
@@ -2259,37 +2412,15 @@ export const czRegionalAdapter = defineSourceAdapter({
                   : makeCursor({ date: today, page: 0, emptyDays: 0 }),
             };
           }
-
-          throw new AdapterFetchError({
-            message: `CZ Regional API error: ${response.status}`,
-            adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-            cursor,
-            httpStatus: response.status,
-          });
+          case "unavailable":
+            throw read.error;
+          case "present":
+            break;
+          default:
+            read satisfies never;
+            return panic("Unhandled regional page read");
         }
-
-        const validatedPage = validatePublisherPage({
-          body: await response.text(),
-          headers: response.headers,
-          adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-          cursor,
-          expectation: {
-            kind: "json",
-            minBytes: 2,
-            shape: isCzRegionalPageResponse,
-          },
-        });
-        if (validatedPage.isErr()) {
-          throw validatedPage.error;
-        }
-        const json = validatedPage.value;
-        if (!isCzRegionalPageResponse(json)) {
-          throw new AdapterFetchError({
-            message: "CZ Regional API returned an invalid payload",
-            adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-            cursor,
-          });
-        }
+        const json = read.page;
         const { items, failures } = readCzRegionalListingItems(json.items);
 
         const { decisions, refused, deferred } = await buildCzRegionalPageItems(
@@ -2327,7 +2458,7 @@ export const czRegionalAdapter = defineSourceAdapter({
           itemBuildFailures: { type: "item_build_failed", count: refused },
           nextCursor: nextCzRegionalListingCursor({
             state,
-            totalPages: json.totalPages ?? 1,
+            totalPages: json.totalPages,
             hasResults: json.items.length > 0,
           }),
         };
