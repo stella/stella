@@ -1,5 +1,12 @@
-import { expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { afterEach, expect, test } from "bun:test";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import ts from "typescript";
 
@@ -112,12 +119,31 @@ const isLiteralData = (node: ts.Expression): boolean => {
   );
 };
 
-const isConstantsOnly = (source: string): boolean => {
+const isConstantsOnly = (
+  source: string,
+  isConstantDependency: (specifier: string) => boolean = () => false,
+): boolean => {
   const parsed = ts.createSourceFile("leaf.ts", source, ts.ScriptTarget.Latest);
   return (
     parsed.statements.length > 0 &&
-    parsed.statements.every(
-      (statement) =>
+    parsed.statements.every((statement) => {
+      if (ts.isImportDeclaration(statement)) {
+        const clause = statement.importClause;
+        const bindings = clause?.namedBindings;
+        const typeOnly =
+          clause?.isTypeOnly === true ||
+          (clause?.name === undefined &&
+            bindings !== undefined &&
+            ts.isNamedImports(bindings) &&
+            bindings.elements.length > 0 &&
+            bindings.elements.every((element) => element.isTypeOnly));
+        return (
+          typeOnly ||
+          (ts.isStringLiteral(statement.moduleSpecifier) &&
+            isConstantDependency(statement.moduleSpecifier.text))
+        );
+      }
+      return (
         ts.isVariableStatement(statement) &&
         statement.declarationList.getFirstToken(parsed)?.kind ===
           ts.SyntaxKind.ConstKeyword &&
@@ -129,9 +155,35 @@ const isConstantsOnly = (source: string): boolean => {
             ts.isIdentifier(declaration.name) &&
             declaration.initializer !== undefined &&
             isLiteralData(declaration.initializer),
-        ),
-    )
+        )
+      );
+    })
   );
+};
+
+const isConstantsOnlyFile = (
+  file: string,
+  ancestors = new Set<string>(),
+): boolean => {
+  if (ancestors.has(file)) {
+    return false;
+  }
+  ancestors.add(file);
+  const valid = isConstantsOnly(readFileSync(file, "utf-8"), (specifier) => {
+    const packageName = specifier.split("/").slice(0, 2).join("/");
+    if (
+      !specifier.startsWith(".") &&
+      !(specifier.startsWith("@stll/") && allowedExternal.has(packageName))
+    ) {
+      return false;
+    }
+    return isConstantsOnlyFile(
+      Bun.resolveSync(specifier, path.dirname(file)),
+      ancestors,
+    );
+  });
+  ancestors.delete(file);
+  return valid;
 };
 
 const resolveApiImport = (from: string, specifier: string) => {
@@ -171,12 +223,7 @@ test("public Knowledge runtime graph is limited to static readers and parsers", 
         if (
           specifier.startsWith("@stll/") &&
           allowedExternal.has(packageName) &&
-          isConstantsOnly(
-            readFileSync(
-              Bun.resolveSync(specifier, path.dirname(file)),
-              "utf-8",
-            ),
-          )
+          isConstantsOnlyFile(Bun.resolveSync(specifier, path.dirname(file)))
         ) {
           continue;
         }
@@ -213,7 +260,65 @@ test("constant leaves contain only exported literal data", () => {
   ).toBe(true);
 });
 
+test("constant leaves admit type-only imports and inspect constant dependencies", () => {
+  expect(
+    isConstantsOnly(
+      'import type { Value } from "example"; export const VALUE = "example";',
+    ),
+  ).toBe(true);
+  expect(
+    isConstantsOnly(
+      'import { type Value } from "example"; export const VALUE = "example";',
+    ),
+  ).toBe(true);
+  const source =
+    'import { VALUE } from "./constants"; export const OTHER = "example";';
+  const dependency = 'export const VALUE = "example";';
+  expect(isConstantsOnly(source, () => isConstantsOnly(dependency))).toBe(true);
+  expect(
+    isConstantsOnly(source, () =>
+      isConstantsOnly(
+        'import JSZip from "jszip"; export const VALUE = "example";',
+      ),
+    ),
+  ).toBe(false);
+});
+
+const temporaryDirectories: string[] = [];
+afterEach(() => {
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("constant file graphs reject jszip dependencies and cycles at every depth", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "constant-leaves-"));
+  temporaryDirectories.push(directory);
+  const root = path.join(directory, "root.ts");
+  const leaf = path.join(directory, "leaf.ts");
+  writeFileSync(
+    root,
+    'import "./first"; import "./second"; export const ROOT = "example";',
+  );
+  for (const name of ["first", "second"]) {
+    writeFileSync(
+      path.join(directory, `${name}.ts`),
+      'import "./leaf"; export const VALUE = "example";',
+    );
+  }
+  writeFileSync(leaf, 'export const LEAF = "example";');
+  expect(isConstantsOnlyFile(root)).toBe(true);
+  writeFileSync(
+    leaf,
+    'import JSZip from "jszip"; export const LEAF = "example";',
+  );
+  expect(isConstantsOnlyFile(root)).toBe(false);
+  writeFileSync(leaf, 'import "./root"; export const LEAF = "example";');
+  expect(isConstantsOnlyFile(root)).toBe(false);
+});
+
 test.each([
+  'import JSZip from "jszip"; export const VALUE = "example";',
   'import "example"; export const VALUE = "example";',
   'export { VALUE } from "example";',
   'export const VALUE = import("example");',
