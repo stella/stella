@@ -1,4 +1,4 @@
-// parser-output-unchanged: immediate reservations share publisher pacing; response parsing and stored output are unchanged.
+// parser-output-unchanged: immediate gate checks bound connection and reservation work; response parsing and stored output are unchanged.
 import { TaggedError } from "better-result";
 
 import { Temporal } from "@stll/time";
@@ -247,9 +247,11 @@ export const createPublisherRequestSlot = (
       replies,
     }: { signal?: AbortSignal | undefined; replies?: readonly number[] } = {},
   ) => {
-    const redis = await dependencies.redis();
     const rawWait = await withTimeout(
-      async () => await redis.send("EVAL", args),
+      async () => {
+        const redis = await dependencies.redis();
+        return await redis.send("EVAL", args);
+      },
       {
         label: `${publisher} publisher gate reservation`,
         signal,

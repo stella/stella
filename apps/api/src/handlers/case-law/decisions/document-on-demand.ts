@@ -25,7 +25,8 @@
  * per-await wrapping below is defence in depth, not the guarantee.
  *
  * Read-through takes an immediate reservation from the queue’s shared
- * publisher gate; a busy source leaves the read metadata-only.
+ * publisher gate at the outbound boundary; a busy or unavailable gate
+ * leaves the read metadata-only.
  *
  * The bounds above are per process. The cross-process claim that keeps
  * two replicas off one document lives in the fetch unit itself, which
@@ -37,6 +38,10 @@
 
 import { panic, Result, TaggedError, UnhandledException } from "better-result";
 
+import type {
+  ImmediatePublisherSlotResult,
+  PublisherPacingOutcome,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
@@ -64,9 +69,9 @@ const READ_BUDGET_LABEL = "caseLaw.deferredDocumentRead";
 /** Concurrent read-through fetches allowed at a time. */
 const CONCURRENT_FETCH_LIMIT = 2;
 
-class DocumentPacingDeferred extends TaggedError("DocumentPacingDeferred")<{
+class DocumentPacingOutcome extends TaggedError("DocumentPacingOutcome")<{
   message: string;
-  outcome: "pacing-deferred";
+  outcome: PublisherPacingOutcome;
 }> {}
 
 const CAPTURE_SOURCE = "case-law-document-on-demand";
@@ -137,11 +142,11 @@ export type OnDemandDocumentDeps = {
   withFetchBudget: (
     adapterKey: DeferredDocumentAdapterKey,
     operation: () => Promise<DecisionDocumentOutcome>,
-  ) => Promise<
-    | { status: "completed"; value: DecisionDocumentOutcome }
-    | { status: "pacing-deferred" }
-  >;
-  recordPacingDeferred: (decisionId: SafeId<"caseLawDecision">) => void;
+  ) => Promise<ImmediatePublisherSlotResult<DecisionDocumentOutcome>>;
+  recordPacingOutcome: (
+    decisionId: SafeId<"caseLawDecision">,
+    outcome: PublisherPacingOutcome,
+  ) => void;
 };
 
 /**
@@ -163,13 +168,14 @@ const recordFailure = (
     captureError(error, { source: CAPTURE_SOURCE, decisionId });
   }).unwrapOr(undefined);
 
-export const recordDocumentPacingDeferred = (
+export const recordDocumentPacingOutcome = (
   decisionId: SafeId<"caseLawDecision">,
+  outcome: PublisherPacingOutcome,
 ): void =>
   recordFailure(
-    new DocumentPacingDeferred({
-      message: "Document fetch pacing deferred",
-      outcome: "pacing-deferred",
+    new DocumentPacingOutcome({
+      message: `Document fetch ${outcome}`,
+      outcome,
     }),
     decisionId,
   );
@@ -210,7 +216,8 @@ const runFetch = async ({
     );
     switch (budgeted.status) {
       case "pacing-deferred":
-        deps.recordPacingDeferred(decision.id);
+      case "pacing-unavailable":
+        deps.recordPacingOutcome(decision.id, budgeted.status);
         return null;
       case "completed":
         return budgeted.value.status === "filled"

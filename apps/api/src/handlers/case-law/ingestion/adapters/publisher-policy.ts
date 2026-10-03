@@ -1,4 +1,4 @@
-// parser-output-unchanged: immediate reservations share publisher pacing; response parsing and stored output are unchanged.
+// parser-output-unchanged: immediate checks at the request boundary share publisher pacing; response parsing and stored output are unchanged.
 /**
  * What each publisher costs, declared once, and the only fetch that spends it.
  *
@@ -16,7 +16,7 @@
  * requests rather than a total.
  */
 
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -355,10 +355,10 @@ type RunPublisherLimit = {
 
 const runPublisherLimit = new AsyncLocalStorage<RunPublisherLimit>();
 
-// The first request spends the immediate reservation, rather than reserving twice.
-const immediateReservation = new AsyncLocalStorage<{
+// Immediate mode checks the shared gate at every outbound request boundary.
+const immediateRequestGate = new AsyncLocalStorage<{
   gateId: PublisherGateId;
-  status: "reserved" | "spent";
+  slot: ReturnType<typeof createPublisherGateSlot>;
 }>();
 
 type WithImmediatePublisherSlotOptions<T> = {
@@ -367,9 +367,17 @@ type WithImmediatePublisherSlotOptions<T> = {
   dependencies?: PublisherRequestGateDependencies;
 };
 
-type ImmediatePublisherSlotResult<T> =
+export type PublisherPacingOutcome = "pacing-deferred" | "pacing-unavailable";
+
+class PublisherPacingStopped extends TaggedError("PublisherPacingStopped")<{
+  message: string;
+  status: PublisherPacingOutcome;
+  cause?: unknown;
+}> {}
+
+export type ImmediatePublisherSlotResult<T> =
   | { status: "completed"; value: T }
-  | { status: "pacing-deferred" };
+  | { status: PublisherPacingOutcome };
 
 export const withImmediatePublisherSlot = async <T>({
   adapterKey,
@@ -383,17 +391,18 @@ export const withImmediatePublisherSlot = async <T>({
     dependencies === undefined
       ? getPublisherGateSlot(gateId)
       : createPublisherGateSlot(gateId, dependencies);
-  if (!(await slot.tryReserve())) {
-    return { status: "pacing-deferred" };
+  const result = await Result.tryPromise({
+    try: async () =>
+      await immediateRequestGate.run({ gateId, slot }, operation),
+    catch: (error) => error,
+  });
+  if (Result.isOk(result)) {
+    return { status: "completed", value: result.value };
   }
-  return await immediateReservation.run(
-    { gateId, status: "reserved" },
-    async () =>
-      ({
-        status: "completed",
-        value: await operation(),
-      }) as const,
-  );
+  if (PublisherPacingStopped.is(result.error)) {
+    return { status: result.error.status };
+  }
+  throw result.error;
 };
 
 const getPublisherGateSlot = (gateId: PublisherGateId) => {
@@ -456,9 +465,25 @@ export const reservePublisherGateSlot = async (
   gateId: PublisherGateId,
   signal?: AbortSignal,
 ): Promise<void> => {
-  const immediate = immediateReservation.getStore();
-  if (immediate?.gateId === gateId && immediate.status === "reserved") {
-    immediate.status = "spent";
+  const immediate = immediateRequestGate.getStore();
+  if (immediate?.gateId === gateId) {
+    const reserved = await Result.tryPromise({
+      try: async () => await immediate.slot.tryReserve(signal),
+      catch: (error) => error,
+    });
+    if (Result.isError(reserved)) {
+      throw new PublisherPacingStopped({
+        message: "Publisher pacing unavailable",
+        status: "pacing-unavailable",
+        cause: reserved.error,
+      });
+    }
+    if (!reserved.value) {
+      throw new PublisherPacingStopped({
+        message: "Publisher pacing deferred",
+        status: "pacing-deferred",
+      });
+    }
     return;
   }
   const runLimit = runPublisherLimit.getStore();

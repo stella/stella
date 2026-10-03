@@ -8,7 +8,7 @@
  */
 
 import {
-  recordDocumentPacingDeferred,
+  recordDocumentPacingOutcome,
   type OnDemandDocumentDeps,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import { withImmediatePublisherSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
@@ -37,7 +37,7 @@ export const onDemandDocumentDeps: OnDemandDocumentDeps = {
         await recordDocumentFetchRequest(decisionId, getCaseLawIngestionDb()),
       { label: "caseLaw.recordDocumentFetchRequest", timeoutMs: 15_000 },
     ),
-  recordPacingDeferred: recordDocumentPacingDeferred,
+  recordPacingOutcome: recordDocumentPacingOutcome,
   withFetchBudget: async (adapterKey, operation) =>
     await withImmediatePublisherSlot({ adapterKey, operation }),
   fetchDocument: async (decision, adapterKey) =>

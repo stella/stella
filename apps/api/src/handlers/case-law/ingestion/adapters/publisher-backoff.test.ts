@@ -1,14 +1,19 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
+
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import {
   createPublisherGateSlot,
   PUBLISHER_GATES,
   readPublisherCooldown,
+  withImmediatePublisherSlot,
 } from "./publisher-policy";
 import {
   createPublisherRequestSlot,
   publisherGateKeys,
 } from "./publisher-request-gate";
+import { fetchPublisher } from "./retry";
 
 // Redis Cluster uses CRC16/XMODEM over the first nonempty hash tag, or the full key.
 const redisKeySlot = (key: string) => {
@@ -264,3 +269,79 @@ for (const reply of [-1, 2, "invalid"]) {
     );
   });
 }
+
+test("read-through requests observe competing requests during preparation", async () => {
+  const clock = createGateClock();
+  const adapterKey = ADAPTER_KEYS.SK_COURTS;
+  const intervalMs = PUBLISHER_GATES["justice-sk"].intervalMs;
+  let now = 0;
+  const sent: number[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = asFetchMock(
+    mock(async () => {
+      sent.push(now);
+      return new Response("document");
+    }),
+  );
+  const request = async () =>
+    await fetchPublisher("https://obcan.justice.sk/document.pdf", {
+      adapterKey,
+      fetchStage: "document",
+      timeoutMs: 1000,
+    });
+  try {
+    const result = await withImmediatePublisherSlot({
+      adapterKey,
+      dependencies: clock.dependencies,
+      operation: async () => {
+        // Preparation spans the interval; another worker sends before it finishes.
+        now = intervalMs + 100;
+        clock.advanceTo(now);
+        const competitor = await withImmediatePublisherSlot({
+          adapterKey,
+          dependencies: clock.dependencies,
+          operation: request,
+        });
+        expect(competitor.status).toBe("completed");
+        now += 50;
+        clock.advanceTo(now);
+        return await request();
+      },
+    });
+    expect(result).toEqual({ status: "pacing-deferred" });
+    expect(sent).toEqual([intervalMs + 100]);
+    expect(clock.sleeps).toEqual([]);
+    now = intervalMs * 2 + 100;
+    clock.advanceTo(now);
+    expect(
+      (
+        await withImmediatePublisherSlot({
+          adapterKey,
+          dependencies: clock.dependencies,
+          operation: request,
+        })
+      ).status,
+    ).toBe("completed");
+    expect(sent).toEqual([intervalMs + 100, intervalMs * 2 + 100]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("preparation without an outbound request leaves the shared gate available", async () => {
+  const clock = createGateClock();
+  const adapterKey = ADAPTER_KEYS.SK_COURTS;
+  expect(
+    await withImmediatePublisherSlot({
+      adapterKey,
+      dependencies: clock.dependencies,
+      operation: async () => "claimed",
+    }),
+  ).toEqual({ status: "completed", value: "claimed" });
+  expect(
+    await createPublisherGateSlot(
+      "justice-sk",
+      clock.dependencies,
+    ).tryReserve(),
+  ).toBe(true);
+});

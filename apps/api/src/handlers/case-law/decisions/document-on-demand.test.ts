@@ -100,7 +100,7 @@ const recorder = (
       release();
     },
     deps: {
-      recordPacingDeferred: () => {},
+      recordPacingOutcome: () => {},
       withFetchBudget: availableBudget,
       recordRequest: async (id) => {
         requested.push(id);
@@ -296,7 +296,7 @@ describe("deferred document read-through", () => {
    * budget abandons.
    */
   const badShape = {
-    recordPacingDeferred: () => {},
+    recordPacingOutcome: () => {},
     withFetchBudget: availableBudget,
     recordRequest: async () => {
       await Promise.resolve();
@@ -315,7 +315,7 @@ describe("deferred document read-through", () => {
 
   const hostile: Record<string, () => OnDemandDocumentDeps> = {
     "a rejecting fetch": () => ({
-      recordPacingDeferred: () => {},
+      recordPacingOutcome: () => {},
       withFetchBudget: availableBudget,
       recordRequest: async () => {
         await Promise.resolve();
@@ -326,7 +326,7 @@ describe("deferred document read-through", () => {
       },
     }),
     "a rejecting demand recording": () => ({
-      recordPacingDeferred: () => {},
+      recordPacingOutcome: () => {},
       withFetchBudget: availableBudget,
       recordRequest: async () => {
         await Promise.resolve();
@@ -338,7 +338,7 @@ describe("deferred document read-through", () => {
       },
     }),
     "a fetch that never settles": () => ({
-      recordPacingDeferred: () => {},
+      recordPacingOutcome: () => {},
       withFetchBudget: availableBudget,
       recordRequest: async () => {
         await Promise.resolve();

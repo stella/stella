@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, jest, mock, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
@@ -6,11 +6,13 @@ import { assertProperty } from "@stll/property-testing";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import {
   withImmediatePublisherSlot,
   reservePublisherSlot,
 } from "../ingestion/adapters/publisher-policy";
+import { fetchPublisher } from "../ingestion/adapters/retry";
 import {
   readThroughDeferredDocument,
   type OnDemandDocumentDeps,
@@ -40,7 +42,7 @@ const pacedDeps = ({
   const deferred: SafeId<"caseLawDecision">[] = [];
   const deps: OnDemandDocumentDeps = {
     recordRequest: async () => {},
-    recordPacingDeferred: (id) => {
+    recordPacingOutcome: (id) => {
       deferred.push(id);
     },
     withFetchBudget: async (adapterKey, operation) =>
@@ -64,7 +66,7 @@ const pacedDeps = ({
         operation,
       }),
     fetchDocument: async (pending, adapterKey) => {
-      // The fetch boundary spends the acquired slot without reserving again.
+      // The fetch boundary takes the immediate shared reservation.
       await reservePublisherSlot(adapterKey);
       fetched.push(pending.id);
       return { status: "claimed" };
@@ -149,43 +151,104 @@ test("concurrent reads resolve within the shared source budget", async () => {
   );
 });
 
-test("a source budget failure resolves the read without fetching", async () => {
-  let fetched = 0;
-  const deps: OnDemandDocumentDeps = {
-    recordRequest: async () => {},
-    recordPacingDeferred: () => {},
-    withFetchBudget: async (adapterKey, operation) =>
-      await withImmediatePublisherSlot({
-        adapterKey,
-        dependencies: {
-          redis: () => ({
-            send: () => {
-              throw new Error("Budget unavailable");
-            },
-          }),
-          sleep: async () => {},
-        },
-        operation,
+for (const mode of ["throws", "rejects", "pending", "connecting"] as const) {
+  test(`an unavailable source gate ${mode} and returns metadata without a request`, async () => {
+    jest.useFakeTimers();
+    let requests = 0;
+    let gateCalls = 0;
+    let resolved = false;
+    const recorded: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = asFetchMock(
+      mock(async () => {
+        requests += 1;
+        return new Response("document");
       }),
-    fetchDocument: async () => {
-      fetched += 1;
-      return { status: "claimed" };
-    },
-  };
-  expect(
-    await readThroughDeferredDocument({
-      decision: decision(),
-      adapterKey: "sk-courts",
-      deps,
-      recordDemand: false,
-    }),
-  ).toBeNull();
-  expect(fetched).toBe(0);
-});
+    );
+    const deps: OnDemandDocumentDeps = {
+      recordRequest: async () => {},
+      recordPacingOutcome: (_id, outcome) => {
+        recorded.push(outcome);
+      },
+      withFetchBudget: async (adapterKey, operation) =>
+        await withImmediatePublisherSlot({
+          adapterKey,
+          dependencies: {
+            redis: () =>
+              mode === "connecting"
+                ? new Promise(() => {})
+                : {
+                    send: () => {
+                      gateCalls += 1;
+                      switch (mode) {
+                        case "throws":
+                          throw new Error("Budget unavailable");
+                        case "rejects":
+                          return Promise.reject(
+                            new Error("Budget unavailable"),
+                          );
+                        case "pending":
+                          return new Promise(() => {});
+                        case "connecting":
+                          throw new Error("Connection must not reach send");
+                        default:
+                          mode satisfies never;
+                      }
+                    },
+                  },
+            sleep: async () => {
+              throw new Error("Immediate reservation must not sleep");
+            },
+          },
+          operation,
+        }),
+      fetchDocument: async (_pending, adapterKey) => {
+        await fetchPublisher("https://obcan.justice.sk/document.pdf", {
+          adapterKey,
+          fetchStage: "document",
+          timeoutMs: 1000,
+        });
+        return { status: "claimed" };
+      },
+    };
+    try {
+      const read = readThroughDeferredDocument({
+        decision: decision(),
+        adapterKey: "sk-courts",
+        deps,
+        recordDemand: false,
+      }).then((result) => {
+        resolved = true;
+        return result;
+      });
+      for (let turn = 0; turn < 40; turn += 1) {
+        await Promise.resolve();
+      }
+      expect(gateCalls).toBe(mode === "connecting" ? 0 : 1);
+      if (mode === "pending" || mode === "connecting") {
+        jest.advanceTimersByTime(4999);
+        await Promise.resolve();
+        expect(resolved).toBe(false);
+        expect(requests).toBe(0);
+        jest.advanceTimersByTime(1);
+      }
+      expect(await read).toBeNull();
+      expect(resolved).toBe(true);
+      expect(requests).toBe(0);
+      expect(recorded).toEqual(["pacing-unavailable"]);
+      // Advancing past the read budget does not resume an unreserved request.
+      jest.advanceTimersByTime(6000);
+      expect(requests).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+      jest.useRealTimers();
+    }
+  });
+}
 
 test("a pacing capture failure still resolves the read", async () => {
   const { deps, fetched } = pacedDeps({ tokens: 0 });
-  deps.recordPacingDeferred = () => {
+  deps.recordPacingOutcome = () => {
     throw new Error("Capture unavailable");
   };
   expect(
