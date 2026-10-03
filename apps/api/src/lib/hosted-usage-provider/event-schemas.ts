@@ -102,6 +102,7 @@ const providerUpdatedEntitlementSchema = v.union([
 ]);
 
 const providerAllocationSchema = v.object({
+  occurred_at: v.optional(v.pipe(v.string(), v.isoTimestamp())),
   id: v.string(),
   account_ref: v.string(),
   policy_ref: v.string(),

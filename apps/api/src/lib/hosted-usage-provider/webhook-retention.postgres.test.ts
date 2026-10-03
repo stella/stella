@@ -4,8 +4,11 @@ import { sql } from "drizzle-orm";
 
 import { hostedUsageWebhookEvents } from "@/api/db/schema";
 import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
+import type { DispatchOutcome } from "./dispatch-outcome";
+import type { ProviderEventReplayAttempt } from "./replay-audit";
 import {
   redactCompletedWebhookEvents,
   WEBHOOK_RETENTION_BATCH_SIZE,
@@ -89,6 +92,93 @@ describe.skipIf(!runPostgresTests)("completed provider event retention", () => {
       } finally {
         await owner.execute(sql`DROP SCHEMA ${sql.identifier(schema)} CASCADE`);
       }
+    });
+  });
+
+  test("redaction removes replay text from all attempts and preserves their ordered terminal skeleton", async () => {
+    if (!databaseUrl) {
+      panic("DATABASE_URL required");
+    }
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      await openClient().db.transaction(async (db) => {
+        await db.execute(sql`
+          create temporary table usage_provider_webhook_events
+          (like public.usage_provider_webhook_events including all) on commit drop
+        `);
+        const attemptSkeleton = {
+          requestedBy: "fixture operator",
+          at: "2026-01-01T00:00:00Z",
+          previousResult: "ignored",
+          newResult: "ignored",
+          outcome: "ignored" satisfies DispatchOutcome["kind"],
+          execution: {
+            performer: { type: "local", username: "fixture" },
+            trigger: {
+              type: "system",
+              source: "usage_provider.replay",
+              sourceId: "audit-only",
+            },
+          },
+          event: {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.USAGE_PROVIDER_EVENT,
+            resourceId: "audit-only",
+            changes: { result: { old: "ignored", new: "ignored" } },
+            metadata: { requestedBy: "fixture operator", outcome: "ignored" },
+          },
+        } as const satisfies ProviderEventReplayAttempt;
+        const terminalSkeleton = {
+          ...attemptSkeleton,
+          at: "2026-01-02T00:00:00Z",
+          newResult: "ok",
+          outcome: "applied" satisfies DispatchOutcome["kind"],
+          event: {
+            ...attemptSkeleton.event,
+            changes: { result: { old: "ignored", new: "ok" } },
+            metadata: {
+              requestedBy: "fixture operator",
+              outcome: "applied",
+            },
+          },
+        } as const satisfies ProviderEventReplayAttempt;
+        const audit: ProviderEventReplayAttempt[] = [];
+        for (const attempt of [attemptSkeleton, terminalSkeleton]) {
+          audit.push({
+            ...attempt,
+            previousReason: "previous private detail",
+            reason: "operator private detail",
+            dispatchReason: "dispatch private detail",
+            event: {
+              ...attempt.event,
+              metadata: {
+                ...attempt.event.metadata,
+                reason: "operator private detail",
+                dispatchReason: "dispatch private detail",
+              },
+            },
+          });
+        }
+        await db.execute(sql`
+          insert into usage_provider_webhook_events
+            (event_id, event_type, processed_at, result, payload, replay_audit)
+          values ('audit-only', 'fixture', '2026-01-02T00:00:00Z'::timestamptz,
+            'ok', '{}'::jsonb, ${JSON.stringify(audit)}::text::jsonb)
+        `);
+        const redact = async () =>
+          await redactCompletedWebhookEvents({
+            db,
+            retentionDays: 1,
+            now: new Date("2026-06-01T00:00:00Z"),
+          });
+        expect(await redact()).toBe(1);
+        const rows = await db.select().from(hostedUsageWebhookEvents);
+        expect(rows.at(0)?.replayAudit).toEqual([
+          attemptSkeleton,
+          terminalSkeleton,
+        ]);
+        expect(rows.at(0)?.result).toBe("ok");
+        expect(await redact()).toBe(0);
+      });
     });
   });
 
