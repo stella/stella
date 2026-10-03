@@ -246,7 +246,7 @@ export const useInspectorGroupTransfer = (
       }
     }
     if (copiedFile.fieldId === null) {
-      notifyUserError(invalidation.error, t("errors.actionFailed"));
+      notifyUserError(undefined, t("errors.actionFailed"));
       submittingRef.current = false;
       setIsSubmitting(false);
       return;

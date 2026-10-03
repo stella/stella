@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { BoundedSet } from "@/lib/bounded-set";
-import { toAPIError } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 const SERVER_PREVIEW_ERROR_THRESHOLD = 500;
@@ -24,19 +24,18 @@ export const externalReferencePreviewOptions = ({
         query: { url },
         fetch: { signal },
       });
-      if (!response.error) {
-        return response.data;
+      if (response.error) {
+        const error = toAPIError(response.error);
+        const toastKey = `${url}|${error.status}`;
+        if (
+          error.status >= SERVER_PREVIEW_ERROR_THRESHOLD &&
+          !toastedPreviewFailures.has(toastKey)
+        ) {
+          toastedPreviewFailures.add(toastKey);
+          notifyUserError(error, errorTitle, { description: error.message });
+        }
       }
-      const error = toAPIError(response.error);
-      const toastKey = `${url}|${error.status}`;
-      if (
-        error.status >= SERVER_PREVIEW_ERROR_THRESHOLD &&
-        !toastedPreviewFailures.has(toastKey)
-      ) {
-        toastedPreviewFailures.add(toastKey);
-        notifyUserError(error, errorTitle, { description: error.message });
-      }
-      throw error;
+      return unwrapEden(response);
     },
     retry: false,
     staleTime: 1000 * 60 * 10,

@@ -44,6 +44,6 @@ export const openPublicLawLink = async <Resolved>({
   }
 
   if (!result.value) {
-    notifyUserError(result.error.cause, t("errors.actionFailed"));
+    notifyUserError(undefined, t("errors.actionFailed"));
   }
 };

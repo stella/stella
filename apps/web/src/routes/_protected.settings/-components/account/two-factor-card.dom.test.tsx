@@ -1,4 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type { DataTag } from "@tanstack/react-query";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
@@ -38,6 +39,11 @@ afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
+type SessionData =
+  typeof sessionOptions.queryKey extends DataTag<unknown, infer Data, unknown>
+    ? Data
+    : never;
+
 const signedAt = new Date("2026-01-01T00:00:00Z");
 const mount = (emailAvailable: boolean) => {
   const client = new QueryClient({
@@ -47,27 +53,31 @@ const mount = (emailAvailable: boolean) => {
     },
   });
   clients.push(client);
-  client.setQueryData(sessionOptions.queryKey, {
-    session: {
-      activeOrganizationId: "organization",
-      createdAt: signedAt,
-      expiresAt: new Date("2027-01-01T00:00:00Z"),
-      id: "session",
-      token: "token",
-      updatedAt: signedAt,
-      userId: "user",
-    },
-    user: {
-      createdAt: signedAt,
-      email: "member@example.test",
-      emailVerified: true,
-      id: "user",
-      name: "Member",
-      timezoneId: "UTC",
-      twoFactorEnabled: false,
-      updatedAt: signedAt,
-    },
-  });
+  client.setQueryData(
+    sessionOptions.queryKey,
+    () =>
+      ({
+        session: {
+          activeOrganizationId: "organization",
+          createdAt: signedAt,
+          expiresAt: new Date("2027-01-01T00:00:00Z"),
+          id: "session",
+          token: "token",
+          updatedAt: signedAt,
+          userId: "user",
+        },
+        user: {
+          createdAt: signedAt,
+          email: "member@example.test",
+          emailVerified: true,
+          id: "user",
+          name: "Member",
+          timezoneId: "UTC",
+          twoFactorEnabled: false,
+          updatedAt: signedAt,
+        },
+      }) satisfies SessionData,
+  );
   client.setQueryData(linkedAccountsOptions("user").queryKey, []);
   client.setQueryData(authCapabilitiesOptions.queryKey, {
     emailOtp: emailAvailable,
@@ -103,8 +113,11 @@ test.each([403, 404, 500])(
   async (status) => {
     const emailAvailable = true;
     const privateMessage = "Private email provider account detail";
-    const fetch = spyOn(globalThis, "fetch").mockImplementation(async () =>
-      Response.json({ message: privateMessage }, { status }),
+    const fetch = spyOn(globalThis, "fetch").mockImplementation(
+      Object.assign(
+        async () => Response.json({ message: privateMessage }, { status }),
+        { preconnect: globalThis.fetch.preconnect },
+      ),
     );
     const toast = spyOn(stellaToast, "add").mockReturnValue("failure");
     try {
@@ -144,10 +157,14 @@ test.each([400, 403, 500])(
   async (status) => {
     const emailAvailable = false;
     const privateMessage = "Private auth provider detail";
-    const fetch = spyOn(globalThis, "fetch").mockImplementation(async () =>
-      Response.json(
-        { code: "MANAGEMENT_FAILED", message: privateMessage },
-        { status },
+    const fetch = spyOn(globalThis, "fetch").mockImplementation(
+      Object.assign(
+        async () =>
+          Response.json(
+            { code: "MANAGEMENT_FAILED", message: privateMessage },
+            { status },
+          ),
+        { preconnect: globalThis.fetch.preconnect },
       ),
     );
     const toast = spyOn(stellaToast, "add").mockReturnValue("failure");

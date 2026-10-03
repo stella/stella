@@ -61,10 +61,7 @@ function ReportExportRecoveryPage() {
 
     const downloadUrl = result.value.data?.downloadUrl;
     if (!downloadUrl) {
-      notifyUserError(
-        Result.isError(result) ? result.error : undefined,
-        t("common.unexpectedError"),
-      );
+      notifyUserError(undefined, t("common.unexpectedError"));
       return;
     }
 

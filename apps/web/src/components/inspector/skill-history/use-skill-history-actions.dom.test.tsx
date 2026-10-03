@@ -50,8 +50,11 @@ test.each([403, 404, 409, 500])(
       },
     );
     const privateMessage = "Private skill implementation detail";
-    const fetch = spyOn(globalThis, "fetch").mockImplementation(async () =>
-      Response.json({ message: privateMessage }, { status }),
+    const fetch = spyOn(globalThis, "fetch").mockImplementation(
+      Object.assign(
+        async () => Response.json({ message: privateMessage }, { status }),
+        { preconnect: globalThis.fetch.preconnect },
+      ),
     );
     const toast = spyOn(stellaToast, "add").mockReturnValue("failure");
     try {

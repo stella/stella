@@ -1,4 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { Result } from "better-result";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
@@ -27,8 +28,11 @@ test.each([500, 503])(
   "external previews retain localized failure descriptions for status %i",
   async (status) => {
     const privateMessage = "Unexpected provider response detail";
-    const fetch = spyOn(globalThis, "fetch").mockImplementation(async () =>
-      Response.json({ message: privateMessage }, { status }),
+    const fetch = spyOn(globalThis, "fetch").mockImplementation(
+      Object.assign(
+        async () => Response.json({ message: privateMessage }, { status }),
+        { preconnect: globalThis.fetch.preconnect },
+      ),
     );
     const toast = spyOn(stellaToast, "add").mockReturnValue("failure");
     const client = new QueryClient({
@@ -40,9 +44,13 @@ test.each([500, 503])(
         url: `https://example.test/preview-${status}`,
         errorTitle: messages.common.somethingWentWrong,
       });
-      await expect(client.fetchQuery(options)).rejects.toMatchObject({
-        status,
-      });
+      const result = await Result.tryPromise(
+        async () => await client.query(options),
+      );
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.cause).toMatchObject({ status });
+      }
       expect(toast).toHaveBeenCalledTimes(1);
       const error = toAPIError({ status, value: { message: privateMessage } });
       expect(error.message).not.toBe(privateMessage);
@@ -52,9 +60,13 @@ test.each([500, 503])(
         description: error.message,
       });
       expect(JSON.stringify(toast.mock.calls)).not.toContain(privateMessage);
-      await expect(client.fetchQuery(options)).rejects.toMatchObject({
-        status,
-      });
+      const retry = await Result.tryPromise(
+        async () => await client.query(options),
+      );
+      expect(retry.isErr()).toBe(true);
+      if (retry.isErr()) {
+        expect(retry.error.cause).toMatchObject({ status });
+      }
       expect(toast).toHaveBeenCalledTimes(1);
     } finally {
       toast.mockRestore();

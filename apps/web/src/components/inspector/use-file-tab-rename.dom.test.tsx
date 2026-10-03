@@ -5,7 +5,10 @@ import { createStore } from "zustand";
 import type { StoreApi } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
-import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
 import { stellaToast } from "@stll/ui/toast";
 
 import type { DownloadVariant } from "@/components/inspector/file-download-service.logic";
@@ -769,7 +772,8 @@ test("download errors preserve every admission refusal for all renditions", asyn
     scrubbed: "scrubbed",
   } as const satisfies Record<DownloadVariant, DownloadVariant>;
   for (const variant of Object.values(variants)) {
-    for (const [code, refusal] of Object.entries(ACTION_ADMISSION_REFUSALS)) {
+    for (const code of Object.values(ACTION_ADMISSION_CODES)) {
+      const refusal = ACTION_ADMISSION_REFUSALS[code];
       const fetch = spyOn(globalThis, "fetch").mockResolvedValue(
         Response.json({ code, message: "Refused" }, { status: refusal.status }),
       );

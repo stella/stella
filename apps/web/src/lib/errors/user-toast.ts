@@ -7,7 +7,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 type UserErrorToastOptions = Omit<
   Parameters<typeof stellaToast.add>[0],
   "title" | "type"
-> & { toastId?: string };
+> & { toastId?: string | undefined };
 
 export const notifyUserError = (
   error: unknown,

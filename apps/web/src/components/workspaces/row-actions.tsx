@@ -122,7 +122,7 @@ import {
 } from "@/lib/desktop-edit-formats";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -1807,7 +1807,10 @@ const downloadEntityAsZip = async (
   const response = responseResult.value;
 
   if (!response.ok) {
-    const body = await Result.tryPromise(async () => await response.json());
+    const body = await Result.tryPromise(async () => {
+      const payload: unknown = await response.json();
+      return payload;
+    });
     notifyUserError(
       toAPIError({
         status: response.status,
@@ -1858,9 +1861,10 @@ const downloadOcrExport = async ({
     return;
   }
   if (!responseResult.value.ok) {
-    const body = await Result.tryPromise(
-      async () => await responseResult.value.json(),
-    );
+    const body = await Result.tryPromise(async () => {
+      const payload: unknown = await responseResult.value.json();
+      return payload;
+    });
     notifyUserError(
       toAPIError({
         status: responseResult.value.status,

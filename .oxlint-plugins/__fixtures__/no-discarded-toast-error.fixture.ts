@@ -25,13 +25,13 @@ const extractedRejection = () => {
   // oxlint-disable-next-line no-discarded-toast-error/no-discarded-toast-error -- fixture proves extracted rejection callbacks preserve their error
   notifyUserError(undefined, "Failed");
 };
-export const catchExtractedRejection = (promise: Promise<unknown>) =>
-  promise.catch(extractedRejection);
+export const catchExtractedRejection = async (promise: Promise<unknown>) =>
+  await promise.catch(extractedRejection);
 
 const preserveError = (error: unknown) => {
   // expect-clean: no-discarded-toast-error/no-discarded-toast-error
   notifyUserError(error, "Failed");
 };
 export const preservedCallbacks = { onError: preserveError };
-export const catchPreservedRejection = (promise: Promise<unknown>) =>
-  promise.catch(preserveError);
+export const catchPreservedRejection = async (promise: Promise<unknown>) =>
+  await promise.catch(preserveError);

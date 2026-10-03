@@ -312,7 +312,7 @@ export const useReaderAnnotations = (
         await queryClient.invalidateQueries({
           queryKey: readerAnnotationKeys.all,
         });
-        const failed = results.find(Result.isError);
+        const failed = results.find((result) => result.status === "error");
         if (failed) {
           notifyUserError(
             failed.error,

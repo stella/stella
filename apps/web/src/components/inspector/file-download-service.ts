@@ -64,9 +64,10 @@ const fetchBuiltFile = async ({
     return responseResult;
   }
   if (!responseResult.value.ok) {
-    const body = await Result.tryPromise(
-      async () => await responseResult.value.json(),
-    );
+    const body = await Result.tryPromise(async () => {
+      const payload: unknown = await responseResult.value.json();
+      return payload;
+    });
     return Result.err(
       toAPIError({
         status: responseResult.value.status,
@@ -110,7 +111,7 @@ export const downloadTabFile = async ({
       rendition: variant,
       workspaceId,
     });
-    if (Result.isError(blobResult)) {
+    if (blobResult.status === "error") {
       // The scrubbed copy fails for its own reason — the file kept metadata
       // the server could not remove — and the user's next step differs.
       onError(

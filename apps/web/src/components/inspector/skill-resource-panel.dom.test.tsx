@@ -61,7 +61,7 @@ const mount = () => {
       id: toSafeId<"agentSkill">("skill"),
       scope: "team",
       origin: "authored",
-      userId: null,
+      userId: "user",
       slug: "test-skill",
       name: "Test skill",
       description: "Test instructions",
@@ -73,7 +73,7 @@ const mount = () => {
       enabled: true,
       body: "Instructions",
       command: null,
-      createdAt: new Date("2026-01-01T00:00:00Z"),
+      createdAt: "2026-01-01T00:00:00.000Z",
       resources: [],
     },
   );
@@ -105,15 +105,21 @@ test.each([403, 404, 409, 500])(
     const privateMessage = "Private resource storage details";
     const requests: { path: string; method: string; body: unknown }[] = [];
     const fetch = spyOn(globalThis, "fetch").mockImplementation(
-      async (input, init) => {
-        const request = new Request(input, init);
-        requests.push({
-          path: new URL(request.url).pathname,
-          method: request.method,
-          body: await request.json(),
-        });
-        return Response.json({ message: privateMessage }, { status });
-      },
+      Object.assign(
+        async (
+          input: Parameters<typeof globalThis.fetch>[0],
+          init?: Parameters<typeof globalThis.fetch>[1],
+        ) => {
+          const request = new Request(input, init);
+          requests.push({
+            path: new URL(request.url).pathname,
+            method: request.method,
+            body: await request.json(),
+          });
+          return Response.json({ message: privateMessage }, { status });
+        },
+        { preconnect: globalThis.fetch.preconnect },
+      ),
     );
     const toast = spyOn(stellaToast, "add").mockReturnValue("failure");
     try {
