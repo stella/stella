@@ -54,6 +54,14 @@ export const responseByteBound = (schema: unknown): number => {
       );
     }
     case "object": {
+      // Elysia cleans undeclared properties by default; an explicit opt-in
+      // requires a different envelope calculation, never a silent underestimate.
+      if (
+        schema["additionalProperties"] !== undefined &&
+        schema["additionalProperties"] !== false
+      ) {
+        return panic("Public response object allows undeclared properties");
+      }
       const properties = schema["properties"];
       if (isRecord(properties)) {
         const entries = Object.entries(properties);

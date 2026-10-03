@@ -51,4 +51,9 @@ test("an unbounded schema cannot produce a finite envelope claim", () => {
   expect(() => responseByteBound(t.Array(boundedString(16)))).toThrow(
     "Public response schema has no finite bound",
   );
+  expect(() =>
+    responseByteBound(
+      t.Object({ label: boundedString(16) }, { additionalProperties: true }),
+    ),
+  ).toThrow("Public response object allows undeclared properties");
 });
