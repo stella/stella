@@ -1,4 +1,4 @@
-// parser-output-unchanged: Bounded crawl retries and unsettled-day cursors change fetch control without changing parsed decision output.
+// parser-output-unchanged: Bounded crawl retries and cursor encoding change fetch control without changing parsed decision output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
@@ -2541,26 +2541,18 @@ const buildCzNssFromPayload = async (
 
 const CZ_NSS_MISSING_COUNT_ATTEMPTS = 3;
 
-type CzNssUnsettledDay = {
-  type: "missing-result-count";
-  date: string;
-  attempts: number;
-};
-
 type CzNssCursor = {
   date: string;
   page: number;
   missingCountAttempts?: number;
-  /** Earliest completeness debt; the calendar reconciliation sweeps every day. */
-  unsettledDay?: CzNssUnsettledDay;
 };
 
 const encodeCursor = (state: CzNssCursor): string =>
-  state.missingCountAttempts === undefined && state.unsettledDay === undefined
+  state.missingCountAttempts === undefined
     ? `${state.date}:${state.page}`
     : JSON.stringify(state);
 
-/** Retry state and completeness debt share the pipeline's durable checkpoint. */
+/** Retry state shares the pipeline's durable checkpoint. */
 const parseCursor = (cursor: string | null): CzNssCursor => {
   if (cursor?.startsWith("{")) {
     const state: unknown = JSON.parse(cursor);
@@ -2574,7 +2566,6 @@ const parseCursor = (cursor: string | null): CzNssCursor => {
       return panic("Invalid NSS crawl cursor");
     }
     const attempts = state["missingCountAttempts"];
-    const unsettled = state["unsettledDay"];
     if (
       attempts !== undefined &&
       (typeof attempts !== "number" ||
@@ -2584,32 +2575,11 @@ const parseCursor = (cursor: string | null): CzNssCursor => {
     ) {
       return panic("Invalid NSS count attempt checkpoint");
     }
-    if (
-      unsettled !== undefined &&
-      (!isRecord(unsettled) ||
-        unsettled["type"] !== "missing-result-count" ||
-        typeof unsettled["date"] !== "string" ||
-        typeof unsettled["attempts"] !== "number" ||
-        unsettled["attempts"] !== CZ_NSS_MISSING_COUNT_ATTEMPTS)
-    ) {
-      return panic("Invalid NSS unsettled-day checkpoint");
-    }
     return {
       date: state["date"],
       page: state["page"],
       ...(typeof attempts === "number"
         ? { missingCountAttempts: attempts }
-        : {}),
-      ...(isRecord(unsettled) &&
-      typeof unsettled["date"] === "string" &&
-      typeof unsettled["attempts"] === "number"
-        ? {
-            unsettledDay: {
-              type: "missing-result-count",
-              date: unsettled["date"],
-              attempts: unsettled["attempts"],
-            },
-          }
         : {}),
     };
   }
@@ -2803,17 +2773,11 @@ export const czNssAdapter = defineSourceAdapter({
         const readBudgetSpent = (): boolean =>
           readBudget.aborted && signal?.aborted !== true;
 
-        const {
-          date,
-          page,
-          missingCountAttempts = 0,
-          unsettledDay,
-        } = parseCursor(cursor);
+        const { date, page, missingCountAttempts = 0 } = parseCursor(cursor);
         const cursorFor = (nextDate: string, nextPage: number): string =>
           encodeCursor({
             date: nextDate,
             page: nextPage,
-            ...(unsettledDay ? { unsettledDay } : {}),
           });
         const today = todayIso();
 
@@ -2845,18 +2809,14 @@ export const czNssAdapter = defineSourceAdapter({
                 date,
                 page,
                 missingCountAttempts: attempts,
-                ...(unsettledDay ? { unsettledDay } : {}),
               }),
             };
           }
-          const debt: CzNssUnsettledDay = {
+          logger.warn("case_law.ingestion.nss_unsettled_day", {
+            adapterKey: ADAPTER_KEYS.CZ_NSS,
             type: "missing-result-count",
             date,
             attempts,
-          };
-          logger.warn("case_law.ingestion.nss_unsettled_day", {
-            adapterKey: ADAPTER_KEYS.CZ_NSS,
-            ...debt,
             repair: "calendar_reconciliation",
           });
           const next = nextDay(date);
@@ -2866,7 +2826,6 @@ export const czNssAdapter = defineSourceAdapter({
             nextCursor: encodeCursor({
               date: next <= today ? next : today,
               page: 0,
-              unsettledDay: unsettledDay ?? debt,
             }),
           };
         }

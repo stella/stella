@@ -1141,7 +1141,7 @@ describe("cz-nss fetchPage", () => {
     );
   });
 
-  test("persistent uncounted days exhaust a durable per-day budget and retain reconciliation debt", async () => {
+  test("persistent uncounted days reset their durable budget and return to plain cursors", async () => {
     const recording = installRecordingLogger();
     try {
       installStub({
@@ -1158,12 +1158,7 @@ describe("cz-nss fetchPage", () => {
         });
       }
       const skipped = (await czNssAdapter.fetchPage(cursor, {})).unwrap();
-      const debt = { type: "missing-result-count", date: SLICE, attempts: 3 };
-      expect(JSON.parse(skipped.nextCursor ?? "")).toEqual({
-        date: "2026-06-11",
-        page: 0,
-        unsettledDay: debt,
-      });
+      expect(skipped.nextCursor).toBe("2026-06-11:0");
       expect(skipped.itemBuildFailures).toEqual({
         type: "item_build_failed",
         count: 1,
@@ -1176,23 +1171,18 @@ describe("cz-nss fetchPage", () => {
           date: "2026-06-11",
           page: 0,
           missingCountAttempts: attempt,
-          unsettledDay: debt,
         });
       }
       const nextDaySkipped = (
         await czNssAdapter.fetchPage(cursor, {})
       ).unwrap();
-      expect(JSON.parse(nextDaySkipped.nextCursor ?? "")).toEqual({
-        date: "2026-06-12",
-        page: 0,
-        unsettledDay: debt,
-      });
+      expect(nextDaySkipped.nextCursor).toBe("2026-06-12:0");
       expect(
         recording.records.filter(
           ({ message }) => message === "case_law.ingestion.nss_unsettled_day",
         ),
       ).toHaveLength(2);
-      // A later successful read carries the debt forward without retry state.
+      // The plain checkpoint remains usable after the retry budget resets.
       installStub({
         search: [
           htmlResponse(
@@ -1203,11 +1193,7 @@ describe("cz-nss fetchPage", () => {
       const empty = (
         await czNssAdapter.fetchPage(nextDaySkipped.nextCursor, {})
       ).unwrap();
-      expect(JSON.parse(empty.nextCursor ?? "")).toEqual({
-        date: "2026-06-13",
-        page: 0,
-        unsettledDay: debt,
-      });
+      expect(empty.nextCursor).toBe("2026-06-13:0");
     } finally {
       recording.restore();
     }
@@ -1289,7 +1275,7 @@ describe("cz-nss fetchPage", () => {
     }
   });
 
-  test("a full continuation page moves the cursor on within the day", async () => {
+  test("a persisted plain cursor resumes its date and continuation page", async () => {
     // A continuation page is full at half the inline page's size, so a crawl
     // measuring it against the inline size ends the day here and never asks
     // for the records past it.
@@ -1313,10 +1299,15 @@ describe("cz-nss fetchPage", () => {
 
     const page = await czNssAdapter.fetchPage(`${SLICE}:1`, {});
 
-    expect(Result.isError(page)).toBe(false);
-    expect(Result.isError(page) ? null : page.value.nextCursor).toBe(
-      `${SLICE}:2`,
+    const resumed = page.unwrap();
+    expect(
+      resumed.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual(
+      fullPageRows(CZ_NSS_CONTINUATION_PAGE_ROWS).map(
+        ({ documentId }) => documentId,
+      ),
     );
+    expect(resumed.nextCursor).toBe(`${SLICE}:2`);
   }, 30_000);
 
   test("an empty continuation body fails the page instead of ending the day", async () => {

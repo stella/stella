@@ -2739,7 +2739,7 @@ export const skUsAdapter = defineSourceAdapter({
                 cursor: encodeCursor({ year, offset }),
                 resultIndex: item.offset,
                 outcome: "deterministic_refusal",
-                repair: "monthly_reconciliation",
+                reconciliation: "reports_unserved",
               });
               continue;
             case "served":
