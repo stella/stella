@@ -133,7 +133,11 @@ const languageAlternateSchema = t.Object({
   decisionDate: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionDate),
   language: boundedString(DECISION_READER_TEXT_BYTES.language),
   slug: nullableBoundedString(DECISION_READER_TEXT_BYTES.slug),
-});
+  hasDocument: t.Boolean(),
+} satisfies Record<
+  keyof ReadableDecision["languageAlternates"][number],
+  TSchema
+>);
 
 export const readDecisionSuccessResponseSchema = t.Object({
   documentPending: t.Boolean(),
@@ -198,7 +202,7 @@ export const readDecisionSuccessResponseSchema = t.Object({
     DECISION_READER_TEXT_BYTES.sourceAttributionUrl,
   ),
   documentUrl: nullableBoundedString(DECISION_READER_TEXT_BYTES.documentUrl),
-  metadata: t.Nullable(metadataSchema),
+  metadata: metadataSchema,
   headnote: textFieldSchema,
   textFields: t.Object({
     abstract: textFieldSchema,
@@ -281,10 +285,7 @@ const projectTextField = (field: TextField): TextField => {
   }
 };
 
-const projectMetadata = (metadata: Record<string, unknown> | null) => {
-  if (metadata === null) {
-    return null;
-  }
+const projectMetadata = (metadata: Record<string, unknown>) => {
   let remaining = METADATA_NODES;
   const project = (value: unknown, depth: number): unknown => {
     if (typeof value === "string") {
@@ -447,6 +448,7 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
       decisionDate: nullableText(alternate.decisionDate, text.decisionDate),
       language: truncateTextBytes(alternate.language, text.language),
       slug: nullableText(alternate.slug, text.slug),
+      hasDocument: alternate.hasDocument,
     })),
   };
 };

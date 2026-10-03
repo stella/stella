@@ -9,6 +9,7 @@ import type {
   summarizeDecisionCitationsHandler,
   listLeadingCitationsHandler,
   DecisionCitationRow,
+  LeadingCitationRow,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import {
   CITATION_TIMELINE_MAX_YEARS,
@@ -26,6 +27,7 @@ import type {
   LatestDecisionsByCourt,
 } from "@/api/handlers/case-law/decisions/latest";
 import type { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
+import { languageAlternatesSchema } from "@/api/handlers/case-law/decisions/search-schema";
 import { SHELF_TIER_LABEL_VALUES } from "@/api/handlers/case-law/decisions/shelf-courts";
 import type {
   listSitemapShardDecisionsHandler,
@@ -34,7 +36,6 @@ import type {
 import type { readCaseLawCorpusStatusHandler } from "@/api/handlers/case-law/decisions/status";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
-import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import { LIMITS } from "@/api/lib/limits";
@@ -60,21 +61,11 @@ const identity = {
 };
 const date = nullableBoundedString(128);
 const numberOrNull = t.Union([t.Number(), t.Null()]);
-const alternate = t.Object(
-  { ...identity, decisionDate: date } satisfies Record<
-    keyof PublicDecisionLanguageAlternate,
-    TSchema
-  >,
-  { additionalProperties: false },
-);
-export const boundedDecisionLanguageAlternatesSchema = t.Array(alternate, {
-  maxItems: LIMITS.caseLawLanguageAlternatesPerGroupMax,
-});
 const headnote = decisionHeadnotePreviewSchema;
 const decision = {
   ...identity,
   ecli: nullableBoundedString(1024),
-  languageAlternates: boundedDecisionLanguageAlternatesSchema,
+  languageAlternates: languageAlternatesSchema,
   decisionDate: date,
   decisionType: nullableBoundedString(512),
 };
@@ -222,13 +213,25 @@ const citation = t.Object(
   } satisfies Record<keyof DecisionCitationRow, TSchema>,
   { additionalProperties: false },
 );
+// A leading citation always names a held decision; only the general list
+// carries unresolved rows.
+const leadingCitation = t.Object(
+  {
+    id: boundedString(36),
+    citationText: boundedString(16_384),
+    sectionIndex: numberOrNull,
+    treatment: t.UnionEnum(CITATION_TREATMENTS),
+    decision: relatedDecision,
+  } satisfies Record<keyof LeadingCitationRow, TSchema>,
+  { additionalProperties: false },
+);
 export const citationsResponseSchema = page(
   citation,
   LIMITS.caseLawSearchPageSizeMax,
 );
 export const leadingCitationsResponseSchema = t.Object(
   {
-    items: t.Array(citation, {
+    items: t.Array(leadingCitation, {
       maxItems: CITATION_TREATMENTS.length * LEADING_CITATIONS_PER_TREATMENT,
     }),
   } satisfies Record<

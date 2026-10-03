@@ -154,7 +154,7 @@ test("sitemap bounds every language group even within a larger batch", async () 
     caseLawDb,
   );
   if (!("items" in response)) {
-    return panic("Sitemap overflow fixture failed to load");
+    panic("Sitemap overflow fixture failed to load");
   }
   expect(response.items.length).toBe(variants.length);
   for (const item of response.items) {

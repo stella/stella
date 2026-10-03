@@ -130,7 +130,7 @@ const languageAlternateSchema = t.Object(
 
 // SAFETY: JSON arrays have no readonly marker; the static type preserves the
 // canonical readonly view without copying every result on this search path.
-const languageAlternatesSchema = Type.Unsafe<
+export const languageAlternatesSchema = Type.Unsafe<
   readonly PublicDecisionLanguageAlternate[]
 >(
   t.Array(languageAlternateSchema, {
