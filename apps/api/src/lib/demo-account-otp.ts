@@ -2,8 +2,8 @@ import { env } from "@/api/env";
 import {
   DEMO_ACCOUNT_OTP_WARNING_EVENT,
   resolveDemoAccountOtp,
-} from "@/api/lib/demo-account-otp-policy";
-import type { DemoAccountOtpArgs } from "@/api/lib/demo-account-otp-policy";
+} from "@/api/lib/auth/demo-account-otp-policy";
+import type { DemoAccountOtpArgs } from "@/api/lib/auth/demo-account-otp-policy";
 import { logger } from "@/api/lib/observability/logger";
 
 let overrideWarningEmitted = false;

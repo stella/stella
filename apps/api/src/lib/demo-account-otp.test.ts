@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { resolveDemoAccountOtp } from "@/api/lib/demo-account-otp-policy";
+import { resolveDemoAccountOtp } from "@/api/lib/auth/demo-account-otp-policy";
 
 const CONFIGURED = {
   demoEmail: "demo@example.com",

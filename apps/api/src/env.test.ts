@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { DEMO_ACCOUNT_OTP_WARNING_EVENT } from "@/api/lib/demo-account-otp-policy";
+import { DEMO_ACCOUNT_OTP_WARNING_EVENT } from "@/api/lib/auth/demo-account-otp-policy";
 
 const baseEnv = {
   DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella",
