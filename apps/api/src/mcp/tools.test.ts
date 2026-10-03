@@ -22,11 +22,14 @@ import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-r
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
+  SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   countedSearchTotal,
   LEGISLATION_SEARCH_MATCH_TYPES,
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
+import type { SearchPaginationOutcome } from "@stll/api-contract/search";
 import {
   CZ_INSOLVENCY_SOURCE,
   CZ_VAT_RELIABILITY_SOURCE,
@@ -72,6 +75,7 @@ import {
   CORPUS_SEARCH_CURSOR_MAX_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
+  corpusSearchGroupToken,
   encodeCorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
@@ -80,6 +84,7 @@ import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
 import * as actionCostContext from "@/api/lib/usage/action-costs/context";
 import type { withTimeout } from "@/api/lib/with-timeout";
+import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
@@ -103,7 +108,11 @@ import {
   compileWireSchema,
   createWireSchemaValidator,
 } from "@/api/tests/helpers/wire-json-schema";
-import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+  toSafeDbMock,
+} from "@/api/tests/scoped-db-mock";
 
 const wireSchemaValidator = createWireSchemaValidator();
 
@@ -1092,10 +1101,12 @@ describe("OpenAI-compatible MCP tools", () => {
     // open, which it is in dev and test. These tests are about the matter half,
     // so both corpora answer an empty page unless a test says otherwise.
     searchDecisionsHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       hits: [],
       nextCursor: null,
     });
     searchLegislationHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       items: [],
       nextCursor: null,
       total: { type: "exact", value: 0 },
@@ -1131,7 +1142,7 @@ describe("OpenAI-compatible MCP tools", () => {
           description:
             "Opaque cursor from a previous search call to fetch the next page",
           minLength: 1,
-          maxLength: 512,
+          maxLength: COMPAT_SEARCH_CURSOR_MAX_LENGTH,
         },
       },
       required: ["query"],
@@ -1999,6 +2010,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       nextCursor: null,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       results: [
         {
           id: "00000000-0000-4000-8000-0000000e0001",
@@ -2206,6 +2218,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("search_case_law maps filters and returns decision links", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: {
         court: [
           {
@@ -2324,10 +2337,12 @@ describe("OpenAI-compatible MCP tools", () => {
         language: [{ count: 1, label: null, value: "cs" }],
       },
       nextCursor: "cursor_2",
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       searches: [
         {
           query: "shareholder dispute",
           queryUsed: "shareholder dispute",
+          paginationOutcome: SEARCH_PAGINATION_COMPLETE,
           warnings: [],
         },
       ],
@@ -2356,8 +2371,42 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test.each(["search_case_law", "search_legislation"] as const)(
+    "%s surfaces exclusion-budget truncation even without a continuation",
+    async (toolName) => {
+      const result = {
+        paginationOutcome: SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+        nextCursor: null,
+        total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
+      };
+      searchDecisionsHandlerMock.mockResolvedValue({
+        ...result,
+        facets: null,
+        hits: [],
+        queryUsed: "contract",
+        warnings: [],
+      });
+      searchLegislationHandlerMock.mockResolvedValue({ ...result, items: [] });
+      const payload = parseToolPayload(
+        await handleMcpToolCall({
+          args:
+            toolName === "search_case_law"
+              ? { country: "CZE", queries: ["contract"] }
+              : { country: "CZE", query: "contract" },
+          context: createContext(),
+          toolName,
+        }),
+      );
+      expect(payload).toMatchObject({
+        paginationOutcome: SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+        nextCursor: null,
+      });
+    },
+  );
+
   test("search_case_law returns the same payload in anonymized mode", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: {
         court: [],
         year: [],
@@ -2417,10 +2466,12 @@ describe("OpenAI-compatible MCP tools", () => {
         language: [],
       },
       nextCursor: null,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       searches: [
         {
           query: "shareholder dispute",
           queryUsed: "shareholder dispute",
+          paginationOutcome: SEARCH_PAGINATION_COMPLETE,
           warnings: [],
         },
       ],
@@ -2882,6 +2933,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("search_case_law merges several phrasings by best rank", async () => {
     searchDecisionsHandlerMock.mockImplementation(
       async ({ query }: { query: string }) => ({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: {
           court: [],
           year: [
@@ -2963,6 +3015,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("search_case_law resumes each phrasing from its own sub-cursor", async () => {
     searchDecisionsHandlerMock.mockImplementation(
       async ({ query }: { query: string }) => ({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: null,
         hits: [createCaseLawHit(`dec-${query}`, query)],
         nextCursor: query === "first" ? "engine-first-2" : null,
@@ -3013,6 +3066,7 @@ describe("OpenAI-compatible MCP tools", () => {
     // what page one did with it.
     searchDecisionsHandlerMock.mockImplementation(
       async ({ query }: { query: string }) => ({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: null,
         hits: [createCaseLawHit(`dec-${query}`, query)],
         nextCursor: query.startsWith("dluh") ? "engine-dluh-2" : null,
@@ -3037,6 +3091,7 @@ describe("OpenAI-compatible MCP tools", () => {
       searches: {
         query: string;
         queryUsed: string;
+        paginationOutcome: SearchPaginationOutcome;
         warnings: readonly unknown[];
       }[];
     }>(
@@ -3053,20 +3108,43 @@ describe("OpenAI-compatible MCP tools", () => {
       {
         query: "dluh na nájemném",
         queryUsed: "dluh na nájemném",
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         warnings: [],
       },
-      { query: "výpověď z nájmu", queryUsed: "výpověď nájmu", warnings: [] },
+      {
+        query: "výpověď z nájmu",
+        queryUsed: "výpověď nájmu",
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        warnings: [],
+      },
     ]);
   });
 
   test("search_case_law accepts back the longest cursor its engine can emit", async () => {
-    // Under query expansion an engine cursor carries a 64-character dictionary
-    // identity. Five of them at the codec's own maximum is the largest
-    // envelope this tool can hand out, and the input schema has to take it
-    // back: a cap guessed below the emitted length refuses the second page.
-    const longestEngineCursor = "c".repeat(CORPUS_SEARCH_CURSOR_MAX_LENGTH);
+    // Maximum group exclusions and dictionary identity must survive the
+    // merged envelope and validate when the client sends it back.
+    const longestEngineCursor = encodeCorpusSearchCursor({
+      dictionary: { type: "dictionary", contentHash: "a".repeat(64) },
+      excludedGroups: Array.from(
+        { length: LIMITS.corpusIndexSearchMaxExcludedGroups },
+        (_, index) => corpusSearchGroupToken(`judgment-${index}`),
+      ),
+      id: "00000000-0000-4000-8000-000000000001",
+      rankingMode: "bm25-ratio",
+      score: Number.MAX_VALUE,
+      sort: "relevance",
+      target: "a".repeat(32),
+      windowStart: 9_999_999_999,
+    });
+    expect(longestEngineCursor.length).toBeGreaterThan(
+      CORPUS_SEARCH_CURSOR_MAX_LENGTH,
+    );
+    expect(longestEngineCursor.length).toBeLessThanOrEqual(
+      CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+    );
     searchDecisionsHandlerMock.mockImplementation(
       async ({ query }: { query: string }) => ({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: null,
         hits: [createCaseLawHit("dec-a", "a")],
         nextCursor: longestEngineCursor,
@@ -3237,6 +3315,7 @@ describe("OpenAI-compatible MCP tools", () => {
       { featurePublicLaw: true, localDevOpen: false },
       async () => {
         searchDecisionsHandlerMock.mockResolvedValue({
+          paginationOutcome: SEARCH_PAGINATION_COMPLETE,
           facets: {
             court: [],
             year: [],
@@ -3645,6 +3724,7 @@ describe("OpenAI-compatible MCP tools", () => {
     "search_legislation passes the admitted jurisdiction and projects each %s hit",
     async (matchType) => {
       searchLegislationHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         items: [
           {
             documentId: STATUTE_ID,
@@ -3681,6 +3761,7 @@ describe("OpenAI-compatible MCP tools", () => {
       });
       expect(parseToolPayload(result)).toEqual({
         nextCursor: "legislation_cursor_2",
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         results: [
           {
             appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik`,
@@ -3707,7 +3788,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("search_legislation accepts a relaxed cursor at the codec bounds and maximum page size", async () => {
     const tokens = Array.from(
       { length: LIMITS.corpusIndexSearchMaxExcludedGroups },
-      (_, index) => index.toString(36).padStart(6, "0"),
+      (_, index) => corpusSearchGroupToken(`work-${index}`),
     );
     const cursor = encodeCorpusSearchCursor({
       dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
@@ -3730,7 +3811,18 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(cursor.length).toBeLessThanOrEqual(
       CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
     );
+    const advertised = asTestRaw<{
+      properties: { cursor: { maxLength: number } };
+    }>(
+      (await listMcpTools(createContext())).find(
+        (tool) => tool.name === "search_legislation",
+      )?.inputSchema,
+    );
+    expect(cursor.length).toBeLessThanOrEqual(
+      advertised.properties.cursor.maxLength,
+    );
     searchLegislationHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       items: [],
       nextCursor: null,
       total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
@@ -3753,6 +3845,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("search_legislation answers a made-up cursor with the first page", async () => {
     searchLegislationHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       items: [],
       nextCursor: null,
       total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
@@ -4292,6 +4385,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("search_case_law normalizes an unambiguous localized date", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: null,
       hits: [],
       nextCursor: null,
@@ -4379,6 +4473,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     beforeEach(() => {
       searchDecisionsHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: null,
         hits: [],
         nextCursor: null,
@@ -4504,6 +4599,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     test("a stored court with no hits keeps its filter and names the courts that have them", async () => {
       searchDecisionsHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: {
           court: [
             {
@@ -6139,6 +6235,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       nextCursor: null,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       results: [
         {
           id: "00000000-0000-4000-8000-0000000e0001",
@@ -6211,6 +6308,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       nextCursor: null,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       results: [
         {
           id: "00000000-0000-4000-8000-0000000e0001",
@@ -6265,6 +6363,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       nextCursor: null,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       results: [
         {
           id: "00000000-0000-4000-8000-0000000e0001",
@@ -6309,6 +6408,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       nextCursor: null,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       results: [
         {
           id: "00000000-0000-4000-8000-0000000e0001",
@@ -8100,24 +8200,23 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       },
       select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: () => ({
-              for: async () => [
-                {
-                  entityId: "00000000-0000-4000-8000-00000007a001",
-                  workspaceId: WORKSPACE_ID,
-                  type: "task",
-                  status: WORK_OBLIGATION_STATUS.CANCELLED,
-                  ownerUserId: null,
-                  acknowledgedAt: null,
-                  workingTargetDate: null,
-                  hardDeadlineDate: null,
-                },
-              ],
-            }),
-          }),
-        }),
+        from: (table: unknown) =>
+          createSelectQueryMock(
+            table === workObligations
+              ? [
+                  {
+                    entityId: "00000000-0000-4000-8000-00000007a001",
+                    workspaceId: WORKSPACE_ID,
+                    type: "task",
+                    status: WORK_OBLIGATION_STATUS.CANCELLED,
+                    ownerUserId: null,
+                    acknowledgedAt: null,
+                    workingTargetDate: null,
+                    hardDeadlineDate: null,
+                  },
+                ]
+              : [],
+          ).from(),
       }),
       update: (table: unknown) => ({
         set: (values: Record<string, unknown>) => {

@@ -48,22 +48,6 @@ import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 const QUEUE_READ_LIMIT = 500;
 
 /**
- * The queue row a store call would have come from. Only the id and the
- * jurisdiction are read, and this suite runs with corpus storage off,
- * so the rest is filler.
- */
-const pendingFor = (id: SafeId<"caseLawDecision">): PendingDocument => ({
-  id,
-  caseNumber: "stored",
-  ecli: null,
-  court: "Okresný súd",
-  country: "SVK",
-  decisionDate: null,
-  decisionType: null,
-  documentUrl: null,
-});
-
-/**
  * Keep only the decisions a test created, in the order the queue
  * returned them, so rows left by neighbouring tests cannot change the
  * assertion.
@@ -180,6 +164,15 @@ if (!databaseUrl || !runPostgresTests) {
       }
       created.push(row.id);
       return row.id;
+    };
+
+    const claimFor = async (id: SafeId<"caseLawDecision">) => {
+      const claim = await claimDocumentFetch(id, scopedDb);
+      expect(claim.status).toBe("claimed");
+      if (claim.status !== "claimed") {
+        throw new Error("expected claimed snapshot");
+      }
+      return claim.decision;
     };
 
     const readFetchState = async (id: SafeId<"caseLawDecision">) =>
@@ -341,7 +334,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       await storeBackfilledDocument({
-        decision: pendingFor(id),
+        decision: await claimFor(id),
         document: {
           fulltext: "Rozsudok\n\nOdôvodnenie:\n\nText.",
           documentAst: parsedAst,
@@ -383,9 +376,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       await markDocumentUnavailable({
-        // The fixture rows carry no source hash.
-        claimedSourceHash: null,
-        decisionId: id,
+        decision: await claimFor(id),
         scopedDb,
       });
 
@@ -415,9 +406,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       await markDocumentUnavailable({
-        // The fixture rows carry no source hash.
-        claimedSourceHash: null,
-        decisionId: id,
+        decision: await claimFor(id),
         scopedDb,
       });
 
@@ -443,15 +432,16 @@ if (!databaseUrl || !runPostgresTests) {
         sections: [],
       };
 
+      const decision = await claimFor(id);
       await storeBackfilledDocument({
-        decision: pendingFor(id),
+        decision,
         document: stored,
         scopedDb,
       });
       // A second fetch of the same decision — the queue and a reader can
       // both reach it — must converge rather than replace what is there.
       await storeBackfilledDocument({
-        decision: pendingFor(id),
+        decision,
         document: { ...stored, fulltext: "Stale re-parse." },
         scopedDb,
       });
@@ -471,8 +461,9 @@ if (!databaseUrl || !runPostgresTests) {
         documentUrl: "https://example.test/no-erase.pdf",
       });
 
+      const decision = await claimFor(id);
       await storeBackfilledDocument({
-        decision: pendingFor(id),
+        decision,
         document: {
           fulltext: "Rozsudok\n\nOdôvodnenie:\n\nText.",
           documentAst: parsedAst,
@@ -481,9 +472,7 @@ if (!databaseUrl || !runPostgresTests) {
         scopedDb,
       });
       await markDocumentUnavailable({
-        // The fixture rows carry no source hash.
-        claimedSourceHash: null,
-        decisionId: id,
+        decision,
         scopedDb,
       });
 
@@ -591,6 +580,8 @@ if (!databaseUrl || !runPostgresTests) {
         sections: [],
       };
 
+      const decision = await claimFor(id);
+
       // The source refreshed the decision while the document was being
       // fetched, so what was parsed describes a row that no longer
       // exists in that form.
@@ -600,10 +591,9 @@ if (!databaseUrl || !runPostgresTests) {
         .where(eq(caseLawDecisions.id, id));
 
       await storeBackfilledDocument({
-        decision: pendingFor(id),
+        decision,
         document,
         scopedDb,
-        claimedSourceHash: "hash-at-claim",
       });
 
       expect(
@@ -615,13 +605,19 @@ if (!databaseUrl || !runPostgresTests) {
         )?.fulltext,
       ).toBeNull();
 
+      await db
+        .update(caseLawDecisions)
+        .set({
+          documentFetchAttemptedAt: new Date(Date.now() - 60 * 60 * 1000),
+        })
+        .where(eq(caseLawDecisions.id, id));
+
       // Fetched again against the row as it now stands, the same
       // document stores.
       await storeBackfilledDocument({
-        decision: pendingFor(id),
+        decision: await claimFor(id),
         document,
         scopedDb,
-        claimedSourceHash: "hash-after-refresh",
       });
 
       expect(
@@ -801,7 +797,7 @@ if (!databaseUrl || !runPostgresTests) {
         answer: () => Promise<Response>,
       ) =>
         await fetchDecisionDocument({
-          decision: { ...pendingFor(id), documentUrl: PUBLISHER_URL },
+          decisionId: id,
           fetchDocument: answer,
           scopedDb,
           signal: new AbortController().signal,
@@ -864,7 +860,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(buffered.caseNumber).not.toBe(metadata.caseNumber);
           const urls: string[] = [];
           const outcome = await fetchDecisionDocument({
-            decision: buffered,
+            decisionId: buffered.id,
             fetchDocument: async (url) => {
               urls.push(url.href);
               return url.href === currentUrl

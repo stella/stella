@@ -491,7 +491,7 @@ export const streamChat = async ({
     workspaceIds: tenantWorkspaceIds,
   });
 
-  const primaryModel = resolveTanStackTextModel({
+  const primaryModel = await resolveTanStackTextModel({
     dataClass: "customer",
     modelId: devModelId,
     organizationId,
@@ -584,7 +584,7 @@ export const streamChat = async ({
 
   const resolvedFallbackModel =
     devModelId === undefined
-      ? resolveFallbackTextModel({
+      ? await resolveFallbackTextModel({
           organizationId,
           orgAIConfig,
           managedAIResidency,
@@ -981,15 +981,15 @@ type ResolveFallbackTextModelProps = {
   threadId: SafeId<"chatThread">;
 };
 
-const resolveFallbackTextModel = ({
+const resolveFallbackTextModel = async ({
   organizationId,
   orgAIConfig,
   managedAIResidency,
   primaryModel,
   threadId,
-}: ResolveFallbackTextModelProps): ResolvedTanStackTextModel | null => {
+}: ResolveFallbackTextModelProps): Promise<ResolvedTanStackTextModel | null> => {
   try {
-    const fallbackModel = resolveTanStackTextModel({
+    const fallbackModel = await resolveTanStackTextModel({
       dataClass: "customer",
       organizationId,
       orgAIConfig,
