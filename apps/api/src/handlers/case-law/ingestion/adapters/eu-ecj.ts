@@ -1246,6 +1246,7 @@ const UNKNOWN_DECISION_TYPE = "unknown";
 const RAW_PART = {
   LISTING: "listing",
   NOTICE: "notice",
+  NOTICE_STATE: "notice-state",
   DOCUMENT: "document",
   FORMEX: "formex",
 } as const;
@@ -1607,7 +1608,7 @@ const ecjDecisionFromParts = ({
       rawHash: hashContent(
         `${celex}|${ecli}|${decisionDate}|${language}|${fulltext}|${
           noticeXml === undefined
-            ? "notice:not-published"
+            ? (parts[RAW_PART.NOTICE_STATE] ?? "notice:not-published")
             : hashContent(noticeXml)
         }`,
       ),
@@ -1883,7 +1884,8 @@ export const refreshEcjStoredFormex = async ({
 
 type EcjNoticeRead =
   | { type: "present"; xml: string }
-  | { type: "not-published"; status: 404 | 410 };
+  | { type: "not-published"; status: 404 | 410 }
+  | { type: "refused"; status: number };
 
 type FetchNoticeOptions = {
   celex: string;
@@ -1909,7 +1911,7 @@ export const fetchNotice = async ({
   celex,
   languageUri,
   signal,
-  fetch = fetchPublisher,
+  fetch: fetchRequest = fetchPublisher,
 }: FetchNoticeOptions): Promise<EcjNoticeRead> => {
   const cellarLanguage = languageUri.startsWith(CELLAR_LANGUAGE_PREFIX)
     ? languageUri.slice(CELLAR_LANGUAGE_PREFIX.length).toLowerCase()
@@ -1917,7 +1919,7 @@ export const fetchNotice = async ({
   if (cellarLanguage === undefined) {
     return panic("Expected a Cellar language URI for a branch notice");
   }
-  const response = await fetch(`${CELLAR_CELEX_PREFIX}${celex}`, {
+  const response = await fetchRequest(`${CELLAR_CELEX_PREFIX}${celex}`, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
@@ -1931,6 +1933,14 @@ export const fetchNotice = async ({
   });
   if (response.status === 404 || response.status === 410) {
     return { type: "not-published", status: response.status };
+  }
+  if (!response.ok && !isRetryableStatus(response.status)) {
+    logger.warn("case_law.ingestion.notice_unavailable", {
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      httpStatus: response.status,
+      celex,
+    });
+    return { type: "refused", status: response.status };
   }
   if (!response.ok) {
     throw new AdapterFetchError({
@@ -2096,6 +2106,9 @@ export const buildDecision = async (
   const formex =
     formexResult?.type === "fetched" ? formexResult.formex : undefined;
   const parts = ecjRawParts({ binding, html: served.html, notice, formex });
+  if (noticeRead.type === "refused") {
+    parts[RAW_PART.NOTICE_STATE] = `notice:refused:${noticeRead.status}`;
+  }
 
   return ecjDecisionFromParts({
     celex,

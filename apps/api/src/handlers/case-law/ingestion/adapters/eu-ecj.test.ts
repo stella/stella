@@ -175,8 +175,8 @@ describe("euEcjAdapter.fetchPage", () => {
     Bun.sleep = originalSleep;
   });
 
-  test.each([401, 403, 429])(
-    "a branch notice HTTP %s stops the page for retry",
+  test.each([400, 401, 403, 408, 429, 500])(
+    "a branch notice HTTP %s holds the page only when retryable",
     async (status) => {
       let noticeRequests = 0;
       globalThis.fetch = asFetchMock(
@@ -200,7 +200,17 @@ describe("euEcjAdapter.fetchPage", () => {
       );
 
       const result = await ecjAdapter.fetchPage("2024-01-18", {});
-      expect(noticeRequests).toBe(1);
+      expect(noticeRequests).toBeGreaterThanOrEqual(1);
+      if ([400, 401, 403].includes(status)) {
+        expect(result.isOk()).toBe(true);
+        if (!result.isOk()) {
+          throw new TypeError("Expected a completed page after notice refusal");
+        }
+        expect(result.value.decisions).toHaveLength(1);
+        expect(result.value.nextCursor).toBe("2024-01-19");
+        expect(result.value.decisions.at(0)?.judges).toBeUndefined();
+        return;
+      }
       if (status === 429) {
         expect(result.isErr()).toBe(true);
         if (!result.isErr()) {
@@ -221,7 +231,6 @@ describe("euEcjAdapter.fetchPage", () => {
       expect(result.error).toMatchObject({
         cursor: null,
         httpStatus: status,
-        message: `Cellar notice HTTP ${status} for ${enBinding.celex.value}`,
       });
     },
   );

@@ -7,7 +7,7 @@
  * hold the notice to being read per expression rather than per work.
  */
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 import JSZip from "jszip";
@@ -124,8 +124,13 @@ const decisionFrom = async (notice: string | undefined) => {
 
 describe("notice publication outcomes", () => {
   const originalFetch = globalThis.fetch;
+  const originalSleep = Bun.sleep;
+  beforeEach(() => {
+    Bun.sleep = () => Promise.resolve();
+  });
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    Bun.sleep = originalSleep;
   });
 
   test("a 500 notice rejects the item and a later attempt can build it", async () => {
@@ -166,7 +171,7 @@ describe("notice publication outcomes", () => {
     });
   }
 
-  for (const status of [400, 401, 403, 408, 429, 500, 502, 503, 504]) {
+  for (const status of [408, 429, 500, 502, 503, 504]) {
     test(`HTTP ${status} propagates a notice read failure`, async () => {
       await expect(readNotice(status)).rejects.toBeInstanceOf(
         AdapterFetchError,
@@ -176,6 +181,49 @@ describe("notice publication outcomes", () => {
       );
     });
   }
+
+  test.each([400, 401, 403, 405, 422])(
+    "HTTP %s is a terminal notice refusal",
+    async (status) => {
+      expect(await readNotice(status)).toEqual({ type: "refused", status });
+    },
+  );
+
+  test.each([400, 401, 403, 405, 422])(
+    "a notice refusal %s retains the row and a later publication changes its hash",
+    async (status) => {
+      let noticeStatus = status;
+      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/resource/celex/")) {
+          return new Response(noticeStatus === 200 ? noticeEn : null, {
+            status: noticeStatus,
+          });
+        }
+        return new Response(documentEn, {
+          headers: { "Content-Type": "application/xhtml+xml" },
+        });
+      });
+      const refused = await buildDecision(binding, AbortSignal.timeout(5000));
+      expect(refused?.fulltext?.length).toBeGreaterThan(100);
+      expect(refused?.judges).toBeUndefined();
+      expect(
+        decodeSourceRawEnvelope(refused?.sourceRaw ?? "")?.["notice-state"],
+      ).toBe(`notice:refused:${status}`);
+      noticeStatus = 404;
+      const absent = await buildDecision(binding, AbortSignal.timeout(5000));
+      expect(refused?.rawHash).not.toBe(absent?.rawHash);
+      noticeStatus = 200;
+      const present = await buildDecision(binding, AbortSignal.timeout(5000));
+      expect(present?.rawHash).not.toBe(refused?.rawHash);
+      expect(present?.judges?.length).toBeGreaterThan(0);
+      const replayed = await reparse(storedFrom(refused?.sourceRaw ?? ""));
+      expect(replayed.type).toBe("parsed");
+      if (replayed.type === "parsed") {
+        expect(replayed.result.rawHash).toBe(refused?.rawHash);
+      }
+    },
+  );
 
   test("a published notice retains its bytes", async () => {
     expect(await readNotice(200)).toEqual({ type: "present", xml: noticeEn });
