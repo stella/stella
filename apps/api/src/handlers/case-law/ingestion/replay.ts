@@ -1051,6 +1051,16 @@ const replayOneRow = async ({
   });
 };
 
+// Every row outcome completes under the source lease, including paths that
+// report without writing. A lost lease rejects before recording or advancing.
+const completeReplayRow = async (
+  options: ReplayOneRowOptions,
+): Promise<ReplayRowReport> => {
+  const report = await replayOneRow(options);
+  await options.sourceLease?.beforeDatabaseMark();
+  return report;
+};
+
 /** Bounded, printable context for a failure that halted the run. */
 const FAILURE_DETAIL_LIMIT = 300;
 
@@ -1280,7 +1290,7 @@ export const replayCaseLawSource = async ({
 
     const attempt = await Result.tryPromise({
       try: async () =>
-        await replayOneRow({
+        await completeReplayRow({
           resolveMetadataUrlSchema,
           metadataUrlSchema: metadataUrlSchemaForAdapter(adapter.key),
           capability,

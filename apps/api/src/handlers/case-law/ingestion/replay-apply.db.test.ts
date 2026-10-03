@@ -54,6 +54,7 @@ import {
 import type {
   ReplayCaseLawSourceOptions,
   ReplayRejectionPolicy,
+  ReplayRowReport,
   ReplayRowResult,
 } from "@/api/handlers/case-law/ingestion/replay";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -62,6 +63,7 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
@@ -990,6 +992,96 @@ test.each(["row-columns", "content-hash"])(
     }
     expect(second.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
     await lease.release();
+  },
+);
+
+test.each(["unchanged", "rejected", "missing-payload", "changed"] as const)(
+  "an expired lease holds the replay cursor before completing a row: %s",
+  async (outcome) => {
+    const fixture = await replayConvergenceFixture("Unchanged body text.");
+    const lease = await acquireCaseLawSourceIngestionLease({
+      scopedDb,
+      sourceId: fixture.sourceId,
+    });
+    if (lease === null) {
+      panic("Expected free source lease");
+    }
+    const leaseLifetimeMs = 60 * 60 * 1000;
+    let nowMs = 0;
+    let expiresAtMs = leaseLifetimeMs;
+    const expiringLease = {
+      ...lease,
+      beforeDatabaseMark: async () => {
+        if (nowMs >= expiresAtMs) {
+          throw new ConcurrentModificationError({
+            message: "Case-law source ingestion lease was lost",
+          });
+        }
+        expiresAtMs = nowMs + leaseLifetimeMs;
+      },
+    } satisfies CaseLawSourceIngestionLease;
+    const recorded: ReplayRowReport[] = [];
+    const replay = async (sourceLease: CaseLawSourceIngestionLease | null) =>
+      await replayCaseLawSource({
+        adapter: stubAdapter(() =>
+          outcome === "rejected"
+            ? {
+                type: "rejected",
+                rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
+                detail: "Unsupported stored content",
+              }
+            : {
+                type: "parsed",
+                result:
+                  outcome === "changed"
+                    ? { ...fixture.result, rawHash: "changed-source-hash" }
+                    : fixture.result,
+              },
+        ),
+        scopedDb,
+        sourceId: fixture.sourceId,
+        sourceLease,
+        scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+        readStoredRaw: async () => {
+          nowMs += leaseLifetimeMs + 1;
+          return outcome === "missing-payload"
+            ? null
+            : new TextEncoder().encode(STORED_PAYLOAD);
+        },
+        bound: { type: "at-most", limit: 10 },
+        pageSize: 10,
+        recordRow: async (row) => {
+          recorded.push(row);
+        },
+      });
+    try {
+      const run = await replay(expiringLease);
+      if (run.type !== "ran") {
+        panic("Expected replay to run");
+      }
+      expect(run.report.visited).toBe(0);
+      expect(run.report.resumeAfter).toBeNull();
+      expect(run.report.haltReason).toContain("ingestion lease was lost");
+      expect(recorded).toHaveLength(0);
+
+      const dry = await replay(null);
+      if (dry.type !== "ran") {
+        panic("Expected dry replay to run");
+      }
+      expect(dry.report.visited).toBe(1);
+      expect(dry.report.resumeAfter).toBe(fixture.id);
+      expect(dry.report.haltReason).toBeNull();
+      expect(recorded).toHaveLength(1);
+      const dryOutcomes = {
+        changed: REPLAY_ROW_OUTCOME.WOULD_APPLY,
+        "missing-payload": REPLAY_ROW_OUTCOME.MISSING_PAYLOAD,
+        rejected: REPLAY_ROW_OUTCOME.REJECTED,
+        unchanged: REPLAY_ROW_OUTCOME.UNCHANGED,
+      } as const;
+      expect(dry.report.outcomes[dryOutcomes[outcome]]).toBe(1);
+    } finally {
+      await lease.release();
+    }
   },
 );
 
