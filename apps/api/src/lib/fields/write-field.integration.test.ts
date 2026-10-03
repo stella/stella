@@ -55,9 +55,9 @@ const propertyIds = [restPropertyId, chatPropertyId];
 /** Who acts: a session that may edit documents, and narrower ones that may not. */
 const editor = sessionMemberRole("owner");
 const intern = sessionMemberRole("intern");
-const readOnlyKey: AuthorizedMemberRole = {
+const createOnlyKey: AuthorizedMemberRole = {
   role: "owner",
-  credential: { type: "attenuated", permissions: { entity: ["read"] } },
+  credential: { type: "attenuated", permissions: { entity: ["create"] } },
 };
 
 const userId = () => ids.userAdmin;
@@ -177,18 +177,23 @@ const writeOverChat = async ({
     scopedDb: scopedDb(),
   })["update-entity-fields"];
   const execute = tool?.execute ?? panic("update-entity-fields is missing");
-  return await execute(
-    {
-      matterRef: refRegistry.toMatterRef(workspaceId),
-      entityRef: refRegistry.toEntityRef({ entityId, workspaceId }),
-      propertyRef: refRegistry.toPropertyRef(propertyId),
-      value,
-    },
-    { emitCustomEvent: () => undefined },
-  ).then(
-    (output) => output,
-    (error: unknown) => error,
-  );
+  return await Promise.resolve()
+    .then(
+      async () =>
+        await execute(
+          {
+            matterRef: refRegistry.toMatterRef(workspaceId),
+            entityRef: refRegistry.toEntityRef({ entityId, workspaceId }),
+            propertyRef: refRegistry.toPropertyRef(propertyId),
+            value,
+          },
+          { emitCustomEvent: () => undefined },
+        ),
+    )
+    .then(
+      (output: unknown) => output,
+      (error: unknown) => error,
+    );
 };
 
 const cellState = async (propertyId: SafeId<"property">) => {
@@ -245,7 +250,7 @@ describe("writing a field value", () => {
 
   test("refuses a credential whose permissions do not include editing documents", async () => {
     const refusal = await writeOverChat({
-      authority: readOnlyKey,
+      authority: createOnlyKey,
       propertyId: chatPropertyId,
       value: "Acme",
     });
@@ -254,7 +259,7 @@ describe("writing a field value", () => {
     const direct = await Result.gen(() =>
       writeFieldValue({
         safeDb: safeDb(),
-        authority: readOnlyKey,
+        authority: createOnlyKey,
         workspaceId,
         userId: userId(),
         recordAuditEvent: recorder(),
