@@ -116,10 +116,12 @@ export type OAuthScopePolicyContext = {
   readonly providerScopes: readonly string[];
 };
 
-type OAuthScopeClient = Pick<
-  SchemaClient<readonly Scope[]>,
-  "clientId" | "clientDiscoveryId" | "scopes"
->;
+/** What the scope decision reads of a client (a stored one or a candidate). */
+export type OAuthScopeClient = {
+  readonly clientId: string;
+  readonly clientDiscoveryId?: string | null | undefined;
+  readonly scopes?: readonly string[] | undefined;
+};
 
 /**
  * The scopes an authorization for `client` may carry. `requested` is the
@@ -143,7 +145,9 @@ export const grantableScopes = (
 };
 
 /** Mirrors the provider's choice of parameter source for `/oauth2/authorize`. */
-const readsAuthorizationBody = (ctx: HookEndpointContext): boolean => {
+const readsAuthorizationBody = (ctx: {
+  readonly method?: string | undefined;
+}): boolean => {
   if (ctx.method !== "POST") {
     return false;
   }

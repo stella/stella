@@ -255,9 +255,9 @@ describe("login orchestration", () => {
     const provider = startProvider({
       documentIssuer: "https://api.stella.example/api/auth",
     });
-    let authorizedClientId: string | null = null;
+    const authorized: { clientId: string | null } = { clientId: null };
     onBrowserOpen = async (authorizeUrl) => {
-      authorizedClientId = new URL(authorizeUrl).searchParams.get("client_id");
+      authorized.clientId = new URL(authorizeUrl).searchParams.get("client_id");
       await driveCallback()(authorizeUrl);
     };
 
@@ -270,7 +270,7 @@ describe("login orchestration", () => {
 
       expect(Result.isOk(result)).toBe(true);
       const clientId = `https://api.stella.example${CLI_CLIENT_METADATA_PATH}`;
-      expect(authorizedClientId).toBe(clientId);
+      expect(authorized.clientId).toBe(clientId);
       expect(provider.counts.registration).toBe(0);
       const persisted = await readCredentialFile(configDir);
       expect(persisted.credentials.at(0)?.clientId).toBe(clientId);

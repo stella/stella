@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 1,
+  "reason": "The consent details endpoint is a Better Auth endpoint, which reports an unknown client by throwing its APIError."
+}

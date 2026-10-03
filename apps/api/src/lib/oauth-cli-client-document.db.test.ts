@@ -44,14 +44,19 @@ let hideDocumentSupport = false;
 
 /** Every request the CLI or the simulated browser makes, served in process. */
 const serveInProcess = async (
-  input: RequestInfo | URL,
+  input: string | URL | Request,
   init?: RequestInit,
 ): Promise<Response> => {
-  const request = new Request(input, init);
-  const url = new URL(request.url);
+  const source = input instanceof Request ? input : undefined;
+  const url = new URL(source ? source.url : input.toString());
+  const body = init?.body ?? (source ? await source.text() : undefined);
   const local = new Request(
-    new URL(`${url.pathname}${url.search}`, LOCAL_URL),
-    request,
+    new URL(`${url.pathname}${url.search}`, LOCAL_URL).toString(),
+    {
+      method: init?.method ?? source?.method ?? "GET",
+      headers: new Headers(init?.headers ?? source?.headers),
+      ...(body ? { body } : {}),
+    },
   );
   const response = url.pathname.startsWith("/api/auth/")
     ? await getAuth().handler(local)
@@ -158,7 +163,9 @@ const fetchSpy = spyOn(globalThis, "fetch");
 
 beforeAll(async () => {
   await initAgentAuthTestDb();
-  fetchSpy.mockImplementation(serveInProcess);
+  fetchSpy.mockImplementation(
+    Object.assign(serveInProcess, { preconnect: fetch.preconnect }),
+  );
 });
 
 afterAll(async () => {

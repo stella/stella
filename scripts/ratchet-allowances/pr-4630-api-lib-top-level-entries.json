@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 3,
+  "reason": "The OAuth provider gains three owners next to auth.ts: the consent details endpoint, the client capability policy, and the client documents Stella publishes itself."
+}

@@ -223,7 +223,8 @@ describe("OAuth dynamic client registration", () => {
         headers: browser.headers(),
       });
       await browser.setActiveOrganization(organization.id);
-      const requestedScope = fixture.body["scope"];
+      const requestedScope: unknown =
+        "scope" in fixture.body ? fixture.body.scope : undefined;
       const query = new URLSearchParams({
         client_id: registered.client_id,
         code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",

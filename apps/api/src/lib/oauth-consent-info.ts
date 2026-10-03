@@ -97,10 +97,10 @@ const matchesVerifiedUrl = (
     );
   });
 
-export const isVerifiedThirdPartyRedirect = (url: URL) =>
+const isVerifiedThirdPartyRedirect = (url: URL) =>
   matchesVerifiedUrl(url, VERIFIED_THIRD_PARTY_REDIRECTS);
 
-export const isVerifiedThirdPartyClientId = (url: URL) =>
+const isVerifiedThirdPartyClientId = (url: URL) =>
   matchesVerifiedUrl(url, VERIFIED_THIRD_PARTY_CLIENT_IDS);
 
 /** Stella's own origins: every redirect under them is first-party. */
@@ -146,7 +146,9 @@ export const getOAuthConsentInfo = (
   client: OAuthConsentClient,
   verifiedOrigins: readonly string[],
 ) => {
-  const redirects = (client.redirectUris ?? []).map((uri) => URL.parse(uri));
+  const redirects = client.redirectUris
+    ? client.redirectUris.map((uri) => URL.parse(uri))
+    : [];
   const clientUrl = client.clientDiscoveryId
     ? URL.parse(client.clientId)
     : null;
