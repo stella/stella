@@ -91,10 +91,19 @@ const callbackContext = (
 ): CallbackCtx =>
   asTestRaw<CallbackCtx>({
     query: { code: "auth-code", state: "state-token" },
-    safeDb: asTestRaw<CallbackCtx["safeDb"]>(async () => {
-      counter.calls += 1;
-      return Result.ok(row);
-    }),
+    safeDb: asTestRaw<CallbackCtx["safeDb"]>(
+      async (operation: (tx: unknown) => unknown) => {
+        counter.calls += 1;
+        return Result.ok(
+          await operation({
+            query: { mcpOAuthState: { findFirst: async () => row } },
+            insert: () => ({
+              values: () => ({ onConflictDoUpdate: async () => {} }),
+            }),
+          }),
+        );
+      },
+    ),
     scopedDb: asTestRaw<CallbackCtx["scopedDb"]>(async () => undefined),
     session: { activeOrganizationId: orgA },
     user: { id: userA },
@@ -122,7 +131,7 @@ describe("mcpOAuthCallback identity binding", () => {
       ),
     );
     expect(reasonOf(result)).toBe("invalid-secret");
-    expect(counter.calls).toBe(1);
+    expect(counter.calls).toBe(2);
   });
 
   test("rejects a state row belonging to another organization", async () => {

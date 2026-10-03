@@ -1,6 +1,10 @@
 import type { StatusTone } from "@stll/ui/list";
 
 import type { TranslationKey } from "@/i18n/types";
+import type {
+  McpConnectionsResponse,
+  McpConnectorsResponse,
+} from "@/lib/knowledge/queries";
 
 /** Case- and accent-insensitive folding, so "cesky" finds "Český". */
 const fold = (value: string): string =>
@@ -22,10 +26,12 @@ export const matchesConnectionQuery = (
   return words.every((word) => haystack.includes(word));
 };
 
-export type IntegrationConnection = {
-  status: "connected" | "needs_reauth" | "revoked";
-  enabled: boolean;
-};
+export type IntegrationConnection = Pick<
+  McpConnectionsResponse["connections"][number],
+  "enabled" | "status"
+>;
+export type IntegrationAuthorizationStatus =
+  McpConnectorsResponse["connectors"][number]["authorizationStatus"];
 
 type IntegrationStatus = {
   tone: StatusTone;
@@ -36,10 +42,29 @@ type IntegrationStatus = {
  * One status per integration row. `null` for servers that need no sign-in:
  * there is nothing for the user to connect, so a status would be noise.
  */
-export const integrationStatus = (
-  authType: "none" | "bearer" | "oauth",
-  connection: IntegrationConnection | undefined,
-) => {
+type IntegrationStatusOptions = {
+  authType: "none" | "bearer" | "oauth";
+  authorizationStatus: IntegrationAuthorizationStatus | undefined;
+  connection: IntegrationConnection | undefined;
+};
+
+export const integrationStatus = ({
+  authType,
+  authorizationStatus,
+  connection,
+}: IntegrationStatusOptions) => {
+  if (authorizationStatus === "needs_reapproval") {
+    return {
+      tone: "warning",
+      labelKey: "knowledge.mcp.needsReapproval",
+    } as const satisfies IntegrationStatus;
+  }
+  if (connection?.status === "needs_approval") {
+    return {
+      tone: "warning",
+      labelKey: "knowledge.mcp.needsReapproval",
+    } as const satisfies IntegrationStatus;
+  }
   if (connection === undefined || connection.status === "revoked") {
     if (authType === "none") {
       return null;

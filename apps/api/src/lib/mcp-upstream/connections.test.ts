@@ -2,10 +2,17 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { mcpUserConnections } from "@/api/db/schema";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
-import { bindDiscoveredMetadata } from "@/api/lib/mcp-upstream/oauth";
+import {
+  bindDiscoveredMetadata,
+  discoverOAuthMetadata,
+  MCP_OAUTH_INVALID_GRANT_CODE,
+  MCP_OAUTH_DISCOVERY_TIMEOUT_CODE,
+} from "@/api/lib/mcp-upstream/oauth";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -31,6 +38,7 @@ type CapturedTransport = {
 // Mutable controls the mocked collaborators close over. Reset per test.
 const state = {
   closes: 0,
+  now: new Date(),
   dbSets: [] as Record<string, unknown>[],
   decryptCalls: 0,
   encryptCalls: 0,
@@ -48,6 +56,7 @@ const state = {
 };
 
 const connectionDependenciesTestDouble = {
+  now: () => state.now,
   discoverOAuthMetadata: async (connectorUrl: string) =>
     bindDiscoveredMetadata({
       connectorUrl,
@@ -92,6 +101,7 @@ const {
   createMcpClientForConnection: createMcpClientForConnectionImpl,
   loadActiveMcpConnectionsForUser,
   proxyMcpToolCall: proxyMcpToolCallImpl,
+  MCP_REFRESH_BACKOFF_MS,
 } = await import("@/api/lib/mcp-upstream/connections");
 
 const connectionDependencies = asTestRaw<
@@ -139,21 +149,73 @@ const cachedTool = {
 
 // Records every `.set(...)` payload written through the fake so tests can
 // assert on the status transitions the module persists.
-const makeSafeDb = (): SafeDb => {
-  const chain: Record<string, (arg?: unknown) => unknown> = {
-    set: (value?: unknown) => {
-      state.dbSets.push(asTestRaw<Record<string, unknown>>(value));
-      return chain;
-    },
-    update: () => chain,
-    where: () => chain,
+const makeSafeDb = () => {
+  let lease: Date | null = null;
+  let retryAfter: Date | null = null;
+  let status = "connected";
+  const update = () => {
+    let fields: Record<string, unknown> = {};
+    const apply = () => {
+      if (
+        fields["refreshLeaseExpiresAt"] instanceof Date &&
+        ((lease !== null && lease > state.now) ||
+          (retryAfter !== null && retryAfter > state.now) ||
+          status !== "connected")
+      ) {
+        return false;
+      }
+      state.dbSets.push(fields);
+      if (
+        fields["refreshLeaseExpiresAt"] instanceof Date ||
+        fields["refreshLeaseExpiresAt"] === null
+      ) {
+        lease = fields["refreshLeaseExpiresAt"];
+      }
+      if (
+        fields["refreshRetryAfter"] instanceof Date ||
+        fields["refreshRetryAfter"] === null
+      ) {
+        retryAfter = fields["refreshRetryAfter"];
+      }
+      if (typeof fields["status"] === "string") {
+        status = fields["status"];
+      }
+      return true;
+    };
+    const chain = {
+      set: (value: Record<string, unknown>) => {
+        fields = value;
+        return chain;
+      },
+      where: () => {
+        const accepted = apply();
+        return Object.assign(Promise.resolve(), {
+          returning: async () =>
+            accepted ? [{ id: "conn_1", expiresAt: lease }] : [],
+        });
+      },
+    };
+    return chain;
   };
-  // SAFETY: test double; the module only ever calls update().set().where()
-  // and awaits the returned Result, none of which touches a real Transaction.
-  return asTestRaw<SafeDb>(async (fn: (tx: unknown) => unknown) => {
-    await fn(chain);
-    return Result.ok(undefined);
-  });
+  const tx = {
+    update,
+    insert: (table: unknown) => ({
+      values: (values: Record<string, unknown>) => ({
+        onConflictDoUpdate: async () => {
+          if (
+            table === mcpUserConnections &&
+            typeof values["status"] === "string"
+          ) {
+            status = values["status"];
+            state.dbSets.push(values);
+          }
+        },
+      }),
+    }),
+  };
+  return asTestRaw<SafeDb>(async (operation: (tx: unknown) => unknown) =>
+    Result.ok(await operation(tx)),
+  );
 };
 
 const oauthRow = (
@@ -191,6 +253,7 @@ let analytics: RecordingAnalytics;
 
 beforeEach(() => {
   analytics = installRecordingAnalytics();
+  state.now = new Date();
   state.closes = 0;
   state.dbSets = [];
   state.encryptCalls = 0;
@@ -211,21 +274,47 @@ afterEach(() => {
 
 test("uses only credentials configured for the connector", async () => {
   for (const expiresAt of [null, new Date(0)]) {
+    for (const oauthResourceUrl of [
+      "https://other.example.com/rpc",
+      "https://mcp.example.com/other",
+      "https://mcp.example.com/rp",
+    ]) {
+      const client = await createMcpClientForConnection({
+        organizationId,
+        userId,
+        safeDb: makeSafeDb(),
+        row: oauthRow({
+          oauthResourceUrl,
+          expiresAt,
+        }),
+      });
+      expect(client).toBeNull();
+    }
+  }
+  expect(state.transports).toEqual([]);
+  expect(state.decryptCalls).toBe(0);
+  expect(state.refreshCalls).toBe(0);
+  expect(hasStatusSet("needs_approval")).toBe(true);
+});
+
+test("uses credentials for configured resource paths", async () => {
+  for (const oauthResourceUrl of [
+    "https://mcp.example.com",
+    "https://mcp.example.com/rpc",
+  ]) {
     const client = await createMcpClientForConnection({
       organizationId,
       userId,
       safeDb: makeSafeDb(),
       row: oauthRow({
-        oauthResourceUrl: "https://mcp.example.com/other",
-        expiresAt,
+        oauthResourceUrl,
+        url: "https://mcp.example.com/rpc/v1",
+        expiresAt: null,
       }),
     });
-    expect(client).toBeNull();
+    expect(client).not.toBeNull();
+    expect(lastAuthHeader()).toBe("Bearer decrypted-mcp_access_token");
   }
-  expect(state.transports).toEqual([]);
-  expect(state.decryptCalls).toBe(0);
-  expect(state.refreshCalls).toBe(0);
-  expect(hasStatusSet("needs_reauth")).toBe(true);
 });
 
 test("uses a consistent connection snapshot while preparing credentials", async () => {
@@ -290,7 +379,14 @@ describe("MCP upstream connection lifecycle", () => {
   });
 
   test("refresh failure normalizes to needs_reauth and a skipped (null) client", async () => {
-    state.refresh = () => Result.err(new Error("token endpoint 400"));
+    state.refresh = () =>
+      Result.err(
+        new HandlerError({
+          status: 502,
+          code: MCP_OAUTH_INVALID_GRANT_CODE,
+          message: "Token refresh requires sign-in",
+        }),
+      );
 
     const client = await createMcpClientForConnection({
       organizationId,
@@ -307,7 +403,14 @@ describe("MCP upstream connection lifecycle", () => {
   });
 
   test("refresh failure surfaces as an error tool-result, never a raw throw", async () => {
-    state.refresh = () => Result.err(new Error("token endpoint 400"));
+    state.refresh = () =>
+      Result.err(
+        new HandlerError({
+          status: 502,
+          code: MCP_OAUTH_INVALID_GRANT_CODE,
+          message: "Token refresh requires sign-in",
+        }),
+      );
 
     const result = await proxyMcpToolCall({
       args: {},
@@ -540,33 +643,27 @@ describe("MCP upstream connection lifecycle", () => {
     expect(state.closes).toBeGreaterThan(0);
   });
 
-  // FINDING (pinned, not fixed): there is no single-flight guard. Each call
-  // resolves its token independently, so N concurrent calls on an expired
-  // OAuth connection stampede N refreshes and N DB writes.
-  test("concurrent calls during an expired-token window each refresh independently", async () => {
+  test("coordinates concurrent attempts for an expired connection", async () => {
     const safeDb = makeSafeDb();
     const row = oauthRow();
-
     await Promise.all([
       createMcpClientForConnection({ organizationId, row, safeDb, userId }),
       createMcpClientForConnection({ organizationId, row, safeDb, userId }),
       createMcpClientForConnection({ organizationId, row, safeDb, userId }),
     ]);
-
-    expect(state.refreshCalls).toBe(3);
+    expect(state.refreshCalls).toBe(1);
   });
 
-  // FINDING (pinned, not fixed): the module keeps no in-memory circuit-breaker
-  // or cooldown. Each failure writes needs_reauth again; there is no backoff
-  // counter. The only "circuit break" is at the persistence layer
-  // (`loadActiveMcpConnectionsForUser` filters status = "connected"), so a
-  // downed connection is excluded on the *next load*, not by any in-module
-  // state on a row that is already in hand.
-  test("repeated refresh failures re-attempt every time (no in-module cooldown)", async () => {
-    state.refresh = () => Result.err(new Error("token endpoint 400"));
+  test("defers retryable refresh outcomes", async () => {
+    state.refresh = () =>
+      Result.err(
+        new HandlerError({
+          status: 502,
+          message: "Token endpoint unavailable",
+        }),
+      );
     const safeDb = makeSafeDb();
     const row = oauthRow();
-
     for (let attempt = 0; attempt < 3; attempt += 1) {
       await createMcpClientForConnection({
         organizationId,
@@ -575,11 +672,63 @@ describe("MCP upstream connection lifecycle", () => {
         userId,
       });
     }
-
-    expect(state.refreshCalls).toBe(3);
+    expect(state.refreshCalls).toBe(1);
+    expect(hasStatusSet("needs_reauth")).toBe(false);
     expect(
-      state.dbSets.filter((set) => set["status"] === "needs_reauth"),
-    ).toHaveLength(3);
+      state.dbSets.some((set) => set["refreshRetryAfter"] instanceof Date),
+    ).toBe(true);
+  });
+
+  test("resumes metadata discovery after a bounded retry interval", async () => {
+    let metadataFetches = 0;
+    let stalled = true;
+    let failureCode: string | undefined;
+    const safeDb = makeSafeDb();
+    const row = oauthRow();
+    const dependencies = {
+      ...connectionDependencies,
+      discoverOAuthMetadata: async (connectorUrl: string) => {
+        if (!stalled) {
+          return await connectionDependenciesTestDouble.discoverOAuthMetadata(
+            connectorUrl,
+          );
+        }
+        const result = await discoverOAuthMetadata(connectorUrl, {
+          timeoutMs: 5,
+          validateOutboundFetchTarget: async (rawUrl: string | URL) =>
+            Result.ok({ url: new URL(rawUrl), addresses: [] }),
+          safeOutboundFetchBytes: async () => {
+            metadataFetches += 1;
+            return await new Promise<never>(() => {});
+          },
+        });
+        if (Result.isError(result)) {
+          failureCode = result.error.code;
+        }
+        return result;
+      },
+    };
+    const create = async () =>
+      await createMcpClientForConnectionImpl({
+        organizationId,
+        row,
+        safeDb,
+        userId,
+        outboundFetch,
+        dependencies,
+      });
+    const concurrent = await Promise.all([create(), create()]);
+    expect(concurrent).toEqual([null, null]);
+    expect(metadataFetches).toBe(1);
+    expect(failureCode).toBe(MCP_OAUTH_DISCOVERY_TIMEOUT_CODE);
+    expect(hasStatusSet("needs_reauth")).toBe(false);
+    expect(hasStatusSet("needs_approval")).toBe(false);
+    expect(await create()).toBeNull();
+    expect(metadataFetches).toBe(1);
+    state.now = new Date(state.now.getTime() + MCP_REFRESH_BACKOFF_MS + 1);
+    stalled = false;
+    expect(await create()).not.toBeNull();
+    expect(state.refreshCalls).toBe(1);
   });
 
   test("bearer connections send the decrypted static token, no OAuth path", async () => {

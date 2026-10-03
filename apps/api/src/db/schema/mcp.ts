@@ -14,6 +14,7 @@ import {
   mcpOAuthStatePolicies,
   mcpUserConnectionPolicies,
   organization,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -109,6 +110,30 @@ export const mcpOAuthClients = p.pgTable(
   ],
 );
 
+export const mcpConnectorAuthorizationReviews = p.pgTable(
+  "mcp_connector_authorization_reviews",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    connectorId: safeUuid<"mcpConnector">("connector_id")
+      .notNull()
+      .references(() => mcpConnectors.id, { onDelete: "cascade" }),
+    observedIssuer: p.text("observed_issuer"),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p.primaryKey({ columns: [table.organizationId, table.connectorId] }),
+    p
+      .index("mcp_connector_authorization_reviews_connector_idx")
+      .on(table.connectorId),
+    ...orgPolicies(),
+  ],
+);
+
 export type CachedMcpToolDefinition = {
   description?: string;
   exposedName: string;
@@ -142,6 +167,8 @@ export const mcpUserConnections = p.pgTable(
     scope: p.text(),
     resourceUrl: p.text("resource_url"),
     authorizationServerUrl: p.text("authorization_server_url"),
+    refreshLeaseExpiresAt: timestamptz("refresh_lease_expires_at"),
+    refreshRetryAfter: timestamptz("refresh_retry_after"),
     expiresAt: timestamptz("expires_at"),
     cachedTools: jsonb("cached_tools").$type<
       CachedMcpToolDefinition[] | null

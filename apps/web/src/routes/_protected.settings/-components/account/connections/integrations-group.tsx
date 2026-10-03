@@ -32,12 +32,16 @@ import {
   isEffectivelyInstalled,
   type CatalogueMcp,
 } from "@/lib/knowledge/catalogue-types";
-import { mcpConnectionsOptions } from "@/lib/knowledge/queries";
+import {
+  mcpConnectorsOptions,
+  mcpConnectionsOptions,
+} from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 
 import {
   integrationStatus,
   matchesConnectionQuery,
+  type IntegrationAuthorizationStatus,
   type IntegrationConnection,
 } from "./connections.logic";
 
@@ -47,6 +51,10 @@ export type IntegrationsData = {
   /** The ones matching the search query. */
   visible: readonly CatalogueMcp[];
   connectionBySlug: ReadonlyMap<string, IntegrationConnection>;
+  authorizationStatusBySlug: ReadonlyMap<
+    string,
+    IntegrationAuthorizationStatus
+  >;
 };
 
 export const useIntegrations = (query: string): IntegrationsData => {
@@ -56,6 +64,9 @@ export const useIntegrations = (query: string): IntegrationsData => {
   );
   const { data: connectionsData } = useSuspenseQuery(
     mcpConnectionsOptions(activeOrganizationId, userId),
+  );
+  const { data: connectorsData } = useSuspenseQuery(
+    mcpConnectorsOptions(activeOrganizationId),
   );
 
   const connectionBySlug = new Map<string, IntegrationConnection>(
@@ -70,7 +81,13 @@ export const useIntegrations = (query: string): IntegrationsData => {
   const visible = installed.filter((entry) =>
     matchesConnectionQuery(query, [entry.displayName, entry.description]),
   );
-  return { installed, visible, connectionBySlug };
+  const authorizationStatusBySlug = new Map(
+    connectorsData.connectors.map((connector) => [
+      connector.slug,
+      connector.authorizationStatus,
+    ]),
+  );
+  return { installed, visible, connectionBySlug, authorizationStatusBySlug };
 };
 
 /**
@@ -79,7 +96,12 @@ export const useIntegrations = (query: string): IntegrationsData => {
  * its entry there.
  */
 export const IntegrationsGroup = ({
-  integrations: { installed, visible, connectionBySlug },
+  integrations: {
+    installed,
+    visible,
+    connectionBySlug,
+    authorizationStatusBySlug,
+  },
 }: {
   integrations: IntegrationsData;
 }) => {
@@ -113,10 +135,12 @@ export const IntegrationsGroup = ({
       </ListGroupHeader>
       <List>
         {visible.map((entry) => {
-          const status = integrationStatus(
-            entry.authType,
-            connectionBySlug.get(entry.installedConnectorSlug ?? entry.slug),
-          );
+          const connectorSlug = entry.installedConnectorSlug ?? entry.slug;
+          const status = integrationStatus({
+            authType: entry.authType,
+            authorizationStatus: authorizationStatusBySlug.get(connectorSlug),
+            connection: connectionBySlug.get(connectorSlug),
+          });
           return (
             <ListItem
               key={entry.slug}

@@ -2259,7 +2259,7 @@ type Messages = {
       "internalServerError": "The server could not complete the action. Please try again.";
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.";
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.";
-      "mcpAuthorizationApprovalRequired": "An administrator must re-approve this connector before you can connect.";
+      "mcpAuthorizationApprovalRequired": "An administrator must remove and re-add this connector before you can connect.";
       "notOrganizationMember": "You are not a member of this organization.";
       "providerKeyRejected": "The provider rejected the API key.";
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.";
@@ -3404,6 +3404,7 @@ type Messages = {
       "errorDescription": "The integration could not be updated.";
       "errorTitle": "MCP failed";
       "mcpExplainer": "Integrations connect external services to the chat that the AI can work with.";
+      "needsReapproval": "Needs re-approval: remove and re-add this connector.";
       "needsReauth": "Needs reconnect";
       "off": "Off";
       "on": "On";

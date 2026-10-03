@@ -12,9 +12,11 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { recordMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
 import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
 import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
 import {
+  MCP_OAUTH_BINDING_FAILURE_CODE,
   buildAuthorizeUrl,
   buildMcpClientMetadataDocument,
   clientRegistrationMode,
@@ -122,11 +124,38 @@ export const createConnectMcpConnectorHandler = (
         });
       }
 
-      const metadata = yield* Result.await(discoverMetadata(connector.url));
-
-      yield* Result.await(
-        validateApprovedOAuthIssuer(metadata, connector.oauthIssuer),
+      const discovery = await discoverMetadata(connector.url);
+      if (Result.isError(discovery)) {
+        if (discovery.error.code === MCP_OAUTH_BINDING_FAILURE_CODE) {
+          yield* Result.await(
+            recordMcpAuthorizationReview({
+              safeDb,
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+              connectorId: connector.id,
+              observedIssuer: connector.oauthIssuer,
+            }),
+          );
+        }
+        return Result.err(discovery.error);
+      }
+      const metadata = discovery.value;
+      const approval = validateApprovedOAuthIssuer(
+        metadata,
+        connector.oauthIssuer,
       );
+      if (Result.isError(approval)) {
+        yield* Result.await(
+          recordMcpAuthorizationReview({
+            safeDb,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+            connectorId: connector.id,
+            observedIssuer: metadata.authorizationServer.issuer,
+          }),
+        );
+        return Result.err(approval.error);
+      }
 
       // Servers that advertise OAuth but offer no client registration path
       // (neither CIMD nor dynamic registration) cannot complete stella's

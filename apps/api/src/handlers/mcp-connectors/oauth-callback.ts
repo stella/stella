@@ -11,18 +11,20 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { oauthCallbackFailureReason } from "@/api/lib/errors/oauth-callback-failure";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { recordMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
 import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
 import {
   decryptMcpSecret,
   encryptMcpSecret,
 } from "@/api/lib/mcp-upstream/crypto";
 import {
+  MCP_OAUTH_BINDING_FAILURE_CODE,
   discoverOAuthMetadata,
   validateApprovedOAuthIssuer,
   exchangeAuthorizationCode,
   tokenExpiresAt,
 } from "@/api/lib/mcp-upstream/oauth";
-import { canonicalMcpResourceUrl } from "@/api/lib/mcp-upstream/url-safety";
+import { mcpResourceMatchesConnector } from "@/api/lib/mcp-upstream/url-safety";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -145,14 +147,30 @@ const mcpOAuthCallback = createSafeRootHandler(
         }
         const connectorSlug = row.connector.slug;
 
+        const requestReview = async (observedIssuer: string) =>
+          await recordMcpAuthorizationReview({
+            safeDb,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+            connectorId: row.connectorId,
+            observedIssuer,
+          });
+
         if (
-          canonicalMcpResourceUrl(row.resourceUrl) !==
-          canonicalMcpResourceUrl(row.connector.url)
+          !mcpResourceMatchesConnector({
+            resourceUrl: row.resourceUrl,
+            connectorUrl: row.connector.url,
+          })
         ) {
+          const review = await requestReview(row.authorizationServerUrl);
+          if (Result.isError(review)) {
+            return Result.ok(redirectForFailure(review.error));
+          }
           return Result.ok(
             redirectForFailure(
               new HandlerError({
                 status: 502,
+                code: MCP_OAUTH_BINDING_FAILURE_CODE,
                 message:
                   "MCP resource metadata does not match the connector URL",
               }),
@@ -161,6 +179,12 @@ const mcpOAuthCallback = createSafeRootHandler(
         }
         const metadata = await discoverOAuthMetadata(row.connector.url);
         if (Result.isError(metadata)) {
+          if (metadata.error.code === MCP_OAUTH_BINDING_FAILURE_CODE) {
+            const review = await requestReview(row.authorizationServerUrl);
+            if (Result.isError(review)) {
+              return Result.ok(redirectForFailure(review.error));
+            }
+          }
           return Result.ok(redirectForFailure(metadata.error));
         }
         const approvedIssuer = validateApprovedOAuthIssuer(
@@ -168,12 +192,24 @@ const mcpOAuthCallback = createSafeRootHandler(
           row.connector.oauthIssuer,
         );
         if (Result.isError(approvedIssuer)) {
+          const review = await requestReview(
+            metadata.value.authorizationServer.issuer,
+          );
+          if (Result.isError(review)) {
+            return Result.ok(redirectForFailure(review.error));
+          }
           return Result.ok(redirectForFailure(approvedIssuer.error));
         }
         if (
           metadata.value.authorizationServer.issuer !==
           row.authorizationServerUrl
         ) {
+          const review = await requestReview(
+            metadata.value.authorizationServer.issuer,
+          );
+          if (Result.isError(review)) {
+            return Result.ok(redirectForFailure(review.error));
+          }
           return Result.ok(
             redirectForFailure(
               new HandlerError({
@@ -299,6 +335,8 @@ const mcpOAuthCallback = createSafeRootHandler(
                   resourceUrl: row.resourceUrl,
                   authorizationServerUrl: row.authorizationServerUrl,
                   expiresAt: tokenExpiresAt(token.value),
+                  refreshLeaseExpiresAt: null,
+                  refreshRetryAfter: null,
                   cachedTools: null,
                   cachedToolsRefreshedAt: null,
                   status: "connected",

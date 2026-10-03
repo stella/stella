@@ -1,7 +1,10 @@
 import { Result } from "better-result";
-import { desc, eq, isNull, or } from "drizzle-orm";
+import { and, desc, eq, exists, isNull, or, sql } from "drizzle-orm";
 
-import { mcpConnectors } from "@/api/db/schema";
+import {
+  mcpConnectorAuthorizationReviews,
+  mcpConnectors,
+} from "@/api/db/schema";
 import { mcpConnectorUrlIdentity } from "@/api/handlers/mcp-connectors/url-normalization";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -41,6 +44,23 @@ const listMcpConnectors = createSafeRootHandler(
             documentationUrl: mcpConnectors.documentationUrl,
             tokenHelpUrl: mcpConnectors.tokenHelpUrl,
             iconUrl: mcpConnectors.iconUrl,
+            authorizationReviewExists: sql<boolean>`${exists(
+              tx
+                .select({ one: sql`1` })
+                .from(mcpConnectorAuthorizationReviews)
+                .where(
+                  and(
+                    eq(
+                      mcpConnectorAuthorizationReviews.organizationId,
+                      session.activeOrganizationId,
+                    ),
+                    eq(
+                      mcpConnectorAuthorizationReviews.connectorId,
+                      mcpConnectors.id,
+                    ),
+                  ),
+                ),
+            )}`,
           })
           .from(mcpConnectors)
           .where(
@@ -88,6 +108,7 @@ const listMcpConnectors = createSafeRootHandler(
           documentationUrl: connector.documentationUrl,
           tokenHelpUrl: connector.tokenHelpUrl,
           iconUrl: connector.iconUrl,
+          authorizationStatus: connectorAuthorizationStatus(connector),
           isRecommended: isMcpConnectorRecommendedForPractice({
             connector,
             practiceJurisdictions,
@@ -121,6 +142,27 @@ const listMcpConnectors = createSafeRootHandler(
 );
 
 export default listMcpConnectors;
+
+const CONNECTOR_AUTHORIZATION_STATUS = {
+  approved: "approved",
+  needsReapproval: "needs_reapproval",
+  notRequired: "not_required",
+} as const;
+
+const connectorAuthorizationStatus = ({
+  authType,
+  authorizationReviewExists,
+}: {
+  authType: typeof mcpConnectors.$inferSelect.authType;
+  authorizationReviewExists: boolean;
+}) => {
+  if (authType !== "oauth2") {
+    return CONNECTOR_AUTHORIZATION_STATUS.notRequired;
+  }
+  return authorizationReviewExists
+    ? CONNECTOR_AUTHORIZATION_STATUS.needsReapproval
+    : CONNECTOR_AUTHORIZATION_STATUS.approved;
+};
 
 const uniqueConnectorsByUrl = <T extends { url: string }>(
   connectors: T[],

@@ -1,6 +1,11 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import {
+  mcpOAuthState,
+  mcpUserConnections,
+  mcpConnectorAuthorizationReviews,
+} from "@/api/db/schema";
 import { createConnectMcpConnectorHandler } from "@/api/handlers/mcp-connectors/connect";
 import { toSafeId } from "@/api/lib/branded-types";
 import { bindDiscoveredMetadata } from "@/api/lib/mcp-upstream/oauth";
@@ -36,6 +41,7 @@ const connector = (oauthIssuer: string | null) => ({
 
 const setup = (oauthIssuer: string | null) => {
   const states: unknown[] = [];
+  const reviews: { table: unknown; value: unknown }[] = [];
   let clientReads = 0;
   const handler = createConnectMcpConnectorHandler(async () => metadata());
   type Context = Parameters<typeof handler.handler>[0];
@@ -44,11 +50,20 @@ const setup = (oauthIssuer: string | null) => {
     from: () => chain,
     where: () => chain,
     limit: async () => [connector(oauthIssuer)],
-    insert: () => ({
-      values: async (value: unknown) => {
-        states.push(value);
-      },
-    }),
+    insert: (table: unknown) =>
+      table === mcpOAuthState
+        ? {
+            values: async (value: unknown) => {
+              states.push(value);
+            },
+          }
+        : {
+            values: (value: unknown) => ({
+              onConflictDoUpdate: async () => {
+                reviews.push({ table, value });
+              },
+            }),
+          },
     query: {
       mcpOAuthClients: {
         findFirst: async () => {
@@ -74,7 +89,7 @@ const setup = (oauthIssuer: string | null) => {
     ),
     route: "/v1/mcp/connectors/:slug/connect",
   });
-  return { context, handler, states, clientReads: () => clientReads };
+  return { context, handler, states, reviews, clientReads: () => clientReads };
 };
 
 test("requires current connector approval before connecting", async () => {
@@ -86,6 +101,15 @@ test("requires current connector approval before connecting", async () => {
   });
   expect(setupResult.clientReads()).toBe(0);
   expect(setupResult.states).toEqual([]);
+  expect(
+    setupResult.reviews.find(({ table }) => table === mcpUserConnections)
+      ?.value,
+  ).toMatchObject({ status: "needs_approval" });
+  expect(
+    setupResult.reviews.find(
+      ({ table }) => table === mcpConnectorAuthorizationReviews,
+    )?.value,
+  ).toMatchObject({ observedIssuer: issuer });
 });
 
 test("connects using configured connector metadata", async () => {

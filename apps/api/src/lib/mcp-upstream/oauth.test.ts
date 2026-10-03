@@ -9,6 +9,8 @@ import {
   buildAuthorizeUrl,
   discoverOAuthMetadata,
   exchangeAuthorizationCode,
+  refreshOAuthToken,
+  MCP_OAUTH_INVALID_GRANT_CODE,
   validateApprovedOAuthIssuer,
   buildMcpClientMetadataDocument,
   buildOAuthClientRegistrationRequest,
@@ -22,7 +24,10 @@ import type {
   TokenResponse,
 } from "@/api/lib/mcp-upstream/oauth";
 import { redactMcpOAuthRegistrationResponse } from "@/api/lib/mcp-upstream/oauth-registration-response";
-import { canonicalMcpResourceUrl } from "@/api/lib/mcp-upstream/url-safety";
+import {
+  canonicalMcpResourceUrl,
+  mcpResourceMatchesConnector,
+} from "@/api/lib/mcp-upstream/url-safety";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const connectorUrl = "https://mcp.example.com/rpc";
@@ -88,6 +93,104 @@ describe("upstream metadata binding", () => {
     expect(transport.requests).toHaveLength(1);
     expect(transport.requests.every(({ method }) => method === "GET")).toBe(
       true,
+    );
+  });
+
+  test("accepts origin-level resource metadata", async () => {
+    const transport = discoveryTransport({
+      resource: "https://mcp.example.com",
+    });
+    const result = await discoverOAuthMetadata(
+      connectorUrl,
+      transport.dependencies,
+    );
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value.protectedResource.resource).toBe(
+        "https://mcp.example.com",
+      );
+    }
+  });
+
+  test("accepts configured resource paths", () => {
+    const configuredUrl = "https://mcp.example.com/mcp/v1";
+    for (const [resourceUrl, accepted] of [
+      ["https://mcp.example.com", true],
+      ["https://mcp.example.com/mcp", true],
+      ["https://mcp.example.com/mcp/v1/", true],
+      ["https://other.example.com/mcp", false],
+      ["https://mcp.example.com/other", false],
+      ["https://mcp.example.com/mc", false],
+    ] as const) {
+      expect(
+        mcpResourceMatchesConnector({
+          connectorUrl: configuredUrl,
+          resourceUrl,
+        }),
+      ).toBe(accepted);
+    }
+  });
+
+  test("mcp-resource-url.segment-prefix", () => {
+    assertProperty(
+      "mcp-resource-url.segment-prefix",
+      fc.property(
+        fc.record({
+          scheme: fc.constantFrom("http", "https"),
+          host: fc.integer({ min: 1, max: 100_000 }),
+          segments: fc.array(fc.integer({ min: 1, max: 100_000 }), {
+            minLength: 1,
+            maxLength: 5,
+          }),
+          prefixLength: fc.nat({ max: 5 }),
+          pathKind: fc.constantFrom("prefix", "sibling", "partial", "child"),
+          originKind: fc.constantFrom("same", "host", "scheme", "port"),
+          slashes: fc.nat({ max: 3 }),
+        }),
+        ({
+          scheme,
+          host,
+          segments,
+          prefixLength,
+          pathKind,
+          originKind,
+          slashes,
+        }) => {
+          const parts = segments.map((part) => `rpc${part}segment`);
+          const connectorPath = `/${parts.join("/")}`;
+          const prefix = parts.slice(0, prefixLength);
+          const resourcePaths = {
+            prefix: `/${prefix.join("/")}`,
+            sibling: "/other",
+            partial: connectorPath.slice(0, -1),
+            child: `${connectorPath}/other`,
+          };
+          const resourceOrigins = {
+            same: `${scheme.toUpperCase()}://SERVER${host}.EXAMPLE.COM:${scheme === "https" ? 443 : 80}`,
+            host: `${scheme}://other${host}.example.com`,
+            scheme: `${scheme === "https" ? "http" : "https"}://server${host}.example.com`,
+            port: `${scheme}://server${host}.example.com:8443`,
+          };
+          const configuredUrl = `${scheme}://server${host}.example.com${connectorPath}`;
+          const resourceUrl = `${resourceOrigins[originKind]}${resourcePaths[pathKind]}${"/".repeat(slashes)}`;
+          const expected = originKind === "same" && pathKind === "prefix";
+          expect(
+            mcpResourceMatchesConnector({
+              connectorUrl: configuredUrl,
+              resourceUrl,
+            }),
+          ).toBe(expected);
+          const binding = bindDiscoveredMetadata({
+            connectorUrl: configuredUrl,
+            protectedResource: {
+              resource: resourceUrl,
+              authorization_servers: [issuer],
+            },
+            authorizationServer: authorizationServer({}),
+          });
+          expect(Result.isOk(binding)).toBe(expected);
+        },
+      ),
     );
   });
 
@@ -181,16 +284,53 @@ describe("upstream metadata binding", () => {
           expect(
             canonicalMcpResourceUrl(canonicalMcpResourceUrl(resource)),
           ).toBe(canonicalMcpResourceUrl(resource));
-          const binding = bindDiscoveredMetadata({
-            connectorUrl: base,
-            protectedResource: { resource, authorization_servers: [issuer] },
-            authorizationServer: authorizationServer({}),
-          });
-          expect(Result.isOk(binding)).toBe(equivalent);
         },
       ),
     );
   });
+});
+
+test("classifies refresh outcomes from the token endpoint", async () => {
+  for (const [status, error, definitive] of [
+    [400, "invalid_grant", true],
+    [503, "temporarily_unavailable", false],
+    [400, "invalid_client", false],
+  ] as const) {
+    const transport = discoveryTransport();
+    const metadata = await discoverOAuthMetadata(
+      connectorUrl,
+      transport.dependencies,
+    );
+    expect(Result.isOk(metadata)).toBe(true);
+    if (Result.isError(metadata)) {
+      return;
+    }
+    const result = await refreshOAuthToken({
+      metadata: metadata.value,
+      dependencies: {
+        ...transport.dependencies,
+        safeOutboundFetchBytes: async () =>
+          Result.ok({
+            body: new TextEncoder().encode(JSON.stringify({ error })).buffer,
+            headers: new Headers(),
+            ok: false,
+            status,
+          }),
+      },
+      clientId: "client",
+      clientSecret: null,
+      refreshToken:
+        asTestRaw<Parameters<typeof refreshOAuthToken>[0]["refreshToken"]>(
+          "refresh",
+        ),
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.code === MCP_OAUTH_INVALID_GRANT_CODE).toBe(
+        definitive,
+      );
+    }
+  }
 });
 
 describe("authorization response metadata", () => {

@@ -123,6 +123,7 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.legalSourceEntityLimitReached",
   legal_source_file_property_missing:
     "errors.apiCodes.legalSourceFilePropertyMissing",
+  mcp_oauth_binding_invalid: "errors.apiCodes.mcpAuthorizationApprovalRequired",
   mcp_authorization_approval_required:
     "errors.apiCodes.mcpAuthorizationApprovalRequired",
   provider_key_rejected: "errors.apiCodes.providerKeyRejected",

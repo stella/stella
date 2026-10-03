@@ -6,6 +6,27 @@ export const canonicalMcpResourceUrl = (rawUrl: string): string => {
   return url.toString();
 };
 
+type McpResourceMatchesConnectorOptions = {
+  connectorUrl: string;
+  resourceUrl: string;
+};
+
+export const mcpResourceMatchesConnector = ({
+  connectorUrl,
+  resourceUrl,
+}: McpResourceMatchesConnectorOptions): boolean => {
+  const connector = new URL(canonicalMcpResourceUrl(connectorUrl));
+  const resource = new URL(canonicalMcpResourceUrl(resourceUrl));
+  if (connector.origin !== resource.origin) {
+    return false;
+  }
+  return (
+    resource.pathname === "/" ||
+    connector.pathname === resource.pathname ||
+    connector.pathname.startsWith(`${resource.pathname}/`)
+  );
+};
+
 export const mcpWellKnownProtectedResourceUrls = (mcpUrl: URL): URL[] => {
   const root = new URL("/.well-known/oauth-protected-resource", mcpUrl.origin);
   const pathScoped = new URL(
