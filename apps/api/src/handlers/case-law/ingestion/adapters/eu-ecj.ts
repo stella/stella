@@ -1112,6 +1112,29 @@ const COURT_EPOCH_YEAR = ADAPTER_MANIFESTS[
 /** First day the Court sat; the widest range a CELEX lookup can need. */
 const COURT_EPOCH = `${COURT_EPOCH_YEAR}-01-01`;
 
+type BuildPendingVariantOptions = {
+  binding: SparqlResult;
+  completedVariants: Set<string>;
+  signal: AbortSignal;
+};
+
+// Rejected raw is retained, but only accepted text completes a variant.
+const buildPendingVariant = async ({
+  binding,
+  completedVariants,
+  signal,
+}: BuildPendingVariantOptions): Promise<IngestionResult | undefined> => {
+  const variantKey = `${binding.celex.value}:${binding.language.value}`;
+  if (completedVariants.has(variantKey)) {
+    return undefined;
+  }
+  const decision = await buildDecision(binding, signal);
+  if (decision?.plainTextOutcome.type === "accepted") {
+    completedVariants.add(variantKey);
+  }
+  return decision;
+};
+
 type FetchDecisionsByCelexOptions = {
   celexNumbers: readonly string[];
   /** Restrict to these languages; all published languages when omitted. */
@@ -1155,22 +1178,15 @@ export const fetchDecisionsByCelex = async ({
     if (lang === undefined || (languages && !languages.includes(lang))) {
       continue;
     }
-    // A work can expose several XHTML manifestations of one language
-    // (re-publications), and a variant is done only once one of them has
-    // built — the rule the crawl walks by. Marking it on sight instead
-    // would let an unreadable first manifestation stand for the variant
-    // while a later usable one goes unvisited, and every caller here reads
-    // an empty result as the publisher not serving the document at all.
-    const variantKey = `${binding.celex.value}:${lang}`;
-    if (completedVariants.has(variantKey)) {
-      continue;
-    }
-    const decision = await buildDecision(binding, signal);
+    const decision = await buildPendingVariant({
+      binding,
+      completedVariants,
+      signal,
+    });
     if (!decision) {
       continue;
     }
     decisions.push(decision);
-    completedVariants.add(variantKey);
   }
   return decisions;
 };
@@ -3073,23 +3089,21 @@ export const euEcjAdapter = defineSourceAdapter({
             break;
           }
 
-          const celex = binding.celex.value;
-          const variantKey = `${celex}:${binding.language.value}`;
-          if (completedVariants.has(variantKey)) {
-            continue;
-          }
-
           const attempted = await buildPlainTextItem({
             decisionOf: (value) => value,
             adapterKey: ADAPTER_KEYS.EU_ECJ,
 
             rawListing: JSON.stringify(binding),
-            build: async () => await buildDecision(binding, abortSignal),
+            build: async () =>
+              await buildPendingVariant({
+                binding,
+                completedVariants,
+                signal: abortSignal,
+              }),
           });
           if (attempted.type === "item_build_failed") {
             failed++;
             decisions.push(attempted.decision);
-            completedVariants.add(variantKey);
             continue;
           }
           const decision = attempted.value;
@@ -3098,7 +3112,6 @@ export const euEcjAdapter = defineSourceAdapter({
           }
 
           decisions.push(decision);
-          completedVariants.add(variantKey);
         }
 
         // If the page was aborted mid-iteration, retry

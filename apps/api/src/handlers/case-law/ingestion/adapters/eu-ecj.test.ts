@@ -11,6 +11,7 @@ import {
   ECJ_TOTAL_COUNT_QUERY,
   ecjListingIdentity,
   euEcjAdapter as ecjAdapter,
+  fetchDecisionsByCelex,
   SPARQL_LIMIT,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
@@ -703,6 +704,66 @@ const installSparqlMock = ({
   );
   return { queries, documentFetches, noticeRequests };
 };
+
+describe("language variant completion", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test.each(["crawl", "celex"] as const)(
+    "%s retains rejected raw and tries later manifestations until text is accepted",
+    async (walk) => {
+      const rejectedId = "5f978357-b5e4-11ee-b164-01aa75ed71a1.0005.05";
+      const duplicateId = "5f978357-b5e4-11ee-b164-01aa75ed71a1.0006.05";
+      const rejectedBinding = withManifestation(
+        {
+          ...firstFixtureBinding,
+          ecli: { type: "literal", value: String.raw`\rtf1 ECLI:EU:C:2024:49` },
+        },
+        { cellarLanguage: "ENG", manifestationId: rejectedId },
+      );
+      const duplicateBinding = withManifestation(firstFixtureBinding, {
+        cellarLanguage: "ENG",
+        manifestationId: duplicateId,
+      });
+      const { documentFetches } = installSparqlMock({
+        bindings: [rejectedBinding, enBinding, duplicateBinding],
+        served: [EN_MANIFESTATION_ID, duplicateId],
+      });
+      const servedFetch = globalThis.fetch;
+      globalThis.fetch = asFetchMock((input, init) => {
+        const url = requestUrl(input);
+        if (url.endsWith(rejectedId)) {
+          documentFetches.push(url);
+          return Promise.resolve(
+            new Response(shortDocumentHtml, {
+              headers: { "Content-Type": "text/html" },
+            }),
+          );
+        }
+        return servedFetch(input, init);
+      });
+      const decisions =
+        walk === "crawl"
+          ? (await ecjAdapter.fetchPage("2024-01-18", {})).unwrap().decisions
+          : await fetchDecisionsByCelex({
+              celexNumbers: [enBinding.celex.value],
+              signal: new AbortController().signal,
+            });
+      expect(
+        decisions.map(({ plainTextOutcome }) => plainTextOutcome.type),
+      ).toEqual(["item_build_failed", "accepted"]);
+      expect(decisions.map(({ sourceDocumentId }) => sourceDocumentId)).toEqual(
+        [`${enBinding.celex.value}:en`, `${enBinding.celex.value}:en`],
+      );
+      expect(documentFetches).toEqual([
+        `https://publications.europa.eu/resource/cellar/${rejectedId}`,
+        `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
+      ]);
+    },
+  );
+});
 
 /**
  * Serve one listed variant whose document response carries the given body and
