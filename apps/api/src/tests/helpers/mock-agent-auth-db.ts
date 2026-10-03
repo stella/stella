@@ -40,13 +40,30 @@ const originalRlsTransactionDescriptor = Object.getOwnPropertyDescriptor(
 const installDatabaseBoundary = (database: TestDatabase) => {
   Object.defineProperties(rootDb, {
     delete: { configurable: true, value: database.delete.bind(database) },
-    execute: { configurable: true, value: database.execute.bind(database) },
+    execute: {
+      configurable: true,
+      value: async (query: Parameters<typeof database.execute>[0]) =>
+        (await database.execute(query)).rows,
+    },
     insert: { configurable: true, value: database.insert.bind(database) },
     query: { configurable: true, value: database.query },
     select: { configurable: true, value: database.select.bind(database) },
     transaction: {
       configurable: true,
-      value: database.transaction.bind(database),
+      value: async (callback: Parameters<typeof database.transaction>[0]) =>
+        await database.transaction(
+          async (transaction) =>
+            await callback(
+              new Proxy(transaction, {
+                get: (target, property, receiver) =>
+                  property === "execute"
+                    ? async (
+                        query: Parameters<typeof transaction.execute>[0],
+                      ) => (await transaction.execute(query)).rows
+                    : Reflect.get(target, property, receiver),
+              }),
+            ),
+        ),
     },
     update: { configurable: true, value: database.update.bind(database) },
   });

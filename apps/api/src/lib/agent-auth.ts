@@ -31,6 +31,7 @@ import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
+import { reserveRegistration } from "@/api/lib/auth/registration-budget";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { readAccountEmail } from "@/api/lib/db/account-row";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -143,6 +144,7 @@ export const createAgentOAuthClient = async ({
       panic("Agent OAuth resource is absent from the migrated auth schema");
     }
     await transaction.insert(oauthClient).values({
+      registrationOrigin: "agent",
       id: createSafeId<"mcpOAuthClient">(),
       applicationType: "web",
       clientId,
@@ -321,6 +323,14 @@ export type AnonymousRegistrationResult = {
 export const startServiceAuthRegistration = async (
   loginHint: string,
 ): Promise<Result<ServiceAuthCeremony, HandlerError>> => {
+  const admission = await reserveRegistration({
+    kind: "agent",
+    now: new Date(),
+    execute: async (query) => await rootDb.execute(query),
+  });
+  if (Result.isError(admission)) {
+    return Result.err(admission.error);
+  }
   const registrationId = createSafeId<"mcpOAuthClient">();
   const claimToken = generateOpaqueToken();
   const userCode = generateUserCode();
@@ -372,6 +382,14 @@ export const startServiceAuthRegistration = async (
 export const startAnonymousRegistration = async (): Promise<
   Result<AnonymousRegistrationResult, AgentTokenError | HandlerError>
 > => {
+  const admission = await reserveRegistration({
+    kind: "agent",
+    now: new Date(),
+    execute: async (query) => await rootDb.execute(query),
+  });
+  if (Result.isError(admission)) {
+    return Result.err(admission.error);
+  }
   const registrationId = createSafeId<"mcpOAuthClient">();
   const claimToken = generateOpaqueToken();
   const credentials = await createAgentOAuthClient({

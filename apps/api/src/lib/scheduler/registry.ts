@@ -121,6 +121,10 @@ import {
   reconcileOrganizationFileReservations,
 } from "@/api/lib/scheduler/tasks/organization-file-reservation-reconcile";
 import {
+  SWEEP_REGISTRATIONS_TASK,
+  sweepRegistrationRecords,
+} from "@/api/lib/scheduler/tasks/registration-retention";
+import {
   RECONCILE_REPORT_EXPORTS_TASK,
   reconcileReportExports,
 } from "@/api/lib/scheduler/tasks/report-export-reconcile";
@@ -198,6 +202,7 @@ const SCHEDULER_TASKS = {
   [CHAT_THREAD_COMPACTOR_TASK]: compactChatThreads,
   [SWEEP_CHAT_RUN_LOGS_TASK]: sweepChatRunLogs,
   [SWEEP_ACTION_COSTS_TASK]: sweepActionCostRecords,
+  [SWEEP_REGISTRATIONS_TASK]: sweepRegistrationRecords,
   [BACKFILL_WORK_OBLIGATIONS_TASK]: backfillWorkObligations,
   [BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK]: backfillLegislationExpressionIds,
   [WORK_ATTENTION_SCOUT_TASK]: runWorkAttentionScoutTask,

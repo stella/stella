@@ -368,10 +368,7 @@ class ReplayError extends Error {
 /**
  * Insert the jti one-time, failing closed on a duplicate (the unique PK
  * makes a second insert of the same jti a conflict).
- *
- * TODO: prune rows whose assertion has expired from a periodic background
- * job rather than on this read-heavy validation path; `expires_at` is
- * indexed for exactly that sweep.
+ * Expired records are pruned by the registration retention task.
  */
 const recordJti = async (
   jti: string,

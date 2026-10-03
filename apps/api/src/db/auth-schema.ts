@@ -189,6 +189,7 @@ export const verification = pgTable(
   },
   (table) => [
     index("verification_identifier_idx").on(table.identifier),
+    index("verification_expires_at_idx").on(table.expiresAt),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -401,6 +402,12 @@ export const apikey = pgTable(
   ],
 );
 
+export const OAUTH_CLIENT_REGISTRATION_ORIGINS = [
+  "managed",
+  "open-client",
+  "agent",
+] as const;
+
 export const oauthClient = pgTable(
   "oauth_client",
   {
@@ -408,6 +415,11 @@ export const oauthClient = pgTable(
     clientId: text("client_id").notNull().unique(),
     clientSecret: text("client_secret"),
     clientDiscoveryId: text("client_discovery_id"),
+    registrationOrigin: text("registration_origin", {
+      enum: OAUTH_CLIENT_REGISTRATION_ORIGINS,
+    })
+      .notNull()
+      .default("managed"),
     disabled: boolean("disabled").default(false).notNull(),
     skipConsent: boolean("skip_consent"),
     enableEndSession: boolean("enable_end_session"),
@@ -458,6 +470,20 @@ export const oauthClient = pgTable(
   (table) => [
     uniqueIndex("oauth_client_client_id_uidx").on(table.clientId),
     index("oauth_client_user_id_idx").on(table.userId),
+    index("oauth_client_registration_retention_idx")
+      .on(table.updatedAt, table.clientId)
+      .where(
+        sql`registration_origin IN ('open-client', 'agent') OR client_discovery_id IS NOT NULL`,
+      ),
+    check(
+      "oauth_client_registration_origin_check",
+      sql`${table.registrationOrigin} IN (${sql.join(
+        OAUTH_CLIENT_REGISTRATION_ORIGINS.map((origin) =>
+          sql.raw(`'${origin}'`),
+        ),
+        sql`, `,
+      )})`,
+    ),
     index("oauth_client_reference_id_idx").on(table.referenceId),
     ...denyStellaAccessPolicies(),
   ],
@@ -520,7 +546,10 @@ export const oauthClientAssertion = pgTable(
     id: text("id").primaryKey(),
     expiresAt: timestamptz("expires_at").notNull(),
   },
-  () => [...denyStellaAccessPolicies()],
+  (table) => [
+    index("oauth_client_assertion_expires_at_idx").on(table.expiresAt),
+    ...denyStellaAccessPolicies(),
+  ],
 );
 
 export const oauthRefreshToken = pgTable(

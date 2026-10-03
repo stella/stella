@@ -20,7 +20,16 @@ import {
   twoFactor,
 } from "better-auth/plugins";
 import { panic, Result } from "better-result";
-import { and, count, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  exists,
+  inArray,
+  isNotNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
@@ -79,6 +88,13 @@ import {
   createDemoSessionFilter,
   warnDemoAccountConfiguration,
 } from "@/api/lib/auth/demo-account-policy";
+import {
+  admitOpenClient,
+  authorizationClientId,
+  requireAuthRetention,
+  REGISTRATION_RETENTION_SCHEMA_PLUGIN,
+  withAuthRetention,
+} from "@/api/lib/auth/registration-adapter";
 import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import {
   createSessionLifetime,
@@ -1020,7 +1036,55 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
 
   const rawAuthAdapter = drizzleAdapter(rootDb, AUTH_DATABASE_ADAPTER_OPTIONS);
   const membershipAuthAdapter: typeof rawAuthAdapter = (options) => {
-    const adapter = rawAuthAdapter(options);
+    const adapter = withAuthRetention({
+      adapter: rawAuthAdapter(options),
+      admitClient: async () =>
+        await admitOpenClient({
+          now: new Date(),
+          execute: async (query) => await rootDb.execute(query),
+        }),
+      touchClient: async (clientId) => {
+        const endpoint = tryGetCurrentAuthEndpointContext();
+        if (
+          !endpoint?.path ||
+          !["/oauth2/authorize", "/oauth2/token"].includes(endpoint.path)
+        ) {
+          return;
+        }
+        const touched = await rootDb.execute(
+          sql`update oauth_client set updated_at = now() where client_id = ${clientId} returning client_id`,
+        );
+        if (touched.length === 0) {
+          throw new APIError("BAD_REQUEST", {
+            message: "Authorization client is unavailable.",
+          });
+        }
+      },
+      protectCreate: (raw) => async (args) => {
+        const table = requireAuthRetention({ model: args.model });
+        const clientId =
+          table === "verification"
+            ? authorizationClientId(args.data)
+            : undefined;
+        if (!clientId) {
+          return await raw.create(args);
+        }
+        return await rootDb.transaction(async (tx) => {
+          const clients = await tx.execute(
+            sql`select client_id from oauth_client where client_id = ${clientId} for key share`,
+          );
+          if (clients.length === 0) {
+            throw new APIError("BAD_REQUEST", {
+              message: "Authorization client is unavailable.",
+            });
+          }
+          return await drizzleAdapter(
+            tx,
+            AUTH_DATABASE_ADAPTER_OPTIONS,
+          )(options).create(args);
+        });
+      },
+    });
     return {
       ...adapter,
       // The hook's preflight cannot hold a lock across this plugin write.
@@ -1288,6 +1352,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         : {}),
     },
     plugins: [
+      REGISTRATION_RETENTION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
       createAgentUserPlugin(),
       createSessionBearer(),
