@@ -100,6 +100,7 @@ import {
   META_URL_DIAGNOSTICS,
   rehydrateMetadataUrls,
 } from "@/api/lib/legal-search/metadata-urls";
+import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
@@ -1576,12 +1577,14 @@ const ecjDecisionFromParts = ({
       // Refused secondary reads carry less detail than a complete observation.
       // Derive quality from the envelope so stored replay preserves the same
       // pipeline protection; authoritative absence remains a full observation.
-      isListingOnly:
+      observationDetail:
         (noticeXml === undefined &&
           parts[RAW_PART.NOTICE_STATE]?.startsWith("notice:refused:") ===
             true) ||
         (formexXml === undefined &&
-          parts[RAW_PART.FORMEX_STATE]?.startsWith("formex:refused:") === true),
+          parts[RAW_PART.FORMEX_STATE]?.startsWith("formex:refused:") === true)
+          ? OBSERVATION_DETAIL.SECONDARY_REFUSED
+          : OBSERVATION_DETAIL.COMPLETE,
       sourceUrl,
       documentUrl,
       // Absent, not empty, where no notice was read: an empty list is a

@@ -7,10 +7,13 @@
  * hold the notice to being read per expression rather than per work.
  */
 
+import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 import JSZip from "jszip";
+
+import type { DocumentStageObservation } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -44,7 +47,11 @@ import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/typ
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { createSafeId } from "@/api/lib/branded-types";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
+import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { caseLawProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
+import { withDocumentStageWindow } from "@/api/lib/legal-search/document-stage-observation";
 import {
   sanitizeResult,
   partialObservationFromMetadata,
@@ -243,7 +250,7 @@ describe("notice publication outcomes", () => {
       expect(replayed.type).toBe("parsed");
       if (replayed.type === "parsed") {
         expect(replayed.result.rawHash).toBe(refused?.rawHash);
-        expect(replayed.result.isListingOnly).toBe(true);
+        expect(replayed.result.observationDetail).toBe("secondary-refused");
       }
     },
   );
@@ -297,8 +304,8 @@ describe("notice publication outcomes", () => {
         expect(replayed.type).toBe("parsed");
         if (replayed.type === "parsed") {
           expect(replayed.result.rawHash).toBe(incomplete?.rawHash);
-          expect(replayed.result.isListingOnly).toBe(
-            ![404, 410].includes(status),
+          expect(replayed.result.observationDetail).toBe(
+            [404, 410].includes(status) ? "complete" : "secondary-refused",
           );
         }
         const repeated = await buildDecision(
@@ -391,9 +398,49 @@ describe("notice publication outcomes", () => {
       expect(refusedParts?.[`${refusedPart}-state`]).toBe(
         `${refusedPart}:refused:403`,
       );
+      expect(partialObservationFromMetadata(refused.metadata).detail).toBe(
+        "secondary-refused",
+      );
       expect(
-        partialObservationFromMetadata(refused.metadata).isListingOnly,
-      ).toBe(true);
+        partialObservationFromMetadata(refused.metadata).detail ===
+          "listing-only",
+      ).toBe(false);
+      const projection = deriveCorpusIndexProjectionDescriptor(
+        CORPUS_INDEX_MANIFESTS.case_law_v5,
+        caseLawProjectionInputFromCanonical({
+          documentId: createSafeId<"caseLawDecision">(),
+          sourceId: createSafeId<"caseLawSource">(),
+          jurisdiction: refused.country,
+          language: refused.language,
+          documentType: "judgment",
+          contentHash: "refused-secondary-with-complete-primary-text",
+          redactedAt: null,
+          caseNumber: refused.caseNumber,
+          identifiers: [],
+          court: refused.court,
+          courtId: null,
+          decisionDate: refused.decisionDate ?? null,
+          ecli: refused.ecli ?? null,
+          metadata: refused.metadata,
+          sourceDescriptor: null,
+        }),
+      );
+      expect(projection.action).toBe("upsert");
+      const observations: DocumentStageObservation[] = [];
+      await withDocumentStageWindow({
+        source: ADAPTER_KEYS.EU_ECJ,
+        now: () => 0,
+        observe: (event) => {
+          observations.push(event);
+        },
+        fetchPage: async () =>
+          Result.ok({ decisions: [refused], nextCursor: null }),
+      });
+      expect(observations.at(-1)).toMatchObject({
+        filled: 1,
+        backlog: 0,
+        failed: 0,
+      });
       const shape = classifyObservation({ result: refused, existing });
       expect(shape.preservesExistingDetail).toBe(true);
       const writes: Record<string, unknown>[] = [];
@@ -464,6 +511,17 @@ describe("notice publication outcomes", () => {
       expect(persisted.sourceObservedAt).toBe(observedAt);
 
       const partialExisting = storedDecision(refused);
+      for (const stored of [existing, partialExisting]) {
+        const listingOnly = sanitizeResult({
+          ...refused,
+          observationDetail: "listing-only",
+        });
+        expect(
+          classifyObservation({ result: listingOnly, existing: stored })
+            .preservesExistingDetail,
+        ).toBe(true);
+      }
+
       expect(
         classifyObservation({ result: refused, existing: undefined })
           .preservesExistingDetail,
@@ -477,7 +535,8 @@ describe("notice publication outcomes", () => {
       expect(enriched.metadata).toEqual(complete.metadata);
       expect(enriched.sourceRaw).toBe(complete.sourceRaw);
       expect(
-        partialObservationFromMetadata(enriched.metadata).isListingOnly,
+        partialObservationFromMetadata(enriched.metadata).detail ===
+          "listing-only",
       ).toBe(false);
       const enrichmentShape = classifyObservation({
         result: enriched,
@@ -501,7 +560,8 @@ describe("notice publication outcomes", () => {
         const gone = await read();
         expect(gone.rawHash).not.toBe(complete.rawHash);
         expect(
-          partialObservationFromMetadata(gone.metadata).isListingOnly,
+          partialObservationFromMetadata(gone.metadata).detail ===
+            "listing-only",
         ).toBe(false);
         const goneShape = classifyObservation({ result: gone, existing });
         expect(goneShape.preservesExistingDetail).toBe(false);
@@ -756,7 +816,7 @@ describe("stored Formex refresh", () => {
     const parts = decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "");
     expect(parts?.formex).toBe(formexEn);
     expect(parts?.["formex-state"]).toBeUndefined();
-    expect(outcome.decision.isListingOnly).toBe(false);
+    expect(outcome.decision.observationDetail).toBe("complete");
   });
 
   test("stores a fetched ZIP as the adapter's Formex archive shape", async () => {
