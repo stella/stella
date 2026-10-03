@@ -61,6 +61,7 @@ const UNWIRED_TEST_FILES = new Set<string>([
   // model.
   "apps/api/src/lib/legal-search/corpus-index-scored-scan.contract.test.ts",
   "apps/api/src/lib/legal-search/corpus-index-delete-survivor.contract.test.ts",
+  "apps/api/src/lib/legal-search/corpus-index-query-features.contract.test.ts",
 ]);
 
 const TEST_FILE_GLOB = "{apps,packages}/**/*.test.{ts,tsx}";
