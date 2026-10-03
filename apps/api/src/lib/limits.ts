@@ -1,3 +1,6 @@
+// parser-output-unchanged: Public corpus address caps and global validation affect HTTP admission only.
+import * as v from "valibot";
+
 import {
   AGENT_SKILLS_CHAT_METADATA_MAX,
   CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX,
@@ -924,35 +927,66 @@ export const getPublicCorpusLimits = (
     const max =
       override ??
       Math.max(1, Math.floor((replicas * permits * 60) / p95Seconds));
+    v.parse(
+      v.pipe(
+        v.number(),
+        v.minValue(
+          2,
+          "Public corpus global request budgets must be at least 2",
+        ),
+      ),
+      max,
+    );
     return { duration: 60_000, max, localMax: Math.floor(max / replicas) };
   };
+  const searchGlobal = globalBudget({
+    permits: searchConcurrency,
+    p95Seconds: configuration.PUBLIC_CORPUS_SEARCH_P95_SECONDS,
+    override: configuration.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX,
+  });
+  const aggregateGlobal = globalBudget({
+    permits: aggregateConcurrency,
+    p95Seconds: configuration.PUBLIC_CORPUS_AGGREGATE_P95_SECONDS,
+    override: configuration.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX,
+  });
+  const sitemapGlobal = globalBudget({
+    permits: totalConcurrency,
+    p95Seconds: configuration.PUBLIC_CORPUS_SITEMAP_P95_SECONDS,
+    override: configuration.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX,
+  });
+  type AddressBudgetOptions = { configuredMax: number; globalMax: number };
+  const addressBudget = ({
+    configuredMax,
+    globalMax,
+  }: AddressBudgetOptions) => ({
+    duration: 60_000,
+    max: Math.min(configuredMax, Math.floor(globalMax / 2)),
+  });
   return {
     totalConcurrency,
     classes: {
       search: {
         concurrency: searchConcurrency,
-        global: globalBudget({
-          permits: searchConcurrency,
-          p95Seconds: configuration.PUBLIC_CORPUS_SEARCH_P95_SECONDS,
-          override: configuration.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX,
+        address: addressBudget({
+          configuredMax: API_RATE_LIMITS.publicStatuteSearch.max,
+          globalMax: searchGlobal.max,
         }),
+        global: searchGlobal,
       },
       aggregate: {
         concurrency: aggregateConcurrency,
-        address: { duration: 60_000, max: 60 },
-        global: globalBudget({
-          permits: aggregateConcurrency,
-          p95Seconds: configuration.PUBLIC_CORPUS_AGGREGATE_P95_SECONDS,
-          override: configuration.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX,
+        address: addressBudget({
+          configuredMax: 60,
+          globalMax: aggregateGlobal.max,
         }),
+        global: aggregateGlobal,
       },
       sitemap: {
-        address: { duration: 60_000, max: 10 },
-        global: globalBudget({
-          permits: totalConcurrency,
-          p95Seconds: configuration.PUBLIC_CORPUS_SITEMAP_P95_SECONDS,
-          override: configuration.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX,
+        address: addressBudget({
+          configuredMax: 10,
+          globalMax: sitemapGlobal.max,
         }),
+        global: sitemapGlobal,
       },
       browse: { address: API_RATE_LIMITS.api },
     },

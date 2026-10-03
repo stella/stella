@@ -5,12 +5,16 @@ import { Elysia } from "elysia";
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import { env } from "@/api/env";
+import { isPublicStatuteSearchRateLimitedRequest } from "@/api/handlers/legislation/public-search-rate-limit";
 import { createPublicStatuteSearchRateLimitComposition } from "@/api/handlers/legislation/public-search-rate-limit-composition";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
-import { getPublicCorpusClassPolicy } from "@/api/public-corpus-policy";
+import {
+  getPublicCorpusClassPolicy,
+  PUBLIC_CORPUS_ROUTE_POLICY,
+} from "@/api/public-corpus-policy";
 
 import {
   createPublicCorpusAddressRateLimitOptions,
@@ -132,8 +136,10 @@ describe("public corpus fleet request budgets", () => {
   test("accepted requests report the tightest applicable address or fleet policy", async () => {
     const bindings = createBindings();
     const previous = env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX;
+    const previousAggregate = env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX;
     try {
       env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = 100;
+      env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = 120;
       const app = createApp(bindings.binding);
       for (const { path, limit } of [
         { path: "/law/statutes/search", limit: 30 },
@@ -153,6 +159,7 @@ describe("public corpus fleet request budgets", () => {
       }
     } finally {
       env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = previous;
+      env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = previousAggregate;
       bindings.kill();
     }
   });
@@ -244,6 +251,77 @@ describe("public corpus fleet request budgets", () => {
       } finally {
         completion.resolve("done");
         await Promise.all(running);
+        bindings.kill();
+      }
+    });
+  }
+
+  const searchRoutes = Object.entries(PUBLIC_CORPUS_ROUTE_POLICY)
+    .filter(([, routeClass]) => routeClass === "search")
+    .flatMap(([route]) => {
+      const separator = route.indexOf(" ");
+      const method = route.slice(0, separator);
+      const path = route.slice(separator + 1);
+      return (method === "GET" ? [method, "HEAD"] : [method]).map(
+        (requestMethod) => ({
+          path,
+          method: requestMethod,
+          addressScope: isPublicStatuteSearchRateLimitedRequest(
+            request(path, requestMethod),
+          )
+            ? "public-statute-search"
+            : "public-corpus-search",
+        }),
+      );
+    });
+  for (const { path, method, addressScope } of searchRoutes) {
+    test(`search address refusals preserve fleet capacity without double charging: ${method} ${path}`, async () => {
+      const previous = env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX;
+      const bindings = createBindings();
+      try {
+        env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX = 7;
+        const app = createApp(bindings.binding);
+        for (let index = 0; index < 3; index += 1) {
+          expect(
+            (
+              await bindings.send({
+                app,
+                incoming: request(path, method),
+                address: "192.0.2.1",
+              })
+            ).status,
+          ).toBe(200);
+        }
+        expect(
+          (
+            await bindings.send({
+              app,
+              incoming: request(path, method),
+              address: "192.0.2.1",
+            })
+          ).status,
+        ).toBe(429);
+        expect(bindings.increments.get(addressScope)).toBe(4);
+        expect(
+          bindings.increments.get(
+            addressScope === "public-statute-search"
+              ? "public-corpus-search"
+              : "public-statute-search",
+          ),
+        ).toBeUndefined();
+        expect(bindings.increments.get("public-corpus-global-search")).toBe(3);
+        expect(
+          (
+            await bindings.send({
+              app,
+              incoming: request(path, method),
+              address: "192.0.2.2",
+            })
+          ).status,
+        ).toBe(200);
+        expect(bindings.increments.get("public-corpus-global-search")).toBe(4);
+      } finally {
+        env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX = previous;
         bindings.kill();
       }
     });
@@ -368,12 +446,14 @@ describe("public corpus fleet request budgets", () => {
           failurePolicy: "fail_open_local",
         });
       }
-      for (const routeClass of ["aggregate", "sitemap"] as const) {
+      for (const routeClass of ["search", "aggregate", "sitemap"] as const) {
         const options = createPublicCorpusAddressRateLimitOptions(
           routeClass,
           bindings.binding,
         );
-        expect(options.max).toBe(routeClass === "aggregate" ? 60 : 10);
+        expect(options.max).toBe(
+          getPublicCorpusClassPolicy().classes[routeClass].address.max,
+        );
         const first = await options.generator(request("/law/statutes/facets"), {
           requestIP: () => ({ address: "192.0.2.1" }),
         });
@@ -401,7 +481,7 @@ describe("public corpus fleet request budgets", () => {
     });
     try {
       for (const { path, max, routeClass } of [
-        { path: "/law/statutes/facets", max: 60, routeClass: "aggregate" },
+        { path: "/law/statutes/facets", max: 50, routeClass: "aggregate" },
         { path: "/law/sitemap/shards", max: 10, routeClass: "sitemap" },
       ]) {
         for (let index = 0; index < max; index += 1) {

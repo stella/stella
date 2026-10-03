@@ -160,6 +160,10 @@ describe("public statute search request budget", () => {
             [
               { scope: "api", failurePolicy: "fail_open_local" },
               {
+                scope: "public-corpus-search",
+                failurePolicy: "fail_open_local",
+              },
+              {
                 scope: "public-statute-search",
                 failurePolicy: "fail_open_local",
               },

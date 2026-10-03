@@ -56,6 +56,7 @@ describe("public corpus capacity configuration", () => {
       classes: {
         search: {
           concurrency: 4,
+          address: { duration: 60_000, max: 30 },
           global: { duration: 60_000, max: 480, localMax: 240 },
         },
         aggregate: {
@@ -127,6 +128,7 @@ describe("public corpus capacity configuration", () => {
     expect(limits.totalConcurrency).toBe(15);
     expect(limits.classes.search).toEqual({
       concurrency: 10,
+      address: { duration: 60_000, max: 30 },
       global: { duration: 60_000, max: 450, localMax: 150 },
     });
     expect(limits.classes.aggregate.global).toEqual({
@@ -166,19 +168,56 @@ describe("public corpus capacity configuration", () => {
     });
   });
 
-  test("very slow requests retain a positive fleet budget and can disable replica fallback", () => {
-    const limits = getPublicCorpusLimits({
-      ...defaults(),
-      PUBLIC_CORPUS_SEARCH_P95_SECONDS: 100_000,
-      PUBLIC_CORPUS_AGGREGATE_P95_SECONDS: 100_000,
-      PUBLIC_CORPUS_SITEMAP_P95_SECONDS: 100_000,
-    });
-    for (const global of [
-      limits.classes.search.global,
-      limits.classes.aggregate.global,
-      limits.classes.sitemap.global,
-    ]) {
-      expect(global).toEqual({ duration: 60_000, max: 1, localMax: 0 });
+  test("every budgeted class reserves at least half its fleet budget for other addresses", () => {
+    for (const rootPool of [10, 20]) {
+      for (const override of [undefined, 2, 3, 7, 31, 100]) {
+        const limits = getPublicCorpusLimits({
+          ...defaults(),
+          PUBLIC_LAW_DATABASE_URL: undefined,
+          DATABASE_ROOT_POOL_MAX: rootPool,
+          PUBLIC_CORPUS_SEARCH_GLOBAL_MAX: override,
+          PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX: override,
+          PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX: override,
+        });
+        for (const policy of Object.values(limits.classes)) {
+          if (!("global" in policy)) {
+            continue;
+          }
+          expect(policy.address.max).toBeGreaterThanOrEqual(1);
+          expect(policy.address.max).toBeLessThanOrEqual(
+            Math.floor(policy.global.max / 2),
+          );
+        }
+      }
+    }
+  });
+
+  test("global budgets below two are rejected for every class, including derived budgets", () => {
+    for (const key of [
+      "PUBLIC_CORPUS_SEARCH_GLOBAL_MAX",
+      "PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX",
+      "PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX",
+    ] as const) {
+      expect(v.safeParse(configurationSchema, { [key]: "1" }).success).toBe(
+        false,
+      );
+      expect(v.safeParse(configurationSchema, { [key]: "2" }).success).toBe(
+        true,
+      );
+      for (const value of [0, 1]) {
+        expect(() =>
+          getPublicCorpusLimits({ ...defaults(), [key]: value }),
+        ).toThrow("Public corpus global request budgets must be at least 2");
+      }
+    }
+    for (const key of [
+      "PUBLIC_CORPUS_SEARCH_P95_SECONDS",
+      "PUBLIC_CORPUS_AGGREGATE_P95_SECONDS",
+      "PUBLIC_CORPUS_SITEMAP_P95_SECONDS",
+    ] as const) {
+      expect(() =>
+        getPublicCorpusLimits({ ...defaults(), [key]: 100_000 }),
+      ).toThrow("Public corpus global request budgets must be at least 2");
     }
   });
 

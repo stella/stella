@@ -1,4 +1,4 @@
-// parser-output-unchanged: Public corpus admission settings do not change ingestion parser output.
+// parser-output-unchanged: Minimum public corpus request budgets affect admission only, not parsed records.
 // parser-output-unchanged: Search ranking flag and policy; ingestion parsers never read them.
 /**
  * Base environment variables shared by all entrypoints
@@ -144,9 +144,15 @@ export const envBaseServerSchema = {
     positiveIntegerValueSchema,
     "30",
   ),
-  PUBLIC_CORPUS_SEARCH_GLOBAL_MAX: v.optional(positiveIntegerValueSchema),
-  PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX: v.optional(positiveIntegerValueSchema),
-  PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX: v.optional(positiveIntegerValueSchema),
+  PUBLIC_CORPUS_SEARCH_GLOBAL_MAX: v.optional(
+    v.pipe(positiveIntegerValueSchema, v.minValue(2)),
+  ),
+  PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX: v.optional(
+    v.pipe(positiveIntegerValueSchema, v.minValue(2)),
+  ),
+  PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX: v.optional(
+    v.pipe(positiveIntegerValueSchema, v.minValue(2)),
+  ),
   DATABASE_POOL_MAX_LIFETIME_S: databasePoolSecondsSchema("0"),
   DATABASE_POOL_IDLE_TIMEOUT_S: databasePoolSecondsSchema("0"),
   // Session statement_timeout for the root and RLS pools, sent when each

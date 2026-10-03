@@ -39,6 +39,10 @@ export const createPublicStatuteSearchRateLimitComposition = <
     "search",
     createRedisBinding,
   );
+  const searchAddress = createPublicCorpusAddressRateLimitOptions(
+    "search",
+    createRedisBinding,
+  );
   return {
     shared: new Elysia()
       .use(
@@ -75,6 +79,15 @@ export const createPublicStatuteSearchRateLimitComposition = <
             createRedisBinding,
           ),
         ),
+      )
+      // Statute and case search will share one address bucket in the follow-up.
+      .use(
+        rateLimit({
+          ...searchAddress,
+          skip: (request) =>
+            searchAddress.skip(request) ||
+            isPublicStatuteSearchRateLimitedRequest(request),
+        }),
       )
       .use(concurrency.shared)
       .use(
