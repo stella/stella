@@ -5,7 +5,7 @@ import * as v from "valibot";
 import {
   LEGISLATION_EXPRESSION_KINDS,
   LEGISLATION_WINDOW_DISPOSITIONS,
-  LEGISLATION_WINDOW_DISPOSITION_BASES,
+  LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES,
 } from "@stll/api-contract/legislation-expression";
 import { documentAstSchema } from "@stll/legal-ast/document-ast";
 
@@ -46,11 +46,7 @@ const labelFields = {
   expressionKind: t.UnionEnum(LEGISLATION_EXPRESSION_KINDS),
   windowDisposition: t.UnionEnum(LEGISLATION_WINDOW_DISPOSITIONS),
   windowDispositionBasis: t.Union([
-    t.Union(
-      Object.values(LEGISLATION_WINDOW_DISPOSITION_BASES)
-        .flat()
-        .map((basis) => t.Literal(basis)),
-    ),
+    t.UnionEnum(LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES),
     t.Null(),
   ]),
 };
