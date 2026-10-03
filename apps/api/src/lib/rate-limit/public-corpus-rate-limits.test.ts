@@ -203,10 +203,10 @@ describe("public corpus fleet request budgets", () => {
       try {
         await Promise.race([
           entered.promise,
-          Promise.all(running).then((responses) => 
+          Promise.all(running).then((responses) =>
             panic(
               `Capacity fixture completed before admission: ${responses.map((response) => response.status).join(",")}`,
-            )
+            ),
           ),
         ]);
         const scope = `public-corpus-global-${routeClass}`;
