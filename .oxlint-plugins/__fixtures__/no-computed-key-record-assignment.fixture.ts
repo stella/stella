@@ -59,3 +59,32 @@ export const accepted = (): unknown[] => {
   list[names.length] = 1;
   return [fromEntries, map, fixed, fromCall, list];
 };
+
+export const parameterWrite = (record: Record<string, unknown>): void => {
+  // oxlint-disable-next-line no-computed-key-record-assignment/no-computed-key-record-assignment -- fixture checks an annotated parameter
+  record[key] = 1;
+};
+
+// oxlint-disable-next-line unicorn/no-array-reduce -- fixture exercises an object-seeded reducer
+export const reduced = names.reduce((record, name) => {
+  // oxlint-disable-next-line no-computed-key-record-assignment/no-computed-key-record-assignment -- fixture checks an object-seeded reducer
+  record[name] = 1;
+  return record;
+}, {});
+
+export const nestedWrite = (): void => {
+  const result = { items: {} };
+  // oxlint-disable-next-line no-computed-key-record-assignment/no-computed-key-record-assignment -- fixture checks a nested literal member
+  result.items[key] = 1;
+};
+
+export const assigned = (record: Record<string, unknown>): unknown =>
+  // oxlint-disable-next-line no-computed-key-record-assignment/no-computed-key-record-assignment -- fixture checks a dynamic copy source
+  Object.assign(record, input);
+
+export const lookup = (name: string): number | undefined =>
+  // oxlint-disable-next-line no-computed-key-record-assignment/no-computed-key-record-assignment -- fixture checks an open module table lookup
+  moduleCache[name];
+
+export const ownLookup = (name: string): number | undefined =>
+  Object.hasOwn(moduleCache, name) ? moduleCache[name] : undefined;

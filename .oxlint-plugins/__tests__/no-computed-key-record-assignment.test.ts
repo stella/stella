@@ -11,6 +11,85 @@ const lint = async (lines: readonly string[]) =>
   );
 
 describe.serial("no-computed-key-record-assignment", () => {
+  test("distinguishes open key unions and local aliases from closed key types", async () => {
+    expect(
+      await lint([
+        "type Open = string; type Closed = 'a' | 'b';",
+        "const TABLE: Record<string, number> = {};",
+        "const UNION: Record<string | number, number> = {};",
+        "export const alias = (key: Open) => TABLE[key];",
+        "export const union = (key: string | number) => TABLE[key];",
+        "export const tableUnion = (key: string) => UNION[key];",
+        "export const closed = (key: Closed) => TABLE[key];",
+      ]),
+    ).toEqual([4, 5, 6]);
+  });
+
+  test("terminates local alias and class-field cycles", async () => {
+    expect(
+      await lint([
+        "declare const key: string;",
+        "type Cycle = Cycle; type RecursiveUnion = RecursiveUnion | number;",
+        "const TABLE: Record<string, number> = {};",
+        "export const read = (key: RecursiveUnion) => TABLE[key];",
+        "export const write = (out: Cycle) => { out[key] = 1; };",
+        "let first = second; let second = first;",
+        "first[key] = 1;",
+        "class Cache { cache = this.cache; put() { this.cache[key] = 1; } }",
+      ]),
+    ).toEqual([]);
+  });
+
+  test("resolves destructured annotations and statically named nested members", async () => {
+    expect(
+      await lint([
+        "declare const key: string;",
+        "export const write = ({out}: {out: Record<string, number>}) => { out[key] = 1; };",
+        "export const renamed = ({out: record}: {out: Record<string, number>}) => { record[key] = 1; };",
+        "export const nested = ({outer: {out}}: {outer: {out: Record<string, number>}}) => { out[key] = 1; };",
+        "const out = { ['items']: {} };",
+        "out.items[key] = 1;",
+        "const TABLE: Record<string, number> = {};",
+        "export const read = ({key}: {key: string}) => TABLE[key];",
+        "export const closed = ({key}: {key: 'a' | 'b'}) => TABLE[key];",
+        "export const array = ({out}: {out: number[]}, key: number) => { out[key] = 1; };",
+      ]),
+    ).toEqual([2, 3, 4, 6, 8]);
+  });
+
+  test("recognizes compound checks and the positive branch of negated checks", async () => {
+    expect(
+      await lint([
+        "const TABLE: Record<string, number> = {};",
+        "export const compound = (key: string) => {",
+        "  if (Object.hasOwn(TABLE, key) && key !== '') return TABLE[key];",
+        "  if (key !== '' && Object.hasOwn(TABLE, key)) return TABLE[key];",
+        "};",
+        "export const alternate = (key: string) => {",
+        "  if (!Object.hasOwn(TABLE, key)) return undefined; else return TABLE[key];",
+        "};",
+        "export const ternary = (key: string) => !Object.hasOwn(TABLE, key) ? undefined : TABLE[key];",
+        "export const loose = (key: string, flag: boolean) => {",
+        "  if (Object.hasOwn(TABLE, key) || flag) return TABLE[key];",
+        "};",
+        "export const changed = (key: string) => {",
+        "  if (Object.hasOwn(TABLE, key) && (key = 'different')) return TABLE[key];",
+        "};",
+      ]),
+    ).toEqual([11, 14]);
+  });
+
+  test("checks string assertions without treating closed assertions as open keys", async () => {
+    expect(
+      await lint([
+        "const TABLE: Record<string, number> = {};",
+        "export const asserted = (key: unknown) => TABLE[key as string];",
+        "export const closed = (key: unknown) => TABLE[key as 'a' | 'b'];",
+        "export const guarded = (key: string) => Object.hasOwn(TABLE, key) ? TABLE[key as string] : undefined;",
+      ]),
+    ).toEqual([2]);
+  });
+
   test("a guard must match the binding and still apply at the read", async () => {
     expect(
       await lint([
@@ -95,13 +174,14 @@ describe.serial("no-computed-key-record-assignment", () => {
         "Object.assign({}, source);",
         "Object.assign({}, { fixed: 1 }, source);",
         "Object.assign({}, ...[source]);",
+        "Object.assign(...[{}, source]);",
         "Object.assign({}, { fixed: 1 });",
         "Object.assign({}, { ...source });",
         "const copied = { ...source };",
         "const built = fromOwnEntries(ownEntries(source));",
         "const shadow = (Object: { assign: (...args: unknown[]) => unknown }) => Object.assign({}, source);",
       ]),
-    ).toEqual([2, 3, 4]);
+    ).toEqual([2, 3, 4, 5]);
   });
 
   test("requires an own-key guard for open module table reads", async () => {

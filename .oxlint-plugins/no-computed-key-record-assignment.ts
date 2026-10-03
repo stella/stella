@@ -26,41 +26,63 @@ const isStaticKey = (node: unknown): boolean =>
       Array.isArray(node.expressions) &&
       node.expressions.length === 0));
 
-const resolveType = (
-  context: ScopeContext,
-  value: unknown,
-  seen = new Set<Variable>(),
-): AstNode | null => {
-  if (!isAstNode(value)) {
-    return null;
+const resolveType = (context: ScopeContext, value: unknown): AstNode | null => {
+  let node = value;
+  const seen = new Set<Variable>();
+  while (isAstNode(node)) {
+    if (
+      ["TSTypeAnnotation", "TSParenthesizedType", "TSTypeOperator"].includes(
+        node.type,
+      )
+    ) {
+      node = node.typeAnnotation;
+      continue;
+    }
+    if (
+      node.type !== "TSTypeReference" ||
+      !isIdentifierReference(node.typeName)
+    ) {
+      return node;
+    }
+    const variable = resolveVariable(context, node.typeName);
+    const definition = variable?.defs.at(0)?.node;
+    if (
+      !variable ||
+      !isAstNode(definition) ||
+      definition.type !== "TSTypeAliasDeclaration"
+    ) {
+      return node;
+    }
+    if (seen.has(variable)) {
+      return null;
+    }
+    seen.add(variable);
+    node = definition.typeAnnotation;
   }
-  if (
-    value.type === "TSTypeAnnotation" ||
-    value.type === "TSParenthesizedType" ||
-    value.type === "TSTypeOperator"
-  ) {
-    return resolveType(context, value.typeAnnotation, seen);
+  return null;
+};
+
+const isStringKeyType = (context: ScopeContext, value: unknown): boolean => {
+  const pending = [value];
+  const seen = new Set<AstNode>();
+  while (pending.length > 0) {
+    const type = resolveType(context, pending.pop());
+    if (type?.type === "TSStringKeyword") {
+      return true;
+    }
+    if (
+      type?.type !== "TSUnionType" ||
+      !Array.isArray(type.types) ||
+      seen.has(type)
+    ) {
+      continue;
+    }
+    seen.add(type);
+    for (const member of type.types) {
+      pending.push(member);
+    }
   }
-  if (
-    value.type !== "TSTypeReference" ||
-    !isIdentifierReference(value.typeName)
-  ) {
-    return value;
-  }
-  const variable = resolveVariable(context, value.typeName);
-  const definition = variable?.defs.at(0)?.node;
-  if (
-    !variable ||
-    !isAstNode(definition) ||
-    definition.type !== "TSTypeAliasDeclaration"
-  ) {
-    return value;
-  }
-  if (seen.has(variable)) {
-    return null;
-  }
-  seen.add(variable);
-  return resolveType(context, definition.typeAnnotation, seen);
+  return false;
 };
 
 const recordValueType = (
@@ -90,8 +112,7 @@ const isOpenRecordType = (context: ScopeContext, value: unknown): boolean => {
     return (
       isAstNode(argumentsNode) &&
       Array.isArray(argumentsNode.params) &&
-      resolveType(context, argumentsNode.params.at(0))?.type ===
-        "TSStringKeyword"
+      isStringKeyType(context, argumentsNode.params.at(0))
     );
   }
   return (
@@ -108,8 +129,7 @@ const isOpenRecordType = (context: ScopeContext, value: unknown): boolean => {
       const parameter = member.parameters.at(0);
       return (
         isAstNode(parameter) &&
-        resolveType(context, parameter.typeAnnotation)?.type ===
-          "TSStringKeyword"
+        isStringKeyType(context, parameter.typeAnnotation)
       );
     })
   );
@@ -135,9 +155,54 @@ const reducerSeed = (definition: AstNode, name: unknown): AstNode | null => {
   return unwrapExpression(call.arguments.at(1));
 };
 
+const bindingAnnotation = (
+  context: ScopeContext,
+  binding: AstNode,
+): AstNode | null => {
+  const ownType = resolveType(context, binding.typeAnnotation);
+  if (ownType) {
+    return ownType;
+  }
+  const keys: string[] = [];
+  let child = binding;
+  let parent = child.parent;
+  while (
+    isAstNode(parent) &&
+    ["Property", "ObjectPattern", "AssignmentPattern"].includes(parent.type)
+  ) {
+    if (parent.type === "Property") {
+      const key = getPropertyName(parent.key);
+      if (key === null || (parent.computed && !isStaticKey(parent.key))) {
+        return null;
+      }
+      keys.unshift(key);
+    }
+    let type = resolveType(context, parent.typeAnnotation);
+    if (type) {
+      for (const key of keys) {
+        if (type?.type !== "TSTypeLiteral" || !Array.isArray(type.members)) {
+          return null;
+        }
+        const member = type.members.find(
+          (candidate) =>
+            isAstNode(candidate) && getPropertyName(candidate.key) === key,
+        );
+        type = isAstNode(member)
+          ? resolveType(context, member.typeAnnotation)
+          : null;
+      }
+      return type;
+    }
+    child = parent;
+    parent = child.parent;
+  }
+  return null;
+};
+
+type InstanceFieldOptions = { node: AstNode; seen: Set<Variable | AstNode> };
 const instanceFieldShape = (
   context: ScopeContext,
-  node: AstNode,
+  { node, seen }: InstanceFieldOptions,
 ): AstNode | null => {
   let ancestor = node.parent;
   while (isAstNode(ancestor) && ancestor.type !== "ClassBody") {
@@ -151,20 +216,25 @@ const instanceFieldShape = (
         !member.static &&
         getPropertyName(member.key) === getPropertyName(node.property),
     );
-    return isAstNode(field)
-      ? (resolveType(context, field.typeAnnotation) ??
-          shapeOf(context, field.value))
-      : null;
+    if (!isAstNode(field) || seen.has(field)) {
+      return null;
+    }
+    seen.add(field);
+    return (
+      resolveType(context, field.typeAnnotation) ??
+      shapeOf(context, { value: field.value, seen })
+    );
   }
   return null;
 };
 
 // A shape is either an initializer or a type node. Keeping the nested value
 // shape lets a record of arrays stay distinct from a record of records.
+type ShapeOptions = { value: unknown; seen?: Set<Variable | AstNode> };
+
 const shapeOf = (
   context: ScopeContext,
-  value: unknown,
-  seen = new Set<Variable>(),
+  { value, seen = new Set<Variable | AstNode>() }: ShapeOptions,
 ): AstNode | null => {
   if (!isAstNode(value)) {
     return null;
@@ -176,7 +246,7 @@ const shapeOf = (
   ) {
     return (
       resolveType(context, value.typeAnnotation) ??
-      shapeOf(context, value.expression, seen)
+      shapeOf(context, { value: value.expression, seen })
     );
   }
   const node = unwrapExpression(value);
@@ -198,18 +268,21 @@ const shapeOf = (
       return null;
     }
     return (
-      resolveType(context, definition.name.typeAnnotation) ??
+      bindingAnnotation(context, definition.name) ??
       (definition.type === "Parameter"
-        ? shapeOf(context, reducerSeed(definition.node, definition.name), seen)
-        : shapeOf(context, definition.node.init, seen))
+        ? shapeOf(context, {
+            value: reducerSeed(definition.node, definition.name),
+            seen,
+          })
+        : shapeOf(context, { value: definition.node.init, seen }))
     );
   }
   if (node.type !== "MemberExpression") {
     return node;
   }
-  let shape = shapeOf(context, node.object, seen);
+  let shape = shapeOf(context, { value: node.object, seen });
   if (isAstNode(node.object) && node.object.type === "ThisExpression") {
-    return instanceFieldShape(context, node);
+    return instanceFieldShape(context, { node, seen });
   }
   shape = resolveType(context, shape);
   if (!shape) {
@@ -235,11 +308,11 @@ const shapeOf = (
     (member) =>
       isAstNode(member) &&
       getPropertyName(member.key) === key &&
-      !member.computed,
+      (!member.computed || isStaticKey(member.key)),
   );
   return isAstNode(matchedMember)
     ? (resolveType(context, matchedMember.typeAnnotation) ??
-        shapeOf(context, matchedMember.value, seen))
+        shapeOf(context, { value: matchedMember.value, seen }))
     : null;
 };
 
@@ -249,7 +322,7 @@ const isRecordShape = (context: ScopeContext, shape: AstNode | null): boolean =>
   isOpenRecordType(context, shape);
 
 const isRecordReceiver = (context: ScopeContext, value: unknown): boolean => {
-  if (isRecordShape(context, shapeOf(context, value))) {
+  if (isRecordShape(context, shapeOf(context, { value }))) {
     return true;
   }
   if (!isIdentifierReference(value)) {
@@ -272,23 +345,34 @@ const isFunction = (node: AstNode): boolean =>
     "FunctionDeclaration",
   ].includes(node.type);
 
+type BindingPair = { left: unknown; right: unknown };
 const sameBinding = (
   context: ScopeContext,
-  left: unknown,
-  right: unknown,
-): boolean =>
-  isIdentifierReference(left) &&
-  isIdentifierReference(right) &&
-  resolveVariable(context, left) !== null &&
-  resolveVariable(context, left) === resolveVariable(context, right);
+  { left, right }: BindingPair,
+): boolean => {
+  const leftIdentifier = unwrapExpression(left);
+  const rightIdentifier = unwrapExpression(right);
+  return (
+    isIdentifierReference(leftIdentifier) &&
+    isIdentifierReference(rightIdentifier) &&
+    resolveVariable(context, leftIdentifier) !== null &&
+    resolveVariable(context, leftIdentifier) ===
+      resolveVariable(context, rightIdentifier)
+  );
+};
 
+type OwnKeyTestOptions = { test: unknown; table: unknown; key: unknown };
 const ownKeyTest = (
   context: ScopeContext,
-  test: unknown,
-  table: unknown,
-  key: unknown,
+  { test, table, key }: OwnKeyTestOptions,
 ): boolean => {
   const node = unwrapExpression(test);
+  if (node?.type === "LogicalExpression" && node.operator === "&&") {
+    return (
+      ownKeyTest(context, { test: node.left, table, key }) ||
+      ownKeyTest(context, { test: node.right, table, key })
+    );
+  }
   if (node?.type !== "CallExpression" || !Array.isArray(node.arguments)) {
     return false;
   }
@@ -318,8 +402,8 @@ const ownKeyTest = (
   });
   return (
     Boolean(objectHasOwn || helper) &&
-    sameBinding(context, node.arguments.at(0), table) &&
-    sameBinding(context, node.arguments.at(1), key)
+    sameBinding(context, { left: node.arguments.at(0), right: table }) &&
+    sameBinding(context, { left: node.arguments.at(1), right: key })
   );
 };
 
@@ -341,52 +425,68 @@ const exits = (value: unknown): boolean => {
   );
 };
 
+type GuardReadOptions = { test: unknown; read: AstNode };
 const stableGuardKey = (
   context: ScopeContext,
-  test: unknown,
-  read: AstNode,
+  { test, read }: GuardReadOptions,
 ): boolean => {
-  if (!isAstNode(test) || !isIdentifierReference(read.property)) {
+  const key = unwrapExpression(read.property);
+  if (!isAstNode(test) || !isIdentifierReference(key)) {
     return false;
   }
-  const variable = resolveVariable(context, read.property);
+  const variable = resolveVariable(context, key);
   return (
     variable !== null &&
     !variable.references.some(
       (reference) =>
         reference.isWrite() &&
-        reference.identifier.range[0] >= test.range[1] &&
+        reference.identifier.range[0] >= test.range[0] &&
         reference.identifier.range[0] < read.range[0],
     )
   );
 };
 
-const guardedRead = (context: ScopeContext, read: AstNode): boolean => {
+type GuardBranchOptions = { parent: AstNode; child: AstNode };
+const branchTest = ({ parent, child }: GuardBranchOptions): AstNode | null => {
+  if (
+    parent.type === "IfStatement" ||
+    parent.type === "ConditionalExpression"
+  ) {
+    const test = unwrapExpression(parent.test);
+    if (child === parent.consequent) {
+      return test;
+    }
+    if (
+      child === parent.alternate &&
+      test?.type === "UnaryExpression" &&
+      test.operator === "!"
+    ) {
+      return unwrapExpression(test.argument);
+    }
+  }
+  if (
+    parent.type === "LogicalExpression" &&
+    parent.operator === "&&" &&
+    child === parent.right
+  ) {
+    return unwrapExpression(parent.left);
+  }
+  return null;
+};
+
+const guardedRead = (context: ScopeContext, value: unknown): boolean => {
+  if (!isAstNode(value)) {
+    return false;
+  }
+  const read = value;
   let child = read;
   let parent = read.parent;
   while (isAstNode(parent) && !isFunction(parent)) {
+    const test = branchTest({ parent, child });
     if (
-      parent.type === "IfStatement" &&
-      child === parent.consequent &&
-      ownKeyTest(context, parent.test, read.object, read.property) &&
-      stableGuardKey(context, parent.test, read)
-    ) {
-      return true;
-    }
-    if (
-      parent.type === "ConditionalExpression" &&
-      child === parent.consequent &&
-      ownKeyTest(context, parent.test, read.object, read.property) &&
-      stableGuardKey(context, parent.test, read)
-    ) {
-      return true;
-    }
-    if (
-      parent.type === "LogicalExpression" &&
-      parent.operator === "&&" &&
-      child === parent.right &&
-      ownKeyTest(context, parent.left, read.object, read.property) &&
-      stableGuardKey(context, parent.left, read)
+      test &&
+      ownKeyTest(context, { test, table: read.object, key: read.property }) &&
+      stableGuardKey(context, { test, read })
     ) {
       return true;
     }
@@ -403,14 +503,13 @@ const guardedRead = (context: ScopeContext, read: AstNode): boolean => {
         if (
           statement.test.type === "UnaryExpression" &&
           statement.test.operator === "!" &&
-          ownKeyTest(
-            context,
-            statement.test.argument,
-            read.object,
-            read.property,
-          ) &&
+          ownKeyTest(context, {
+            test: statement.test.argument,
+            table: read.object,
+            key: read.property,
+          }) &&
           exits(statement.consequent) &&
-          stableGuardKey(context, statement.test, read)
+          stableGuardKey(context, { test: statement.test, read })
         ) {
           return true;
         }
@@ -450,7 +549,7 @@ const isOpenModuleTable = (context: ScopeContext, value: unknown): boolean => {
       (container.type === "ExportNamedDeclaration" &&
         isAstNode(container.parent) &&
         container.parent.type === "Program"));
-  return moduleLevel && isOpenRecordType(context, shapeOf(context, value));
+  return moduleLevel && isOpenRecordType(context, shapeOf(context, { value }));
 };
 
 export default eslintCompatPlugin({
@@ -505,14 +604,19 @@ export default eslintCompatPlugin({
             reportWrite(node.argument);
           },
           CallExpression(node) {
+            const callee = node.callee;
             if (
-              !isMemberAccess(node.callee, "Object", "assign") ||
-              (isIdentifierReference(node.callee.object) &&
-                resolveVariable(context, node.callee.object)?.defs.length)
+              callee.type !== "MemberExpression" ||
+              !isMemberAccess(callee, "Object", "assign") ||
+              (isIdentifierReference(callee.object) &&
+                resolveVariable(context, callee.object)?.defs.length)
             ) {
               return;
             }
             if (
+              !node.arguments.some(
+                (argument) => argument.type === "SpreadElement",
+              ) &&
               !node.arguments
                 .slice(1)
                 .some(
@@ -525,24 +629,22 @@ export default eslintCompatPlugin({
             context.report({ node, messageId: "assignedSource" });
           },
           MemberExpression(node) {
-            if (
-              !node.computed ||
-              !isIdentifierReference(node.property) ||
-              !isOpenModuleTable(context, node.object)
-            ) {
+            if (!node.computed || !isOpenModuleTable(context, node.object)) {
               return;
             }
             const parent = node.parent;
             if (
-              parent?.type === "AssignmentExpression" &&
+              parent.type === "AssignmentExpression" &&
               parent.left === node &&
               parent.operator === "="
             ) {
               return;
             }
             if (
-              resolveType(context, shapeOf(context, node.property))?.type !==
-                "TSStringKeyword" ||
+              !isStringKeyType(
+                context,
+                shapeOf(context, { value: node.property }),
+              ) ||
               guardedRead(context, node)
             ) {
               return;

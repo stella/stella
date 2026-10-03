@@ -88,7 +88,9 @@ test("external tool normalization retains every execution input entry", async ()
       expect(args).toEqual(originalArgs);
       for (const value of [...calls, args]) {
         expect(isRecord(value)).toBe(true);
-        if (!isRecord(value)) {panic("expected object execution input");}
+        if (!isRecord(value)) {
+          panic("expected object execution input");
+        }
         expect(Object.hasOwn(value, "__proto__")).toBe(true);
         expect(Object.hasOwn(value, "constructor")).toBe(true);
       }
