@@ -1,4 +1,5 @@
-// parser-output-unchanged: Page validation and item-level failure reporting reject invalid publisher input without transforming parsed decision content.
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
@@ -763,12 +764,14 @@ export const buildCzNsDecision = async (
   // work.
   const [detailResponse, printResponse] = await Promise.all([
     fetchPublisher(webUrl, {
+      fetchStage: "document",
       adapterKey: ADAPTER_KEYS.CZ_NS,
       signal,
       headers: COMMON_HEADERS,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     }),
     fetchPublisher(printUrl, {
+      fetchStage: "document",
       adapterKey: ADAPTER_KEYS.CZ_NS,
       signal,
       headers: COMMON_HEADERS,
@@ -1132,6 +1135,7 @@ const listCzNsSlicePage = async ({
     `&Start=1&Count=${CZ_NS_LISTING_WINDOW}`;
 
   const response = await fetchPublisher(url, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.CZ_NS,
     signal,
     headers: COMMON_HEADERS,
@@ -1305,6 +1309,7 @@ const CZ_NS_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const czNsAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.CZ_NS,
   sourceSurfaces: CZ_NS_SOURCE_SURFACES,
   sourceFields: {
@@ -1326,6 +1331,15 @@ export const czNsAdapter = defineSourceAdapter({
    * compare against what is held.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            unid: payload["unid"],
+            caseNumber: payload["caseNumber"],
+            additionalCaseNumbers: payload["additionalCaseNumbers"],
+          }
+        : null,
     firstSlice: CZ_NS_FIRST_SLICE,
     ...czNsDaySlices.walk,
     tipWindowDays: CZ_NS_TIP_WINDOW_DAYS,
@@ -1340,6 +1354,7 @@ export const czNsAdapter = defineSourceAdapter({
         `&Count=1&Start=1&OutputFormat=JSON`;
 
       const response = await fetchPublisher(url, {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.CZ_NS,
         signal,
         headers: COMMON_HEADERS,
@@ -1380,6 +1395,7 @@ export const czNsAdapter = defineSourceAdapter({
           `&OutputFormat=JSON`;
 
         const listResponse = await fetchPublisher(listUrl, {
+          fetchStage: "listing",
           adapterKey: ADAPTER_KEYS.CZ_NS,
           headers: COMMON_HEADERS,
           signal,

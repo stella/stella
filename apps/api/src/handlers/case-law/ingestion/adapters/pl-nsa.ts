@@ -1,3 +1,5 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 /**
  * Polish administrative courts, imported from the Hugging Face dataset
@@ -1718,6 +1720,7 @@ const productionCrawler = (config: Record<string, unknown>): PlNsaCrawler => {
 const lastSlice = sliceName(PL_NSA_SNAPSHOT.shards.length - 1);
 
 export const plNsaAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_NSA,
   language: PL_NSA_LANGUAGE,
   minRequestIntervalMs: publisherRequestIntervalMs(ADAPTER_KEYS.PL_NSA),
@@ -1746,6 +1749,13 @@ export const plNsaAdapter = defineSourceAdapter({
   },
 
   reconciliation: {
+    // Only the listed identity is a row signal; dataset revision and shard/row coordinates describe the snapshot.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            identity: payload["identity"],
+          }
+        : null,
     firstSlice: sliceName(0),
     // A snapshot has no present: its newest slice is its last shard.
     sliceOf: () => lastSlice,

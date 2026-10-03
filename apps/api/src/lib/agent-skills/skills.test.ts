@@ -13,6 +13,7 @@ import {
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -46,7 +47,7 @@ describe("canEditActiveSkill", () => {
   test("requires agent skill update permission for private owned skills", () => {
     expect(
       canEditActiveSkill({
-        memberRole: { role: "intern" },
+        memberRole: sessionMemberRole("intern"),
         origin: "authored",
         scope: "private",
         skillUserId: userId,
@@ -56,7 +57,7 @@ describe("canEditActiveSkill", () => {
 
     expect(
       canEditActiveSkill({
-        memberRole: { role: "member" },
+        memberRole: sessionMemberRole("member"),
         origin: "authored",
         scope: "private",
         skillUserId: userId,
@@ -68,7 +69,7 @@ describe("canEditActiveSkill", () => {
   test("keeps team skills limited to owners and admins", () => {
     expect(
       canEditActiveSkill({
-        memberRole: { role: "member" },
+        memberRole: sessionMemberRole("member"),
         origin: "authored",
         scope: "team",
         skillUserId: "other_user",
@@ -78,7 +79,7 @@ describe("canEditActiveSkill", () => {
 
     expect(
       canEditActiveSkill({
-        memberRole: { role: "admin" },
+        memberRole: sessionMemberRole("admin"),
         origin: "authored",
         scope: "team",
         skillUserId: "other_user",
@@ -100,7 +101,7 @@ describe("resolveActiveSkillContext", () => {
 
     const result = await resolveActiveSkillContext({
       activeSkill: { skillId, skillName: "Enabled Team Skill" },
-      memberRole: { role: "member" },
+      memberRole: sessionMemberRole("member"),
       organizationId: ids.orgA,
       safeDb,
       userId: ids.userA2,
@@ -128,7 +129,7 @@ describe("resolveActiveSkillContext", () => {
 
     const result = await resolveActiveSkillContext({
       activeSkill: { skillId, skillName: "Disabled Team Skill" },
-      memberRole: { role: "member" },
+      memberRole: sessionMemberRole("member"),
       organizationId: ids.orgA,
       safeDb,
       userId: ids.userA2,
@@ -151,7 +152,7 @@ describe("resolveActiveSkillContext", () => {
 
     const result = await resolveActiveSkillContext({
       activeSkill: { skillId, skillName: "Disabled Team Skill" },
-      memberRole: { role: "admin" },
+      memberRole: sessionMemberRole("admin"),
       organizationId: ids.orgA,
       safeDb,
       userId: ids.userA2,
@@ -176,7 +177,7 @@ describe("resolveActiveSkillContext", () => {
 
     const result = await resolveActiveSkillContext({
       activeSkill: { skillId, skillName: "Disabled Bundled Skill" },
-      memberRole: { role: "admin" },
+      memberRole: sessionMemberRole("admin"),
       organizationId: ids.orgA,
       safeDb,
       userId: ids.userA2,
@@ -199,14 +200,14 @@ describe("resolveActiveSkillContext", () => {
 
     const ownerResult = await resolveActiveSkillContext({
       activeSkill: { skillId, skillName: "Private Skill" },
-      memberRole: { role: "member" },
+      memberRole: sessionMemberRole("member"),
       organizationId: ids.orgA,
       safeDb,
       userId: ids.userA1,
     });
     const otherUserResult = await resolveActiveSkillContext({
       activeSkill: { skillId, skillName: "Private Skill" },
-      memberRole: { role: "admin" },
+      memberRole: sessionMemberRole("admin"),
       organizationId: ids.orgA,
       safeDb,
       userId: ids.userA2,

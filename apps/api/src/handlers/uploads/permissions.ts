@@ -1,10 +1,11 @@
 import { Result } from "better-result";
 
-import { roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { PendingUploadPurposeData } from "@/api/db/schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
 export const uploadRoutePermission = {
   workspace: ["read"],
@@ -24,7 +25,7 @@ export const UPLOAD_PURPOSE_PERMISSION = {
 } as const satisfies Record<UploadPurpose, PermissionInput>;
 
 type AuthorizeUploadPurposeProps = {
-  memberRole: { role: keyof typeof roles };
+  memberRole: AuthorizedMemberRole;
   purpose: UploadPurpose;
 };
 
@@ -32,10 +33,7 @@ export const authorizeUploadPurpose = ({
   memberRole,
   purpose,
 }: AuthorizeUploadPurposeProps): Result<void, HandlerError> => {
-  const authorization = roles[memberRole.role].authorize(
-    UPLOAD_PURPOSE_PERMISSION[purpose],
-  );
-  if (authorization.success) {
+  if (hasMemberPermission(memberRole, UPLOAD_PURPOSE_PERMISSION[purpose])) {
     return Result.ok(undefined);
   }
   return Result.err(new HandlerError({ status: 403, message: "Forbidden" }));

@@ -83,6 +83,50 @@ const FLUSHES_ITS_OWN_SEARCH_MARKS =
 // the baseline; it moves one out of it, and review of the row is the gate.
 export const ROOT_CONNECTION_DOORS = [
   {
+    id: "desktop-account-bootstrap",
+    capability: "Claiming desktop connection and document handoff requests",
+    owner: [
+      "apps/api/src/lib/auth.ts",
+      "apps/api/src/lib/business-registries/desktop/link-grants.ts",
+      "apps/api/src/lib/business-registries/desktop/link-grant-store.ts",
+      "apps/api/src/lib/desktop-edit-handoffs.ts",
+    ],
+    summary:
+      "Connection verification rows deny application-role access. These owners " +
+      "claim short-lived requests atomically, bind their stored account to the " +
+      "request, and bootstrap live member scope before document access.",
+    enforcement: {
+      kind: "import",
+      specifiers: [
+        "@/api/lib/business-registries/desktop/link-grants",
+        "@/api/lib/business-registries/desktop/link-grant-store",
+        "@/api/lib/desktop-edit-handoffs",
+      ],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/desktop-registry/grant.ts",
+          reason: "Creates the authenticated browser connection request.",
+        },
+        {
+          path: "apps/api/src/handlers/desktop-registry/redeem-link.ts",
+          reason: "Claims the native connection request.",
+        },
+        {
+          path: "apps/api/src/handlers/entities/desktop-edit-handoffs.ts",
+          reason: "Creates and claims document handoffs.",
+        },
+        {
+          path: "apps/api/src/lib/business-registries/desktop/link-grants.test.ts",
+          reason: "Exercises connection claims.",
+        },
+        {
+          path: "apps/api/src/lib/desktop-edit-handoffs.integration.test.ts",
+          reason: "Exercises document handoff claims.",
+        },
+      ],
+    },
+  },
+  {
     id: "root-connection-worker-hosts",
     capability:
       "Handing the owner connection to the queue workers a process hosts",
@@ -291,6 +335,18 @@ const MODEL_REQUEST_NAMES = [
 ] as const;
 
 export const OWNERSHIP = [
+  {
+    id: "api-test-memory-planner",
+    capability: "Measured API test memory and batch composition",
+    owner: ["apps/api/scripts/test-batch-plan.ts"],
+    summary:
+      "The planner owns measured peak RSS, conservative unknown weights and automatic process isolation. Batch plans must fit their execution-class memory caps before a test starts.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["apps/api/scripts/test-peak-rss.json"],
+      allowed: [],
+    },
+  },
   {
     id: "model-request-send-mode",
     capability: "Sending a request to an AI model",
@@ -719,6 +775,72 @@ export const OWNERSHIP = [
           path: "apps/api/src/scripts/polarity-system-one-compare.ts",
           reason:
             "Measures the raw model against the corpus with a pinned client; the floor is what it calibrates, so it reads below `decide`.",
+        },
+      ],
+    },
+  },
+  {
+    id: "member-authorization",
+    capability: "Deciding what a request's member role and credential may do",
+    owner: ["apps/api/src/lib/permission-authorization.ts"],
+    summary:
+      "Every permission decision reads the request's `AuthorizedMemberRole`: " +
+      "the member role together with the credential behind the request. A " +
+      "person's session spends the role; a credential minted with a narrower " +
+      "permission set spends only what both grant. `hasMemberPermission` and " +
+      "`hasManagementPermission` are the reads, and every handler context " +
+      "builder sets the credential once, so no handler-level check can fall " +
+      "back to the role's full authority. Reading the role table directly " +
+      "skips the credential.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@stll/permissions"],
+      names: ["roles", "isOrganizationManagementRole"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/member-roles.ts",
+          reason:
+            "Recognizes the role names the table defines; it decides no permission.",
+        },
+        {
+          path: "apps/api/src/lib/auth.ts",
+          reason:
+            "Configures the authentication library's organization roles from the same table.",
+        },
+        {
+          path: "apps/web/src/lib/auth-client.ts",
+          reason:
+            "Configures the web authentication client's organization roles from the same table.",
+        },
+        {
+          path: "packages/scripts/src/agent-session.ts",
+          reason:
+            "Local development tooling seeds an owner's key with the owner's full statement set.",
+        },
+        {
+          path: "apps/api/src/handlers/chat/tools/chat-tools.ts",
+          reason:
+            "Chat tools run only inside a person's own chat session, which carries no narrower credential.",
+        },
+        {
+          path: "apps/api/src/mcp/billing-tools.ts",
+          reason:
+            "`isVisibleToMemberRole` decides which tools are listed; each tool checks the request's effective authority when called.",
+        },
+        {
+          path: "apps/api/src/handlers/entities/join-folio-collab-room.ts",
+          reason:
+            "Re-checks the person's current membership role, read from the database, when a room is joined.",
+        },
+        {
+          path: "apps/api/src/lib/folio-collab-rooms.ts",
+          reason:
+            "Re-checks the person's current membership role, read from the database, when a room token is used.",
+        },
+        {
+          path: "apps/api/src/lib/entities/workspace-entity-write-access.ts",
+          reason:
+            "Re-checks the person's current membership role, read from the database, when a desktop or signing session is used.",
         },
       ],
     },

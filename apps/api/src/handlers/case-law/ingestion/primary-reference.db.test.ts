@@ -253,6 +253,8 @@ const replayerFor = async (
     .where(eq(caseLawDecisions.id, row.id));
   const adapter: SourceAdapter = {
     key: ADAPTER_KEYS.EU_ECJ,
+    documentStage: "inline",
+    observeDocumentStage: async ({ fetchPage }) => await fetchPage(),
     sourceFields: {
       status: "declared",
       fields: {},
@@ -270,6 +272,7 @@ const replayerFor = async (
       throw new Error("a replay must never fetch from the publisher");
     },
     reconciliation: {
+      revisionOf: (payload) => payload,
       firstSlice: "1970-01-01",
       sliceOf: () => "1970-01-01",
       nextSlice: () => null,

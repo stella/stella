@@ -1,3 +1,4 @@
+// parser-output-unchanged: TimeoutError reexport preserves the same class identity and behavior.
 import { panic, TaggedError } from "better-result";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
@@ -5,6 +6,7 @@ import { declareFailureClass } from "@stll/errors";
 import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
 
 export { FetchBoundaryError } from "@stll/errors";
+export { TimeoutError } from "@stll/concurrency/with-timeout";
 
 export type HandlerErrorStatusCode =
   | 400
@@ -622,14 +624,6 @@ export class ExtractionWorkerError extends TaggedError(
   mimeType: string;
   sizeBytes: number;
   termination: ExtractionWorkerTermination | null;
-}> {}
-
-/** Timeout waiting for a readiness probe, subprocess, or external resource. */
-export class TimeoutError extends TaggedError("TimeoutError")<{
-  message: string;
-  label: string;
-  timeoutMs?: number;
-  cause?: unknown;
 }> {}
 
 /**

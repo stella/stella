@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import listFiles from "@/api/handlers/entities/files/list";
 import listFolders from "@/api/handlers/entities/folders/list";
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const workspaceId = toSafeId<"workspace">("ws_organizer_lists");
@@ -28,7 +29,7 @@ const createContext = ({
   workspaceId,
   user: { id: userId },
   session: { activeOrganizationId: organizationId },
-  memberRole: { role: "owner" },
+  memberRole: sessionMemberRole("owner"),
   query,
   safeDb: async <T>() => Result.ok(asTestRaw<T>(rows)),
   request: new Request("https://example.test/v1/entities/ws/files"),

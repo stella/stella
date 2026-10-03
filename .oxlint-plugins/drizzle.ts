@@ -1,7 +1,12 @@
 import type { CreateOnceRule } from "@oxlint/plugins";
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getPropertyName } from "./utils.ts";
+import {
+  filenameForContext,
+  getPropertyName,
+  isAstNode,
+  isIdentifier,
+} from "./utils.ts";
 
 // Require a filter on the mutation's own fluent chain. An unrelated `.where`
 // before the mutation or on an enclosing call cannot filter its rows. This
@@ -119,6 +124,64 @@ const rule = (mutation: "delete" | "update"): CreateOnceRule => ({
 export default eslintCompatPlugin({
   meta: { name: "drizzle" },
   rules: {
+    "no-direct-entity-reparent": {
+      meta: {
+        type: "problem",
+        messages: {
+          useMoveOwner:
+            "Reparent existing entities through moveEntityHandler, which locks the matter before checking ancestry. Direct parentId updates bypass that invariant.",
+        },
+      },
+      createOnce(context) {
+        return {
+          CallExpression(node) {
+            const filename = filenameForContext(context);
+            if (
+              filename.endsWith(".test.ts") ||
+              filename.endsWith(".test.tsx") ||
+              filename.includes("/apps/api/src/tests/") ||
+              filename.endsWith("/apps/api/src/handlers/entities/move.ts")
+            ) {
+              return;
+            }
+            const callee = node.callee;
+            if (
+              callee.type !== "MemberExpression" ||
+              getPropertyName(callee.property) !== "set"
+            ) {
+              return;
+            }
+            const update = callee.object;
+            if (
+              update.type !== "CallExpression" ||
+              update.callee.type !== "MemberExpression" ||
+              getPropertyName(update.callee.property) !== "update" ||
+              !isIdentifier(update.arguments.at(0), "entities")
+            ) {
+              return;
+            }
+            const values = node.arguments.at(0);
+            if (
+              !isAstNode(values) ||
+              values.type !== "ObjectExpression" ||
+              !Array.isArray(values.properties)
+            ) {
+              return;
+            }
+            if (
+              values.properties.some(
+                (property) =>
+                  isAstNode(property) &&
+                  property.type === "Property" &&
+                  getPropertyName(property.key) === "parentId",
+              )
+            ) {
+              context.report({ node, messageId: "useMoveOwner" });
+            }
+          },
+        };
+      },
+    },
     "enforce-delete-with-where": {
       ...rule("delete"),
     },

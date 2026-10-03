@@ -1,3 +1,5 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
@@ -997,6 +999,7 @@ const fetchDetail = async (
   let response: Response;
   try {
     response = await fetchPublisher(url, {
+      fetchStage: "document",
       adapterKey: ADAPTER_KEYS.PL_COURTS,
       signal,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -1821,6 +1824,7 @@ export const listPlCourtsDayPage = async ({
   }).toString()}`;
 
   const response = await fetchPublisher(url, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.PL_COURTS,
     signal,
     timeoutMs: SLICE_LIST_TIMEOUT_MS,
@@ -2499,6 +2503,7 @@ const PL_COURTS_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const plCourtsAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_COURTS,
   sourceSurfaces: PL_COURTS_SOURCE_SURFACES,
   sourceFields: {
@@ -2522,6 +2527,7 @@ export const plCourtsAdapter = defineSourceAdapter({
           sortingDirection: "DESC",
         }).toString()}`,
         {
+          fetchStage: "listing",
           adapterKey: ADAPTER_KEYS.PL_COURTS,
           signal,
           timeoutMs: ADAPTER_TIMEOUT.LIST,
@@ -2559,6 +2565,37 @@ export const plCourtsAdapter = defineSourceAdapter({
    * against what is held.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            id: payload["id"],
+            href: payload["href"],
+            courtType: payload["courtType"],
+            courtCases: payload["courtCases"],
+            judgmentType: payload["judgmentType"],
+            judgmentDate: payload["judgmentDate"],
+            judges: payload["judges"],
+            textContent: payload["textContent"],
+            keywords: payload["keywords"],
+            division: payload["division"],
+            chambers: payload["chambers"],
+            personnelType: payload["personnelType"],
+            judgmentForm: payload["judgmentForm"],
+            source: payload["source"],
+            courtReporters: payload["courtReporters"],
+            decision: payload["decision"],
+            summary: payload["summary"],
+            legalBases: payload["legalBases"],
+            referencedRegulations: payload["referencedRegulations"],
+            referencedCourtCases: payload["referencedCourtCases"],
+            receiptDate: payload["receiptDate"],
+            meansOfAppeal: payload["meansOfAppeal"],
+            judgmentResult: payload["judgmentResult"],
+            lowerCourtJudgments: payload["lowerCourtJudgments"],
+            dissentingOpinions: payload["dissentingOpinions"],
+          }
+        : null,
     firstSlice: PL_COURTS_FIRST_SLICE,
     ...plCourtsDaySlices.walk,
     tipWindowDays: PL_COURTS_TIP_WINDOW_DAYS,

@@ -1,3 +1,5 @@
+// parser-output-unchanged: document-fetch routing metadata preserves parsed decision fields.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 
 import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";
@@ -163,6 +165,8 @@ export const skCourtsDocumentFetch: SkDocumentFetch = async (
   const fetched = await Result.tryPromise({
     try: async () =>
       await fetchPublisher(target.value, {
+        fetchStage: "document",
+        expectedContentType: "pdf",
         adapterKey: ADAPTER_KEYS.SK_COURTS,
         redirect: "error",
         signal,
@@ -378,6 +382,7 @@ const fetchDetail = async (
 ): Promise<SkDetailItem | null> => {
   const url = `${BASE_URL}/${encodeURIComponent(guid)}`;
   const response = await fetchPublisher(url, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -1036,6 +1041,7 @@ const listSkCourtsDayPage = async ({
   }).toString()}`;
 
   const response = await fetchPublisher(url, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     signal,
     timeoutMs: LIST_TIMEOUT_MS,
@@ -1735,6 +1741,7 @@ const SK_COURTS_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const skCourtsAdapter = defineSourceAdapter({
+  documentStage: "deferred",
   key: ADAPTER_KEYS.SK_COURTS,
   collectionEnrichment: createSkCollectionConnector({ status: "disabled" }),
   sourceSurfaces: SK_COURTS_SOURCE_SURFACES,
@@ -1764,6 +1771,7 @@ export const skCourtsAdapter = defineSourceAdapter({
     const response = await fetchPublisher(
       `${BASE_URL}?${new URLSearchParams({ page: "0", size: "1" }).toString()}`,
       {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.SK_COURTS,
         signal,
         headers: { Accept: "application/json" },
@@ -1792,6 +1800,20 @@ export const skCourtsAdapter = defineSourceAdapter({
    * against what is held.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            guid: payload["guid"],
+            spisovaZnacka: payload["spisovaZnacka"],
+            identifikacneCislo: payload["identifikacneCislo"],
+            sud: payload["sud"],
+            sudca: payload["sudca"],
+            datumVydania: payload["datumVydania"],
+            formaRozhodnutia: payload["formaRozhodnutia"],
+            povaha: payload["povaha"],
+          }
+        : null,
     firstSlice: SK_COURTS_FIRST_SLICE,
     ...skCourtsDaySlices.walk,
     tipWindowDays: SK_COURTS_TIP_WINDOW_DAYS,

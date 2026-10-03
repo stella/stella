@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
-const CATALOG = "packages/cli/capability-catalog.json";
+const CAPABILITIES = "packages/cli/capabilities";
 const SNAPSHOT = "packages/cli/src/generated/registry-snapshot.json";
 const CODEGEN = "packages/cli/src/codegen.ts";
 const CHECKER = "scripts/check-cli-runtime-generation.ts";
@@ -62,23 +62,14 @@ const addProbe = (
   return lines.join("\n");
 };
 
-const addCapability = (
-  catalog: string,
-  { capabilityId, position }: (typeof PROBES)[number],
-) => {
-  const entries: unknown = JSON.parse(catalog);
-  if (!Array.isArray(entries)) {
-    throw new TypeError("Capability catalog is not an array");
-  }
-  const lines = catalog.split("\n");
-  const starts = lines.flatMap((line, index) =>
-    line.startsWith('{"id":') ? [index] : [],
-  );
-  expect(starts.length).toBe(entries.length);
-  const insertion = starts.at(position);
-  if (insertion === undefined) {
-    throw new TypeError("Missing capability insertion anchor");
-  }
+// Each capability is its own committed shard, so a probe adds one new file.
+const capabilityShard = ({ capabilityId }: (typeof PROBES)[number]) =>
+  `${CAPABILITIES}/${capabilityId}.json`;
+
+const addCapability = (checkout: string, probe: (typeof PROBES)[number]) => {
+  const { capabilityId } = probe;
+  const shard = path.join(checkout, capabilityShard(probe));
+  expect(existsSync(shard)).toBe(false);
   const capability = {
     id: capabilityId,
     description: "List synthetic capability merge probes.",
@@ -92,8 +83,7 @@ const addCapability = (
     inputSchema: { query: { type: "object", properties: {} } },
     mcp: { type: "capability", reason: "billing_admin" },
   };
-  lines.splice(insertion, 0, `${JSON.stringify(capability)},`);
-  return lines.join("\n");
+  writeFileSync(shard, `${JSON.stringify(capability)}\n`);
 };
 
 const runtimeBytes = (checkout: string) =>
@@ -171,23 +161,20 @@ test.skipIf(!process.env["CI"])(
         );
         const source = path.join(checkout, SNAPSHOT);
         writeFileSync(source, addProbe(readFileSync(source, "utf-8"), probe));
-        const catalog = path.join(checkout, CATALOG);
-        writeFileSync(
-          catalog,
-          addCapability(readFileSync(catalog, "utf-8"), probe),
-        );
+        addCapability(checkout, probe);
+        const shard = capabilityShard(probe);
         await generate(checkout);
         const bytes = runtimeBytes(checkout);
         expect(bytes[OUTPUTS[0]]).toContain(probe.name);
         expect(bytes[OUTPUTS[1]]).toContain(probe.name);
         expect(bytes[OUTPUTS[0]]).toContain(probe.capabilityId);
-        await succeed(["git", "add", SNAPSHOT, CATALOG], checkout);
+        await succeed(["git", "add", SNAPSHOT, shard], checkout);
         const staged = await succeed(
           ["git", "diff", "--cached", "--name-only"],
           checkout,
         );
         expect(staged.split("\n").toSorted()).toEqual(
-          [SNAPSHOT, CATALOG].toSorted(),
+          [SNAPSHOT, shard].toSorted(),
         );
         await succeed(
           ["git", "commit", "--quiet", "-m", "test: add runtime merge probe"],

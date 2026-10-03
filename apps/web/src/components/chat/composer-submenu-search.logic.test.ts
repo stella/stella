@@ -1,11 +1,108 @@
 import { describe, expect, test } from "bun:test";
 
+import { typedCharacter } from "@stll/ui/typed-character";
+
 import {
   isMenuNavigationKey,
   isTabPick,
   isTriggerErase,
+  POPUP_KEY_ROUTE,
+  routePopupKey,
   scheduleSearchFocus,
 } from "./composer-submenu-search.logic";
+
+type KeystrokeFields = {
+  altGraph?: boolean;
+  altKey?: boolean;
+  ctrlKey?: boolean;
+  isComposing?: boolean;
+  key: string;
+  metaKey?: boolean;
+};
+
+// Realistic keydown fields, read through typedCharacter as the popup does.
+const routeKeystroke = ({
+  hasTrigger = true,
+  value = "e",
+  ...fields
+}: KeystrokeFields & { hasTrigger?: boolean; value?: string }) =>
+  routePopupKey({
+    character: typedCharacter({
+      altKey: fields.altKey ?? false,
+      ctrlKey: fields.ctrlKey ?? false,
+      getModifierState: (modifier) =>
+        modifier === "AltGraph" && (fields.altGraph ?? false),
+      isComposing: fields.isComposing ?? false,
+      key: fields.key,
+      metaKey: fields.metaKey ?? false,
+    }),
+    hasTrigger,
+    key: fields.key,
+    value,
+  });
+
+describe("routePopupKey", () => {
+  test("sends every typed character and deletion back to the field", () => {
+    for (const key of ["e", "E", "1", "@", "ř", "ß", "ع", "😀"]) {
+      expect(routeKeystroke({ key })).toBe(POPUP_KEY_ROUTE.search);
+    }
+    // macOS Option types "@" on Czech, Slovak and German layouts.
+    expect(routeKeystroke({ altKey: true, key: "@" })).toBe(
+      POPUP_KEY_ROUTE.search,
+    );
+    // Windows AltGr arrives as Ctrl+Alt, with or without the AltGraph state.
+    expect(routeKeystroke({ altKey: true, ctrlKey: true, key: "@" })).toBe(
+      POPUP_KEY_ROUTE.search,
+    );
+    expect(
+      routeKeystroke({
+        altGraph: true,
+        altKey: true,
+        ctrlKey: true,
+        key: "@",
+      }),
+    ).toBe(POPUP_KEY_ROUTE.search);
+    for (const key of ["Backspace", "Delete"]) {
+      expect(routeKeystroke({ key })).toBe(POPUP_KEY_ROUTE.search);
+    }
+  });
+
+  test("Backspace with an empty query erases the trigger, as in the field", () => {
+    expect(routeKeystroke({ key: "Backspace", value: "" })).toBe(
+      POPUP_KEY_ROUTE.eraseTrigger,
+    );
+    // The (+) submenus have no trigger to erase.
+    expect(
+      routeKeystroke({ hasTrigger: false, key: "Backspace", value: "" }),
+    ).toBe(POPUP_KEY_ROUTE.search);
+  });
+
+  test("leaves navigation, Space, command chords and IME to the menu", () => {
+    for (const key of [
+      "ArrowDown",
+      "ArrowUp",
+      "Enter",
+      "Escape",
+      "Tab",
+      "Home",
+      " ",
+      "Shift",
+      "F2",
+      "Dead",
+    ]) {
+      expect(routeKeystroke({ key })).toBe(POPUP_KEY_ROUTE.menu);
+    }
+    expect(routeKeystroke({ key: "a", metaKey: true })).toBe(
+      POPUP_KEY_ROUTE.menu,
+    );
+    expect(routeKeystroke({ ctrlKey: true, key: "a" })).toBe(
+      POPUP_KEY_ROUTE.menu,
+    );
+    expect(routeKeystroke({ isComposing: true, key: "a" })).toBe(
+      POPUP_KEY_ROUTE.menu,
+    );
+  });
+});
 
 describe("composer submenu search interactions", () => {
   test("keeps menu navigation keys available to the menu", () => {

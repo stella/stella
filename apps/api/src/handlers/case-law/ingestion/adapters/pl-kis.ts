@@ -1,6 +1,5 @@
-import { Result, panic } from "better-result";
-
-import { readCappedBytes } from "@stll/skills/streaming";
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
  * Polish tax interpretations and rulings (EUREKA) adapter.
  *
@@ -47,6 +46,11 @@ import { readCappedBytes } from "@stll/skills/streaming";
  * months (`undated|<boundary id>|<page>`) and the ledger holds it as a slice
  * of its own, ahead of the first month.
  */
+
+import { Result, panic } from "better-result";
+
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
+import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
@@ -532,7 +536,13 @@ type EurekaResponse = {
 const fetchEureka = async (
   rawUrl: string,
   init: { method?: string; headers: Record<string, string>; body?: string },
-  signal?: AbortSignal,
+  {
+    fetchStage,
+    signal,
+  }: {
+    fetchStage: DocumentFetchStage;
+    signal?: AbortSignal | undefined;
+  },
 ): Promise<EurekaResponse> => {
   const target = restrictOutboundUrl({
     hostPolicy: PL_KIS_HOST_POLICY,
@@ -550,6 +560,7 @@ const fetchEureka = async (
       redirect: "error",
     },
     {
+      fetchStage,
       adapterKey: ADAPTER_KEYS.PL_KIS,
       signal,
       timeoutMs: REQUEST_TIMEOUT_MS,
@@ -640,7 +651,7 @@ const search = async (
       },
       body: plKisListingBody(query),
     },
-    signal,
+    { fetchStage: "listing", signal },
   );
   if (!response.ok || response.bytes === null) {
     return Result.err(
@@ -1358,7 +1369,7 @@ const fetchDetailText = async (
   const response = await fetchEureka(
     detailUrl(id),
     { headers: { Accept: "application/json" } },
-    signal,
+    { fetchStage: "document", signal },
   );
   if (response.status === 404 || response.status === 410) {
     return Result.ok(undefined);
@@ -1383,7 +1394,7 @@ const fetchPdf = async (
   const response = await fetchEureka(
     pdfUrl(id),
     { headers: { Accept: "application/pdf" } },
-    signal,
+    { fetchStage: "document", signal },
   );
   if (response.status === 404 || response.status === 410) {
     return Result.ok(undefined);
@@ -2341,6 +2352,7 @@ const plKisTotalCount = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const plKisAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_KIS,
   language: LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,
@@ -2363,6 +2375,37 @@ export const plKisAdapter = defineSourceAdapter({
   getTotalCount: plKisTotalCount,
 
   reconciliation: {
+    // The declared listing columns hold record content, without result coordinates.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            ID_INFORMACJI: payload["ID_INFORMACJI"],
+            KATEGORIA_INFORMACJI: payload["KATEGORIA_INFORMACJI"],
+            SYG: payload["SYG"],
+            DT_WYD: payload["DT_WYD"],
+            TEZA: payload["TEZA"],
+            STATUS_INFORMACJI: payload["STATUS_INFORMACJI"],
+            DATA_PUBLIKACJI: payload["DATA_PUBLIKACJI"],
+            AUTOR: payload["AUTOR"],
+            SLOWA_KLUCZOWE: payload["SLOWA_KLUCZOWE"],
+            PRZEPISY: payload["PRZEPISY"],
+            ZAGADNIENIA: payload["ZAGADNIENIA"],
+            INFORMACJA_ZMIENIANA: payload["INFORMACJA_ZMIENIANA"],
+            MIEJ_PUB: payload["MIEJ_PUB"],
+            INN_ZROD: payload["INN_ZROD"],
+            RODZAJ_DECYZJI: payload["RODZAJ_DECYZJI"],
+            DAT_WAZ_OD: payload["DAT_WAZ_OD"],
+            DAT_WAZ_DO: payload["DAT_WAZ_DO"],
+            STAN_PRAW: payload["STAN_PRAW"],
+            NOMENKLATURA_SCALONA: payload["NOMENKLATURA_SCALONA"],
+            KLASYFIKACJA_PKWIU: payload["KLASYFIKACJA_PKWIU"],
+            KLASYFIKACJA_PKOB: payload["KLASYFIKACJA_PKOB"],
+            RODZAJ_WYROBU_AKCYZOWEGO: payload["RODZAJ_WYROBU_AKCYZOWEGO"],
+            DATA_REJESTRACJI: payload["DATA_REJESTRACJI"],
+            KOMENTARZE_BIP: payload["KOMENTARZE_BIP"],
+            KOM_BIP_OPIS: payload["KOM_BIP_OPIS"],
+          }
+        : null,
     firstSlice: PL_KIS_FIRST_SLICE,
     sliceOf,
     nextSlice: (slice) => plKisNextSlice(slice),

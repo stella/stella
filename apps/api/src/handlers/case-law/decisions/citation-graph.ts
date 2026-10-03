@@ -230,8 +230,14 @@ const DIRECTION_SPECS = {
 } as const satisfies Record<CitationDirection, DirectionSpec>;
 
 /**
- * A row the reader may see: its far end is a decision from a source that
- * allows redistribution, or (outgoing only) there is no far end to protect.
+ * A row the reader may see: its far end is a held decision from a source that
+ * allows redistribution, published rather than listing-only, in a public
+ * country; or (outgoing only) there is no far end to protect.
+ *
+ * The one gate for every related-decision read in this module: the list, the
+ * summary and the leading rows all filter through it, so a new disposition
+ * reaches them together. `case-law-public-route-invariants.test.ts` holds the
+ * module to it.
  */
 const visibleFor = ({
   keepsUnresolved,
@@ -661,8 +667,9 @@ export const listLeadingCitationsHandler = async ({
       and(
         eq(spec.anchor, decisionId),
         precedentOnly,
-        inArray(relatedDecision.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
-        redistributableCaseLawSourceFor(relatedSource.descriptor),
+        // Before ranking, so a hidden decision cannot take a leader's place.
+        // Only a held decision can lead, whatever the direction keeps.
+        visibleFor({ keepsUnresolved: false, related: spec.related }),
       ),
     )
     .as("leading_mentions");

@@ -20,6 +20,7 @@ import type { UsageEntitlementStatus } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -201,7 +202,7 @@ describe("get-entitlement handler", () => {
 
   const contextFor = (role: "owner" | "member"): EntitlementCtx =>
     createTestHandlerContext<EntitlementCtx>({
-      memberRole: { role },
+      memberRole: sessionMemberRole(role),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userAdmin },
       safeDb: asTestRaw<SafeDb>(

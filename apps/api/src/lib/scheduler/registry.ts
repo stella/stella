@@ -4,6 +4,14 @@ import {
   sweepActionCostRecords,
 } from "@/api/lib/scheduler/tasks/action-cost-retention";
 import {
+  BACKFILL_AGENT_CLIENT_STORAGE_TASK,
+  backfillAgentClientStorage,
+} from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
+import {
+  BACKFILL_HEARTBEAT_TASK,
+  emitBackfillHeartbeats,
+} from "@/api/lib/scheduler/tasks/backfill-heartbeat";
+import {
   RECONCILE_BILINGUAL_RUNS_TASK,
   reconcileBilingualRuns,
 } from "@/api/lib/scheduler/tasks/bilingual-run-reconcile";
@@ -162,6 +170,8 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [BACKFILL_AGENT_CLIENT_STORAGE_TASK]: backfillAgentClientStorage,
+  [BACKFILL_HEARTBEAT_TASK]: emitBackfillHeartbeats,
   "scheduler.noop": noopTask,
   "scheduler.dispatchBullMq": createBullMqDispatchTask(),
   [INFO_SOUD_SYNC_TRACKED_CASES_TASK]: syncInfoSoudTrackedCases,

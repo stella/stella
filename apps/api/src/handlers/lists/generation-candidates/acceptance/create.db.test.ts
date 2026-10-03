@@ -24,6 +24,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -326,7 +327,7 @@ const runAcceptance = async (
         runId: seeded.runId,
         candidateId: seeded.candidateId,
       },
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       recordAuditEvent: noAuditRows,
       request: new Request("https://example.test/v1/lists/candidates/accept", {
         method: "POST",

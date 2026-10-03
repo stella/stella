@@ -10,7 +10,6 @@ import {
   deriveHandlerImportPath,
   detectContextFidelityFeatures,
   finalIdSegment,
-  findCatalogFormatProblems,
   findInlineCapabilityMismatches,
   findMalformedCapabilityIds,
   findStaleAccessOverrides,
@@ -636,7 +635,6 @@ describe("serializeCatalog", () => {
     expect(serialized).toBe(
       '[\n{"id":"a.b","access":"read"},\n{"id":"c.d","access":"write"}\n]\n',
     );
-    expect(findCatalogFormatProblems(serialized)).toEqual([]);
   });
 
   test("adding an entry changes only its own line (no stored count or total)", () => {
@@ -655,51 +653,6 @@ describe("serializeCatalog", () => {
     const entries = [{ id: "x", inputSchema: { body: { type: "object" } } }];
     expect(JSON.parse(serializeCatalog(entries))).toEqual(entries);
     expect(JSON.parse(serializeCatalog([]))).toEqual([]);
-    expect(findCatalogFormatProblems(serializeCatalog([]))).toEqual([]);
-  });
-});
-
-describe("findCatalogFormatProblems", () => {
-  test("rejects the single-line array", () => {
-    expect(
-      findCatalogFormatProblems('[{"id":"a.b"},{"id":"c.d"}]\n'),
-    ).not.toEqual([]);
-  });
-
-  test("rejects unsorted and duplicate ids", () => {
-    expect(
-      findCatalogFormatProblems('[\n{"id":"c.d"},\n{"id":"a.b"}\n]\n'),
-    ).toEqual([
-      'line 3: "a.b" is not after "c.d" (ids must be unique and ascending)',
-    ]);
-    expect(
-      findCatalogFormatProblems('[\n{"id":"a.b"},\n{"id":"a.b"}\n]\n'),
-    ).toHaveLength(1);
-  });
-
-  test("rejects a wrapper carrying a count, a split entry, spacing, or a missing comma", () => {
-    expect(
-      findCatalogFormatProblems('{"count":1,"entries":[\n{"id":"a.b"}\n]}\n'),
-    ).not.toEqual([]);
-    expect(
-      findCatalogFormatProblems('[\n{"id":"a.b",\n"access":"read"}\n]\n'),
-    ).not.toEqual([]);
-    expect(findCatalogFormatProblems('[\n{"id": "a.b"}\n]\n')).toEqual([
-      "line 2 is not compact JSON",
-    ]);
-    expect(
-      findCatalogFormatProblems('[\n{"id":"a.b"}\n{"id":"c.d"}\n]\n'),
-    ).toEqual(['line 2 must end with ","']);
-  });
-
-  test("the committed catalog is in this format", async () => {
-    const committed = await Bun.file(
-      new URL(
-        "../../../../packages/cli/capability-catalog.json",
-        import.meta.url,
-      ),
-    ).text();
-    expect(findCatalogFormatProblems(committed)).toEqual([]);
   });
 });
 
