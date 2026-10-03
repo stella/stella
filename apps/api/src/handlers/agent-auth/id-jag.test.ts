@@ -434,7 +434,9 @@ describe("agent-auth ID-JAG new identity (auto-provision)", () => {
     expect(delegations.length).toBe(1);
     expect(delegations.at(0)?.userId).toBe(String(users.at(0)?.id));
     const delegation = delegations.at(0);
-    if (!delegation) {panic("Expected the created delegation");}
+    if (!delegation) {
+      panic("Expected the created delegation");
+    }
     const createdOrganization = (
       await rootDb
         .select({ slug: organization.slug })
