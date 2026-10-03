@@ -1839,6 +1839,12 @@ jobs:
           bun scripts/chat-fixture-guard.ts --self-test
           bun scripts/chat-fixture-guard.ts
 
+      - name: Transfer timeout and fixed read guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: |
+          bun run --cwd packages/scripts test ../../scripts/transfer-read-guard.test.ts
+          bun scripts/transfer-read-guard.ts
+
       - name: Model catalog snapshot drift check
         if: >-
           needs.ci-plan.outputs.package_checks_required == 'true'
