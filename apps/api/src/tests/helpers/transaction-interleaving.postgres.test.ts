@@ -59,6 +59,7 @@ if (!databaseUrl || !runPostgres) {
     test("finds an unlocked count cap violation and preserves the locked cap in every schedule", async () => {
       await withFixture(async ({ rows, reset, readState }) => {
         const runCap = async (mode: "unlocked" | "locked") => {
+          let invariantCalls = 0;
           const counts = { a: 0, b: 0 };
           const participant = (actor: "a" | "b", id: number) => ({
             steps: [
@@ -90,13 +91,14 @@ if (!databaseUrl || !runPostgres) {
               },
             ],
           });
-          return await withInterleaving({
+          const results = await withInterleaving({
             databaseUrl,
             a: participant("a", 1),
             b: participant("b", 2),
             reset,
             readState,
             invariant: ({ outcomes, state }) => {
+              invariantCalls += 1;
               expect(outcomes).toEqual({
                 a: { status: "committed" },
                 b: { status: "committed" },
@@ -106,6 +108,8 @@ if (!databaseUrl || !runPostgres) {
               }
             },
           });
+          expect(invariantCalls).toBe(results.length);
+          return results;
         };
         const red = await runCap("unlocked");
         expect(red).toHaveLength(20);
@@ -126,6 +130,7 @@ if (!databaseUrl || !runPostgres) {
     test("finds a stale status write and preserves conditional transitions in every schedule", async () => {
       await withFixture(async ({ rows, reset, readState }) => {
         const runStatus = async (mode: "unconditional" | "cas") => {
+          let invariantCalls = 0;
           const observed = { a: "", b: "" };
           const participant = (actor: "a" | "b", status: string) => ({
             steps: [
@@ -158,13 +163,14 @@ if (!databaseUrl || !runPostgres) {
               },
             ],
           });
-          return await withInterleaving({
+          const results = await withInterleaving({
             databaseUrl,
             a: participant("a", "approved"),
             b: participant("b", "cancelled"),
             reset,
             readState,
             invariant: ({ outcomes, state }) => {
+              invariantCalls += 1;
               expect(outcomes).toEqual({
                 a: { status: "committed" },
                 b: { status: "committed" },
@@ -174,6 +180,8 @@ if (!databaseUrl || !runPostgres) {
               }
             },
           });
+          expect(invariantCalls).toBe(results.length);
+          return results;
         };
         const red = await runStatus("unconditional");
         expect(red).toHaveLength(20);
@@ -185,6 +193,7 @@ if (!databaseUrl || !runPostgres) {
     }, 30_000);
 
     test("both distinct transactions are open before the first step of every schedule", async () => {
+      let invariantCalls = 0;
       const snapshots: { pid: number; xid: string }[][] = [];
       const participant = {
         steps: [
@@ -213,6 +222,7 @@ if (!databaseUrl || !runPostgres) {
         },
         readState: async () => snapshots,
         invariant: ({ sessions, state, outcomes }) => {
+          invariantCalls += 1;
           expect(sessions.a.pid).not.toBe(sessions.b.pid);
           expect(sessions.a.xid).not.toBe(sessions.b.xid);
           const first = state.at(0) ?? panic("Overlap probe missing");
@@ -225,6 +235,70 @@ if (!databaseUrl || !runPostgres) {
         },
       });
       expect(results).toHaveLength(6);
+      expect(invariantCalls).toBe(results.length);
+    }, 10_000);
+
+    test("a failing invariant rejects the harness and stops schedule enumeration", async () => {
+      const refusal = new FixtureRefusal({ message: "Invariant refused" });
+      let invariantCalls = 0;
+      let resets = 0;
+      await expect(
+        withInterleaving({
+          databaseUrl,
+          a: { steps: [] },
+          b: { steps: [] },
+          reset: async () => {
+            resets += 1;
+          },
+          readState: async () => null,
+          invariant: async () => {
+            invariantCalls += 1;
+            throw refusal;
+          },
+        }),
+      ).rejects.toBe(refusal);
+      expect(invariantCalls).toBe(1);
+      expect(resets).toBe(1);
+    });
+
+    test("a slow server query is never reported as blocked without a lock waiter", async () => {
+      let sleeps = 0;
+      const results = await withInterleaving({
+        databaseUrl,
+        a: {
+          steps: [
+            {
+              name: "sleep",
+              run: async (tx) => {
+                await tx.execute(sql`SELECT pg_sleep(0.2)`);
+                sleeps += 1;
+              },
+            },
+          ],
+        },
+        b: {
+          steps: [
+            {
+              name: "probe",
+              run: async (tx) => await tx.execute(sql`SELECT 1`),
+            },
+          ],
+        },
+        reset: async () => {
+          sleeps = 0;
+        },
+        readState: async () => sleeps,
+        invariant: () => {},
+      });
+      expect(results).toHaveLength(6);
+      for (const { blocked, outcomes, state } of results) {
+        expect(state).toBe(1);
+        expect(blocked).toEqual([]);
+        expect(outcomes).toEqual({
+          a: { status: "committed" },
+          b: { status: "committed" },
+        });
+      }
     }, 10_000);
 
     test("a real deadlock finishes within the deadline with one recorded victim", async () => {
@@ -382,24 +456,103 @@ if (!databaseUrl || !runPostgres) {
       });
     }, 10_000);
 
-    test("a stalled application step cannot hang the harness", async () => {
-      const stalled = Promise.withResolvers<undefined>();
-      const started = performance.now();
-      await expect(
-        withInterleaving({
-          databaseUrl,
-          timeoutMs: 300,
-          a: {
-            steps: [{ name: "stall", run: async () => await stalled.promise }],
-          },
-          b: { steps: [] },
-          reset: async () => {},
-          readState: async () => null,
-          invariant: () => panic("Stalled schedule must not complete"),
-        }),
-      ).rejects.toBeInstanceOf(InterleavingTimeout);
-      stalled.resolve(undefined);
-      expect(performance.now() - started).toBeLessThan(2000);
+    test("a timed-out server query is cancelled before releasing its caller-owned client", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const connection = openClient();
+        let stepSettled = false;
+        await expect(
+          withInterleaving({
+            databaseUrl,
+            timeoutMs: 500,
+            a: {
+              transaction: connection.db.transaction.bind(connection.db),
+              steps: [
+                {
+                  name: "query",
+                  run: async (tx) => {
+                    try {
+                      await tx.execute(
+                        sql`SET LOCAL statement_timeout = '10s'`,
+                      );
+                      await tx.execute(sql`SELECT pg_sleep(10)`);
+                    } finally {
+                      stepSettled = true;
+                    }
+                  },
+                },
+              ],
+            },
+            b: { steps: [] },
+            reset: async () => {},
+            readState: async () => null,
+            invariant: () => panic("Timed-out query must not complete"),
+          }),
+        ).rejects.toBeInstanceOf(InterleavingTimeout);
+        expect(stepSettled).toBe(true);
+        expect(
+          (await connection.db.execute(sql`SELECT 1 AS value`)).at(0)?.[
+            "value"
+          ],
+        ).toBe(1);
+      });
+    }, 5000);
+
+    test("a timed-out step settles cancellation before releasing caller-owned transactions", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const connections = { a: openClient(), b: openClient() };
+        let activeCallbacks = 0;
+        let cancelledStepSettled = false;
+        const transaction =
+          (actor: "a" | "b") =>
+          async <T>(work: (tx: Transaction) => Promise<T>) =>
+            await connections[actor].db.transaction(async (tx) => {
+              activeCallbacks += 1;
+              try {
+                return await work(tx);
+              } finally {
+                activeCallbacks -= 1;
+              }
+            });
+        const started = performance.now();
+        await expect(
+          withInterleaving({
+            databaseUrl,
+            timeoutMs: 500,
+            a: {
+              transaction: transaction("a"),
+              steps: [
+                {
+                  name: "stall",
+                  run: async (_tx, signal) => {
+                    const cancelled = Promise.withResolvers<undefined>();
+                    signal.addEventListener(
+                      "abort",
+                      () => cancelled.resolve(undefined),
+                      { once: true },
+                    );
+                    await cancelled.promise;
+                    await Bun.sleep(50);
+                    cancelledStepSettled = true;
+                    signal.throwIfAborted();
+                  },
+                },
+              ],
+            },
+            b: { transaction: transaction("b"), steps: [] },
+            reset: async () => {},
+            readState: async () => null,
+            invariant: () => panic("Stalled schedule must not complete"),
+          }),
+        ).rejects.toBeInstanceOf(InterleavingTimeout);
+        expect(cancelledStepSettled).toBe(true);
+        expect(activeCallbacks).toBe(0);
+        expect(performance.now() - started).toBeLessThan(2000);
+        for (const { db } of Object.values(connections)) {
+          expect(
+            (await db.execute(sql`SELECT 1 AS value`)).at(0)?.["value"],
+          ).toBe(1);
+        }
+      });
     }, 5000);
   });
 }

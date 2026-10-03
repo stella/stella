@@ -1,13 +1,19 @@
 import { panic, Result, TaggedError } from "better-result";
 import { sql } from "drizzle-orm";
 
+import { withTimeout } from "@stll/concurrency/with-timeout";
+
 import type { Transaction } from "@/api/db/root";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 type Actor = "a" | "b";
 export type InterleavingToken = `${Actor}.${string}`;
-type Step = { name: string; run: (tx: Transaction) => Promise<unknown> };
+type Step = {
+  name: string;
+  /** Application waits must consume the signal and settle after cancellation. */
+  run: (tx: Transaction, signal: AbortSignal) => Promise<unknown>;
+};
 type Participant = {
   steps: readonly Step[];
   transaction?: <T>(run: (tx: Transaction) => Promise<T>) => Promise<T>;
@@ -29,6 +35,8 @@ export type InterleavingResult<State> = {
 export class InterleavingTimeout extends TaggedError("InterleavingTimeout")<{
   message: string;
 }> {}
+
+const CANCELLATION_TIMEOUT_MS = 2000;
 
 type InterleavingOptions<State> = {
   databaseUrl: string;
@@ -132,16 +140,17 @@ export const withInterleaving = async <State>({
         const executed: InterleavingToken[] = [];
         const blocked: InterleavingToken[] = [];
         const outcomes: Partial<Record<Actor, TransactionOutcome>> = {};
+        const controller = new AbortController();
+        const activePids = new Set<number>();
+        const stepTasks: Promise<unknown>[] = [];
         const timeout = Promise.withResolvers<never>();
-        const timer = setTimeout(
-          () =>
-            timeout.reject(
-              new InterleavingTimeout({
-                message: "Interleaving exceeded its deadline",
-              }),
-            ),
-          timeoutMs,
-        );
+        const timer = setTimeout(() => {
+          const error = new InterleavingTimeout({
+            message: "Interleaving exceeded its deadline",
+          });
+          controller.abort(error);
+          timeout.reject(error);
+        }, timeoutMs);
         const bounded = <T>(work: PromiseLike<T>) =>
           Promise.race([work, timeout.promise]);
         let stopped = false;
@@ -165,9 +174,10 @@ export const withInterleaving = async <State>({
                     xid: sql<string>`txid_current()::text`,
                   })
                   .from(sql`(SELECT 1) AS identity`);
-                ready[actor].resolve(
-                  identity.at(0) ?? panic("Transaction identity missing"),
-                );
+                const session =
+                  identity.at(0) ?? panic("Transaction identity missing");
+                activePids.add(session.pid);
+                ready[actor].resolve(session);
                 for (const step of participant.steps) {
                   const token: InterleavingToken = `${actor}.${step.name}`;
                   await (gates.get(token) ?? panic("Step gate missing"))
@@ -177,7 +187,9 @@ export const withInterleaving = async <State>({
                       message: "Interleaving exceeded its deadline",
                     });
                   }
-                  await bounded(step.run(tx));
+                  const stepTask = step.run(tx, controller.signal);
+                  stepTasks.push(stepTask);
+                  await stepTask;
                   completed.add(token);
                 }
                 await (
@@ -279,11 +291,32 @@ export const withInterleaving = async <State>({
           };
         } finally {
           stopped = true;
+          if (!outcomes.a || !outcomes.b) {
+            controller.abort(
+              new InterleavingTimeout({
+                message: "Interleaving exceeded its deadline",
+              }),
+            );
+          }
           for (const gate of gates.values()) {
             gate.resolve(undefined);
           }
           try {
-            await bounded(Promise.allSettled(tasks));
+            await withTimeout(
+              async () => {
+                if (!outcomes.a || !outcomes.b) {
+                  for (const pid of activePids) {
+                    await observer.sql`SELECT pg_cancel_backend(${pid})`;
+                  }
+                }
+                // The schedule deadline has expired; cleanup has its own budget.
+                await Promise.allSettled([...stepTasks, ...tasks]);
+              },
+              {
+                label: "Interleaving cancellation",
+                timeoutMs: CANCELLATION_TIMEOUT_MS,
+              },
+            );
           } finally {
             clearTimeout(timer);
           }

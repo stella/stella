@@ -3,6 +3,8 @@ import { fillPlaceholders } from "drizzle-orm";
 import { BunSQLSession } from "drizzle-orm/bun-sql/session";
 import { PgAsyncPreparedQuery } from "drizzle-orm/pg-core/async/session";
 
+import type { SafeDb } from "@/api/db/safe-db";
+
 export const FLOW_LOCK_RANKS = {
   workspace: 0,
   run: 1,
@@ -19,14 +21,18 @@ const FLOW_TABLE_AGGREGATES: Readonly<Record<string, string>> = {
   entities: "entity",
 };
 
-export type TransactionEvent = {
-  type: "rowLock" | "advisoryLock" | "firstWrite";
+type TransactionEventFields = {
   aggregate: string;
-  table?: string;
   mode: string;
   sql: string;
   params: readonly unknown[];
 };
+
+export type TransactionEvent = TransactionEventFields &
+  (
+    | { type: "advisoryLock" }
+    | { type: "rowLock" | "writeLock" | "firstWrite"; table: string }
+  );
 
 export type TransactionTrace = { events: TransactionEvent[] };
 
@@ -43,6 +49,7 @@ type TransactionRecorderOptions = {
 
 const IDENTIFIER = '(?:"(?:[^"]|"")+"|[a-zA-Z_][a-zA-Z_0-9$]*)';
 const QUALIFIED_IDENTIFIER = `${IDENTIFIER}(?:\\s*\\.\\s*${IDENTIFIER})?`;
+const ALIAS_IDENTIFIER = `(?!(?:join|inner|left|right|full|cross|natural|where|group|order|limit|offset|having|for|union|intersect|except|on|using)\\b)${IDENTIFIER}`;
 const tableName = (identifier: string) =>
   identifier.split(".").at(-1)?.trim().replaceAll('"', "") ??
   panic("Missing table name in recorded statement");
@@ -66,6 +73,19 @@ const isTransactionRunner = (
 
 const hasRows = (result: unknown) =>
   !Array.isArray(result) || result.length > 0;
+
+const affectedRows = (result: unknown) => {
+  if (result !== null && typeof result === "object" && "count" in result) {
+    const count: unknown = Reflect.get(result, "count");
+    if (typeof count === "number") {
+      return count;
+    }
+  }
+  if (Array.isArray(result) && result.length > 0) {
+    return result.length;
+  }
+  return panic("Write result must expose its affected-row count");
+};
 
 const acquiredTryLock = (result: unknown, functionName: string) => {
   if (!Array.isArray(result)) {
@@ -91,9 +111,6 @@ export const assertLockRanks = (
   let previousRank = -Infinity;
   let previousAggregate = "";
   for (const event of events) {
-    if (event.type === "firstWrite") {
-      continue;
-    }
     const rank = ranks[event.aggregate];
     if (rank === undefined) {
       panic(`No lock rank declared for ${event.aggregate}`);
@@ -129,60 +146,91 @@ export const createTransactionRecorder = ({
     const shape = statementShape(sql);
     const aggregateFor = (table: string) =>
       tables[table] ?? panic(`No aggregate declared for table ${table}`);
-    for (const write of shape.matchAll(
-      new RegExp(
-        `\\b(insert\\s+into|delete\\s+from|update(?=\\s+${QUALIFIED_IDENTIFIER}\\s+(?:${IDENTIFIER}\\s+)?set\\b))\\s+(${QUALIFIED_IDENTIFIER})`,
-        "giu",
+    const writes = [
+      ...shape.matchAll(
+        new RegExp(
+          `\\b(insert\\s+into|delete\\s+from|update(?=\\s+${QUALIFIED_IDENTIFIER}\\s+(?:${IDENTIFIER}\\s+)?set\\b))\\s+(${QUALIFIED_IDENTIFIER})`,
+          "giu",
+        ),
       ),
-    )) {
+    ];
+    const rowLocks = [
+      ...shape.matchAll(
+        new RegExp(
+          `\\bfor\\s+(no\\s+key\\s+update|key\\s+share|update|share)(?:\\s+of\\s+(${IDENTIFIER}(?:\\s*,\\s*${IDENTIFIER})*))?`,
+          "giu",
+        ),
+      ),
+    ];
+    const advisoryCalls = [
+      ...shape.matchAll(
+        /\b(pg_(?:try_)?advisory_(?:xact_)?lock(?:_shared)?)\s*\(/giu,
+      ),
+    ];
+    if (writes.length > 1) {
+      panic(
+        "Record writes in separate statements to preserve acquisition order",
+      );
+    }
+    if (
+      writes.length > 0 &&
+      (rowLocks.length > 0 || advisoryCalls.length > 0)
+    ) {
+      panic(
+        "Record writes and explicit locks in separate statements to preserve acquisition order",
+      );
+    }
+    for (const write of writes) {
       const identifier = write.at(2);
       if (identifier === undefined) {
         panic("Missing write target");
       }
       const table = tableName(identifier);
-      if (
-        trace.events.some(
-          (event) => event.type === "firstWrite" && event.table === table,
-        )
-      ) {
+      if (affectedRows(result) === 0) {
         continue;
       }
-      trace.events.push({
-        type: "firstWrite",
+      const event = {
         aggregate: aggregateFor(table),
         table,
-        mode: write.at(1) ?? "",
+        mode: (write.at(1) ?? "").toLowerCase().replace(/\s+/gu, " "),
         sql,
         params,
-      });
+      };
+      if (
+        !trace.events.some(
+          (recorded) =>
+            recorded.type === "firstWrite" && recorded.table === table,
+        )
+      ) {
+        trace.events.push({ type: "firstWrite", ...event });
+      }
+      trace.events.push({ type: "writeLock", ...event });
     }
     if (!hasRows(result)) {
       return;
     }
-    const sources = new Map<string, string>();
-    for (const source of shape.matchAll(
-      new RegExp(
-        `\\b(?:from|join)\\s+(${QUALIFIED_IDENTIFIER})(?:\\s+(?:as\\s+)?(${IDENTIFIER}))?`,
-        "giu",
-      ),
-    )) {
-      const identifier = source.at(1);
-      if (identifier === undefined) {
-        panic("Missing row-lock target");
+    for (const lock of rowLocks) {
+      const preceding = shape.slice(0, lock.index);
+      const select = [...preceding.matchAll(/\bselect\b/giu)].at(-1);
+      const scope = preceding.slice(select?.index ?? 0);
+      const sources = new Map<string, string>();
+      for (const source of scope.matchAll(
+        new RegExp(
+          `\\b(?:from|join)\\s+(${QUALIFIED_IDENTIFIER})(?:\\s+(?:as\\s+)?(${ALIAS_IDENTIFIER}))?`,
+          "giu",
+        ),
+      )) {
+        const identifier = source.at(1);
+        if (identifier === undefined) {
+          panic("Missing row-lock target");
+        }
+        const table = tableName(identifier);
+        sources.set(table, table);
+        const alias = source.at(2);
+        if (alias !== undefined) {
+          sources.set(tableName(alias), table);
+        }
       }
-      const table = tableName(identifier);
-      sources.set(table, table);
-      const alias = source.at(2);
-      if (alias !== undefined) {
-        sources.set(tableName(alias), table);
-      }
-    }
-    for (const lock of shape.matchAll(
-      new RegExp(
-        `\\bfor\\s+(no\\s+key\\s+update|key\\s+share|update|share)(?:\\s+of\\s+(${IDENTIFIER}(?:\\s*,\\s*${IDENTIFIER})*))?`,
-        "giu",
-      ),
-    )) {
       const targets = lock.at(2);
       const lockedTables =
         targets === undefined
@@ -208,11 +256,6 @@ export const createTransactionRecorder = ({
         });
       }
     }
-    const advisoryCalls = [
-      ...shape.matchAll(
-        /\b(pg_(?:try_)?advisory_(?:xact_)?lock(?:_shared)?)\s*\(/giu,
-      ),
-    ];
     if (advisoryCalls.length > 1) {
       panic(
         "Record advisory locks in separate statements to preserve acquisition order",
@@ -311,21 +354,31 @@ export const createTransactionRecorder = ({
     };
   };
 
+  const recordTransaction = async <Tx extends object, T>(
+    tx: Tx,
+    work: (tx: Tx) => Promise<T>,
+  ) => {
+    const trace: TransactionTrace = { events: [] };
+    transactions.push(trace);
+    const restore = instrument(tx, trace);
+    try {
+      return await work(tx);
+    } finally {
+      restore();
+    }
+  };
+
   const wrap =
     <Tx extends object>(
       transaction: <T>(work: (tx: Tx) => Promise<T>) => Promise<T>,
     ) =>
     async <T>(work: (tx: Tx) => Promise<T>) =>
-      await transaction(async (tx) => {
-        const trace: TransactionTrace = { events: [] };
-        transactions.push(trace);
-        const restore = instrument(tx, trace);
-        try {
-          return await work(tx);
-        } finally {
-          restore();
-        }
-      });
+      await transaction(async (tx) => await recordTransaction(tx, work));
 
-  return { transactions, instrument, wrap };
+  const wrapSafeDb =
+    (safeDb: SafeDb): SafeDb =>
+    async (work, retry) =>
+      await safeDb(async (tx) => await recordTransaction(tx, work), retry);
+
+  return { transactions, instrument, wrap, wrapSafeDb };
 };

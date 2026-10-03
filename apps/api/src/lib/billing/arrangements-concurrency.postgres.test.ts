@@ -120,70 +120,74 @@ if (!databaseUrl || !runPostgres) {
             {
               name: "refresh",
               run: async (tx: Transaction) => {
-                (
-                  await recordBillingCapCrossings(tx, {
-                    workspaceId,
-                    recordAuditEvent: record,
-                  })
-                ).unwrap();
+                await recordBillingCapCrossings(tx, {
+                  workspaceId,
+                  recordAuditEvent: record,
+                });
               },
             },
           ],
         });
-        await withInterleaving({
+        let invariantCalls = 0;
+        const results = await withInterleaving({
           databaseUrl,
           a: participant(firstSafe),
           b: participant(secondSafe),
-          schedules: [["a.refresh", "b.refresh", "a.commit", "b.commit"]],
-          reset: async () => {},
+          reset: async () => {
+            await firstDb
+              .delete(auditLogs)
+              .where(eq(auditLogs.workspaceId, workspaceId));
+            await firstDb
+              .update(billingArrangements)
+              .set({
+                thresholdState: "below",
+                capState: "below",
+                crossingSequence: 0,
+              })
+              .where(eq(billingArrangements.workspaceId, workspaceId));
+          },
           readState: async () =>
             await firstDb
               .select()
               .from(billingArrangements)
               .where(eq(billingArrangements.workspaceId, workspaceId)),
-          invariant: ({ outcomes, blocked, state }) => {
+          invariant: async ({ outcomes, state }) => {
+            invariantCalls += 1;
             expect(outcomes).toEqual({
               a: { status: "committed" },
               b: { status: "committed" },
             });
-            expect(blocked).toContain("b.refresh");
             expect(state.at(0)).toMatchObject({
               thresholdState: "above",
               capState: "above",
               crossingSequence: 2,
             });
+            const events = await firstDb
+              .select({ metadata: auditLogs.metadata })
+              .from(auditLogs)
+              .where(eq(auditLogs.workspaceId, workspaceId));
+            expect(events).toHaveLength(2);
+            expect(
+              events
+                .map((event) => {
+                  const boundary = event.metadata?.["boundary"];
+                  if (typeof boundary !== "string") {
+                    panic("Crossing audit boundary missing");
+                  }
+                  return boundary;
+                })
+                .toSorted((left, right) => {
+                  if (left === right) {
+                    return 0;
+                  }
+                  return left < right ? -1 : 1;
+                }),
+            ).toEqual(["cap", "threshold"]);
           },
         });
-        const events = await firstDb
-          .select({ metadata: auditLogs.metadata })
-          .from(auditLogs)
-          .where(eq(auditLogs.workspaceId, workspaceId));
-        expect(events).toHaveLength(2);
-        expect(
-          events
-            .map((event) => {
-              const boundary = event.metadata?.["boundary"];
-              if (typeof boundary !== "string") {
-                panic("Crossing audit boundary missing");
-              }
-              return boundary;
-            })
-            .toSorted((left, right) => {
-              if (left === right) {
-                return 0;
-              }
-              return left < right ? -1 : 1;
-            }),
-        ).toEqual(["cap", "threshold"]);
-        const rows = await firstDb
-          .select()
-          .from(billingArrangements)
-          .where(eq(billingArrangements.workspaceId, workspaceId));
-        expect(rows.at(0)).toMatchObject({
-          thresholdState: "above",
-          capState: "above",
-          crossingSequence: 2,
-        });
+        expect(results).toHaveLength(6);
+        expect(invariantCalls).toBe(results.length);
+        expect(results.some(({ blocked }) => blocked.length > 0)).toBe(true);
       } finally {
         await firstDb
           .delete(organization)

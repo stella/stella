@@ -6,13 +6,21 @@ import {
   collectApiModuleGraph,
 } from "@/api/tests/api-module-graph";
 
-import { assertLockRanks, FLOW_LOCK_RANKS } from "./transaction-recorder";
-import type { TransactionTrace } from "./transaction-recorder";
+import {
+  assertLockRanks,
+  FLOW_LOCK_RANKS,
+  type TransactionTrace,
+  type TransactionEvent,
+} from "./transaction-recorder";
 
-const traceFor = (aggregates: readonly string[]): TransactionTrace => ({
+const traceFor = (
+  aggregates: readonly string[],
+  type: TransactionEvent["type"] = "rowLock",
+): TransactionTrace => ({
   events: aggregates.map((aggregate) => ({
-    type: "rowLock",
+    type,
     aggregate,
+    table: aggregate,
     mode: "update",
     sql: "",
     params: [],
@@ -22,12 +30,19 @@ const traceFor = (aggregates: readonly string[]): TransactionTrace => ({
 describe("transaction lock ranks", () => {
   test("accepts every ordered subset and rejects every inverted pair", () => {
     const aggregates = Object.keys(FLOW_LOCK_RANKS);
-    for (const [index, aggregate] of aggregates.entries()) {
-      assertLockRanks(traceFor(aggregates.slice(index)));
-      for (const preceding of aggregates.slice(0, index)) {
-        expect(() => assertLockRanks(traceFor([aggregate, preceding]))).toThrow(
-          "Lock rank inversion",
-        );
+    for (const type of [
+      "rowLock",
+      "advisoryLock",
+      "firstWrite",
+      "writeLock",
+    ] as const) {
+      for (const [index, aggregate] of aggregates.entries()) {
+        assertLockRanks(traceFor(aggregates.slice(index), type));
+        for (const preceding of aggregates.slice(0, index)) {
+          expect(() =>
+            assertLockRanks(traceFor([aggregate, preceding], type)),
+          ).toThrow("Lock rank inversion");
+        }
       }
     }
     assertLockRanks(traceFor(["workspace", "workspace", "entity", "entity"]));
