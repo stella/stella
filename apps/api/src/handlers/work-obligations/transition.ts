@@ -1,13 +1,13 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
-import { WORK_OBLIGATION_SOURCE } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   decideGateForTask,
   gateDecisionForTransition,
+  reviewGateForTask,
 } from "@/api/lib/flows/review-gate-task";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 import { settleWorkObligation } from "@/api/lib/work-obligations/settle-work-obligation";
@@ -47,15 +47,20 @@ const transitionWorkObligation = createSafeHandler(
     const reason = body.reason?.trim() || undefined;
     const result = yield* Result.await(
       safeDb(async (tx) => {
+        if (
+          await reviewGateForTask(tx, {
+            workspaceId,
+            taskEntityId: params.entityId,
+          })
+        ) {
+          return { status: "flow_review" as const };
+        }
         const existing = await lockWorkObligation(tx, {
           entityId: params.entityId,
           workspaceId,
         });
         if (!existing) {
           return { status: "not_found" as const };
-        }
-        if (existing.sourceType === WORK_OBLIGATION_SOURCE.FLOW) {
-          return { status: "flow_review" as const };
         }
         const transition = resolveWorkObligationTransition(
           body.action,

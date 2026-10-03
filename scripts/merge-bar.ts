@@ -53,6 +53,8 @@
 // Lift: gh variable delete STELLA_MERGE_HOLD --repo stella/stella
 
 import { panic, Result, TaggedError } from "better-result";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { findMigrationIdentityViolation } from "./check-migration-order";
@@ -804,10 +806,25 @@ const selectorVariables = (jobs: readonly FastRequiredJob[]): string[] => [
   ),
 ];
 
-const ratchetFreshnessFailure = (
-  definitions: unknown,
-  changedPaths: ReadonlySet<string>,
-): string | null => {
+export class RatchetRecheckError extends TaggedError("RatchetRecheckError")<{
+  message: string;
+}> {}
+
+type RatchetFreshnessFailureOptions = {
+  definitions: unknown;
+  changedPaths: ReadonlySet<string>;
+  pullFiles: readonly string[];
+  pullRequest: PullRequestSnapshot;
+  recheckRatchet: CheckGreenResultFreshnessOptions["recheckRatchet"];
+};
+
+const ratchetFreshnessFailure = ({
+  definitions,
+  changedPaths,
+  pullFiles,
+  pullRequest: { headSha, baseRefName },
+  recheckRatchet,
+}: RatchetFreshnessFailureOptions): string | null => {
   if (
     !Array.isArray(definitions) ||
     definitions.length === 0 ||
@@ -818,10 +835,24 @@ const ratchetFreshnessFailure = (
   const ratchetChanges = definitions.filter((filename) =>
     changedPaths.has(filename),
   );
-  if (ratchetChanges.length > 0) {
-    return `main changed the ratchet since the green run: ${ratchetChanges.join(", ")}`;
+  if (ratchetChanges.length === 0) {
+    return null;
   }
-  return null;
+  // The recheck runs the base's checker; a PR that edits the checker itself
+  // needs CI, which runs the merged one.
+  if (pullFiles.some((filename) => definitions.includes(filename))) {
+    return `main changed the ratchet since the green run (${ratchetChanges.join(", ")}) and this PR changes it too`;
+  }
+  const recheck = recheckRatchet({ headSha, baseRefName });
+  if (recheck.isOk()) {
+    return null;
+  }
+  return (
+    `main changed the ratchet since the green run (${ratchetChanges.join(", ")}) ` +
+    `and the ratchet does not pass on ${baseRefName} merged with this head: ${
+      recheck.error.message
+    }`
+  );
 };
 
 type CheckGreenResultFreshnessOptions = {
@@ -844,6 +875,13 @@ type CheckGreenResultFreshnessOptions = {
   // main changed one applied different rules than the merge queue will. Read
   // from the base branch: an older checkout's copy may miss a newer helper.
   readRatchetDefinitionPaths: (baseRefName: string) => unknown;
+  // Measures the ratchet on the base branch tip merged with this head, as the
+  // merge queue will, with the base's checker: a definition change on main
+  // costs one local ratchet run instead of a full CI re-run.
+  recheckRatchet: (input: {
+    headSha: string;
+    baseRefName: string;
+  }) => Result<void, RatchetRecheckError>;
 };
 
 export const checkGreenResultFreshness = ({
@@ -857,6 +895,7 @@ export const checkGreenResultFreshness = ({
   runSelector,
   readRunJobs,
   readRatchetDefinitionPaths,
+  recheckRatchet,
 }: CheckGreenResultFreshnessOptions) => {
   if (jump || isReleasePullRequest(pullRequest)) {
     return Result.ok();
@@ -941,14 +980,17 @@ export const checkGreenResultFreshness = ({
       changedPaths.add(file["previous_filename"]);
     }
   }
-  const ratchetFailure = ratchetFreshnessFailure(
-    readRatchetDefinitionPaths(pullRequest.baseRefName),
+  const pullFiles = readPullFiles();
+  const ratchetFailure = ratchetFreshnessFailure({
+    definitions: readRatchetDefinitionPaths(pullRequest.baseRefName),
     changedPaths,
-  );
+    pullFiles,
+    pullRequest,
+    recheckRatchet,
+  });
   if (ratchetFailure !== null) {
     return refuse(ratchetFailure);
   }
-  const pullFiles = readPullFiles();
   const overlap = pullFiles.filter((filename) => changedPaths.has(filename));
   if (overlap.length > 0) {
     return refuse(
@@ -1624,6 +1666,125 @@ const readReleaseRecognition = (repo: string, pullNumber: number) => {
 };
 
 const runGhJson = (args: readonly string[]): unknown => JSON.parse(runGh(args));
+
+type RecheckRatchetOptions = {
+  repositoryRoot: string;
+  repo: string;
+  baseSha: string;
+  headSha: string;
+};
+
+/**
+ * Runs the base's own `ratchet.ts --check` against the base merged with the
+ * head. The pull request's tree is only measured as data (`--head` exports
+ * it), so none of its code runs; the checker runs from a worktree of the base
+ * commit under the ignored `.cache`, where it resolves this checkout's
+ * installed dependencies, with no credentials in its environment. The merge
+ * is built with plumbing, so no hook runs and no ref moves.
+ */
+const recheckRatchetOnBase = ({
+  repositoryRoot,
+  repo,
+  baseSha,
+  headSha,
+}: RecheckRatchetOptions): Result<void, RatchetRecheckError> => {
+  const git = (args: readonly string[], env?: Record<string, string>) =>
+    Bun.spawnSync(["git", ...args], {
+      cwd: repositoryRoot,
+      env: { ...process.env, ...env },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+  const fail = (step: string, result: { stderr: Buffer; stdout: Buffer }) =>
+    Result.err(
+      new RatchetRecheckError({
+        message: `${step} failed: ${(result.stderr.toString() || result.stdout.toString()).trim()}`,
+      }),
+    );
+  const fetched = git([
+    "fetch",
+    "--no-tags",
+    "--quiet",
+    `https://github.com/${repo}.git`,
+    baseSha,
+    headSha,
+  ]);
+  if (fetched.exitCode !== 0) {
+    return fail("fetching the base and head", fetched);
+  }
+  const merged = git(["merge-tree", "--write-tree", baseSha, headSha]);
+  const tree = /^([0-9a-f]{40})$/mu.exec(merged.stdout.toString())?.[1];
+  if (merged.exitCode !== 0 || tree === undefined) {
+    return fail("merging the base into the head", merged);
+  }
+  const committed = git(
+    [
+      "-c",
+      "commit.gpgSign=false",
+      "commit-tree",
+      tree,
+      "-p",
+      baseSha,
+      "-p",
+      headSha,
+      "-m",
+      "merge-bar ratchet recheck",
+    ],
+    {
+      GIT_AUTHOR_NAME: "merge-bar",
+      GIT_AUTHOR_EMAIL: "merge-bar@localhost",
+      GIT_COMMITTER_NAME: "merge-bar",
+      GIT_COMMITTER_EMAIL: "merge-bar@localhost",
+    },
+  );
+  if (committed.exitCode !== 0) {
+    return fail("committing the merged tree", committed);
+  }
+  const cacheDirectory = path.join(repositoryRoot, ".cache");
+  mkdirSync(cacheDirectory, { recursive: true });
+  const worktree = mkdtempSync(path.join(cacheDirectory, "merge-bar-ratchet-"));
+  const added = git([
+    "worktree",
+    "add",
+    "--detach",
+    "--quiet",
+    worktree,
+    baseSha,
+  ]);
+  if (added.exitCode !== 0) {
+    rmSync(worktree, { recursive: true, force: true });
+    return fail("creating the base worktree", added);
+  }
+  try {
+    const checked = Bun.spawnSync(
+      [
+        "bun",
+        "scripts/ratchet.ts",
+        "--check",
+        "--base",
+        baseSha,
+        "--head",
+        committed.stdout.toString().trim(),
+      ],
+      {
+        cwd: worktree,
+        env: {
+          PATH: process.env["PATH"] ?? "",
+          HOME: process.env["HOME"] ?? "",
+          TMPDIR: process.env["TMPDIR"] ?? "",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    if (checked.exitCode !== 0) {
+      return fail("ratchet --check", checked);
+    }
+    return Result.ok();
+  } finally {
+    git(["worktree", "remove", "--force", worktree]);
+  }
+};
 
 const readLiveRepositoryPolicy = (
   repo: string,
@@ -2481,6 +2642,13 @@ if (import.meta.main) {
       }),
     readRunJobs: gateway.readRunJobs,
     readRatchetDefinitionPaths: gateway.readRatchetDefinitionPaths,
+    recheckRatchet: ({ headSha, baseRefName }) =>
+      recheckRatchetOnBase({
+        repositoryRoot: fileURLToPath(new URL("..", import.meta.url)),
+        repo: options.repo,
+        baseSha: gateway.readBranchTip(baseRefName).sha,
+        headSha,
+      }),
   });
   if (freshness.isErr()) {
     console.error(freshness.error.message);

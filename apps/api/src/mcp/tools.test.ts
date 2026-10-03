@@ -96,7 +96,11 @@ import {
   compileWireSchema,
   createWireSchemaValidator,
 } from "@/api/tests/helpers/wire-json-schema";
-import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+  toSafeDbMock,
+} from "@/api/tests/scoped-db-mock";
 
 const wireSchemaValidator = createWireSchemaValidator();
 
@@ -8006,24 +8010,23 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       },
       select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: () => ({
-              for: async () => [
-                {
-                  entityId: "00000000-0000-4000-8000-00000007a001",
-                  workspaceId: WORKSPACE_ID,
-                  type: "task",
-                  status: WORK_OBLIGATION_STATUS.CANCELLED,
-                  ownerUserId: null,
-                  acknowledgedAt: null,
-                  workingTargetDate: null,
-                  hardDeadlineDate: null,
-                },
-              ],
-            }),
-          }),
-        }),
+        from: (table: unknown) =>
+          createSelectQueryMock(
+            table === workObligations
+              ? [
+                  {
+                    entityId: "00000000-0000-4000-8000-00000007a001",
+                    workspaceId: WORKSPACE_ID,
+                    type: "task",
+                    status: WORK_OBLIGATION_STATUS.CANCELLED,
+                    ownerUserId: null,
+                    acknowledgedAt: null,
+                    workingTargetDate: null,
+                    hardDeadlineDate: null,
+                  },
+                ]
+              : [],
+          ).from(),
       }),
       update: (table: unknown) => ({
         set: (values: Record<string, unknown>) => {
