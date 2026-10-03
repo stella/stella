@@ -152,6 +152,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-swallowed-item-error.fixture.test.ts", [
     "no-swallowed-item-error/no-test-swallowed-error",
   ]),
+  fixtureRuleOverride("provider-call-error-message.fixture.ts", [
+    "provider-call-error-message/provider-call-error-message",
+  ]),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
     rules: publicSsrAmbientStateRules,
@@ -920,6 +923,7 @@ export default defineConfig({
       "error",
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
     "tagged-error-requires-message/tagged-error-requires-message": "error",
+    "provider-call-error-message/provider-call-error-message": "error",
     "require-custom-jsonb-column/require-custom-jsonb-column": "error",
     // The column-cast allowlist lives in per-file overrides below, scoped to
     // the files that own the schema objects, so the same spelling elsewhere
@@ -1332,6 +1336,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
     "./.oxlint-plugins/no-array-built-typebox-union.ts",
     "./.oxlint-plugins/tagged-error-requires-message.ts",
+    "./.oxlint-plugins/provider-call-error-message.ts",
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
     "./.oxlint-plugins/no-bare-jsonb-cast.ts",
     "./.oxlint-plugins/no-hand-rolled-sql-case.ts",
