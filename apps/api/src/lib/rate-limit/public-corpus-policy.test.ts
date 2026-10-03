@@ -20,9 +20,23 @@ const HTTP_METHODS = new Set([
   "all",
 ]);
 
-type RouterSource = { source: string; exportName: string };
+type RouterSource = {
+  source: string;
+  exportName: string;
+  modules?: ReadonlyMap<string, string>;
+  ancestors?: readonly string[];
+};
 
-const mountedRoutes = ({ source, exportName }: RouterSource): string[] => {
+const mountedRoutes = ({
+  source,
+  exportName,
+  modules = new Map<string, string>(),
+  ancestors = [],
+}: RouterSource): string[] => {
+  const identity = `${source}\n${exportName}`;
+  if (ancestors.includes(identity)) {
+    panic("Public route census rejects recursive composition");
+  }
   const tree = ts.createSourceFile(
     "public-routes.ts",
     source,
@@ -46,7 +60,41 @@ const mountedRoutes = ({ source, exportName }: RouterSource): string[] => {
     }
   }
   if (!initializer) {
-    panic(`Missing public router ${exportName}`);
+    for (const statement of tree.statements) {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !ts.isStringLiteral(statement.moduleSpecifier)
+      ) {
+        continue;
+      }
+      const bindings = statement.importClause?.namedBindings;
+      if (!bindings || !ts.isNamedImports(bindings)) {
+        continue;
+      }
+      const binding = bindings.elements.find(
+        (item) => item.name.text === exportName,
+      );
+      if (!binding) {
+        continue;
+      }
+      const importedSource = modules.get(statement.moduleSpecifier.text);
+      if (importedSource === undefined) {
+        panic("Public route census requires source for composed imports");
+      }
+      return mountedRoutes({
+        source: importedSource,
+        exportName: binding.propertyName?.text ?? binding.name.text,
+        modules,
+        ancestors: [...ancestors, identity],
+      });
+    }
+    panic(`Public route census missing router ${exportName}`);
+  }
+  if (ts.isArrowFunction(initializer)) {
+    if (ts.isBlock(initializer.body)) {
+      panic("Public route census requires an expression-bodied router factory");
+    }
+    initializer = initializer.body;
   }
   // A reference can alias or mutate the router outside its declaration chain.
   // Fail closed rather than let registrations bypass the policy census.
@@ -56,9 +104,22 @@ const mountedRoutes = ({ source, exportName }: RouterSource): string[] => {
       node.text === exportName &&
       node !== routerDeclarationName
     ) {
-      panic(
-        "Public route census requires all registrations in the declaration chain",
-      );
+      const plugin =
+        ts.isCallExpression(node.parent) && node.parent.expression === node
+          ? node.parent
+          : node;
+      const use = plugin.parent;
+      if (
+        !ts.isCallExpression(use) ||
+        !ts.isPropertyAccessExpression(use.expression) ||
+        use.expression.name.text !== "use" ||
+        use.arguments.length !== 1 ||
+        use.arguments.at(0) !== plugin
+      ) {
+        panic(
+          "Public route census requires all registrations in the declaration chain",
+        );
+      }
     }
     ts.forEachChild(node, rejectRouterReferences);
   };
@@ -77,7 +138,26 @@ const mountedRoutes = ({ source, exportName }: RouterSource): string[] => {
         panic("Public route census requires literal paths");
       }
       routes.push(`${method.toUpperCase()} ${routePath.text}`);
-    } else if (method !== "onBeforeHandle") {
+    } else if (method === "use") {
+      const plugin = expression.arguments.at(0);
+      if (!plugin || expression.arguments.length !== 1) {
+        panic("Public route census requires one composed router");
+      }
+      const reference = ts.isCallExpression(plugin)
+        ? plugin.expression
+        : plugin;
+      if (!ts.isIdentifier(reference)) {
+        panic("Public route census requires a named composed router");
+      }
+      routes.push(
+        ...mountedRoutes({
+          source,
+          exportName: reference.text,
+          modules,
+          ancestors: [...ancestors, identity],
+        }),
+      );
+    } else if (method !== "onBeforeHandle" && method !== "onTransform") {
       panic(`Public route census does not support ${method} composition`);
     }
     expression = expression.expression.expression;
@@ -90,6 +170,9 @@ const mountedRoutes = ({ source, exportName }: RouterSource): string[] => {
     panic("Public route census requires an Elysia root");
   }
   const options = expression.arguments?.at(0);
+  if (!options && !expression.arguments?.length) {
+    return routes.toSorted();
+  }
   if (!options || !ts.isObjectLiteralExpression(options)) {
     panic("Public route census requires literal options");
   }
@@ -100,7 +183,18 @@ const mountedRoutes = ({ source, exportName }: RouterSource): string[] => {
       property.name.text === "prefix",
   );
   if (
-    !prefixProperty ||
+    options.properties.some(
+      (property) =>
+        !ts.isPropertyAssignment(property) ||
+        (!ts.isIdentifier(property.name) && !ts.isStringLiteral(property.name)),
+    )
+  ) {
+    panic("Public route census requires literal option properties");
+  }
+  if (!prefixProperty) {
+    return routes.toSorted();
+  }
+  if (
     !ts.isPropertyAssignment(prefixProperty) ||
     !ts.isStringLiteralLike(prefixProperty.initializer)
   ) {
@@ -120,18 +214,32 @@ const readMountedRoutes = async () => {
     Bun.file(
       new URL("../../handlers/case-law/public-routes.ts", import.meta.url),
     ).text(),
+    Bun.file(new URL("../deployment-feature-route.ts", import.meta.url)).text(),
   ]);
   const legislation = sources.at(0);
   const caseLaw = sources.at(1);
-  if (legislation === undefined || caseLaw === undefined) {
+  const featureGate = sources.at(2);
+  if (
+    legislation === undefined ||
+    caseLaw === undefined ||
+    featureGate === undefined
+  ) {
     panic("Missing public router source");
   }
+  const modules = new Map([
+    ["@/api/lib/deployment-feature-route", featureGate],
+  ]);
   return [
     ...mountedRoutes({
       source: legislation,
       exportName: "publicLegislationRoute",
+      modules,
     }),
-    ...mountedRoutes({ source: caseLaw, exportName: "publicCaseLawRoute" }),
+    ...mountedRoutes({
+      source: caseLaw,
+      exportName: "publicCaseLawRoute",
+      modules,
+    }),
   ].toSorted();
 };
 
@@ -206,6 +314,75 @@ describe("public corpus admission policy", () => {
         mountedRoutes({ source: indirect, exportName: "publicRoute" }),
       ).toThrow("Public route census");
     }
+  });
+
+  test("composed imports enumerate nested routes and keep exact policy coverage", () => {
+    const source =
+      'import { gate as featureGate } from "gate"; export const publicRoute = new Elysia({ prefix: "/law" }).use(featureGate(enabled)).get("/statutes", handler);';
+    const gate =
+      'import { nested } from "nested"; export const gate = (enabled) => new Elysia().onTransform({ as: "scoped" }, hook).use(nested);';
+    const nested =
+      'export const nested = new Elysia({ prefix: "/extra" }).post("/resolve", handler);';
+    const modules = new Map([
+      ["gate", gate],
+      ["nested", nested],
+    ]);
+    const mounted = mountedRoutes({
+      source,
+      exportName: "publicRoute",
+      modules,
+    });
+    expect(mounted).toEqual(["GET /law/statutes", "POST /law/extra/resolve"]);
+    const classified = ["GET /law/statutes"];
+    expect(() => expectCompletePolicy({ mounted, classified })).toThrow(
+      "Every mounted route",
+    );
+    const removed = mountedRoutes({
+      source,
+      exportName: "publicRoute",
+      modules: new Map([
+        ["gate", gate],
+        ["nested", nested.replace('.post("/resolve", handler)', "")],
+      ]),
+    });
+    expect(removed).toEqual(classified);
+    expect(() =>
+      expectCompletePolicy({ mounted: removed, classified: mounted }),
+    ).toThrow("Every mounted route");
+  });
+
+  test("local routers and factories contribute their prefixed routes", () => {
+    const source =
+      'const nested = new Elysia({ prefix: "/extra" }).get("/items", handler); const plugin = () => new Elysia().use(nested); export const publicRoute = new Elysia({ prefix: "/law" }).use(plugin());';
+    expect(mountedRoutes({ source, exportName: "publicRoute" })).toEqual([
+      "GET /law/extra/items",
+    ]);
+  });
+
+  test("composition fails closed when its source cannot be fully enumerated", () => {
+    const source =
+      'import { plugin } from "plugin"; export const publicRoute = new Elysia({ prefix: "/law" }).use(plugin());';
+    for (const plugin of [
+      "export const plugin = () => configure(new Elysia());",
+      "export const plugin = () => { return new Elysia(); };",
+      "export const plugin = () => new Elysia().get(path, handler);",
+      "export const plugin = () => new Elysia().use(plugin());",
+      'export const plugin = new Elysia(); plugin.get("/extra", handler);',
+      "export const plugin = () => new Elysia({ ...options });",
+      'export const plugin = () => new Elysia({ ["prefix"]: "/extra" });',
+      "export const plugin = () => new Elysia({ prefix: prefix });",
+    ]) {
+      expect(() =>
+        mountedRoutes({
+          source,
+          exportName: "publicRoute",
+          modules: new Map([["plugin", plugin]]),
+        }),
+      ).toThrow("Public route census");
+    }
+    expect(() => mountedRoutes({ source, exportName: "publicRoute" })).toThrow(
+      "source for composed imports",
+    );
   });
 
   test("separate registrations and router aliases cannot bypass the census", () => {
