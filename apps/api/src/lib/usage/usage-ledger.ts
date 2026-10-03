@@ -125,6 +125,7 @@ type ResolveUsageConsumptionInput = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
   originalAccess: boolean;
+  currentPeriodStart: Date;
   asOf: Date;
 };
 
@@ -132,6 +133,7 @@ export const resolveUsageConsumption = async ({
   tx,
   organizationId,
   originalAccess,
+  currentPeriodStart,
   asOf,
 }: ResolveUsageConsumptionInput): Promise<boolean> => {
   if (!env.FEATURE_CONFIGURED_ACCESS) {
@@ -139,7 +141,7 @@ export const resolveUsageConsumption = async ({
   }
   const snapshot = await readOrganizationAccessSnapshot(tx, organizationId);
   return snapshot?.state === CONFIGURED_ACCESS_STATE
-    ? allowsInstanceModels(snapshot, asOf)
+    ? currentPeriodStart <= asOf && allowsInstanceModels(snapshot, asOf)
     : originalAccess;
 };
 
@@ -285,6 +287,7 @@ export const assertUsageAvailable = async ({
       tx,
       organizationId,
       originalAccess: isConsumableEntitlementStatus(entitlement.status),
+      currentPeriodStart: entitlement.currentPeriodStart,
       asOf,
     }))
   ) {

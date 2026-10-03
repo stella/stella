@@ -59,6 +59,7 @@ const getLane = createSafeRootHandler(
             tx,
             organizationId: session.activeOrganizationId,
             originalAccess: isEntitlementConsumableAt(entitlement, asOf),
+            currentPeriodStart: entitlement.currentPeriodStart,
             asOf,
           }))
         ) {

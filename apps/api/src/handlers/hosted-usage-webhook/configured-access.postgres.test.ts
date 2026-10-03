@@ -694,6 +694,68 @@ describe.skipIf(!runPostgresTests)(
       });
     });
 
+    test.each(["ledger", "lane-routing", "get-lane"] as const)(
+      "configured consumption preserves the paid period start: %s",
+      async (reader) => {
+        await withFixture(async (tx, fixture) => {
+          await seedPrior(tx, fixture, CONFIGURED_ACCESS_STATE);
+          const userId = await seedReader(tx, fixture);
+          const currentPeriodStart = at(1000);
+          await tx
+            .update(usageEntitlements)
+            .set({ currentPeriodStart })
+            .where(
+              eq(usageEntitlements.organizationId, fixture.organizationId),
+            );
+          const snapshot = await readOrganizationAccessSnapshot(
+            tx,
+            fixture.organizationId,
+          );
+          expect(snapshot?.state).toBe(CONFIGURED_ACCESS_STATE);
+          expect(snapshot && allowsInstanceModels(snapshot, at(999))).toBe(
+            true,
+          );
+          for (const configuredAccess of [false, true]) {
+            env.FEATURE_CONFIGURED_ACCESS = configuredAccess;
+            for (const asOf of [at(999), currentPeriodStart]) {
+              const options = {
+                tx,
+                organizationId: fixture.organizationId,
+                asOf,
+              };
+              const started = asOf >= currentPeriodStart;
+              switch (reader) {
+                case "lane-routing":
+                  expect(
+                    await decideChatUsageLane({ ...options, userId }),
+                  ).toBe(started ? "allowance" : "pool");
+                  break;
+                case "get-lane":
+                  expect(await readLaneBudgets({ ...options, userId })).toBe(
+                    started,
+                  );
+                  break;
+                case "ledger": {
+                  const ledger = await assertUsageAvailable({
+                    ...options,
+                    required: 1,
+                  });
+                  // The original ledger is status-only; configured access preserves the start.
+                  expect(ledger.ok).toBe(!configuredAccess || started);
+                  if (!ledger.ok) {
+                    expect(ledger.error.reason).toBe("entitlement_inactive");
+                  }
+                  break;
+                }
+                default:
+                  reader satisfies never;
+              }
+            }
+          }
+        });
+      },
+    );
+
     for (const prior of ["ending", "payment_retry", "disabled"] as const) {
       test(`ledger and lane readers follow ${prior} deadlines and retain disabled-feature behavior`, async () => {
         await withFixture(async (tx, fixture) => {

@@ -8,12 +8,18 @@ Object.assign(import.meta.env, {
 });
 
 const originalFetch = globalThis.fetch;
+// Auth client imports start the boot prefetch before the per-test transport.
+globalThis.fetch = Object.assign(async () => Response.json(null), {
+  preconnect: () => undefined,
+});
 const React = await import("react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { act, cleanup, render, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { roleOptions } = await import("@/lib/auth-query-options");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
@@ -41,6 +47,9 @@ const paymentRetry = (endsAt: string) => ({
 const none = { paymentRetry: { status: "none" } };
 
 const renderBanner = (queryClient: InstanceType<typeof QueryClient>) => {
+  if (queryClient.getQueryData(roleOptions.queryKey) === undefined) {
+    queryClient.setQueryData(roleOptions.queryKey, "member");
+  }
   const BannerForOrganization = ({
     organizationId,
   }: {
@@ -60,7 +69,11 @@ const renderBanner = (queryClient: InstanceType<typeof QueryClient>) => {
           wordEditShortcut: null,
         },
       },
-      React.createElement(PaymentRetryBanner),
+      React.createElement(
+        FormattingProvider,
+        { locale: "en-GB", timeZone: "UTC" },
+        React.createElement(PaymentRetryBanner),
+      ),
     );
   const view = render(
     React.createElement(
@@ -169,6 +182,80 @@ test("a delayed access response stays in its organization cache and retry copy e
   } finally {
     oldResponse.resolve(Response.json(none));
     newResponse.resolve(Response.json(none));
+    view.unmount();
+    queryClient.clear();
+  }
+});
+
+test("external members never request organization access", async () => {
+  let requests = 0;
+  globalThis.fetch = Object.assign(
+    async () => {
+      requests += 1;
+      return Response.json(none);
+    },
+    { preconnect: () => undefined },
+  );
+  const queryClient = new QueryClient();
+  queryClient.setQueryData(roleOptions.queryKey, "external");
+  const view = renderBanner(queryClient);
+  try {
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 30);
+      });
+    });
+    expect(requests).toBe(0);
+    expect(view.queryByRole("status")).toBeNull();
+  } finally {
+    view.unmount();
+    queryClient.clear();
+  }
+});
+
+test("access permission refusals are not retried", async () => {
+  let requests = 0;
+  globalThis.fetch = Object.assign(
+    async () => {
+      requests += 1;
+      return Response.json({ code: "forbidden" }, { status: 403 });
+    },
+    { preconnect: () => undefined },
+  );
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retryDelay: 0 } },
+  });
+  const view = renderBanner(queryClient);
+  try {
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryState(["usage", "access", "org-a"])?.status,
+      ).toBe("error"),
+    );
+    expect(requests).toBe(1);
+    expect(view.queryByRole("status")).toBeNull();
+  } finally {
+    view.unmount();
+    queryClient.clear();
+  }
+});
+
+test("the deadline follows regional formatting independently of the language", async () => {
+  const deadline = new Date("2099-10-04T12:00:00Z");
+  globalThis.fetch = Object.assign(
+    async () => Response.json(paymentRetry(deadline.toISOString())),
+    { preconnect: () => undefined },
+  );
+  const queryClient = new QueryClient();
+  const view = renderBanner(queryClient);
+  try {
+    await waitFor(() =>
+      expect(view.getByRole("status").textContent).toContain("4 October 2099"),
+    );
+    expect(view.getByRole("status").textContent).not.toContain(
+      "October 4, 2099",
+    );
+  } finally {
     view.unmount();
     queryClient.clear();
   }

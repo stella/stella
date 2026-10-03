@@ -1,12 +1,14 @@
 import { useState } from "react";
 
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 
 import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { organizationAccessOptions } from "@/lib/usage-queries";
@@ -16,13 +18,14 @@ const ACCESS_REFRESH_INTERVAL_MS = 60_000;
 export const PaymentRetryBanner = () => {
   const t = useTranslations();
   const format = useFormatter();
+  const canUseChat = usePermissions({ chat: ["create"] });
   const { activeOrganizationId } = useAuthenticatedUser();
   const [now, setNow] = useState(
     () => Temporal.Now.instant().epochMilliseconds,
   );
   const { data } = useChromeQuery({
     ...organizationAccessOptions({ organizationId: activeOrganizationId }),
-    enabled: env.VITE_FEATURE_USAGE,
+    enabled: env.VITE_FEATURE_USAGE && canUseChat,
     refetchInterval: (query) => {
       const retry = query.state.data?.paymentRetry;
       if (retry?.status !== "payment_retry") {

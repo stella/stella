@@ -85,6 +85,7 @@ export const decideChatUsageLane = async ({
       tx,
       organizationId,
       originalAccess: isEntitlementConsumableAt(entitlement, asOf),
+      currentPeriodStart: entitlement.currentPeriodStart,
       asOf,
     }))
   ) {

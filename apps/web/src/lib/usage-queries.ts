@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 
 type UsageEntitlementKey = {
@@ -117,6 +117,7 @@ export const organizationAccessOptions = ({
 }: OrganizationAccessOptionsInput) =>
   queryOptions({
     queryKey: organizationAccessKeys.byOrganization({ organizationId }),
+    retry: shouldRetryAPIRequest,
     queryFn: async ({ signal }) =>
       unwrapEden(await api.usage.access.get({ fetch: { signal } })),
   });
