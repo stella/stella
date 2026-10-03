@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
+import { readFileSync } from "node:fs";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -15,6 +17,7 @@ import {
   releaseMcpRefreshLease,
 } from "@/api/lib/mcp-upstream/connections";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { TABLE_POLICY_SETTINGS_BASELINE } from "@/api/tests/security/table-policy-settings-baseline";
 import {
   createScopedQuery,
   getTestDb,
@@ -32,6 +35,21 @@ let testDb: TestDatabase;
 
 beforeAll(async () => {
   testDb = await getTestDb();
+  // Apply the committed definition, including settings schema push cannot represent.
+  await testDb.execute(sql`DROP TABLE mcp_connector_authorization_reviews`);
+  await testDb.execute(
+    sql`ALTER TABLE mcp_user_connections DROP COLUMN refresh_lease_expires_at, DROP COLUMN refresh_retry_after`,
+  );
+  const migration = readFileSync(
+    new URL(
+      "../../../drizzle/20261003124600_mcp_authorization_reviews/migration.sql",
+      import.meta.url,
+    ),
+    "utf-8",
+  );
+  for (const statement of migration.split("--> statement-breakpoint")) {
+    await testDb.execute(sql.raw(statement));
+  }
   await testDb.insert(user).values([
     {
       id: ownerId,
@@ -107,6 +125,53 @@ afterAll(async () => {
 });
 
 describe("MCP connector authorization reviews", () => {
+  test("the migrated table matches its declared row policy settings", async () => {
+    const settings = await testDb.execute<{
+      enabled: boolean;
+      forced: boolean;
+    }>(sql`
+      SELECT relrowsecurity AS enabled, relforcerowsecurity AS forced
+      FROM pg_catalog.pg_class
+      WHERE oid = 'public.mcp_connector_authorization_reviews'::regclass
+    `);
+    expect(settings.rows).toEqual([{ enabled: true, forced: true }]);
+    expect(TABLE_POLICY_SETTINGS_BASELINE).not.toContain(
+      "mcp_connector_authorization_reviews",
+    );
+    const declared = getTableConfig(mcpConnectorAuthorizationReviews);
+    expect(declared.enableRLS).toBe(true);
+  });
+
+  test("the migrated update policy matches its declared check", async () => {
+    const declared = getTableConfig(mcpConnectorAuthorizationReviews);
+    const update = declared.policies.find((policy) => policy.for === "update");
+    expect(update?.using).toBeDefined();
+    expect(update?.withCheck).toBeDefined();
+    const dialect = new PgDialect();
+    if (!update?.using || !update.withCheck) {
+      return;
+    }
+    expect(dialect.sqlToQuery(update.withCheck).sql).toBe(
+      dialect.sqlToQuery(update.using).sql,
+    );
+    const policies = await testDb.execute<{
+      using_expression: string;
+      check_expression: string;
+    }>(sql`
+      SELECT qual AS using_expression, with_check AS check_expression
+      FROM pg_catalog.pg_policies
+      WHERE schemaname = 'public'
+        AND tablename = 'mcp_connector_authorization_reviews'
+        AND policyname = 'organization_update'
+    `);
+    expect(policies.rows).toHaveLength(1);
+    const policy = policies.rows.at(0);
+    expect(policy?.check_expression).toBeString();
+    expect(policy?.check_expression).toBe(policy?.using_expression);
+    expect(policy?.check_expression).toContain("organization_id");
+    expect(policy?.check_expression).toContain("app.organization_id");
+  });
+
   test("keeps the organization review visible to its members", async () => {
     const scopedQuery = createScopedQuery(testDb);
     const rows = await scopedQuery(

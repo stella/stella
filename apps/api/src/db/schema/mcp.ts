@@ -110,7 +110,7 @@ export const mcpOAuthClients = p.pgTable(
   ],
 );
 
-export const mcpConnectorAuthorizationReviews = p.pgTable(
+export const mcpConnectorAuthorizationReviews = p.pgTable.withRLS(
   "mcp_connector_authorization_reviews",
   {
     organizationId: safeOrganizationId("organization_id")
@@ -130,7 +130,16 @@ export const mcpConnectorAuthorizationReviews = p.pgTable(
     p
       .index("mcp_connector_authorization_reviews_connector_idx")
       .on(table.connectorId),
-    ...orgPolicies(),
+    ...orgPolicies().map((policy) =>
+      policy.for === "update"
+        ? p.pgPolicy(policy.name, {
+            for: policy.for,
+            to: policy.to,
+            using: policy.using,
+            withCheck: policy.using,
+          })
+        : policy,
+    ),
   ],
 );
 

@@ -14,10 +14,11 @@ CREATE TABLE "mcp_connector_authorization_reviews" (
 CREATE INDEX "mcp_connector_authorization_reviews_connector_idx"
   ON "mcp_connector_authorization_reviews" ("connector_id");--> statement-breakpoint
 ALTER TABLE "mcp_connector_authorization_reviews" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "mcp_connector_authorization_reviews" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "mcp_connector_authorization_reviews" TO stella;--> statement-breakpoint
 CREATE POLICY "organization_select" ON "mcp_connector_authorization_reviews" AS PERMISSIVE FOR SELECT TO "stella" USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
 CREATE POLICY "organization_insert" ON "mcp_connector_authorization_reviews" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
-CREATE POLICY "organization_update" ON "mcp_connector_authorization_reviews" AS PERMISSIVE FOR UPDATE TO "stella" USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "organization_update" ON "mcp_connector_authorization_reviews" AS PERMISSIVE FOR UPDATE TO "stella" USING (organization_id = (SELECT current_setting('app.organization_id', true))) WITH CHECK (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
 CREATE POLICY "organization_delete" ON "mcp_connector_authorization_reviews" AS PERMISSIVE FOR DELETE TO "stella" USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
 ALTER TABLE "mcp_user_connections" ADD COLUMN "refresh_lease_expires_at" timestamptz;--> statement-breakpoint
 ALTER TABLE "mcp_user_connections" ADD COLUMN "refresh_retry_after" timestamptz;
