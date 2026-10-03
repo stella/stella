@@ -26,6 +26,7 @@ type MatterActivityExportFormat =
 
 const config = {
   accountAccess: "standard",
+  contentDelivery: { type: "audited" },
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",

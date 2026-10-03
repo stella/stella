@@ -10,6 +10,11 @@ import { readStyleSetPackage } from "@/api/lib/style-sets";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Returns parsed style editor configuration rather than stored-file bytes.",
+  },
   description:
     "Read one organization style set as editor settings: its name, " +
     "updatedAt, and the style settings parsed out of the stored DOCX " +

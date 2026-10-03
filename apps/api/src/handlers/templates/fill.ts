@@ -283,6 +283,10 @@ export const fillHandler = async ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Renders the template uploaded in this request.",
+  },
   description:
     "Fill a template with values. 'values' maps each field path to its " +
     'value, e.g. {"tenant.name": "ACME Sp. z o.o.", "signing_date": ' +

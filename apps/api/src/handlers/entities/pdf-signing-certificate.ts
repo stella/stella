@@ -103,6 +103,10 @@ const certificateConflict = () =>
   });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Verifies signing inputs without returning stored-file bytes.",
+  },
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: permissiveBodySchema({
     keys: ["sessionToken", "certificate"],

@@ -16,6 +16,10 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { mockAnswersForOrganization } from "@/api/lib/tanstack-ai-models";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Generates document geometry without delivering stored-file bytes.",
+  },
   permissions: { workspace: ["update"] },
   mcp: { type: "internal", reason: "document_processing" },
   body: t.Object({

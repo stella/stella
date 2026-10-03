@@ -11,6 +11,11 @@ import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-enti
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Returns translation preparation metadata rather than stored-file bytes.",
+  },
   description:
     "Inspect the current DOCX version and prepare its comment requirements for translation.",
   permissions: { entity: ["create"] },

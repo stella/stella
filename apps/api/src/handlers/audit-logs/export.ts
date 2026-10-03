@@ -23,6 +23,7 @@ import {
 
 const config = {
   accountAccess: "standard",
+  contentDelivery: { type: "audited" },
   permissions: { auditLog: ["read"] },
   mcp: { type: "internal", reason: "ui_navigation_state" },
   query: readAuditLogsQuerySchema,

@@ -628,6 +628,11 @@ export const openDesktopEditSessionHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Provides working-copy URLs covered by the edit-session lifecycle audit.",
+  },
   body: openDesktopEditSessionBodySchema,
   permissions: { entity: ["update"] },
   mcp: { type: "internal", reason: "session_token_exchange" },

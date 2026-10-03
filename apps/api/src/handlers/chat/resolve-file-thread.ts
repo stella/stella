@@ -34,6 +34,11 @@ const resolveFileThreadBodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Resolves the conversation associated with a file without delivering stored bytes.",
+  },
   permissions: { chat: ["create"] },
   mcp: { type: "internal", reason: "assistant_chat" },
   body: resolveFileThreadBodySchema,

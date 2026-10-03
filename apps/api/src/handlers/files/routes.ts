@@ -30,6 +30,7 @@ import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 export const readFileEndpoint = createSafeHandler(
   {
+    contentDelivery: { type: "audited" },
     permissions: { workspace: ["read"] },
     access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
@@ -70,6 +71,10 @@ export const readFileEndpoint = createSafeHandler(
 
 export const readEmailHtmlPreviewEndpoint = createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason: "Returns parsed email preview data rather than a file grant.",
+    },
     permissions: { workspace: ["read"] },
     access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
@@ -102,6 +107,7 @@ export const readEmailHtmlPreviewEndpoint = createSafeHandler(
 export const printPdfEndpoint = createSafeHandler(
   {
     accountAccess: "standard",
+    contentDelivery: { type: "audited" },
     permissions: { workspace: ["read"] },
     access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
@@ -134,6 +140,7 @@ export const printPdfEndpoint = createSafeHandler(
 export const stampedDownloadEndpoint = createSafeHandler(
   {
     accountAccess: "standard",
+    contentDelivery: { type: "audited" },
     permissions: { workspace: ["read"] },
     access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
@@ -168,6 +175,10 @@ export const stampedDownloadEndpoint = createSafeHandler(
 
 export const readDocumentPropertiesEndpoint = createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason: "Returns document metadata rather than file bytes.",
+    },
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",
@@ -232,6 +243,10 @@ const AUTHORED_PROPERTY_BODY = {
 
 export const updateDocumentPropertiesEndpoint = createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason: "Updates document metadata without delivering a file.",
+    },
     permissions: { entity: ["update"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
@@ -274,6 +289,7 @@ export const updateDocumentPropertiesEndpoint = createSafeHandler(
 export const scrubbedDownloadEndpoint = createSafeHandler(
   {
     accountAccess: "standard",
+    contentDelivery: { type: "audited" },
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",
@@ -306,6 +322,7 @@ export const scrubbedDownloadEndpoint = createSafeHandler(
 export const ocrExportEndpoint = createSafeHandler(
   {
     accountAccess: "standard",
+    contentDelivery: { type: "audited" },
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",

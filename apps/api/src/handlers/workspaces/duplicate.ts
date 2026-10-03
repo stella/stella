@@ -76,6 +76,11 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
   accountAccess: "standard",
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Copies stored content and returns operation metadata rather than file bytes.",
+  },
   description:
     "Copy a matter into a new one: its columns with their dependencies, " +
     "views, members, party contacts, client, billing reference, colour, and " +

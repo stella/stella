@@ -1282,6 +1282,11 @@ const uploadEntityHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores document content and returns operation metadata rather than stored-file bytes.",
+  },
   description:
     "Upload a file as a new document in the current matter over a multipart " +
     "request: the file, a name, and the propertyId of the matter's file " +
@@ -1330,6 +1335,11 @@ const uploadEntity = createSafeHandler(
 );
 
 const generatedDocumentConfig = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores document content and returns operation metadata rather than stored-file bytes.",
+  },
   permissions: { entity: ["create"] },
   mcp: { type: "internal", reason: "assistant_chat" },
   body: uploadGeneratedDocumentBodySchema,

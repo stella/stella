@@ -19,6 +19,11 @@ const saveDocumentParamsSchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores a template and returns its metadata rather than file bytes.",
+  },
   description:
     "Store an edited DOCX as the template's next version: the file becomes " +
     "the current body, its field configuration is read from the markers it " +

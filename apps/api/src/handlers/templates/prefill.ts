@@ -167,6 +167,11 @@ const extractFieldValues = async ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Suggest values for one stored template's fields from source material: " +
     "an uploaded DOCX or PDF, pasted text, or the stored extracted text of " +

@@ -15,6 +15,11 @@ const fillPreviewParamsSchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Run the full fill of a stored template with the given values and return " +
     "text instead of a file: the filled paragraphs, the character count, " +

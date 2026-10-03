@@ -16,6 +16,11 @@ import {
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores document content and returns operation metadata rather than stored-file bytes.",
+  },
   description:
     "Add a new version to an existing document by uploading a file over a " +
     "multipart request, replacing that document's current file. The bytes " +

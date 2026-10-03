@@ -11,6 +11,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const readUserFileContent = createSafeRootHandler(
   {
+    contentDelivery: { type: "audited" },
     permissions: { chat: ["create"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: t.Object({ fileId: tSafeId("userFile") }),

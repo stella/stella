@@ -13,6 +13,7 @@ import { createUserFileKey } from "@/api/lib/files/utils";
 
 const readUserFileThumbnail = createSafeRootHandler(
   {
+    contentDelivery: { type: "audited" },
     permissions: { chat: ["create"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: t.Object({ fileId: tSafeId("userFile") }),

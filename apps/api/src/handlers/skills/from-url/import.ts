@@ -16,6 +16,10 @@ const importSkillBodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Imports skill metadata without delivering stored-file bytes.",
+  },
   description:
     "Fetch and install one agent skill from a URL pointing at a SKILL.md " +
     "file or a skill package. It is stored with a url origin, so it stays " +

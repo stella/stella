@@ -25,6 +25,10 @@ import { LIMITS } from "@/api/lib/limits";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Returns skill availability metadata rather than stored packages.",
+  },
   // The composer menus read this beside the skill list; it names skill ids
   // and tool names only.
   permissions: { chat: ["create"] },
