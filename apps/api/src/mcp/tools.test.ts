@@ -4446,10 +4446,11 @@ describe("OpenAI-compatible MCP tools", () => {
   describe("search_case_law reads a full-property client's placeholders", () => {
     const searchedBody = (): Record<string, unknown> => {
       const args = searchDecisionsHandlerMock.mock.calls.at(0)?.at(0);
-      if (!isRecord(args) || !isRecord(args.body)) {
+      const body = isRecord(args) ? args["body"] : undefined;
+      if (!isRecord(body)) {
         throw new Error("expected the search to run");
       }
-      return args.body;
+      return body;
     };
 
     const inputNotes = (
