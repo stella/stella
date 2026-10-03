@@ -10,6 +10,7 @@ import {
 
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
+import sourceFingerprintBaseline from "./scripts/source-fingerprint-baseline.json" with { type: "json" };
 import {
   SHADCN_LINT_JS_PLUGINS,
   SHADCN_LINT_POLICY_OVERRIDES,
@@ -1224,6 +1225,7 @@ export default defineConfig({
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
+    "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
     "./.oxlint-plugins/drizzle.ts",
@@ -4358,6 +4360,26 @@ export default defineConfig({
       ],
       rules: {
         "no-raw-cache-control/no-raw-cache-control": "error",
+      },
+    },
+    {
+      // A case-law adapter's rawHash decides whether a re-fetched decision is
+      // written, so it comes from `sourceFingerprint` over the stored source.
+      // Files that predate the owner are listed, shrink-only, in
+      // scripts/source-fingerprint-baseline.json.
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
+        ".oxlint-plugins/__fixtures__/raw-hash-from-source-fingerprint.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/handlers/case-law/ingestion/adapters/__fixtures__/**",
+      ],
+      rules: {
+        "raw-hash-from-source-fingerprint/raw-hash-from-source-fingerprint": [
+          "error",
+          { allowedFiles: Object.keys(sourceFingerprintBaseline.files) },
+        ],
       },
     },
     {

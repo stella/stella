@@ -29,6 +29,8 @@ export const BASELINE_PATHS = {
   designLint: "scripts/design-lint-baseline.json",
   /** scripts/typecheck-baseline.ts */
   typecheck: "scripts/typecheck-baseline.json",
+  /** scripts/source-fingerprint-baseline.ts */
+  sourceFingerprint: "scripts/source-fingerprint-baseline.json",
   /** scripts/sql-perf-baseline.ts */
   sqlPerf: ".oxlint-plugins/sql-perf-baseline.json",
   /** apps/api/scripts/mcp-coverage-guard.ts */
