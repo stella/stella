@@ -152,6 +152,16 @@ describe("detect-e2e-changes", () => {
     expect(detects("landing", files)).toBe("false");
   });
 
+  test.each([
+    ".github/actions/prepare-network-baseline/action.yml",
+    ".github/actions/prepare-network-baseline/prepare.sh",
+    "scripts/network-baseline-scope.ts",
+    "scripts/network-baseline-comparison.test.ts",
+  ])("network comparison inputs require core E2E: %s", (file) => {
+    expect(detects("core", [file])).toBe("true");
+    expect(detects("landing", [file])).toBe("false");
+  });
+
   test("a marketing-test-only change waits for the nightly suite", () => {
     const files = ["apps/web/e2e/marketing/product-screenshots.spec.ts"];
     expect(detects("core", files)).toBe("false");

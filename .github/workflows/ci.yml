@@ -1916,6 +1916,10 @@ jobs:
       - name: Test install-free CI commands
         run: bun test scripts/install-free-ci.test.ts
 
+      - name: Test merge-base network comparison
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/network-baseline-comparison.test.ts
+
       # Needs the installed workspace (fast-check, property-testing), so it
       # cannot join the no-install invariants step above.
       - name: Test CLI release coupling gate
@@ -3292,11 +3296,13 @@ jobs:
     timeout-minutes: 12
     permissions:
       contents: read
+      actions: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
@@ -3325,6 +3331,12 @@ jobs:
             echo "::error::Route smoke requires a ready production browser stack."
             exit 1
           fi
+
+      - name: Prepare merge-base network budget
+        uses: ./.github/actions/prepare-network-baseline
+        with:
+          base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          token: ${{ github.token }}
 
       - name: Check route network baseline
         id: network-baseline
@@ -3370,6 +3382,7 @@ jobs:
     timeout-minutes: 12
     permissions:
       contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -3381,6 +3394,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
@@ -3403,6 +3417,13 @@ jobs:
 
       # Keep fixture cardinality equal to baseline generation and prevent other
       # specs' workspace events from refetching queries during measurement.
+      - name: Prepare merge-base network budget
+        if: matrix.shard == 'network-baseline'
+        uses: ./.github/actions/prepare-network-baseline
+        with:
+          base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          token: ${{ github.token }}
+
       - name: Check route network baseline
         if: >-
           steps.e2e-stack.outputs.status == 'ready'
