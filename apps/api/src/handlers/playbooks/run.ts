@@ -9,6 +9,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
+import type { OpenPlaybookRunResult } from "@/api/lib/document-review/open-playbook-run";
+import { playbookRunFailureDetails } from "@/api/lib/document-review/playbook-run-refusal";
 import {
   PLAYBOOK_RUN_START_OUTCOME,
   playbookRunStartOutcome,
@@ -51,7 +53,9 @@ const config = {
   body: runPlaybookBodySchema,
 } satisfies WorkspaceHandlerConfig;
 
-type RunFailure = { ok: false; status: 400 | 404; message: string };
+type RunFailure =
+  | Extract<OpenPlaybookRunResult, { ok: false }>
+  | { ok: false; status: 404; message: string };
 
 type RunSuccess = {
   ok: true;
@@ -132,10 +136,7 @@ export const createRunPlaybook = (
 
       if (!txResult.ok) {
         return Result.err(
-          new HandlerError({
-            status: txResult.status,
-            message: txResult.message,
-          }),
+          new HandlerError(playbookRunFailureDetails(txResult)),
         );
       }
 

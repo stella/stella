@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
+import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
+
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { type ClauseBody, isClauseBody } from "@/api/lib/clauses/types";
 import { isRecord } from "@/api/lib/type-guards";
+import type { MaterializePlaybookRunResult } from "@/api/lib/workflow/materialize-playbook-run";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -90,6 +94,7 @@ const createPlaybookScopedDb = (playbook: unknown) =>
         await run({
           query: {
             playbookDefinitions: { findFirst: async () => playbook },
+            documentTypes: { findFirst: async () => null },
           },
         }),
     ),
@@ -416,9 +421,14 @@ describe("MCP knowledge tools", () => {
         error: {
           code: "validation_error",
           hint: expect.stringContaining("save_clause"),
-          issues: [
+          issues: expect.arrayContaining([
+            {
+              path: "",
+              code: CLAUSE_DIRECTIVES_INVALID_CODE,
+              message: expect.stringContaining("invalid directives"),
+            },
             { path: "body.0", message: expect.stringContaining("Unclosed") },
-          ],
+          ]),
         },
       });
       expect(insertedBodies).toEqual([]);
@@ -997,6 +1007,103 @@ describe("MCP knowledge tools", () => {
       propertyIds: [toSafeId<"property">("p1"), toSafeId<"property">("p2")],
       workspaceId: MATTER_ID,
     });
+  });
+
+  const runRefusals = {
+    file_property_type_immutable: {
+      ok: false,
+      status: 422,
+      code: FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
+      retryable: false,
+      message: "File property types cannot be changed.",
+      hint: "Keep the existing ASK content.type, or add a new playbook position.",
+    },
+    playbook_scope_unresolved: {
+      ok: false,
+      status: 400,
+      code: "playbook_scope_unresolved",
+      retryable: false,
+      message: "The document-type scope cannot be resolved.",
+      hint: "Configure a matching Document Type classifier before running it.",
+    },
+    properties_limit_reached: {
+      ok: false,
+      status: 400,
+      code: "properties_limit_reached",
+      message: "The matter has reached its property limit.",
+    },
+  } as const satisfies Record<
+    Extract<MaterializePlaybookRunResult, { ok: false }>["code"],
+    Extract<MaterializePlaybookRunResult, { ok: false }>
+  >;
+
+  test.each(Object.values(runRefusals))(
+    "run_playbook preserves $code and its corrective action",
+    async (refusal) => {
+      loadLatestApprovedVersionMock.mockResolvedValue(null);
+      materializePlaybookRunMock.mockResolvedValue(refusal);
+      const result = await handleMcpToolCall({
+        args: { matter_id: MATTER_ID, playbook_id: PLAYBOOK_ID },
+        context: createContext({
+          scopedDb: createPlaybookScopedDb({
+            id: PLAYBOOK_ID,
+            name: "Playbook",
+            positions: positionsSaying("File content"),
+            scope: null,
+          }),
+        }),
+        toolName: "run_playbook",
+      });
+      const { ok: _ok, status: _status, code, ...details } = refusal;
+      expect(materializePlaybookRunMock).toHaveBeenCalledTimes(1);
+      expect(result.isError).toBe(true);
+      expect(parseToolPayload(result)).toEqual({
+        error: {
+          code: "validation_error",
+          ...details,
+          issues: [{ path: "", code, message: refusal.message }],
+        },
+      });
+      expect(createPlaybookTableRunsMock).not.toHaveBeenCalled();
+      expect(startWorkflowMock).not.toHaveBeenCalled();
+    },
+  );
+
+  test("run_playbook forwards the real unresolved-scope refusal before materialization", async () => {
+    loadLatestApprovedVersionMock.mockResolvedValue(null);
+    const result = await handleMcpToolCall({
+      args: { matter_id: MATTER_ID, playbook_id: PLAYBOOK_ID },
+      context: createContext({
+        scopedDb: createPlaybookScopedDb({
+          id: PLAYBOOK_ID,
+          name: "Scoped playbook",
+          positions: positionsSaying("Scoped content"),
+          scope: { documentTypeKey: "missing_type" },
+        }),
+      }),
+      toolName: "run_playbook",
+    });
+    expect(result.isError).toBe(true);
+    expect(parseToolPayload(result)).toEqual({
+      error: {
+        code: "validation_error",
+        message:
+          "This playbook is scoped to a document type, but the workspace has no matching Document Type classifier to gate on.",
+        hint: "Configure a matching Document Type classifier or change the playbook document-type scope before running it.",
+        retryable: false,
+        issues: [
+          {
+            path: "",
+            code: "playbook_scope_unresolved",
+            message:
+              "This playbook is scoped to a document type, but the workspace has no matching Document Type classifier to gate on.",
+          },
+        ],
+      },
+    });
+    expect(materializePlaybookRunMock).not.toHaveBeenCalled();
+    expect(createPlaybookTableRunsMock).not.toHaveBeenCalled();
+    expect(startWorkflowMock).not.toHaveBeenCalled();
   });
 
   test("run_playbook reports a workflow that never started instead of a run count", async () => {
