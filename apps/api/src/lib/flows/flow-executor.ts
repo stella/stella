@@ -18,6 +18,7 @@ import { resultTx } from "@/api/db/safe-db";
 import {
   entities,
   flowRuns,
+  workspaces,
   flowRunSteps,
   WORK_OBLIGATION_SOURCE,
   workspaceMembers,
@@ -1320,11 +1321,23 @@ type LockRunAndCurrentStepOptions = {
   runId: SafeId<"flowRun">;
 };
 
-/** All review and cancellation writers lock the run before its current step. */
+/**
+ * Existing workflow rows lock workspace → run → current step → obligation →
+ * entity. Taking the workspace FK lock first also covers repeated entity
+ * updates and field inserts inside an outer Kanban transaction. KEY SHARE
+ * allows independent runs in one workspace to progress concurrently; creators
+ * already hold the stronger workspace cap lock before entering this helper.
+ */
 const lockRunAndCurrentStep = async (
   tx: Transaction,
   { workspaceId, runId }: LockRunAndCurrentStepOptions,
 ) => {
+  await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1)
+    .for("key share");
   const runs = await tx
     .select()
     .from(flowRuns)
