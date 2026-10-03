@@ -1112,7 +1112,7 @@ describe("cz-nss fetchPage", () => {
     setSystemTime();
   });
 
-  test("an unreadable search fails and refreshes the session before retry", async () => {
+  test("an uncounted search checkpoints its retry and refreshes the session", async () => {
     const { requests } = installStub({
       search: [
         htmlResponse(SESSION_PAGE),
@@ -1122,15 +1122,16 @@ describe("cz-nss fetchPage", () => {
       ],
     });
     const cursor = `${SLICE}:0`;
-    const failed = await czNssAdapter.fetchPage(cursor, {});
-    expect(Result.isError(failed)).toBe(true);
-    if (Result.isError(failed)) {
-      expect(String(failed.error)).toContain("stated no result count");
-    }
+    const failed = (await czNssAdapter.fetchPage(cursor, {})).unwrap();
+    expect(JSON.parse(failed.nextCursor ?? "")).toEqual({
+      date: SLICE,
+      page: 0,
+      missingCountAttempts: 1,
+    });
     const sessionReads = requests.filter(
       ({ method }) => method === "GET",
     ).length;
-    const retried = await czNssAdapter.fetchPage(cursor, {});
+    const retried = await czNssAdapter.fetchPage(failed.nextCursor, {});
     expect(Result.isError(retried)).toBe(false);
     expect(Result.isError(retried) ? null : retried.value.nextCursor).toBe(
       "2026-06-11:0",
@@ -1140,19 +1141,134 @@ describe("cz-nss fetchPage", () => {
     );
   });
 
-  test("a short inline page fails before reading documents", async () => {
-    const { requests } = installStub({
-      search: [
-        htmlResponse(searchPage({ statedCount: 2, rows: [MUNICIPAL_ROW] })),
-      ],
-    });
-    const result = await czNssAdapter.fetchPage(`${SLICE}:0`, {});
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
-      expect(String(result.error)).toContain("carried 1 of the 2 rows");
+  test("persistent uncounted days exhaust a durable per-day budget and retain reconciliation debt", async () => {
+    const recording = installRecordingLogger();
+    try {
+      installStub({
+        search: Array.from({ length: 7 }, () => htmlResponse(SESSION_PAGE)),
+      });
+      let cursor: string | null = `${SLICE}:0`;
+      for (const attempt of [1, 2]) {
+        const result = (await czNssAdapter.fetchPage(cursor, {})).unwrap();
+        cursor = result.nextCursor;
+        expect(JSON.parse(cursor ?? "")).toEqual({
+          date: SLICE,
+          page: 0,
+          missingCountAttempts: attempt,
+        });
+      }
+      const skipped = (await czNssAdapter.fetchPage(cursor, {})).unwrap();
+      const debt = { type: "missing-result-count", date: SLICE, attempts: 3 };
+      expect(JSON.parse(skipped.nextCursor ?? "")).toEqual({
+        date: "2026-06-11",
+        page: 0,
+        unsettledDay: debt,
+      });
+      expect(skipped.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 1,
+      });
+      cursor = skipped.nextCursor;
+      for (const attempt of [1, 2]) {
+        const result = (await czNssAdapter.fetchPage(cursor, {})).unwrap();
+        cursor = result.nextCursor;
+        expect(JSON.parse(cursor ?? "")).toEqual({
+          date: "2026-06-11",
+          page: 0,
+          missingCountAttempts: attempt,
+          unsettledDay: debt,
+        });
+      }
+      const nextDaySkipped = (
+        await czNssAdapter.fetchPage(cursor, {})
+      ).unwrap();
+      expect(JSON.parse(nextDaySkipped.nextCursor ?? "")).toEqual({
+        date: "2026-06-12",
+        page: 0,
+        unsettledDay: debt,
+      });
+      expect(
+        recording.records.filter(
+          ({ message }) => message === "case_law.ingestion.nss_unsettled_day",
+        ),
+      ).toHaveLength(2);
+      // A later successful read carries the debt forward without retry state.
+      installStub({
+        search: [
+          htmlResponse(
+            searchPage({ statedCount: 0, rows: [], withScript: false }),
+          ),
+        ],
+      });
+      const empty = (
+        await czNssAdapter.fetchPage(nextDaySkipped.nextCursor, {})
+      ).unwrap();
+      expect(JSON.parse(empty.nextCursor ?? "")).toEqual({
+        date: "2026-06-13",
+        page: 0,
+        unsettledDay: debt,
+      });
+    } finally {
+      recording.restore();
     }
-    expect(requests.some(({ url }) => url.includes("/Dokument"))).toBe(false);
   });
+
+  test("short parsed pages account for their gaps and advance across the whole stated day", async () => {
+    const recording = installRecordingLogger();
+    try {
+      const malformed = rowBlock({
+        ...MUNICIPAL_ROW,
+        displayedCaseNumber: "X".repeat(101),
+      });
+      expect(parseResultRows(malformed)).toHaveLength(0);
+      installStub({
+        search: [
+          htmlResponse(
+            searchPage({ statedCount: 2, rows: [MUNICIPAL_ROW] }) + malformed,
+          ),
+        ],
+      });
+      const short = (await czNssAdapter.fetchPage(`${SLICE}:0`, {})).unwrap();
+      expect(
+        short.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+      ).toEqual([MUNICIPAL_ROW.documentId]);
+      expect(short.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 1,
+      });
+      expect(short.nextCursor).toBe("2026-06-11:0");
+
+      installStub({
+        search: Array.from({ length: 3 }, () =>
+          htmlResponse(searchPage({ statedCount: 61, rows: [MUNICIPAL_ROW] })),
+        ),
+        continuation: [
+          htmlResponse(rowBlock(MUNICIPAL_ROW) + malformed),
+          htmlResponse(rowBlock(MUNICIPAL_ROW)),
+        ],
+      });
+      const first = (await czNssAdapter.fetchPage(`${SLICE}:0`, {})).unwrap();
+      expect(first.itemBuildFailures?.count).toBe(39);
+      expect(first.nextCursor).toBe(`${SLICE}:1`);
+      const second = (
+        await czNssAdapter.fetchPage(first.nextCursor, {})
+      ).unwrap();
+      expect(second.itemBuildFailures?.count).toBe(19);
+      expect(second.nextCursor).toBe(`${SLICE}:2`);
+      const third = (
+        await czNssAdapter.fetchPage(second.nextCursor, {})
+      ).unwrap();
+      expect(third.itemBuildFailures?.count).toBe(0);
+      expect(third.nextCursor).toBe("2026-06-11:0");
+      expect(
+        recording.records.filter(
+          ({ message }) => message === "case_law.ingestion.nss_listing_gap",
+        ),
+      ).toHaveLength(3);
+    } finally {
+      recording.restore();
+    }
+  }, 30_000);
 
   test("a counted day without pagination state fails", async () => {
     installStub({

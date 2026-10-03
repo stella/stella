@@ -1,4 +1,4 @@
-// parser-output-unchanged: Crawl search availability and row-count checks control retries without changing parsed decision output.
+// parser-output-unchanged: Bounded crawl retries and unsettled-day cursors change fetch control without changing parsed decision output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
@@ -95,7 +95,8 @@ import { isRecord } from "@/api/lib/type-guards";
  * 3. Page 0 results are inline in the search response.
  *    Pages 1+ use POST /Home/MyResTRowsCont (AJAX pagination)
  *
- * Cursor format: "YYYY-MM-DD:page" where page is 0-indexed.
+ * Cursor format: "YYYY-MM-DD:page" where page is 0-indexed; JSON when
+ * checkpointing count retries or the earliest unsettled day.
  * A null cursor starts 30 days ago at page 0.
  *
  * The search is addressed by decision date and answers with the court's own
@@ -1992,14 +1993,16 @@ type SearchResult =
       statedCount: number;
     }
   | { type: "absent"; html: string; statedCount: 0 }
+  | { type: "missing-count"; error: AdapterFetchError }
   | { type: "unavailable"; error: AdapterFetchError };
 
-/** Both listing walks retry unreadable searches without advancing their day. */
+/** Reconciliation refuses uncounted searches; the crawl bounds them before this boundary. */
 const requireSearchResult = (read: SearchResult) => {
   switch (read.type) {
     case "present":
     case "absent":
       return read;
+    case "missing-count":
     case "unavailable":
       invalidateSession();
       throw read.error;
@@ -2070,7 +2073,7 @@ const executeSearch = async (
   const statedCount = statedResultCount(html);
   if (statedCount === null) {
     return {
-      type: "unavailable",
+      type: "missing-count",
       error: new AdapterFetchError({
         message: `NSS stated no result count for ${date}`,
         adapterKey: ADAPTER_KEYS.CZ_NSS,
@@ -2536,8 +2539,80 @@ const buildCzNssFromPayload = async (
   }
 };
 
-/** Parse cursor string "YYYY-MM-DD:page" or null. */
-const parseCursor = (cursor: string | null): { date: string; page: number } => {
+const CZ_NSS_MISSING_COUNT_ATTEMPTS = 3;
+
+type CzNssUnsettledDay = {
+  type: "missing-result-count";
+  date: string;
+  attempts: number;
+};
+
+type CzNssCursor = {
+  date: string;
+  page: number;
+  missingCountAttempts?: number;
+  /** Earliest completeness debt; the calendar reconciliation sweeps every day. */
+  unsettledDay?: CzNssUnsettledDay;
+};
+
+const encodeCursor = (state: CzNssCursor): string =>
+  state.missingCountAttempts === undefined && state.unsettledDay === undefined
+    ? `${state.date}:${state.page}`
+    : JSON.stringify(state);
+
+/** Retry state and completeness debt share the pipeline's durable checkpoint. */
+const parseCursor = (cursor: string | null): CzNssCursor => {
+  if (cursor?.startsWith("{")) {
+    const state: unknown = JSON.parse(cursor);
+    if (
+      !isRecord(state) ||
+      typeof state["date"] !== "string" ||
+      typeof state["page"] !== "number" ||
+      !Number.isInteger(state["page"]) ||
+      state["page"] < 0
+    ) {
+      return panic("Invalid NSS crawl cursor");
+    }
+    const attempts = state["missingCountAttempts"];
+    const unsettled = state["unsettledDay"];
+    if (
+      attempts !== undefined &&
+      (typeof attempts !== "number" ||
+        !Number.isInteger(attempts) ||
+        attempts < 0 ||
+        attempts >= CZ_NSS_MISSING_COUNT_ATTEMPTS)
+    ) {
+      return panic("Invalid NSS count attempt checkpoint");
+    }
+    if (
+      unsettled !== undefined &&
+      (!isRecord(unsettled) ||
+        unsettled["type"] !== "missing-result-count" ||
+        typeof unsettled["date"] !== "string" ||
+        typeof unsettled["attempts"] !== "number" ||
+        unsettled["attempts"] !== CZ_NSS_MISSING_COUNT_ATTEMPTS)
+    ) {
+      return panic("Invalid NSS unsettled-day checkpoint");
+    }
+    return {
+      date: state["date"],
+      page: state["page"],
+      ...(typeof attempts === "number"
+        ? { missingCountAttempts: attempts }
+        : {}),
+      ...(isRecord(unsettled) &&
+      typeof unsettled["date"] === "string" &&
+      typeof unsettled["attempts"] === "number"
+        ? {
+            unsettledDay: {
+              type: "missing-result-count",
+              date: unsettled["date"],
+              attempts: unsettled["attempts"],
+            },
+          }
+        : {}),
+    };
+  }
   if (!cursor) {
     const lookback = addUtcDays(new Date(), -DEFAULT_LOOKBACK_DAYS);
     const iso = lookback.toISOString().split("T")[0];
@@ -2728,23 +2803,74 @@ export const czNssAdapter = defineSourceAdapter({
         const readBudgetSpent = (): boolean =>
           readBudget.aborted && signal?.aborted !== true;
 
-        const { date, page } = parseCursor(cursor);
+        const {
+          date,
+          page,
+          missingCountAttempts = 0,
+          unsettledDay,
+        } = parseCursor(cursor);
+        const cursorFor = (nextDate: string, nextPage: number): string =>
+          encodeCursor({
+            date: nextDate,
+            page: nextPage,
+            ...(unsettledDay ? { unsettledDay } : {}),
+          });
         const today = todayIso();
 
         // If the date is in the future, park at today so we
         // only re-check today on the next cycle (never null —
         // null restarts from DEFAULT_LOOKBACK_DAYS ago).
         if (date > today) {
-          return { decisions: [], nextCursor: `${today}:0` };
+          return { decisions: [], nextCursor: cursorFor(today, 0) };
         }
 
         // 1. Get or reuse session
         const session = await getSession(effectiveSignal);
 
         // 2. Execute search for this date
-        const searchResult = requireSearchResult(
-          await executeSearch(session, date, effectiveSignal),
-        );
+        const searchRead = await executeSearch(session, date, effectiveSignal);
+        if (searchRead.type === "missing-count") {
+          invalidateSession();
+          const attempts = missingCountAttempts + 1;
+          if (attempts < CZ_NSS_MISSING_COUNT_ATTEMPTS) {
+            logger.warn("case_law.ingestion.nss_count_retry", {
+              adapterKey: ADAPTER_KEYS.CZ_NSS,
+              date,
+              page,
+              attempts,
+            });
+            return {
+              decisions: [],
+              nextCursor: encodeCursor({
+                date,
+                page,
+                missingCountAttempts: attempts,
+                ...(unsettledDay ? { unsettledDay } : {}),
+              }),
+            };
+          }
+          const debt: CzNssUnsettledDay = {
+            type: "missing-result-count",
+            date,
+            attempts,
+          };
+          logger.warn("case_law.ingestion.nss_unsettled_day", {
+            adapterKey: ADAPTER_KEYS.CZ_NSS,
+            ...debt,
+            repair: "calendar_reconciliation",
+          });
+          const next = nextDay(date);
+          return {
+            decisions: [],
+            itemBuildFailures: { type: "item_build_failed", count: 1 },
+            nextCursor: encodeCursor({
+              date: next <= today ? next : today,
+              page: 0,
+              unsettledDay: unsettledDay ?? debt,
+            }),
+          };
+        }
+        const searchResult = requireSearchResult(searchRead);
 
         if (searchResult.type === "absent") {
           const rows = parseResultRows(searchResult.html);
@@ -2758,7 +2884,7 @@ export const czNssAdapter = defineSourceAdapter({
           const next = nextDay(date);
           return {
             decisions: [],
-            nextCursor: next <= today ? `${next}:0` : `${today}:0`,
+            nextCursor: cursorFor(next <= today ? next : today, 0),
           };
         }
         const { continuation } = searchResult;
@@ -2792,16 +2918,20 @@ export const czNssAdapter = defineSourceAdapter({
           page,
           statedCount: searchResult.statedCount,
         });
-        if (rows.length < expectedRows) {
-          invalidateSession();
-          throw new AdapterFetchError({
-            message: `NSS page ${page} of ${date} carried ${rows.length} of the ${expectedRows} rows its stated count of ${searchResult.statedCount} requires`,
+        const gap = Math.max(0, expectedRows - rows.length);
+        if (gap > 0) {
+          logger.warn("case_law.ingestion.nss_listing_gap", {
             adapterKey: ADAPTER_KEYS.CZ_NSS,
-            cursor,
+            date,
+            page,
+            type: "item_build_failed",
+            count: gap,
+            expectedRows,
+            parsedRows: rows.length,
           });
         }
         const decisions: IngestionResult[] = [];
-        let failed = 0;
+        let failed = gap;
 
         // Every listed row is stored, and the cursor moves past the page. A
         // document that was not read, including every row left once the
@@ -2846,16 +2976,14 @@ export const czNssAdapter = defineSourceAdapter({
           decisions.push(attempted.value);
         }
 
-        // Determine next cursor. Against the size this page can hold, not the
-        // inline one: a continuation page tops out at half of it, so measuring
-        // every page against the inline size ended the day at the first
-        // continuation page and skipped everything past record 60.
-        if (rows.length >= czNssRowsOnPage(page)) {
+        // Parsed rows can be short because malformed rows were dropped. The
+        // publisher's count still requires the remaining pages to be read.
+        if (page + 1 < czNssTotalPages(searchResult.statedCount)) {
           // More pages for this date
           return {
             decisions,
             itemBuildFailures: { type: "item_build_failed", count: failed },
-            nextCursor: `${date}:${page + 1}`,
+            nextCursor: cursorFor(date, page + 1),
           };
         }
 
@@ -2864,7 +2992,7 @@ export const czNssAdapter = defineSourceAdapter({
         return {
           decisions,
           itemBuildFailures: { type: "item_build_failed", count: failed },
-          nextCursor: next <= today ? `${next}:0` : `${today}:0`,
+          nextCursor: cursorFor(next <= today ? next : today, 0),
         };
       },
       catch: adapterCatch(ADAPTER_KEYS.CZ_NSS, cursor),
