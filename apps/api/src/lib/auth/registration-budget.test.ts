@@ -60,7 +60,9 @@ test("unavailable registration storage returns a typed refusal", async () => {
     kind: "agent",
     limit: limits.agent,
     now: new Date("2026-10-03T12:00:00Z"),
-    execute: () => Promise.reject(new TypeError("Storage unavailable")),
+    execute: async () => {
+      throw new TypeError("Storage unavailable");
+    },
   });
   expect(Result.isError(admission)).toBe(true);
   if (Result.isError(admission)) {
