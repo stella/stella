@@ -139,7 +139,7 @@ export const decideGateForTask = async (
     note,
     recordAuditEvent,
   }: DecideGateForTaskOptions,
-  /** The resolver's own injection points, passed through for tests. */
+  /** The resolver's side effects, including notices deferred until commit. */
   dependencies: Parameters<typeof resolveFlowReviewGate>[1] = {},
 ): Promise<Result<FlowRunActionResult, HandlerError | SafeDbError>> =>
   await Result.gen(async function* () {

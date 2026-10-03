@@ -1390,8 +1390,11 @@ export const resolveFlowReviewGate = async (
     /**
      * Files the completion pointer for the run's actor, who is usually not the
      * reviewer: a cross-user operation the caller's scope cannot perform.
+     * An enclosing transaction collects the notice and files it after commit.
      */
-    notifyRunCompleted?: typeof notifyFlowRunActorOfCompletion;
+    notifyRunCompleted?: (
+      notice: Parameters<typeof notifyFlowRunActorOfCompletion>[0],
+    ) => void | Promise<void>;
   } = {},
 ): Promise<Result<FlowRunActionResult, HandlerError | SafeDbError>> =>
   await Result.gen(async function* () {
@@ -1521,7 +1524,8 @@ export const resolveFlowReviewGate = async (
     // the run's actor, who is usually not the reviewer, so it cannot be
     // written under the reviewer's own scope; the run-derived key makes it a
     // no-op if `completeStepAndAdvance` also reaches it. The review and its
-    // audit event have committed by now, so a notice that cannot be filed is
+    // audit event commit before the notice is filed (an outer transaction
+    // defers its callback until commit), so a notice that cannot be filed is
     // observed and the reviewer still gets the completed run: failing here
     // would answer an error for a decision that stands, and a retry would find
     // the run no longer awaiting review.
