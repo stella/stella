@@ -56,7 +56,7 @@ describe("generated environment examples", () => {
       expect(Object.values(ENV_CREDENTIAL_KIND)).toContain(
         entry.credentialKind,
       );
-      expect(entry.credentialKind).toBe(classifications.get(entry.name));
+      expect(classifications.get(entry.name)).toBe(entry.credentialKind);
     }
   });
 
