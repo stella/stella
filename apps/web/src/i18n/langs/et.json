@@ -1753,6 +1753,7 @@
     "organization": "Organisatsioon",
     "organizationName": "Organisatsiooni nimi",
     "page": "Lehekülg {page}",
+    "paymentRetryNotice": "Makseprobleem. Juurdepääsu säilitamiseks uuendage oma makseviisi hiljemalt {date}.",
     "pin": "Kinnita",
     "playbooks": "Playbookid",
     "preparing": "Ettevalmistamine…",

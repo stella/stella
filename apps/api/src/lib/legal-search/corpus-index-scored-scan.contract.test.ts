@@ -35,6 +35,7 @@ import {
   type CorpusIndexRankingMode,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
+  corpusSearchGroupToken,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
@@ -142,6 +143,9 @@ const decisionAst = (templates: readonly number[]): DocumentAst => ({
   }),
 });
 
+/** Mirror the applied projection count from the exact documents ingested below. */
+const physicalPassagesByDocument = new Map<string, number>();
+
 const decisionDocuments = (batch: number, slot: number) => {
   const serial = batch * DECISIONS_PER_BATCH + slot;
   const templates = Array.from(
@@ -168,7 +172,7 @@ const decisionDocuments = (batch: number, slot: number) => {
     ecli: null,
     metadata: null,
   } satisfies CaseLawProjectionInput;
-  return buildCaseLawProjectionDocuments({
+  const documents = buildCaseLawProjectionDocuments({
     manifest: MANIFEST,
     input,
     payload: {
@@ -177,6 +181,8 @@ const decisionDocuments = (batch: number, slot: number) => {
     },
     revision: REVISION,
   });
+  physicalPassagesByDocument.set(input.documentId, documents.length);
+  return documents;
 };
 
 const tiedDocuments = (serial: number) => {
@@ -207,6 +213,7 @@ const tiedDocuments = (serial: number) => {
     revision: REVISION,
   });
   expect(documents).toHaveLength(1);
+  physicalPassagesByDocument.set(input.documentId, documents.length);
   return documents;
 };
 
@@ -378,8 +385,22 @@ const readScanPage = async ({
       stableBlendUpperBound(next, DEFAULT_AUTHORITY_WEIGHT),
     rankCandidates: async (candidates) => ({
       context: null,
+      groups: candidates
+        .filter(({ id }) => {
+          const count = physicalPassagesByDocument.get(id);
+          if (count === undefined) {
+            return panic("Candidate has no ingested projection count");
+          }
+          return count > 1;
+        })
+        .map(({ id }) => corpusSearchGroupToken(id)),
       ranked: blendStableCitationAuthority({
-        candidates,
+        candidates: candidates.filter(
+          (candidate) =>
+            !parsedCursor?.excludedGroups?.includes(
+              corpusSearchGroupToken(candidate.id),
+            ),
+        ),
         authorityById: new Map(),
       }),
     }),
