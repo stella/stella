@@ -1,3 +1,4 @@
+import type { ProviderEventReplayAudit } from "@/api/lib/hosted-usage-provider/replay-audit";
 import { CONFIGURED_ACCESS_STATUSES } from "@/api/lib/usage/configured-access";
 
 import {
@@ -999,6 +1000,8 @@ export const hostedUsageWebhookEvents = p.pgTable(
     processedAt: timestamptz("processed_at").notNull().defaultNow(),
     result: p.text({ enum: USAGE_PROVIDER_WEBHOOK_RESULTS }).notNull(),
     errorMessage: p.text("error_message"),
+    // Kept independently of retained payload details: an ignored replay is terminal too.
+    replayAudit: jsonb("replay_audit").$type<ProviderEventReplayAudit>(),
   },
   (table) => [
     p

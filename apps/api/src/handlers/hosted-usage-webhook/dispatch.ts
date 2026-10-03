@@ -30,6 +30,7 @@ import { env } from "@/api/env";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
+  HostedUsageWebhookEvent,
   HostedUsageAllocationPayload,
   HostedUsageEntitlementPayload,
 } from "@/api/lib/hosted-usage-provider/event-schemas";
@@ -1297,4 +1298,66 @@ export const handleHostedAllocation = async ({
   });
 
   return { kind: "applied", entitlementId: existing.id };
+};
+
+type DispatchEventOptions = {
+  tx: Transaction;
+  event: HostedUsageWebhookEvent;
+  eventId: string;
+};
+
+export const dispatchEvent = async ({
+  tx,
+  event,
+  eventId,
+}: DispatchEventOptions): Promise<DispatchOutcome> => {
+  switch (event.type) {
+    case "entitlement.created":
+    case "entitlement.updated":
+    case "entitlement.active":
+      return await handleHostedEntitlementUpsert({
+        tx,
+        payload: event.data,
+        eventId,
+      });
+    case "entitlement.reconciliation":
+      return await handleHostedEntitlementReconciliation({
+        tx,
+        payload: event.data,
+        eventId,
+        reason: "provider_migration",
+      });
+    case "entitlement.paused":
+      // A pause can introduce a replacement generation before its creation
+      // arrives; the upsert's generation clock must retain that denial.
+      return await handleHostedEntitlementUpsert({
+        tx,
+        payload: {
+          ...event.data,
+          status: "paused",
+          cancel_at_period_end: false,
+        },
+        eventId,
+      });
+    case "entitlement.canceled":
+      return await handleUsageEntitlementStatusChange({
+        tx,
+        payload: event.data,
+        eventId,
+        eventKind: "canceled",
+      });
+    case "entitlement.revoked":
+      return await handleUsageEntitlementStatusChange({
+        tx,
+        payload: event.data,
+        eventId,
+        eventKind: "revoked",
+      });
+    case "allocation.created":
+      return await handleHostedAllocation({ tx, payload: event.data, eventId });
+    default: {
+      event satisfies never;
+      return panic(`Unhandled event: ${String(event)}`);
+    }
+  }
 };
