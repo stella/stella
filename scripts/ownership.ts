@@ -607,7 +607,7 @@ export const OWNERSHIP = [
       specifiers: ["@/api/lib/root-scoped-db"],
       names: ["createRootRunActor"],
       allowed: [
-        // Kept equal to MEMBER_RUN_QUEUES by apps/api/src/lib/member-run-queues.test.ts.
+        // Kept equal to MEMBER_RUN_QUEUES by scripts/ownership.test.ts.
         ...[
           "apps/api/src/lib/document-review/run-queue.ts",
           "apps/api/src/lib/document-translation/run-queue.ts",

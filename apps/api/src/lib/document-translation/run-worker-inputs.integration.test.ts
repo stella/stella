@@ -32,7 +32,7 @@ import {
   initBuiltinReportTemplates,
 } from "@/api/handlers/reports/builtin-templates";
 import * as aiConfigLoader from "@/api/lib/ai-config-loader";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import * as translationAI from "@/api/lib/document-translation/ai";
 import { processDocumentTranslationRun } from "@/api/lib/document-translation/run-queue";
@@ -152,7 +152,7 @@ beforeEach(async () => {
     entityId: ids.entityA1,
     fileFieldId: ids.fileFieldA1,
     entityVersionId: ids.entityVersionA1,
-    sourceFileId: ids.fileObjectA1,
+    sourceFileId: toSafeId<"userFile">(ids.fileObjectA1),
     sourceFileName: "agreement-a.docx",
     sourceMimeType: DOCX_MIME_TYPE,
     output: "translated",

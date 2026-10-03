@@ -1,9 +1,9 @@
+import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import { rlsDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   createMembershipSafeDb,
-  createMembershipScopedDb,
   createSafeDb,
   createScopedDb,
   createTenantlessDb,
@@ -80,56 +80,71 @@ type MembershipOptions = {
   userId: SafeId<"user">;
 };
 
+const NO_STORED_WORKSPACES = {
+  type: WORKSPACE_ACCESS_MODE.membership,
+  serverValidatedWorkspaceIds: [],
+} as const satisfies CurrentMembershipScope;
+
+export const createRootSafeDb = (
+  options: RootScopedDbOptions,
+  database: RlsDatabase<Transaction> = rlsDb,
+) => {
+  // This helper exists only because some modules are not allowed
+  // to import the RLS database handle directly.
+  if ("workspaceScope" in options) {
+    return createMembershipSafeDb(database, {
+      organizationId: options.organizationId,
+      userId: options.userId,
+      serverValidatedWorkspaceIds:
+        options.workspaceScope.serverValidatedWorkspaceIds,
+    });
+  }
+  return createSafeDb(
+    database,
+    options.workspaceIds,
+    options.organizationId,
+    options.userId,
+  );
+};
+
 /** A deferred read uses current membership without adding stored matter IDs. */
 export const createRootMembershipScopedDb = (
   { organizationId, userId }: MembershipOptions,
-  database: RlsDatabase<Transaction> = rlsDb,
+  database?: RlsDatabase<Transaction>,
 ): MembershipScopedDb =>
   Object.assign(
-    createMembershipScopedDb(database, {
-      organizationId,
-      userId,
-      serverValidatedWorkspaceIds: [],
-    }),
+    createRootScopedDb(
+      { organizationId, userId, workspaceScope: NO_STORED_WORKSPACES },
+      database,
+    ),
     { [MEMBERSHIP_SCOPE]: true as const },
   );
 
 const createRootMembershipSafeDb = (
   { organizationId, userId }: MembershipOptions,
-  database: RlsDatabase<Transaction>,
+  database: RlsDatabase<Transaction> | undefined,
 ): MembershipSafeDb =>
   Object.assign(
-    createMembershipSafeDb(database, {
-      organizationId,
-      userId,
-      serverValidatedWorkspaceIds: [],
-    }),
+    createRootSafeDb(
+      { organizationId, userId, workspaceScope: NO_STORED_WORKSPACES },
+      database,
+    ),
     { [MEMBERSHIP_SCOPE]: true as const },
   );
 
-export const createRootSafeDb = ({
-  organizationId,
-  userId,
-  workspaceIds,
-}: PinnedOptions) =>
-  // This helper exists only because some modules are not allowed
-  // to import the RLS database handle directly.
-  createSafeDb(rlsDb, workspaceIds, organizationId, userId);
-
 const createPinnedScopedDb = (
-  { organizationId, userId, workspaceIds }: PinnedOptions,
-  database: RlsDatabase<Transaction>,
+  options: PinnedOptions,
+  database: RlsDatabase<Transaction> | undefined,
 ): PinnedScopedDb =>
-  Object.assign(
-    createScopedDb(database, workspaceIds, organizationId, userId),
-    { [EXPLICIT_PIN]: true as const },
-  );
+  Object.assign(createRootScopedDb(options, database), {
+    [EXPLICIT_PIN]: true as const,
+  });
 
 const createPinnedSafeDb = (
-  { organizationId, userId, workspaceIds }: PinnedOptions,
-  database: RlsDatabase<Transaction>,
+  options: PinnedOptions,
+  database: RlsDatabase<Transaction> | undefined,
 ): PinnedSafeDb =>
-  Object.assign(createSafeDb(database, workspaceIds, organizationId, userId), {
+  Object.assign(createRootSafeDb(options, database), {
     [EXPLICIT_PIN]: true as const,
   });
 
@@ -182,7 +197,7 @@ export const createRootRunActor = <TRun extends SafeIdType>(
     runId: string;
   },
   brandRunId: (runId: string) => SafeId<TRun>,
-  database: RlsDatabase<Transaction> = rlsDb,
+  database?: RlsDatabase<Transaction>,
 ): RootRunActor<TRun> => {
   const branded = brandValidatedWorkflowActorKey({
     organizationId: data.organizationId,
