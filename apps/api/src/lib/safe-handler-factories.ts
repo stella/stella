@@ -24,26 +24,62 @@ export type HandlerKind = (typeof HANDLER_KINDS)[number];
  */
 type HandlerContextTrust = "authenticated" | "self-authorized" | "anonymous";
 
+const API_HANDLERS_MODULE = "@/api/lib/api-handlers";
+const PUBLIC_SUBJECT_MODULE =
+  "@/api/handlers/case-law/decisions/public-subject";
+
 type SafeHandlerScope = {
   kind: HandlerKind;
   context: HandlerContextTrust;
+  /** The import specifier that defines the factory; a same-named import from elsewhere is not it. */
+  module: typeof API_HANDLERS_MODULE | typeof PUBLIC_SUBJECT_MODULE;
 };
 
 export const SAFE_HANDLER_FACTORIES = {
-  createSafeHandler: { kind: "workspace", context: "authenticated" },
-  createSafeRootHandler: { kind: "root", context: "authenticated" },
-  createSafeSessionHandler: { kind: "session", context: "authenticated" },
-  createSafeTokenHandler: { kind: "token", context: "self-authorized" },
-  createSafePublicHandler: { kind: "public", context: "anonymous" },
-  createSafeBoundedPublicHandler: { kind: "public", context: "anonymous" },
+  createSafeHandler: {
+    kind: "workspace",
+    context: "authenticated",
+    module: API_HANDLERS_MODULE,
+  },
+  createSafeRootHandler: {
+    kind: "root",
+    context: "authenticated",
+    module: API_HANDLERS_MODULE,
+  },
+  createSafeSessionHandler: {
+    kind: "session",
+    context: "authenticated",
+    module: API_HANDLERS_MODULE,
+  },
+  createSafeTokenHandler: {
+    kind: "token",
+    context: "self-authorized",
+    module: API_HANDLERS_MODULE,
+  },
+  createSafePublicHandler: {
+    kind: "public",
+    context: "anonymous",
+    module: API_HANDLERS_MODULE,
+  },
+  createSafeBoundedPublicHandler: {
+    kind: "public",
+    context: "anonymous",
+    module: API_HANDLERS_MODULE,
+  },
   createSafeUncheckedBoundedPublicHandler: {
     kind: "public",
     context: "anonymous",
+    module: API_HANDLERS_MODULE,
   },
-  createSafePublicSubjectHandler: { kind: "public", context: "anonymous" },
+  createSafePublicSubjectHandler: {
+    kind: "public",
+    context: "anonymous",
+    module: PUBLIC_SUBJECT_MODULE,
+  },
   createSafePublicSubjectFollowUpHandler: {
     kind: "public",
     context: "anonymous",
+    module: PUBLIC_SUBJECT_MODULE,
   },
 } as const satisfies Record<`createSafe${string}Handler`, SafeHandlerScope>;
 

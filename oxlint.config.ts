@@ -227,6 +227,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-tenant-page-limit.fixture.tsx", [
     "require-tenant-page-limit/require-tenant-page-limit",
   ]),
+  fixtureRuleOverride("require-tenant-page-limit.fixture.impostor.ts", [
+    "require-tenant-page-limit/require-tenant-page-limit",
+  ]),
   fixtureRuleOverride("no-optional-mutation-command.fixture.ts", [
     "no-optional-mutation-command/no-optional-mutation-command",
   ]),
