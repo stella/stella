@@ -1,206 +1,42 @@
-/**
- * Seed usage policies from deployment-owned JSON config.
- *
- * Idempotent: repeated runs upsert by `policyKey` and
- * leave existing rows in place. Source defaults are intentionally
- * empty so the public repo does not encode an operator policy.
- */
-
 import { Result } from "better-result";
-import { and, eq, notInArray } from "drizzle-orm";
-import * as v from "valibot";
+import { parseArgs } from "node:util";
 
-import {
-  USAGE_POLICY_BILLING_INTERVALS,
-  USAGE_POLICY_KINDS,
-  USAGE_POLICY_PRICE_BASES,
-  USAGE_POLICY_VISIBILITIES,
-  usagePolicies,
-} from "@/api/db/schema";
 import { env } from "@/api/env";
-import { MAX_CATALOG_ROWS } from "@/api/lib/usage/policy-catalog";
 
-// PostgreSQL int4 ceiling: values beyond it would fail at write time
-// with an opaque driver error instead of a seed validation message.
-const PG_INT4_MAX = 2_147_483_647;
+import { runSeedReport } from "./seed-usage-policies-runner";
 
-const usagePolicySeedSchema = v.pipe(
-  v.strictObject({
-    key: v.pipe(v.string(), v.trim(), v.regex(/^[a-z0-9][a-z0-9_-]{0,63}$/u)),
-    displayName: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
-    description: v.optional(v.nullable(v.pipe(v.string(), v.trim())), null),
-    kind: v.optional(v.picklist(USAGE_POLICY_KINDS), "subscription"),
-    monthlyUsageUnits: v.pipe(
-      v.number(),
-      v.integer(),
-      v.minValue(0),
-      v.maxValue(PG_INT4_MAX),
-    ),
-    hostedPolicyRef: v.optional(v.nullable(v.string()), null),
-    priceAmountCents: v.optional(
-      v.nullable(
-        v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(PG_INT4_MAX)),
-      ),
-      null,
-    ),
-    priceCurrency: v.optional(
-      // Strict ISO 4217 alpha code: a malformed value would make the
-      // picker's Intl.NumberFormat throw at render time.
-      v.nullable(v.pipe(v.string(), v.trim(), v.regex(/^[A-Z]{3}$/u))),
-      null,
-    ),
-    billingInterval: v.optional(
-      v.nullable(v.picklist(USAGE_POLICY_BILLING_INTERVALS)),
-      null,
-    ),
-    priceBasis: v.optional(v.picklist(USAGE_POLICY_PRICE_BASES), "flat"),
-    storageBytesPerAssignment: v.optional(
-      v.nullable(
-        v.pipe(
-          v.number(),
-          v.integer(),
-          v.minValue(0),
-          v.maxValue(Number.MAX_SAFE_INTEGER),
-        ),
-      ),
-      null,
-    ),
-    serviceActionsPerPeriod: v.optional(
-      v.nullable(
-        v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(PG_INT4_MAX)),
-      ),
-      null,
-    ),
-    maxMembers: v.optional(
-      v.nullable(
-        v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(PG_INT4_MAX)),
-      ),
-      null,
-    ),
-    visibility: v.optional(v.picklist(USAGE_POLICY_VISIBILITIES), "hidden"),
-    sortOrder: v.optional(
-      v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(-PG_INT4_MAX - 1),
-        v.maxValue(PG_INT4_MAX),
-      ),
-      0,
-    ),
-  }),
-  v.check(
-    (seed) =>
-      (seed.priceAmountCents === null) === (seed.priceCurrency === null) &&
-      (seed.priceAmountCents === null) === (seed.billingInterval === null),
-    "price fields must be set together (amount + currency + interval)",
-  ),
-);
-
-// Bounded to the catalog read ceiling (MAX_CATALOG_ROWS): an oversized
-// operator config fails loudly at seed time instead of silently
-// truncating the checkout picker.
-const usagePolicySeedsSchema = v.pipe(
-  v.array(usagePolicySeedSchema),
-  v.maxLength(MAX_CATALOG_ROWS),
-);
-
-type UsagePolicySeed = v.InferOutput<typeof usagePolicySeedSchema>;
-
-const parseSeeds = (): UsagePolicySeed[] => {
-  const parsed = JSON.parse(env.STELLA_USAGE_POLICY_SEEDS);
-  return v.parse(usagePolicySeedsSchema, parsed);
-};
-
-const seed = async (): Promise<void> => {
-  const seeds = parseSeeds();
-  if (seeds.length === 0) {
-    console.log("usage policies: seeded=0 hidden=0");
-    return;
-  }
-
-  const { openMaintenanceDb } = await import("@/api/lib/db/maintenance-db");
-  const db = openMaintenanceDb({ readOnly: false });
-  // One transaction for upserts + retirement: a mid-run failure (e.g.
-  // two seeds colliding on the unique hosted-provider reference) must
-  // not leave the catalog as a partial mix of new and stale entries.
-  const hiddenCount = await db.transaction(async (tx) => {
-    for (const seedPolicy of seeds) {
-      // Upsert by policyKey so edits to the config (display name, units,
-      // or a newly created hostedPolicyRef) propagate to the existing row
-      // instead of being skipped.
-      await tx
-        .insert(usagePolicies)
-        .values({
-          policyKey: seedPolicy.key,
-          displayName: seedPolicy.displayName,
-          description: seedPolicy.description,
-          kind: seedPolicy.kind,
-          monthlyUsageUnits: seedPolicy.monthlyUsageUnits,
-          hostedPolicyRef: seedPolicy.hostedPolicyRef,
-          priceAmountCents: seedPolicy.priceAmountCents,
-          priceCurrency: seedPolicy.priceCurrency,
-          billingInterval: seedPolicy.billingInterval,
-          priceBasis: seedPolicy.priceBasis,
-          storageBytesPerAssignment:
-            seedPolicy.storageBytesPerAssignment === null
-              ? null
-              : BigInt(seedPolicy.storageBytesPerAssignment),
-          maxMembers: seedPolicy.maxMembers,
-          serviceActionsPerPeriod: seedPolicy.serviceActionsPerPeriod,
-          visibility: seedPolicy.visibility,
-          sortOrder: seedPolicy.sortOrder,
-        })
-        .onConflictDoUpdate({
-          target: usagePolicies.policyKey,
-          set: {
-            displayName: seedPolicy.displayName,
-            description: seedPolicy.description,
-            kind: seedPolicy.kind,
-            monthlyUsageUnits: seedPolicy.monthlyUsageUnits,
-            hostedPolicyRef: seedPolicy.hostedPolicyRef,
-            priceAmountCents: seedPolicy.priceAmountCents,
-            priceCurrency: seedPolicy.priceCurrency,
-            billingInterval: seedPolicy.billingInterval,
-            priceBasis: seedPolicy.priceBasis,
-            storageBytesPerAssignment:
-              seedPolicy.storageBytesPerAssignment === null
-                ? null
-                : BigInt(seedPolicy.storageBytesPerAssignment),
-            maxMembers: seedPolicy.maxMembers,
-            serviceActionsPerPeriod: seedPolicy.serviceActionsPerPeriod,
-            visibility: seedPolicy.visibility,
-            sortOrder: seedPolicy.sortOrder,
-          },
-        });
-    }
-
-    // The seed config is the single source of the PUBLIC catalog: rows
-    // whose key left the config are hidden (not deleted or deactivated —
-    // existing entitlements keep referencing them), so repeated
-    // reconfiguration cannot grow the visible catalog past the seed
-    // bound. The empty-config early return above deliberately leaves
-    // everything untouched.
-    const seededKeys = seeds.map((seedPolicy) => seedPolicy.key);
-    const hidden = await tx
-      .update(usagePolicies)
-      .set({ visibility: "hidden" })
-      .where(
-        and(
-          notInArray(usagePolicies.policyKey, seededKeys),
-          eq(usagePolicies.visibility, "public"),
-        ),
-      )
-      .returning({ policyKey: usagePolicies.policyKey });
-    return hidden.length;
+const run = async () => {
+  const { values } = parseArgs({
+    args: process.argv.slice(2),
+    options: { results: { type: "string" } },
+    allowPositionals: false,
   });
-  console.log(`usage policies: seeded=${seeds.length} hidden=${hiddenCount}`);
+  const resultsPath =
+    values.results ??
+    `/tmp/usage-policy-results-${Date.now()}-${process.pid}.jsonl`;
+  const report = await runSeedReport({
+    input: env.STELLA_USAGE_POLICY_SEEDS,
+    resultsPath,
+    openDb: async () => {
+      const { openMaintenanceDb } = await import("@/api/lib/db/maintenance-db");
+      return openMaintenanceDb({ readOnly: false });
+    },
+  });
+  if (report.status === "complete") {
+    console.log(
+      `usage policies: seeded=${report.seeded} hidden=${report.rows.filter((row) => row.outcome === "hidden").length}`,
+    );
+  }
+  console.log(
+    `usage policy results: ${resultsPath}\n\`\`\`jsonl\n${report.lines}\n\`\`\``,
+  );
+  return report.status === "complete";
 };
 
-const result = await Result.tryPromise(seed);
-if (result.isErr()) {
-  // Driver and validation errors may contain deployment-owned policy values.
+const result = await Result.tryPromise(run);
+if (result.isErr() || !result.value) {
   process.stderr.write(
-    "Usage policy seed failed; check configuration and database access.\n",
+    "Usage policy seed failed; check configuration, results path and database access.\n",
   );
   process.exit(1);
 }

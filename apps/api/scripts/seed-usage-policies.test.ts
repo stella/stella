@@ -1,11 +1,18 @@
 import { expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import nodePath from "node:path";
 
 const runSeed = async (seeds: string) => {
+  const dir = mkdtempSync(nodePath.join(tmpdir(), "policy-cli-"));
+  const resultsPath = nodePath.join(dir, "results.jsonl");
   const child = Bun.spawn(
     [
       process.execPath,
       "--no-env-file",
       new URL("seed-usage-policies.ts", import.meta.url).pathname,
+      "--results",
+      resultsPath,
     ],
     {
       env: {
@@ -37,14 +44,17 @@ const runSeed = async (seeds: string) => {
     new Response(child.stdout).text(),
     new Response(child.stderr).text(),
   ]);
-  return { exitCode, stdout, stderr };
+  const report = readFileSync(resultsPath, "utf-8");
+  rmSync(dir, { recursive: true });
+  return { exitCode, stdout, stderr, report };
 };
 
 test("empty usage policy configuration exits without database access", async () => {
   const result = await runSeed("[]");
   expect(result).toEqual({
     exitCode: 0,
-    stdout: "usage policies: seeded=0 hidden=0\n",
+    stdout: expect.stringContaining("usage policies: seeded=0 hidden=0\n"),
+    report: "",
     stderr: "",
   });
 });
@@ -68,9 +78,36 @@ test.each([
     const result = await runSeed(seeds);
     expect(result).toEqual({
       exitCode: 1,
-      stdout: "",
+      stdout: expect.stringContaining("```jsonl\n\n```"),
+      report: "",
       stderr:
-        "Usage policy seed failed; check configuration and database access.\n",
+        "Usage policy seed failed; check configuration, results path and database access.\n",
     });
   },
 );
+
+test("database failure writes a redacted failed row and exits non-zero", async () => {
+  const result = await runSeed(
+    JSON.stringify([
+      {
+        key: "sample-policy",
+        displayName: "Private display",
+        monthlyUsageUnits: 1,
+        hostedPolicyRef: "private-ref",
+      },
+    ]),
+  );
+  expect(result.exitCode).toBe(1);
+  expect(JSON.parse(result.report)).toEqual({
+    policyKey: "sample-policy",
+    outcome: "failed",
+    reason: expect.any(String),
+  });
+  expect(result.stdout).toContain(result.report.trim());
+  expect(`${result.stdout}${result.stderr}${result.report}`).not.toContain(
+    "private-ref",
+  );
+  expect(`${result.stdout}${result.stderr}${result.report}`).not.toContain(
+    "Private display",
+  );
+});

@@ -47,11 +47,27 @@ const buildForOutput = (output: string): string | undefined =>
   );
 
 test("the usage policy seed is available at the documented operator path", () => {
-  expect(buildForOutput("/app/seed-usage-policies.js")).toContain(
+  const docs = readFileSync(
+    nodePath.resolve(import.meta.dirname, "../docs/self-hosting.md"),
+    "utf-8",
+  );
+  const commands = [
+    ...docs.matchAll(
+      /^<!-- usage-policy-seed-command -->\n\n```bash\n(bun \/app\/[^\n]+)\n```$/gmu,
+    ),
+  ];
+  expect(commands).toHaveLength(1);
+  const command = commands.at(0)?.at(1);
+  expect(command).toBeDefined();
+  const output = command?.split(" ").at(1);
+  if (output === undefined) {
+    throw new TypeError("Missing documented seed entrypoint");
+  }
+  expect(buildForOutput(output)).toContain(
     "apps/api/scripts/seed-usage-policies.ts",
   );
   expect(stage("runner")).toContain(
-    "COPY --chown=stella:stella --from=builder /app/seed-usage-policies.js /app/seed-usage-policies.js",
+    `COPY --chown=stella:stella --from=builder ${output} ${output}`,
   );
   const startup = logicalInstructions(stage("runner")).filter((instruction) =>
     /^(?:CMD|ENTRYPOINT) /u.test(instruction),

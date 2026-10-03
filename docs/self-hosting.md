@@ -229,7 +229,15 @@ docker compose --env-file deploy/selfhost/.env \
   bun /app/apps/api/src/db/migrate.js
 ```
 
-After migrations, run `bun /app/seed-usage-policies.js` explicitly inside the API image with `STELLA_USAGE_POLICY_SEEDS` set to the deployment's JSON configuration; it never runs on API startup.
+After migrations, run the usage policy seed explicitly inside the API image with `STELLA_USAGE_POLICY_SEEDS` set to the deployment's JSON configuration; it never runs on API startup.
+
+<!-- usage-policy-seed-command -->
+
+```bash
+bun /app/seed-usage-policies.js --results /tmp/policy-results.jsonl
+```
+
+The seed writes JSON Lines containing each policy key and its `inserted`, `updated`, `unchanged`, `hidden`, or `failed` outcome (with a redacted failure reason), even when its transaction rolls back; failures exit non-zero. Omit `--results` for a timestamped path in `/tmp`; an existing results file is never overwritten. The command prints the path and the same rows in a fenced JSON Lines block, so operators can retrieve one-off ECS task results from its CloudWatch stdout logs after the container exits.
 
 ## Container images
 
