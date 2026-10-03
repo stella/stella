@@ -9,7 +9,11 @@ import {
 } from "@stll/runtime-mode";
 
 import { featureFlagSchema } from "@/api/env-base-schema";
-import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
+import {
+  AUTH_CLIENT_ADDRESS_HEADER,
+  ORIGIN_VERIFY_HEADER,
+  SIGNUP_RATE_LIMIT_IP_SOURCE,
+} from "@/api/lib/client-ip-config";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   DEFAULT_POLAR_API_VERSION,
@@ -335,6 +339,39 @@ export const envApiServerSchema = {
       v.trim(),
       v.toLowerCase(),
       v.regex(/^[a-z0-9-]+$/u, "must be a header name"),
+      v.check(
+        (name) =>
+          name !== AUTH_CLIENT_ADDRESS_HEADER && name !== ORIGIN_VERIFY_HEADER,
+        "must not be a header the API sets or verifies itself",
+      ),
+    ),
+  ),
+
+  /**
+   * How `STELLA_CLIENT_ADDRESS_HEADER` spells the address: `with-port` (as
+   * `cloudfront-viewer-address` does) or `bare`.
+   */
+  STELLA_CLIENT_ADDRESS_FORMAT: v.optional(
+    v.picklist(["with-port", "bare"]),
+    "with-port",
+  ),
+
+  /**
+   * Comma-separated values the edge sends in `x-stella-origin-verify` (current
+   * first, then the next one during a rotation). When set, the client address
+   * header is read only from requests carrying one of them.
+   */
+  STELLA_ORIGIN_VERIFY_SECRET: v.optional(
+    v.pipe(
+      v.string(),
+      v.check(
+        (value) =>
+          value
+            .split(",")
+            .map((part) => part.trim())
+            .every((part) => part.length >= 32),
+        "each value must be at least 32 characters",
+      ),
     ),
   ),
 
