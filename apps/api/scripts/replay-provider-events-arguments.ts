@@ -15,7 +15,7 @@ type ReplayProviderEventsArguments = {
   ids: string[];
   mode: ProviderEventReplayMode;
   resultsPath: string;
-  actor: string;
+  requestedBy: string | null;
   reason: string;
 };
 
@@ -53,7 +53,7 @@ export const parseReplayProviderEventsArguments = (
           "event-id": { type: "string", multiple: true },
           "ids-file": { type: "string" },
           results: { type: "string" },
-          actor: { type: "string" },
+          "requested-by": { type: "string" },
           reason: { type: "string" },
           apply: { type: "boolean", default: false },
         },
@@ -79,10 +79,10 @@ export const parseReplayProviderEventsArguments = (
       }),
     );
   }
-  if (values.actor === undefined || values.actor.trim().length === 0) {
+  if (values.apply && !values["requested-by"]?.trim()) {
     return Result.err(
       new ReplayProviderEventsArgumentsError({
-        message: "--actor is required.",
+        message: "--requested-by is required with --apply.",
       }),
     );
   }
@@ -171,7 +171,7 @@ export const parseReplayProviderEventsArguments = (
       ? PROVIDER_EVENT_REPLAY_MODES.apply
       : PROVIDER_EVENT_REPLAY_MODES.dryRun,
     resultsPath: values.results,
-    actor: values.actor.trim(),
+    requestedBy: values["requested-by"]?.trim() || null,
     reason: values.reason?.trim() || DEFAULT_DRY_RUN_REASON,
   });
 };

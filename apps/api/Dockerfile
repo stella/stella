@@ -82,7 +82,9 @@ RUN bun build \
     --outfile /app/seed-usage-policies.js \
     apps/api/scripts/seed-usage-policies.ts
 # Replays one stored hosted-usage provider event at a time. Run with the API
-# task's database credentials and provide --actor plus --reason for --apply.
+# task's database credentials. --apply requires --requested-by (a claimed
+# operator label) and --reason.
+# Replay performer is the ECS task ARN; metadata resolution must succeed.
 #   command override -> ["bun", "/app/replay-provider-events.js"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \

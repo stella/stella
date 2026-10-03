@@ -32,7 +32,11 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DispatchOutcome } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import type { HostedUsageWebhookEvent } from "@/api/lib/hosted-usage-provider/event-schemas";
-import type { ProviderEventReplayAudit } from "@/api/lib/hosted-usage-provider/replay-audit";
+import type {
+  ProviderEventReplayAudit,
+  ProviderEventReplayAttempt,
+  ProviderEventReplayPerformer,
+} from "@/api/lib/hosted-usage-provider/replay-audit";
 import { minimalWebhookRecord } from "@/api/lib/hosted-usage-provider/webhook-record";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -233,9 +237,12 @@ export const recordWebhookAuditEvent = async ({
 type RecordProviderEventReplayAuditOptions = {
   tx: Transaction;
   eventId: string;
-  actor: string;
+  performer: ProviderEventReplayPerformer;
+  requestedBy: string | null;
+  previousReason: string | null;
   reason: string;
-  newResult: UsageProviderWebhookResult;
+  newResult: "ok" | "ignored";
+  previousAttempts: ProviderEventReplayAudit | null;
   outcome: DispatchOutcome["kind"];
   dispatchReason: string | null;
 };
@@ -246,21 +253,26 @@ type RecordProviderEventReplayAuditOptions = {
 export const recordProviderEventReplayAuditInTx = async ({
   tx,
   eventId,
-  actor,
+  performer,
+  requestedBy,
+  previousReason,
   reason,
   newResult,
+  previousAttempts,
   outcome,
   dispatchReason,
 }: RecordProviderEventReplayAuditOptions) => {
-  const replayAudit = {
-    actor,
+  const attempt = {
+    requestedBy,
     at: Temporal.Now.instant().toString(),
     previousResult: "ignored",
+    previousReason,
     newResult,
     outcome,
     reason,
+    dispatchReason,
     execution: {
-      performer: { type: "service", id: actor, name: null },
+      performer,
       trigger: {
         type: "system",
         source: "usage_provider.replay",
@@ -272,9 +284,11 @@ export const recordProviderEventReplayAuditInTx = async ({
       resourceType: AUDIT_RESOURCE_TYPE.USAGE_PROVIDER_EVENT,
       resourceId: eventId,
       changes: { result: { old: "ignored", new: newResult } },
-      metadata: { reason, outcome, dispatchReason },
+      metadata: { requestedBy, reason, outcome, dispatchReason },
     },
-  } as const satisfies ProviderEventReplayAudit;
+  } as const satisfies ProviderEventReplayAttempt;
+  const replayAudit =
+    previousAttempts === null ? [attempt] : [...previousAttempts, attempt];
   await tx
     .update(hostedUsageWebhookEvents)
     .set({ result: newResult, errorMessage: dispatchReason, replayAudit })

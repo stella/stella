@@ -1,77 +1,130 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { closeSync, openSync, writeFileSync } from "node:fs";
 
-import type { ProviderEventReplayRow as CoreReplayRow } from "@/api/handlers/hosted-usage-webhook/replay";
+import type { ProviderEventReplayRow } from "@/api/handlers/hosted-usage-webhook/replay";
 
-export type ProviderEventReplayMode = CoreReplayRow["mode"];
-
+export type ProviderEventReplayMode = ProviderEventReplayRow["mode"];
 export const PROVIDER_EVENT_REPLAY_MODES = {
   dryRun: "dry_run",
   apply: "apply",
 } as const satisfies Record<string, ProviderEventReplayMode>;
 
-type ProviderEventReplayRow =
-  | CoreReplayRow
-  | (Omit<CoreReplayRow, "kind" | "previousResult" | "reason"> & {
-      kind: "error";
-      previousResult: null;
-      reason: string;
-    });
-
 type ReplayAttempt =
   | { type: "ok"; row: ProviderEventReplayRow }
   | { type: "error"; error: { message: string } };
 
-class ReplayAttemptError extends TaggedError("ReplayAttemptError")<{
+export class ReplayAttemptError extends TaggedError("ReplayAttemptError")<{
   message: string;
+  cause: unknown;
 }> {}
+
+// Defer telemetry initialization so argument/identity refusals need no API setup.
+type ObserveUnexpectedFailureOptions = {
+  error: ReplayAttemptError;
+  mode: ProviderEventReplayMode;
+  eventId: string;
+};
+const observeUnexpectedFailure = async ({
+  error,
+  mode,
+  eventId,
+}: ObserveUnexpectedFailureOptions) => {
+  const [{ observeFailure }, { failureSink }] = await Promise.all([
+    import("@/api/lib/observability/observe-failure"),
+    import("@/api/lib/observability/failure"),
+  ]);
+  observeFailure(error, {
+    sink: failureSink({
+      event: "usage_provider.replay.runner_failed",
+      expected: [],
+    }),
+    ctx: { source: "usage_provider.replay", mode, requestId: eventId },
+  });
+};
 
 type RunReplayReportOptions = {
   ids: string[];
   mode: ProviderEventReplayMode;
   resultsPath: string;
-  replayEvent: (id: string) => Promise<ReplayAttempt>;
+  observeUnexpectedFailure?: typeof observeUnexpectedFailure;
+  execution:
+    | { type: "per_event"; replayEvent: (id: string) => Promise<ReplayAttempt> }
+    | {
+        type: "batch";
+        replayBatch: (
+          emitRow: (row: ProviderEventReplayRow) => void,
+        ) => Promise<void>;
+      };
 };
 
 export const runReplayReport = async ({
   ids,
   mode,
   resultsPath,
-  replayEvent,
+  execution,
+  observeUnexpectedFailure: observe = observeUnexpectedFailure,
 }: RunReplayReportOptions) => {
   const fd = openSync(resultsPath, "wx", 0o600);
   const rows: ProviderEventReplayRow[] = [];
+  const emitRow = (row: ProviderEventReplayRow) => {
+    rows.push(row);
+    writeFileSync(fd, `${JSON.stringify(row)}\n`);
+  };
   try {
-    for (const id of ids) {
-      const attemptResult = await Result.tryPromise({
-        try: async () => await replayEvent(id),
-        catch: () =>
-          new ReplayAttemptError({
-            message: "Replay failed unexpectedly; check operator logs.",
-          }),
-      });
-      const attempt = Result.isError(attemptResult)
-        ? { type: "error" as const, error: attemptResult.error }
-        : attemptResult.value;
-      const row =
-        attempt.type === "ok"
-          ? attempt.row
-          : ({
-              id,
-              previousResult: null,
-              kind: "error" as const,
-              reason: attempt.error.message,
-              mode,
-            } satisfies ProviderEventReplayRow);
-      rows.push(row);
-      writeFileSync(fd, `${JSON.stringify(row)}\n`);
+    switch (execution.type) {
+      case "per_event":
+        for (const id of ids) {
+          const result = await Result.tryPromise({
+            try: async () => await execution.replayEvent(id),
+            catch: (cause) =>
+              new ReplayAttemptError({
+                message: "Replay failed unexpectedly; check operator logs.",
+                cause,
+              }),
+          });
+          if (Result.isError(result)) {
+            await observe({ error: result.error, mode, eventId: id });
+          }
+          const attempt = Result.isError(result)
+            ? { type: "error" as const, error: result.error }
+            : result.value;
+          emitRow(
+            attempt.type === "ok"
+              ? attempt.row
+              : {
+                  id,
+                  previousResult: null,
+                  kind: "error",
+                  reason: attempt.error.message,
+                  mode,
+                },
+          );
+        }
+        break;
+      case "batch": {
+        const result = await Result.tryPromise({
+          try: async () => await execution.replayBatch(emitRow),
+          catch: (cause) =>
+            new ReplayAttemptError({
+              message: "Replay batch failed; check operator logs.",
+              cause,
+            }),
+        });
+        if (Result.isError(result)) {
+          await observe({ error: result.error, mode, eventId: "batch" });
+          throw result.error;
+        }
+        break;
+      }
+      default:
+        execution satisfies never;
+        return panic("Unhandled replay execution mode");
     }
-    const lines = rows.map((row) => JSON.stringify(row)).join("\n");
-    const failed = rows.filter((row) => row.kind === "error").length;
+    const failed = rows.filter(({ kind }) => kind === "error").length;
     return {
       status: failed === 0 ? ("complete" as const) : ("failed" as const),
       rows,
-      lines,
+      lines: rows.map((row) => JSON.stringify(row)).join("\n"),
       failed,
     };
   } finally {

@@ -237,7 +237,12 @@ export const receiveHostedUsageWebhook = async (
         return { kind: "duplicate" } as const;
       }
 
-      const dispatched = await dispatchEvent({ tx, event, eventId });
+      const dispatched = await dispatchEvent({
+        tx,
+        event,
+        eventId,
+        mode: "live",
+      });
 
       if (dispatched.kind === "ignored") {
         await updateWebhookEventResultInTx({

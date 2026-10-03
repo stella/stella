@@ -9,7 +9,10 @@ import {
   MAX_PROVIDER_EVENT_REPLAY_IDS_FILE_BYTES,
   parseReplayProviderEventsArguments,
 } from "./replay-provider-events-arguments";
-import { runReplayReport } from "./replay-provider-events-runner";
+import {
+  ReplayAttemptError,
+  runReplayReport,
+} from "./replay-provider-events-runner";
 
 const temporaryDirectory = () =>
   mkdtempSync(nodePath.join(tmpdir(), "provider-event-replay-"));
@@ -28,7 +31,7 @@ test("defaults to dry run and deduplicates explicit IDs and IDs-file entries", a
       idsFile,
       "--results",
       nodePath.join(dir, "results.jsonl"),
-      "--actor",
+      "--requested-by",
       "operator@example.test",
     ]);
 
@@ -40,7 +43,7 @@ test("defaults to dry run and deduplicates explicit IDs and IDs-file entries", a
       ids: ["event-a", "event-b", "event-c"],
       mode: "dry_run",
       resultsPath: nodePath.join(dir, "results.jsonl"),
-      actor: "operator@example.test",
+      requestedBy: "operator@example.test",
       reason: "Operator requested a dry run.",
     });
   } finally {
@@ -48,18 +51,20 @@ test("defaults to dry run and deduplicates explicit IDs and IDs-file entries", a
   }
 });
 
-test("requires an actor and a reason for apply mode", () => {
+test("requires a claimed requester and a reason for apply mode", () => {
   const resultPath = "/tmp/provider-event-results.jsonl";
-  const missingActor = parseReplayProviderEventsArguments([
+  const missingRequester = parseReplayProviderEventsArguments([
     "--event-id",
     "event-a",
     "--results",
     resultPath,
     "--apply",
   ]);
-  expect(Result.isError(missingActor)).toBe(true);
-  if (Result.isError(missingActor)) {
-    expect(missingActor.error.message).toBe("--actor is required.");
+  expect(Result.isError(missingRequester)).toBe(true);
+  if (Result.isError(missingRequester)) {
+    expect(missingRequester.error.message).toBe(
+      "--requested-by is required with --apply.",
+    );
   }
 
   const missingReason = parseReplayProviderEventsArguments([
@@ -67,7 +72,7 @@ test("requires an actor and a reason for apply mode", () => {
     "event-a",
     "--results",
     resultPath,
-    "--actor",
+    "--requested-by",
     "operator",
     "--apply",
   ]);
@@ -83,7 +88,7 @@ test("requires an actor and a reason for apply mode", () => {
     "event-a",
     "--results",
     resultPath,
-    "--actor",
+    "--requested-by",
     "operator",
     "--reason",
     "Operator selected replay",
@@ -101,7 +106,7 @@ test("requires an explicit selection and rejects malformed IDs and unknown flags
   const base = [
     "--results",
     nodePath.join(dir, "results.jsonl"),
-    "--actor",
+    "--requested-by",
     "operator",
   ];
   try {
@@ -160,7 +165,7 @@ test("bounds the file and number of selected event IDs", () => {
       idsFile,
       "--results",
       nodePath.join(dir, "results.jsonl"),
-      "--actor",
+      "--requested-by",
       "operator",
     ]);
     expect(Result.isError(tooManyFromFile)).toBe(true);
@@ -175,7 +180,7 @@ test("bounds the file and number of selected event IDs", () => {
       ).flat(),
       "--results",
       nodePath.join(dir, "too-many.jsonl"),
-      "--actor",
+      "--requested-by",
       "operator",
     ]);
     expect(Result.isError(tooManyIds)).toBe(true);
@@ -191,39 +196,50 @@ test("writes each row durably, continues after errors, and refuses overwrite", a
   const dir = temporaryDirectory();
   const resultsPath = nodePath.join(dir, "results.jsonl");
   let firstRowWasDurableBeforeSecondReplay = false;
+  const unexpectedCause = new Error("private database detail");
+  let observedCause: unknown;
   try {
     const report = await runReplayReport({
       ids: ["event-ok", "event-error", "event-throw"],
       mode: "apply",
       resultsPath,
-      replayEvent: async (id) => {
-        if (id === "event-error") {
-          firstRowWasDurableBeforeSecondReplay = readFileSync(
-            resultsPath,
-            "utf-8",
-          ).includes('"id":"event-ok"');
+      observeUnexpectedFailure: async ({ error, mode, eventId }) => {
+        observedCause = error.cause;
+        expect(mode).toBe("apply");
+        expect(eventId).toBe("event-throw");
+      },
+      execution: {
+        type: "per_event",
+        replayEvent: async (id) => {
+          if (id === "event-error") {
+            firstRowWasDurableBeforeSecondReplay = readFileSync(
+              resultsPath,
+              "utf-8",
+            ).includes('"id":"event-ok"');
+            return {
+              type: "error",
+              error: { message: "Replay is not applicable." },
+            };
+          }
+          if (id === "event-throw") {
+            throw unexpectedCause;
+          }
           return {
-            type: "error",
-            error: { message: "Replay is not applicable." },
+            type: "ok",
+            row: {
+              id,
+              previousResult: "ignored",
+              kind: "applied",
+              reason: null,
+              mode: "apply",
+            },
           };
-        }
-        if (id === "event-throw") {
-          throw new Error("private database detail");
-        }
-        return {
-          type: "ok",
-          row: {
-            id,
-            previousResult: "ignored",
-            kind: "applied",
-            reason: null,
-            mode: "apply",
-          },
-        };
+        },
       },
     });
 
     expect(report.status).toBe("failed");
+    expect(observedCause).toBe(unexpectedCause);
     expect(report.failed).toBe(2);
     expect(firstRowWasDurableBeforeSecondReplay).toBe(true);
     expect(report.rows.map(({ id, kind }) => [id, kind])).toEqual([
@@ -239,8 +255,11 @@ test("writes each row durably, continues after errors, and refuses overwrite", a
       ids: ["event-ok"],
       mode: "dry_run",
       resultsPath,
-      replayEvent: async () => {
-        throw new Error("must not run");
+      execution: {
+        type: "per_event",
+        replayEvent: async () => {
+          throw new Error("must not run");
+        },
       },
     }).then(
       () => undefined,
@@ -263,9 +282,12 @@ test("a results file open failure prevents any replay", async () => {
       ids: ["event-a"],
       mode: "dry_run",
       resultsPath: nodePath.join(dir, "missing", "results.jsonl"),
-      replayEvent: async () => {
-        replayed = true;
-        return { type: "error", error: { message: "not relevant" } };
+      execution: {
+        type: "per_event",
+        replayEvent: async () => {
+          replayed = true;
+          return { type: "error", error: { message: "not relevant" } };
+        },
       },
     }).then(
       () => undefined,
@@ -291,4 +313,95 @@ test("builds and copies the standalone replay command into the API image", () =>
   expect(dockerfile).toContain(
     "COPY --chown=stella:stella --from=builder /app/replay-provider-events.js /app/replay-provider-events.js",
   );
+});
+
+test("dry run does not require a claimed requester", () => {
+  const parsed = parseReplayProviderEventsArguments([
+    "--event-id",
+    "event-a",
+    "--results",
+    "/tmp/results.jsonl",
+  ]);
+  expect(parsed.unwrap().requestedBy).toBeNull();
+});
+
+test("ECS identity failure refuses replay before opening results or the database", async () => {
+  const dir = temporaryDirectory();
+  try {
+    const resultsPath = nodePath.join(dir, "results.jsonl");
+    const child = Bun.spawn({
+      cmd: [
+        process.execPath,
+        new URL("replay-provider-events.ts", import.meta.url).pathname,
+        "--event-id",
+        "event-a",
+        "--results",
+        resultsPath,
+        "--apply",
+        "--requested-by",
+        "claimed-operator",
+        "--reason",
+        "fixture",
+      ],
+      env: {
+        ...process.env,
+        ECS_CONTAINER_METADATA_URI_V4: "http://127.0.0.1:0",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const stderr = await new Response(child.stderr).text();
+    expect(await child.exited).toBe(1);
+    expect(stderr).toContain(
+      "Could not resolve replay performer identity; replay refused.",
+    );
+    expect(await Bun.file(resultsPath).exists()).toBe(false);
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
+});
+
+test("batch reporting writes rows durably and observes an unexpected batch cause", async () => {
+  const dir = temporaryDirectory();
+  const resultsPath = nodePath.join(dir, "results.jsonl");
+  const cause = new Error("batch infrastructure detail");
+  let observedCause: unknown;
+  try {
+    const failed = await runReplayReport({
+      ids: ["event-a", "event-b"],
+      mode: "dry_run",
+      resultsPath,
+      observeUnexpectedFailure: async ({ error, mode, eventId }) => {
+        observedCause = error.cause;
+        expect(mode).toBe("dry_run");
+        expect(eventId).toBe("batch");
+      },
+      execution: {
+        type: "batch",
+        replayBatch: async (emitRow) => {
+          emitRow({
+            id: "event-a",
+            previousResult: "ignored",
+            kind: "applied",
+            reason: null,
+            mode: "dry_run",
+          });
+          expect(readFileSync(resultsPath, "utf-8")).toContain(
+            '"id":"event-a"',
+          );
+          throw cause;
+        },
+      },
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(failed).toBeInstanceOf(ReplayAttemptError);
+    expect(observedCause).toBe(cause);
+    expect(readFileSync(resultsPath, "utf-8")).not.toContain(
+      "batch infrastructure detail",
+    );
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
 });

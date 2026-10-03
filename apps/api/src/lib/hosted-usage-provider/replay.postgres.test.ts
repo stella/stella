@@ -13,7 +13,15 @@ import {
 } from "@/api/db/schema";
 import type { UsageProviderWebhookResult } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { replayProviderEvent } from "@/api/handlers/hosted-usage-webhook/replay";
+import { handleHostedAllocation } from "@/api/handlers/hosted-usage-webhook/dispatch";
+import {
+  HOSTED_USAGE_WEBHOOK_HEADERS,
+  receiveHostedUsageWebhook,
+} from "@/api/handlers/hosted-usage-webhook/receive";
+import {
+  replayProviderEvent,
+  replayProviderEventsBatch,
+} from "@/api/handlers/hosted-usage-webhook/replay";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { redactCompletedWebhookEvents } from "@/api/lib/hosted-usage-provider/webhook-retention";
@@ -31,6 +39,8 @@ type ReplayFixture = {
   seedReceipt: (options: {
     eventId: string;
     data?: Record<string, unknown>;
+    eventType?: "entitlement.created" | "allocation.created";
+    processedAt?: string;
     result?: UsageProviderWebhookResult;
     payloadUnavailable?: boolean;
     signatureVerified?: boolean;
@@ -78,6 +88,8 @@ const withReplayFixture = async (
           const seedReceipt: ReplayFixture["seedReceipt"] = async ({
             eventId,
             data = {},
+            eventType = "entitlement.created",
+            processedAt = START,
             result = "ignored",
             payloadUnavailable = false,
             signatureVerified = true,
@@ -95,7 +107,7 @@ const withReplayFixture = async (
               payload = {
                 signatureVerified,
                 payloadDigest: "fixture-digest",
-                type: "entitlement.created",
+                type: eventType,
                 data: {
                   id: `entitlement_${eventId}`,
                   status: "active",
@@ -112,9 +124,10 @@ const withReplayFixture = async (
             }
             await tx.insert(hostedUsageWebhookEvents).values({
               eventId,
-              eventType: "entitlement.created",
-              processedAt: new Date(START),
+              eventType,
+              processedAt: new Date(processedAt),
               result,
+              errorMessage: "Original ignored reason",
               payload,
             });
           };
@@ -138,17 +151,27 @@ const withReplayFixture = async (
   }
 };
 
-const runReplay = async (
-  tx: Transaction,
-  eventId: string,
-  mode: "dry_run" | "apply" = "apply",
-) => {
+type RunReplayOptions = {
+  tx: Transaction;
+  eventId: string;
+  mode?: "dry_run" | "apply";
+  selectedEventIds?: readonly string[];
+};
+
+const runReplay = async ({
+  tx,
+  eventId,
+  mode = "apply",
+  selectedEventIds = [eventId],
+}: RunReplayOptions) => {
   const runTransaction: WebhookTransactionRunner = async (fn) =>
     await tx.transaction(async (nested) => await fn(nested));
   const result = await replayProviderEvent({
     eventId,
+    selectedEventIds,
     mode,
-    actor: "operator:fixture",
+    requestedBy: "operator:fixture",
+    performer: { type: "local", username: "fixture" },
     reason: "fixture replay",
     runTransaction,
   });
@@ -166,7 +189,11 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
           .select()
           .from(hostedUsageWebhookEvents)
           .where(eq(hostedUsageWebhookEvents.eventId, eventId));
-        const outcome = await runReplay(tx, eventId, "dry_run");
+        const outcome = await runReplay({
+          tx,
+          eventId,
+          mode: "dry_run",
+        });
         expect(outcome).toMatchObject({
           id: eventId,
           previousResult: "ignored",
@@ -208,7 +235,7 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
         await seedReceipt({ eventId });
         await insertPolicy();
 
-        const outcome = await runReplay(tx, eventId);
+        const outcome = await runReplay({ tx, eventId });
         expect(outcome).toMatchObject({
           id: eventId,
           previousResult: "ignored",
@@ -221,14 +248,19 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
           .where(eq(hostedUsageWebhookEvents.eventId, eventId));
         expect(receipt.at(0)).toMatchObject({
           result: "ok",
-          replayAudit: {
-            actor: "operator:fixture",
-            previousResult: "ignored",
-            newResult: "ok",
-            outcome: "applied",
-            reason: "fixture replay",
-            event: { resourceId: eventId },
-          },
+          errorMessage: null,
+          replayAudit: [
+            {
+              requestedBy: "operator:fixture",
+              execution: { performer: { type: "local", username: "fixture" } },
+              previousResult: "ignored",
+              previousReason: "Original ignored reason",
+              newResult: "ok",
+              outcome: "applied",
+              reason: "fixture replay",
+              event: { resourceId: eventId },
+            },
+          ],
         });
         expect(
           await tx
@@ -267,11 +299,23 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
 
         const firstPass = [];
         for (const eventId of eventIds) {
-          firstPass.push(await runReplay(tx, eventId));
+          firstPass.push(
+            await runReplay({
+              tx,
+              eventId,
+              selectedEventIds: eventIds,
+            }),
+          );
         }
         const secondPass = [];
         for (const eventId of eventIds) {
-          secondPass.push(await runReplay(tx, eventId));
+          secondPass.push(
+            await runReplay({
+              tx,
+              eventId,
+              selectedEventIds: eventIds,
+            }),
+          );
         }
 
         expect(firstPass.map(({ kind }) => kind)).toEqual(
@@ -315,6 +359,257 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
     );
   });
 
+  test("an ignored attempt can be repaired and replayed to a terminal success", async () => {
+    await withReplayFixture(async (tx, { seedReceipt, insertPolicy }) => {
+      const eventId = `replay-${Bun.randomUUIDv7()}`;
+      await seedReceipt({ eventId });
+      const ignored = await runReplay({ tx, eventId });
+      expect(ignored.kind).toBe("ignored");
+      await insertPolicy();
+      expect((await runReplay({ tx, eventId })).kind).toBe("applied");
+      expect((await runReplay({ tx, eventId })).kind).toBe("already_replayed");
+      const receipts = await tx
+        .select()
+        .from(hostedUsageWebhookEvents)
+        .where(eq(hostedUsageWebhookEvents.eventId, eventId));
+      expect(receipts.at(0)).toMatchObject({
+        result: "ok",
+        errorMessage: null,
+        replayAudit: [
+          { outcome: "ignored", previousReason: "Original ignored reason" },
+          { outcome: "applied", previousReason: ignored.reason },
+        ],
+      });
+    });
+  });
+
+  test("partial selection refuses related receipts in apply and dry run", async () => {
+    await withReplayFixture(async (tx, { seedReceipt, insertPolicy }) => {
+      await insertPolicy();
+      const selectedId = `replay-${Bun.randomUUIDv7()}`;
+      const omittedId = `replay-${Bun.randomUUIDv7()}`;
+      const entityId = `entitlement_${Bun.randomUUIDv7()}`;
+      await seedReceipt({ eventId: selectedId, data: { id: entityId } });
+      await seedReceipt({ eventId: omittedId, data: { id: entityId } });
+      const before = await tx.select().from(hostedUsageWebhookEvents);
+      for (const mode of ["dry_run", "apply"] as const) {
+        expect(
+          await runReplay({ tx, eventId: selectedId, mode }),
+        ).toMatchObject({
+          kind: "related_receipts_unselected",
+          unselectedEventIds: [omittedId],
+        });
+      }
+      expect(await tx.select().from(hostedUsageWebhookEvents)).toEqual(before);
+    });
+  });
+
+  test("batch dry run predicts ordered entitlement and add-on apply without retaining writes", async () => {
+    await withReplayFixture(
+      async (tx, { seedReceipt, insertPolicy, organizationId, policyRef }) => {
+        await insertPolicy();
+        const addonRef = `addon_${Bun.randomUUIDv7()}`;
+        await tx.insert(usagePolicies).values({
+          policyKey: addonRef,
+          displayName: "Replay add-on",
+          kind: "addon",
+          monthlyUsageUnits: 5,
+          hostedPolicyRef: addonRef,
+        });
+        const eventIds = [
+          `replay-${Bun.randomUUIDv7()}`,
+          `replay-${Bun.randomUUIDv7()}`,
+        ];
+        for (const [index, eventId] of eventIds.entries()) {
+          await seedReceipt({
+            eventId,
+            eventType:
+              index === 0 ? "entitlement.created" : "allocation.created",
+            data: {
+              policy_ref: index === 0 ? policyRef : addonRef,
+              allocation_reason: "addon",
+            },
+          });
+        }
+        const snapshot = async () => ({
+          receipts: await tx.select().from(hostedUsageWebhookEvents),
+          entitlements: await tx
+            .select()
+            .from(usageEntitlements)
+            .where(eq(usageEntitlements.organizationId, organizationId)),
+          allocations: await tx
+            .select()
+            .from(usageAllocations)
+            .where(eq(usageAllocations.organizationId, organizationId)),
+          audits: await tx
+            .select()
+            .from(auditLogs)
+            .where(eq(auditLogs.organizationId, organizationId)),
+        });
+        const before = await snapshot();
+        const batch = async (mode: "dry_run" | "apply") =>
+          (
+            await replayProviderEventsBatch({
+              eventIds,
+              mode,
+              performer: { type: "local", username: "fixture" },
+              requestedBy: "operator:fixture",
+              reason: "batch fixture replay",
+              runTransaction: async (fn) =>
+                await tx.transaction(async (nested) => await fn(nested)),
+            })
+          ).unwrap();
+        const dry = await batch("dry_run");
+        expect(dry.map(({ kind }) => kind)).toEqual(["applied", "applied"]);
+        expect(await snapshot()).toEqual(before);
+        const applied = await batch("apply");
+        expect(
+          applied.map(({ id, kind, reason }) => ({ id, kind, reason })),
+        ).toEqual(dry.map(({ id, kind, reason }) => ({ id, kind, reason })));
+        expect((await snapshot()).allocations).toHaveLength(2);
+      },
+    );
+  });
+
+  test("allocation replay refuses a receipt outside the current entitlement period", async () => {
+    await withReplayFixture(async (tx, { seedReceipt, insertPolicy }) => {
+      await insertPolicy();
+      const entitlementId = `replay-${Bun.randomUUIDv7()}`;
+      const allocationId = `replay-${Bun.randomUUIDv7()}`;
+      await seedReceipt({ eventId: entitlementId });
+      expect((await runReplay({ tx, eventId: entitlementId })).kind).toBe(
+        "applied",
+      );
+      await seedReceipt({
+        eventId: allocationId,
+        eventType: "allocation.created",
+        processedAt: "2026-07-02T00:00:00Z",
+        data: { allocation_reason: "addon" },
+      });
+      for (const mode of ["dry_run", "apply"] as const) {
+        expect(
+          (await runReplay({ tx, eventId: allocationId, mode })).kind,
+        ).toBe("allocation_period_elapsed");
+      }
+      const receipt = await tx
+        .select()
+        .from(hostedUsageWebhookEvents)
+        .where(eq(hostedUsageWebhookEvents.eventId, allocationId));
+      expect(receipt.at(0)?.replayAudit).toBeNull();
+    });
+  });
+
+  test("an already allocated ignored receipt becomes a terminal duplicate allocation", async () => {
+    await withReplayFixture(
+      async (tx, { seedReceipt, insertPolicy, organizationId }) => {
+        await insertPolicy();
+        const entitlementId = `replay-${Bun.randomUUIDv7()}`;
+        await seedReceipt({ eventId: entitlementId });
+        expect((await runReplay({ tx, eventId: entitlementId })).kind).toBe(
+          "applied",
+        );
+        const addonRef = `addon_${Bun.randomUUIDv7()}`;
+        await tx.insert(usagePolicies).values({
+          policyKey: addonRef,
+          displayName: "Replay add-on",
+          kind: "addon",
+          monthlyUsageUnits: 5,
+          hostedPolicyRef: addonRef,
+        });
+        const eventId = `replay-${Bun.randomUUIDv7()}`;
+        const payload = {
+          id: `allocation_${Bun.randomUUIDv7()}`,
+          account_ref: `account_${organizationId}`,
+          policy_ref: addonRef,
+          allocation_reason: "addon",
+          metadata: { organization_id: organizationId },
+        };
+        expect(
+          (await handleHostedAllocation({ tx, eventId, payload })).kind,
+        ).toBe("applied");
+        await seedReceipt({
+          eventId,
+          eventType: "allocation.created",
+          data: payload,
+        });
+        const before = await tx
+          .select()
+          .from(usageAllocations)
+          .where(eq(usageAllocations.organizationId, organizationId));
+        expect((await runReplay({ tx, eventId })).kind).toBe(
+          "duplicate_allocation",
+        );
+        expect((await runReplay({ tx, eventId })).kind).toBe(
+          "already_replayed",
+        );
+        expect(
+          await tx
+            .select()
+            .from(usageAllocations)
+            .where(eq(usageAllocations.organizationId, organizationId)),
+        ).toEqual(before);
+      },
+    );
+  });
+
+  test("a dispatch failure rolls back simulated writes and produces a batch error row", async () => {
+    await withReplayFixture(
+      async (tx, { seedReceipt, insertPolicy, organizationId }) => {
+        await insertPolicy();
+        const eventId = `replay-${Bun.randomUUIDv7()}`;
+        await seedReceipt({ eventId });
+        const before = await tx.select().from(hostedUsageWebhookEvents);
+        await tx.execute(sql`CREATE FUNCTION pg_temp.fail_replay_entitlement() RETURNS trigger
+        LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture dispatch failure'; END $$`);
+        await tx.execute(sql`CREATE TRIGGER fail_replay_entitlement BEFORE INSERT ON usage_entitlements
+        FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_replay_entitlement()`);
+        const rows = (
+          await replayProviderEventsBatch({
+            eventIds: [eventId],
+            mode: "dry_run",
+            performer: { type: "local", username: "fixture" },
+            requestedBy: "operator:fixture",
+            reason: "failure fixture replay",
+            runTransaction: async (fn) =>
+              await tx.transaction(async (nested) => await fn(nested)),
+          })
+        ).unwrap();
+        expect(rows).toMatchObject([{ id: eventId, kind: "error" }]);
+        const singlePreview = await replayProviderEvent({
+          eventId,
+          selectedEventIds: [eventId],
+          mode: "dry_run",
+          performer: { type: "local", username: "fixture" },
+          requestedBy: "operator:fixture",
+          reason: "failure fixture replay",
+          runTransaction: async (fn) => await fn(tx),
+        });
+        expect(singlePreview.isErr()).toBe(true);
+        expect(await tx.select().from(hostedUsageWebhookEvents)).toEqual(
+          before,
+        );
+        expect(
+          await tx
+            .select()
+            .from(usageEntitlements)
+            .where(eq(usageEntitlements.organizationId, organizationId)),
+        ).toHaveLength(0);
+        expect(
+          await tx
+            .select()
+            .from(usageAllocations)
+            .where(eq(usageAllocations.organizationId, organizationId)),
+        ).toHaveLength(0);
+        expect(
+          await tx
+            .select()
+            .from(auditLogs)
+            .where(eq(auditLogs.organizationId, organizationId)),
+        ).toHaveLength(0);
+      },
+    );
+  });
+
   test("non-ignored, purged, and incomplete receipts return typed skips", async () => {
     await withReplayFixture(async (tx, { seedReceipt, organizationId }) => {
       const completedId = `replay-${Bun.randomUUIDv7()}`;
@@ -337,19 +632,28 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
       });
       const before = await tx.select().from(hostedUsageWebhookEvents);
 
-      expect((await runReplay(tx, completedId)).kind).toBe("not_ignored");
-      expect((await runReplay(tx, failedId)).kind).toBe("not_ignored");
-      expect((await runReplay(tx, purgedId)).kind).toBe("payload_unavailable");
-      expect((await runReplay(tx, incompleteId)).kind).toBe(
+      expect((await runReplay({ tx, eventId: completedId })).kind).toBe(
+        "not_ignored",
+      );
+      expect((await runReplay({ tx, eventId: failedId })).kind).toBe(
+        "not_ignored",
+      );
+      expect((await runReplay({ tx, eventId: purgedId })).kind).toBe(
         "payload_unavailable",
       );
-      expect((await runReplay(tx, unsignedId)).kind).toBe(
+      expect((await runReplay({ tx, eventId: incompleteId })).kind).toBe(
         "payload_unavailable",
       );
-      expect((await runReplay(tx, minimalId)).kind).toBe("payload_unavailable");
-      expect((await runReplay(tx, `missing-${Bun.randomUUIDv7()}`)).kind).toBe(
-        "not_found",
+      expect((await runReplay({ tx, eventId: unsignedId })).kind).toBe(
+        "payload_unavailable",
       );
+      expect((await runReplay({ tx, eventId: minimalId })).kind).toBe(
+        "payload_unavailable",
+      );
+      expect(
+        (await runReplay({ tx, eventId: `missing-${Bun.randomUUIDv7()}` }))
+          .kind,
+      ).toBe("not_found");
       expect(await tx.select().from(hostedUsageWebhookEvents)).toEqual(before);
       expect(
         await tx
@@ -382,8 +686,24 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
           data: { id: externalId, occurred_at: "2026-06-02T00:00:00Z" },
         });
 
-        expect((await runReplay(tx, newerId)).kind).toBe("applied");
-        expect((await runReplay(tx, olderId)).kind).toBe("ignored");
+        const selectedEventIds = [newerId, olderId];
+        expect(
+          (
+            await runReplay({
+              tx,
+              eventId: newerId,
+              selectedEventIds,
+            })
+          ).kind,
+        ).toBe("applied");
+        const olderOutcome = await runReplay({
+          tx,
+          eventId: olderId,
+          selectedEventIds,
+        });
+        expect(olderOutcome.kind).toBe("ignored");
+        expect(olderOutcome.reason).not.toBeNull();
+        expect(olderOutcome.reason).not.toBe("Original ignored reason");
         const entitlements = await tx
           .select()
           .from(usageEntitlements)
@@ -398,39 +718,229 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
           .where(eq(hostedUsageWebhookEvents.eventId, olderId));
         expect(olderReceipt.at(0)).toMatchObject({
           result: "ignored",
-          replayAudit: { outcome: "ignored", previousResult: "ignored" },
+          errorMessage: olderOutcome.reason,
+          replayAudit: [
+            {
+              outcome: "ignored",
+              previousResult: "ignored",
+              previousReason: "Original ignored reason",
+            },
+          ],
         });
-        const receiptBeforeSecondApply = await tx
+        expect(
+          (
+            await runReplay({
+              tx,
+              eventId: olderId,
+              selectedEventIds,
+            })
+          ).kind,
+        ).toBe("ignored");
+        const repeatedReceipt = await tx
           .select()
           .from(hostedUsageWebhookEvents)
           .where(eq(hostedUsageWebhookEvents.eventId, olderId));
-        expect((await runReplay(tx, olderId)).kind).toBe("already_replayed");
-        expect(
-          await tx
-            .select()
-            .from(hostedUsageWebhookEvents)
-            .where(eq(hostedUsageWebhookEvents.eventId, olderId)),
-        ).toEqual(receiptBeforeSecondApply);
+        expect(repeatedReceipt.at(0)?.replayAudit).toHaveLength(2);
         await redactCompletedWebhookEvents({
           db: tx,
           retentionDays: 1,
           now: new Date("2026-10-03T00:00:00Z"),
         });
-        expect((await runReplay(tx, olderId)).kind).toBe("already_replayed");
-        const retainedAudit = await tx
-          .select({
-            payload: hostedUsageWebhookEvents.payload,
-            replayAudit: hostedUsageWebhookEvents.replayAudit,
-          })
+        expect(
+          (
+            await runReplay({
+              tx,
+              eventId: newerId,
+              selectedEventIds,
+            })
+          ).kind,
+        ).toBe("already_replayed");
+        const retainedReceipt = await tx
+          .select()
           .from(hostedUsageWebhookEvents)
-          .where(eq(hostedUsageWebhookEvents.eventId, olderId));
-        expect(retainedAudit.at(0)?.replayAudit).not.toBeNull();
-        expect(retainedAudit.at(0)?.payload).toEqual({});
+          .where(eq(hostedUsageWebhookEvents.eventId, newerId));
+        expect(retainedReceipt.at(0)?.payload).toEqual({});
+        const retainedAttempts = retainedReceipt.at(0)?.replayAudit;
+        expect(retainedAttempts).toMatchObject([
+          { outcome: "applied", newResult: "ok" },
+        ]);
+        const retainedAttempt = retainedAttempts?.at(0);
+        expect(retainedAttempt?.reason).toBeUndefined();
+        expect(retainedAttempt?.previousReason).toBeUndefined();
+        expect(retainedAttempt?.dispatchReason).toBeUndefined();
+        expect(retainedAttempt?.event.metadata?.["reason"]).toBeUndefined();
+        expect(
+          retainedAttempt?.event.metadata?.["dispatchReason"],
+        ).toBeUndefined();
       },
     );
   });
 
-  test("concurrent replay operators audit a receipt once", async () => {
+  test("a committed dry run preserves state and applied replay racing live delivery keeps the newest event", async () => {
+    if (!databaseUrl) {
+      panic("DATABASE_URL required");
+    }
+    const previousFeatureUsage = env.FEATURE_USAGE;
+    const previousSecret = env.HOSTED_USAGE_WEBHOOK_SECRET;
+    const previousSecretPrevious = env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS;
+    const testSecret = "test-replay-webhook-secret";
+    env.FEATURE_USAGE = true;
+    env.HOSTED_USAGE_WEBHOOK_SECRET = testSecret;
+    env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS = undefined;
+    try {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const owner = openClient({ max: 1 }).db;
+        const worker = openClient({ max: 1 }).db;
+        const schema = `provider_replay_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+        const eventId = `replay-${Bun.randomUUIDv7()}`;
+        const liveId = `live-${Bun.randomUUIDv7()}`;
+        const organizationId = toSafeId<"organization">(
+          `org_${Bun.randomUUIDv7()}`,
+        );
+        const policyKey = `policy_${Bun.randomUUIDv7()}`;
+        const payload = {
+          id: `entitlement_${eventId}`,
+          status: "active",
+          account_ref: `account_${eventId}`,
+          policy_ref: policyKey,
+          current_period_start: START,
+          current_period_end: END,
+          metadata: { organization_id: organizationId },
+          quantity: 2,
+          occurred_at: START,
+        };
+        try {
+          await owner.execute(sql`CREATE SCHEMA ${sql.identifier(schema)}`);
+          await owner.execute(sql`CREATE TABLE ${sql.identifier(schema)}.usage_provider_webhook_events
+            (LIKE public.usage_provider_webhook_events INCLUDING ALL)`);
+          await owner.insert(organization).values({
+            id: organizationId,
+            name: "Replay race fixture",
+            slug: organizationId,
+            createdAt: new Date(START),
+          });
+          await owner.insert(usagePolicies).values({
+            policyKey,
+            displayName: "Replay race fixture",
+            monthlyUsageUnits: 17,
+            hostedPolicyRef: policyKey,
+          });
+          const runOnOwner: WebhookTransactionRunner = async (fn) =>
+            await owner.transaction(async (tx) => {
+              await tx.execute(
+                sql`SELECT set_config('search_path', ${`${schema},public`}, true)`,
+              );
+              return await fn(tx);
+            });
+          const runOnWorker: WebhookTransactionRunner = async (fn) =>
+            await worker.transaction(async (tx) => {
+              await tx.execute(
+                sql`SELECT set_config('search_path', ${`${schema},public`}, true)`,
+              );
+              return await fn(tx);
+            });
+          await runOnOwner(async (tx) => {
+            await tx.insert(hostedUsageWebhookEvents).values({
+              eventId,
+              eventType: "entitlement.created",
+              processedAt: new Date(START),
+              result: "ignored",
+              errorMessage: "Original ignored reason",
+              payload: {
+                type: "entitlement.created",
+                data: payload,
+                signatureVerified: true,
+                payloadDigest: "fixture",
+              },
+            });
+          });
+          const snapshot = async () => ({
+            receipts: await runOnOwner(
+              async (tx) => await tx.select().from(hostedUsageWebhookEvents),
+            ),
+            entitlements: await owner
+              .select()
+              .from(usageEntitlements)
+              .where(eq(usageEntitlements.organizationId, organizationId)),
+            allocations: await owner
+              .select()
+              .from(usageAllocations)
+              .where(eq(usageAllocations.organizationId, organizationId)),
+            audits: await owner
+              .select()
+              .from(auditLogs)
+              .where(eq(auditLogs.organizationId, organizationId)),
+          });
+          const before = await snapshot();
+          const replay = async (mode: "dry_run" | "apply") =>
+            (
+              await replayProviderEvent({
+                eventId,
+                selectedEventIds: [eventId],
+                mode,
+                performer: { type: "local", username: "fixture" },
+                requestedBy: "operator:fixture",
+                reason: "race fixture replay",
+                runTransaction: runOnOwner,
+              })
+            ).unwrap();
+          expect((await replay("dry_run")).kind).toBe("applied");
+          expect(await snapshot()).toEqual(before);
+          const newest = "2026-06-03T00:00:00Z";
+          const body = JSON.stringify({
+            type: "entitlement.updated",
+            data: { ...payload, quantity: 3, occurred_at: newest },
+          });
+          const timestamp = `${Math.floor(Date.now() / 1000)}`;
+          const hasher = new Bun.CryptoHasher("sha256", testSecret);
+          hasher.update(`${liveId}.${timestamp}.${body}`);
+          const request = new Request("http://api.test/usage/hosted/webhook", {
+            method: "POST",
+            headers: {
+              [HOSTED_USAGE_WEBHOOK_HEADERS.id]: liveId,
+              [HOSTED_USAGE_WEBHOOK_HEADERS.timestamp]: timestamp,
+              [HOSTED_USAGE_WEBHOOK_HEADERS.signature]: `v1,${hasher.digest("base64")}`,
+            },
+          });
+          const [replayed, received] = await Promise.all([
+            replay("apply"),
+            receiveHostedUsageWebhook({
+              request,
+              body,
+              runTransaction: runOnWorker,
+            }),
+          ]);
+          expect(["applied", "ignored"]).toContain(replayed.kind);
+          expect(received.status).toBe(200);
+          const entitlements = await owner
+            .select()
+            .from(usageEntitlements)
+            .where(eq(usageEntitlements.organizationId, organizationId));
+          expect(entitlements).toHaveLength(1);
+          expect(entitlements.at(0)?.hostedLastEventAt).toEqual(
+            new Date(newest),
+          );
+          expect(entitlements.at(0)?.seats).toBe(3);
+        } finally {
+          await owner
+            .delete(organization)
+            .where(eq(organization.id, organizationId));
+          await owner
+            .delete(usagePolicies)
+            .where(eq(usagePolicies.policyKey, policyKey));
+          await owner.execute(
+            sql`DROP SCHEMA ${sql.identifier(schema)} CASCADE`,
+          );
+        }
+      });
+    } finally {
+      env.FEATURE_USAGE = previousFeatureUsage;
+      env.HOSTED_USAGE_WEBHOOK_SECRET = previousSecret;
+      env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS = previousSecretPrevious;
+    }
+  });
+
+  test("concurrent ignored replay operators preserve both attempts", async () => {
     if (!databaseUrl) {
       panic("DATABASE_URL required");
     }
@@ -457,6 +967,7 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
               eventType: "entitlement.created",
               processedAt: new Date(START),
               result: "ignored",
+              errorMessage: "Original ignored reason",
               payload: {
                 signatureVerified: true,
                 payloadDigest: "fixture-digest",
@@ -478,8 +989,10 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
           const replayOn = async (db: typeof owner) =>
             await replayProviderEvent({
               eventId,
+              selectedEventIds: [eventId],
               mode: "apply",
-              actor: "operator:concurrent-fixture",
+              requestedBy: "operator:concurrent-fixture",
+              performer: { type: "local", username: "concurrent-fixture" },
               reason: "concurrent fixture replay",
               runTransaction: async (fn) =>
                 await db.transaction(async (tx) => {
@@ -496,7 +1009,7 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
           ]);
           expect(
             outcomes.map((outcome) => outcome.unwrap().kind).toSorted(),
-          ).toEqual(["already_replayed", "ignored"]);
+          ).toEqual(["ignored", "ignored"]);
           const rows = await owner.transaction(async (tx) => {
             await tx.execute(
               sql`SELECT set_config('search_path', ${`${schema},public`}, true)`,
@@ -509,11 +1022,18 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
           expect(rows).toHaveLength(1);
           expect(rows.at(0)).toMatchObject({
             result: "ignored",
-            replayAudit: {
-              actor: "operator:concurrent-fixture",
-              outcome: "ignored",
-              previousResult: "ignored",
-            },
+            replayAudit: [
+              {
+                requestedBy: "operator:concurrent-fixture",
+                execution: {
+                  performer: { type: "local", username: "concurrent-fixture" },
+                },
+                outcome: "ignored",
+                previousResult: "ignored",
+                previousReason: "Original ignored reason",
+              },
+              { outcome: "ignored" },
+            ],
           });
         } finally {
           await owner.execute(
