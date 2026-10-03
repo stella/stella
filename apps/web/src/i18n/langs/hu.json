@@ -1607,6 +1607,15 @@
     "currency": "Pénznem",
     "currentPage": "Aktuális oldal",
     "date": "Dátum",
+    "datePicker": {
+      "label": "Dátumválasztó",
+      "nextDecade": "Következő évtized",
+      "nextMonth": "Következő hónap",
+      "nextYear": "Következő év",
+      "previousDecade": "Előző évtized",
+      "previousMonth": "Előző hónap",
+      "previousYear": "Előző év"
+    },
     "decisions": "Határozatok",
     "decline": "Elutasítás",
     "delete": "Törlés",

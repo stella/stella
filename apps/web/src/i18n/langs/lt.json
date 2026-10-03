@@ -1607,6 +1607,15 @@
     "currency": "Valiuta",
     "currentPage": "Dabartinis puslapis",
     "date": "Data",
+    "datePicker": {
+      "label": "Datos parinkiklis",
+      "nextDecade": "Kitas dešimtmetis",
+      "nextMonth": "Kitas mėnuo",
+      "nextYear": "Kiti metai",
+      "previousDecade": "Ankstesnis dešimtmetis",
+      "previousMonth": "Ankstesnis mėnuo",
+      "previousYear": "Ankstesni metai"
+    },
     "decisions": "Sprendimai",
     "decline": "Atmesti",
     "delete": "Ištrinti",
