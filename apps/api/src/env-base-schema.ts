@@ -1,3 +1,4 @@
+// parser-output-unchanged: The public corpus search address budget affects admission only, not parsed records.
 // parser-output-unchanged: Minimum public corpus request budgets affect admission only, not parsed records.
 // parser-output-unchanged: Search ranking and query variant configuration do not change ingestion parser output.
 /**
@@ -142,6 +143,10 @@ export const envBaseServerSchema = {
     "2",
   ),
   PUBLIC_CORPUS_SITEMAP_P95_SECONDS: v.optional(
+    positiveIntegerValueSchema,
+    "30",
+  ),
+  PUBLIC_CORPUS_SEARCH_ADDRESS_MAX: v.optional(
     positiveIntegerValueSchema,
     "30",
   ),

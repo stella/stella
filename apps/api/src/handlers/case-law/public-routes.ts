@@ -359,7 +359,11 @@ const searchDecisions = createSafeBoundedPublicHandler(
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await searchDecisionsHandler(body, caseLawPublicReadDb, "unobserved"),
+          await searchDecisionsHandler({
+            body,
+            caseLawDb: caseLawPublicReadDb,
+            observer: "unobserved",
+          }),
       ),
     );
 

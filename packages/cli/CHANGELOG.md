@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 3.6.0
+
+### Minor Changes
+
+- [#4630](https://github.com/stella/stella/pull/4630) [`a288e01`](https://github.com/stella/stella/commit/a288e01207fc95f92588ce94b17639d7931351e2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Sign in with the client document the server publishes for the CLI when the server supports it.
+
 ## 3.5.4
 
 ### Patch Changes
