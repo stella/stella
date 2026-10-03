@@ -17,6 +17,7 @@ import {
 import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { tPublicCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
+import { searchPaginationOutcomeSchema } from "@/api/lib/search/pagination-outcome-schema";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
 export const PUBLIC_JURISDICTIONS_DESCRIPTION =
@@ -99,6 +100,7 @@ export const searchLegislationSuccessResponseSchema = t.Object(
     nextCursor: nullableBoundedString(
       CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
     ),
+    paginationOutcome: searchPaginationOutcomeSchema,
     total: searchTotalSchema,
   },
   { additionalProperties: false },

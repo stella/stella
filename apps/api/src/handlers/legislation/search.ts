@@ -10,7 +10,11 @@ import {
   isPublicLegislationCountry,
 } from "@stll/api-contract/legislation-publication";
 import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
-import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
+import {
+  SEARCH_PAGINATION_COMPLETE,
+  type SearchPaginationOutcome,
+  SEARCH_TOTAL_NOT_COUNTED,
+} from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -48,6 +52,7 @@ import type {
   CorpusSearchPhase,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import {
+  corpusSearchGroupToken,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
   isStaleCorpusSearchCursor,
@@ -62,7 +67,10 @@ import {
   corpusIndexPattern,
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
-import { currentLegislationCorpusProjection } from "@/api/lib/legal-search/legislation-corpus-projection";
+import {
+  currentLegislationCorpusProjection,
+  legislationCorpusWorkCanRecur,
+} from "@/api/lib/legal-search/legislation-corpus-projection";
 import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
 import { relaxedLegislationClause } from "@/api/lib/legal-search/legislation-query";
 import {
@@ -83,7 +91,6 @@ import {
   pinnedLegislationWorks,
   pinnedLegislationWorkScore,
   shownLegislationVersionId,
-  legislationWorkToken,
 } from "@/api/lib/legal-search/legislation-work-collapse";
 import type { LegislationWorkRepresentative } from "@/api/lib/legal-search/legislation-work-collapse";
 import {
@@ -442,7 +449,7 @@ export const rehydrateLegislationCandidates = async ({
     currentLegislationCorpusProjection(generation),
   ];
   const read = await legislationDb(async (tx) => {
-    const rows: LegislationSearchRow[] =
+    const rows =
       ids.length === 0
         ? []
         : await tx
@@ -459,6 +466,7 @@ export const rehydrateLegislationCandidates = async ({
               effectiveDate: legislationDocuments.effectiveDate,
               sourceUrl: legislationDocuments.sourceUrl,
               citationAuthority: legislationDocuments.citationAuthority,
+              canRecur: legislationCorpusWorkCanRecur(generation),
             })
             .from(legislationDocuments)
             .innerJoin(
@@ -550,10 +558,23 @@ export const rehydrateLegislationCandidates = async ({
     excludedWorkTokens: new Set(excludedWorkTokens),
   });
 
+  const recurringTokens = new Set([
+    ...read.rows
+      .filter((row) => row.canRecur)
+      .map((row) => corpusSearchGroupToken(legislationWorkRefKey(row))),
+    // Named Works are inserted independently of physical matches on every page.
+    ...read.named.map((work) =>
+      corpusSearchGroupToken(legislationWorkRefKey(work)),
+    ),
+    ...(read.cursorWork === undefined
+      ? []
+      : [corpusSearchGroupToken(legislationWorkRefKey(read.cursorWork))]),
+  ]);
+
   return {
     context: { byId },
     ranked: collapsed.ranked,
-    groups: collapsed.workTokens,
+    groups: collapsed.workTokens.filter((token) => recurringTokens.has(token)),
   };
 };
 
@@ -788,7 +809,11 @@ const pgSearch = async (
   parsedCursor: SearchCursor | null,
   legislationDb: LegislationReadDb,
   dependencies: SearchLegislationDependencies,
-): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
+): Promise<{
+  hits: LegislationHit[];
+  nextCursor: string | null;
+  paginationOutcome: SearchPaginationOutcome;
+}> => {
   const limit = normalizeTenantPageLimit(
     body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
   );
@@ -915,7 +940,7 @@ const pgSearch = async (
       score: row.score,
     };
   });
-  return { hits, nextCursor };
+  return { hits, nextCursor, paginationOutcome: SEARCH_PAGINATION_COMPLETE };
 };
 
 export const legislationQueryFingerprint = (
@@ -954,6 +979,7 @@ const corpusIndexSearch = async ({
 }: CorpusLegislationSearchOptions): Promise<{
   hits: LegislationHit[];
   nextCursor: string | null;
+  paginationOutcome: SearchPaginationOutcome;
 }> => {
   const limit = normalizeTenantPageLimit(
     body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
@@ -1078,7 +1104,11 @@ const corpusIndexSearch = async ({
     cursor: parsedCursor,
   });
   if (page === null) {
-    return { hits: [], nextCursor: null };
+    return {
+      hits: [],
+      nextCursor: null,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+    };
   }
   const hits = hitsOf(page, phase);
   // A continuation means strict results remain. Only an exhausted first page can append coverage hits.
@@ -1086,9 +1116,14 @@ const corpusIndexSearch = async ({
     phase.type === "relaxed" ||
     parsedCursor !== null ||
     hits.length >= limit ||
-    page.nextCursor !== null
+    page.nextCursor !== null ||
+    page.paginationOutcome.type === "truncated"
   ) {
-    return { hits, nextCursor: cursorOf(page, phase) };
+    return {
+      hits,
+      nextCursor: cursorOf(page, phase),
+      paginationOutcome: page.paginationOutcome,
+    };
   }
   const strictWorkTokens = [
     ...new Set(
@@ -1096,7 +1131,7 @@ const corpusIndexSearch = async ({
         const row = page.context.byId.get(hit.documentId);
         return row === undefined
           ? panic("Strict legislation hit has no Work")
-          : legislationWorkToken(legislationWorkRefKey(row));
+          : corpusSearchGroupToken(legislationWorkRefKey(row));
       }),
     ),
   ];
@@ -1119,11 +1154,16 @@ const corpusIndexSearch = async ({
     cursor: boundary,
   });
   if (extra === null) {
-    return { hits, nextCursor: null };
+    return {
+      hits,
+      nextCursor: null,
+      paginationOutcome: page.paginationOutcome,
+    };
   }
   return {
     hits: [...hits, ...hitsOf(extra, relaxed)],
     nextCursor: cursorOf(extra, relaxed),
+    paginationOutcome: extra.paginationOutcome,
   };
 };
 
@@ -1236,20 +1276,24 @@ export const searchLegislationHandler = async (
     return status(400, { message: "Invalid cursor" });
   }
 
-  const { hits: items, nextCursor } =
-    serving !== null
-      ? await corpusIndexSearch({
-          body,
-          parsedCursor,
-          legislationDb,
-          observer,
-          serving,
-        })
-      : await pgSearch(body, parsedCursor, legislationDb, dependencies);
+  const {
+    hits: items,
+    nextCursor,
+    paginationOutcome,
+  } = serving !== null
+    ? await corpusIndexSearch({
+        body,
+        parsedCursor,
+        legislationDb,
+        observer,
+        serving,
+      })
+    : await pgSearch(body, parsedCursor, legislationDb, dependencies);
 
   const response: Static<typeof searchLegislationSuccessResponseSchema> = {
     items: items.map(projectLegislationSearchHit),
     nextCursor,
+    paginationOutcome,
     total: SEARCH_TOTAL_NOT_COUNTED,
   };
   return response;

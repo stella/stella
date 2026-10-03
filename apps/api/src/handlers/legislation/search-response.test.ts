@@ -2,7 +2,11 @@ import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
+import {
+  SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+  SEARCH_TOTAL_NOT_COUNTED,
+} from "@stll/api-contract/search";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -147,6 +151,7 @@ test("search projection bounds Unicode text and balances highlight markup", () =
             () => projected,
           ),
           nextCursor: "a".repeat(CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH),
+          paginationOutcome: SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
           total: SEARCH_TOTAL_NOT_COUNTED,
         };
         expect(
@@ -170,6 +175,7 @@ test("every text field rejects multi-byte values beyond its schema byte bound", 
     const response = {
       items: [{ ...projected, [field]: oversized }],
       nextCursor: null,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       total: SEARCH_TOTAL_NOT_COUNTED,
     };
     expect(Value.Check(searchLegislationSuccessResponseSchema, response)).toBe(

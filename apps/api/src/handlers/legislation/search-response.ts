@@ -3,6 +3,7 @@ import type { Static } from "elysia";
 
 import {
   LEGISLATION_SEARCH_MATCH_TYPES,
+  SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
 
@@ -170,6 +171,8 @@ export const PUBLIC_LEGISLATION_SEARCH_RESPONSE_MAX_BYTES =
         () => null,
       ),
       nextCursor: "",
+      // The longest pagination outcome the schema admits.
+      paginationOutcome: SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
       total: SEARCH_TOTAL_NOT_COUNTED,
     }),
     "utf-8",
