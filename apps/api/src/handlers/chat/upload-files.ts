@@ -49,6 +49,7 @@ import {
   FileScanRejectedError,
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
+import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
@@ -744,6 +745,7 @@ export const uploadUserFile = async ({
     });
 
     if (Result.isError(scanResult)) {
+      observeScanFailures(scanResult.error);
       return Result.err(
         FileScanRejectedError.is(scanResult.error)
           ? new HandlerError({

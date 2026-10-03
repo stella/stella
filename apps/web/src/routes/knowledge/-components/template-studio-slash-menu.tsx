@@ -42,7 +42,7 @@ import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import {
   clausesOptions as clauseLibraryOptions,
-  knowledgeKeys,
+  invalidateTemplateClauseSources,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
@@ -597,12 +597,7 @@ export const useTemplateStudioSlashMenu = ({
       return;
     }
     detached(
-      queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.templates.clauses(
-          activeOrganizationId,
-          templateId,
-        ),
-      }),
+      invalidateTemplateClauseSources(queryClient, activeOrganizationId),
       "template-studio-slash-menu.invalidate",
     );
   };

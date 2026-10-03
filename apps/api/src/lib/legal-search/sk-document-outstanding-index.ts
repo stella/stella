@@ -15,12 +15,20 @@ const DOCUMENT_OUTSTANDING_PREDICATE_SQL = new PgDialect().sqlToQuery(
     documentAst: sql.identifier("document_ast"),
   }),
 ).sql;
-const DOCUMENT_OUTSTANDING_DEFINITION_BODY = `ON public.case_law_decisions USING btree (source_id, id) WHERE ((redacted_at IS NULL) AND (fulltext IS NULL) AND (document_url IS NOT NULL) AND ((content_hash IS NULL) OR ((content_hash)::text = ANY ((${EMPTY_CORPUS_HASHES_VARCHAR_ARRAY})::text[])) OR (document_ast IS NOT NULL)))`;
+const DOCUMENT_OUTSTANDING_DEFINITION_PREDICATE = `((redacted_at IS NULL) AND (fulltext IS NULL) AND (document_url IS NOT NULL) AND ((content_hash IS NULL) OR ((content_hash)::text = ANY ((${EMPTY_CORPUS_HASHES_VARCHAR_ARRAY})::text[])) OR (document_ast IS NOT NULL)))`;
 
 export const DOCUMENT_OUTSTANDING_INDEX = {
   createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_document_outstanding_idx" ON public."case_law_decisions" USING btree ("source_id", "id") WHERE ${DOCUMENT_OUTSTANDING_PREDICATE_SQL}`,
-  definitionBody: DOCUMENT_OUTSTANDING_DEFINITION_BODY,
+  definitionBody: `ON public.case_law_decisions USING btree (source_id, id) WHERE ${DOCUMENT_OUTSTANDING_DEFINITION_PREDICATE}`,
   isUnique: false,
   name: "case_law_decisions_document_outstanding_idx",
+  tableName: "case_law_decisions",
+} as const satisfies RequiredMigrationIndex & { createSql: string };
+
+export const DOCUMENT_OUTSTANDING_DATE_INDEX = {
+  createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_document_outstanding_date_idx" ON public."case_law_decisions" USING btree ("source_id", "decision_date" DESC NULLS LAST, "id") WHERE ${DOCUMENT_OUTSTANDING_PREDICATE_SQL}`,
+  definitionBody: `ON public.case_law_decisions USING btree (source_id, decision_date DESC NULLS LAST, id) WHERE ${DOCUMENT_OUTSTANDING_DEFINITION_PREDICATE}`,
+  isUnique: false,
+  name: "case_law_decisions_document_outstanding_date_idx",
   tableName: "case_law_decisions",
 } as const satisfies RequiredMigrationIndex & { createSql: string };
