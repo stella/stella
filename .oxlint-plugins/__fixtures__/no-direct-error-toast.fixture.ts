@@ -12,7 +12,7 @@ export const errorNotices = (tone: string) => {
   // oxlint-disable-next-line no-direct-error-toast/no-direct-error-toast -- fixture proves dynamic discriminators require a shared error owner
   notices.add({ type: tone, title: "Outcome" });
   // oxlint-disable-next-line no-direct-error-toast/no-direct-error-toast -- fixture proves promise rejection handling stays with the shared error owner
-  notices.promise(Promise.resolve("done"), {
+  void notices.promise(Promise.resolve("done"), {
     loading: "Working",
     success: "Done",
     error: "Failed",
