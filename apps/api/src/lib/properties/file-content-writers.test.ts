@@ -66,13 +66,21 @@ test("every property content writer is insert-only or refuses file type transiti
   const guarded: string[] = [];
   const unprotected: string[] = [];
   for await (const file of new Bun.Glob("**/*.ts").scan({ cwd: SOURCE_ROOT })) {
-    if (file.includes(".test.") || file.startsWith("tests/")) {continue;}
+    if (file.includes(".test.") || file.startsWith("tests/")) {
+      continue;
+    }
     const classes = classifyWriters(
       await Bun.file(path.join(SOURCE_ROOT, file)).text(),
     );
-    if (classes.includes("insert-only")) {inserts.push(file);}
-    if (classes.includes("guarded")) {guarded.push(file);}
-    if (classes.includes("unprotected")) {unprotected.push(file);}
+    if (classes.includes("insert-only")) {
+      inserts.push(file);
+    }
+    if (classes.includes("guarded")) {
+      guarded.push(file);
+    }
+    if (classes.includes("unprotected")) {
+      unprotected.push(file);
+    }
   }
   expect(unprotected.toSorted()).toEqual([]);
   expect(inserts.toSorted()).toEqual(INSERT_ONLY_OWNERS);

@@ -323,19 +323,25 @@ const applyNullAsAbsent = (value: unknown, plan: NullAsAbsentPlan): unknown => {
       if (!isRecord(value)) {
         return value;
       }
-      const normalized: Record<string, unknown> = {};
-      for (const [key, entry] of Object.entries(value)) {
-        const placeholders = plan.absentWhen.get(key);
-        if (
-          placeholders?.some((placeholder) => isPlaceholder(entry, placeholder))
-        ) {
-          continue;
-        }
-        const nested = plan.properties.get(key);
-        normalized[key] =
-          nested === undefined ? entry : applyNullAsAbsent(entry, nested);
-      }
-      return normalized;
+      return Object.fromEntries(
+        Object.entries(value).flatMap(([key, entry]) => {
+          const placeholders = plan.absentWhen.get(key);
+          if (
+            placeholders?.some((placeholder) =>
+              isPlaceholder(entry, placeholder),
+            )
+          ) {
+            return [];
+          }
+          const nested = plan.properties.get(key);
+          return [
+            [
+              key,
+              nested === undefined ? entry : applyNullAsAbsent(entry, nested),
+            ] as const,
+          ];
+        }),
+      );
     }
     default:
       return panic(`Unhandled null-as-absent plan: ${JSON.stringify(plan)}`);

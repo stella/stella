@@ -5,6 +5,8 @@ import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-p
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { type ClauseBody, isClauseBody } from "@/api/lib/clauses/types";
+import { isRecord } from "@/api/lib/type-guards";
 import type { MaterializePlaybookRunResult } from "@/api/lib/workflow/materialize-playbook-run";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
@@ -444,6 +446,156 @@ describe("MCP knowledge tools", () => {
       "Provide at least one field to change",
     );
   });
+
+  test("save_clause limits expected_body to updates", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        title: "Clause",
+        body: [{ text: "New" }],
+        expected_body: [{ text: "Read" }],
+      },
+      context: createContext(),
+      toolName: "save_clause",
+    });
+    expect(result.isError).toBe(true);
+    expect(parseToolPayload(result)).toMatchObject({
+      error: { code: "validation_error" },
+    });
+  });
+
+  test("list_clauses paragraphs round-trip verbatim through expected_body", async () => {
+    const stored = {
+      id: CLAUSE_ID,
+      title: "Clause",
+      categoryId: null,
+      description: null,
+      usageNotes: null,
+      language: null,
+      body: [
+        {
+          text: "List",
+          listKind: "ordered",
+          listLevel: 1,
+          runs: [{ text: "List", bold: true }],
+        },
+        {
+          text: "{% if party %}",
+          isDirective: true,
+          directiveKind: "if",
+          directiveExpression: "party",
+        },
+      ] satisfies ClauseBody,
+      metadata: null,
+      currentVersion: 1,
+      createdBy: "user_1",
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: new Date("2026-01-01T00:00:00Z"),
+      variants: [],
+      versions: [],
+    };
+    let writes = 0;
+    const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+      async (run: (tx: unknown) => unknown) =>
+        await run({
+          query: { clauses: { findFirst: async () => stored } },
+          select: () => ({
+            from: () => ({ where: () => ({ for: async () => [stored] }) }),
+          }),
+          update: () => ({
+            set: () => ({
+              where: () => ({
+                returning: async () => {
+                  writes += 1;
+                  return [stored];
+                },
+              }),
+            }),
+          }),
+        }),
+    );
+    const context = createContext({ scopedDb });
+    const read = await KNOWLEDGE_TOOL_HANDLERS.list_clauses({
+      args: { clause_id: CLAUSE_ID },
+      context,
+    });
+    if (
+      !isMcpEgressPlan(read) ||
+      !("clause" in read.payload) ||
+      !isRecord(read.payload.clause) ||
+      !isClauseBody(read.payload.clause.body)
+    ) {
+      throw new Error("Expected a clause detail payload");
+    }
+    const expectedBody = read.payload.clause.body;
+    expect(expectedBody).toEqual(stored.body);
+    const saved = await handleMcpToolCall({
+      args: {
+        clause_id: CLAUSE_ID,
+        usage_notes: "Updated",
+        expected_body: expectedBody,
+      },
+      context,
+      toolName: "save_clause",
+    });
+    expect(saved.isError).toBeFalsy();
+    expect(writes).toBe(1);
+  });
+
+  for (const expectation of ["matching", "stale"] as const) {
+    test(`save_clause maps ${expectation} expected_body paragraph fields into update preconditions`, async () => {
+      let writes = 0;
+      const stored = {
+        id: CLAUSE_ID,
+        title: "Clause",
+        currentVersion: 1,
+        body: [{ text: "Read", listKind: "bullet", listLevel: 1 }],
+      };
+      const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+        async (run: (tx: unknown) => unknown) =>
+          await run({
+            query: { clauses: { findFirst: async () => stored } },
+            select: () => ({
+              from: () => ({ where: () => ({ for: async () => [stored] }) }),
+            }),
+            update: () => ({
+              set: () => ({
+                where: () => ({
+                  returning: async () => {
+                    writes += 1;
+                    return [stored];
+                  },
+                }),
+              }),
+            }),
+          }),
+      );
+      const result = await handleMcpToolCall({
+        args: {
+          clause_id: CLAUSE_ID,
+          usage_notes: "Updated notes",
+          expected_body: [
+            {
+              text: expectation === "matching" ? "Read" : "Older",
+              list_kind: "bullet",
+              list_level: 1,
+            },
+          ],
+        },
+        context: createContext({ scopedDb }),
+        toolName: "save_clause",
+      });
+      if (expectation === "matching") {
+        expect(result.isError).toBeFalsy();
+        expect(writes).toBe(1);
+      } else {
+        expect(result.isError).toBe(true);
+        expect(parseToolPayload(result)).toMatchObject({
+          error: { code: "conflict" },
+        });
+        expect(writes).toBe(0);
+      }
+    });
+  }
 
   test("save_playbook creates from a name and returns the next save's token", async () => {
     const { savedAt, scopedDb, writes } = createPlaybookWriteScopedDb();

@@ -1,3 +1,5 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 
 import { Temporal } from "@stll/time";
@@ -36,6 +38,7 @@ import {
   AT_RIS_DOCUMENT_ORIGINS,
   fetchAtRisWithRetry,
 } from "@/api/handlers/case-law/ingestion/adapters/at-ris-throttle";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -56,6 +59,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 
 const API_URL = "https://data.bka.gv.at/ris/api/v2.6/Judikatur";
@@ -931,6 +935,7 @@ const fetchHeadnoteListing = async ({
     headnoteListingQuery(source, caseNumber, decisionDate),
     { headers: { Accept: "application/json" }, redirect: "error" },
     {
+      fetchStage: "listing",
       adapterKey: source.key,
       baseDelayMs: REQUEST_INTERVAL_MS,
       signal,
@@ -1011,7 +1016,7 @@ const buildListingOnly = ({
   const caseNumber = data.caseNumber ?? `RIS ${sourceDocumentId}`;
   const court = data.court ?? `RIS ${source.application}`;
   const raw = storedRaw({ item, documentXml: rawDetail });
-  return {
+  return plainTextIngestionResult({
     sourceDocumentId,
     sourceDocumentIdRepairAliases,
     caseNumber,
@@ -1043,7 +1048,7 @@ const buildListingOnly = ({
     documentAst: EMPTY_AST,
     parserVersion: PARSER_VERSIONS[source.key],
     ...raw,
-  };
+  });
 };
 
 type BuildDecisionOptions = {
@@ -1100,6 +1105,7 @@ const buildDecision = async ({
     xmlUrl,
     { headers: { Accept: "application/xml" }, redirect: "error" },
     {
+      fetchStage: "document",
       adapterKey: source.key,
       baseDelayMs: REQUEST_INTERVAL_MS,
       signal,
@@ -1211,7 +1217,7 @@ export const assembleAtRisDecision = (
   const parsed = parseResult.value;
 
   const raw = storedRaw({ item, documentXml, headnoteListing });
-  return {
+  return plainTextIngestionResult({
     sourceDocumentId,
     sourceDocumentIdRepairAliases,
     caseNumber: data.caseNumber,
@@ -1240,7 +1246,7 @@ export const assembleAtRisDecision = (
     sections: sectionsFromAst(parsed.documentAst.blocks),
     parserVersion: PARSER_VERSIONS[source.key],
     ...raw,
-  };
+  });
 };
 
 type FetchListingOptions = {
@@ -1270,6 +1276,7 @@ const fetchListing = async ({
     url,
     { headers: { Accept: "application/json" }, redirect: "error" },
     {
+      fetchStage: "listing",
       adapterKey: source.key,
       baseDelayMs: REQUEST_INTERVAL_MS,
       signal,
@@ -1401,8 +1408,11 @@ const buildReconciliationDecision = async (
   ) {
     return { type: "detail-unavailable" };
   }
+  if (typeof detailStatus !== "string") {
+    return panic("RIS listing-only decision has no detail status");
+  }
   throw new AdapterFetchError({
-    message: `RIS reconciliation could not build detail: ${String(detailStatus)}`,
+    message: `RIS reconciliation could not build detail: ${detailStatus}`,
     adapterKey: source.key,
     cursor: null,
   });
@@ -1423,6 +1433,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
   dependencies: AtRisDependencies,
 ): AtRisSourceAdapter<TKey> =>
   defineSourceAdapter({
+    documentStage: "inline",
     key: source.key,
     sourceSurfaces: atRisSourceSurfaces(source.key),
     sourceFields: atRisFieldInventory(profileOf(source)),
@@ -1433,6 +1444,14 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
     maxSyncPages: 1,
 
     reconciliation: {
+      // Decision metadata and document references describe the item, without search result coordinates.
+      revisionOf: (payload) =>
+        isRecord(payload)
+          ? {
+              metadata: nestedRecord(payload, "Data", "Metadaten"),
+              documents: nestedRecord(payload, "Data", "Dokumentliste"),
+            }
+          : null,
       firstSlice: source.firstSlice,
       sliceOf: (now) => tipSlice(source, now),
       nextSlice: (slice) => {
@@ -1578,21 +1597,48 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             };
           }
 
-          const decisions = await Array.fromAsync(
-            page.items.filter((item) => !isExcludedItem(source, item)),
-            async (item) =>
-              await buildDecision({
-                cursor,
-                dependencies,
-                item,
-                signal,
-                source,
-              }),
-          );
+          const decisions: IngestionResult[] = [];
+          let refused = 0;
+          for (const item of page.items.filter(
+            (candidate) => !isExcludedItem(source, candidate),
+          )) {
+            const outcome = await buildPlainTextItem({
+              adapterKey: source.key,
+
+              rawListing: JSON.stringify(item),
+              decisionOf: (decision) => decision,
+              build: async () =>
+                await buildDecision({
+                  cursor,
+                  dependencies,
+                  item,
+                  signal,
+                  source,
+                }),
+            });
+            signal?.throwIfAborted();
+            switch (outcome.type) {
+              case "built":
+                decisions.push(outcome.value);
+                break;
+              case "item_build_failed":
+                refused += 1;
+                decisions.push(outcome.decision);
+                break;
+              default:
+                outcome satisfies never;
+                panic(`Unhandled RIS item outcome: ${String(outcome)}`);
+            }
+          }
+          const itemBuildFailures = {
+            type: "item_build_failed",
+            count: refused,
+          } as const;
           const collected = state.collected + decisions.length;
           if (state.page < totalPages) {
             return {
               decisions,
+              itemBuildFailures,
               nextCursor: encodeCursor({
                 ...state,
                 page: state.page + 1,
@@ -1612,6 +1658,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
           }
           return {
             decisions,
+            itemBuildFailures,
             nextCursor: encodeCursor({
               slice: state.slice,
               phase: CURSOR_PHASE.VERIFY,

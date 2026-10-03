@@ -70,14 +70,15 @@ test.each([
           ask: { question: "", content },
         },
       ] satisfies Position[];
-      if (prependNewPosition)
-        {positions.unshift({
+      if (prependNewPosition) {
+        positions.unshift({
           mode: "extract",
           sourceId: Bun.randomUUIDv7(),
           issue: "Additional column",
           enabled: true,
           ask: { question: "", content: { version: 1, type: "text" } },
-        });}
+        });
+      }
       return await createSafeDb(
         db,
         [ids.wsA1],
@@ -100,10 +101,13 @@ test.each([
     };
     const created = await run({ content: initial, issue: "Initial column" });
     expect(created.isOk()).toBe(true);
-    if (created.isErr() || !created.value.ok)
-      {panic("Initial materialization was refused");}
+    if (created.isErr() || !created.value.ok) {
+      panic("Initial materialization was refused");
+    }
     const propertyId = created.value.materializedPropertyIds.at(0);
-    if (!propertyId) {panic("Materialization did not produce a column");}
+    if (!propertyId) {
+      panic("Materialization did not produce a column");
+    }
     const before = await db.query.properties.findFirst({
       where: { id: { eq: propertyId } },
     });
@@ -117,8 +121,9 @@ test.each([
       prependNewPosition: true,
     });
     expect(refusal.isOk()).toBe(true);
-    if (refusal.isErr())
-      {panic("Materialization failed without its typed refusal");}
+    if (refusal.isErr()) {
+      panic("Materialization failed without its typed refusal");
+    }
     expect(refusal.value).toMatchObject({
       ok: false,
       status: 422,
@@ -137,7 +142,9 @@ test.each([
     expect(auditCount).toBe(1);
     const rerun = await run({ content: initial, issue: "Renamed column" });
     expect(rerun.isOk()).toBe(true);
-    if (rerun.isErr()) {panic("Same-type materialization failed");}
+    if (rerun.isErr()) {
+      panic("Same-type materialization failed");
+    }
     expect(rerun.value).toMatchObject({
       ok: true,
       materializedPropertyIds: [propertyId],

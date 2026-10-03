@@ -9,6 +9,11 @@ import {
 } from "bun:test";
 import { desc, DrizzleQueryError, eq } from "drizzle-orm";
 
+import {
+  BackfillFailedError,
+  BackfillHeldError,
+  createScriptBackfillRuntime,
+} from "@/api/db/backfill-runtime";
 import type { SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
@@ -25,6 +30,8 @@ import {
   type SchedulerDb,
   startLeaseHeartbeat,
 } from "./runner";
+import { createCaseLawProvisionStateBackfillTask } from "./tasks/case-law-provision-state-backfill";
+import { createLegislationExpressionIdBackfill } from "./tasks/legislation-expression-id-backfill";
 import type { SchedulerTask, SchedulerTaskRegistry } from "./types";
 
 // leaseMs has a hard floor of three poll intervals (3 * 60_000). The runtime
@@ -156,6 +163,162 @@ test("scheduler failure logs preserve Bun driver codes and SQLSTATEs", async () 
       "ERR_POSTGRES_SERVER_ERROR",
     );
     expect(server?.attributes?.["error.cause.pg_code"]).toBe("57014");
+  } finally {
+    recording.restore();
+  }
+});
+
+test.each([
+  "completed",
+  42,
+  null,
+  {},
+  { status: "err", isErr: () => true, error: { cause: "unexpected result" } },
+])(
+  "an incidental task return is successful unless it is an actual Result (%j)",
+  async (returned) => {
+    const taskName = "test.incidental-return";
+    const id = await seedJob({ task: taskName });
+    const recording = installRecordingLogger();
+    try {
+      // A void callback may return an incidental value, including an object
+      // whose method happens to have the same name as a Result method.
+      const result = await runSchedulerOnce({
+        db,
+        leaseMs: LEASE_MS,
+        registry: registryOf(taskName, () => returned),
+        runnerId: "runner-incidental-return",
+      });
+      expect(result).toMatchObject({ acquired: 1, failed: 0, succeeded: 1 });
+      const job = await readJob(id);
+      expect(job.lastSuccessAt).not.toBeNull();
+      expect(job.lastError).toBeNull();
+      expect(job.lockedBy).toBeNull();
+      expect((await readLatestRun(id)).status).toBe("success");
+      expect(
+        recording.records.filter(
+          (record) => record.message === "scheduler.job_failed",
+        ),
+      ).toHaveLength(0);
+    } finally {
+      recording.restore();
+    }
+  },
+);
+
+test.each(["expression", "provision"] as const)(
+  "%s task timeouts persist failure even when the following decision is held",
+  async (taskKind) => {
+    const cause = new SQL.PostgresError("statement timeout", {
+      code: "ERR_POSTGRES_SERVER_ERROR",
+      errno: "57014",
+    });
+    const failure = new BackfillFailedError({
+      message: "backfill batch statement timeout",
+      cause,
+      holdUntil: 105_000,
+      heldSince: 100_000,
+    });
+    let task: SchedulerTask;
+    switch (taskKind) {
+      case "expression":
+        task = createLegislationExpressionIdBackfill({
+          readVerdict: async () => ({ kind: "normal", signals: [] }),
+          observeStatus: () => undefined,
+          createRuntime: (options) => ({
+            ...createScriptBackfillRuntime({
+              ...options,
+              slot: { tryAcquire: async () => true, release: () => {} },
+            }),
+            step: async () => {
+              throw failure;
+            },
+          }),
+        });
+        break;
+      case "provision":
+        task = createCaseLawProvisionStateBackfillTask({
+          withConnection: async () => {
+            throw failure;
+          },
+          observeStatus: () => undefined,
+        });
+        break;
+    }
+    const taskName = `test.${taskKind}.backfill`;
+    const id = await seedJob({ task: taskName });
+    const recording = installRecordingLogger();
+    try {
+      const result = await runSchedulerOnce({
+        db,
+        leaseMs: LEASE_MS,
+        registry: registryOf(taskName, task),
+        runnerId: "runner-backfill",
+      });
+      expect(result.failed).toBe(1);
+      expect(result.succeeded).toBe(0);
+      expect((await readLatestRun(id)).status).toBe("failed");
+      expect((await readJob(id)).lastError).toBe("BackfillFailedError");
+      const failures = recording.records.filter(
+        (record) => record.message === "scheduler.job_failed",
+      );
+      expect(failures).toHaveLength(1);
+      expect(
+        recording.records.filter(
+          (record) =>
+            record.message ===
+            "scheduler.case_law_provision_state_backfill_failed",
+        ),
+      ).toHaveLength(0);
+      expect(failures.at(0)?.attributes?.["error.cause.pg_code"]).toBe("57014");
+      expect(
+        recording.records.some((record) => record.message.endsWith("_held")),
+      ).toBe(false);
+    } finally {
+      recording.restore();
+    }
+  },
+);
+
+test("a genuine expression hold keeps success semantics and omits an absent heldSince", async () => {
+  const task = createLegislationExpressionIdBackfill({
+    createRuntime: (options) => ({
+      ...createScriptBackfillRuntime({
+        ...options,
+        slot: { tryAcquire: async () => true, release: () => {} },
+      }),
+      step: async () => {
+        throw new BackfillHeldError({
+          message: "load hold",
+          holdUntil: 105_000,
+          heldSince: null,
+        });
+      },
+    }),
+  });
+  const id = await seedJob({ task: "test.expression.held" });
+  const recording = installRecordingLogger();
+  try {
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      registry: registryOf("test.expression.held", task),
+      runnerId: "runner-held",
+    });
+    expect(result.failed).toBe(0);
+    expect(result.succeeded).toBe(1);
+    expect((await readLatestRun(id)).status).toBe("success");
+    const held = recording.records.find(
+      (record) =>
+        record.message === "scheduler.legislation_expression_ids_held",
+    );
+    expect(held).toBeDefined();
+    expect(held?.attributes).not.toHaveProperty("heldSince");
+    expect(
+      recording.records.some(
+        (record) => record.message === "scheduler.job_failed",
+      ),
+    ).toBe(false);
   } finally {
     recording.restore();
   }

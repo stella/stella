@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -33,7 +34,7 @@ const createContext = ({
     scopedDb,
     params: { propertyId: toSafeId<"property">("property_test") },
     workspaceId: toSafeId<"workspace">("workspace_test"),
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     session: {
       activeOrganizationId: toSafeId<"organization">("org_test"),
     },

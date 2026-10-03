@@ -4,7 +4,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
+
+import { checkMigrationSources } from "./check-migration-safety";
 
 type CheckerResult = {
   exitCode: number | null;
@@ -13,8 +15,6 @@ type CheckerResult = {
 };
 
 const decoder = new TextDecoder();
-// Each property run spawns the checker as a subprocess.
-const PROPERTY_TEST_TIMEOUT_MS = 60_000;
 
 const TIMEOUTS = `
 SET LOCAL lock_timeout = '1s';
@@ -59,6 +59,17 @@ const expectClean = (result: CheckerResult) => {
   expect(result.stderr).toBe("");
   expect(result.exitCode).toBe(0);
 };
+
+// Property samples run the checker in process. Outside the repository, like
+// the temporary files runChecker writes, so a corpus read sorts it first.
+const PROPERTY_MIGRATION = "../property-sample/migration.sql";
+
+const findingsIn = (sql: string) =>
+  checkMigrationSources([
+    { file: PROPERTY_MIGRATION, source: `${TIMEOUTS}${sql}` },
+  ]).flatMap(({ invariantFindings, guardedFindings, acknowledgementErrors }) =>
+    invariantFindings.concat(guardedFindings, acknowledgementErrors),
+  );
 
 const expectFinding = (result: CheckerResult, ruleId: string) => {
   expect(result.stderr).toContain(`[${ruleId}]`);
@@ -630,47 +641,71 @@ describe("check-migration-safety", () => {
       (fragment) => `SELECT $tag$${fragment}$tag$;`,
     ];
 
-    it(
-      "never fires on unsafe SQL inside comments, literals, or identifiers",
-      () => {
-        fc.assert(
-          fc.property(
-            fc.constantFrom(...UNSAFE_FRAGMENTS),
-            fc.constantFrom(...wrappers),
-            fc.constantFrom(...wrappers),
-            (fragment, first, second) => {
-              expectClean(
-                runChecker(`${first(fragment)}\n${second(fragment)}`),
-              );
-            },
-          ),
-          propertyConfig({ numRuns: 30 }),
-        );
-      },
-      PROPERTY_TEST_TIMEOUT_MS,
-    );
+    const maskedSql = fc
+      .tuple(
+        fc.constantFrom(...UNSAFE_FRAGMENTS),
+        fc.constantFrom(...wrappers),
+        fc.constantFrom(...wrappers),
+      )
+      .map(
+        ([fragment, first, second]) =>
+          `${first(fragment)}\n${second(fragment)}`,
+      );
 
-    it(
-      "always fires on the same unsafe SQL when it executes",
-      () => {
-        fc.assert(
-          fc.property(
-            fc.constantFrom(...UNSAFE_FRAGMENTS.slice(0, 5)),
-            fc.constantFrom(...wrappers),
-            (fragment, wrapper) => {
-              const executable = fragment.startsWith("ON CONFLICT")
-                ? `INSERT INTO "documents" ("slug") VALUES ('x') ${fragment};`
-                : `${fragment};`;
-              const result = runChecker(`${wrapper(fragment)}\n${executable}`);
+    const executedSql = fc
+      .tuple(
+        fc.constantFrom(...UNSAFE_FRAGMENTS.slice(0, 5)),
+        fc.constantFrom(...wrappers),
+      )
+      .map(([fragment, wrapper]) => {
+        const executable = fragment.startsWith("ON CONFLICT")
+          ? `INSERT INTO "documents" ("slug") VALUES ('x') ${fragment};`
+          : `${fragment};`;
+        return `${wrapper(fragment)}\n${executable}`;
+      });
 
-              expect(result.exitCode).toBe(1);
-            },
-          ),
-          propertyConfig({ numRuns: 20 }),
-        );
-      },
-      PROPERTY_TEST_TIMEOUT_MS,
-    );
+    it("never fires on unsafe SQL inside comments, literals, or identifiers", () => {
+      fc.assert(
+        fc.property(maskedSql, (sql) => {
+          expect(findingsIn(sql)).toEqual([]);
+        }),
+        propertyConfig({ numRuns: 30 }),
+      );
+    });
+
+    it("always fires on the same unsafe SQL when it executes", () => {
+      fc.assert(
+        fc.property(executedSql, (sql) => {
+          expect(findingsIn(sql).length).toBeGreaterThan(0);
+        }),
+        propertyConfig({ numRuns: 20 }),
+      );
+    });
+
+    // The spawned CLI must agree with the in-process verdict the properties
+    // assert: no finding exactly when it prints no error and exits 0. Ten
+    // spawns measure ~1 s; 30 s leaves a cold runner a margin above 20x.
+    it("the CLI reports exactly the in-process findings for drawn samples", () => {
+      for (const { value: sql, label } of [
+        ...drawPropertySamples(maskedSql, { numRuns: 5 }).map(
+          ({ value, label: drawn }) => ({ value, label: `maskedSql ${drawn}` }),
+        ),
+        ...drawPropertySamples(executedSql, { numRuns: 5 }).map(
+          ({ value, label: drawn }) => ({
+            value,
+            label: `executedSql ${drawn}`,
+          }),
+        ),
+      ]) {
+        const findings = findingsIn(sql);
+        const result = runChecker(sql);
+        expect(result.exitCode, label).toBe(findings.length > 0 ? 1 : 0);
+        expect(result.stderr === "", label).toBe(findings.length === 0);
+        for (const { ruleId } of findings) {
+          expect(result.stderr, label).toContain(`[${ruleId}]`);
+        }
+      }
+    }, 30_000);
   });
 
   describe("high-volume-table-dml", () => {

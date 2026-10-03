@@ -23,6 +23,10 @@ export type ProvisionBackfillSession = {
     query: string,
     params?: readonly ProvisionBackfillParam[],
   ) => Promise<readonly unknown[]>;
+  runUnit?: (
+    budget: UnitBudget,
+    work: () => Promise<void>,
+  ) => Promise<ProvisionBackfillUnit>;
   setTransactionBudget: (budget: {
     lockTimeout: number;
     statementTimeout: number;
@@ -81,6 +85,9 @@ export const inBackfillTransaction = async (
   { lockTimeout, statementTimeout }: UnitBudget,
   work: () => Promise<void>,
 ): Promise<ProvisionBackfillUnit> => {
+  if (session.runUnit !== undefined) {
+    return await session.runUnit({ lockTimeout, statementTimeout }, work);
+  }
   await session.execute("BEGIN");
   const unit = await Result.tryPromise({
     try: async () => {

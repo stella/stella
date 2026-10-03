@@ -9,6 +9,7 @@ import { fields, properties } from "@/api/db/schema";
 import type { PropertyContent } from "@/api/db/schema-validators";
 import { createScopedDb, createSafeDb } from "@/api/db/scoped";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { validateEntityCreate } from "@/api/lib/uploads/entity-create";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -76,7 +77,7 @@ const runUpdate = async ({
       scopedDb: async () => {},
       request: new Request("https://example.test/v1/properties"),
       route: "/v1/properties/:workspaceId/:propertyId",
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
       workspaceId: ids.wsA1,

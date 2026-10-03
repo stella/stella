@@ -44,6 +44,7 @@ import {
   type ClauseParagraph,
   type ClauseRun,
   isClauseBody,
+  normalizeClauseBody,
 } from "@/api/lib/clauses/types";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
@@ -1049,6 +1050,27 @@ const saveClauseArgsSchema = nullAsAbsent(
         ),
       ),
       body: v.optional(clauseBodyArgSchema),
+      expected_body: v.optional(
+        v.pipe(
+          v.pipe(
+            v.array(
+              v.objectWithRest(
+                {
+                  text: v.pipe(
+                    v.string(),
+                    v.description("Paragraph text from the read body"),
+                  ),
+                },
+                v.unknown(),
+              ),
+            ),
+            v.minLength(1),
+          ),
+          v.description(
+            "Body from your last read; update only if the current body still matches. On conflict, read the clause again before saving.",
+          ),
+        ),
+      ),
       category_id: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.uuid())),
@@ -1124,6 +1146,15 @@ const saveClauseArgsSchema = nullAsAbsent(
       ["snapshot_version"],
     ),
     // An update must request at least one change.
+    v.forward(
+      v.partialCheck(
+        [["clause_id"], ["expected_body"]],
+        ({ clause_id, expected_body }) =>
+          clause_id !== undefined || expected_body === undefined,
+        "expected_body only applies when updating a clause",
+      ),
+      ["expected_body"],
+    ),
     v.partialCheck(
       [
         ["clause_id"],
@@ -1239,6 +1270,9 @@ const handleSaveClauseTool: TypedMcpToolHandler<
       body: {
         ...(input.title === undefined ? {} : { title: input.title }),
         ...(clauseBody === undefined ? {} : { body: clauseBody }),
+        ...(input.expected_body === undefined
+          ? {}
+          : { expectedBody: normalizeClauseBody(input.expected_body) }),
         ...(input.category_id === undefined
           ? {}
           : {

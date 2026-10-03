@@ -102,8 +102,9 @@ describe("run playbook handler", () => {
     } as const satisfies Extract<OpenPlaybookRunResult, { ok: false }>;
     openPlaybookRunMock.mockResolvedValue(refusal);
     const result = await runColumnsProjection();
-    if (!("code" in result))
-      {panic("Expected the materialization refusal status");}
+    if (!("code" in result)) {
+      panic("Expected the materialization refusal status");
+    }
     expect(result.code).toBe(422);
     expect(result.response).toMatchObject({
       code: refusal.code,
