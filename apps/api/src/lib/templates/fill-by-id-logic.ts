@@ -11,6 +11,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { templateFills } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -75,6 +76,7 @@ export const fillByIdLogic = async function* ({
     values,
     scopedDb,
     organizationId,
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     clauseOverrides,
     // A required, user-entered field left absent or empty must never download
     // as an invented value or a raw `{{marker}}`.

@@ -31,6 +31,7 @@ import {
 } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
+import type { RequiresThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import type {
   AllHandlerOutputsTyped,
   AssertTrue,
@@ -106,6 +107,28 @@ const REGISTRY_READ_TOOL_HANDLERS = {
 
 type ProjectableRegistryReadToolName = ChatProjectableToolName<
   typeof READ_TOOL_REF_FIELD_MAP
+>;
+
+/**
+ * The reads whose handler reaches a third-party service: those declared with
+ * `withThirdPartyOutbound`. Derived from the handler types, so the chat read
+ * script policy cannot offer one to scripts.
+ */
+export type ThirdPartyOutboundReadToolName = {
+  [
+    TName in RegistryReadToolName
+  ]: (typeof REGISTRY_READ_TOOL_HANDLERS)[TName] extends RequiresThirdPartyOutbound
+    ? TName
+    : never;
+}[RegistryReadToolName];
+
+/** Compile-time guard: the derivation sees the reads that need a permit. */
+export type ThirdPartyOutboundReadsDeclared = AssertTrue<
+  "search_boe_legislation" extends ThirdPartyOutboundReadToolName
+    ? "lookup_business_registry" extends ThirdPartyOutboundReadToolName
+      ? true
+      : false
+    : false
 >;
 
 export type RegistryReadToolDataByName = TypedHandlerDataByName<

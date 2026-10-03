@@ -1,5 +1,13 @@
 import { panic, Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
@@ -19,10 +27,12 @@ import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/deci
 import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import { CHAT_READ_SCRIPT_POLICY } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
 import type { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { RegistryLookupResponse } from "@/api/lib/business-registries/dispatch";
 import { deriveRefMediationEntry } from "@/api/lib/chat/projection-schema";
@@ -223,6 +233,49 @@ const buildContext = (tx: unknown): McpRequestContext => {
       executeRegistryLookup: executeRegistryLookupMock,
     },
   });
+};
+
+/**
+ * The context a call runs with. A `script` read runs as the chat script runner
+ * runs it: `buildMcpContextFromChat`, which holds no third-party outbound
+ * permit. A `direct-only` read is offered as its direct tool, whose boundary
+ * holds one.
+ */
+const contextFor = (
+  toolName: ProjectableReadToolName,
+  tx: unknown,
+): McpRequestContext =>
+  CHAT_READ_SCRIPT_POLICY[toolName] === "script"
+    ? buildContext(tx)
+    : {
+        ...buildContext(tx),
+        thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
+      };
+
+/**
+ * Every fetch the process attempts while `run` is in flight. The fixtures
+ * answer every source a read uses, so a read that sends anything reaches past
+ * its seams to the network.
+ */
+const recordOutboundFetches = async <TResult>(
+  run: () => Promise<TResult>,
+): Promise<{ result: TResult; fetched: readonly string[] }> => {
+  const fetched: string[] = [];
+  const refuse = Object.assign(
+    async (input: Parameters<typeof fetch>[0]): Promise<Response> => {
+      fetched.push(input instanceof Request ? input.url : String(input));
+      return await Promise.reject(
+        new Error("A contract fixture read must not reach the network"),
+      );
+    },
+    { preconnect: globalThis.fetch.preconnect },
+  );
+  const spy = spyOn(globalThis, "fetch").mockImplementation(refuse);
+  try {
+    return { result: await run(), fetched };
+  } finally {
+    spy.mockRestore();
+  }
 };
 
 /**
@@ -1923,14 +1976,21 @@ describe("registry projection contract", () => {
       test(`${toolName} (${call.mode}) projects with no undeclared UUID`, async () => {
         call.setup?.();
         const refRegistry = createChatRefRegistry();
-        const context = buildContext(call.tx?.() ?? {});
+        const context = contextFor(toolName, call.tx?.() ?? {});
 
-        const result = await runRegistryReadTool({
-          args: call.buildArgs(refRegistry),
-          context,
-          refRegistry,
-          toolName,
-        });
+        const { result, fetched } = await recordOutboundFetches(
+          async () =>
+            await runRegistryReadTool({
+              args: call.buildArgs(refRegistry),
+              context,
+              refRegistry,
+              toolName,
+            }),
+        );
+        expect(
+          fetched,
+          `${toolName} (${call.mode}): the read sent a request past its seams`,
+        ).toEqual([]);
 
         if (Result.isError(result)) {
           const leakPaths = recordedExceptions()
@@ -1991,6 +2051,36 @@ describe("registry projection contract", () => {
           recordedExceptions(),
           `${toolName} (${call.mode}): the call reported an exception`,
         ).toEqual([]);
+      });
+    }
+  }
+});
+
+describe("third-party outbound permit", () => {
+  for (const [toolName, calls] of corpusEntries()) {
+    if (CHAT_READ_SCRIPT_POLICY[toolName] === "script") {
+      continue;
+    }
+    for (const call of calls) {
+      test(`${toolName} (${call.mode}) refuses the chat context and sends nothing`, async () => {
+        call.setup?.();
+        const refRegistry = createChatRefRegistry();
+
+        const { result, fetched } = await recordOutboundFetches(
+          async () =>
+            await runRegistryReadTool({
+              args: call.buildArgs(refRegistry),
+              context: buildContext(call.tx?.() ?? {}),
+              refRegistry,
+              toolName,
+            }),
+        );
+
+        expect(Result.isError(result)).toBe(true);
+        expect(fetched).toEqual([]);
+        for (const handlerMock of ALL_MOCKS) {
+          expect(handlerMock).not.toHaveBeenCalled();
+        }
       });
     }
   }

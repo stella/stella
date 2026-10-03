@@ -7,6 +7,7 @@ import {
 } from "@stll/api-contract";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   BUSINESS_REGISTRY_SLUGS,
   LOOKUP_DETAIL_DESCRIPTION,
@@ -60,6 +61,7 @@ const businessRegistriesLookup = createSafeRootHandler(
     );
     const result = await lookupBusinessRegistryShared({
       observer,
+      permit: grantThirdPartyOutboundPermit(),
       scopedDb,
       organizationId: session.activeOrganizationId,
       registry: query.registry,

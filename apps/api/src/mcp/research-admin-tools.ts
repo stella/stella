@@ -1,15 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import {
-  BOE_SEARCH_PAGE_LIMITS,
-  findRelatedLaws,
-  getConsolidatedLaw,
-  getLawStructure,
-  getLawTextBlock,
-  RELATION_TYPES,
-  searchConsolidatedLegislation,
-} from "@stll/boe";
+import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
 
 import { DOCUMENT_PROCESSING_MODES } from "@/api/db/schema";
@@ -30,6 +22,7 @@ import {
   MANAGE_ORGANIZATION_PROJECTION,
   SEARCH_BOE_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
+import { boeClient } from "@/api/lib/legal-search/boe-client";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -38,6 +31,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { withThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import type {
   McpToolDefinition,
   McpToolHandler,
@@ -489,12 +483,13 @@ const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
   scope: "stella:read",
 });
 
-const handleSearchBoeLegislationTool: TypedMcpToolHandler<
+const handleSearchBoeLegislationTool = withThirdPartyOutbound<
   v.InferInput<typeof SEARCH_BOE_LEGISLATION_PROJECTION>
-> = async ({ args, context }) => {
+>(async ({ args, context, permit }) => {
   if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
     return errorResult("Forbidden");
   }
+  const boe = boeClient(permit);
 
   const parsed = v.safeParse(searchBoeLegislationArgsSchema, args);
   if (!parsed.success) {
@@ -510,10 +505,9 @@ const handleSearchBoeLegislationTool: TypedMcpToolHandler<
       const blockId = input.block_id;
       const block = await Result.tryPromise({
         try: async () =>
-          await (context.testDependencies?.getLawTextBlock ?? getLawTextBlock)(
-            lawId,
-            blockId,
-          ),
+          await (
+            context.testDependencies?.getLawTextBlock ?? boe.getLawTextBlock
+          )(lawId, blockId),
         catch: mapBoeError,
       });
       if (Result.isError(block)) {
@@ -525,7 +519,7 @@ const handleSearchBoeLegislationTool: TypedMcpToolHandler<
     if (input.relation_type !== undefined) {
       const relationType = input.relation_type;
       const related = await Result.tryPromise({
-        try: async () => await findRelatedLaws(lawId, relationType),
+        try: async () => await boe.findRelatedLaws(lawId, relationType),
         catch: mapBoeError,
       });
       if (Result.isError(related)) {
@@ -540,11 +534,11 @@ const handleSearchBoeLegislationTool: TypedMcpToolHandler<
     const detail = await Result.tryPromise({
       try: async () => {
         const [law, structure] = await Promise.all([
-          getConsolidatedLaw(lawId, {
+          boe.getConsolidatedLaw(lawId, {
             metadata: true,
             ...(includeFullText ? { fullText: true } : {}),
           }),
-          getLawStructure(lawId),
+          boe.getLawStructure(lawId),
         ]);
         return { law, structure };
       },
@@ -565,7 +559,7 @@ const handleSearchBoeLegislationTool: TypedMcpToolHandler<
     try: async () =>
       await (
         context.testDependencies?.searchConsolidatedLegislation ??
-        searchConsolidatedLegislation
+        boe.searchConsolidatedLegislation
       )({
         ...(input.query === undefined ? {} : { text: input.query }),
         ...(input.title === undefined ? {} : { title: input.title }),
@@ -598,7 +592,7 @@ const handleSearchBoeLegislationTool: TypedMcpToolHandler<
     v.InferInput<typeof SEARCH_BOE_LEGISLATION_PROJECTION>
   >;
   return toolDataResult(result.value satisfies SearchLegislationPayload);
-};
+});
 
 // --- list_audit_log -----------------------------------------------------
 

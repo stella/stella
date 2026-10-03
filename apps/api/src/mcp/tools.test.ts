@@ -49,8 +49,12 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
-import { DECISION_DOCUMENT_HYDRATION } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import {
+  type DecisionDocumentHydration,
+  STORED_ONLY_DOCUMENT_HYDRATION,
+} from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { executeRegistryLookup } from "@/api/lib/business-registries/dispatch";
 import type {
@@ -975,6 +979,8 @@ const createContext = ({
   recordAuditEvent,
   safeDb: toSafeDbMock(scopedDb),
   scopedDb,
+  // The MCP transport holds a permit for every request (`context.ts`).
+  thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
   testDependencies: {
     ...testDependencies,
     anonymizeTextFields: anonymizeTextFieldsMock,
@@ -4758,7 +4764,7 @@ describe("OpenAI-compatible MCP tools", () => {
       caseLawDb: caseLawPublicReadDb,
       caller: "attributed",
       citationsCursor: undefined,
-      documentHydration: DECISION_DOCUMENT_HYDRATION.storedOnly,
+      documentHydration: STORED_ONLY_DOCUMENT_HYDRATION,
     });
 
     expect(parseToolPayload(result)).toEqual({
@@ -5289,7 +5295,7 @@ describe("OpenAI-compatible MCP tools", () => {
       caseLawDb: caseLawPublicReadDb,
       caller: "attributed",
       citationsCursor: "citations-next",
-      documentHydration: DECISION_DOCUMENT_HYDRATION.storedOnly,
+      documentHydration: STORED_ONLY_DOCUMENT_HYDRATION,
     });
   });
 
@@ -5427,8 +5433,9 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(
       readGatedDecisionMock.mock.calls.filter(
         (call) =>
-          asTestRaw<{ documentHydration: string }>(call.at(0))
-            .documentHydration === DECISION_DOCUMENT_HYDRATION.onDemand,
+          asTestRaw<{ documentHydration: DecisionDocumentHydration }>(
+            call.at(0),
+          ).documentHydration.type === "on-demand",
       ),
     ).toHaveLength(1);
   });
@@ -5531,6 +5538,52 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(entry.decision?.textUnavailableReason).toBeUndefined();
   });
 
+  test("read_case_law_decision fetches no publisher document without a permit", async () => {
+    const base = createReadDecisionResult();
+    readGatedDecisionMock.mockImplementation(
+      async ({ locator }: { locator: { kind: "id"; id: string } }) => ({
+        ...base,
+        source: { ...base.source, adapterKey: "sk-courts" },
+        documentPending: true,
+        id: locator.id,
+      }),
+    );
+
+    const payload = asTestRaw<BatchDecisionPage>(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { decision_ids: [DECISION_ID, ...PENDING_DECISION_IDS] },
+          context: {
+            ...createContext({
+              testDependencies: { readsSharedPublicLawCorpus: () => false },
+            }),
+            thirdPartyOutboundPermit: undefined,
+          },
+          toolName: "read_case_law_decision",
+        }),
+      ),
+    );
+
+    expect(payload.items.map(({ status }) => status)).toEqual(
+      Array.from({ length: PENDING_DECISION_IDS.length + 1 }, () => "pending"),
+    );
+    // Reading the id on its own would not fetch it either.
+    expect(payload.items.at(0)?.message).toContain("read this decision again");
+    expect(
+      readGatedDecisionMock.mock.calls.map(
+        (call) =>
+          asTestRaw<{ documentHydration: DecisionDocumentHydration }>(
+            call.at(0),
+          ).documentHydration,
+      ),
+    ).toEqual(
+      Array.from(
+        { length: PENDING_DECISION_IDS.length + 1 },
+        () => STORED_ONLY_DOCUMENT_HYDRATION,
+      ),
+    );
+  });
+
   test("read_case_law_decision bounds the publisher fetches one call triggers", async () => {
     const base = createReadDecisionResult();
     readGatedDecisionMock.mockImplementation(
@@ -5538,7 +5591,7 @@ describe("OpenAI-compatible MCP tools", () => {
         documentHydration,
         locator,
       }: {
-        documentHydration: string;
+        documentHydration: DecisionDocumentHydration;
         locator: { kind: "id"; id: string };
       }) => ({
         ...base,
@@ -5549,7 +5602,7 @@ describe("OpenAI-compatible MCP tools", () => {
         // a fetch that finished, so only the entries the budget never reached
         // stay pending.
         documentPending:
-          documentHydration === DECISION_DOCUMENT_HYDRATION.storedOnly &&
+          documentHydration.type === "stored-only" &&
           (PENDING_DECISION_IDS as readonly string[]).includes(locator.id),
         id: locator.id,
       }),
@@ -5572,8 +5625,8 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(payload.items.at(4)?.message).toContain("on its own");
     const hydrations = readGatedDecisionMock.mock.calls.filter(
       (call) =>
-        asTestRaw<{ documentHydration: string }>(call.at(0))
-          .documentHydration === DECISION_DOCUMENT_HYDRATION.onDemand,
+        asTestRaw<{ documentHydration: DecisionDocumentHydration }>(call.at(0))
+          .documentHydration.type === "on-demand",
     );
     expect(hydrations).toHaveLength(LIMITS.caseLawDecisionBatchHydrationsMax);
   });

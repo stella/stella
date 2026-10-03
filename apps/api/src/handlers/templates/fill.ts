@@ -8,6 +8,7 @@ import { templateFills } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -136,6 +137,7 @@ export const fillHandler = async ({
     values: parsed,
     scopedDb,
     organizationId,
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     // A required, user-entered field left absent or empty must never download
     // as an invented value or a raw `{{marker}}`.
     requiredFields: "enforce",

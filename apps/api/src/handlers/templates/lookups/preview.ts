@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { getOrganizationRegistryHandler } from "@/api/lib/business-registries/credentials";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import {
@@ -101,6 +102,7 @@ const lookupPreview = createSafeRootHandler(
     }
     const resolveLookup = createDispatchLookupResolver({
       observer,
+      permit: grantThirdPartyOutboundPermit(),
       dispatch: { ...BUSINESS_REGISTRY_DISPATCH, [registry]: handler },
     });
     const cacheKey = `${session.activeOrganizationId}:${registry}:${handler.cacheVersion ?? "deployment"}:${number.replaceAll(/\s/gu, "")}`;

@@ -211,6 +211,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -234,6 +235,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "" },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -248,6 +250,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "   " },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -273,6 +276,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { persons: [{ member: "Alice" }, { member: "" }] },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -307,6 +311,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { persons: [{ member: "Alice" }, { member: "Bob" }] },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -327,6 +332,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "Czech" },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -354,6 +360,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       aiCollaborators: async () => ({
         generateAiValue: async () => ({ type: "drafted", value: "Slovak" }),
@@ -385,6 +392,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       aiCollaborators: async () => ({
         generateAiValue: async () => ({
@@ -427,6 +435,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -446,6 +455,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: { governing_law: "Czech" },
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       aiCollaborators: () =>
         panic("deterministic fill resolved the AI collaborators"),
@@ -466,6 +476,7 @@ describe("fillTemplateDocx required-field rejection", () => {
       values: {},
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
     });
 
@@ -549,6 +560,7 @@ describe("fillStoredTemplateDocx use recording", () => {
         templateId: usedTemplateId,
         values: { governing_law: "Czech" },
         scopedDb,
+        thirdPartyOutboundPermit: undefined,
         requiredFields: "enforce",
         ...options,
       });
@@ -633,6 +645,7 @@ describe("fillTemplateDocx condition decisions", () => {
       values,
       scopedDb: stubScopedDb(),
       organizationId,
+      thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       aiCollaborators: async () => ({ decideAiCondition: decide }),
     });
