@@ -4134,11 +4134,10 @@ export default defineConfig({
       },
     },
     {
-      // A computed-key write onto an object literal sends `__proto__` through
-      // the prototype setter, so a record rebuilt from client, model or
-      // parsed-JSON keys loses that entry. Existing debt is carried per file
-      // in scripts/design-lint-baseline.json and switched off there by
-      // `designLintBacklogOverrides` below.
+      // Dynamic record writes use own-property builders; open module tables
+      // require an own-key check. Existing sites covered by these syntax checks
+      // carry count ceilings in scripts/design-lint-baseline.json and are
+      // switched off here by `designLintBacklogOverrides` below.
       files: [
         "apps/*/src/**/*.{ts,tsx}",
         "apps/*/scripts/**/*.{ts,tsx}",

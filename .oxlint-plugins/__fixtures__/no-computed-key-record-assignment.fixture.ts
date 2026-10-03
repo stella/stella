@@ -53,6 +53,7 @@ export const accepted = (): unknown[] => {
   fixed[`content-type`] = 1;
   const fromCall = makeRecord();
   fromCall[key] = 1;
+  // oxlint-disable-next-line no-computed-key-record-assignment/no-computed-key-record-assignment -- fixture proves an annotated record is checked
   parameterRecord[key] = 1;
   const list: unknown[] = [];
   list[names.length] = 1;
