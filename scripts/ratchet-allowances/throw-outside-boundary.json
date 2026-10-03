@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 8,
+  "reason": "Better Auth organization hooks and adapter boundaries propagate typed membership refusals; the member-role mutation rejects failed requests after surfacing the error."
+}

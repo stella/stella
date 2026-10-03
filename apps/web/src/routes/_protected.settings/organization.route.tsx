@@ -5,7 +5,7 @@ import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
-import { managementRoles } from "@/lib/organization/consts";
+import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/_protected/settings/organization")({
   beforeLoad: async ({ context, location }) => {
     const role = await ensureRouteQueryData(context.queryClient, roleOptions);
 
-    if (!managementRoles.includes(role)) {
+    if (!hasOrganizationManagementAccess(role)) {
       throw redirect({ to: "/settings/account/profile", replace: true });
     }
 

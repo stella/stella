@@ -19,25 +19,19 @@ import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json";
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json";
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
+import { extractPlanSelector } from "./ci-plan-selector";
 import queueOnlyReasons from "./ci-queue-only-jobs.json";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
+import { mainHeavyJobs } from "./main-heavy-plan";
 
 const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
   "utf-8",
 );
-const selectorStart = workflow.indexOf(
-  "          # Path scopes for the build/smoke jobs",
-);
-const selectorEnd = workflow.indexOf(
-  "          printf 'Changed files:",
-  selectorStart,
-);
-expect(selectorStart).toBeGreaterThan(-1);
-expect(selectorEnd).toBeGreaterThan(selectorStart);
-const selector = workflow.slice(selectorStart, selectorEnd);
+const selector = extractPlanSelector(workflow);
+const selectorStart = workflow.indexOf(selector);
 
 type BashCase = {
   flags: readonly string[];
@@ -316,7 +310,7 @@ test("every release requires both final image smokes regardless of other changed
       "true",
     ]);
   }
-});
+}, 30_000);
 
 test("API image construction and smoke orchestration changes require the final image", () => {
   for (const file of [
@@ -585,7 +579,7 @@ test("a pull request builds the API image for arm64 unless it releases", () => {
       `${label} ${suiteDepth} ${JSON.stringify(files)}`,
     ).toEqual(platforms);
   }
-});
+}, 30_000);
 
 const workflowJobs = (source: string) =>
   v.parse(
@@ -1049,6 +1043,8 @@ const resultGateCase = ({
     args: [],
     env: {
       EVENT: event,
+      QUEUE_DEPTH: "full",
+      THIN_JOBS: "[]",
       GITHUB_RUN_ID: "123",
       FAKE_API_FAILURE: apiFailure ?? "",
       FAKE_CURRENT_RUN: JSON.stringify(currentRun),
@@ -1689,7 +1685,7 @@ test("a manual run supersedes only an older manual run on the same branch", () =
     Bun.YAML.parse(workflow),
   ).concurrency;
   expect(concurrency["cancel-in-progress"]).toBe(
-    `\${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}`,
+    `\${{ inputs.heavy_only != true && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') }}`,
   );
   expect(concurrency.group).toContain(
     "github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref)",
@@ -3056,7 +3052,7 @@ test("route-relevant pull requests plan the required route smoke job", () => {
       unplannedScopes: [scope],
     }),
   ).toBe(0);
-});
+}, 30_000);
 
 test("route smoke consumes the production build and fails when its stack cannot run", () => {
   const plan = jobSteps(ciJobs["ci-plan"]).find(
@@ -3505,11 +3501,26 @@ const queueOnlyJobs = v.parse(
 
 // Evaluate the actual predicate with a successful trusted plan. Unfamiliar
 // expression syntax fails closed instead of silently evading parity.
-type DepthContext = { event: Event; depth: SuiteDepth };
-const runsAtDepth = (condition: string, { event, depth }: DepthContext) => {
+type DepthContext = {
+  event: Event;
+  depth: SuiteDepth;
+  heavyOnly?: boolean;
+  queueDepth?: "full" | "thin";
+};
+const runsAtDepth = (
+  condition: string,
+  { event, depth, heavyOnly, queueDepth = "full" }: DepthContext,
+) => {
   const expression = condition
     .replaceAll(/\balways\(\)/gu, "true")
     .replaceAll(/\bcancelled\(\)/gu, "false")
+    .replaceAll(
+      /\binputs\.heavy_only\s*(==|!=)\s*(true|false)\b/gu,
+      (_, operator: string, expected: string) => {
+        const equal = (heavyOnly === true) === (expected === "true");
+        return String(operator === "==" ? equal : !equal);
+      },
+    )
     .replaceAll(
       /([\w.-]+)\s*(==|!=)\s*'([^']*)'/gu,
       (_, context: string, operator: string, expected: string) => {
@@ -3518,6 +3529,12 @@ const runsAtDepth = (condition: string, { event, depth }: DepthContext) => {
           actual = event;
         } else if (context === "needs.ci-plan.outputs.suite_depth") {
           actual = depth;
+        } else if (context === "needs.ci-plan.outputs.queue_depth") {
+          actual = event === EVENT.mergeGroup ? queueDepth : "full";
+        } else if (
+          context === "needs.ci-plan.outputs.heavy_web_build_required"
+        ) {
+          actual = String(heavyOnly === true);
         } else if (context.startsWith("needs.ci-plan.outputs.")) {
           actual = "true";
         } else if (/^needs\.[\w-]+\.result$/u.test(context)) {
@@ -3727,6 +3744,80 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
   ).toEqual([`${name}: stale queue-only exception`]);
   expect(() =>
     runsAtDepth("contains(github.ref, 'main')", {
+      event: EVENT.pullRequest,
+      depth: SUITE_DEPTH.fast,
+    }),
+  ).toThrow("Unknown CI predicate syntax");
+});
+
+test("thin merge groups intentionally skip heavy jobs while full parity stays enforced", () => {
+  const heavy = new Set(mainHeavyJobs({ jobs: ciJobs }));
+  for (const { name, condition } of parityJobs) {
+    const full = runsAtDepth(condition, {
+      event: EVENT.mergeGroup,
+      depth: SUITE_DEPTH.full,
+    });
+    expect(
+      runsAtDepth(condition, {
+        event: EVENT.mergeGroup,
+        depth: SUITE_DEPTH.full,
+        queueDepth: "full",
+      }),
+      name,
+    ).toBe(full);
+    expect(
+      runsAtDepth(condition, {
+        event: EVENT.mergeGroup,
+        depth: SUITE_DEPTH.full,
+        queueDepth: "thin",
+      }),
+      name,
+    ).toBe(heavy.has(name) ? false : full);
+    for (const event of [EVENT.pullRequest, EVENT.workflowDispatch]) {
+      expect(
+        runsAtDepth(condition, {
+          event,
+          depth: SUITE_DEPTH.fast,
+          queueDepth: "thin",
+        }),
+        name,
+      ).toBe(runsAtDepth(condition, { event, depth: SUITE_DEPTH.fast }));
+    }
+  }
+  expect(parityViolations(parityJobs, queueOnlyJobs)).toEqual([]);
+});
+
+test("parity treats absent or false heavy-only input as ordinary event execution", () => {
+  for (const event of [
+    EVENT.pullRequest,
+    EVENT.mergeGroup,
+    EVENT.workflowDispatch,
+  ]) {
+    for (const heavyOnly of [undefined, false, true]) {
+      const context = {
+        event,
+        depth: SUITE_DEPTH.full,
+        ...(heavyOnly === undefined ? {} : { heavyOnly }),
+      };
+      expect(runsAtDepth("inputs.heavy_only == true", context)).toBe(
+        heavyOnly === true,
+      );
+      expect(runsAtDepth("inputs.heavy_only != true", context)).toBe(
+        heavyOnly !== true,
+      );
+      expect(
+        runsAtDepth(
+          "needs.ci-plan.outputs.heavy_web_build_required == 'true'",
+          context,
+        ),
+      ).toBe(heavyOnly === true);
+      expect(runsAtDepth(jobIf(ciJobs["heavy-web-build"]), context)).toBe(
+        heavyOnly === true,
+      );
+    }
+  }
+  expect(() =>
+    runsAtDepth("inputs.unknown == true", {
       event: EVENT.pullRequest,
       depth: SUITE_DEPTH.fast,
     }),

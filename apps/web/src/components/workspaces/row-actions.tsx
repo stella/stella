@@ -1009,6 +1009,7 @@ export const RowActions = ({
         content={t("common.actions")}
         render={
           <MenuTrigger
+            aria-label={t("common.actions")}
             className={cn(
               triggerClassName ??
                 "opacity-0! transition-opacity group-hover/row:opacity-100!",

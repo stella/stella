@@ -1,17 +1,13 @@
 import { useState } from "react";
 
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { compareByLocale } from "@stll/collation";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import {
   ArrowDownIcon,
@@ -25,13 +21,6 @@ import {
   InputGroupInput,
 } from "@stll/ui/input-group";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
@@ -47,34 +36,20 @@ import { cn } from "@stll/ui/utils";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { useLocale } from "@/i18n/formatting-context";
-import { useAnalytics } from "@/lib/analytics/provider";
-import { authClient } from "@/lib/auth-client";
-import type { Role } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
-import { toAuthClientError } from "@/lib/errors/auth";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { rolePriority, roleTranslationKeys } from "@/lib/organization/consts";
 import {
   useCancelInvitation,
   useInviteMember,
   useRemoveMember,
 } from "@/lib/organization/mutations";
-import {
-  organizationKeys,
-  organizationOptions,
-} from "@/lib/organization/queries";
+import { organizationOptions } from "@/lib/organization/queries";
 import { formatMemberDate } from "@/lib/organization/utils";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { OrganizationJurisdictionsCard } from "@/routes/_protected.settings/-components/organization/jurisdictions-card";
 import { OrganizationListToolbar } from "@/routes/_protected.settings/-components/organization/list-toolbar";
+import { RoleCell } from "@/routes/_protected.settings/-components/organization/member-role-cell";
 import { OrganizationProfileCard } from "@/routes/_protected.settings/-components/organization/profile-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
-
-const ASSIGNABLE_ROLES = ["owner", "admin", "member"] as const;
-type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
-
-const isAssignableRole = (role: Role): role is AssignableRole =>
-  ASSIGNABLE_ROLES.some((assignableRole) => assignableRole === role);
 
 type SortKey = "name" | "role" | "joined";
 type SortDir = "asc" | "desc";
@@ -191,7 +166,9 @@ function Members() {
       if (sort.key === "name") {
         cmp = compareName(a.user.name, b.user.name);
       } else if (sort.key === "role") {
-        cmp = rolePriority[a.role] - rolePriority[b.role];
+        cmp =
+          ORGANIZATION_ROLE_NAMES.indexOf(a.role) -
+          ORGANIZATION_ROLE_NAMES.indexOf(b.role);
       } else {
         cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       }
@@ -420,148 +397,6 @@ function Members() {
     </>
   );
 }
-
-type RoleCellProps = {
-  memberId: string;
-  memberEmail: string;
-  memberRole: Role;
-  currentUserRole: Role;
-  isSelf: boolean;
-};
-
-const RoleCell = ({
-  memberId,
-  memberEmail,
-  memberRole,
-  currentUserRole,
-  isSelf,
-}: RoleCellProps) => {
-  const t = useTranslations();
-  const analytics = useAnalytics();
-  const queryClient = useQueryClient();
-  const [pendingRole, setPendingRole] = useState<AssignableRole | null>(null);
-
-  const outranks = rolePriority[memberRole] < rolePriority[currentUserRole];
-  // editable gates the SOURCE side: the current user can edit
-  // anyone they don't outrank (and not themselves). The dropdown
-  // lists only the TARGET roles in ASSIGNABLE_ROLES, so an admin
-  // can promote an intern/external to member/admin/owner even
-  // though those source roles aren't in the picklist.
-  const editable = !isSelf && !outranks;
-
-  const updateRole = useMutation({
-    mutationFn: async (role: AssignableRole) => {
-      const result = await authClient.organization.updateMemberRole({
-        memberId,
-        role,
-      });
-
-      if (result.error) {
-        analytics.captureError(toAuthClientError(result.error));
-        stellaToast.add({
-          title: userErrorFromThrown(
-            toAuthClientError(result.error),
-            t("errors.actionFailed"),
-          ),
-          type: "error",
-        });
-        throw toAuthClientError(result.error);
-      }
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: organizationKeys.all });
-      stellaToast.add({ title: t("success.roleUpdated"), type: "success" });
-    },
-  });
-
-  if (!editable) {
-    return (
-      <span className="text-foreground">
-        {t(`organization.roles.${memberRole}`)}
-      </span>
-    );
-  }
-
-  const roleData = roleTranslationKeys.map(
-    ({ descriptionKey, labelKey, value }) => ({
-      description: t(descriptionKey),
-      label: t(labelKey),
-      value,
-    }),
-  );
-
-  const handleConfirm = async () => {
-    if (pendingRole) {
-      await updateRole.mutateAsync(pendingRole);
-      setPendingRole(null);
-    }
-  };
-
-  return (
-    <>
-      <Select
-        disabled={updateRole.isPending}
-        onValueChange={(value) => {
-          if (value && isAssignableRole(value) && value !== memberRole) {
-            setPendingRole(value);
-          }
-        }}
-        value={memberRole}
-      >
-        <SelectTrigger
-          className={cn(
-            "min-w-32 border-transparent shadow-none",
-            "hover:border-input data-popup-open:border-input",
-          )}
-          size="sm"
-        >
-          <SelectValue>{t(`organization.roles.${memberRole}`)}</SelectValue>
-        </SelectTrigger>
-        <SelectPopup alignItemWithTrigger={false} className="min-w-72">
-          {ASSIGNABLE_ROLES.map((role) => {
-            const item = roleData.find((r) => r.value === role);
-            if (!item) {
-              return null;
-            }
-            return (
-              <SelectItem key={role} label={item.label} value={role}>
-                <div className="flex flex-col gap-0.5 py-0.5">
-                  <span>{item.label}</span>
-                  <span className="text-muted-foreground text-xs leading-tight">
-                    {item.description}
-                  </span>
-                </div>
-              </SelectItem>
-            );
-          })}
-        </SelectPopup>
-      </Select>
-
-      <DestructiveConfirmDialog
-        cancelLabel={t("common.cancel")}
-        confirmation={memberEmail}
-        confirmLabel={t("organization.members.changeRole")}
-        description={t("organization.members.confirmRoleChangeDescription", {
-          email: memberEmail,
-          oldRole: t(`organization.roles.${memberRole}`),
-          newRole: pendingRole ? t(`organization.roles.${pendingRole}`) : "",
-        })}
-        inputLabel={t("organization.members.typeEmailToConfirm", {
-          email: memberEmail,
-        })}
-        loading={updateRole.isPending}
-        onConfirm={handleConfirm}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPendingRole(null);
-          }
-        }}
-        open={pendingRole !== null}
-        title={t("organization.members.confirmRoleChangeTitle")}
-      />
-    </>
-  );
-};
 
 type SortableHeadProps = {
   label: string;
