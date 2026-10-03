@@ -19,6 +19,7 @@ import {
   clauseBodySchema,
   clauseExpectedBodySchema,
 } from "@/api/lib/clauses/body-schema";
+import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
 import { normalizeClauseBody } from "@/api/lib/clauses/types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
@@ -84,6 +85,10 @@ export const updateClauseHandler = async function* ({
   body,
   recordAuditEvent,
 }: UpdateClauseProps) {
+  if (body.body !== undefined && body.snapshotVersion === true) {
+    yield* validateClauseBodyDirectives(body.body);
+  }
+
   const existing = yield* Result.await(
     safeDb((tx) =>
       tx.query.clauses.findFirst({
