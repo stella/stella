@@ -250,35 +250,79 @@ export const createPublisherRequestSlot = (
   dependencies = defaultDependencies(intervalMs, cooldown),
 ) => {
   const { key, cooldownKey } = publisherGateKeys(slot);
-  const commandWait = async (
+  type CommandWaitOptions = {
+    signal?: AbortSignal | undefined;
+    replies?: readonly number[];
+    mode?: "immediate";
+  };
+  const commandResult = async (
     args: string[],
-    {
-      signal,
-      replies,
-    }: { signal?: AbortSignal | undefined; replies?: readonly number[] } = {},
+    { signal, replies, mode }: CommandWaitOptions,
   ) => {
-    const rawWait = await withTimeout(
-      async () => {
-        const redis = await dependencies.redis();
-        return await redis.send("EVAL", args);
-      },
-      {
-        label: `${publisher} publisher gate reservation`,
-        signal,
-        timeoutMs: PUBLISHER_GATE_COMMAND_TIMEOUT_MS,
-      },
-    );
-    const waitMs = Number(rawWait);
+    const response = await Result.tryPromise({
+      try: async () =>
+        await withTimeout(
+          async () => {
+            const redis = await dependencies.redis();
+            return await redis.send("EVAL", args);
+          },
+          {
+            label: `${publisher} publisher gate reservation`,
+            signal,
+            timeoutMs: PUBLISHER_GATE_COMMAND_TIMEOUT_MS,
+          },
+        ),
+      catch: (error) => error,
+    });
+    if (Result.isError(response)) {
+      return Result.err(
+        mode === "immediate"
+          ? new PublisherPacingStopped({
+              message: "Publisher pacing unavailable",
+              status: "pacing-unavailable",
+              cause: response.error,
+            })
+          : response.error,
+      );
+    }
+    const waitMs = Number(response.value);
     if (
       !Number.isFinite(waitMs) ||
       waitMs < 0 ||
       (replies !== undefined && !replies.includes(waitMs))
     ) {
-      throw new PublisherGateReplyError({
+      const error = new PublisherGateReplyError({
         message: `${publisher} publisher gate returned an invalid wait`,
       });
+      return Result.err(
+        mode === "immediate"
+          ? new PublisherPacingStopped({
+              message: "Publisher pacing unavailable",
+              status: "pacing-unavailable",
+              cause: error,
+            })
+          : error,
+      );
     }
-    return waitMs;
+    if (mode === "immediate" && waitMs === 0) {
+      return Result.err(
+        new PublisherPacingStopped({
+          message: "Publisher pacing deferred",
+          status: "pacing-deferred",
+        }),
+      );
+    }
+    return Result.ok(waitMs);
+  };
+  const commandWait = async (
+    args: string[],
+    options: CommandWaitOptions = {},
+  ) => {
+    const result = await commandResult(args, options);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    return result.value;
   };
   const reserve = async (signal?: AbortSignal) => {
     while (true) {
@@ -302,7 +346,10 @@ export const createPublisherRequestSlot = (
       await dependencies.sleep(remaining, signal);
     }
   };
-  const tryReserve = async (signal?: AbortSignal): Promise<boolean> => {
+  const tryReserve = async ({
+    signal,
+    mode,
+  }: Pick<CommandWaitOptions, "signal" | "mode"> = {}): Promise<boolean> => {
     const keys = cooldown === "shared" ? [key, cooldownKey] : [key];
     const reply = await commandWait(
       [
@@ -311,30 +358,14 @@ export const createPublisherRequestSlot = (
         ...keys,
         String(intervalMs),
       ],
-      { signal, replies: [0, 1] },
+      { signal, replies: [0, 1], ...(mode === undefined ? {} : { mode }) },
     );
     return reply === 1;
   };
   return Object.assign(reserve, {
-    tryReserve,
+    tryReserve: async (signal?: AbortSignal) => await tryReserve({ signal }),
     reserveImmediately: async (signal?: AbortSignal): Promise<void> => {
-      const reserved = await Result.tryPromise({
-        try: async () => await tryReserve(signal),
-        catch: (error) => error,
-      });
-      if (Result.isError(reserved)) {
-        throw new PublisherPacingStopped({
-          message: "Publisher pacing unavailable",
-          status: "pacing-unavailable",
-          cause: reserved.error,
-        });
-      }
-      if (!reserved.value) {
-        throw new PublisherPacingStopped({
-          message: "Publisher pacing deferred",
-          status: "pacing-deferred",
-        });
-      }
+      await tryReserve({ signal, mode: "immediate" });
     },
     readCooldown: async (): Promise<number | null> => {
       const deadline = await commandWait([
