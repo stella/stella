@@ -60,6 +60,7 @@ import {
   type CatalogServiceClassification,
   type ServiceClassification,
 } from "../src/lib/rate-limit/service-classification";
+import type { HandlerKind } from "../src/lib/safe-handler-factories";
 import { advertisedSchema } from "../src/mcp/advertised-schema";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import { PUBLIC_FIELD_NAME } from "../src/mcp/public-field-names";
@@ -111,7 +112,6 @@ import {
 } from "./lib/compact-schema-defs";
 import {
   discoverSafeHandlers,
-  type HandlerKind,
   isRecord,
   type ParsedExposure,
   REPO_ROOT,
