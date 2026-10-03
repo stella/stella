@@ -23,6 +23,8 @@ const connectors = [
     documentationUrl: null,
     tokenHelpUrl: null,
     iconUrl: null,
+    reviewObservedIssuer: "https://authorization.example.test",
+    reviewEndpointOrigins: ["https://authorization.example.test"],
     authorizationReviewExists: true,
   },
   {
@@ -39,6 +41,8 @@ const connectors = [
     documentationUrl: null,
     tokenHelpUrl: null,
     iconUrl: null,
+    reviewObservedIssuer: null,
+    reviewEndpointOrigins: null,
     authorizationReviewExists: false,
   },
   {
@@ -55,6 +59,8 @@ const connectors = [
     documentationUrl: null,
     tokenHelpUrl: null,
     iconUrl: null,
+    reviewObservedIssuer: "https://authorization.example.test",
+    reviewEndpointOrigins: ["https://authorization.example.test"],
     authorizationReviewExists: true,
   },
 ];

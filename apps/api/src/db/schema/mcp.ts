@@ -127,9 +127,10 @@ export const mcpConnectorAuthorizationReviews = p.pgTable.withRLS(
     connectorId: safeUuid<"mcpConnector">("connector_id").notNull(),
     observedIssuer: p.text("observed_issuer"),
     approvedIssuer: p.text("approved_issuer"),
-    observedEndpointOrigins: jsonb("observed_endpoint_origins").$type<
-      string[]
-    >(),
+    observedEndpointOrigins: jsonb("observed_endpoint_origins")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
     approvedEndpointOrigins: jsonb("approved_endpoint_origins").$type<
       string[]
     >(),

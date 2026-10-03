@@ -7,7 +7,7 @@ CREATE TABLE "mcp_connector_authorization_reviews" (
   "connector_id" uuid NOT NULL,
   "observed_issuer" text,
   "approved_issuer" text,
-  "observed_endpoint_origins" jsonb,
+  "observed_endpoint_origins" jsonb DEFAULT '[]'::jsonb NOT NULL,
   "approved_endpoint_origins" jsonb,
   "status" text DEFAULT 'needs_reapproval' NOT NULL,
   CONSTRAINT "mcp_authorization_review_status_check" CHECK ("status" IN ('needs_reapproval', 'approved')),

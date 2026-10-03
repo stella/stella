@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 
 import {
@@ -110,12 +110,7 @@ const listMcpConnectors = createSafeRootHandler(
           tokenHelpUrl: connector.tokenHelpUrl,
           iconUrl: connector.iconUrl,
           authorizationStatus: connectorAuthorizationStatus(connector),
-          authorizationReview: connector.authorizationReviewExists
-            ? {
-                issuer: connector.reviewObservedIssuer,
-                endpointOrigins: connector.reviewEndpointOrigins ?? [],
-              }
-            : null,
+          authorizationReview: pendingAuthorizationReview(connector),
           isRecommended: isMcpConnectorRecommendedForPractice({
             connector,
             practiceJurisdictions,
@@ -169,6 +164,31 @@ const connectorAuthorizationStatus = ({
   return authorizationReviewExists
     ? CONNECTOR_AUTHORIZATION_STATUS.needsReapproval
     : CONNECTOR_AUTHORIZATION_STATUS.approved;
+};
+
+type PendingAuthorizationReviewRow = {
+  authorizationReviewExists: boolean;
+  reviewObservedIssuer: string | null;
+  reviewEndpointOrigins: string[] | null;
+};
+
+const pendingAuthorizationReview = ({
+  authorizationReviewExists,
+  reviewObservedIssuer,
+  reviewEndpointOrigins,
+}: PendingAuthorizationReviewRow) => {
+  if (!authorizationReviewExists) {
+    return null;
+  }
+  // The left join yields null only without a review row, and a stored review
+  // always records its observed endpoint origins.
+  if (reviewEndpointOrigins === null) {
+    return panic("MCP authorization review has no observed endpoint origins");
+  }
+  return {
+    issuer: reviewObservedIssuer,
+    endpointOrigins: reviewEndpointOrigins,
+  };
 };
 
 const uniqueConnectorsByUrl = <T extends { url: string }>(

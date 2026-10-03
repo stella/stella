@@ -98,10 +98,9 @@ export const createApproveMcpAuthorizationHandler = (
         endpointOrigins.some(
           (origin) => !confirmation.confirmedEndpointOrigins.includes(origin),
         ) ||
-        endpointOrigins.length !==
-          (connector.observedEndpointOrigins ?? []).length ||
+        endpointOrigins.length !== connector.observedEndpointOrigins.length ||
         endpointOrigins.some(
-          (origin) => !connector.observedEndpointOrigins?.includes(origin),
+          (origin) => !connector.observedEndpointOrigins.includes(origin),
         )
       ) {
         return Result.err(
