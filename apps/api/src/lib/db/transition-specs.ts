@@ -1,359 +1,139 @@
-import { FLOW_RUN_TRANSITIONS_V1 } from "@/api/lib/db/flow-run-transition-spec";
+import {
+  FLOW_RUN_TRANSITIONS_V1,
+  FLOW_RUN_STEP_TRANSITIONS_V1,
+} from "@/api/lib/db/flow-run-transition-spec";
 import type { StatusTable } from "@/api/lib/db/status-tables.gen";
 import type { TransitionSpec } from "@/api/lib/db/transitions";
 
+// Each table chooses an ownership category explicitly; new status tables must
+// choose a category or declare a managed spec before the total map compiles.
+const UNMANAGED_REASONS = {
+  authCeremony:
+    "Registration lifecycle is owned by the authentication ceremony store.",
+  delegatedAuth: "Invitation acceptance and expiry are owned by Better Auth.",
+  antiForgery:
+    "The state column stores an OAuth anti-forgery token, not a lifecycle.",
+  workerRun:
+    "Worker-run lifecycle remains with its existing executor pending transition-owner migration.",
+  cleanup:
+    "Durable cleanup and deletion requests remain with their idempotent retry workers pending migration.",
+  projection:
+    "Derived index or access state remains with its projection/reconciliation owner pending migration.",
+  userWorkflow:
+    "User-edited workflow state remains with its command handlers pending migration.",
+  userDecision:
+    "Approval and suggestion state combines user decisions with domain handlers pending migration.",
+  fileLifecycle:
+    "Upload, scan, and file-publication state remains with its file lifecycle owner pending migration.",
+  configRow:
+    "Configuration-row state is maintained by its configuration owner, not a worker-run lifecycle.",
+  connection:
+    "Connection availability combines credential updates and provider health checks pending migration.",
+  externalEntitlement:
+    "Provider entitlement state is ordered by external events and generations pending migration.",
+  corpusEdition:
+    "Corpus-edition activation is coordinated by the ingestion refresh owner pending migration.",
+  collaboration:
+    "Session and room state remains with its collaboration owner pending migration.",
+  coordinatedTimers:
+    "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
+} as const;
+
 /** Existing domain owners remain explicit until their writers migrate. */
 export const TRANSITIONS = {
-  agentRegistration: {
-    unmanaged:
-      "Registration lifecycle remains owned by the authentication ceremony store.",
-  },
-  accountDeletionEffectChunks: {
-    unmanaged:
-      "Existing accountDeletionEffectChunks writers have not migrated to the transition owner.",
-  },
-  accountDeletionRequests: {
-    unmanaged:
-      "Existing accountDeletionRequests writers have not migrated to the transition owner.",
-  },
-  agentSkillProposals: {
-    unmanaged:
-      "Existing agentSkillProposals writers have not migrated to the transition owner.",
-  },
-  aiMemories: {
-    unmanaged:
-      "Existing aiMemories writers have not migrated to the transition owner.",
-  },
-  auditLogs: {
-    unmanaged:
-      "Existing auditLogs writers have not migrated to the transition owner.",
-  },
-  bilingualTranslationRows: {
-    unmanaged:
-      "Existing bilingualTranslationRows writers have not migrated to the transition owner.",
-  },
-  bilingualTranslationRuns: {
-    unmanaged:
-      "Existing bilingualTranslationRuns writers have not migrated to the transition owner.",
-  },
-  billingArrangements: {
-    unmanaged:
-      "Existing billingArrangements writers have not migrated to the transition owner.",
-  },
-  bufferObjectCleanupIntents: {
-    unmanaged:
-      "Existing bufferObjectCleanupIntents writers have not migrated to the transition owner.",
-  },
+  agentRegistration: { unmanaged: UNMANAGED_REASONS.authCeremony },
+  accountDeletionEffectChunks: { unmanaged: UNMANAGED_REASONS.cleanup },
+  accountDeletionRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
+  agentSkillProposals: { unmanaged: UNMANAGED_REASONS.userDecision },
+  aiMemories: { unmanaged: UNMANAGED_REASONS.userDecision },
+  auditLogs: { unmanaged: UNMANAGED_REASONS.userDecision },
+  bilingualTranslationRows: { unmanaged: UNMANAGED_REASONS.workerRun },
+  bilingualTranslationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  billingArrangements: { unmanaged: UNMANAGED_REASONS.configRow },
+  bufferObjectCleanupIntents: { unmanaged: UNMANAGED_REASONS.cleanup },
   caseLawCitationResolutionCensusRuns: {
-    unmanaged:
-      "Existing caseLawCitationResolutionCensusRuns writers have not migrated to the transition owner.",
+    unmanaged: UNMANAGED_REASONS.workerRun,
   },
-  caseLawCitations: {
-    unmanaged:
-      "Existing caseLawCitations writers have not migrated to the transition owner.",
-  },
-  caseLawCorpusUploadIntents: {
-    unmanaged:
-      "Existing caseLawCorpusUploadIntents writers have not migrated to the transition owner.",
-  },
+  caseLawCitations: { unmanaged: UNMANAGED_REASONS.projection },
+  caseLawCorpusUploadIntents: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   caseLawDecisionIdentifierBackfills: {
-    unmanaged:
-      "Existing caseLawDecisionIdentifierBackfills writers have not migrated to the transition owner.",
+    unmanaged: UNMANAGED_REASONS.workerRun,
   },
-  caseLawDecisions: {
-    unmanaged:
-      "Existing caseLawDecisions writers have not migrated to the transition owner.",
-  },
-  caseLawIndexJobs: {
-    unmanaged:
-      "Existing caseLawIndexJobs writers have not migrated to the transition owner.",
-  },
-  caseLawIngestionEvents: {
-    unmanaged:
-      "Existing caseLawIngestionEvents writers have not migrated to the transition owner.",
-  },
-  caseLawProvisionCitations: {
-    unmanaged:
-      "Existing caseLawProvisionCitations writers have not migrated to the transition owner.",
-  },
-  caseLawProvisionExtractions: {
-    unmanaged:
-      "Existing caseLawProvisionExtractions writers have not migrated to the transition owner.",
-  },
-  caseLawProvisionExtractionScopes: {
-    unmanaged:
-      "Existing caseLawProvisionExtractionScopes writers have not migrated to the transition owner.",
-  },
-  caseLawReconciliationItems: {
-    unmanaged:
-      "Existing caseLawReconciliationItems writers have not migrated to the transition owner.",
-  },
-  caseLawResearchAnswers: {
-    unmanaged:
-      "Existing caseLawResearchAnswers writers have not migrated to the transition owner.",
-  },
-  caseLawSearchBackfillFailures: {
-    unmanaged:
-      "Existing caseLawSearchBackfillFailures writers have not migrated to the transition owner.",
-  },
-  caseLawStatuteCitationCountState: {
-    unmanaged:
-      "Existing caseLawStatuteCitationCountState writers have not migrated to the transition owner.",
-  },
-  chatThreadCompactions: {
-    unmanaged:
-      "Existing chatThreadCompactions writers have not migrated to the transition owner.",
-  },
-  chatTurns: {
-    unmanaged:
-      "Existing chatTurns writers have not migrated to the transition owner.",
-  },
-  contactExtractionUploads: {
-    unmanaged:
-      "Existing contactExtractionUploads writers have not migrated to the transition owner.",
-  },
-  corpusIndexGenerations: {
-    unmanaged:
-      "Existing corpusIndexGenerations writers have not migrated to the transition owner.",
-  },
-  corpusIndexGroupEnrollments: {
-    unmanaged:
-      "Existing corpusIndexGroupEnrollments writers have not migrated to the transition owner.",
-  },
-  corpusIndexProjectionIntents: {
-    unmanaged:
-      "Existing corpusIndexProjectionIntents writers have not migrated to the transition owner.",
-  },
-  corpusIndexProjectionStates: {
-    unmanaged:
-      "Existing corpusIndexProjectionStates writers have not migrated to the transition owner.",
-  },
-  correspondence: {
-    unmanaged:
-      "Existing correspondence writers have not migrated to the transition owner.",
-  },
-  desktopEditSessions: {
-    unmanaged:
-      "Existing desktopEditSessions writers have not migrated to the transition owner.",
-  },
-  documentProcessingRuns: {
-    unmanaged:
-      "Existing documentProcessingRuns writers have not migrated to the transition owner.",
-  },
-  documentReviewFindings: {
-    unmanaged:
-      "Existing documentReviewFindings writers have not migrated to the transition owner.",
-  },
-  documentReviewRuns: {
-    unmanaged:
-      "Existing documentReviewRuns writers have not migrated to the transition owner.",
-  },
-  documentTranslationRuns: {
-    unmanaged:
-      "Existing documentTranslationRuns writers have not migrated to the transition owner.",
-  },
-  documentTranslationUnits: {
-    unmanaged:
-      "Existing documentTranslationUnits writers have not migrated to the transition owner.",
-  },
-  docxSuggestions: {
-    unmanaged:
-      "Existing docxSuggestions writers have not migrated to the transition owner.",
-  },
-  entities: {
-    unmanaged:
-      "Existing entities writers have not migrated to the transition owner.",
-  },
-  entityDeletionCleanupRequests: {
-    unmanaged:
-      "Existing entityDeletionCleanupRequests writers have not migrated to the transition owner.",
-  },
-  entityDeletionEffectChunks: {
-    unmanaged:
-      "Existing entityDeletionEffectChunks writers have not migrated to the transition owner.",
-  },
-  expenses: {
-    unmanaged:
-      "Existing expenses writers have not migrated to the transition owner.",
-  },
-  extractionRuns: {
-    unmanaged:
-      "Existing extractionRuns writers have not migrated to the transition owner.",
-  },
-  fileComparisonUploads: {
-    unmanaged:
-      "Existing fileComparisonUploads writers have not migrated to the transition owner.",
-  },
+  caseLawDecisions: { unmanaged: UNMANAGED_REASONS.projection },
+  caseLawIndexJobs: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawIngestionEvents: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawProvisionCitations: { unmanaged: UNMANAGED_REASONS.projection },
+  caseLawProvisionExtractions: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawProvisionExtractionScopes: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawReconciliationItems: { unmanaged: UNMANAGED_REASONS.projection },
+  caseLawResearchAnswers: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawSearchBackfillFailures: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawStatuteCitationCountState: { unmanaged: UNMANAGED_REASONS.projection },
+  chatThreadCompactions: { unmanaged: UNMANAGED_REASONS.workerRun },
+  chatTurns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  contactExtractionUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
+  corpusIndexGenerations: { unmanaged: UNMANAGED_REASONS.projection },
+  corpusIndexGroupEnrollments: { unmanaged: UNMANAGED_REASONS.projection },
+  corpusIndexProjectionIntents: { unmanaged: UNMANAGED_REASONS.projection },
+  corpusIndexProjectionStates: { unmanaged: UNMANAGED_REASONS.projection },
+  correspondence: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  desktopEditSessions: { unmanaged: UNMANAGED_REASONS.collaboration },
+  documentProcessingRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  documentReviewFindings: { unmanaged: UNMANAGED_REASONS.userDecision },
+  documentReviewRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  documentTranslationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  documentTranslationUnits: { unmanaged: UNMANAGED_REASONS.workerRun },
+  docxSuggestions: { unmanaged: UNMANAGED_REASONS.userDecision },
+  entities: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  entityDeletionCleanupRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
+  entityDeletionEffectChunks: { unmanaged: UNMANAGED_REASONS.cleanup },
+  expenses: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  extractionRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  fileComparisonUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   flowRuns: FLOW_RUN_TRANSITIONS_V1,
-  flowRunSteps: {
-    unmanaged:
-      "Existing flowRunSteps writers have not migrated to the transition owner.",
-  },
-  folioCollabRooms: {
-    unmanaged:
-      "Existing folioCollabRooms writers have not migrated to the transition owner.",
-  },
-  invitation: {
-    unmanaged: "Invitation acceptance and expiry remain owned by Better Auth.",
-  },
-  invoices: {
-    unmanaged:
-      "Existing invoices writers have not migrated to the transition owner.",
-  },
-  legalListClaims: {
-    unmanaged:
-      "Existing legalListClaims writers have not migrated to the transition owner.",
-  },
-  legalListGenerationCandidates: {
-    unmanaged:
-      "Existing legalListGenerationCandidates writers have not migrated to the transition owner.",
-  },
-  legalListGenerationRuns: {
-    unmanaged:
-      "Existing legalListGenerationRuns writers have not migrated to the transition owner.",
-  },
-  legalListItems: {
-    unmanaged:
-      "Existing legalListItems writers have not migrated to the transition owner.",
-  },
-  legalListItemSources: {
-    unmanaged:
-      "Existing legalListItemSources writers have not migrated to the transition owner.",
-  },
-  legalLists: {
-    unmanaged:
-      "Existing legalLists writers have not migrated to the transition owner.",
-  },
-  legalListVerificationRuns: {
-    unmanaged:
-      "Existing legalListVerificationRuns writers have not migrated to the transition owner.",
-  },
-  legislationDocuments: {
-    unmanaged:
-      "Existing legislationDocuments writers have not migrated to the transition owner.",
-  },
-  legislationIndexJobs: {
-    unmanaged:
-      "Existing legislationIndexJobs writers have not migrated to the transition owner.",
-  },
-  mcpOAuthState: {
-    unmanaged: "State holds an OAuth anti-forgery token, not a lifecycle.",
-  },
-  mcpUserConnections: {
-    unmanaged:
-      "Existing mcpUserConnections writers have not migrated to the transition owner.",
-  },
-  officeFileEvidence: {
-    unmanaged:
-      "Existing officeFileEvidence writers have not migrated to the transition owner.",
-  },
-  organizationAccessStates: {
-    unmanaged:
-      "Existing organizationAccessStates writers have not migrated to the transition owner.",
-  },
-  organizationConfiguredAccess: {
-    unmanaged:
-      "Existing organizationConfiguredAccess writers have not migrated to the transition owner.",
-  },
-  organizationFileObjects: {
-    unmanaged:
-      "Existing organizationFileObjects writers have not migrated to the transition owner.",
-  },
-  pdfSigningSessions: {
-    unmanaged:
-      "Existing pdfSigningSessions writers have not migrated to the transition owner.",
-  },
-  pendingUploads: {
-    unmanaged:
-      "Existing pendingUploads writers have not migrated to the transition owner.",
-  },
-  playbookDefinitions: {
-    unmanaged:
-      "Existing playbookDefinitions writers have not migrated to the transition owner.",
-  },
-  properties: {
-    unmanaged:
-      "Existing properties writers have not migrated to the transition owner.",
-  },
-  reportExports: {
-    unmanaged:
-      "Existing reportExports writers have not migrated to the transition owner.",
-  },
-  sanctionsEditions: {
-    unmanaged:
-      "Existing sanctionsEditions writers have not migrated to the transition owner.",
-  },
-  schedulerJobRuns: {
-    unmanaged:
-      "Existing schedulerJobRuns writers have not migrated to the transition owner.",
-  },
-  scoutRuns: {
-    unmanaged:
-      "Existing scoutRuns writers have not migrated to the transition owner.",
-  },
-  sharepointConnections: {
-    unmanaged:
-      "Existing sharepointConnections writers have not migrated to the transition owner.",
-  },
-  sharepointOAuthState: {
-    unmanaged: "State holds an OAuth anti-forgery token, not a lifecycle.",
-  },
-  signals: {
-    unmanaged:
-      "Existing signals writers have not migrated to the transition owner.",
-  },
-  styleSets: {
-    unmanaged:
-      "Existing styleSets writers have not migrated to the transition owner.",
-  },
-  templateDeletionCleanupRequests: {
-    unmanaged:
-      "Existing templateDeletionCleanupRequests writers have not migrated to the transition owner.",
-  },
-  templateFills: {
-    unmanaged:
-      "Existing templateFills writers have not migrated to the transition owner.",
-  },
-  templatePersistenceRequests: {
-    unmanaged:
-      "Existing templatePersistenceRequests writers have not migrated to the transition owner.",
-  },
-  templates: {
-    unmanaged:
-      "Existing templates writers have not migrated to the transition owner.",
-  },
-  templateVersions: {
-    unmanaged:
-      "Existing templateVersions writers have not migrated to the transition owner.",
-  },
-  timeEntries: {
-    unmanaged:
-      "Existing timeEntries writers have not migrated to the transition owner.",
-  },
-  timeEntrySuggestions: {
-    unmanaged:
-      "Existing timeEntrySuggestions writers have not migrated to the transition owner.",
-  },
-  timeEntryTimerStates: {
-    unmanaged:
-      "Existing timeEntryTimerStates writers have not migrated to the transition owner.",
-  },
-  timeTimers: {
-    unmanaged:
-      "Existing timeTimers writers have not migrated to the transition owner.",
-  },
-  usageEntitlements: {
-    unmanaged:
-      "Existing usageEntitlements writers have not migrated to the transition owner.",
-  },
-  workObligations: {
-    unmanaged:
-      "Existing workObligations writers have not migrated to the transition owner.",
-  },
-  workspaces: {
-    unmanaged:
-      "Existing workspaces writers have not migrated to the transition owner.",
-  },
+  flowRunSteps: FLOW_RUN_STEP_TRANSITIONS_V1,
+  folioCollabRooms: { unmanaged: UNMANAGED_REASONS.collaboration },
+  invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
+  invoices: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  legalListClaims: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  legalListGenerationCandidates: { unmanaged: UNMANAGED_REASONS.workerRun },
+  legalListGenerationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  legalListItems: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  legalListItemSources: { unmanaged: UNMANAGED_REASONS.projection },
+  legalLists: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  legalListVerificationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  legislationDocuments: { unmanaged: UNMANAGED_REASONS.projection },
+  legislationIndexJobs: { unmanaged: UNMANAGED_REASONS.workerRun },
+  mcpOAuthState: { unmanaged: UNMANAGED_REASONS.antiForgery },
+  mcpUserConnections: { unmanaged: UNMANAGED_REASONS.connection },
+  officeFileEvidence: { unmanaged: UNMANAGED_REASONS.workerRun },
+  organizationAccessStates: { unmanaged: UNMANAGED_REASONS.projection },
+  organizationConfiguredAccess: { unmanaged: UNMANAGED_REASONS.projection },
+  organizationFileObjects: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
+  pdfSigningSessions: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  pendingUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
+  playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },
+  properties: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  reportExports: { unmanaged: UNMANAGED_REASONS.workerRun },
+  sanctionsEditions: { unmanaged: UNMANAGED_REASONS.corpusEdition },
+  schedulerJobRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  scoutRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  sharepointConnections: { unmanaged: UNMANAGED_REASONS.connection },
+  sharepointOAuthState: { unmanaged: UNMANAGED_REASONS.antiForgery },
+  signals: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  styleSets: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
+  templateDeletionCleanupRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
+  templateFills: { unmanaged: UNMANAGED_REASONS.workerRun },
+  templatePersistenceRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
+  templates: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
+  templateVersions: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
+  timeEntries: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  timeEntrySuggestions: { unmanaged: UNMANAGED_REASONS.userDecision },
+  timeEntryTimerStates: { unmanaged: UNMANAGED_REASONS.projection },
+  timeTimers: { unmanaged: UNMANAGED_REASONS.coordinatedTimers },
+  usageEntitlements: { unmanaged: UNMANAGED_REASONS.externalEntitlement },
+  workObligations: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  workspaces: { unmanaged: UNMANAGED_REASONS.userWorkflow },
 } as const satisfies Record<
   StatusTable,
   TransitionSpec | { unmanaged: string }

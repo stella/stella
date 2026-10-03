@@ -49,14 +49,6 @@ type PausedWorkerOptions = {
 };
 
 const pausedWorker = async ({ db, f, phase }: PausedWorkerOptions) => {
-  await db
-    .update(flowRuns)
-    .set({ status: "pending" })
-    .where(eq(flowRuns.id, f.runId));
-  await db
-    .update(flowRunSteps)
-    .set({ status: "pending" })
-    .where(eq(flowRunSteps.runId, f.runId));
   if (phase === "complete") {
     await db
       .update(flowRuns)
@@ -235,14 +227,6 @@ if (!databaseUrl || !enabled) {
                 return value;
               }, retry);
             try {
-              await db
-                .update(flowRuns)
-                .set({ status: "pending" })
-                .where(eq(flowRuns.id, f.runId));
-              await db
-                .update(flowRunSteps)
-                .set({ status: "pending" })
-                .where(eq(flowRunSteps.runId, f.runId));
               if (phase === "complete") {
                 await db
                   .update(flowRuns)
@@ -409,6 +393,14 @@ if (!databaseUrl || !enabled) {
                 return value;
               }, retry);
             try {
+              await db
+                .update(flowRuns)
+                .set({ status: "running" })
+                .where(eq(flowRuns.id, f.runId));
+              await db
+                .update(flowRunSteps)
+                .set({ status: "running" })
+                .where(eq(flowRunSteps.reviewTaskEntityId, f.taskEntityId));
               // Another delivery reached a gate while this worker held its
               // earlier snapshot. AI completion is now behind the next gate;
               // the other writers are duplicate work on the same gate.
@@ -421,6 +413,10 @@ if (!databaseUrl || !enabled) {
                 if (!next) {
                   throw new Error("Expected the subsequent review gate");
                 }
+                await db
+                  .update(flowRunSteps)
+                  .set({ status: "running" })
+                  .where(eq(flowRunSteps.id, next.id));
                 await db
                   .update(flowRunSteps)
                   .set({

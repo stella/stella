@@ -48,9 +48,7 @@ export const GENERATORS = [
   {
     id: "transition-triggers",
     outputKind: "committed",
-    outputs: [
-      "apps/api/drizzle/20261003124600_flow_run_transitions/migration.sql",
-    ],
+    outputs: ["apps/api/drizzle/*_flow_run_transitions/migration.sql"],
     inputs: [
       "apps/api/src/lib/db/flow-run-transition-spec.ts",
       "apps/api/src/lib/db/transition-sql.ts",

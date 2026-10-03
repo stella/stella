@@ -7,6 +7,7 @@ import {
 } from "@stll/api-contract";
 
 import { flowRuns } from "@/api/db/schema";
+import { FLOW_TRANSITION_SPECS_V1 } from "@/api/lib/db/flow-run-transition-spec";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   transitionDomainSql,
@@ -14,20 +15,62 @@ import {
 } from "@/api/lib/db/transition-sql";
 import { defineTransitions, permitsTransition } from "@/api/lib/db/transitions";
 
+import {
+  transitionMigrationDirectory,
+  transitionMigrationName,
+} from "../../../scripts/generate-transition-triggers";
+
 test("the committed trigger and status-domain check derive from the declared graph", async () => {
   const migration = await Bun.file(
-    new URL(
-      "../../../drizzle/20261003124600_flow_run_transitions/migration.sql",
-      import.meta.url,
-    ),
+    new URL("migration.sql", transitionMigrationDirectory()),
   ).text();
-  expect(migration).toContain(transitionTriggerSql(TRANSITIONS.flowRuns));
-  expect(migration).toContain(
-    transitionDomainSql(TRANSITIONS.flowRuns).trimEnd(),
-  );
+  for (const spec of FLOW_TRANSITION_SPECS_V1) {
+    expect(migration).toContain(transitionTriggerSql(spec));
+    expect(migration).toContain(transitionDomainSql(spec).trimEnd());
+  }
   expect(getTableConfig(flowRuns).checks.map(({ name }) => name)).toContain(
     "flow_runs_status_domain",
   );
+});
+
+test("validation releases the prerequisite's exclusive lock before scanning", async () => {
+  const validation = await Bun.file(
+    new URL(
+      "../../../drizzle/20261003124700_validate_flow_run_status/migration.sql",
+      import.meta.url,
+    ),
+  ).text();
+  const statements = validation
+    .split("--> statement-breakpoint")
+    .map((statement) => statement.replace(/^[ \t]*--[^\n]*/gmu, "").trim());
+  const commit = statements.indexOf("COMMIT;");
+  const begin = statements.indexOf("BEGIN;\nSET lock_timeout = '1s';");
+  expect(commit).toBeGreaterThanOrEqual(0);
+  expect(begin).toBeGreaterThan(commit);
+  for (const statement of statements.filter((sql) =>
+    sql.includes("VALIDATE CONSTRAINT"),
+  )) {
+    expect(statements.indexOf(statement)).toBeGreaterThan(begin);
+  }
+  expect(
+    statements.filter((sql) => sql.includes("VALIDATE CONSTRAINT")),
+  ).toHaveLength(FLOW_TRANSITION_SPECS_V1.length);
+});
+
+test("the transition generator discovers a restamped migration without source edits", () => {
+  expect(
+    transitionMigrationName([
+      "20261103123456_flow_run_transitions",
+      "20261001000000_other",
+    ]),
+  ).toBe("20261103123456_flow_run_transitions");
+  expect(() => transitionMigrationName([])).toThrow("Expected exactly one");
+  expect(() =>
+    transitionMigrationName([
+      "20261001000000_flow_run_transitions",
+      "20261002000000_flow_run_transitions",
+    ]),
+  ).toThrow("Expected exactly one");
 });
 
 test("canonical terminal flow states have no escape even when both generators agree", () => {

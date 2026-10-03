@@ -122,8 +122,7 @@ export const flowReviewGateFixture = async (
         index,
         kind: step.kind,
         reviewTaskEntityId: index === 0 ? taskEntityId : null,
-        status:
-          index === 0 ? ("awaiting_review" as const) : ("pending" as const),
+        status: index === 0 ? initialRunStatus : ("pending" as const),
       })),
     );
   } catch (error) {

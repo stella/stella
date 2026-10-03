@@ -2901,7 +2901,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "direct-status-writes",
     description:
-      "lifecycle keys in direct Drizzle updates outside the transition owner; each file's debt can only shrink",
+      "lifecycle keys in direct/conflict Drizzle updates and visible raw SQL assignments outside the transition owner; opaque handles/payloads count conservatively and each file's debt can only shrink",
     include: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.ts"],
     exclude: (file) =>
       isExcludedSource(file) ||

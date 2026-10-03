@@ -72,6 +72,10 @@ if (!databaseUrl || !enabled) {
               .where(eq(flowRuns.id, f.runId));
             await db
               .update(flowRunSteps)
+              .set({ status: "running" })
+              .where(eq(flowRunSteps.reviewTaskEntityId, f.taskEntityId));
+            await db
+              .update(flowRunSteps)
               .set({
                 kind: "ai",
                 status: "completed",

@@ -53,6 +53,71 @@ describe("lifecycle write shapes", () => {
       ),
     ).toBe(2);
   });
+  test("opaque table/payload handles, conflict writes and explicit payload mutations are measured", () => {
+    for (const content of [
+      'function apply(table) { db.update(table).set({ status: "running" }); }',
+      'import { rows } from "./table-facade"; db.update(rows).set({ status: "running" });',
+      'db.insert(flowRuns).values(row).onConflictDoUpdate({ target: flowRuns.id, set: { status: "running" } });',
+      'db.update(flowRuns).set(flag ? { status: "running" } : { label: "done" });',
+      'db.update(flowRuns).set({ ...(flag && { status: "running" }) });',
+      "db.update(flowRuns).set({ ...opaque });",
+      "db.update(flowRuns).set(makePatch());",
+      'const patch = {}; patch.status = "running"; db.update(flowRuns).set(patch);',
+      'const patch = {}; const alias = patch; alias["status"] = "running"; db.update(flowRuns).set(patch);',
+      'let patch = {}; patch = { status: "running" }; db.update(flowRuns).set(patch);',
+      'const patch = {}; Object.assign(patch, { status: "running" }); db.update(flowRuns).set(patch);',
+      'const patch = {}; Reflect.set(patch, key, "running"); db.update(flowRuns).set(patch);',
+    ]) {
+      expect({ content, count: measure(content) }).toEqual({
+        content,
+        count: 1,
+      });
+    }
+  });
+  test("static SQL lifecycle updates are measured through quoted names, SQL aliases and tuple assignments", () => {
+    for (const content of [
+      `tx.execute(sql\`UPDATE flow_runs SET status = \${value} WHERE id = \${id}\`);`,
+      `tx.execute(sql\`UPDATE \${flowRuns} SET \${flowRuns.status} = \${value}\`);`,
+      `tx.execute(raw\`UPDATE "flow_runs" SET "status" = \${value}\`);`,
+      "tx.execute(sql.raw(\"UPDATE flow_runs SET updated_at = now(), status = 'running' WHERE id = 'job'\"));",
+      `tx.execute(sql\`UPDATE unknown_table SET item_status = \${value}\`);`,
+      `tx.execute(sql\`UPDATE flow_runs SET (status, error) = (\${value}, NULL)\`);`,
+      `tx.execute(sql\`UPDATE flow_runs SET ("status", "error") = (\${value}, NULL)\`);`,
+      'tx.execute("UPDATE flow_runs " + "SET status = $1 WHERE id = $2");',
+    ]) {
+      expect({ content, count: measure(content) }).toEqual({
+        content,
+        count: 1,
+      });
+    }
+    expect(
+      measure(
+        `tx.execute(sql\`UPDATE flow_runs SET error = \${value} WHERE status = 'running'\`); // UPDATE flow_runs SET status = running`,
+      ),
+    ).toBe(0);
+  });
+  test("external SQL builders and external payload mutation remain outside static inspection while visible statements count independently", () => {
+    expect(
+      measure(
+        'import { decorate } from "external-mutator"; const patch = {}; decorate(patch); db.update(flowRuns).set(patch);',
+      ),
+    ).toBe(0);
+    expect(
+      measure(
+        `tx.execute(sql\`UPDATE mapped_jobs SET lifecycle_code = \${next}\`);`,
+      ),
+    ).toBe(0);
+    expect(
+      measure(
+        'import { buildUpdate } from "external-sql"; tx.execute(buildUpdate(table, values));',
+      ),
+    ).toBe(0);
+    expect(
+      measure(
+        `tx.execute(sql\`UPDATE flow_runs SET status = \${first}; UPDATE flow_run_steps SET status = \${second}\`);`,
+      ),
+    ).toBe(2);
+  });
   test("unmanaged reasons count as properties rather than occurrences of the word", () => {
     expect(
       countUnmanagedTransitionSpecs(

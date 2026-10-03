@@ -5,6 +5,7 @@ import {
   type StatusColumns,
 } from "../scripts/status-write-shapes.ts";
 import { filenameForContext } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
 
 const columnsFrom = (value: unknown): StatusColumns => {
   const columns: Record<string, readonly string[]> = {};
@@ -44,6 +45,11 @@ export default eslintCompatPlugin({
       createOnce(context) {
         let ranges = new Set<string>();
         let owner = "";
+        const report = (node: AstNode) => {
+          if (ranges.has(`${node.range[0]}:${node.range[1]}`)) {
+            context.report({ node, messageId: "statusOwner", data: { owner } });
+          }
+        };
         return {
           before() {
             ranges = new Set();
@@ -69,13 +75,19 @@ export default eslintCompatPlugin({
             );
           },
           CallExpression(node) {
-            if (ranges.has(`${node.range[0]}:${node.range[1]}`)) {
-              context.report({
-                node,
-                messageId: "statusOwner",
-                data: { owner },
-              });
-            }
+            report(node);
+          },
+          TaggedTemplateExpression(node) {
+            report(node);
+          },
+          TemplateLiteral(node) {
+            report(node);
+          },
+          Literal(node) {
+            report(node);
+          },
+          BinaryExpression(node) {
+            report(node);
           },
         };
       },

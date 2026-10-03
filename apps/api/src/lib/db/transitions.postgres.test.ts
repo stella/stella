@@ -4,11 +4,11 @@ import { eq, sql } from "drizzle-orm";
 import { customType, integer, pgTable, text } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
-import { FLOW_RUN_STATUSES } from "@stll/api-contract";
+import { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "@stll/api-contract";
 import { assertProperty } from "@stll/property-testing";
 
 import { jsonb, timestamptz } from "@/api/db/columns";
-import { flowRuns } from "@/api/db/schema";
+import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
@@ -47,6 +47,162 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("status transitions (postgres)", () => {
+    test("competing transitions commit exactly one result and return stale for the loser", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const { db: competitor } = openClient();
+        const fixture = await flowReviewGateFixture(db, {
+          intermediate: false,
+          initialRunStatus: "pending",
+        });
+        try {
+          const start = Promise.withResolvers<undefined>();
+          const ready = Promise.withResolvers<undefined>();
+          let arrivals = 0;
+          const move = async (client: typeof db) =>
+            await client.transaction(async (tx) => {
+              arrivals += 1;
+              if (arrivals === 2) {
+                ready.resolve(undefined);
+              }
+              await start.promise;
+              return await transition(tx, TRANSITIONS.flowRuns, fixture.runId, {
+                from: ["pending"],
+                to: "running",
+              });
+            });
+          const results = [move(db), move(competitor)];
+          await ready.promise;
+          start.resolve(undefined);
+          const outcomes = await Promise.all(results);
+          expect(outcomes.map(({ type }) => type).toSorted()).toEqual([
+            "stale",
+            "transitioned",
+          ]);
+          expect(
+            (
+              await db.query.flowRuns.findFirst({
+                where: { id: { eq: fixture.runId } },
+              })
+            )?.status,
+          ).toBe("running");
+        } finally {
+          await fixture.cleanup();
+        }
+      });
+    });
+
+    test("inserts allow every initial domain state but terminal runs cannot reopen", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const fixture = await flowReviewGateFixture(db, {
+          intermediate: false,
+        });
+        try {
+          for (const status of FLOW_RUN_STATUSES) {
+            const id = createSafeId<"flowRun">();
+            await db.insert(flowRuns).values({
+              id,
+              workspaceId: fixture.workspaceId,
+              status,
+              definitionSnapshot: { name: "Initial status", steps: [] },
+              triggerSource: { type: "manual", userId: fixture.userId },
+            });
+            expect(
+              (await db.query.flowRuns.findFirst({ where: { id: { eq: id } } }))
+                ?.status,
+            ).toBe(status);
+            if (
+              TRANSITIONS.flowRuns.terminal.some(
+                (terminal) => terminal === status,
+              )
+            ) {
+              const reopened = await Result.tryPromise(() =>
+                db
+                  .update(flowRuns)
+                  .set({ status: "running" })
+                  .where(eq(flowRuns.id, id)),
+              );
+              expect(reopened.isErr()).toBe(true);
+              if (reopened.isErr()) {
+                expect(
+                  isPgConstraintError(
+                    reopened.error,
+                    "23514",
+                    "flow_runs_status_transition",
+                  ),
+                ).toBe(true);
+              }
+            }
+          }
+          const invalid = await Result.tryPromise(() =>
+            db.execute(
+              sql`INSERT INTO ${flowRuns} (id, workspace_id, status, definition_snapshot, trigger_source)
+                  SELECT ${createSafeId<"flowRun">()}, workspace_id, 'unknown', definition_snapshot, trigger_source
+                  FROM ${flowRuns} WHERE id = ${fixture.runId}`,
+            ),
+          );
+          expect(invalid.isErr()).toBe(true);
+          if (invalid.isErr()) {
+            expect(
+              isPgConstraintError(
+                invalid.error,
+                "23514",
+                "flow_runs_status_domain",
+              ),
+            ).toBe(true);
+          }
+        } finally {
+          await fixture.cleanup();
+        }
+      });
+    });
+
+    test("installed step trigger agrees with the step graph for every pair", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const fixture = await flowReviewGateFixture(db, {
+          intermediate: false,
+        });
+        try {
+          let index = 1;
+          for (const from of FLOW_RUN_STEP_STATUSES) {
+            for (const to of FLOW_RUN_STEP_STATUSES) {
+              const id = createSafeId<"flowRunStep">();
+              await db.insert(flowRunSteps).values({
+                id,
+                runId: fixture.runId,
+                workspaceId: fixture.workspaceId,
+                index: index++,
+                kind: "review-gate",
+                status: from,
+              });
+              const outcome = await Result.tryPromise(() =>
+                db
+                  .update(flowRunSteps)
+                  .set({ status: to })
+                  .where(eq(flowRunSteps.id, id)),
+              );
+              expect(outcome.isOk()).toBe(
+                permitsTransition(TRANSITIONS.flowRunSteps, from, to),
+              );
+              if (outcome.isErr()) {
+                expect(
+                  isPgConstraintError(
+                    outcome.error,
+                    "23514",
+                    "flow_run_steps_status_transition",
+                  ),
+                ).toBe(true);
+              }
+            }
+          }
+        } finally {
+          await fixture.cleanup();
+        }
+      });
+    });
+
     test("status owner and installed flow trigger agree on generated pairs", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
@@ -97,13 +253,11 @@ if (!databaseUrl || !enabled) {
               definitionSnapshot: { name: "Owner transition", steps: [] },
               triggerSource: { type: "manual", userId: fixture.userId },
             });
+            const move = { from: [from], to } as const;
             const owned = await Result.tryPromise(
               async () =>
                 // @ts-expect-error arbitrary external pairs exercise runtime validation too
-                await transition(db, TRANSITIONS.flowRuns, ownerId, {
-                  from: [from],
-                  to,
-                }),
+                await transition(db, TRANSITIONS.flowRuns, ownerId, move),
             );
             expect(owned.isOk()).toBe(expected);
             if (owned.isOk()) {

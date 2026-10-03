@@ -155,6 +155,13 @@ export const flowRunSteps = p.pgTable(
     finishedAt: timestamptz("finished_at"),
   },
   (table) => [
+    p.check(
+      "flow_run_steps_status_domain",
+      sql`${table.status} IN (${sql.join(
+        FLOW_RUN_STEP_STATUSES.map((status) => sql.raw(`'${status}'`)),
+        sql`, `,
+      )})`,
+    ),
     p
       .foreignKey({
         columns: [table.runId, table.workspaceId],

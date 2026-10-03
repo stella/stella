@@ -350,7 +350,7 @@ export const STATUS_TRANSITION_OWNERSHIP = {
   capability: "Changing a row's lifecycle state",
   owner: ["apps/api/src/lib/db/transitions.ts"],
   summary:
-    "The transition owner checks the expected state and optional fence in the update predicate, and returns Transitioned or Stale. Direct lifecycle writes report lint warnings while callers migrate; a per-file shrink-only ratchet forbids adding them. Unmanaged declarations can only shrink for each table independently. Dynamic payloads are outside the syntax detector's boundary.",
+    "The transition owner checks the expected state and optional fence in the update predicate, and returns Transitioned or Stale. Direct lifecycle writes, conflict updates and visible SQL lifecycle assignments report lint warnings; a per-file shrink-only ratchet forbids adding them. Opaque table handles and payloads count conservatively. Unmanaged declarations shrink independently per table. SQL built entirely by external functions, external payload mutation and custom SQL column names not ending in status/state/phase remain outside static inspection.",
   enforcement: { kind: "status-set", columns: STATUS_COLUMNS, allowed: [] },
 } as const satisfies OwnershipEntry;
 
@@ -1605,7 +1605,7 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
       return `call \`.${enforcement.method}()\` in \`${enforcement.within.join("`, `")}\``;
     }
     case "status-set": {
-      return "lifecycle keys in `.update(table).set(...)`; warning plus per-file shrink-only ratchet";
+      return "lifecycle updates, conflict sets and visible SQL assignments; warning plus per-file shrink-only ratchet";
     }
     default: {
       enforcement satisfies never;

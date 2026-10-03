@@ -31,3 +31,34 @@ REVOKE ALL ON FUNCTION "flow_runs_status_transition_guard"() FROM PUBLIC;--> sta
 CREATE TRIGGER "flow_runs_status_transition"
 BEFORE UPDATE OF "status" ON "flow_runs"
 FOR EACH ROW EXECUTE FUNCTION "flow_runs_status_transition_guard"();
+
+--> statement-breakpoint
+
+ALTER TABLE "flow_run_steps" ADD CONSTRAINT "flow_run_steps_status_domain" CHECK ("status" IN ('pending', 'running', 'awaiting_review', 'completed', 'failed', 'skipped')) NOT VALID;--> statement-breakpoint
+
+CREATE FUNCTION "flow_run_steps_status_transition_guard"() RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  IF OLD."status" IS NOT DISTINCT FROM NEW."status"
+     AND NEW."status" IN ('pending', 'running', 'awaiting_review', 'completed', 'failed', 'skipped') THEN
+    RETURN NEW;
+  END IF;
+  IF NOT COALESCE((
+      (OLD."status" = 'pending' AND NEW."status" IN ('running', 'failed', 'skipped'))
+      OR (OLD."status" = 'running' AND NEW."status" IN ('awaiting_review', 'completed', 'failed', 'skipped'))
+      OR (OLD."status" = 'awaiting_review' AND NEW."status" IN ('completed', 'skipped'))
+  ), FALSE) THEN
+    RAISE EXCEPTION 'illegal status transition on flow_run_steps from % to %', OLD."status", NEW."status"
+      USING ERRCODE = 'check_violation', CONSTRAINT = 'flow_run_steps_status_transition';
+  END IF;
+  RETURN NEW;
+END;
+$$;--> statement-breakpoint
+
+REVOKE ALL ON FUNCTION "flow_run_steps_status_transition_guard"() FROM PUBLIC;--> statement-breakpoint
+
+CREATE TRIGGER "flow_run_steps_status_transition"
+BEFORE UPDATE OF "status" ON "flow_run_steps"
+FOR EACH ROW EXECUTE FUNCTION "flow_run_steps_status_transition_guard"();
