@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { CONTACT_TYPES } from "@stll/api-contract";
 import type { TemplatePackAuthor } from "@stll/template-packs/schema";
 
+import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
 import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 
@@ -318,6 +319,8 @@ export type TemplatePersistenceResult =
       fileName: string;
       unmatchedPlaceholders: string[];
       unusedValues: string[];
+      /** Older persisted receipts predate clause warnings. */
+      clauseWarnings?: ClauseDirectiveWarning[];
       /** Optional only because receipts persisted before AI diagnostics were
        * recorded do not carry this property. New partial receipts include it. */
       aiFieldErrors?: TemplatePersistenceAiFieldError[] | undefined;
@@ -329,6 +332,8 @@ export type TemplatePersistenceResult =
       fileName: string;
       unmatchedPlaceholders: string[];
       unusedValues: string[];
+      /** Older persisted receipts predate clause warnings. */
+      clauseWarnings?: ClauseDirectiveWarning[];
       /** See the persisted-receipt compatibility boundary above. */
       aiFieldErrors?: TemplatePersistenceAiFieldError[] | undefined;
       versionNumber: number;

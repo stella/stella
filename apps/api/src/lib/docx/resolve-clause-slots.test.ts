@@ -2,10 +2,24 @@ import { describe, expect, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
+import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 
 import type { ClauseSlot } from "./discover-clause-slots";
-import { resolveClauseSlots } from "./resolve-clause-slots";
+import { resolveClauseSlotBodies } from "./resolve-clause-slots";
+
+// Exercise lookup batching and rich conversion with explicit fill values.
+const resolveClauseSlots = async (
+  ...args: Parameters<typeof resolveClauseSlotBodies>
+) => {
+  const bodies = await resolveClauseSlotBodies(...args);
+  return Object.fromEntries(
+    Object.entries(bodies).map(([slotKey, body]) => [
+      slotKey,
+      clauseBodyToRichPatch(body, { values: {}, slotKey }).unwrap(),
+    ]),
+  );
+};
 
 const templateId = toSafeId<"template">("tmpl_1");
 const organizationId = toSafeId<"organization">("org_1");

@@ -3,7 +3,7 @@ import { panic } from "better-result";
 import { Elysia } from "elysia";
 
 import {
-  CHAT_TURN_ID_HEADER,
+  REQUEST_ID_HEADER,
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
 import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
@@ -158,7 +158,6 @@ import {
   enrichRequestContext,
   getRequestId,
   initRequestContext,
-  REQUEST_ID_HEADER,
 } from "@/api/lib/observability/request-context";
 import {
   answerRequestError,
@@ -189,6 +188,7 @@ import {
   finalizeResponseCachePolicy,
   API_SECURITY_HEADERS,
   setSecurityHeaders,
+  CORS_EXPOSED_HEADERS,
 } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
@@ -272,12 +272,6 @@ if (isLocalDevOpen()) {
 }
 
 const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
-const CORS_EXPOSED_HEADERS = [
-  "Content-Disposition",
-  "X-Ai-Field-Errors",
-  REQUEST_ID_HEADER,
-  CHAT_TURN_ID_HEADER,
-];
 
 const publicStatuteSearchRateLimits =
   createPublicStatuteSearchRateLimitComposition({
