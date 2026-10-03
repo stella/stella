@@ -148,7 +148,9 @@ export class LegislationRevision {
   readonly #contentHash: string;
 
   constructor(input: LegislationDocumentInput) {
-    this.#input = sanitizeInput(structuredClone(input));
+    // Sanitizing first turns values structuredClone rejects (functions,
+    // symbols, promises in metadata) into storable ones before the snapshot.
+    this.#input = structuredClone(sanitizeInput(input));
     this.#contentHash = corpusContentHash({
       text: this.#input.fulltext ?? null,
       sections: this.#input.sections ?? null,

@@ -3,6 +3,7 @@ import { expect, expectTypeOf, test } from "bun:test";
 import { LegislationRevision } from "@/api/handlers/legislation/revision";
 import type { LegislationRevisionProjection } from "@/api/handlers/legislation/revision";
 import { createSafeId } from "@/api/lib/branded-types";
+import { sanitizeMetadata } from "@/api/lib/legal-search/corpus-sanitize";
 import { planCorpusDocumentWrite } from "@/api/lib/legal-search/corpus-storage";
 import type { LegislationDocumentInput } from "@/api/lib/legal-search/legislation-ingestion-types";
 
@@ -79,4 +80,22 @@ test("caller mutations cannot change a captured revision", () => {
   expect(revision.sourceHash(classification)).toBe(before);
   expect(revision.values(sourceRaw).fulltext).toBe(fetched.fulltext);
   expect(revision.values(sourceRaw).metadata).toEqual(fetched.metadata);
+});
+
+test("non-cloneable metadata values are sanitized instead of aborting the revision", () => {
+  const metadata = {
+    kept: "value",
+    callback: () => "not data",
+    marker: Symbol("not data"),
+    pending: Promise.resolve("not data"),
+    nested: { callback: () => "not data" },
+  };
+  const revision = new LegislationRevision({ ...fetched, metadata });
+  expect(revision.input.metadata).toEqual(sanitizeMetadata(metadata));
+  expect(revision.input.metadata).toMatchObject({
+    kept: "value",
+    callback: null,
+    marker: null,
+    nested: { callback: null },
+  });
 });
