@@ -8,6 +8,8 @@ import {
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 
+import { MAX_REPLAY_ROW_READMISSIONS } from "./replay-failure";
+
 // A load hold resumes only once the ordinary admission floor is recovered.
 export const REPLAY_HEALTH_CONFIG = {
   ...defaultConfig,
@@ -59,6 +61,8 @@ export const BACKGROUND_REPLAY_LIMITS = {
   maxDailyBudget: 10_000,
   storedRawReadTimeoutMs: 30_000,
   maxRowAttempts: 5,
+  maxRowReadmissions: MAX_REPLAY_ROW_READMISSIONS,
+  rowReadmissionDelayMs: 7 * 24 * 60 * 60_000,
   rowRetryBaseMs: 60_000,
   rowRetryMaxMs: 60 * 60_000,
   receiptRetentionDays: 90,

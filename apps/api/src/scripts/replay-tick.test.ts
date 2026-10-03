@@ -40,6 +40,8 @@ const report = (
   blocked: 0,
   errors: 0,
   failed: 0,
+  retryExhausted: 0,
+  retryTerminal: 0,
   heldTooLong: false,
 });
 

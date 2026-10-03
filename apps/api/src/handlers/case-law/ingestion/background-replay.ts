@@ -70,6 +70,8 @@ export type BackgroundReplayTickReport = {
   blocked: number;
   errors: number;
   failed: number;
+  retryExhausted: number;
+  retryTerminal: number;
   heldTooLong: boolean;
 };
 
@@ -108,7 +110,14 @@ export type BackgroundReplayDependencies = {
     batch: BackgroundReplayBatch,
     completion: BackgroundReplayCompletion,
   ) => Promise<
-    "applied" | "blocked" | "unchanged" | "retryable" | "isolated" | "failed"
+    | "applied"
+    | "blocked"
+    | "unchanged"
+    | "retryable"
+    | "isolated"
+    | "failed"
+    | "retry-exhausted"
+    | "retry-terminal"
   >;
   recordFailure: (
     batch: BackgroundReplayBatch,
@@ -117,10 +126,17 @@ export type BackgroundReplayDependencies = {
       verdict: Verdict;
       healthyEvidence: "adjacent-row" | "none";
     },
-  ) => Promise<"retryable" | "failed" | "applied" | "isolated">;
+  ) => Promise<
+    | "retryable"
+    | "failed"
+    | "applied"
+    | "isolated"
+    | "retry-exhausted"
+    | "retry-terminal"
+  >;
   pickUpBatch: (
     batch: BackgroundReplayBatch,
-  ) => Promise<"ready" | "failed" | "waiting">;
+  ) => Promise<"ready" | "retry-exhausted" | "retry-terminal" | "waiting">;
   advancePreview: (batch: BackgroundReplayBatch) => Promise<void>;
   metric: (report: BackgroundReplayTickReport) => void;
   now: () => number;
@@ -233,6 +249,20 @@ const replayFailureStop = ({ mode, code, scope }: ReplayFailureStopOptions) => {
   return mode === "dry-run" ? "retryable" : null;
 };
 
+const countFailedOutcome = (
+  outcome: Awaited<ReturnType<BackgroundReplayDependencies["completeBatch"]>>,
+  report: BackgroundReplayTickReport,
+) => {
+  const failed =
+    outcome === "failed" ||
+    outcome === "retry-exhausted" ||
+    outcome === "retry-terminal";
+  report.failed += Number(failed);
+  report.retryExhausted += Number(outcome === "retry-exhausted");
+  report.retryTerminal += Number(outcome === "retry-terminal");
+  return failed;
+};
+
 const runReplayBatch = async ({
   dependencies,
   source,
@@ -279,11 +309,11 @@ const runReplayBatch = async ({
     if (completion.isOk()) {
       report.applied += Number(completion.value === "applied");
       report.blocked += Number(completion.value === "blocked");
-      report.failed += Number(completion.value === "failed");
+      const failed = countFailedOutcome(completion.value, report);
       report.errors += Number(
         completion.value === "retryable" ||
           completion.value === "isolated" ||
-          completion.value === "failed",
+          failed,
       );
       if (completion.value === "retryable") {
         stop = "failed";
@@ -308,16 +338,19 @@ const runReplayBatch = async ({
         }),
     );
     if (settlement.isOk()) {
-      if (settlement.value === "isolated" || settlement.value === "failed") {
+      const failed = countFailedOutcome(settlement.value, report);
+      if (settlement.value === "isolated" || failed) {
         settledScope = "row";
       }
-      report.failed += Number(settlement.value === "failed");
       report.applied += Number(settlement.value === "applied");
     } else {
       stop = "failed";
     }
     stop ??=
-      settlement.isOk() && settlement.value === "failed"
+      settlement.isOk() &&
+      (settlement.value === "failed" ||
+        settlement.value === "retry-exhausted" ||
+        settlement.value === "retry-terminal")
         ? null
         : replayFailureStop({
             mode: source.mode,
@@ -350,8 +383,8 @@ const pickUpReplayBatch = async ({
   if (pickedUp === "waiting") {
     return { type: "stopped", status: "retryable" } as const;
   }
-  if (pickedUp === "failed") {
-    return { type: "failed" } as const;
+  if (pickedUp === "retry-exhausted" || pickedUp === "retry-terminal") {
+    return { type: "failed", outcome: pickedUp } as const;
   }
   const afterPickup = await stopRequested();
   if (afterPickup === null) {
@@ -486,7 +519,7 @@ const runReplayLoop = async ({
         }
         if (pickedUp.type === "failed") {
           report.attempted += 1;
-          report.failed += 1;
+          countFailedOutcome(pickedUp.outcome, report);
           report.errors += 1;
           await releaseSlot?.();
           releaseSlot = null;
@@ -562,6 +595,8 @@ export const runBackgroundReplayTick = async ({
       blocked: 0,
       errors: 0,
       failed: 0,
+      retryExhausted: 0,
+      retryTerminal: 0,
       heldTooLong: false,
     };
     dependencies.metric(report);
@@ -579,6 +614,8 @@ export const runBackgroundReplayTick = async ({
       blocked: 0,
       errors: 0,
       failed: 0,
+      retryExhausted: 0,
+      retryTerminal: 0,
       heldTooLong: false,
     };
     dependencies.metric(report);
@@ -593,6 +630,8 @@ export const runBackgroundReplayTick = async ({
     blocked: 0,
     errors: 0,
     failed: 0,
+    retryExhausted: 0,
+    retryTerminal: 0,
     heldTooLong: false,
   };
   const finish = (status: BackgroundReplayTickStatus) => {

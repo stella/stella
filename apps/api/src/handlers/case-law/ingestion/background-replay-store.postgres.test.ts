@@ -1455,7 +1455,7 @@ if (!databaseUrl || !enabled) {
         expect(await store.pickUpBatch(recovered.batch)).toBe("ready");
         expect(await store.recordFailure(recovered.batch, failure)).toBe(
           attempt === BACKGROUND_REPLAY_LIMITS.maxRowAttempts
-            ? "failed"
+            ? "retry-exhausted"
             : "retryable",
         );
       }
@@ -1466,15 +1466,44 @@ if (!databaseUrl || !enabled) {
           .where(eq(caseLawReplayBatches.id, first.batch.id))
       ).at(0);
       expect(failed).toMatchObject({
-        status: "failed",
+        status: "retry-exhausted",
         attempts: BACKGROUND_REPLAY_LIMITS.maxRowAttempts,
+        readmissions: 0,
         failed: 1,
         failureCode: "adapter-exception",
         failureMessageClass: "adapter",
+        retryAt: new Date(
+          currentTime + BACKGROUND_REPLAY_LIMITS.rowReadmissionDelayMs,
+        ),
       });
       expect(await store.pendingBatch(source, "2026-10-01")).toEqual({
         type: "empty",
       });
+      currentTime += BACKGROUND_REPLAY_LIMITS.rowReadmissionDelayMs - 1;
+      expect(await store.pendingBatch(source, "2026-10-08")).toEqual({
+        type: "empty",
+      });
+      currentTime++;
+      expect(await store.pendingBatch(source, "2026-10-08")).toEqual(first);
+      expect(
+        (
+          await db
+            .select()
+            .from(caseLawReplayBatches)
+            .where(eq(caseLawReplayBatches.id, first.batch.id))
+        ).at(0),
+      ).toMatchObject({
+        status: "reserved",
+        attempts: 0,
+        readmissions: 1,
+        failed: 0,
+        systemicFailures: 0,
+        systemicProgress: 0,
+        attemptState: "idle",
+        retryAt: null,
+      });
+      expect(await store.pickUpBatch(first.batch)).toBe("ready");
+      expect(await store.recordFailure(first.batch, failure)).toBe("retryable");
       const next = await store.reserveBatch(source, "2026-10-01", verdict());
       expect(next.type).toBe("reserved");
       if (next.type !== "reserved") {
@@ -1483,7 +1512,7 @@ if (!databaseUrl || !enabled) {
       expect(next.batch.decisionId).toBe(ids[2]);
     });
 
-    test("crashed pickups stay excluded at their checked parser version after the retry budget", async () => {
+    test("crashed pickups wait seven days between bounded readmissions and remain visible when terminal", async () => {
       const { source } = await fixture(30);
       let time = Date.UTC(2026, 9, 1);
       const store = createBackgroundReplayStore({ db, now: () => time });
@@ -1492,36 +1521,91 @@ if (!databaseUrl || !enabled) {
         throw new TypeError("Expected crash fixture");
       }
       for (
-        let attempt = 0;
-        attempt < BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
-        attempt++
+        let readmissions = 0;
+        readmissions <= BACKGROUND_REPLAY_LIMITS.maxRowReadmissions;
+        readmissions++
       ) {
-        expect(await store.pickUpBatch(first.batch)).toBe("ready");
-        time += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+        for (
+          let attempt = 0;
+          attempt < BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
+          attempt++
+        ) {
+          expect(await store.pickUpBatch(first.batch)).toBe("ready");
+          time += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+        }
+        const terminal =
+          readmissions === BACKGROUND_REPLAY_LIMITS.maxRowReadmissions;
+        expect(await store.pickUpBatch(first.batch)).toBe(
+          terminal ? "retry-terminal" : "retry-exhausted",
+        );
+        const exhausted = (
+          await db
+            .select()
+            .from(caseLawReplayBatches)
+            .where(eq(caseLawReplayBatches.id, first.batch.id))
+        ).at(0);
+        expect(exhausted).toMatchObject({
+          status: terminal ? "retry-terminal" : "retry-exhausted",
+          attempts: BACKGROUND_REPLAY_LIMITS.maxRowAttempts,
+          readmissions,
+          failed: 1,
+          failureCode: "unexpected",
+          retryAt: terminal
+            ? null
+            : new Date(time + BACKGROUND_REPLAY_LIMITS.rowReadmissionDelayMs),
+        });
+        expect(await store.pickUpBatch(first.batch)).toBe("waiting");
+        expect(
+          await db
+            .select()
+            .from(caseLawReplayBlocked)
+            .where(eq(caseLawReplayBlocked.decisionId, first.batch.decisionId)),
+        ).toHaveLength(0);
+        expect(
+          await selectScopeEnd({
+            scopedDb,
+            sourceId: source.id,
+            scope: { type: "decision", decisionId: first.batch.decisionId },
+            selection: {
+              type: "background",
+              currentParserVersion: 2,
+              mode: "enrolled",
+            },
+          }),
+        ).toBeNull();
+        time += BACKGROUND_REPLAY_LIMITS.rowReadmissionDelayMs - 1;
+        expect(await store.pendingBatch(source, "2026-10-08")).toEqual({
+          type: "empty",
+        });
+        time++;
+        const recovered = await store.pendingBatch(source, "2026-10-08");
+        if (terminal) {
+          expect(recovered).toEqual({ type: "empty" });
+          time += BACKGROUND_REPLAY_LIMITS.rowReadmissionDelayMs;
+          expect(await store.pendingBatch(source, "2026-10-08")).toEqual({
+            type: "empty",
+          });
+          continue;
+        }
+        expect(recovered).toEqual(first);
+        expect(
+          (
+            await db
+              .select()
+              .from(caseLawReplayBatches)
+              .where(eq(caseLawReplayBatches.id, first.batch.id))
+          ).at(0),
+        ).toMatchObject({
+          status: "reserved",
+          attempts: 0,
+          attemptState: "idle",
+          failed: 0,
+          systemicFailures: 0,
+          systemicProgress: 0,
+          readmissions: readmissions + 1,
+          retryAt: null,
+        });
       }
-      expect(await store.pickUpBatch(first.batch)).toBe("failed");
-      time += 7 * DAY_IN_MS;
-      expect(await store.pendingBatch(source, "2026-10-08")).toEqual({
-        type: "empty",
-      });
-      expect(await store.pickUpBatch(first.batch)).toBe("failed");
-      const receipt = (
-        await db
-          .select()
-          .from(caseLawReplayBatches)
-          .where(eq(caseLawReplayBatches.id, first.batch.id))
-      ).at(0);
-      expect(receipt).toMatchObject({
-        status: "failed",
-        attempts: BACKGROUND_REPLAY_LIMITS.maxRowAttempts,
-        retryAt: null,
-      });
-      expect(
-        await db
-          .select()
-          .from(caseLawReplayBlocked)
-          .where(eq(caseLawReplayBlocked.decisionId, first.batch.decisionId)),
-      ).toHaveLength(0);
       const scope = {
         type: "decision",
         decisionId: first.batch.decisionId,
@@ -2294,6 +2378,8 @@ if (!databaseUrl || !enabled) {
         errors: 0,
         failed: 0,
         heldTooLong: false,
+        retryExhausted: 0,
+        retryTerminal: 0,
       } as const;
       expect((await store.recordTick(report))?.ticksWithoutProgress).toBe(1);
       const restarted = createBackgroundReplayStore({

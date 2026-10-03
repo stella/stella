@@ -566,29 +566,74 @@ test("the hard deadline settles as systemic and yields a successful time limit",
   expect(settled).toBe(true);
 });
 
-test("a crash-exhausted pickup yields to the next row without invoking its writer", async () => {
-  const state = fixture(3);
-  const pending = state.dependencies.pendingBatch;
-  let exhausted = false;
-  state.dependencies.pendingBatch = async (...args) =>
-    exhausted ? { type: "empty" } : await pending(...args);
-  state.dependencies.pickUpBatch = async () => {
-    if (!exhausted) {
-      exhausted = true;
-      return "failed";
+test("exhausted and terminal pickups remain visible and yield without invoking their writer", async () => {
+  for (const outcome of ["retry-exhausted", "retry-terminal"] as const) {
+    const state = fixture(3);
+    const pending = state.dependencies.pendingBatch;
+    let exhausted = false;
+    state.dependencies.pendingBatch = async (...args) =>
+      exhausted ? { type: "empty" } : await pending(...args);
+    state.dependencies.pickUpBatch = async () => {
+      if (!exhausted) {
+        exhausted = true;
+        return outcome;
+      }
+      return "ready";
+    };
+    const report = await state.run(3);
+    expect(report).toMatchObject({
+      status: "row-limit",
+      attempted: 3,
+      failed: 1,
+      errors: 1,
+      applied: 2,
+      retryExhausted: Number(outcome === "retry-exhausted"),
+      retryTerminal: Number(outcome === "retry-terminal"),
+    });
+    expect(state.counts().completed).toBe(2);
+    expect(state.counts().leased).toBe(false);
+    expect(state.counts().slotted).toBe(false);
+  }
+});
+
+test("completion and failure settlement expose exhausted and terminal rows while allowing later work", async () => {
+  for (const outcome of ["retry-exhausted", "retry-terminal"] as const) {
+    for (const path of ["completion", "failure"] as const) {
+      const state = fixture(2);
+      let first = true;
+      if (path === "completion") {
+        const complete = state.dependencies.completeBatch;
+        state.dependencies.completeBatch = async (...args) => {
+          if (first) {
+            first = false;
+            return outcome;
+          }
+          return await complete(...args);
+        };
+      } else {
+        state.dependencies.recordFailure = async () => outcome;
+        state.dependencies.replay = async (batch) => {
+          if (first) {
+            first = false;
+            throw new ReplayStageError({
+              message: "fixture systemic failure",
+              failure: replayFailure("adapter-exception"),
+            });
+          }
+          return state.success(batch);
+        };
+      }
+      expect(await state.run(2)).toMatchObject({
+        status: "row-limit",
+        attempted: 2,
+        failed: 1,
+        errors: 1,
+        applied: 1,
+        retryExhausted: Number(outcome === "retry-exhausted"),
+        retryTerminal: Number(outcome === "retry-terminal"),
+      });
     }
-    return "ready";
-  };
-  const report = await state.run(3);
-  expect(report).toMatchObject({
-    status: "row-limit",
-    attempted: 3,
-    failed: 1,
-    applied: 2,
-  });
-  expect(state.counts().completed).toBe(2);
-  expect(state.counts().leased).toBe(false);
-  expect(state.counts().slotted).toBe(false);
+  }
 });
 
 test("an isolated systemic row yields while a real outage stops without exhausting a row", async () => {
