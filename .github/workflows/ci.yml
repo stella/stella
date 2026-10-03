@@ -2106,6 +2106,12 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/check-projection-totality.test.ts
 
+      - name: Office fixture metadata
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: |
+          bun run check:office-fixture-metadata
+          bun test scripts/check-office-fixture-metadata.test.ts
+
       # Root script tests belong to no workspace package, so no scoped test
       # run reaches them. The steps above call some by path; this runs every
       # other one, so a new test cannot miss CI by missing a step.
