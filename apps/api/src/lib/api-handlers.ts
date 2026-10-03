@@ -1,4 +1,4 @@
-import type { TSchema } from "@sinclair/typebox";
+import type { Static, TSchema } from "@sinclair/typebox";
 import type { Err } from "better-result";
 import { Result, UnhandledException } from "better-result";
 import type { Context, InputSchema, UnwrapRoute } from "elysia";
@@ -1641,12 +1641,56 @@ const toBoundedPublicErrorStatus = (
   body: SafeErrorBody,
 ) => toSafePublicStatusResponse(statusCode, projectPublicErrorBody(body));
 
+/** What a handler answers with a 200: its result minus statuses and raw bodies. */
+type SuccessPayload<TResult> = TResult extends
+  | ElysiaCustomStatusResponse<infer _Code, infer _Body, infer _Status>
+  | Response
+  ? never
+  : TResult;
+
 /**
- * A public corpus route: every error answers with the bounded public body
- * (`safePublicHandlerErrorResponseSchema`), whether the failure is handled
- * by the factory or returned as a status by the handler itself.
+ * A payload with every array and property readonly. Primitives, branded ones
+ * included, and `unknown` stay as they are; the mapped type is homomorphic, so
+ * tuples stay tuples.
  */
-export const createSafeBoundedPublicHandler = <
+type ReadonlyWire<T> = unknown extends T
+  ? T
+  : T extends string | number | boolean | bigint | null | undefined
+    ? T
+    : { readonly [Key in keyof T]: ReadonlyWire<T[Key]> };
+
+/**
+ * Binds a public route's 200 schema to the data its handler returns.
+ *
+ * Elysia checks only that the payload is assignable to the schema, and Eden
+ * types the client from the schema, so a schema looser than the data (a plain
+ * string for a `SafeId`, `X | null` for `X`, `number` for a literal, a key the
+ * data never has) compiles and misdescribes the wire. Requiring the reverse
+ * direction too makes the two mutually assignable. Readonly differences do not
+ * count: the schema is compared with a readonly view of the data, which a
+ * readonly or a mutable schema array are both assignable to.
+ */
+export type ExactSuccessSchemaGuard<TConfig, TResult> = TConfig extends {
+  response: { 200: infer TSuccessSchema extends TSchema };
+}
+  ? [SuccessPayload<TResult>] extends [never]
+    ? unknown
+    : [Static<TSuccessSchema>] extends [ReadonlyWire<SuccessPayload<TResult>>]
+      ? unknown
+      : {
+          responseSchemaLooserThanData: {
+            schema: Static<TSuccessSchema>;
+            data: SuccessPayload<TResult>;
+          };
+        }
+  : unknown;
+
+/**
+ * `createSafeBoundedPublicHandler` without the schema guard, for a factory
+ * whose result type is still generic where it calls this one; that factory
+ * applies `ExactSuccessSchemaGuard` on its own entry points instead.
+ */
+export const createSafeUncheckedBoundedPublicHandler = <
   TConfig extends PublicHandlerConfig,
   TResult extends SafeHandlerPayload,
 >(
@@ -1686,6 +1730,20 @@ export const createSafeBoundedPublicHandler = <
   safePublicHandlers.set(definition.handler, config.cache);
   return definition;
 };
+
+/**
+ * A public corpus route: every error answers with the bounded public body
+ * (`safePublicHandlerErrorResponseSchema`), whether the failure is handled
+ * by the factory or returned as a status by the handler itself.
+ */
+export const createSafeBoundedPublicHandler = <
+  TConfig extends PublicHandlerConfig,
+  TResult extends SafeHandlerPayload,
+>(
+  config: TConfig,
+  handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult> &
+    NoInfer<ExactSuccessSchemaGuard<TConfig, TResult>>,
+) => createSafeUncheckedBoundedPublicHandler(config, handler);
 
 /**
  * Whether a failure also reaches the exception reporter.
