@@ -278,6 +278,7 @@ export type {
   GuideProgressTourId,
 } from "./guide-progress";
 export {
+  CLAUSE_VERSION_LIMIT_ERROR_CODE,
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
@@ -445,14 +446,18 @@ export type {
   ContactImportVocabularyId,
 } from "./contact-import-labeled";
 export {
+  CONVERTIBLE_VIEW_LAYOUTS,
   DIRECTLY_CREATABLE_VIEW_LAYOUTS,
   isRequiredViewLayout,
+  isSingleViewLayout,
   REQUIRED_VIEW_LAYOUTS,
   VIEW_LAYOUT_TYPES,
 } from "./view-layout";
 export type {
+  ConvertibleViewLayoutType,
   DirectlyCreatableViewLayoutType,
   RequiredViewLayoutType,
+  SingleViewLayoutType,
   ViewLayoutType,
 } from "./view-layout";
 export type {

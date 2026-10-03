@@ -55,6 +55,14 @@
       "types": "./src/sk-provision-citation-profile.ts",
       "import": "./src/sk-provision-citation-profile.ts"
     },
+    "./document-fetch-diagnostics": {
+      "types": "./src/document-fetch-diagnostics.ts",
+      "import": "./src/document-fetch-diagnostics.ts"
+    },
+    "./document-stage-observer": {
+      "types": "./src/document-stage-observer.ts",
+      "import": "./src/document-stage-observer.ts"
+    },
     "./sk-document-fetch-diagnostics": {
       "types": "./src/sk-document-fetch-diagnostics.ts",
       "import": "./src/sk-document-fetch-diagnostics.ts"
@@ -71,6 +79,7 @@
   },
   "dependencies": {
     "@stll/api-contract": "workspace:*",
+    "@stll/concurrency": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "better-result": "catalog:"
   },

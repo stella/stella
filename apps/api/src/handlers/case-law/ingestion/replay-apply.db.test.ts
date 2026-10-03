@@ -125,6 +125,8 @@ const stubAdapter = (
   reparse: NonNullable<SourceAdapter["reparseStoredRaw"]>,
 ): SourceAdapter => ({
   key: ADAPTER_KEYS.EU_ECJ,
+  documentStage: "inline",
+  observeDocumentStage: async ({ fetchPage }) => await fetchPage(),
   sourceFields: { status: "declared", fields: {}, listSourceFields: () => [] },
   sourceSurfaces: { surfaces: {} },
   name: "replay apply stub",

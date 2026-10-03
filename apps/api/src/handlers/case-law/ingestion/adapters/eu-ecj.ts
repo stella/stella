@@ -1,4 +1,4 @@
-// parser-output-unchanged: opt into publisher retries; fetched response parsing is unchanged.
+// parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
@@ -497,6 +497,7 @@ const queryDecisions = async ({
   const query = buildListingQuery({ dateFrom, dateTo, celexFilter });
 
   const response = await fetchPublisher(SPARQL_URL, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     method: "POST",
@@ -804,6 +805,7 @@ const readDocumentResponse = async ({
 }: ReadDocumentOptions): Promise<ManifestationRead> => {
   const url = `${CELLAR_CONTENT_BASE}/${resource}`;
   const response = await fetchPublisher(url, {
+    fetchStage: "document",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     signal,
@@ -1791,6 +1793,7 @@ const fetchNotice = async (
     return undefined;
   }
   const response = await fetchPublisher(`${CELLAR_CELEX_PREFIX}${celex}`, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     signal,
@@ -1854,6 +1857,7 @@ const fetchFormex = async (
     return { type: "not-located" };
   }
   const response = await fetchRequest(contentUrl.value, {
+    fetchStage: "document",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     signal,
@@ -2848,6 +2852,7 @@ const EU_ECJ_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const euEcjAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.EU_ECJ,
   sourceSurfaces: EU_ECJ_SOURCE_SURFACES,
   sourceFields: {
@@ -2887,6 +2892,7 @@ export const euEcjAdapter = defineSourceAdapter({
   async getTotalCount(signal) {
     try {
       const response = await fetchPublisher(SPARQL_URL, {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.EU_ECJ,
         retryPolicy: "publisher-backoff",
         method: "POST",

@@ -253,6 +253,8 @@ const replayerFor = async (
     .where(eq(caseLawDecisions.id, row.id));
   const adapter: SourceAdapter = {
     key: ADAPTER_KEYS.EU_ECJ,
+    documentStage: "inline",
+    observeDocumentStage: async ({ fetchPage }) => await fetchPage(),
     sourceFields: {
       status: "declared",
       fields: {},

@@ -3693,6 +3693,22 @@
           "minItems": 1,
           "description": "Ordered clause body paragraphs; required when creating. Each paragraph carries text and optional formatting."
         },
+        "expected_body": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "Paragraph text from the read body"
+              }
+            },
+            "required": ["text"],
+            "additionalProperties": {}
+          },
+          "minItems": 1,
+          "description": "Body from your last read; update only if the current body still matches. On conflict, read the clause again before saving."
+        },
         "category_id": {
           "anyOf": [
             {

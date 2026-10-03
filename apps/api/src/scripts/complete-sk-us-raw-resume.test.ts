@@ -537,6 +537,7 @@ test("every retryable row is durably journaled before stopping without advancing
           visited.push(row.id);
           return row.id === failed.id ? retryOutcome : "completed";
         },
+        record: () => {},
         journal: async (cursor, outcome) =>
           await journalSkUsRawOutcome({
             checkpointPath,
@@ -585,6 +586,7 @@ test("every retryable row is durably journaled before stopping without advancing
           resumedVisits.push(row.id);
           return "completed";
         },
+        record: () => {},
         journal: async (cursor, outcome) =>
           await journalSkUsRawOutcome({
             checkpointPath,
@@ -639,6 +641,7 @@ test("journal persistence failure prevents checkpoint advancement and later rows
           visited.push(row.id);
           return "completed";
         },
+        record: () => {},
         journal: async (cursor, outcome) =>
           await journalSkUsRawOutcome({
             checkpointPath,

@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 import { Result, panic } from "better-result";
 /**
  * Polish public-procurement rulings from the UZP decision database.
@@ -40,6 +41,7 @@ import {
   DECISION_IDENTIFIER_TYPES,
   type DecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
@@ -1061,6 +1063,7 @@ type Requested = { status: number; body: string; url: string };
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
 type RequestOptions = {
+  fetchStage: DocumentFetchStage;
   cursor: string;
   form?: URLSearchParams | undefined;
   path: string;
@@ -1073,6 +1076,7 @@ type Received = { status: number; bytes: Uint8Array | null; url: string };
 
 const receive = async ({
   cursor,
+  fetchStage,
   form,
   path,
   signal,
@@ -1099,7 +1103,12 @@ const receive = async ({
             },
       redirect: "error",
     },
-    { adapterKey: ADAPTER_KEYS.PL_KIO, signal, timeoutMs },
+    {
+      fetchStage,
+      adapterKey: ADAPTER_KEYS.PL_KIO,
+      signal,
+      timeoutMs,
+    },
   );
   const bytes =
     response.body === null
@@ -1172,6 +1181,7 @@ const listPage = async ({
   });
   const requested = await request({
     cursor,
+    fetchStage: "listing",
     form,
     path: LISTING_PATH,
     signal,
@@ -1258,6 +1268,7 @@ const fetchPlKioDecision = async ({
   }
   const detailRequested = await request({
     cursor,
+    fetchStage: "document",
     path: `/Home/Details/${id}`,
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -1287,6 +1298,7 @@ const fetchPlKioDecision = async ({
   }
   const content = await receive({
     cursor,
+    fetchStage: "document",
     path: documentPathOf(id, record.kind),
     signal,
     timeoutMs: ADAPTER_TIMEOUT.PAGE,
@@ -1716,6 +1728,7 @@ const plKioTotalCount = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const plKioAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_KIO,
   language: PL_KIO_LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,

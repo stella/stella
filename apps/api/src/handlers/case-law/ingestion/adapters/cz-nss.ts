@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 import { panic, Result } from "better-result";
 
 import {
@@ -749,6 +750,7 @@ const fetchRichDocument = async (
     const response = await fetchPublisher(
       `${BASE_URL}/DokumentOriginal/Html/${documentId}`,
       {
+        fetchStage: "document",
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         signal,
         headers: {
@@ -842,6 +844,7 @@ const fetchDecisionContent = async (
     const response = await fetchPublisher(
       `${BASE_URL}/DokumentOriginal/Text/${documentId}`,
       {
+        fetchStage: "document",
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         signal,
         headers: {
@@ -1400,6 +1403,7 @@ const readDetailPage = async (
     const response = await fetchPublisher(
       `${BASE_URL}/DokumentDetail/Index/${documentId}`,
       {
+        fetchStage: "document",
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         signal,
         headers: {
@@ -1912,6 +1916,7 @@ let cachedSession: {
 
 const initSession = async (signal: AbortSignal): Promise<SessionState> => {
   const response = await fetchPublisher(BASE_URL, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.CZ_NSS,
     signal,
     redirect: "follow",
@@ -2013,6 +2018,7 @@ const executeSearch = async (
   formData.set(DATE_TO_FIELD, czDate);
 
   const response = await fetchPublisher(`${BASE_URL}/Home/Index`, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.CZ_NSS,
     method: "POST",
     signal,
@@ -2094,6 +2100,7 @@ const fetchResultPage = async ({
   formData.set("resultOrder", continuation.order);
 
   const response = await fetchPublisher(`${BASE_URL}/Home/MyResTRowsCont`, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.CZ_NSS,
     method: "POST",
     signal,
@@ -2590,6 +2597,7 @@ const CZ_NSS_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const czNssAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.CZ_NSS,
   sourceSurfaces: CZ_NSS_SOURCE_SURFACES,
   sourceFields: {
@@ -2635,6 +2643,7 @@ export const czNssAdapter = defineSourceAdapter({
       );
 
       const response = await fetchPublisher(`${BASE_URL}/Home/Index`, {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         method: "POST",
         signal,

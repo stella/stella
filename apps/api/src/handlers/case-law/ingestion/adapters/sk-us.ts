@@ -1,7 +1,7 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 import { Result, panic } from "better-result";
 import * as v from "valibot";
 
-import { classifyFailure } from "@stll/errors";
 /**
  * Slovak Constitutional Court (Ústavný súd SR) adapter.
  *
@@ -35,6 +35,8 @@ import { classifyFailure } from "@stll/errors";
  * the crawl cursor ever reaching it. See `reconciliation`
  * at the bottom of this file.
  */
+import { classifyFailure } from "@stll/errors";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
 import { Temporal } from "@stll/time";
 
@@ -362,7 +364,9 @@ const fetchPdfBytes = async (
 ): Promise<Uint8Array | undefined> => {
   try {
     const response = await fetchPublisher(`${DOC_DOWNLOAD_URL}/${documentId}`, {
+      fetchStage: "document",
       adapterKey: ADAPTER_KEYS.SK_US,
+      expectedContentType: "pdf",
       headers: { "User-Agent": INGESTION_USER_AGENT },
       signal,
       timeoutMs: 30_000,
@@ -409,12 +413,17 @@ const fetchPdfBytes = async (
  */
 const fetchJson = async (
   path: string,
-  init: { body?: string; signal?: AbortSignal },
+  init: {
+    body?: string;
+    signal?: AbortSignal;
+    fetchStage: DocumentFetchStage;
+  },
 ): Promise<string | undefined> =>
   (
     await Result.tryPromise({
       try: async (): Promise<string | undefined> => {
         const response = await fetchPublisher(`${SERVICE_URL}/${path}`, {
+          fetchStage: init.fetchStage,
           adapterKey: ADAPTER_KEYS.SK_US,
           ...(init.body === undefined
             ? {}
@@ -455,6 +464,7 @@ const fetchDocumentXhtml = async (
       documentId,
       docType: DECISION_DOC_TYPE,
     }),
+    fetchStage: "document",
     ...(signal === undefined ? {} : { signal }),
   });
   if (body === undefined) {
@@ -490,6 +500,7 @@ const fetchFacets = async (
   signal?: AbortSignal,
 ): Promise<string | undefined> =>
   await fetchJson(SEARCH_PATH, {
+    fetchStage: "listing",
     body: JSON.stringify({
       docType: DECISION_DOC_TYPE,
       start: 0,
@@ -522,6 +533,7 @@ const fetchCollectionListing = async (
   signal?: AbortSignal,
 ): Promise<string | undefined> =>
   await fetchJson(SEARCH_PATH, {
+    fetchStage: "listing",
     body: JSON.stringify({
       docType: COLLECTION_DOC_TYPE,
       start: 0,
@@ -560,6 +572,7 @@ const fetchCourtFile = async (
   signal?: AbortSignal,
 ): Promise<string | undefined> =>
   await fetchJson(`${COURT_FILE_PATH}/${rvpNumber.replace("/", ":")}`, {
+    fetchStage: "document",
     ...(signal === undefined ? {} : { signal }),
   });
 
@@ -668,6 +681,7 @@ const perKey = <T>(
 export const createSkUsPageContext = (): SkUsPageContext => {
   const codelist = perKey(async (_key, signal) => {
     const body = await fetchJson(CODELIST_PATH, {
+      fetchStage: "listing",
       ...(signal === undefined ? {} : { signal }),
     });
     return body === undefined ? undefined : parseCodelist(body);
@@ -851,6 +865,7 @@ export const fetchSkUsListing = async ({
       try: async (): Promise<SkUsListingFetchOutcome> => {
         const response = await request(SEARCH_URL, {
           adapterKey: ADAPTER_KEYS.SK_US,
+          fetchStage: "listing",
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1531,6 +1546,7 @@ const executeSearch = async ({
   signal,
 }: ExecuteSearchOptions): Promise<SearchResponse | null> => {
   const response = await fetchPublisher(SEARCH_URL, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_US,
     method: "POST",
     headers: {
@@ -2545,6 +2561,7 @@ const SK_US_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const skUsAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.SK_US,
   sourceSurfaces: SK_US_SOURCE_SURFACES,
   sourceFields: {

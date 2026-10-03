@@ -208,7 +208,11 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         let requests = 0;
         const response = await retryPublisherRequest(
           "https://publications.europa.eu/test",
-          { adapterKey: ADAPTER_KEYS.EU_ECJ, timeoutMs: 1000 },
+          {
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            fetchStage: "listing",
+            timeoutMs: 1000,
+          },
           {
             request: async (_url, init) => {
               await firstGate(init.signal);
@@ -269,7 +273,11 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         const retryWaits: number[] = [];
         const pending = retryPublisherRequest(
           "https://publications.europa.eu/test",
-          { adapterKey: ADAPTER_KEYS.EU_ECJ, timeoutMs: 1000 },
+          {
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            fetchStage: "listing",
+            timeoutMs: 1000,
+          },
           {
             request: async (_url, init) => {
               await firstGate(init.signal);

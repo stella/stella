@@ -41,6 +41,20 @@ export const switcherViews = <V extends { layout: { type: string } }>(
   avtEnabled ? [...views] : views.filter((view) => view.layout.type !== "avt");
 
 /**
+ * The view that lists a matter's correspondence, to link back to from one
+ * message. A matter may have removed it; the overview stands in, then any
+ * view. Null only while the matter has no views at all.
+ */
+export const correspondenceViewId = (
+  views: readonly { id: string; layout: { type: string } }[],
+): string | null =>
+  (
+    views.find((view) => view.layout.type === "correspondence") ??
+    views.find((view) => view.layout.type === "overview") ??
+    views.at(0)
+  )?.id ?? null;
+
+/**
  * Apply a partial change to a view layout.
  *
  * The generic preserves the union discriminant: a bare
