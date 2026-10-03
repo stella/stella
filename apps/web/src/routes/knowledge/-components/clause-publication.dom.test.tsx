@@ -11,9 +11,13 @@ import {
   test,
 } from "bun:test";
 
-import { CLAUSE_VERSION_LIMIT_ERROR_CODE } from "@stll/api-contract";
+import {
+  CLAUSE_VERSION_LIMIT_ERROR_CODE,
+  CLAUSE_DIRECTIVES_INVALID_CODE,
+} from "@stll/api-contract";
 
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
+import arabicMessages from "@/i18n/langs/ar.json";
 import englishMessages from "@/i18n/langs/en.json";
 
 import type { ClauseDetailTransport, ClauseHead } from "./clause-detail";
@@ -43,9 +47,9 @@ const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
     { preconnect: () => undefined },
   ),
 );
-const { QueryClient, QueryClientProvider } =
+const { QueryClient, QueryClientProvider, useQuery } =
   await import("@tanstack/react-query");
-const { act, cleanup, fireEvent, render, within } =
+const { act, cleanup, fireEvent, render, renderHook, waitFor, within } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { Editor } = await import("@tiptap/core");
@@ -112,7 +116,8 @@ afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
-const mountDetail = () => {
+const mountDetail = (locale: "en" | "ar" = "en") => {
+  const messages = locale === "ar" ? arabicMessages : englishMessages;
   const requests: (Operation & {
     deferred: ReturnType<typeof Promise.withResolvers<ClauseHead>>;
   })[] = [];
@@ -164,8 +169,8 @@ const mountDetail = () => {
   } satisfies ClauseDetailTransport;
   const content = (detail: typeof DETAIL) => (
     <QueryClientProvider client={queryClient}>
-      <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
-        <FormattingProvider locale="en" timeZone="UTC">
+      <IntlProvider locale={locale} messages={messages} timeZone="UTC">
+        <FormattingProvider locale={locale} timeZone="UTC">
           <button
             type="button"
             onClick={() => useClauseNavStore.getState().open?.exit()}
@@ -270,7 +275,7 @@ const mountDetail = () => {
     });
   };
   const saveButton = () =>
-    view.getByRole("button", { name: englishMessages.clauses.saveAsVersion });
+    view.getByRole("button", { name: messages.clauses.saveAsVersion });
   const rerenderBody = async (body: ClauseParagraph[]) =>
     act(() => view.rerender(content({ ...DETAIL, body })));
   const setRemote = (body: ClauseParagraph[]) => {
@@ -311,6 +316,81 @@ const mountDetail = () => {
 };
 
 describe("clause detail with the real editor", () => {
+  test("publishing the real editor invalidates mounted template discovery", async () => {
+    jest.useRealTimers();
+    const save = mountDetail();
+    let reads = 0;
+    const schema = renderHook(
+      () =>
+        useQuery({
+          queryKey: knowledgeKeys.templates.fillDiscover(
+            "org_1",
+            "template_1",
+            "version_1",
+          ),
+          queryFn: async () => ({ revision: ++reads }),
+          staleTime: Infinity,
+        }),
+      {
+        wrapper: ({ children }) => (
+          <QueryClientProvider client={save.queryClient}>
+            {children}
+          </QueryClientProvider>
+        ),
+      },
+    );
+    await waitFor(() =>
+      expect(schema.result.current.data).toEqual({ revision: 1 }),
+    );
+    await save.edit(B);
+    await save.click(save.saveButton());
+    await save.settle(0, B);
+    await waitFor(() =>
+      expect(schema.result.current.data).toEqual({ revision: 2 }),
+    );
+    schema.unmount();
+  });
+  test.each(["en", "ar"] as const)(
+    "an incomplete directive autosaves, reloads, and refuses only publication inline (%s)",
+    async (locale) => {
+      const messages = locale === "ar" ? arabicMessages : englishMessages;
+      const save = mountDetail(locale);
+      const draft = [{ text: "{% if %}" }];
+      await save.edit(draft);
+      await save.tick();
+      const autosave = await save.started(0);
+      expect(autosave).toMatchObject({ type: "save", write: { body: draft } });
+      expect(
+        autosave.type === "save" && autosave.write.snapshotVersion,
+      ).toBeUndefined();
+      await save.settle(0, draft);
+      expect(save.head().body).toEqual(draft);
+      save.reopen();
+      expect(save.editor().getText()).toBe("{% if %}");
+      await save.edit([{ text: "{% if party %}" }]);
+      await save.click(save.saveButton());
+      await save.settle(
+        1,
+        draft,
+        toAPIError({
+          status: 422,
+          value: {
+            code: CLAUSE_DIRECTIVES_INVALID_CODE,
+            message: "Clause paragraph 1 has invalid directives",
+          },
+        }),
+      );
+      expect(save.view.getByRole("alert").textContent).toBe(
+        messages.clauses.directivesInvalid,
+      );
+      expect(save.editor().getText()).toBe("{% if party %}");
+      expect(save.head().body).toEqual(draft);
+      expect(save.toast).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: "error" }),
+      );
+    },
+  );
+
   test.each([false, true])(
     "immediate version save retains the live body; later edit=%s",
     async (laterEdit) => {
