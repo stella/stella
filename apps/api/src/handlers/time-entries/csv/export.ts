@@ -107,6 +107,7 @@ export const exportCsvHandler = async ({
 };
 
 const config = {
+  accountAccess: "standard",
   description:
     "Export a matter's client time entries as CSV text, one row per entry with " +
     "date, timekeeper name, activity group, work item, minutes, rate, amount, billable flag, " +

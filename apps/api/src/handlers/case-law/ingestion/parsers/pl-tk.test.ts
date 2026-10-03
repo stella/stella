@@ -6,6 +6,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import * as cheerio from "cheerio";
 
 import {
   listPlTkPageFields,
@@ -68,8 +69,10 @@ describe("the case record", () => {
       "art. 111 par. 4",
     );
     expect(page?.record.constitutionalStandards[0]?.provisions).toHaveLength(7);
-    expect(page?.record.caseDocuments.map(({ url }) => url)).toContain(
-      "https://ipo.trybunal.gov.pl/ipo/dok?dok=a6aff75e-4944-4044-9015-b6af062d09c2%2FK_2_26_2026_06_25_transkrypcja.pdf",
+    expect(page?.record.caseDocuments.map(({ url }) => url)).toEqual(
+      expect.arrayContaining([
+        "https://ipo.trybunal.gov.pl/ipo/dok?dok=a6aff75e-4944-4044-9015-b6af062d09c2%2FK_2_26_2026_06_25_transkrypcja.pdf",
+      ]),
     );
   });
 
@@ -126,7 +129,8 @@ describe("one ruling's tab", () => {
       { name: "Wojciech Sych", judgeId: "630", functions: ["sprawozdawca"] },
       { name: "Andrzej Zielonacki", judgeId: "570", functions: [] },
     ]);
-    expect(ruling.wordDocumentUrl).toBe(
+    expect(ruling).toHaveProperty(
+      "wordDocumentUrl",
       "https://ipo.trybunal.gov.pl/ipo/downloadOrzeczenieDoc?dok=124529",
     );
   });
@@ -146,7 +150,7 @@ describe("one ruling's tab", () => {
     const ruling = await rulingOf("pl-tk-case-k-44-16.html.gz", "16940");
 
     expect(ruling.decisionForm).toBe("Rozstrzygnięcie");
-    expect(ruling.publications).toEqual([
+    expect(ruling).toHaveProperty("publications", [
       {
         text: "OTK ZU A/2018, poz. 33",
         links: [
@@ -412,4 +416,53 @@ describe("the court a ruling names", () => {
 
     expect(court).toBeUndefined();
   });
+});
+
+for (const href of [
+  "/ipo/dok?dok=F 1.pdf",
+  "/ipo/dok?dok=F:1.pdf",
+  "",
+  "   ",
+  ["javascript", "alert(1)"].join(":"),
+]) {
+  test(`portal document links retain known-base resolution or whole-entry omission: ${href}`, async () => {
+    const $ = cheerio.load(await casePage("pl-tk-case-k-2-26.html.gz"));
+    const documents = $('[id="sprawaForm:tabView:dokumentyWSprawie"]');
+    documents.empty().append("<ul><li><a>Document</a></li></ul>");
+    documents.find("a").attr("href", href);
+    const page = readPlTkCasePage($.html());
+    expect(page).not.toBeNull();
+    expect(page?.record).toHaveProperty(
+      "caseDocuments",
+      href.startsWith("/")
+        ? [
+            {
+              text: "Document",
+              url: new URL(href, "https://ipo.trybunal.gov.pl/ipo/").href,
+            },
+          ]
+        : [],
+    );
+  });
+}
+
+test("excludes script and style from ruling metadata", () => {
+  const ruling = readPlTkRuling(
+    `<div id="sprawaForm:tabView:dok_1">
+    <div class="prop"><div class="name">Dotyczy<script>bad-label</script></div><div class="value">Visible<style>bad-value</style> subject</div></div>
+    <div class="prop"><div class="name">Miejsce publikacji</div><div class="value"><table><tr><td><table><tr><td>Dz.U.<script>bad-citation</script> 2026</td><td>other register</td></tr></table></td><td><a href="https://example.org">ISAP<style>bad-link</style></a></td></tr></table></div></div>
+    <div id="tekst_1"><p>Visible decision<script>bad-script</script><style>bad-style</style></p></div>
+  </div>`,
+    "1",
+  );
+  expect(ruling?.textHtml).toBe("<p>Visible decision</p>");
+  expect(ruling?.subject).toBe("Visible subject");
+  expect(ruling?.publications).toHaveLength(1);
+  const publication = ruling?.publications.at(0);
+  expect(publication?.text).toBe("Dz.U. 2026");
+  expect(publication?.links).toHaveLength(1);
+  expect(publication?.links.at(0)?.text).toBe("ISAP");
+  const url = publication?.links.at(0)?.url;
+  // A defect object is not a string and fails the comparison.
+  expect(typeof url === "string" && url === "https://example.org/").toBe(true);
 });

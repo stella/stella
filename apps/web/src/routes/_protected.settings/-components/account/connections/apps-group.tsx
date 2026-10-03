@@ -45,6 +45,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   toOAuthScopeDisplayEntries,
   translateOAuthScopeEntry,
@@ -226,10 +227,7 @@ const DisconnectButton = ({ clientName, consentId }: DisconnectButtonProps) => {
     // On error the dialog stays open so the user keeps the per-app
     // context and can retry.
     onError: (error) => {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
       analytics.captureError(error);
     },
   });

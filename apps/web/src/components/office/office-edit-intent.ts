@@ -1,3 +1,6 @@
+import { typedCharacter } from "@stll/ui/typed-character";
+import type { TypedCharacterEvent } from "@stll/ui/typed-character";
+
 const EDIT_INTENT_KEYSTROKES_REQUIRED = 3;
 const EDIT_INTENT_WINDOW_MS = 1600;
 const EDIT_INTENT_PROMPT_COOLDOWN_MS = 10_000;
@@ -12,17 +15,10 @@ export const INITIAL_OFFICE_EDIT_INTENT_STATE: OfficeEditIntentState = {
   lastPromptedAt: null,
 };
 
-type OfficeEditIntentKey = Pick<
-  KeyboardEvent,
-  "altKey" | "ctrlKey" | "isComposing" | "key" | "metaKey" | "repeat"
->;
+type OfficeEditIntentKey = TypedCharacterEvent & Pick<KeyboardEvent, "repeat">;
 
-export const isOfficeEditIntentKey = (event: OfficeEditIntentKey): boolean => {
-  if (event.altKey || event.ctrlKey || event.metaKey || event.repeat) {
-    return false;
-  }
-  return event.key.length === 1 || event.isComposing;
-};
+export const isOfficeEditIntentKey = (event: OfficeEditIntentKey): boolean =>
+  !event.repeat && (event.isComposing || typedCharacter(event) !== null);
 
 type RegisterOfficeEditIntentKeystrokeOptions = {
   state: OfficeEditIntentState;

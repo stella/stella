@@ -21,7 +21,6 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import {
   UPLOAD_ENTITY_ORIGIN,
   uploadTriggeredFlowPolicy,
@@ -37,6 +36,7 @@ import { hasPersistedGeneratedDocumentActiveDraftContext } from "@/api/lib/chat/
 import { getGeneratedDocumentDraftState } from "@/api/lib/chat/created-draft";
 import { expandThreadDataScopeOnTx } from "@/api/lib/chat/data-scope";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
@@ -46,7 +46,7 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
-import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   allocateFileObject,
@@ -914,7 +914,7 @@ const uploadEntityHandler = async function* ({
   });
 
   const s3Keys = [sourceKey];
-  if (!env.FEATURE_FILE_USAGE_LIMITS) {
+  if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
     await writeS3ObjectWithRetry({
       contentType: file.type,
       data: storedBytes,
@@ -927,7 +927,7 @@ const uploadEntityHandler = async function* ({
   let keepUploadedFile = false;
   let writeOutcomeUncertain = false;
   try {
-    if (env.FEATURE_FILE_USAGE_LIMITS) {
+    if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
       const organizationFileWrite = await writeOrganizationFile({
         organizationId,
         objectKey: sourceKey,

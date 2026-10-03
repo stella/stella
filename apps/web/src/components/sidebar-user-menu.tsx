@@ -27,7 +27,6 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/menu";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { DevSidebarGroup } from "@/components/dev-sidebar-group";
@@ -53,7 +52,7 @@ import type { Role } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { sanitizeHref } from "@/lib/sanitize-href";
@@ -315,10 +314,7 @@ const OrganizationMenuSection = ({
         await navigate({ to: "/", replace: true });
       },
       onError: (error) => {
-        stellaToast.add({
-          title: userErrorFromThrown(error, t("errors.actionFailed")),
-          type: "error",
-        });
+        notifyUserError(error, t("errors.actionFailed"));
         analytics.captureError(error);
       },
     });

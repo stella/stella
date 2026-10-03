@@ -1,3 +1,4 @@
+import { HTTPClient } from "@openrouter/sdk";
 import { EventType } from "@tanstack/ai";
 import type { AdapterYieldChunk, ContentPart } from "@tanstack/ai";
 import { OpenRouterTextAdapter } from "@tanstack/ai-openrouter";
@@ -8,15 +9,26 @@ import type {
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { checkManagedOpenRouterModel } from "@/api/lib/chat/managed-provider-checks";
+import type { ManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import {
+  assertManagedOpenRouterModel,
+  fetchManagedOpenRouterCompletion,
   managedProviderUnavailable,
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   PROVIDER_DATA_POLICY,
+  withoutModelVariant,
 } from "@/api/lib/chat/provider-data-policy";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withOptionalsNullable } from "@/api/lib/json-schema/null-optionals";
-import { readProviderStatus } from "@/api/lib/observability/failure-evidence";
+import {
+  readEvidence,
+  readProviderStatus,
+} from "@/api/lib/observability/failure-evidence";
+import { isRecord } from "@/api/lib/type-guards";
 
 type OpenRouterModel = Parameters<typeof createOpenRouterText>[0];
 type OpenRouterTextOptions = Parameters<
@@ -51,6 +63,62 @@ const documentFilename = (part: ContentPart): string | undefined => {
  * remains on the stable upstream adapter.
  */
 export class StellaOpenRouterTextAdapter extends OpenRouterTextAdapter<OpenRouterModel> {
+  constructor(config: OpenRouterConfig, model: OpenRouterModel) {
+    super(config, model);
+    const sendRequest = this.orClient.chat.send.bind(this.orClient.chat);
+    type SendRequest = Parameters<typeof sendRequest>[0];
+    type SendOptions = Parameters<typeof sendRequest>[1];
+    type SendResponse = Awaited<ReturnType<typeof sendRequest>>;
+    type SendStreamResponse = Extract<SendResponse, AsyncIterable<unknown>>;
+    function sendWithRequestId(
+      request: SendRequest & { chatRequest: { stream?: false | undefined } },
+      options?: SendOptions,
+    ): Promise<Exclude<SendResponse, SendStreamResponse>>;
+    function sendWithRequestId(
+      request: SendRequest & { chatRequest: { stream: true } },
+      options?: SendOptions,
+    ): Promise<SendStreamResponse>;
+    function sendWithRequestId(
+      request: SendRequest,
+      options?: SendOptions,
+    ): Promise<SendResponse>;
+    async function sendWithRequestId(
+      request: SendRequest,
+      options?: SendOptions,
+    ) {
+      const result = await Result.tryPromise({
+        try: async () => await sendRequest(request, options),
+        catch: (error) => {
+          if (!isRecord(error) || !(error["rawResponse"] instanceof Response)) {
+            return error;
+          }
+          const requestId =
+            error["rawResponse"].headers.get("x-request-id") ??
+            error["rawResponse"].headers.get("request-id");
+          if (requestId === null) {
+            return error;
+          }
+          // The adapter carries provider-owned evidence through rawEvent.
+          // Project the request id here, while the SDK response is available.
+          Object.defineProperty(error, "rawEvent", {
+            configurable: true,
+            value: {
+              requestId,
+              status: readProviderStatus(error)?.status,
+              cause: error["rawEvent"] ?? error["error"] ?? error["metadata"],
+            },
+          });
+          return error;
+        },
+      });
+      if (Result.isError(result)) {
+        throw result.error;
+      }
+      return result.value;
+    }
+    this.orClient.chat.send = sendWithRequestId;
+  }
+
   // Some routes treat every declared tool field as one to fill, and write ""
   // or invented text into an optional one. On the wire an optional field
   // also admits null, so the model can say "not set"; the stream contract
@@ -106,6 +174,8 @@ const OPENROUTER_RETRY: NonNullable<OpenRouterConfig["retryConfig"]> = {
   retryConnectionErrors: true,
 };
 
+const OPENROUTER_DATA_REGION_FILTER = "Filter by Data Region";
+
 const isManagedRoutingRefusal = (error: unknown): boolean => {
   const status = readProviderStatus(error)?.status;
   if (status !== 404 || typeof error !== "object" || error === null) {
@@ -115,22 +185,84 @@ const isManagedRoutingRefusal = (error: unknown): boolean => {
     "error" in error && typeof error.error === "object" && error.error !== null
       ? error.error
       : error;
-  if (!("message" in body) || typeof body.message !== "string") {
+  if (
+    !("metadata" in body) ||
+    typeof body.metadata !== "object" ||
+    body.metadata === null ||
+    !("failed_routing_step" in body.metadata) ||
+    body.metadata.failed_routing_step !== OPENROUTER_DATA_REGION_FILTER
+  ) {
     return false;
   }
-  return /^No endpoints found (?:supporting your data region|matching your data policy)\.(?:\s|$)/iu.test(
-    body.message,
+  return true;
+};
+
+const checkManagedOpenRouterRequest = (
+  options: OpenRouterTextOptions,
+  residency: ManagedAIResidency,
+): Result<void, HandlerError<503>> => {
+  const selection = assertManagedOpenRouterModel(options.model);
+  if (Result.isError(selection)) {
+    return selection;
+  }
+  return checkManagedOpenRouterModel(
+    withoutModelVariant(options.model),
+    residency,
   );
 };
 
-const withManagedRoutingErrors = async function* (
+type ManagedRoutingOptions = {
+  stream: AsyncIterable<AdapterYieldChunk>;
+  options: OpenRouterTextOptions;
+  managedAIResidency: ManagedAIResidency;
+};
+
+const withManagedRequestEligibility = async function* ({
+  stream,
+  options,
+  managedAIResidency,
+}: ManagedRoutingOptions): AsyncGenerator<AdapterYieldChunk> {
+  const eligibility = checkManagedOpenRouterRequest(
+    options,
+    managedAIResidency,
+  );
+  if (Result.isError(eligibility)) {
+    yield {
+      type: EventType.RUN_STARTED,
+      runId: Bun.randomUUIDv7(),
+      threadId: options.threadId ?? Bun.randomUUIDv7(),
+      model: options.model,
+      timestamp: Temporal.Now.instant().epochMilliseconds,
+      ...(options.parentRunId === undefined
+        ? {}
+        : { parentRunId: options.parentRunId }),
+    };
+    yield {
+      type: EventType.RUN_ERROR,
+      model: options.model,
+      timestamp: Temporal.Now.instant().epochMilliseconds,
+      message: eligibility.error.message,
+      code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+      error: {
+        message: eligibility.error.message,
+        code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+      },
+    };
+    return;
+  }
+  yield* withManagedProviderErrors(stream, isManagedRoutingRefusal);
+};
+
+const withManagedProviderErrors = async function* (
   stream: AsyncIterable<AdapterYieldChunk>,
+  isUnavailable: (error: unknown) => boolean,
 ): AsyncGenerator<AdapterYieldChunk> {
   for await (const chunk of stream) {
     if (
       chunk.type !== EventType.RUN_ERROR ||
       chunk.code === "aborted" ||
-      !isManagedRoutingRefusal(chunk.rawEvent ?? chunk)
+      (chunk.code !== MANAGED_PROVIDER_UNAVAILABLE_CODE &&
+        !isUnavailable(chunk.rawEvent ?? chunk))
     ) {
       yield chunk;
       continue;
@@ -150,11 +282,6 @@ const withManagedRoutingErrors = async function* (
   }
 };
 
-const withoutModelVariant = (model: string): string => {
-  const variantStart = model.indexOf(":", model.lastIndexOf("/") + 1);
-  return variantStart === -1 ? model : model.slice(0, variantStart);
-};
-
 const INSTANCE_DEBUG_LOGGER = {
   group: () => undefined,
   groupEnd: () => undefined,
@@ -162,33 +289,127 @@ const INSTANCE_DEBUG_LOGGER = {
 } satisfies NonNullable<OpenRouterConfig["debugLogger"]>;
 
 class InstanceOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
-  constructor(config: OpenRouterConfig, model: OpenRouterModel) {
+  private readonly credential: ManagedOpenRouterCredential;
+  constructor(
+    config: OpenRouterConfig,
+    model: OpenRouterModel,
+    credential: ManagedOpenRouterCredential,
+  ) {
     // A truthy logger also prevents OPENROUTER_DEBUG from enabling SDK logs.
-    super({ ...config, debugLogger: INSTANCE_DEBUG_LOGGER }, model);
+    super(
+      {
+        ...config,
+        debugLogger: INSTANCE_DEBUG_LOGGER,
+        httpClient: new HTTPClient({
+          fetcher: async (
+            input: Request | URL | string,
+            init?: RequestInit,
+          ) => {
+            const request =
+              input instanceof Request
+                ? input
+                : new Request(input.toString(), init);
+            const result = await fetchManagedOpenRouterCompletion(request);
+            if (Result.isError(result)) {
+              throw result.error;
+            }
+            return result.value;
+          },
+        }),
+      },
+      model,
+    );
+    // Normalize after the SDK promise settles; rejecting its internal result
+    // promise leaves a second APIPromise branch unhandled.
+    const sendRequest = this.orClient.chat.send.bind(this.orClient.chat);
+    type SendRequest = Parameters<typeof sendRequest>[0];
+    type SendOptions = Parameters<typeof sendRequest>[1];
+    type SendResponse = Awaited<ReturnType<typeof sendRequest>>;
+    type SendStreamResponse = Extract<SendResponse, AsyncIterable<unknown>>;
+    function sendManagedRequest(
+      request: SendRequest & { chatRequest: { stream?: false | undefined } },
+      options?: SendOptions,
+    ): Promise<Exclude<SendResponse, SendStreamResponse>>;
+    function sendManagedRequest(
+      request: SendRequest & { chatRequest: { stream: true } },
+      options?: SendOptions,
+    ): Promise<SendStreamResponse>;
+    function sendManagedRequest(
+      request: SendRequest,
+      options?: SendOptions,
+    ): Promise<SendResponse>;
+    async function sendManagedRequest(
+      request: SendRequest,
+      options?: SendOptions,
+    ) {
+      const result = await Result.tryPromise({
+        try: async () => await sendRequest(request, options),
+        catch: (error) =>
+          readEvidence(error).nodes.some(
+            ({ code }) => code === MANAGED_PROVIDER_UNAVAILABLE_CODE,
+          )
+            ? managedProviderUnavailable("openrouter")
+            : error,
+      });
+      if (Result.isError(result)) {
+        throw result.error;
+      }
+      return result.value;
+    }
+    this.orClient.chat.send = sendManagedRequest;
+    this.credential = credential;
   }
 
+  private readonly isFederatedCredentialRefusal = (error: unknown): boolean => {
+    if (
+      this.credential.type !== "federated" ||
+      readProviderStatus(error)?.status !== 401
+    ) {
+      return false;
+    }
+    this.credential.invalidate();
+    return true;
+  };
+
   override chatStream(options: OpenRouterTextOptions) {
-    return super.chatStream({ ...options, logger: resolveDebugOption(false) });
+    return withManagedProviderErrors(
+      super.chatStream({ ...options, logger: resolveDebugOption(false) }),
+      this.isFederatedCredentialRefusal,
+    );
   }
 
   override structuredOutputStream(options: OpenRouterStructuredOptions) {
-    return super.structuredOutputStream({
-      ...options,
-      chatOptions: {
-        ...options.chatOptions,
-        logger: resolveDebugOption(false),
-      },
-    });
+    return withManagedProviderErrors(
+      super.structuredOutputStream({
+        ...options,
+        chatOptions: {
+          ...options.chatOptions,
+          logger: resolveDebugOption(false),
+        },
+      }),
+      this.isFederatedCredentialRefusal,
+    );
   }
 
   override async structuredOutput(options: OpenRouterStructuredOptions) {
-    return await super.structuredOutput({
-      ...options,
-      chatOptions: {
-        ...options.chatOptions,
-        logger: resolveDebugOption(false),
-      },
+    const result = await Result.tryPromise({
+      try: async () =>
+        await super.structuredOutput({
+          ...options,
+          chatOptions: {
+            ...options.chatOptions,
+            logger: resolveDebugOption(false),
+          },
+        }),
+      catch: (error) =>
+        this.isFederatedCredentialRefusal(error)
+          ? managedProviderUnavailable("openrouter")
+          : error,
     });
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    return result.value;
   }
 
   protected override mapOptionsToRequest(options: OpenRouterTextOptions) {
@@ -205,20 +426,38 @@ class ManagedOpenRouterTextAdapter extends InstanceOpenRouterTextAdapter {
     {
       model,
       managedAIResidency,
-    }: Pick<ManagedOpenRouterTextOptions, "model" | "managedAIResidency">,
+      credential,
+    }: Pick<ManagedOpenRouterTextOptions, "model" | "managedAIResidency"> & {
+      credential: ManagedOpenRouterCredential;
+    },
   ) {
-    super(config, model);
+    super(config, model, credential);
     this.residency = managedAIResidency;
   }
   override chatStream(options: OpenRouterTextOptions) {
-    return withManagedRoutingErrors(super.chatStream(options));
+    return withManagedRequestEligibility({
+      stream: super.chatStream(options),
+      options,
+      managedAIResidency: this.residency,
+    });
   }
 
   override structuredOutputStream(options: OpenRouterStructuredOptions) {
-    return withManagedRoutingErrors(super.structuredOutputStream(options));
+    return withManagedRequestEligibility({
+      stream: super.structuredOutputStream(options),
+      options: options.chatOptions,
+      managedAIResidency: this.residency,
+    });
   }
 
   override async structuredOutput(options: OpenRouterStructuredOptions) {
+    const eligibility = checkManagedOpenRouterRequest(
+      options.chatOptions,
+      this.residency,
+    );
+    if (Result.isError(eligibility)) {
+      throw eligibility.error;
+    }
     const result = await Result.tryPromise({
       try: async () => await super.structuredOutput(options),
       catch: (error) =>
@@ -234,10 +473,6 @@ class ManagedOpenRouterTextAdapter extends InstanceOpenRouterTextAdapter {
 
   protected override mapOptionsToRequest(options: OpenRouterTextOptions) {
     const model = withoutModelVariant(options.model);
-    const availability = checkManagedOpenRouterModel(model, this.residency);
-    if (Result.isError(availability)) {
-      throw availability.error;
-    }
     const {
       plugins: _plugins,
       variant: _variant,
@@ -260,33 +495,46 @@ class ManagedOpenRouterTextAdapter extends InstanceOpenRouterTextAdapter {
 
 type ManagedOpenRouterTextOptions = {
   model: OpenRouterModel;
-  apiKey: string;
   managedAIResidency: ManagedAIResidency;
+} & (
+  | { apiKey: string; credential?: never }
+  | { credential: ManagedOpenRouterCredential; apiKey?: never }
+);
+
+type ManagedOpenRouterTextResult = Result<
+  StellaOpenRouterTextAdapter,
+  HandlerError<503>
+>;
+
+export const createManagedOpenRouterText = (
+  options: ManagedOpenRouterTextOptions,
+): ManagedOpenRouterTextResult => {
+  const eligibility = assertManagedOpenRouterModel(options.model);
+  if (Result.isError(eligibility)) {
+    return eligibility;
+  }
+  const credential = options.credential ?? {
+    type: "static" as const,
+    apiKey: options.apiKey,
+  };
+  return Result.ok(
+    new ManagedOpenRouterTextAdapter(
+      {
+        apiKey: credential.apiKey,
+        retryConfig: OPENROUTER_RETRY,
+        serverURL:
+          PROVIDER_DATA_POLICY.customer.openrouter.serverURLs[
+            options.managedAIResidency
+          ],
+      },
+      {
+        model: options.model,
+        managedAIResidency: options.managedAIResidency,
+        credential,
+      },
+    ),
+  );
 };
-
-export const createManagedOpenRouterText = ({
-  model,
-  apiKey,
-  managedAIResidency,
-}: ManagedOpenRouterTextOptions): StellaOpenRouterTextAdapter =>
-  new ManagedOpenRouterTextAdapter(
-    {
-      apiKey,
-      retryConfig: OPENROUTER_RETRY,
-      serverURL:
-        PROVIDER_DATA_POLICY.customer.openrouter.serverURLs[managedAIResidency],
-    },
-    { model, managedAIResidency },
-  );
-
-export const createInstanceOpenRouterText = (
-  model: OpenRouterModel,
-  apiKey: string,
-): StellaOpenRouterTextAdapter =>
-  new InstanceOpenRouterTextAdapter(
-    { apiKey, retryConfig: OPENROUTER_RETRY },
-    model,
-  );
 
 export const createStellaOpenRouterText = (
   model: OpenRouterModel,

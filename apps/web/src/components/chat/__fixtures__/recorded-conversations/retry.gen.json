@@ -417,7 +417,7 @@
           },
           "ended": "complete",
           "response": {
-            "body": "data: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225621000}\n\ndata: {\"type\":\"RUN_ERROR\",\"timestamp\":1767225622000,\"message\":\"unknown\",\"metadata\":{\"tanstack\":{\"model\":\"scripted\"}},\"code\":\"unknown\"}\n\n",
+            "body": "data: {\"type\":\"TEXT_MESSAGE_START\",\"messageId\":\"00000000-0000-7000-8000-000000000003\",\"role\":\"assistant\",\"timestamp\":1767225621000}\n\ndata: {\"type\":\"RUN_ERROR\",\"timestamp\":1767225622000,\"message\":\"unknown\",\"code\":\"unknown\"}\n\n",
             "status": 200
           },
           "page": {

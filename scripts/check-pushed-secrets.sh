@@ -25,8 +25,11 @@ if [[ ! -t 0 ]]; then
     records=$((records + 1))
     # Deleting a remote ref publishes no commits.
     [[ "${local_oid}" == "${zero_oid}" ]] && continue
-    if [[ "${remote_oid}" == "${zero_oid}" ]]; then
-      # New remote ref: everything not already on any remote-tracking ref.
+    if [[ "${remote_oid}" == "${zero_oid}" ]] ||
+      ! git cat-file -e "${remote_oid}^{commit}" 2>/dev/null; then
+      # New remote ref, or a remote tip this clone has not fetched (gitleaks
+      # reads an unknown range as zero commits and exits 0): everything not
+      # already on any remote-tracking ref.
       ranges+=("${local_oid} --not --remotes")
     else
       ranges+=("${remote_oid}..${local_oid}")
@@ -47,6 +50,16 @@ if [[ ${#ranges[@]} -eq 0 ]]; then
     ranges+=("HEAD")
   fi
 fi
+
+# A scanner can exit 0 when Git cannot resolve the commits it was asked to
+# read, so every range must resolve before any scan result is trusted.
+for range in "${ranges[@]}"; do
+  read -r -a revisions <<<"${range}"
+  if ! git rev-list "${revisions[@]}" >/dev/null 2>&1; then
+    echo "error: cannot resolve pushed commit range ${range}; secret scanning refused." >&2
+    exit 1
+  fi
+done
 
 for range in "${ranges[@]}"; do
   gitleaks git --redact --no-banner --no-color --log-opts="${range}" .

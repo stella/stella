@@ -4,14 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { stellaToast } from "@stll/ui/toast";
 
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import type { ClauseBody } from "@/components/templates/clause-editor-types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
-import { userErrorMessage } from "@/lib/errors/user-safe";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
 type ClauseSlot = { patchKey: string; name: string; body: ClauseBody };
@@ -120,14 +119,7 @@ const ClauseFillItem = ({
     });
     setAdjusting(false);
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("ai.editWithAI"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
+      notifyUserError(toAPIError(response.error), t("ai.editWithAI"));
       return;
     }
     onChange(response.data.body);

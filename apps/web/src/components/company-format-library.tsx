@@ -27,7 +27,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
@@ -129,7 +129,7 @@ export const useCompanyFormatLibrary = ({
   };
   const onError = (error: unknown) => {
     getAnalytics().captureError(error);
-    stellaToast.error(userErrorFromThrown(error, t("templates.saveFailed")));
+    notifyUserError(error, t("templates.saveFailed"));
   };
   const create = useMutation({
     mutationFn: async (draft: { name: string; format: string }) =>

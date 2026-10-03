@@ -34,6 +34,7 @@ import {
   MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS,
   toScopeKey,
 } from "@/api/lib/matter-reference";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { runNumberingCopy } from "@/api/tests/helpers/document-numbering-copy";
 import { runNumberingUpload } from "@/api/tests/helpers/document-numbering-upload";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -354,7 +355,7 @@ describe("numbering paths preserve issued stamps across counter state", () => {
             id: clippedState.matter,
             status: "active",
           }),
-          memberRole: { role: "owner" },
+          memberRole: sessionMemberRole("owner"),
           body: { title: "Clipped source", url: "https://example.test/source" },
           createAuditRecorder: () => recordAuditEvent,
           recordAuditEvent,
@@ -514,7 +515,7 @@ describe("numbering paths preserve issued stamps across counter state", () => {
             ids.orgA,
             ids.userA1,
           ),
-          memberRole: { role: "owner" },
+          memberRole: sessionMemberRole("owner"),
           orgAIConfig: null,
           orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
           managedAIResidency: "eu" as const,
@@ -624,6 +625,7 @@ test("matter creation skips an already numbered reference candidate", async () =
   const created = expectOk(
     await Result.gen(() =>
       createWorkspaceHandler({
+        userEmail: "standard@example.test",
         safeDb: asTestRaw(createSafeDb(testDb, [], ids.orgA, ids.userA1)),
         organizationId: ids.orgA,
         userId: ids.userA1,
@@ -697,6 +699,7 @@ test.each([
     const create = async () =>
       await Result.gen(() =>
         createWorkspaceHandler({
+          userEmail: "standard@example.test",
           safeDb: asTestRaw(createSafeDb(testDb, [], ids.orgA, ids.userA1)),
           organizationId: ids.orgA,
           userId: ids.userA1,

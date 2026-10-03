@@ -21,6 +21,7 @@ import {
 } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   APPROVAL_TOOL_NAME,
   approvalToolArguments,
@@ -788,7 +789,7 @@ class ForkFrom implements fc.AsyncCommand<Model, Real> {
       asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
         body: { newThreadId: forkThreadId, upToMessageId },
         getWorkspaceAccess: async () => null,
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         params: { threadId: real.threadId },
         query: {},
         recordAuditEvent: async () => undefined,

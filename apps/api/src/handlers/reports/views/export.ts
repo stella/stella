@@ -37,6 +37,7 @@ import { excludedEntityKindsForView } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 
 const config = {
+  accountAccess: "standard",
   description:
     "Start an asynchronous DOCX or PDF export of a matter view using a selected report template. Returns an export ID to poll.",
   permissions: { workspace: ["read"], entity: ["create"] },

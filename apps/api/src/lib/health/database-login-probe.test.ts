@@ -66,6 +66,7 @@ const fakeConnection = ({
       opened += 1;
       const pending = Promise.withResolvers<unknown>();
       // Handled here too, for clients whose query never awaited it.
+      // swallow-ok: handles teardown of unused deferred queries; selectOne still exposes the original rejection
       pending.promise.catch(() => undefined);
       return {
         selectOne: query ?? (async () => await pending.promise),

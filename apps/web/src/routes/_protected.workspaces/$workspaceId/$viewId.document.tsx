@@ -37,9 +37,8 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { UploadIcon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
-import "@stll/folio-react/editor.css";
 import { cn, composeRefs } from "@stll/ui/utils";
+import "@stll/folio-react/editor.css";
 
 import {
   documentReviewPartiesOptions,
@@ -86,6 +85,7 @@ import {
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { documentPropertiesOptions, fileOptions } from "@/lib/files/queries";
 import {
   ENTITY_VERSION_UPLOAD_RESULT,
@@ -1189,10 +1189,7 @@ const DocumentDisplayUnavailable = ({
                 await openEntityInInspector(entityId, "", workspaceId);
               } catch (openError) {
                 getAnalytics().captureError(openError);
-                stellaToast.add({
-                  title: t("errors.actionFailed"),
-                  type: "error",
-                });
+                notifyUserError(openError, t("errors.actionFailed"));
               }
             })(),
             "document.open-in-side-panel",

@@ -34,6 +34,7 @@ import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceView } from "@/lib/types";
@@ -259,9 +260,7 @@ const ExportReportDialogBody = ({
 
     if (Result.isError(result)) {
       analytics.captureError(result.error);
-      stellaToast.add({
-        type: "error",
-        title: t("workspaces.views.reportExport.failed"),
+      notifyUserError(result.error, t("workspaces.views.reportExport.failed"), {
         description: t("common.unexpectedError"),
       });
       return;
@@ -274,14 +273,16 @@ const ExportReportDialogBody = ({
         setSubmission({ type: "refused", request, error });
         return;
       }
-      stellaToast.add({
-        type: "error",
-        title: t("workspaces.views.reportExport.failed"),
-        description: userErrorMessage(
-          result.value.error,
-          t("common.unexpectedError"),
-        ),
-      });
+      notifyUserError(
+        toAPIError(result.value.error),
+        t("workspaces.views.reportExport.failed"),
+        {
+          description: userErrorMessage(
+            result.value.error,
+            t("common.unexpectedError"),
+          ),
+        },
+      );
       return;
     }
 
@@ -342,21 +343,15 @@ const ExportReportDialogBody = ({
 
     if (Result.isError(result)) {
       analytics.captureError(result.error);
-      stellaToast.add({
-        type: "error",
-        title: t("common.unexpectedError"),
-      });
+      notifyUserError(result.error, t("common.unexpectedError"));
       return;
     }
     if (result.value.status === "error") {
       analytics.captureError(toAPIError(result.value.error));
-      stellaToast.add({
-        type: "error",
-        title: userErrorMessage(
-          result.value.error,
-          t("common.unexpectedError"),
-        ),
-      });
+      notifyUserError(
+        toAPIError(result.value.error),
+        t("common.unexpectedError"),
+      );
       return;
     }
 

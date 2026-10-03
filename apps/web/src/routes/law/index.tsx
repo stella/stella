@@ -20,6 +20,10 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
+import {
+  parseStatuteQuery,
+  type StatuteQueryIntent,
+} from "@stll/api-contract/statute-query-intent";
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
 import {
   ActivityIcon,
@@ -38,7 +42,6 @@ import {
   LandingSection,
 } from "@stll/ui/landing";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 
 import {
   publicCaseLawCountryFromParam,
@@ -55,15 +58,12 @@ import { latestDecisionsOptions } from "@/features/case-law/queries/decisions";
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
 import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { formatValidityDate } from "@/features/statutes/statute-format";
-import {
-  parseStatuteQuery,
-  type StatuteQueryIntent,
-} from "@/features/statutes/statute-query-intent";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { recordLawSearch, useLawSearchHistory } from "@/lib/law-search-history";
 import { pageTitle } from "@/lib/page-title";
 import {
@@ -274,7 +274,7 @@ function LawHome() {
     if (!decisionNotFound) {
       return;
     }
-    stellaToast.add({ title: t("caseLaw.decisionNotFound"), type: "error" });
+    notifyUserError(undefined, t("caseLaw.decisionNotFound"));
     detached(
       routeNavigate({
         replace: true,

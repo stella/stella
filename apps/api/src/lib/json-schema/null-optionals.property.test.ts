@@ -1,8 +1,10 @@
 import { Ajv } from "ajv";
+import { deepEquals } from "bun";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
+  assertProperty,
   propertyConfig,
   propertySeed,
   propertyTestTimeout,
@@ -13,6 +15,12 @@ import {
   withOptionalsNullable,
 } from "@/api/lib/json-schema/null-optionals";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import {
+  ownJsonKey,
+  ownKeyJsonObject,
+  prototypesIntact,
+  withOwnEntry,
+} from "@/api/tests/helpers/own-key-json";
 
 // A tool schema whose optional fields are widened to admit null on the wire,
 // and a model that spells some absent optional fields as null: reading the
@@ -391,4 +399,63 @@ test("a spelled-out absent field is one the declared schema refuses", () => {
   expect(ajv.validate(schema, sent)).toBe(false);
   expect(ajv.validate(widenedSchema(schema), sent)).toBe(true);
   expect(withModelPlaceholdersOmitted(schema, sent)).toEqual({ name: "draft" });
+});
+
+// Schemas that declare nothing, a plain property, keys named after inherited
+// members (parsed, so they are own), and every undeclared key. With no
+// placeholder (`null`, "") in the input, the fold must return it unchanged.
+const inheritedNamedProperties: unknown = JSON.parse(
+  '{"__proto__":{"type":"object"},"constructor":{"type":"integer"}}',
+);
+const ownKeySchema = fc.constantFrom<unknown>(
+  {},
+  { type: "object", properties: { a: { type: "string", minLength: 1 } } },
+  {
+    type: "object",
+    properties: inheritedNamedProperties,
+    additionalProperties: { type: "integer" },
+  },
+  { type: "object", additionalProperties: {} },
+);
+
+const placeholderFreeValue = fc.oneof(
+  fc.integer(),
+  fc.string({ minLength: 1, maxLength: 3 }),
+  ownKeyJsonObject({ nulls: false }),
+);
+
+test("withModelPlaceholdersOmitted keeps every own key as data", () => {
+  assertProperty(
+    "withModelPlaceholdersOmitted keeps every own key as data",
+    fc.property(
+      ownKeySchema,
+      ownKeyJsonObject({ nulls: false }),
+      (schema, value) => {
+        const folded = withModelPlaceholdersOmitted(schema, value);
+        expect(deepEquals(folded, value, true)).toBe(true);
+        expect(prototypesIntact(folded)).toBe(true);
+      },
+    ),
+  );
+});
+
+test("withModelPlaceholdersOmitted separates values that differ in one own key", () => {
+  assertProperty(
+    "withModelPlaceholdersOmitted separates values that differ in one own key",
+    fc.property(
+      ownKeySchema,
+      ownKeyJsonObject({ nulls: false }),
+      fc.nat(),
+      fc.tuple(ownJsonKey, placeholderFreeValue),
+      (schema, value, nodeIndex, entry) => {
+        const extended = withOwnEntry({ entry, nodeIndex, value });
+        expect(
+          deepEquals(
+            withModelPlaceholdersOmitted(schema, value),
+            withModelPlaceholdersOmitted(schema, extended),
+          ),
+        ).toBe(false);
+      },
+    ),
+  );
 });

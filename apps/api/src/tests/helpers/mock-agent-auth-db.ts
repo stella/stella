@@ -1,4 +1,5 @@
 import type { Logger } from "drizzle-orm";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import { oauthResource } from "@/api/db/auth-schema";
 import { rlsDb, rootDb } from "@/api/db/root";
@@ -37,16 +38,55 @@ const originalRlsTransactionDescriptor = Object.getOwnPropertyDescriptor(
   "transaction",
 );
 
+type RootTransaction = Parameters<
+  Parameters<TestDatabase["transaction"]>[0]
+>[0];
+
+// PGlite has a single connection. Production runs a root statement issued
+// during an open transaction on another pooled connection; here it would wait
+// for that transaction forever, so it joins the transaction instead.
+const openTransaction = new AsyncLocalStorage<RootTransaction>();
+
 const installDatabaseBoundary = (database: TestDatabase) => {
   Object.defineProperties(rootDb, {
     delete: { configurable: true, value: database.delete.bind(database) },
-    execute: { configurable: true, value: database.execute.bind(database) },
+    execute: {
+      configurable: true,
+      value: async (query: Parameters<typeof database.execute>[0]) => {
+        const transaction = openTransaction.getStore();
+        return transaction === undefined
+          ? (await database.execute(query)).rows
+          : (await transaction.execute(query)).rows;
+      },
+    },
     insert: { configurable: true, value: database.insert.bind(database) },
     query: { configurable: true, value: database.query },
     select: { configurable: true, value: database.select.bind(database) },
     transaction: {
       configurable: true,
-      value: database.transaction.bind(database),
+      value: async <T>(
+        callback: (transaction: RootTransaction) => Promise<T>,
+      ): Promise<T> => {
+        const run = async (transaction: RootTransaction): Promise<T> =>
+          await openTransaction.run(
+            transaction,
+            async () =>
+              await callback(
+                new Proxy(transaction, {
+                  get: (target, property, receiver): unknown =>
+                    property === "execute"
+                      ? async (
+                          query: Parameters<typeof transaction.execute>[0],
+                        ) => (await transaction.execute(query)).rows
+                      : Reflect.get(target, property, receiver),
+                }),
+              ),
+          );
+        const outer = openTransaction.getStore();
+        return outer === undefined
+          ? await database.transaction(run)
+          : await outer.transaction(run);
+      },
     },
     update: { configurable: true, value: database.update.bind(database) },
   });

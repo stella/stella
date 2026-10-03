@@ -1,4 +1,11 @@
-import { readdirSync, readFileSync, rmSync } from "node:fs";
+import { panic, TaggedError } from "better-result";
+import {
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { availableParallelism, tmpdir, totalmem } from "node:os";
 import path from "node:path";
 
@@ -13,8 +20,18 @@ import {
   TEST_ROOTS,
   type ComposedTestBatches,
 } from "./api-test-plan";
-import { maxRssBytesToMb } from "./resource-usage";
-import { TEST_BATCH_KIND, type TestBatchKind } from "./test-batch-plan";
+import {
+  BATCH_MEMORY,
+  batchMemoryVerdict,
+  maxRssBytesToMb,
+} from "./resource-usage";
+import {
+  parseRssMeasurementArguments,
+  testRssArtifact,
+  TEST_BATCH_KIND,
+  type TestBatchKind,
+  type TestRssMeasurement,
+} from "./test-batch-plan";
 import {
   acquireCurrentSnapshot,
   snapshotCacheDir,
@@ -39,7 +56,9 @@ const STRAY_TEST_FILE_GLOB = "**/*.test.{ts,tsx}";
 const apiRoot = path.resolve(import.meta.dir, "..");
 
 const preloadPath = path.join(apiRoot, "src/tests/setup-env.ts");
-const runnerArguments = Bun.argv.slice(2);
+const rssMode = parseRssMeasurementArguments(Bun.argv.slice(2));
+const runnerArguments = rssMode.arguments;
+const measurements: TestRssMeasurement[] = [];
 const propertyOnly = runnerArguments.includes(PROPERTY_FLAG);
 const forwardedArguments = runnerArguments.filter(
   (argument) => argument !== PROPERTY_FLAG,
@@ -292,6 +311,7 @@ const planBatches = ({
     .filter(({ testFiles }) => testFiles.length > 0);
 
 const composedBatches = await planApiTestBatches({
+  executionMode: rssMode.mode,
   apiRoot,
   propertyOnly,
   testPaths,
@@ -323,14 +343,17 @@ if (
   }
 }
 
-const testLanes = deriveTestLaneCount({
-  availableParallelism: availableParallelism(),
-  env: process.env,
-  // At most one heavy batch runs at a time, so sizing every lane for the
-  // heavy budget over-reserves; that slack covers the runner's own processes.
-  laneMemoryBudgetMb: MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB,
-  totalMemoryBytes: totalmem(),
-});
+const testLanes =
+  rssMode.mode === "measure-rss"
+    ? 1
+    : deriveTestLaneCount({
+        availableParallelism: availableParallelism(),
+        env: process.env,
+        // At most one heavy batch runs at a time, so sizing every lane for the
+        // heavy budget over-reserves; that slack covers the runner's own processes.
+        laneMemoryBudgetMb: MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB,
+        totalMemoryBytes: totalmem(),
+      });
 // Concurrent children writing to the inherited terminal would interleave
 // line by line. With more than one lane each batch's output is collected and
 // printed as one block when the batch ends; a serial run streams live.
@@ -404,6 +427,43 @@ const spawnCollected = async (
   return { exitCode, usage: child.resourceUsage() };
 };
 
+class TestRssMeasurementError extends TaggedError("TestRssMeasurementError")<{
+  message: string;
+}> {}
+
+/** Measure the preload once with the same Bun flags and snapshot as file children. */
+const measurePreloadBaseline = async () => {
+  const directory = mkdtempSync(path.join(apiRoot, ".rss-baseline-"));
+  const file = path.join(directory, "baseline.test.ts");
+  writeFileSync(
+    file,
+    'import { test } from "bun:test"; test("preload memory baseline", () => {});\n',
+  );
+  try {
+    const child = await spawnStreaming(
+      buildApiTestCommand({
+        bunExecutable: process.execPath,
+        bunRuntimeArguments: ["--smol"],
+        testArguments: ["--preload", preloadPath],
+        testFiles: [file],
+      }),
+    );
+    const peakMb =
+      child.usage === undefined ? 0 : maxRssBytesToMb(child.usage.maxRSS);
+    if (child.exitCode !== 0 || !Number.isFinite(peakMb) || peakMb <= 0) {
+      throw new TestRssMeasurementError({
+        message: "Could not measure API preload peak RSS",
+      });
+    }
+    return peakMb;
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+};
+
+const baselineMb =
+  rssMode.mode === "measure-rss" ? await measurePreloadBaseline() : 0;
+
 const runTests = async (
   { isolate, label, maxPeakRssMb, testFiles }: PlannedTestBatch,
   log: BatchLog,
@@ -439,22 +499,50 @@ const runTests = async (
     // platform. Normalizing it as Linux getrusage kibibytes turns a 394 MB
     // process into an impossible 403,796 MB reading under Bun 1.4.
     const peakMb = maxRssBytesToMb(usage.maxRSS);
+    if (rssMode.mode === "measure-rss") {
+      const file = testFiles.at(0);
+      if (
+        testFiles.length !== 1 ||
+        file === undefined ||
+        !Number.isFinite(peakMb) ||
+        peakMb <= 0
+      ) {
+        log.err(`Cannot measure peak RSS for ${testFiles.join(", ")}`);
+        return 1;
+      }
+      measurements.push({ file, peakMb, exitCode });
+    }
     log.out(
       `${executionMode} batch (${testFiles.length} files) peak RSS: ` +
         `${peakMb} MB (budget ${maxPeakRssMb} MB)`,
     );
-    if (exitCode === 0 && peakMb > maxPeakRssMb) {
-      log.err(
-        `Test batch exceeded the ${maxPeakRssMb} MB peak-RSS ` +
-          "budget. Find what grew (new fixtures held across files, " +
-          "unclosed pools/servers, oversized in-memory corpora) or split " +
-          "the offending files; raising the budget requires justification " +
-          "in the PR description.",
-      );
-      return 1;
+    if (exitCode === 0) {
+      const verdict = batchMemoryVerdict({
+        label,
+        peakMb,
+        budgetMb: maxPeakRssMb,
+        testFiles,
+      });
+      switch (verdict.type) {
+        case BATCH_MEMORY.within:
+          break;
+        case BATCH_MEMORY.nearCap:
+          log.out(verdict.annotation);
+          break;
+        case BATCH_MEMORY.over:
+          log.err(verdict.message);
+          return 1;
+        default:
+          verdict satisfies never;
+          panic("Unhandled batch memory verdict");
+      }
     }
   }
 
+  if (rssMode.mode === "measure-rss" && !usage) {
+    log.err(`No subprocess peak RSS reported for ${testFiles.join(", ")}`);
+    return 1;
+  }
   return exitCode;
 };
 
@@ -495,6 +583,7 @@ const outcomes = await runInLanes({
       ? await runBufferedTests(batch)
       : await runTests(batch, streamingLog),
   signal: runnerShutdown.signal,
+  failurePolicy: rssMode.mode === "measure-rss" ? "complete" : "serial-fast",
 });
 const runSeconds = ((performance.now() - runStartedAt) / 1000).toFixed(1);
 const failedOutcomes = outcomes.filter(
@@ -518,6 +607,20 @@ if (failedOutcomes.length > 0) {
           `  ${batch.label} (exit ${String(exitCode)}):\n    ${batch.testFiles.join("\n    ")}`,
       ),
     ].join("\n"),
+  );
+}
+if (rssMode.mode === "measure-rss") {
+  writeFileSync(
+    rssMode.outputPath,
+    testRssArtifact({
+      measurements,
+      baselineMb,
+      environment: rssMode.environment,
+      source: rssMode.source,
+    }),
+  );
+  print(
+    `Wrote ${measurements.length} per-file peak RSS measurements to ${rssMode.outputPath}`,
   );
 }
 process.exitCode = laneRunExitCode(outcomes);

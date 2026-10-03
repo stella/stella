@@ -1,0 +1,130 @@
+name: Main heavy suites
+run-name: "Main heavy suites ${{ inputs.sha || github.sha }}"
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full lowercase commit SHA already on main
+        required: true
+        type: string
+
+concurrency:
+  # Ordinary thin-mode pushes share one running and one replaceable pending run.
+  # Release merges and explicit historical dispatches retain their SHA identity.
+  group: "${{ github.event_name == 'push' && vars.MERGE_QUEUE_DEPTH == 'thin' && !startsWith(github.event.head_commit.message, 'chore: release v') && 'main-heavy-push' || format('main-heavy-{0}', inputs.sha || github.sha) }}"
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  validate:
+    # Thin queues move heavy suites to main. Unknown values reach validation
+    # so a typo fails instead of suppressing the run.
+    # Prefix matching also requires the release title to begin the first line.
+    if: "github.event_name != 'push' || (vars.MERGE_QUEUE_DEPTH != '' && vars.MERGE_QUEUE_DEPTH != 'full') || startsWith(github.event.head_commit.message, 'chore: release v')"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.ancestor.outputs.sha }}
+    steps:
+      - name: Validate merge queue depth
+        env:
+          MERGE_QUEUE_DEPTH: ${{ vars.MERGE_QUEUE_DEPTH }}
+        run: |
+          case "${MERGE_QUEUE_DEPTH:-}" in
+            ""|full|thin) ;;
+            *)
+              echo "::error::Unknown MERGE_QUEUE_DEPTH '$MERGE_QUEUE_DEPTH'; choose full or thin (unset means full)."
+              exit 1
+              ;;
+          esac
+
+      # No repository code executes before the target has been validated.
+      - name: Validate SHA format
+        env:
+          SHA: ${{ inputs.sha || github.sha }}
+        run: |
+          if [[ ! "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::SHA must be a full lowercase 40-hex commit."
+            exit 1
+          fi
+
+      - name: Fetch main history
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/main-heavy-validation"
+          git -C "$RUNNER_TEMP/main-heavy-validation" init
+          git -C "$RUNNER_TEMP/main-heavy-validation" remote add origin "$SERVER_URL/$REPOSITORY.git"
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$auth"
+          git -C "$RUNNER_TEMP/main-heavy-validation" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin main:refs/remotes/origin/main
+
+      - name: Verify main ancestry
+        id: ancestor
+        working-directory: ${{ runner.temp }}/main-heavy-validation
+        env:
+          SHA: ${{ inputs.sha || github.sha }}
+        run: |
+          if ! git cat-file -e "$SHA^{commit}" || ! git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "::error::SHA must name a commit already on main."
+            exit 1
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+  suites:
+    if: needs.validate.result == 'success'
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      # The reusable definition also contains the merge-group-only watcher.
+      # This ceiling permits its declaration; all executed heavy jobs keep
+      # their own read-only permissions, and that watcher never runs here.
+      actions: write
+      checks: read
+      pull-requests: read
+      packages: read
+    with:
+      depth: full
+      heavy_only: true
+      sha: ${{ needs.validate.outputs.sha }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  status:
+    if: always() && needs.validate.result != 'skipped'
+    needs: [validate, suites]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    steps:
+      - name: Publish heavy conclusion
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ needs.validate.outputs.sha }}
+          RESULTS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          state=failure
+          if jq -e 'all(.[]; .result == "success")' <<< "$RESULTS" > /dev/null; then
+            state=success
+          fi
+          if [[ -n "$SHA" ]]; then
+            gh api --method POST "repos/$REPOSITORY/statuses/$SHA" \
+              -f context=main/heavy -f state="$state" \
+              -f description="Main heavy suites: $state" -f target_url="$RUN_URL"
+          fi
+          [[ "$state" == success ]]
