@@ -14,7 +14,10 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import createAllowedSender from "@/api/handlers/organization-settings/correspondence/allowed-senders/create";
-import { reassignActiveTaskAssignmentsAndDropMemberships } from "@/api/lib/account-deletion-steps";
+import {
+  assertUserIsNotSoleOrgOwner,
+  reassignActiveTaskAssignmentsAndDropMemberships,
+} from "@/api/lib/account-deletion-steps";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -67,6 +70,7 @@ if (!databaseUrl || !runPostgresTests) {
           const { db: deletionDb } = openClient({ max: 1 });
           const organizationId = mintAuthProviderId<"organization">();
           const userId = mintAuthProviderId<"user">();
+          const remainingOwnerId = mintAuthProviderId<"user">();
           const workspaceId = createSafeId<"workspace">();
           const suffix = Bun.randomUUIDv7().replaceAll("-", "");
           const functionName = `correspondence_gate_${suffix}`;
@@ -167,6 +171,18 @@ if (!databaseUrl || !runPostgresTests) {
               role: "owner",
               createdAt: new Date(),
             });
+            await writerDb.insert(user).values({
+              id: remainingOwnerId,
+              name: "Remaining owner",
+              email: `owner-${suffix}@example.test`,
+            });
+            await writerDb.insert(member).values({
+              id: mintAuthProviderIdValue(),
+              organizationId,
+              userId: remainingOwnerId,
+              role: "owner",
+              createdAt: new Date(),
+            });
             await writerDb.insert(workspaces).values({
               id: workspaceId,
               organizationId,
@@ -176,6 +192,9 @@ if (!databaseUrl || !runPostgresTests) {
             await writerDb.insert(workspaceMembers).values({
               workspaceId,
               userId,
+            });
+            await writerDb.transaction(async (tx) => {
+              await assertUserIsNotSoleOrgOwner(tx, userId);
             });
             await write(safeDb);
             // Gate the real INSERT after its authorization locks, before its FK
@@ -255,6 +274,12 @@ if (!databaseUrl || !runPostgresTests) {
               { display: { status: "deleted" } },
               { display: { status: "deleted" } },
             ]);
+            expect(
+              await writerDb
+                .select({ userId: member.userId, role: member.role })
+                .from(member)
+                .where(eq(member.organizationId, organizationId)),
+            ).toEqual([{ userId: remainingOwnerId, role: "owner" }]);
           } finally {
             await deletionDb.execute(
               sql`SELECT pg_advisory_unlock(${gateKey})`,
@@ -269,6 +294,7 @@ if (!databaseUrl || !runPostgresTests) {
               .delete(organization)
               .where(eq(organization.id, organizationId));
             await writerDb.delete(user).where(eq(user.id, userId));
+            await writerDb.delete(user).where(eq(user.id, remainingOwnerId));
           }
         });
       },

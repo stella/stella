@@ -11,6 +11,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import fc from "fast-check";
 
+import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import type { OrganizationRoleName } from "@stll/auth-model";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
@@ -485,47 +486,46 @@ describe("rate resolution across stored membership role values", () => {
     currency: DEFAULT_CURRENCY,
   });
 
-  test("a membership holding several roles resolves, in canonical role order whatever order is stored", async () => {
-    for (const stored of ["admin,member", "member,admin", "member, admin"]) {
-      await storeRole(stored);
+  const rateByRole = {
+    owner: DEFAULT_RATE,
+    admin: ADMIN_RATE,
+    member: MEMBER_RATE,
+    intern: INTERN_RATE,
+    external: DEFAULT_RATE,
+  } as const satisfies Record<OrganizationRoleName, number>;
+
+  test("each single valid membership role resolves its applicable rate", async () => {
+    for (const role of ORGANIZATION_ROLE_NAMES) {
+      await storeRole(role);
       expect(await resolveFor(ids.userA2, IN_ADMIN_WINDOW)).toEqual(
-        priced(ADMIN_RATE),
+        priced(rateByRole[role]),
       );
     }
   });
 
-  test("a held role without an effective rate yields to the next held role, not to the table default", async () => {
-    await storeRole("intern,admin");
-    expect(await resolveFor(ids.userA2, IN_ADMIN_WINDOW)).toEqual(
-      priced(ADMIN_RATE),
-    );
+  test("a role without an effective rate falls back to the table default", async () => {
+    await storeRole("admin");
     expect(await resolveFor(ids.userA2, AFTER_ADMIN_WINDOW)).toEqual(
-      priced(INTERN_RATE),
-    );
-    // No owner rate exists at all, so the other held role decides.
-    await storeRole("owner,member");
-    expect(await resolveFor(ids.userA2, IN_ADMIN_WINDOW)).toEqual(
-      priced(MEMBER_RATE),
+      priced(DEFAULT_RATE),
     );
   });
 
-  test("a role name outside the model selects no role rate and never fails the lookup", async () => {
-    await storeRole("partner");
-    expect(await resolveFor(ids.userA2, IN_ADMIN_WINDOW)).toEqual(
-      priced(DEFAULT_RATE),
-    );
-    // Not a prefix or substring match on a known role.
-    await storeRole("administrator,members");
-    expect(await resolveFor(ids.userA2, IN_ADMIN_WINDOW)).toEqual(
-      priced(DEFAULT_RATE),
-    );
-    await storeRole("partner,member");
-    expect(await resolveFor(ids.userA2, IN_ADMIN_WINDOW)).toEqual(
-      priced(MEMBER_RATE),
-    );
+  test("storing a combined membership role is refused", async () => {
+    const write = await Result.tryPromise({
+      try: async () => await storeRole("admin,member"),
+      catch: (error) => error,
+    });
+    expect(
+      write.match({ ok: () => undefined, err: (error) => error }),
+    ).toMatchObject({
+      cause: {
+        code: "23514",
+        constraint: "member_single_product_role",
+      },
+    });
   });
 
-  test("a person-specific rate still wins for a membership holding several or unknown roles", async () => {
+  test("a person-specific rate wins for every single valid membership role", async () => {
     await testDb.insert(rateEntries).values({
       id: toSafeId<"rateEntry">(Bun.randomUUIDv7()),
       workspaceId: ids.wsA1,
@@ -534,28 +534,28 @@ describe("rate resolution across stored membership role values", () => {
       hourlyRate: cents(USER_RATE),
       effectiveFrom: "2025-01-01",
     });
-    for (const stored of ["admin,member", "partner"]) {
-      await storeRole(stored);
+    for (const role of ORGANIZATION_ROLE_NAMES) {
+      await storeRole(role);
       expect(await resolveFor(ids.userA2, IN_ADMIN_WINDOW)).toEqual(
         priced(USER_RATE),
       );
     }
   });
 
-  test("one membership holding several roles does not stop a batch from resolving every entry", async () => {
-    await storeRole("admin,member");
-    const severalInWindow = {
+  test("a batch resolves every entry across role and default rates", async () => {
+    await storeRole("admin");
+    const adminInWindow = {
       userId: ids.userA2,
       dateWorked: IN_ADMIN_WINDOW,
     };
-    const severalAfterWindow = {
+    const adminAfterWindow = {
       userId: ids.userA2,
       dateWorked: AFTER_ADMIN_WINDOW,
     };
     const single = { userId: ids.userA1, dateWorked: IN_ADMIN_WINDOW };
     // The fixture's owner has no role rate.
     const owner = { userId: ids.userAdmin, dateWorked: IN_ADMIN_WINDOW };
-    const lookups = [severalInWindow, severalAfterWindow, single, owner];
+    const lookups = [adminInWindow, adminAfterWindow, single, owner];
     const result = await Result.gen(async function* () {
       return Result.ok(
         yield* Result.await(
@@ -574,8 +574,8 @@ describe("rate resolution across stored membership role values", () => {
       throw result.error;
     }
     expect(Object.fromEntries(result.value)).toEqual({
-      [rateLookupKey(severalInWindow)]: priced(ADMIN_RATE),
-      [rateLookupKey(severalAfterWindow)]: priced(MEMBER_RATE),
+      [rateLookupKey(adminInWindow)]: priced(ADMIN_RATE),
+      [rateLookupKey(adminAfterWindow)]: priced(DEFAULT_RATE),
       [rateLookupKey(single)]: priced(MEMBER_RATE),
       [rateLookupKey(owner)]: priced(DEFAULT_RATE),
     });

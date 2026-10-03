@@ -116,3 +116,34 @@ export const useCancelInvitation = () => {
     },
   });
 };
+
+export const useUpdateMemberRole = (memberId: string) => {
+  const t = useTranslations();
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (role: Role) => {
+      const result = await authClient.organization.updateMemberRole({
+        memberId,
+        role,
+      });
+
+      if (result.error) {
+        analytics.captureError(toAuthClientError(result.error));
+        stellaToast.add({
+          title: userErrorFromThrown(
+            toAuthClientError(result.error),
+            t("errors.actionFailed"),
+          ),
+          type: "error",
+        });
+        throw toAuthClientError(result.error);
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: organizationKeys.all });
+      stellaToast.add({ title: t("success.roleUpdated"), type: "success" });
+    },
+  });
+};

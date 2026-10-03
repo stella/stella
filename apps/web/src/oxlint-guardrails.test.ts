@@ -72,9 +72,6 @@ describe("custom oxlint guardrails", () => {
   });
 
   test("protected shell chrome queries stay non-critical and route-fresh", () => {
-    const organizationConstsSource = readRootFixture(
-      "apps/web/src/lib/organization/consts.ts",
-    );
     // The signed-in guard and frame live beside the `_protected` route, which
     // only wires them up.
     const protectedRouteFileSource = readRootFixture(
@@ -139,11 +136,8 @@ describe("custom oxlint guardrails", () => {
     expect(organizationQuerySource).toContain(
       "staleTime: ROUTE_QUERY_STALE_TIME_MS",
     );
-    expect(organizationConstsSource).toContain(
-      "BETTER_AUTH_ORGANIZATION_OPTIONS.membershipLimit",
-    );
     expect(organizationQuerySource).toContain(
-      "membersLimit: ORGANIZATION_MEMBERS_LIMIT",
+      "membersLimit: BETTER_AUTH_ORGANIZATION_OPTIONS.membershipLimit",
     );
     expect(workspacesQuerySource).toContain("workspacesNavigationOptions");
     expect(workspacesQuerySource).toContain(
