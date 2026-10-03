@@ -14,6 +14,8 @@ const historicalCatalogConsumers = new Set([
 const runtimeAggregateOwners = new Set([
   // The bundled API imports generated aggregates produced from the shards.
   "apps/api/src/mcp/capability-tools.ts",
+  // Checks the cursor bounds of the bundled runtime output contracts.
+  "apps/api/src/mcp/cursor-envelope-bounds.test.ts",
   // Generation, formatting, graph analysis and cache declarations own outputs.
   "scripts/generated-files.ts",
   ".oxfmtrc.json",

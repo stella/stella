@@ -56,8 +56,6 @@ VITE_PUBLIC_APP_URL="https://stella.example.com"
 VITE_SELFHOST="true"
 # Optional: use when the web origin reverse-proxies /api to the API service.
 VITE_BROWSER_API_URL="https://stella.example.com/api"
-# Optional: enable "Edit in Desktop" for self-hosted DOCX editing.
-VITE_FEATURE_DESKTOP_EDITING="true"
 ```
 
 `VITE_API_URL` must point at the public API, aligned with `PUBLIC_URL` on the
@@ -100,7 +98,6 @@ docker build -f apps/web/Dockerfile \
   --build-arg PUBLIC_BROWSER_API_URL=https://stella.example.com/api \
   --build-arg PUBLIC_APP_URL=https://stella.example.com \
   --build-arg VITE_SELFHOST=true \
-  --build-arg VITE_FEATURE_DESKTOP_EDITING=true \
   -t stella-web:local .
 
 docker run --detach \
@@ -216,9 +213,7 @@ searchable text.
 ## Desktop editing
 
 Self-hosted installs can use the signed stella desktop app without rebuilding
-it. Enable `FEATURE_DESKTOP_EDITING="true"` on the API and
-`VITE_FEATURE_DESKTOP_EDITING="true"` in the web build. Users then install
-stella desktop, open **Settings → Account → Desktop** in the self-hosted web
+it and without configuration. Users install stella desktop, open **Settings → Account → Desktop** in the self-hosted web
 app, and click **Connect**. The desktop app shows a local approval prompt and
 stores the exact trusted web/API origin before accepting Office file handoffs.
 

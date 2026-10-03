@@ -11,7 +11,6 @@ import {
   entities,
   LIST_ITEM_TYPES,
   WORK_OBLIGATION_EVENT_TYPE,
-  WORK_OBLIGATION_SOURCE,
   WORK_OBLIGATION_STATUS,
   WORK_OBLIGATION_TYPE,
   workObligationEvents,
@@ -38,7 +37,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FlowReviewDecision } from "@/api/lib/flows/flow-types";
 import {
   decideGateForTask,
-  gateDecisionForTransition,
+  gateDecisionForTaskStatus,
 } from "@/api/lib/flows/review-gate-task";
 import {
   agendaFieldsBodySchema,
@@ -549,6 +548,22 @@ const applyTaskUpdate = async function* ({
 
   const txResult = yield* Result.await(
     abortableTx(safeDb, async (tx) => {
+      // A closing status on the task a workflow review gate raised is the
+      // gate's decision, whichever surface asks for it. Nothing is written
+      // here and no task or obligation lock is taken before the run's locks,
+      // including when this is part of an outer Kanban transaction.
+      const gateDecision = await gateDecisionForTaskStatus(tx, {
+        workspaceId,
+        taskEntityId: body.taskId,
+        requestedStatus: body.status,
+      });
+      if (gateDecision.isErr()) {
+        return { type: "refused" as const, error: gateDecision.error };
+      }
+      if (gateDecision.value !== null) {
+        return { type: "gate" as const, decision: gateDecision.value };
+      }
+
       const workflowRelevant =
         body.status !== undefined ||
         body.dueDate !== undefined ||
@@ -587,31 +602,6 @@ const applyTaskUpdate = async function* ({
           status: 409,
           message: "Task workflow is not initialized",
         });
-      }
-
-      // A closing status on the task a workflow review gate raised is the
-      // gate's decision, whichever surface asks for it. Nothing is written
-      // here: the decision is taken once this transaction has released the
-      // row, and the run then settles the task itself.
-      if (
-        workflow?.sourceType === WORK_OBLIGATION_SOURCE.FLOW &&
-        body.status !== undefined
-      ) {
-        const intent = workObligationIntentForTaskStatus({
-          currentStatus: workflow.status,
-          requestedTaskStatus: body.status,
-        });
-        if (intent.type === "transition") {
-          const decision = gateDecisionForTransition(intent.action);
-          if (decision === null) {
-            throw new HandlerError({
-              status: 409,
-              message:
-                "A workflow review cannot be reopened; start the workflow again instead",
-            });
-          }
-          return { type: "gate" as const, decision };
-        }
       }
 
       const eligibility = await listItemTypeTransition({
@@ -855,6 +845,9 @@ const applyTaskUpdate = async function* ({
     }),
   );
 
+  if (txResult.type === "refused") {
+    return Result.err(txResult.error);
+  }
   if (txResult.type === "gate") {
     return Result.ok(
       applyTaskUpdateOutcome({ type: "gate", decision: txResult.decision }),
@@ -923,6 +916,15 @@ export const updateTaskHandler = async function* ({
     }),
   );
   const { status: _decided, ...rest } = props.body;
+  // Settlement already updates the task and records its audit. A status-only
+  // decision has no remaining fields to write; a second update in an outer
+  // transaction would recheck its workspace FK while still holding the run.
+  const hasRemainingChanges = Object.keys(rest).some(
+    (key) => key !== "taskId" && key !== "workflowReason",
+  );
+  if (!hasRemainingChanges) {
+    return Result.ok({ success: true });
+  }
   const second = yield* applyTaskUpdate({ ...props, body: rest, features });
   if (Result.isError(second)) {
     return second;

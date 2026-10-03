@@ -5,6 +5,7 @@ import type { ResolvedField } from "./template-discover-types";
 import {
   groupFieldsByPrefix,
   readAiFieldErrorPaths,
+  readClauseWarnings,
   runLeadingSingleFlight,
 } from "./template-form.logic";
 
@@ -142,5 +143,35 @@ describe("fill-form grouping", () => {
     expect(groupFieldsByPrefix([field("a"), field("b")])).toEqual([
       { kind: "ungrouped", fields: [field("a"), field("b")] },
     ]);
+  });
+});
+
+describe("download clause diagnostics", () => {
+  test.each([0, 1, 10_000, 4_294_967_295])(
+    "reads the bounded warning count %s",
+    (count) => {
+      const result = readClauseWarnings(
+        new Headers({ "X-Clause-Warnings": String(count) }),
+      );
+      expect(result.isOk() && result.value).toBe(count);
+      expect(String(count).length).toBeLessThanOrEqual(10);
+    },
+  );
+  test("an absent header means no clause warnings", () => {
+    const result = readClauseWarnings(new Headers());
+    expect(result.isOk() && result.value).toBe(0);
+  });
+  test.each([
+    "%",
+    "null",
+    "-1",
+    "1.5",
+    "01",
+    "10000000000",
+    '[{"clauseName":"Terms"}]',
+  ])("rejects malformed warning counts %s", (encoded) => {
+    expect(
+      readClauseWarnings(new Headers({ "X-Clause-Warnings": encoded })).isErr(),
+    ).toBe(true);
   });
 });

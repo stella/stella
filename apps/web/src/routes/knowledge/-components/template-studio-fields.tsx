@@ -59,7 +59,11 @@ import { optionalArray } from "@/lib/arrays";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { knowledgeKeys, templateClausesOptions } from "@/lib/knowledge/queries";
+import {
+  knowledgeKeys,
+  templateClausesOptions,
+  invalidateTemplateClauseSources,
+} from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import { LinkClauseDialog } from "@/routes/knowledge/-components/link-clause-dialog";
@@ -155,9 +159,7 @@ export const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
 
   const invalidateLinks = () => {
     detached(
-      queryClient.invalidateQueries({
-        queryKey: clausesOptions.queryKey,
-      }),
+      invalidateTemplateClauseSources(queryClient, activeOrganizationId),
       "template-studio-fields.invalidate",
     );
   };

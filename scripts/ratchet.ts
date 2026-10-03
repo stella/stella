@@ -10,6 +10,7 @@
 //   bun scripts/ratchet.ts                 report counts vs merge base
 //   bun scripts/ratchet.ts --check         fail on any unfunded increase
 //     --base <commit>                      explicit comparison revision
+//     --head <commit>                      measure this commit, not the worktree
 //     RATCHET_BASE_REF                      CI comparison revision
 //   bun scripts/ratchet.ts --self-test     prove counter and gate behavior
 //
@@ -3752,14 +3753,11 @@ type ScanMergeBaseOptions = {
   previous?: TreeScan;
 };
 
-const scanMergeBase = ({
-  ref,
-  metrics = RATCHET_METRICS,
-  previous,
-}: ScanMergeBaseOptions): Baseline => {
-  const temporary = mkdtempSync(path.join(tmpdir(), "ratchet-merge-base-"));
+// Extracts a commit's tracked files into a temporary directory for `use`.
+const withExportedTree = <T>(ref: string, measure: (root: string) => T): T => {
+  const temporary = mkdtempSync(path.join(tmpdir(), "ratchet-tree-"));
   try {
-    const archive = path.join(temporary, "base.tar");
+    const archive = path.join(temporary, "tree.tar");
     const root = path.join(temporary, "tree");
     mkdirSync(root);
     readGit(["archive", "--format=tar", "--output", archive, ref]);
@@ -3769,18 +3767,29 @@ const scanMergeBase = ({
     });
     if (extracted.exitCode !== 0) {
       return panic(
-        `ratchet base extraction failed: ${extracted.stderr.toString().trim()}`,
+        `ratchet tree extraction failed for ${ref}: ${extracted.stderr.toString().trim()}`,
       );
     }
-    return scanTree({
-      tree: openSourceTree(root, { role: "base" }),
-      metrics,
-      previous,
-    }).snapshot;
+    return measure(root);
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }
 };
+
+const scanMergeBase = ({
+  ref,
+  metrics = RATCHET_METRICS,
+  previous,
+}: ScanMergeBaseOptions): Baseline =>
+  withExportedTree(
+    ref,
+    (root) =>
+      scanTree({
+        tree: openSourceTree(root, { role: "base" }),
+        metrics,
+        previous,
+      }).snapshot,
+  );
 
 // The affected lint planner shares the ratchet's exact debt measurement;
 // no committed allowlist can exempt a newly introduced violation.
@@ -3952,23 +3961,24 @@ export const assessMeasurements = ({
   };
 };
 
-const comparisonBase = (): string => {
-  const baseIndex = process.argv.indexOf("--base");
-  const baseRef = baseIndex === -1 ? undefined : process.argv.at(baseIndex + 1);
-  if (baseIndex !== -1 && (baseRef === undefined || baseRef.startsWith("--"))) {
-    return panic("--base requires a commit reference");
+const revisionOption = (flag: "--base" | "--head"): string | undefined => {
+  const index = process.argv.indexOf(flag);
+  const ref = index === -1 ? undefined : process.argv.at(index + 1);
+  if (index !== -1 && (ref === undefined || ref.startsWith("--"))) {
+    return panic(`${flag} requires a commit reference`);
   }
-  const ref =
-    baseRef ??
-    process.env["RATCHET_BASE_REF"] ??
-    readGit(["merge-base", "origin/main", "HEAD"]);
-  return readGit([
-    "rev-parse",
-    "--verify",
-    "--end-of-options",
-    `${ref}^{commit}`,
-  ]);
+  return ref;
 };
+
+const resolveCommit = (ref: string): string =>
+  readGit(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`]);
+
+const comparisonBase = (): string =>
+  resolveCommit(
+    revisionOption("--base") ??
+      process.env["RATCHET_BASE_REF"] ??
+      readGit(["merge-base", "origin/main", "HEAD"]),
+  );
 
 const ALLOWANCE_DIRECTORY = "scripts/ratchet-allowances";
 
@@ -4021,10 +4031,10 @@ type AllowanceParse =
   | { type: "valid"; allowance: RatchetAllowance }
   | { type: "invalid"; message: string };
 
-/** Validates one committed allowance file at HEAD. */
-const parseAllowance = (filename: string): AllowanceParse => {
+/** Validates one allowance file committed at the measured head. */
+const parseAllowance = (filename: string, head: string): AllowanceParse => {
   const parsed = Result.try((): unknown =>
-    JSON.parse(readGit(["show", `HEAD:${filename}`])),
+    JSON.parse(readGit(["show", `${head}:${filename}`])),
   );
   if (parsed.isErr()) {
     return {
@@ -4074,12 +4084,20 @@ const parseAllowance = (filename: string): AllowanceParse => {
   };
 };
 
-// Presence in the measured base makes an allowance inert, even if HEAD edits
-// its contents. Read committed HEAD files so funding has the same Git boundary.
-const checkAllowances = (
-  base: string,
-  diffs: readonly MetricDiff[],
-): string[] => {
+// Presence in the measured base makes an allowance inert, even if the head
+// edits its contents. Read committed head files so funding has the same Git
+// boundary.
+type CheckAllowancesOptions = {
+  base: string;
+  head: string;
+  diffs: readonly MetricDiff[];
+};
+
+const checkAllowances = ({
+  base,
+  head,
+  diffs,
+}: CheckAllowancesOptions): string[] => {
   const errors: string[] = [];
   const filesAt = (ref: string) =>
     readGit([
@@ -4095,11 +4113,11 @@ const checkAllowances = (
       .filter(Boolean);
   const inherited = new Set(filesAt(base));
   const funding = new Map<string, { delta: number; paths: string[] }>();
-  for (const filename of filesAt("HEAD")) {
+  for (const filename of filesAt(head)) {
     if (inherited.has(filename)) {
       continue;
     }
-    const parsed = parseAllowance(filename);
+    const parsed = parseAllowance(filename, head);
     if (parsed.type === "invalid") {
       errors.push(parsed.message);
       continue;
@@ -4162,8 +4180,16 @@ const checkAllowances = (
   return errors;
 };
 
-const runCheck = (): number => {
-  const started = performance.now();
+const scanCheckedHead = (headRef: string | undefined): TreeScan => {
+  if (headRef !== undefined) {
+    // A committed head is measured as data from its export, so this checkout's
+    // scripts judge it without running any of its code.
+    return withExportedTree(headRef, (root) => {
+      const tree = openSourceTree(root);
+      printReportOnlyMetrics(tree);
+      return scanTree({ tree, metrics: RATCHET_METRICS });
+    });
+  }
   // The index includes staged additions and keeps local source edits visible,
   // without letting untracked files enter either file or repository metrics.
   const trackedFiles = new Set(
@@ -4171,7 +4197,15 @@ const runCheck = (): number => {
   );
   const tree = openSourceTree(REPO_ROOT, { trackedFiles });
   printReportOnlyMetrics(tree);
-  const head = scanTree({ tree, metrics: RATCHET_METRICS });
+  return scanTree({ tree, metrics: RATCHET_METRICS });
+};
+
+const runCheck = (): number => {
+  const started = performance.now();
+  const headOption = revisionOption("--head");
+  const headRef =
+    headOption === undefined ? undefined : resolveCommit(headOption);
+  const head = scanCheckedHead(headRef);
   const current = head.snapshot;
   const headFinished = performance.now();
   const base = comparisonBase();
@@ -4209,7 +4243,11 @@ const runCheck = (): number => {
     );
   }
 
-  const allowanceErrors = checkAllowances(base, assessment.diffs);
+  const allowanceErrors = checkAllowances({
+    base,
+    head: headRef ?? "HEAD",
+    diffs: assessment.diffs,
+  });
   if (allowanceErrors.length === 0) {
     console.log(
       `ratchet --check: OK. ${RATCHET_METRICS.length} metric(s) at or below the measured base tree or exactly funded.`,
@@ -4719,7 +4757,7 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "security-guards/require-secure-document-response": 0,
   "mcp-security/no-direct-oauth-client-join": 0,
   "mcp-security/redact-oauth-registration-response": 0,
-  "auth-lifecycle/after-remove-member-revokes-artifacts": 0,
+  "auth-lifecycle/member-removal-revokes-artifacts": 0,
   "auth-lifecycle/no-direct-auth-artifact-delete": 0,
   "no-unowned-file-version-write/no-unowned-file-version-write": 0,
   "no-direct-audit-log-insert/no-direct-audit-log-insert": 0,
@@ -6756,6 +6794,7 @@ const main = (): number => {
     "--check",
     "--self-test",
     "--base",
+    "--head",
     "--details",
   ]);
   for (const argument of process.argv.slice(2)) {

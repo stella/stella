@@ -318,9 +318,9 @@ export const generateWorkflowData = async ({
   // Resolved up front because the schema budget is a property of the provider,
   // not of the batch: the planner groups properties by dependency signature
   // and cannot know how many of them one request may carry.
-  const model = Result.try({
-    try: () =>
-      resolveTanStackTextModel({
+  const model = await Result.tryPromise({
+    try: async () =>
+      await resolveTanStackTextModel({
         dataClass: "customer",
         managedAIResidency,
         role: "pdf",

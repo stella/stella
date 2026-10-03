@@ -19,6 +19,7 @@ import {
   runPlanSelector,
 } from "./ci-plan-selector";
 import {
+  armAndVerify,
   checkEjectedHead,
   checkMergeHold,
   checkGreenResultFreshness,
@@ -33,6 +34,7 @@ import {
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
   parseMergeQueueRemovals,
+  RatchetRecheckError,
   readFastRequiredJobs,
   readMergeHandoff,
   requiredChecksSucceeded,
@@ -357,6 +359,7 @@ esac
               isDraft: false,
               mergeable: "MERGEABLE",
               headRefOid: HEAD_SHA,
+              updatedAt: "2026-10-02T09:00:00Z",
               baseRefName: "main",
               autoMergeRequest: null,
               mergeQueueEntry: null,
@@ -404,8 +407,8 @@ case "$*" in
     esac;;
   *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' '[]';;
   *enqueuePullRequest*)
-    case "$*" in *'mergeQueueEntry { id position jump state }'*) ;; *) exit 97;; esac
-    printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"id":"entry","position":1,"jump":${mutationJump},"state":"QUEUED"}}}}';;
+    case "$*" in *'mergeQueueEntry { id position jump state headCommit { oid } }'*) ;; *) exit 97;; esac
+    printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"id":"entry","position":1,"jump":${mutationJump},"state":"QUEUED","headCommit":{"oid":"${HEAD_SHA}"}}}}}';;
   *'mergeQueue(branch'*)
     case "$*" in *'position jump state pullRequest'*) ;; *) exit 98;; esac
     printf '%s\\n' '${queue}';;
@@ -1253,7 +1256,7 @@ describe("explicit merge queue jumps", () => {
     ).toEqual({ kind: "already-queued", entryId: "MQE_1", verifyFront: false });
   });
 
-  test("without a jump, arming is unchanged", () => {
+  test("without a jump, existing auto-merge fields still require verified arming", () => {
     expect(
       mergeWhenReadyAction({
         handoff: { status: "pending" },
@@ -1267,7 +1270,7 @@ describe("explicit merge queue jumps", () => {
         jump: false,
         checksSucceeded: false,
       }),
-    ).toEqual({ kind: "already-armed", enabledAt: "2026-09-28T09:00:00Z" });
+    ).toEqual({ kind: "arm" });
   });
 
   test.each([
@@ -1631,6 +1634,9 @@ describe("green result freshness", () => {
       expect(branch).toBe("main");
       return ratchetDefinitionPaths;
     },
+    recheckRatchet: () => {
+      throw new Error("unexpected ratchet recheck");
+    },
   });
 
   test("unchanged base and up to twenty unrelated commits retain green results", () => {
@@ -1896,17 +1902,75 @@ describe("green result freshness", () => {
     ).toEqual([]);
   });
 
-  test("a ratchet change on main refuses green results computed under the old rules", () => {
+  test("a ratchet change on main re-measures the ratchet on main merged with the head", () => {
     for (const filename of ratchetDefinitionPaths) {
-      const result = checkGreenResultFreshness(
-        readers({ status: "ahead", ahead_by: 1, files: [{ filename }] }),
-      );
-      expect(result.isErr(), filename).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.message).toContain(
-          `main changed the ratchet since the green run: ${filename}`,
+      const rechecks: unknown[] = [];
+      const base = readers({
+        status: "ahead",
+        ahead_by: 1,
+        files: [{ filename }],
+      });
+      const passing = checkGreenResultFreshness({
+        ...base,
+        recheckRatchet: (input) => {
+          rechecks.push(input);
+          return Result.ok();
+        },
+      });
+      expect(passing.isOk(), filename).toBe(true);
+      expect(rechecks).toEqual([{ headSha: HEAD_SHA, baseRefName: "main" }]);
+
+      const failing = checkGreenResultFreshness({
+        ...base,
+        recheckRatchet: () =>
+          Result.err(
+            new RatchetRecheckError({ message: "ratchet --check failed: +1" }),
+          ),
+      });
+      expect(failing.isErr(), filename).toBe(true);
+      if (failing.isErr()) {
+        expect(failing.error.message).toContain(
+          `main changed the ratchet since the green run (${filename})`,
         );
+        expect(failing.error.message).toContain("ratchet --check failed: +1");
       }
+    }
+  });
+
+  test("a PR that edits the ratchet itself refuses without a recheck", () => {
+    const result = checkGreenResultFreshness({
+      ...readers({
+        status: "ahead",
+        ahead_by: 1,
+        files: [{ filename: "scripts/ownership.ts" }],
+      }),
+      readPullFiles: () => ["scripts/ratchet.ts"],
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toContain(
+        "main changed the ratchet since the green run (scripts/ownership.ts) and this PR changes it too",
+      );
+    }
+  });
+
+  test("a passing ratchet recheck still applies the overlap gate", () => {
+    const result = checkGreenResultFreshness({
+      ...readers({
+        status: "ahead",
+        ahead_by: 1,
+        files: [
+          { filename: "scripts/ownership.ts" },
+          { filename: "scripts/shared.ts" },
+        ],
+      }),
+      recheckRatchet: () => Result.ok(),
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toContain(
+        "main changed files also touched by this PR: scripts/shared.ts",
+      );
     }
   });
 
@@ -2015,6 +2079,7 @@ describe("green result freshness", () => {
       readBaseComparison: noRead,
       readPullFiles: noRead,
       readRatchetDefinitionPaths: noRead,
+      recheckRatchet: noRead,
       readBaseWorkflow: noRead,
       runSelector: noRead,
       readRunJobs: noRead,
@@ -2572,12 +2637,17 @@ const runLiveBar = ({
     `#!/bin/sh
 case "$*" in
   'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
-  *'pr merge'*|*enqueuePullRequest*)
+  *'pr merge'*|*enqueuePullRequest*|*enablePullRequestAutoMerge*)
     printf '%s' "$*" | tr '\\n' ' ' >> "$FIXTURE_WRITES"; printf '\\n' >> "$FIXTURE_WRITES"
     case "$*" in
-      *enqueuePullRequest*) printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"id":"entry","position":1,"jump":true,"state":"QUEUED"}}}}';;
-      *) printf '%s\\n' 'auto-merge enabled';;
+      *enqueuePullRequest*)
+        : > "$FIXTURE_WRITES.queued"
+        printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"id":"entry","position":1,"jump":true,"state":"QUEUED","headCommit":{"oid":"${HEAD_SHA}"}}}}}';;
+      *) exit 97;;
     esac;;
+  *updatedAt*)
+    if [ -e "$FIXTURE_WRITES.queued" ]; then printf '%s\\n' "$FIXTURE_QUEUED_PULL_REQUEST";
+    else printf '%s\\n' "$FIXTURE_PULL_REQUEST"; fi;;
   *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' "$FIXTURE_TIMELINE";;
   *'mergeQueue(branch'*) printf '%s\\n' '{"data":{"repository":{"mergeQueue":{"entries":{"totalCount":1,"nodes":[{"position":1,"jump":true,"state":"QUEUED","pullRequest":{"number":123}}]}}}}}';;
   *'actions/runs?event=merge_group&head_sha=${GROUP_SHA}'*) printf '%s\\n' "$FIXTURE_GROUP_RUNS";;
@@ -2601,6 +2671,20 @@ esac
 `,
   );
   chmodSync(executable, 0o700);
+  const pullRequest = {
+    id: "PR_fixture",
+    number: 123,
+    title,
+    isCrossRepository: false,
+    state: "OPEN",
+    isDraft: false,
+    mergeable: "MERGEABLE",
+    headRefOid: HEAD_SHA,
+    baseRefName: "main",
+    updatedAt: "2026-10-02T09:00:00Z",
+    autoMergeRequest: null,
+    mergeQueueEntry: null,
+  };
   try {
     const result = Bun.spawnSync({
       cmd: [
@@ -2616,20 +2700,21 @@ esac
         PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
         FIXTURE_WRITES: writes,
         FIXTURE_PULL_REQUEST: JSON.stringify({
+          data: { repository: { pullRequest } },
+        }),
+        // What the verification read sees once the enqueue landed.
+        FIXTURE_QUEUED_PULL_REQUEST: JSON.stringify({
           data: {
             repository: {
               pullRequest: {
-                id: "PR_fixture",
-                number: 123,
-                title,
-                isCrossRepository: false,
-                state: "OPEN",
-                isDraft: false,
-                mergeable: "MERGEABLE",
-                headRefOid: HEAD_SHA,
-                baseRefName: "main",
-                autoMergeRequest: null,
-                mergeQueueEntry: null,
+                ...pullRequest,
+                mergeQueueEntry: {
+                  id: "entry",
+                  position: 1,
+                  jump: true,
+                  state: "QUEUED",
+                  headCommit: { oid: HEAD_SHA },
+                },
               },
             },
           },
@@ -2676,11 +2761,16 @@ describe("live arming", () => {
   ];
 
   test.each([
-    { title: "fix: something", extraArguments: [], write: "--auto" },
+    // Green checks hand an ordinary pull request straight to the queue.
+    {
+      title: "fix: something",
+      extraArguments: [],
+      write: "expectedHeadOid:$sha,jump:false",
+    },
     {
       title: "chore: release v0.9.42",
       extraArguments: ["--jump"],
-      write: "enqueuePullRequest",
+      write: "expectedHeadOid:$sha,jump:true",
     },
   ])(
     "an unchanged ejected head cannot arm: $title $extraArguments",
@@ -2746,8 +2836,9 @@ describe("live arming", () => {
         expect(result.exitCode, result.stderr).toBe(0);
         expect(result.writes).toHaveLength(1);
         expect(result.writes.at(0)).toContain(
-          `--auto --match-head-commit ${HEAD_SHA}`,
+          "expectedHeadOid:$sha,jump:false",
         );
+        expect(result.writes.at(0)).toContain(`sha=${HEAD_SHA}`);
         return;
       }
       expect(result.exitCode).toBe(1);
@@ -2949,4 +3040,311 @@ describe("contributor signature check", () => {
     expect(result.exitCode).not.toBe(0);
     expect(result.stdout + result.stderr).toContain("CLA_UNSIGNED");
   });
+});
+
+type ArmFixtureOptions = {
+  initialEnabledAt?: string | null;
+  removalAt?: string;
+  enabledAt?: string;
+  afterHead?: string;
+  afterEnabledAt?: string | null;
+  queued?: boolean;
+  jump?: boolean;
+  checksSucceeded?: boolean;
+};
+const runArmFixture = (options: ArmFixtureOptions = {}) => {
+  const enabledAt = options.enabledAt ?? "2026-10-02T10:00:00Z";
+  const entry = {
+    id: "MQ_fixture",
+    position: 2,
+    jump: options.jump ?? false,
+    state: "QUEUED",
+    headCommit: { oid: HEAD_SHA },
+  };
+  const state = (timestamp: string | null, head = HEAD_SHA) => ({
+    id: "PR_fixture",
+    headRefOid: head,
+    updatedAt: "2026-10-02T09:00:00Z",
+    autoMergeRequest: timestamp === null ? null : { enabledAt: timestamp },
+    mergeQueueEntry: options.queued ? entry : null,
+  });
+  const writes: { query: string; variables: { id: string; sha: string } }[] =
+    [];
+  let reads = 0;
+  const result = armAndVerify({
+    pullRequestId: "PR_fixture",
+    expectedHeadSha: HEAD_SHA,
+    jump: options.jump ?? false,
+    checksSucceeded: options.checksSucceeded ?? false,
+    readState: () => {
+      reads += 1;
+      return reads === 1
+        ? state(options.initialEnabledAt ?? null)
+        : state(
+            options.afterEnabledAt === undefined
+              ? enabledAt
+              : options.afterEnabledAt,
+            options.afterHead ?? HEAD_SHA,
+          );
+    },
+    readRemovals: () =>
+      options.removalAt === undefined
+        ? []
+        : [
+            {
+              removedAt: options.removalAt,
+              reason: { type: "known", value: "manual" },
+              headSha: HEAD_SHA,
+              groupSha: null,
+            },
+          ],
+    mutate: (query, variables) => {
+      writes.push({ query, variables });
+      if (query.includes("disablePullRequestAutoMerge")) {
+        return {
+          data: { disablePullRequestAutoMerge: { pullRequest: state(null) } },
+        };
+      }
+      if (query.includes("enqueuePullRequest")) {
+        return { data: { enqueuePullRequest: { mergeQueueEntry: entry } } };
+      }
+      return {
+        data: { enablePullRequestAutoMerge: { pullRequest: state(enabledAt) } },
+      };
+    },
+  });
+  return { result, writes, reads };
+};
+
+describe("verified merge handoff", () => {
+  test.each([
+    { initialEnabledAt: "2026-10-02T08:41:00Z" },
+    {
+      initialEnabledAt: "2026-10-02T09:15:00Z",
+      removalAt: "2026-10-02T09:30:00Z",
+    },
+  ])(
+    "a stale field is refreshed for the exact head before reporting armed: %j",
+    (options) => {
+      const { result, writes, reads } = runArmFixture(options);
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value).toEqual({
+          kind: "armed",
+          enabledAt: "2026-10-02T10:00:00Z",
+        });
+      }
+      expect(reads).toBe(2);
+      expect(writes).toHaveLength(2);
+      expect(writes.at(0)?.query).toContain("disablePullRequestAutoMerge");
+      expect(writes.at(1)?.query).toContain(
+        "enablePullRequestAutoMerge(input:{pullRequestId:$id,expectedHeadOid:$sha",
+      );
+      expect(writes.at(1)?.variables).toEqual({
+        id: "PR_fixture",
+        sha: HEAD_SHA,
+      });
+    },
+  );
+  test("a fresh read with no auto-merge is NOT ARMED", () => {
+    const { result } = runArmFixture({ afterEnabledAt: null });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toBe(
+        "NOT ARMED: AUTO_MERGE_ABSENT_AFTER_ENABLE",
+      );
+    }
+  });
+  test("a new request is armed only after a matching fresh read", () => {
+    const { result, writes, reads } = runArmFixture();
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.kind).toBe("armed");
+    }
+    expect(writes).toHaveLength(1);
+    expect(reads).toBe(2);
+  });
+  test.each([
+    { enabledAt: "2026-10-02T08:59:59Z" },
+    { enabledAt: "2026-10-02T09:00:00Z", removalAt: "2026-10-02T09:30:00Z" },
+    { afterEnabledAt: "2026-10-02T10:01:00Z" },
+  ])(
+    "a stale or conflicting verification receipt is NOT ARMED: %j",
+    (options) => {
+      const { result } = runArmFixture(options);
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toBe(
+          "NOT ARMED: AUTO_MERGE_STALE_AFTER_ENABLE",
+        );
+      }
+    },
+  );
+  test("a head change after enabling is NOT ARMED", () => {
+    const { result } = runArmFixture({ afterHead: OTHER_SHA });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toBe("NOT ARMED: HEAD_MOVED_DURING_ARMING");
+    }
+  });
+  test("an existing queue entry for this head needs no write", () => {
+    const { result, writes } = runArmFixture({
+      queued: true,
+      initialEnabledAt: "2026-10-02T08:41:00Z",
+    });
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.kind).toBe("queued");
+    }
+    expect(writes).toHaveLength(0);
+  });
+  test("a trustworthy existing request is verified without writes", () => {
+    const { result, writes, reads } = runArmFixture({
+      initialEnabledAt: "2026-10-02T10:00:00Z",
+    });
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.kind).toBe("armed");
+    }
+    expect(reads).toBe(2);
+    expect(writes).toHaveLength(0);
+  });
+  test("a trustworthy request that disappears on verification is NOT ARMED", () => {
+    const { result, writes } = runArmFixture({
+      initialEnabledAt: "2026-10-02T10:00:00Z",
+      afterEnabledAt: null,
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toBe(
+        "NOT ARMED: AUTO_MERGE_STALE_DURING_VERIFICATION",
+      );
+    }
+    expect(writes).toHaveLength(0);
+  });
+  test("release jump still enqueues when an existing request is trustworthy", () => {
+    const { result, writes } = runArmFixture({
+      initialEnabledAt: "2026-10-02T10:00:00Z",
+      jump: true,
+      checksSucceeded: true,
+    });
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.kind).toBe("queued");
+    }
+    expect(writes).toHaveLength(1);
+    expect(writes.at(0)?.query).toContain("enqueuePullRequest");
+    expect(writes.at(0)?.query).toContain("jump:true");
+  });
+  test("release jump retains its head-pinned enqueue receipt for front verification", () => {
+    const { result, writes, reads } = runArmFixture({
+      jump: true,
+      checksSucceeded: true,
+    });
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toEqual({
+        kind: "queued",
+        entry: { position: 2, jump: true, state: "QUEUED" },
+      });
+    }
+    expect(reads).toBe(2);
+    expect(writes).toHaveLength(1);
+    expect(writes.at(0)?.query).toContain("expectedHeadOid:$sha,jump:true");
+    expect(writes.at(0)?.variables.sha).toBe(HEAD_SHA);
+  });
+});
+
+test("the real CLI exits NOT ARMED when the fresh auto-merge read remains absent", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-arm-absent-"));
+  const executable = path.join(directory, "gh");
+  const calls = path.join(directory, "calls");
+  const state = {
+    id: "PR_fixture",
+    number: 123,
+    title: "fix: verify merge handoff",
+    isCrossRepository: false,
+    state: "OPEN",
+    isDraft: false,
+    mergeable: "MERGEABLE",
+    headRefOid: HEAD_SHA,
+    baseRefName: "main",
+    updatedAt: "2026-10-02T09:00:00Z",
+    autoMergeRequest: null,
+    mergeQueueEntry: null,
+  };
+  writeFileSync(
+    executable,
+    `#!/bin/sh
+case "$*" in
+  *enablePullRequestAutoMerge*)
+    [ "$GH_TOKEN" = write-fixture ] || exit 91
+    printf '%s\\n' enable >> "$FIXTURE_CALLS"
+    printf '%s\\n' "$FIXTURE_ENABLE_RESPONSE"
+    exit 0;;
+esac
+[ "$GH_TOKEN" = read-fixture ] || exit 92
+case "$*" in
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
+  *timelineItems*) printf '%s\\n' '[]';;
+  *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
+  *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *check-runs*) printf '1\\tci-result\\tin_progress\\t\\n';;
+  *updatedAt*)
+    printf '%s\\n' arm-read >> "$FIXTURE_CALLS"
+    printf '%s\\n' "$FIXTURE_PULL_RESPONSE";;
+  *'api graphql'*) printf '%s\\n' "$FIXTURE_PULL_RESPONSE";;
+  *headRefOid*) printf '%s\\n' "$FIXTURE_HEAD_RESPONSE";;
+  *) printf '%s\\n' "Unexpected fixture command: $*" >&2; exit 93;;
+esac
+`,
+  );
+  chmodSync(executable, 0o700);
+  try {
+    const result = Bun.spawnSync({
+      cmd: [
+        process.execPath,
+        fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
+        "123",
+        "--repo",
+        PRIVATE_REPO,
+      ],
+      env: {
+        ...process.env,
+        PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
+        GH_READ_TOKEN: "read-fixture",
+        GH_TOKEN: "write-fixture",
+        STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW: "",
+        FIXTURE_CALLS: calls,
+        FIXTURE_PULL_RESPONSE: JSON.stringify({
+          data: { repository: { pullRequest: state } },
+        }),
+        FIXTURE_HEAD_RESPONSE: JSON.stringify({ headRefOid: HEAD_SHA }),
+        FIXTURE_ENABLE_RESPONSE: JSON.stringify({
+          data: {
+            enablePullRequestAutoMerge: {
+              pullRequest: {
+                ...state,
+                autoMergeRequest: { enabledAt: "2026-10-02T10:00:00Z" },
+              },
+            },
+          },
+        }),
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.stderr.toString()).toContain(
+      "NOT ARMED: AUTO_MERGE_ABSENT_AFTER_ENABLE",
+    );
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout.toString()).not.toContain("verdict: ARMED");
+    expect(readFileSync(calls, "utf-8").trim().split("\n")).toEqual([
+      "arm-read",
+      "enable",
+      "arm-read",
+    ]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
