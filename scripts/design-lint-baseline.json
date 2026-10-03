@@ -564,7 +564,6 @@
     "apps/api/src/lib/business-registries/credentials.ts": 1,
     "apps/api/src/lib/case-law/decision-text.ts": 2,
     "apps/api/src/lib/case-law/research-answers.ts": 1,
-    "apps/api/src/lib/chat/managed-provider-availability.ts": 2,
     "apps/api/src/lib/configuration-placeholders.ts": 1,
     "apps/api/src/lib/db/migration-history.ts": 1,
     "apps/api/src/lib/document-processing-queue.ts": 2,

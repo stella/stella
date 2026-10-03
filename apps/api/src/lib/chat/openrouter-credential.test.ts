@@ -183,7 +183,15 @@ const createHarness = ({
     } else if (typeof init.body === "string") {
       body = init.body;
     }
-    exchangeRequests.push({ url: input.toString(), body, init });
+    let url: string;
+    if (typeof input === "string") {
+      url = input;
+    } else if (input instanceof URL) {
+      url = input.href;
+    } else {
+      url = input.url;
+    }
+    exchangeRequests.push({ url, body, init });
     if (exchangeFetcher !== undefined) {
       return await exchangeFetcher(input, init);
     }
@@ -623,7 +631,9 @@ describe("managed OpenRouter credentials", () => {
   test("metrics and logs exclude tokens and keep dimensions bounded", async () => {
     const lines: string[] = [];
     const logger = installRecordingLogger();
-    setMetricLineSinkForTesting((line) => lines.push(line));
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
     try {
       const harness = createHarness();
       expect(await harness.provider.get()).toEqual(Result.ok(ACCESS_TOKEN));
