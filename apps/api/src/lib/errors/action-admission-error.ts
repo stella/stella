@@ -8,7 +8,12 @@ import {
 
 export class ActionAdmissionError extends TaggedError("ActionAdmissionError")<{
   message: string;
-  reason: "busy" | "period_exhausted" | "not_enabled" | "unavailable";
+  reason:
+    | "busy"
+    | "period_exhausted"
+    | "daily_exhausted"
+    | "not_enabled"
+    | "unavailable";
   cause?: unknown;
 }> {
   get code() {
@@ -19,6 +24,7 @@ export class ActionAdmissionError extends TaggedError("ActionAdmissionError")<{
 const ADMISSION_REASON_CODES = {
   busy: ACTION_ADMISSION_CODES.concurrencyBusy,
   period_exhausted: ACTION_ADMISSION_CODES.periodExhausted,
+  daily_exhausted: ACTION_ADMISSION_CODES.periodExhausted,
   not_enabled: ACTION_ADMISSION_CODES.notEnabled,
   unavailable: ACTION_ADMISSION_CODES.admissionUnavailable,
 } as const satisfies Record<
