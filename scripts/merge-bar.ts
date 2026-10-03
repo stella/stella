@@ -64,7 +64,7 @@ import {
   runPlanScopes,
 } from "./ci-plan-selector";
 
-const DEFAULT_REPO = "stella/stella";
+const DEFAULT_REPO = "stella/stella" satisfies MergeBarRepository;
 const MERGEABLE_POLL_ATTEMPTS = 8;
 const MERGEABLE_POLL_INTERVAL_MS = 2000;
 const MERGE_COMMIT_POLL_ATTEMPTS = 5;
@@ -120,8 +120,41 @@ export type RepositoryPolicy = {
   landing: Landing;
 };
 
-const repositoryMigrationDirectory = (repo: string): string | null =>
-  repo.toLowerCase() === "stella/stella" ? "apps/api/drizzle" : null;
+type RepositoryCapabilities = {
+  // Where committed migrations live, for repositories that carry any.
+  migrationDirectory: string | null;
+  // How a green ci-result is judged against ratchet changes on the base since
+  // it ran: `base-definitions` reads scripts/ratchet-definition-paths.json
+  // from the base branch and rechecks; `none` for repositories without the
+  // ratchet.
+  ratchetFreshness: "base-definitions" | "none";
+};
+
+/** The repositories merge-bar lands, each with what its checks rely on. */
+export const MERGE_BAR_REPOSITORIES = {
+  "stella/stella": {
+    migrationDirectory: "apps/api/drizzle",
+    ratchetFreshness: "base-definitions",
+  },
+  "stella/folio": { migrationDirectory: null, ratchetFreshness: "none" },
+  "stella/stella-infra": { migrationDirectory: null, ratchetFreshness: "none" },
+} as const satisfies Record<string, RepositoryCapabilities>;
+
+export type MergeBarRepository = keyof typeof MERGE_BAR_REPOSITORIES;
+
+const isMergeBarRepository = (repo: string): repo is MergeBarRepository =>
+  Object.hasOwn(MERGE_BAR_REPOSITORIES, repo);
+
+/** GitHub names are case-insensitive; the map is keyed in lower case. */
+export const readMergeBarRepository = (raw: string): MergeBarRepository => {
+  const repo = raw.toLowerCase();
+  if (!isMergeBarRepository(repo)) {
+    return panic(
+      `merge-bar does not know ${raw}; add it to MERGE_BAR_REPOSITORIES with its capabilities`,
+    );
+  }
+  return repo;
+};
 
 /**
  * Derive the landing contract from GitHub's active rules for the target
@@ -130,7 +163,7 @@ const repositoryMigrationDirectory = (repo: string): string | null =>
  * merge or admits one under the wrong policy.
  */
 export const mergeBarRepositoryPolicy = (
-  repo: string,
+  repo: MergeBarRepository,
   rawRules: unknown,
 ): RepositoryPolicy => {
   if (!Array.isArray(rawRules)) {
@@ -176,7 +209,7 @@ export const mergeBarRepositoryPolicy = (
 
   return {
     requiredCheckRuns,
-    migrationDirectory: repositoryMigrationDirectory(repo),
+    migrationDirectory: MERGE_BAR_REPOSITORIES[repo].migrationDirectory,
     landing,
   };
 };
@@ -810,21 +843,51 @@ export class RatchetRecheckError extends TaggedError("RatchetRecheckError")<{
   message: string;
 }> {}
 
+/**
+ * The ratchet-freshness capability of the target repository, from
+ * `MERGE_BAR_REPOSITORIES`.
+ */
+export type RatchetFreshness =
+  | { type: "none" }
+  | {
+      type: "base-definitions";
+      // The ratchet judges a PR with these sources, so a green run from
+      // before main changed one applied different rules than the merge queue
+      // will. Read from the base branch: an older checkout's copy may miss a
+      // newer helper.
+      readDefinitionPaths: (baseRefName: string) => unknown;
+      // Measures the ratchet on the base branch tip merged with this head, as
+      // the merge queue will, with the base's checker: a definition change on
+      // main costs one local ratchet run instead of a full CI re-run.
+      recheck: (input: {
+        headSha: string;
+        baseRefName: string;
+      }) => Result<void, RatchetRecheckError>;
+    };
+
 type RatchetFreshnessFailureOptions = {
-  definitions: unknown;
+  ratchet: RatchetFreshness;
   changedPaths: ReadonlySet<string>;
   pullFiles: readonly string[];
   pullRequest: PullRequestSnapshot;
-  recheckRatchet: CheckGreenResultFreshnessOptions["recheckRatchet"];
 };
 
 const ratchetFreshnessFailure = ({
-  definitions,
+  ratchet,
   changedPaths,
   pullFiles,
   pullRequest: { headSha, baseRefName },
-  recheckRatchet,
 }: RatchetFreshnessFailureOptions): string | null => {
+  switch (ratchet.type) {
+    case "none":
+      return null;
+    case "base-definitions":
+      break;
+    default:
+      ratchet satisfies never;
+      return panic("Unknown ratchet freshness capability");
+  }
+  const definitions = ratchet.readDefinitionPaths(baseRefName);
   if (
     !Array.isArray(definitions) ||
     definitions.length === 0 ||
@@ -843,7 +906,7 @@ const ratchetFreshnessFailure = ({
   if (pullFiles.some((filename) => definitions.includes(filename))) {
     return `main changed the ratchet since the green run (${ratchetChanges.join(", ")}) and this PR changes it too`;
   }
-  const recheck = recheckRatchet({ headSha, baseRefName });
+  const recheck = ratchet.recheck({ headSha, baseRefName });
   if (recheck.isOk()) {
     return null;
   }
@@ -871,17 +934,7 @@ type CheckGreenResultFreshnessOptions = {
     title: string;
   }) => Result<ReadonlyMap<string, boolean>, PlanSelectorError>;
   readRunJobs: (runId: number) => readonly RunJob[];
-  // The ratchet judges a PR with these sources, so a green run from before
-  // main changed one applied different rules than the merge queue will. Read
-  // from the base branch: an older checkout's copy may miss a newer helper.
-  readRatchetDefinitionPaths: (baseRefName: string) => unknown;
-  // Measures the ratchet on the base branch tip merged with this head, as the
-  // merge queue will, with the base's checker: a definition change on main
-  // costs one local ratchet run instead of a full CI re-run.
-  recheckRatchet: (input: {
-    headSha: string;
-    baseRefName: string;
-  }) => Result<void, RatchetRecheckError>;
+  ratchet: RatchetFreshness;
 };
 
 export const checkGreenResultFreshness = ({
@@ -894,8 +947,7 @@ export const checkGreenResultFreshness = ({
   readBaseWorkflow,
   runSelector,
   readRunJobs,
-  readRatchetDefinitionPaths,
-  recheckRatchet,
+  ratchet,
 }: CheckGreenResultFreshnessOptions) => {
   if (jump || isReleasePullRequest(pullRequest)) {
     return Result.ok();
@@ -982,11 +1034,10 @@ export const checkGreenResultFreshness = ({
   }
   const pullFiles = readPullFiles();
   const ratchetFailure = ratchetFreshnessFailure({
-    definitions: readRatchetDefinitionPaths(pullRequest.baseRefName),
+    ratchet,
     changedPaths,
     pullFiles,
     pullRequest,
-    recheckRatchet,
   });
   if (ratchetFailure !== null) {
     return refuse(ratchetFailure);
@@ -2033,7 +2084,7 @@ const recheckRatchetOnBase = ({
 };
 
 const readLiveRepositoryPolicy = (
-  repo: string,
+  repo: MergeBarRepository,
   baseRefName: string,
 ): RepositoryPolicy =>
   mergeBarRepositoryPolicy(
@@ -2688,7 +2739,7 @@ const createGhGateway = ({
 
 type MergeBarOptions = {
   pullNumber: number;
-  repo: string;
+  repo: MergeBarRepository;
   dryRun: boolean;
   // Enqueue at the front of the queue only when explicitly requested.
   jump: boolean;
@@ -2696,7 +2747,7 @@ type MergeBarOptions = {
 
 const parseOptions = (argv: readonly string[]): MergeBarOptions => {
   const positional: string[] = [];
-  let repo = DEFAULT_REPO;
+  let repo: MergeBarRepository = DEFAULT_REPO;
   let dryRun = false;
   let jump = false;
 
@@ -2704,7 +2755,9 @@ const parseOptions = (argv: readonly string[]): MergeBarOptions => {
     const argument = argv[index];
     if (argument === "--repo") {
       index += 1;
-      repo = argv[index] ?? panic("--repo requires a value");
+      repo = readMergeBarRepository(
+        argv[index] ?? panic("--repo requires a value"),
+      );
       continue;
     }
     if (argument === "--dry-run") {
@@ -2773,12 +2826,38 @@ const readSettledPullRequest = (
   return pullRequest;
 };
 
+type RatchetFreshnessForOptions = {
+  repo: MergeBarRepository;
+  readDefinitionPaths: (baseRefName: string) => unknown;
+  recheck: Extract<RatchetFreshness, { type: "base-definitions" }>["recheck"];
+};
+
+/** The ratchet-freshness check `MERGE_BAR_REPOSITORIES` declares for `repo`. */
+export const ratchetFreshnessFor = ({
+  repo,
+  readDefinitionPaths,
+  recheck,
+}: RatchetFreshnessForOptions): RatchetFreshness => {
+  const capability = MERGE_BAR_REPOSITORIES[repo].ratchetFreshness;
+  switch (capability) {
+    case "none":
+      return { type: "none" };
+    case "base-definitions":
+      return { type: "base-definitions", readDefinitionPaths, recheck };
+    default:
+      capability satisfies never;
+      return panic(
+        `Unknown ratchet freshness capability: ${String(capability)}`,
+      );
+  }
+};
+
 if (import.meta.main) {
   const options = parseOptions(Bun.argv.slice(2));
   const gateway = createGhGateway({
     repo: options.repo,
     pullNumber: options.pullNumber,
-    migrationDirectory: repositoryMigrationDirectory(options.repo),
+    migrationDirectory: MERGE_BAR_REPOSITORIES[options.repo].migrationDirectory,
   });
 
   // Version Packages uses this CLI as release-pr.yml's auto-merge-command too.
@@ -2869,14 +2948,17 @@ if (import.meta.main) {
         cwd: fileURLToPath(new URL("..", import.meta.url)),
       }),
     readRunJobs: gateway.readRunJobs,
-    readRatchetDefinitionPaths: gateway.readRatchetDefinitionPaths,
-    recheckRatchet: ({ headSha, baseRefName }) =>
-      recheckRatchetOnBase({
-        repositoryRoot: fileURLToPath(new URL("..", import.meta.url)),
-        repo: options.repo,
-        baseSha: gateway.readBranchTip(baseRefName).sha,
-        headSha,
-      }),
+    ratchet: ratchetFreshnessFor({
+      repo: options.repo,
+      readDefinitionPaths: gateway.readRatchetDefinitionPaths,
+      recheck: ({ headSha, baseRefName }) =>
+        recheckRatchetOnBase({
+          repositoryRoot: fileURLToPath(new URL("..", import.meta.url)),
+          repo: options.repo,
+          baseSha: gateway.readBranchTip(baseRefName).sha,
+          headSha,
+        }),
+    }),
   });
   if (freshness.isErr()) {
     console.error(freshness.error.message);

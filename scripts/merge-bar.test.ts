@@ -34,8 +34,11 @@ import {
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
   parseMergeQueueRemovals,
+  type RatchetFreshness,
+  ratchetFreshnessFor,
   RatchetRecheckError,
   readFastRequiredJobs,
+  readMergeBarRepository,
   readMergeHandoff,
   requiredChecksSucceeded,
   unrunPlannedJobs,
@@ -155,8 +158,8 @@ const checkRun = (
   { id = 1, outputTitle = "" } = {},
 ) => ({ id, name, status, conclusion, outputTitle });
 
-/** Any repository this one does not enumerate, which the bar treats alike. */
-const PRIVATE_REPO = "stella/private";
+/** A declared repository without stella's migrations or ratchet. */
+const PRIVATE_REPO = "stella/stella-infra";
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
@@ -674,7 +677,7 @@ const failedGate = (snapshot: MergeBarSnapshot) => {
 describe("merge bar", () => {
   test("uses the target branch's live required checks for public repositories", () => {
     expect(
-      mergeBarRepositoryPolicy("stella/tooling", [
+      mergeBarRepositoryPolicy("stella/folio", [
         {
           type: "required_status_checks",
           parameters: { required_status_checks: [{ context: "checks" }] },
@@ -705,9 +708,6 @@ describe("merge bar", () => {
       migrationDirectory: "apps/api/drizzle",
       landing: "merge-when-ready",
     });
-    expect(mergeBarRepositoryPolicy("Stella/Stella", stellaRules).landing).toBe(
-      "merge-when-ready",
-    );
 
     const infraRules = [
       {
@@ -735,8 +735,8 @@ describe("merge bar", () => {
   });
 
   test("refuses a repository with no live required checks", () => {
-    expect(() => mergeBarRepositoryPolicy(PRIVATE_REPO, [])).toThrow(
-      "No required status checks are active for stella/private",
+    expect(() => mergeBarRepositoryPolicy("stella/folio", [])).toThrow(
+      "No required status checks are active for stella/folio",
     );
   });
 
@@ -1612,6 +1612,21 @@ describe("green result freshness", () => {
       },
     ],
   };
+  const baseDefinitions = ({
+    readDefinitionPaths = (branch: string) => {
+      expect(branch).toBe("main");
+      return ratchetDefinitionPaths;
+    },
+    recheck = () => {
+      throw new Error("unexpected ratchet recheck");
+    },
+  }: Partial<
+    Omit<Extract<RatchetFreshness, { type: "base-definitions" }>, "type">
+  >): RatchetFreshness => ({
+    type: "base-definitions",
+    readDefinitionPaths,
+    recheck,
+  });
   const readers = (comparison: unknown) => ({
     pullRequest: passingSnapshot().pullRequest,
     jump: false,
@@ -1630,13 +1645,7 @@ describe("green result freshness", () => {
     readRunJobs: () => {
       throw new Error("unexpected run jobs read");
     },
-    readRatchetDefinitionPaths: (branch: string) => {
-      expect(branch).toBe("main");
-      return ratchetDefinitionPaths;
-    },
-    recheckRatchet: () => {
-      throw new Error("unexpected ratchet recheck");
-    },
+    ratchet: baseDefinitions({}),
   });
 
   test("unchanged base and up to twenty unrelated commits retain green results", () => {
@@ -1912,20 +1921,26 @@ describe("green result freshness", () => {
       });
       const passing = checkGreenResultFreshness({
         ...base,
-        recheckRatchet: (input) => {
-          rechecks.push(input);
-          return Result.ok();
-        },
+        ratchet: baseDefinitions({
+          recheck: (input) => {
+            rechecks.push(input);
+            return Result.ok();
+          },
+        }),
       });
       expect(passing.isOk(), filename).toBe(true);
       expect(rechecks).toEqual([{ headSha: HEAD_SHA, baseRefName: "main" }]);
 
       const failing = checkGreenResultFreshness({
         ...base,
-        recheckRatchet: () =>
-          Result.err(
-            new RatchetRecheckError({ message: "ratchet --check failed: +1" }),
-          ),
+        ratchet: baseDefinitions({
+          recheck: () =>
+            Result.err(
+              new RatchetRecheckError({
+                message: "ratchet --check failed: +1",
+              }),
+            ),
+        }),
       });
       expect(failing.isErr(), filename).toBe(true);
       if (failing.isErr()) {
@@ -1964,7 +1979,7 @@ describe("green result freshness", () => {
           { filename: "scripts/shared.ts" },
         ],
       }),
-      recheckRatchet: () => Result.ok(),
+      ratchet: baseDefinitions({ recheck: () => Result.ok() }),
     });
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
@@ -1982,10 +1997,57 @@ describe("green result freshness", () => {
           ahead_by: 1,
           files: [{ filename: "unrelated.ts" }],
         }),
-        readRatchetDefinitionPaths: () => definitions,
+        ratchet: baseDefinitions({ readDefinitionPaths: () => definitions }),
       });
       expect(result.isErr(), JSON.stringify(definitions)).toBe(true);
     }
+  });
+
+  describe("per-repository ratchet capability", () => {
+    // A ratchet change on main, so a declared check must read the definitions.
+    const ratchetChangedOnMain = readers({
+      status: "ahead",
+      ahead_by: 1,
+      files: [{ filename: "scripts/ratchet.ts" }],
+    });
+    const missingDefinitionsFile = () => {
+      throw new Error("gh api: Not Found (HTTP 404)");
+    };
+    const unexpectedRecheck = () => {
+      throw new Error("unexpected ratchet recheck");
+    };
+
+    test("folio declares no ratchet, so a missing definitions file is never read", () => {
+      const ratchet = ratchetFreshnessFor({
+        repo: "stella/folio",
+        readDefinitionPaths: missingDefinitionsFile,
+        recheck: unexpectedRecheck,
+      });
+      expect(ratchet).toEqual({ type: "none" });
+      expect(
+        checkGreenResultFreshness({ ...ratchetChangedOnMain, ratchet }).isOk(),
+      ).toBe(true);
+    });
+
+    test("stella declares the ratchet, so a missing definitions file still panics", () => {
+      const ratchet = ratchetFreshnessFor({
+        repo: "stella/stella",
+        readDefinitionPaths: missingDefinitionsFile,
+        recheck: unexpectedRecheck,
+      });
+      expect(ratchet.type).toBe("base-definitions");
+      expect(() =>
+        checkGreenResultFreshness({ ...ratchetChangedOnMain, ratchet }),
+      ).toThrow("Not Found (HTTP 404)");
+    });
+
+    test("--repo accepts only repositories with declared capabilities", () => {
+      expect(readMergeBarRepository("Stella/Folio")).toBe("stella/folio");
+      expect(readMergeBarRepository("stella/stella")).toBe("stella/stella");
+      expect(() => readMergeBarRepository("stella/tooling")).toThrow(
+        "merge-bar does not know stella/tooling",
+      );
+    });
   });
 
   test("the ratchet definition list is the ratchet's local import closure", () => {
@@ -2078,8 +2140,10 @@ describe("green result freshness", () => {
       readWorkflowRun: noRead,
       readBaseComparison: noRead,
       readPullFiles: noRead,
-      readRatchetDefinitionPaths: noRead,
-      recheckRatchet: noRead,
+      ratchet: baseDefinitions({
+        readDefinitionPaths: noRead,
+        recheck: noRead,
+      }),
       readBaseWorkflow: noRead,
       runSelector: noRead,
       readRunJobs: noRead,
@@ -2391,7 +2455,7 @@ case "$*" in
   *commits/main*) printf '%s\\n' "$FIXTURE_MAIN_TIP";;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
-  *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/private/actions/runs/1"}';;
+  *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella-infra/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
   *check-runs*) printf '1\\tci-result\\tcompleted\\tsuccess\\n';;
@@ -2657,7 +2721,7 @@ case "$*" in
   *actions/runs/1/jobs*) printf '%s\\n' "$FIXTURE_RUN_JOBS";;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
-  *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/private/actions/runs/1"}';;
+  *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella-infra/actions/runs/1"}';;
   *actions/runs/1*) printf '%s\\n' '{"id":1,"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' "$FIXTURE_COMPARISON";;
   *check-runs*) printf '1\\tci-result\\tcompleted\\tsuccess\\n';;
