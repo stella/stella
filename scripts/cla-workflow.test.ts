@@ -1351,10 +1351,25 @@ describe("contributor signature workflow", () => {
     expect(withPartial.errors).toEqual([]);
     expect(lastOutput(withPartial).conclusion).toBe("success");
     // The group's own predecessor losing its head leaves the chain incomplete.
+    const groupHeadEntry = {
+      baseCommit: { oid: predecessor },
+      headCommit: { oid: groupHead },
+      pullRequest: { number: 17 },
+    };
     const brokenChain = fixture({
       ...options,
-      queuePages: [[group[0], { ...group[1], headCommit: null }, ...partial]],
-      rebuiltQueuePages: [[group[0]]],
+      queuePages: [
+        [
+          groupHeadEntry,
+          {
+            baseCommit: { oid: BASE },
+            headCommit: null,
+            pullRequest: { number: 18 },
+          },
+          ...partial,
+        ],
+      ],
+      rebuiltQueuePages: [[groupHeadEntry]],
     });
     await brokenChain.execute();
     expect(brokenChain.errors).toEqual(["CLA_INCOMPLETE_MERGE_GROUP"]);
