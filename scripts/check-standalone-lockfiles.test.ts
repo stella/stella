@@ -334,6 +334,21 @@ jobs:
     ]);
   });
 
+  test.each(['"auto"', '"fallback"', '"force"', "true", "false", "0"])(
+    "checks a new nested bunfig without a lockfile when auto is %s",
+    (auto) => {
+      const file = "tools/new/nested/bunfig.toml";
+      const result = checkStandaloneLockfiles(
+        fixture({ [file]: `[install]\nauto = ${auto}\n` }),
+      );
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors.at(0)).toStartWith(
+        `${file} must set [install] auto = "${AUTO_INSTALL_DISABLED}"`,
+      );
+      expect(result.covered).toEqual([]);
+    },
+  );
+
   test("ignores lockfiles under node_modules", () => {
     const result = checkStandaloneLockfiles(
       fixture({ "node_modules/pkg/yarn.lock": "" }),

@@ -646,6 +646,10 @@ type CheckGreenResultFreshnessOptions = {
   readWorkflowRun: (checkRunId: number) => unknown;
   readBaseComparison: (testedBaseSha: string, baseRefName: string) => unknown;
   readPullFiles: () => readonly string[];
+  // The ratchet judges a PR with these sources, so a green run from before
+  // main changed one applied different rules than the merge queue will. Read
+  // from the base branch: an older checkout's copy may miss a newer helper.
+  readRatchetDefinitionPaths: (baseRefName: string) => unknown;
 };
 
 export const checkGreenResultFreshness = ({
@@ -655,6 +659,7 @@ export const checkGreenResultFreshness = ({
   readWorkflowRun,
   readBaseComparison,
   readPullFiles,
+  readRatchetDefinitionPaths,
 }: CheckGreenResultFreshnessOptions) => {
   if (jump || isReleasePullRequest(pullRequest)) {
     return Result.ok();
@@ -739,6 +744,24 @@ export const checkGreenResultFreshness = ({
       changedPaths.add(file["previous_filename"]);
     }
   }
+  const ratchetDefinitions = readRatchetDefinitionPaths(
+    pullRequest.baseRefName,
+  );
+  if (
+    !Array.isArray(ratchetDefinitions) ||
+    ratchetDefinitions.length === 0 ||
+    !ratchetDefinitions.every((entry) => typeof entry === "string")
+  ) {
+    return refuse("cannot read the ratchet definition paths from the base");
+  }
+  const ratchetChanges = ratchetDefinitions.filter((filename) =>
+    changedPaths.has(filename),
+  );
+  if (ratchetChanges.length > 0) {
+    return refuse(
+      `main changed the ratchet since the green run: ${ratchetChanges.join(", ")}`,
+    );
+  }
   const overlap = readPullFiles().filter((filename) =>
     changedPaths.has(filename),
   );
@@ -761,6 +784,7 @@ type GitHubGateway = {
   readWorkflowRun: (checkRunId: number) => unknown;
   readBaseComparison: (testedBaseSha: string, baseRefName: string) => unknown;
   readPullFiles: () => readonly string[];
+  readRatchetDefinitionPaths: (baseRefName: string) => unknown;
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
   // Both writes pin the head every gate was evaluated against, so GitHub
@@ -1351,6 +1375,14 @@ const createGhGateway = ({
           : [filename];
       }),
 
+    readRatchetDefinitionPaths: (baseRefName) =>
+      runGhJson([
+        "api",
+        "-H",
+        "Accept: application/vnd.github.raw+json",
+        `repos/${repo}/contents/scripts/ratchet-definition-paths.json?ref=${encodeURIComponent(baseRefName)}`,
+      ]),
+
     readReviewThreads: () => {
       const threads: ReviewThreadSnapshot[] = [];
       let cursor: string | null = null;
@@ -1812,6 +1844,7 @@ if (import.meta.main) {
     readWorkflowRun: gateway.readWorkflowRun,
     readBaseComparison: gateway.readBaseComparison,
     readPullFiles: gateway.readPullFiles,
+    readRatchetDefinitionPaths: gateway.readRatchetDefinitionPaths,
   });
   if (freshness.isErr()) {
     console.error(freshness.error.message);
