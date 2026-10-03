@@ -66,15 +66,34 @@ const project = (value: unknown, schema: unknown): unknown => {
   return value;
 };
 
+/**
+ * The wire copy of a value: arrays and properties lose `readonly`. Status
+ * responses and `Response` objects pass through unchanged, as they do below,
+ * and so do primitives, including branded ones such as `SafeId`.
+ */
+type DeepMutable<T> =
+  T extends ElysiaCustomStatusResponse<infer _Code, infer _Body, infer _Status>
+    ? T
+    : T extends Response | string | number | boolean | bigint | null | undefined
+      ? T
+      : T extends readonly (infer Item)[]
+        ? DeepMutable<Item>[]
+        : T extends object
+          ? { -readonly [Key in keyof T]: DeepMutable<T[Key]> }
+          : T;
+
 /** Bound display text from the declared response contract, preserving stored data and cursors. */
-export const projectResponseText = <T>(response: T, schema: unknown): T => {
-  if (
+export const projectResponseText = <T>(
+  response: T,
+  schema: unknown,
+): DeepMutable<T> => {
+  const projected =
     response instanceof ElysiaCustomStatusResponse ||
     response instanceof Response
-  ) {
-    return response;
-  }
-  const projected = structuredClone(response);
-  project(projected, schema);
-  return projected;
+      ? response
+      : project(structuredClone(response), schema);
+  // SAFETY: a status response or Response passes through and DeepMutable maps
+  // its type to itself; every other value is a fresh structuredClone deep copy
+  // owned by this call, so dropping readonly cannot alias the caller's data.
+  return projected as DeepMutable<T>;
 };
