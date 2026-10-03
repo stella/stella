@@ -253,6 +253,7 @@ const extensionsWithScopePolicy = (
     };
   });
 
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- keeps the caller's option types on the returned plugin
 export const createStellaOAuthProvider = <
   O extends OAuthOptions<Scope[]> &
     Required<Pick<OAuthOptions<Scope[]>, "scopes" | "extensions">>,

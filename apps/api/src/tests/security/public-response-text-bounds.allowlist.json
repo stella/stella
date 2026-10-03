@@ -88,7 +88,6 @@
   "GET /v1/law/statutes/search 503.hint": "Existing shared error contract permits free-text messages or codes; bound the shared error schema before removing this exception.",
   "GET /v1/law/statutes/search 503.message": "Existing shared error contract permits free-text messages or codes; bound the shared error schema before removing this exception.",
   "GET /v1/law/statutes/shelf response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
-  "GET /v1/mcp/oauth/cli-client-metadata.json response-schema": "Fixed client metadata document built from constants and the issuer origin, served like client-metadata.json; a bounded contract needs a bounded shared error schema first.",
   "GET /v1/mcp/oauth/client-metadata.json response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
   "GET /v1/public/knowledge/playbook-starters response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
   "GET /v1/public/knowledge/playbook-starters/:id response-schema": "Existing public endpoint has no declared response schema; add a bounded response contract before removing this exception.",
