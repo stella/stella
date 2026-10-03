@@ -240,6 +240,7 @@ const authorizePendingConnection = async ({
       organizationId: pending.organizationId,
       userId,
       connectorId: pending.connectorId,
+      connection: { type: "mark" },
       recordAuditEvent,
       observedIssuer,
       ...(observedEndpointOrigins === undefined

@@ -681,26 +681,69 @@ describe("MCP upstream connection lifecycle", () => {
   });
 
   test("uses only the current configured authorization", async () => {
-    for (const oauthApprovedIssuer of [
-      null,
-      "https://auth.example.com/current",
+    for (const expiresAt of [
+      new Date(state.now.getTime() - 1),
+      new Date(state.now.getTime() + 120_000),
     ]) {
-      for (const expiresAt of [
-        new Date(state.now.getTime() - 1),
-        new Date(state.now.getTime() + 120_000),
-      ]) {
-        const client = await createMcpClientForConnection({
-          organizationId,
-          row: oauthRow({ oauthApprovedIssuer, expiresAt }),
-          safeDb: makeSafeDb(),
-          userId,
-        });
-        expect(client).toBeNull();
-      }
+      const client = await createMcpClientForConnection({
+        organizationId,
+        row: oauthRow({
+          oauthApprovedIssuer: "https://auth.example.com/current",
+          expiresAt,
+        }),
+        safeDb: makeSafeDb(),
+        userId,
+      });
+      expect(client).toBeNull();
     }
     expect(state.decryptCalls).toBe(0);
     expect(state.refreshCalls).toBe(0);
     expect(hasStatusSet("needs_approval")).toBe(true);
+    expect(state.reviews).toEqual([]);
+  });
+
+  test("requests review of a connector without a configured issuer", async () => {
+    const client = await createMcpClientForConnection({
+      organizationId,
+      row: oauthRow({ oauthApprovedIssuer: null }),
+      safeDb: makeSafeDb(),
+      userId,
+    });
+    expect(client).toBeNull();
+    expect(state.decryptCalls).toBe(0);
+    expect(state.refreshCalls).toBe(0);
+    // The pending review blocks the connector; the connection keeps its
+    // tokens for when an administrator approves.
+    expect(state.dbSets).toEqual([]);
+    expect(state.reviews).toEqual([
+      expect.objectContaining({
+        observedIssuer: "https://auth.example.com",
+        observedEndpointOrigins: ["https://auth.example.com"],
+      }),
+    ]);
+  });
+
+  test("records no review when discovery for an unconfigured issuer fails", async () => {
+    const client = await createMcpClientForConnectionImpl({
+      organizationId,
+      row: oauthRow({ oauthApprovedIssuer: null }),
+      safeDb: makeSafeDb(),
+      userId,
+      outboundFetch,
+      dependencies: {
+        ...connectionDependencies,
+        discoverOAuthMetadataForApproval: async () =>
+          Result.err(
+            new HandlerError({
+              status: 502,
+              message: "MCP OAuth metadata discovery did not complete",
+            }),
+          ),
+      },
+    });
+    expect(client).toBeNull();
+    expect(state.decryptCalls).toBe(0);
+    expect(state.dbSets).toEqual([]);
     expect(state.reviews).toEqual([]);
   });
 

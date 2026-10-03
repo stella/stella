@@ -458,6 +458,7 @@ export const createMcpClientForConnection = async ({
       organizationId,
       userId,
       connectorId: row.connectorId,
+      connection: { type: "mark" },
       recordAuditEvent: mcpAuthorizationReviewRecorder({
         organizationId,
         userId,
@@ -1044,19 +1045,55 @@ type ResolveOAuthAuthorizationTokenOptions = Omit<
   row: Extract<BoundMcpConnection, { type: "oauth2" }>;
 };
 
-const markUnapprovedStoredMcpIssuer = async ({
+/**
+ * A connector configured before issuers were stored has neither a connector
+ * issuer nor a review, so nothing could approve its connections. Discovery
+ * records what the connector uses now as a pending review; the review alone
+ * keeps the connector's connections from loading, and the observing
+ * connection keeps its tokens so it resumes once an administrator approves.
+ */
+const requestUnconfiguredIssuerReview = async ({
+  dependencies,
   organizationId,
   row,
   safeDb,
   userId,
-}: Omit<
-  ResolveOAuthAuthorizationTokenOptions,
-  "dependencies"
->): Promise<boolean> => {
-  if (
-    row.oauthApprovedIssuer !== null &&
-    row.oauthApprovedIssuer === row.oauthAuthorizationServerUrl
-  ) {
+}: ResolveOAuthAuthorizationTokenOptions): Promise<void> => {
+  const observed = await dependencies.discoverOAuthMetadataForApproval(row.url);
+  if (Result.isError(observed)) {
+    // Without observed metadata there is nothing to approve: no review is
+    // recorded and the connection stays unused until discovery succeeds.
+    observeFailure(observed.error, { sink: CLIENT_SETUP_FAILED });
+    return;
+  }
+  const review = await recordMcpAuthorizationReview({
+    safeDb,
+    organizationId,
+    userId,
+    connectorId: row.connectorId,
+    connection: { type: "unchanged" },
+    recordAuditEvent: mcpAuthorizationReviewRecorder({
+      organizationId,
+      userId,
+    }),
+    observedIssuer: observed.value.authorizationServer.issuer,
+    observedEndpointOrigins: getOAuthEndpointOrigins(observed.value),
+  });
+  if (Result.isError(review)) {
+    observeFailure(review.error, { sink: CLIENT_SETUP_FAILED });
+  }
+};
+
+/** True when the stored connection cannot be used under its approved issuer. */
+const blockUnapprovedStoredMcpIssuer = async (
+  options: ResolveOAuthAuthorizationTokenOptions,
+): Promise<boolean> => {
+  const { organizationId, row, safeDb, userId } = options;
+  if (row.oauthApprovedIssuer === null) {
+    await requestUnconfiguredIssuerReview(options);
+    return true;
+  }
+  if (row.oauthApprovedIssuer === row.oauthAuthorizationServerUrl) {
     return false;
   }
   await markConnectionsStatus({
@@ -1127,7 +1164,8 @@ const resolveMcpTokenDuringRefresh = async ({
       return panic("Expected an OAuth connection after binding");
     }
     if (
-      await markUnapprovedStoredMcpIssuer({
+      await blockUnapprovedStoredMcpIssuer({
+        dependencies,
         organizationId,
         row: bound.value,
         safeDb,
@@ -1194,7 +1232,8 @@ const discoverMcpRefreshMetadata = async ({
         recordAuditEvent,
         observedIssuer: observed.value.authorizationServer.issuer,
         observedEndpointOrigins: getOAuthEndpointOrigins(observed.value),
-        lease: {
+        connection: {
+          type: "leased",
           connectionId: row.userConnectionId,
           expiresAt: leaseExpiresAt,
         },
@@ -1210,7 +1249,8 @@ const discoverMcpRefreshMetadata = async ({
         connectorId: row.connectorId,
         recordAuditEvent,
         observedIssuer: row.oauthAuthorizationServerUrl,
-        lease: {
+        connection: {
+          type: "leased",
           connectionId: row.userConnectionId,
           expiresAt: leaseExpiresAt,
         },
@@ -1232,7 +1272,11 @@ const discoverMcpRefreshMetadata = async ({
       recordAuditEvent,
       observedIssuer: metadata.value.authorizationServer.issuer,
       observedEndpointOrigins: getOAuthEndpointOrigins(metadata.value),
-      lease: { connectionId: row.userConnectionId, expiresAt: leaseExpiresAt },
+      connection: {
+        type: "leased",
+        connectionId: row.userConnectionId,
+        expiresAt: leaseExpiresAt,
+      },
     });
     if (Result.isError(review)) {
       observeFailure(review.error, { sink: TOKEN_REFRESH_FAILED });
@@ -1251,7 +1295,13 @@ const resolveOAuthAuthorizationToken = async ({
   userId,
 }: ResolveOAuthAuthorizationTokenOptions): Promise<ResolvedAuthorizationToken> => {
   if (
-    await markUnapprovedStoredMcpIssuer({ organizationId, row, safeDb, userId })
+    await blockUnapprovedStoredMcpIssuer({
+      dependencies,
+      organizationId,
+      row,
+      safeDb,
+      userId,
+    })
   ) {
     return { type: "skip" };
   }

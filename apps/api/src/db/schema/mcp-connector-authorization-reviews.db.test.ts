@@ -273,6 +273,7 @@ describe("MCP connector authorization reviews", () => {
         organizationId,
         userId: ownerId,
         connectorId: sharedConnectorId,
+        connection: { type: "mark" },
         recordAuditEvent: async () => {},
         observedIssuer: "https://auth.example.test/shared",
         observedEndpointOrigins: ["https://auth.example.test"],
@@ -445,6 +446,7 @@ describe("MCP connector authorization reviews", () => {
         organizationId,
         userId: ownerId,
         connectorId: sharedConnectorId,
+        connection: { type: "mark" },
         recordAuditEvent: async () => {},
         observedIssuer: "https://auth.example.test/updated",
         observedEndpointOrigins: [
@@ -488,6 +490,7 @@ describe("MCP connector authorization reviews", () => {
         organizationId,
         userId: ownerId,
         connectorId: sharedConnectorId,
+        connection: { type: "mark" },
         recordAuditEvent: async () => {},
         observedIssuer: "https://auth.example.test/updated",
       }),
@@ -501,6 +504,154 @@ describe("MCP connector authorization reviews", () => {
         userId: memberId,
       }),
     ).toBeNull();
+  });
+
+  test("reviews a connector configured without an issuer until an administrator approves it", async () => {
+    const legacyConnectorId = createSafeId<"mcpConnector">();
+    const legacyConnectionId = createSafeId<"mcpUserConnection">();
+    const legacyUrl = "https://mcp.example.test/legacy";
+    const legacyIssuer = "https://auth.example.test/legacy";
+    await testDb.insert(mcpConnectors).values({
+      id: legacyConnectorId,
+      organizationId,
+      slug: `legacy-${legacyConnectorId}`,
+      displayName: "Legacy connector",
+      description: "",
+      url: legacyUrl,
+      authType: "oauth2",
+    });
+    await testDb.insert(mcpOAuthClients).values({
+      organizationId,
+      connectorId: legacyConnectorId,
+      authorizationServerUrl: legacyIssuer,
+      clientId: "legacy-client",
+      registrationResponse: {},
+    });
+    await testDb.insert(mcpUserConnections).values({
+      id: legacyConnectionId,
+      organizationId,
+      connectorId: legacyConnectorId,
+      userId: ownerId,
+      status: "connected",
+      accessTokenEncrypted: Buffer.from("token"),
+      accessTokenIv: Buffer.from("iv"),
+      expiresAt: new Date("2100-01-01T00:00:00.000Z"),
+      resourceUrl: legacyUrl,
+      authorizationServerUrl: legacyIssuer,
+    });
+    const discoverLegacyMetadata = async (url: string) =>
+      Result.ok({
+        protectedResource: {
+          resource: url,
+          authorization_servers: [legacyIssuer],
+        },
+        authorizationServer: {
+          issuer: legacyIssuer,
+          authorization_endpoint: `${legacyIssuer}/authorize`,
+          token_endpoint: `${legacyIssuer}/token`,
+        },
+      });
+    const authorizationHeaders: (string | undefined)[] = [];
+    const dependencies = asTestRaw<
+      NonNullable<
+        Parameters<typeof createMcpClientForConnection>[0]["dependencies"]
+      >
+    >({
+      discoverOAuthMetadataForApproval: discoverLegacyMetadata,
+      decryptMcpSecret: async () => "stored-access-token",
+      createMCPClient: async ({
+        transport,
+      }: {
+        transport: { headers?: Record<string, string> };
+      }) => {
+        authorizationHeaders.push(transport.headers?.["Authorization"]);
+        return { close: async () => {} };
+      },
+    });
+    const outboundFetch = asTestRaw<
+      NonNullable<
+        Parameters<typeof createMcpClientForConnection>[0]["outboundFetch"]
+      >
+    >({
+      validateOutboundFetchTarget: async (url: string) =>
+        Result.ok({ addresses: [], url: new URL(url) }),
+    });
+    const ownerDb = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [], organizationId, ownerId),
+    );
+    const connect = async () => {
+      const row = await loadMcpConnectionById({
+        connectionId: legacyConnectionId,
+        organizationId,
+        safeDb: ownerDb,
+        userId: ownerId,
+      });
+      return row === null
+        ? null
+        : await createMcpClientForConnection({
+            organizationId,
+            row,
+            safeDb: ownerDb,
+            userId: ownerId,
+            dependencies,
+            outboundFetch,
+          });
+    };
+
+    expect(await connect()).toBeNull();
+    expect(
+      await testDb
+        .select({
+          status: mcpConnectorAuthorizationReviews.status,
+          observedIssuer: mcpConnectorAuthorizationReviews.observedIssuer,
+          observedEndpointOrigins:
+            mcpConnectorAuthorizationReviews.observedEndpointOrigins,
+        })
+        .from(mcpConnectorAuthorizationReviews)
+        .where(
+          eq(mcpConnectorAuthorizationReviews.connectorId, legacyConnectorId),
+        ),
+    ).toEqual([
+      {
+        status: "needs_reapproval",
+        observedIssuer: legacyIssuer,
+        observedEndpointOrigins: ["https://auth.example.test"],
+      },
+    ]);
+    expect(
+      await testDb
+        .select({ status: mcpUserConnections.status })
+        .from(mcpUserConnections)
+        .where(eq(mcpUserConnections.id, legacyConnectionId)),
+    ).toEqual([{ status: "connected" }]);
+    // The pending review keeps the connector's connections from loading.
+    expect(await connect()).toBeNull();
+    expect(authorizationHeaders).toEqual([]);
+
+    const approval = createApproveMcpAuthorizationHandler(
+      discoverLegacyMetadata,
+    );
+    const approvalContext = asTestRaw<Parameters<typeof approval.handler>[0]>({
+      params: { slug: `legacy-${legacyConnectorId}` },
+      body: {
+        confirmedIssuer: legacyIssuer,
+        confirmedEndpointOrigins: ["https://auth.example.test"],
+      },
+      safeDb: createSafeDb(testDb, [], organizationId, ownerId),
+      session: { activeOrganizationId: organizationId },
+      user: { id: ownerId },
+      memberRole: sessionMemberRole("owner"),
+      recordAuditEvent: async () => {},
+      request: new Request(
+        "https://api.example.test/v1/mcp/connectors/legacy/approve-authorization",
+        { method: "POST" },
+      ),
+      route: "/v1/mcp/connectors/:slug/approve-authorization",
+    });
+    expect(await approval.handler(approvalContext)).toEqual({ approved: true });
+
+    expect(await connect()).not.toBeNull();
+    expect(authorizationHeaders).toEqual(["Bearer stored-access-token"]);
   });
 
   test("coordinates token refresh with a fenced lease and due retry", async () => {
