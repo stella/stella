@@ -80,11 +80,15 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
+import { opaqueMetadataValue } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { PL_COURTS_METADATA_URL_SCHEMA } from "./pl-courts.metadata-urls";
 
 /**
  * Polish Courts adapter (SAOS).
@@ -477,6 +481,7 @@ type SaosDivision = {
   code?: string | null;
   type?: string | null;
   court?: SaosCourt | null;
+  chamber?: unknown;
 };
 
 type SaosSource = {
@@ -1453,6 +1458,19 @@ export const buildPlDecision = ({
   const effectiveJudges = item.judges ?? dumpItem.judges;
   const effectiveDivision = item.division ?? dumpItem.division;
   const effectiveChambers = item.chambers ?? dumpItem.chambers;
+  const metadataChambers = (() => {
+    if (effectiveChambers === null || effectiveChambers === undefined) {
+      return effectiveChambers;
+    }
+    const chambers = [];
+    for (const chamber of effectiveChambers) {
+      chambers.push({
+        ...chamber,
+        href: toMetadataUrl(chamber.href, "transport-json"),
+      });
+    }
+    return chambers;
+  })();
   const effectiveSource = item.source ?? dumpItem.source;
   const dissentingOpinions = normalizeDissentingOpinions(
     normalizeOptionalArray(
@@ -1544,101 +1562,148 @@ export const buildPlDecision = ({
     .map((referenced) => referenced.caseNumber?.trim() ?? "")
     .filter((caseNo) => caseNo.length > 0);
 
-  return plainTextIngestionResult({
-    caseNumber,
-    ...(firstPublisherIdentifier === undefined
-      ? {}
-      : {
-          identifiers: [firstPublisherIdentifier, ...otherPublisherIdentifiers],
-        }),
-    court: courtName,
-    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_COURTS].country,
-    language: "pl",
-    decisionDate,
-    decisionType: storedDecisionType,
-    documentRole,
-    fulltext,
-    sourceDocumentId: plCourtsSourceDocumentId(saosId),
-    sourceUrl: publicSourceUrl(saosId),
-    documentUrl,
-    publisherCitedCases,
-    judges,
-    textFields: {
-      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      summary: sourceTextField(
-        ADAPTER_KEYS.PL_COURTS,
-        detailOrListing(item.summary, dumpItem.summary),
-      ),
-    },
-    metadata: checkedDecisionMetadata({
+  return plainTextIngestionResult(
+    {
       caseNumber,
+      ...(firstPublisherIdentifier === undefined
+        ? {}
+        : {
+            identifiers: [
+              firstPublisherIdentifier,
+              ...otherPublisherIdentifiers,
+            ],
+          }),
       court: courtName,
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_COURTS].country,
+      language: "pl",
       decisionDate,
       decisionType: storedDecisionType,
-      saosId,
-      href: detailOrListing(item.href, dumpItem.href),
-      courtType: detailOrListing(item.courtType, dumpItem.courtType),
-      courtCases: effectiveCourtCases,
-      judges: effectiveJudges?.map((judge) => ({
-        name: judge.name,
-        function: toOptionalValue(judge.function),
-        specialRoles: normalizeOptionalArray(judge.specialRoles),
-      })),
-      keywords,
-      division: effectiveDivision,
-      chambers: effectiveChambers,
-      personnelType: detailOrListing(
-        item.personnelType,
-        dumpItem.personnelType,
-      ),
-      judgmentForm: judgmentFormName(
-        detailOrListing(item.judgmentForm, dumpItem.judgmentForm),
-      ),
-      source: effectiveSource,
-      courtReporters,
-      decision: detailOrListing(item.decision, dumpItem.decision),
-      legalBases: statutes,
-      referencedRegulations: normalizeOptionalArray(
-        item.referencedRegulations,
-        dumpItem.referencedRegulations,
-      ),
-      referencedCourtCases: normalizeOptionalArray(
-        item.referencedCourtCases,
-        dumpItem.referencedCourtCases,
-      ),
-      receiptDate: detailOrListing(item.receiptDate, dumpItem.receiptDate),
-      meansOfAppeal: detailOrListing(
-        item.meansOfAppeal,
-        dumpItem.meansOfAppeal,
-      ),
-      judgmentResult: detailOrListing(
-        item.judgmentResult,
-        dumpItem.judgmentResult,
-      ),
-      lowerCourtJudgments: normalizeOptionalArray(
-        item.lowerCourtJudgments,
-        dumpItem.lowerCourtJudgments,
-      ),
-      dissentingOpinions,
-      ingestion: {
-        dumpHash: rawHash,
-        sourceTier: detail ? "detail" : "dump",
-        ...(detailHash === undefined ? {} : { detailHash }),
+      documentRole,
+      fulltext,
+      sourceDocumentId: plCourtsSourceDocumentId(saosId),
+      sourceUrl: publicSourceUrl(saosId),
+      documentUrl,
+      publisherCitedCases,
+      judges,
+      textFields: {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        summary: sourceTextField(
+          ADAPTER_KEYS.PL_COURTS,
+          detailOrListing(item.summary, dumpItem.summary),
+        ),
       },
-      [PL_COURTS_DETAIL_READ_METADATA_KEY]: detail
-        ? PL_COURTS_DETAIL_READ_STATE.READ
-        : detailReadState,
-      ...((additionalCaseNumbers?.length ?? 0) > 0 && {
-        additionalCaseNumbers,
-      }),
-      ...(rulingKeys.length > 0 && { rulingKeys }),
-    }),
-    rawHash,
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS],
-    documentAst,
-    sourceRaw: encodeSourceRawEnvelope(rawParts),
-    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  });
+      metadata: checkedDecisionMetadata(
+        {
+          caseNumber,
+          court: courtName,
+          decisionDate,
+          decisionType: storedDecisionType,
+          saosId,
+          href: toMetadataUrl(
+            detailOrListing(item.href, dumpItem.href),
+            "transport-json",
+          ),
+          courtType: detailOrListing(item.courtType, dumpItem.courtType),
+          courtCases: effectiveCourtCases,
+          judges: effectiveJudges?.map((judge) => ({
+            name: judge.name,
+            function: toOptionalValue(judge.function),
+            specialRoles: normalizeOptionalArray(judge.specialRoles),
+          })),
+          keywords,
+          division:
+            effectiveDivision === null || effectiveDivision === undefined
+              ? effectiveDivision
+              : {
+                  ...effectiveDivision,
+                  href: toMetadataUrl(effectiveDivision.href, "transport-json"),
+                  court:
+                    effectiveDivision.court === null ||
+                    effectiveDivision.court === undefined
+                      ? effectiveDivision.court
+                      : {
+                          ...effectiveDivision.court,
+                          href: toMetadataUrl(
+                            effectiveDivision.court.href,
+                            "transport-json",
+                          ),
+                        },
+                  chamber: !isSaosChamber(effectiveDivision.chamber)
+                    ? opaqueMetadataValue(effectiveDivision.chamber)
+                    : {
+                        ...effectiveDivision.chamber,
+                        href: toMetadataUrl(
+                          effectiveDivision.chamber.href,
+                          "transport-json",
+                        ),
+                      },
+                },
+          chambers: metadataChambers,
+          personnelType: detailOrListing(
+            item.personnelType,
+            dumpItem.personnelType,
+          ),
+          judgmentForm: judgmentFormName(
+            detailOrListing(item.judgmentForm, dumpItem.judgmentForm),
+          ),
+          source:
+            effectiveSource === null || effectiveSource === undefined
+              ? effectiveSource
+              : {
+                  ...effectiveSource,
+                  judgmentUrl: toMetadataUrl(
+                    effectiveSource.judgmentUrl,
+                    "transport-json",
+                  ),
+                },
+          courtReporters,
+          decision: detailOrListing(item.decision, dumpItem.decision),
+          legalBases: statutes,
+          referencedRegulations: normalizeOptionalArray(
+            item.referencedRegulations,
+            dumpItem.referencedRegulations,
+          ),
+          referencedCourtCases: normalizeOptionalArray(
+            item.referencedCourtCases,
+            dumpItem.referencedCourtCases,
+          ),
+          receiptDate: detailOrListing(item.receiptDate, dumpItem.receiptDate),
+          meansOfAppeal: detailOrListing(
+            item.meansOfAppeal,
+            dumpItem.meansOfAppeal,
+          ),
+          judgmentResult: detailOrListing(
+            item.judgmentResult,
+            dumpItem.judgmentResult,
+          ),
+          lowerCourtJudgments: normalizeOptionalArray(
+            item.lowerCourtJudgments,
+            dumpItem.lowerCourtJudgments,
+          ),
+          dissentingOpinions,
+          ingestion: {
+            dumpHash: rawHash,
+            sourceTier: detail ? "detail" : "dump",
+            ...(detailHash === undefined ? {} : { detailHash }),
+          },
+          [PL_COURTS_DETAIL_READ_METADATA_KEY]: detail
+            ? PL_COURTS_DETAIL_READ_STATE.READ
+            : detailReadState,
+          ...((additionalCaseNumbers?.length ?? 0) > 0 && {
+            additionalCaseNumbers,
+          }),
+          ...(rulingKeys.length > 0 && { rulingKeys }),
+        },
+        PL_COURTS_METADATA_URL_SCHEMA,
+      ),
+      rawHash,
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS],
+      documentAst,
+      sourceRaw: encodeSourceRawEnvelope(rawParts),
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    PL_COURTS_METADATA_URL_SCHEMA,
+  );
 };
 
 /**

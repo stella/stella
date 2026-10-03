@@ -928,7 +928,7 @@
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1844,
+          "maxLength": 5348,
           "description": "Opaque cursor from a previous search_legislation call"
         }
       }

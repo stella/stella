@@ -1502,7 +1502,8 @@ if (!databaseUrl || !runPostgresTests) {
         const call = replayCallCount;
         replayCallCount += 1;
         const value = await scopedDb(transactionWork);
-        if (call === 0) {
+        // The run reads its source schema once before reading the identity.
+        if (call === 1) {
           replayReadCompleted();
           await replayMayContinue;
         }
@@ -1600,7 +1601,8 @@ if (!databaseUrl || !runPostgresTests) {
         const call = parseFailureCallCount;
         parseFailureCallCount += 1;
         const value = await scopedDb(transactionWork);
-        if (call === 0) {
+        // The run reads its source schema once before reading the identity.
+        if (call === 1) {
           parseFailureReadCompleted();
           await parseFailureMayContinue;
         }
@@ -1657,7 +1659,8 @@ if (!databaseUrl || !runPostgresTests) {
       let transactions = 0;
       const racingDb: ScopedDb = async (transactionWork) => {
         transactions += 1;
-        if (transactions === 2) {
+        // One schema lookup precedes the identity read in this standalone run.
+        if (transactions === 3) {
           await db
             .update(caseLawDecisions)
             .set({
@@ -1682,7 +1685,7 @@ if (!databaseUrl || !runPostgresTests) {
         observedAt: new Date("2026-07-31T12:04:01.000Z"),
       });
 
-      expect(transactions).toBe(3);
+      expect(transactions).toBe(4);
       expect(outcome).toEqual({
         status: "retryable",
         inserted: false,
@@ -1705,7 +1708,8 @@ if (!databaseUrl || !runPostgresTests) {
       let transactions = 0;
       const racingDb: ScopedDb = async (transactionWork) => {
         transactions += 1;
-        if (transactions === 2) {
+        // One schema lookup precedes the identity read in this standalone run.
+        if (transactions === 3) {
           await db
             .update(caseLawDecisions)
             .set({
@@ -1736,7 +1740,7 @@ if (!databaseUrl || !runPostgresTests) {
         observedAt: new Date("2026-07-31T12:05:01.000Z"),
       });
 
-      expect(transactions).toBe(3);
+      expect(transactions).toBe(4);
       expect(outcome).toEqual({
         status: "retryable",
         inserted: false,
@@ -1891,7 +1895,8 @@ if (!databaseUrl || !runPostgresTests) {
         const call = firstCallCount;
         firstCallCount += 1;
         const result = await scopedDb(async (tx) => await transactionWork(tx));
-        if (call === 0) {
+        // The run reads its source schema once before reading the identity.
+        if (call === 1) {
           await synchronizeInitialRead();
         }
         return result;
@@ -1902,7 +1907,8 @@ if (!databaseUrl || !runPostgresTests) {
         const call = secondCallCount;
         secondCallCount += 1;
         const result = await scopedDb(async (tx) => await transactionWork(tx));
-        if (call === 0) {
+        // The run reads its source schema once before reading the identity.
+        if (call === 1) {
           await synchronizeInitialRead();
           await firstWriteCompleted;
         }

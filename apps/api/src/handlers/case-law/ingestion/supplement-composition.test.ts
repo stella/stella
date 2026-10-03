@@ -10,6 +10,7 @@ import type {
 } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { PL_COURTS_RULING_DECISION_TYPES } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import {
   composeDecisionWithSupplements,
   DOCUMENT_SUPPLEMENTS_METADATA_KEY,
@@ -24,6 +25,7 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 type Ruling = SupplementJudgmentCandidate & { id: string };
@@ -319,12 +321,47 @@ const reasons: StoredSupplement = {
 };
 
 describe("a judgment composed with its reasons", () => {
+  test("registered composition preserves root and nested URLs after a metadata spread", () => {
+    const href = "https://example.test/?stated=&amp;amp;";
+    const input = plainTextIngestionResult(
+      {
+        ...judgment,
+        metadata: { ...judgment.metadata, href, division: { href } },
+      },
+      metadataUrlSchemaForAdapter(ADAPTER_KEYS.PL_COURTS),
+    );
+    const supplement = { ...reasons, sourceUrl: href };
+    const composed = composeDecisionWithSupplements({
+      judgment: input,
+      supplements: [supplement],
+      metadataUrlSchema: metadataUrlSchemaForAdapter(ADAPTER_KEYS.PL_COURTS),
+    });
+    expect(composed.metadata).toMatchObject({
+      href,
+      division: { href },
+      documentSupplements: [{ sourceUrl: href }],
+    });
+    const nonUrlJudgment = composeDecisionWithSupplements({
+      judgment,
+      supplements: [supplement],
+      metadataUrlSchema: metadataUrlSchemaForAdapter(ADAPTER_KEYS.PL_NCOURT),
+    });
+    expect(
+      nonUrlJudgment.metadata[DOCUMENT_SUPPLEMENTS_METADATA_KEY],
+    ).toMatchObject([{ sourceUrl: href }]);
+  });
+
   test("is the judgment itself where there are none", () => {
-    expect(composeDecisionWithSupplements(judgment, [])).toBe(judgment);
+    expect(composeDecisionWithSupplements({ judgment, supplements: [] })).toBe(
+      judgment,
+    );
   });
 
   test("reads the ruling, then the reasons, and keeps every anchor distinct", () => {
-    const composed = composeDecisionWithSupplements(judgment, [reasons]);
+    const composed = composeDecisionWithSupplements({
+      judgment,
+      supplements: [reasons],
+    });
     expect(composed.documentRole).toBe(DECISION_DOCUMENT_ROLE.RULING);
     expect(composed.decisionType).toBe(judgment.decisionType);
     expect(composed.fulltext).toBe(
@@ -368,15 +405,20 @@ describe("a judgment composed with its reasons", () => {
   });
 
   test("hashes the observation and every supplement version, and nothing else", () => {
-    const composed = composeDecisionWithSupplements(judgment, [reasons]);
+    const composed = composeDecisionWithSupplements({
+      judgment,
+      supplements: [reasons],
+    });
     expect(composed.rawHash).not.toBe(judgment.rawHash);
-    expect(composeDecisionWithSupplements(judgment, [reasons]).rawHash).toBe(
-      composed.rawHash,
-    );
     expect(
-      composeDecisionWithSupplements(judgment, [
-        { ...reasons, sourceHash: "edited-reasons-hash" },
-      ]).rawHash,
+      composeDecisionWithSupplements({ judgment, supplements: [reasons] })
+        .rawHash,
+    ).toBe(composed.rawHash);
+    expect(
+      composeDecisionWithSupplements({
+        judgment,
+        supplements: [{ ...reasons, sourceHash: "edited-reasons-hash" }],
+      }).rawHash,
     ).not.toBe(composed.rawHash);
   });
 
@@ -386,7 +428,10 @@ describe("a judgment composed with its reasons", () => {
       documentAst: {},
       fulltext: "UZASADNIENIE\n\nPierwszy akapit.\n\n  \n\nDrugi akapit.",
     };
-    const composed = composeDecisionWithSupplements(judgment, [unparsed]);
+    const composed = composeDecisionWithSupplements({
+      judgment,
+      supplements: [unparsed],
+    });
     if (!("blocks" in composed.documentAst)) {
       throw new Error("the composed document lost its blocks");
     }

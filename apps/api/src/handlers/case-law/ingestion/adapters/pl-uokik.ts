@@ -135,7 +135,10 @@ import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+import { MetadataUrlDefect, toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { PL_UOKIK_METADATA_URL_SCHEMA } from "./pl-uokik.metadata-urls";
 
 // ── Publisher boundary ───────────────────────────────────
 
@@ -1284,16 +1287,21 @@ type PageMetadataOptions = {
   files: readonly PlUokikFetchedFile[];
 };
 
-const addressOf = (id: string | undefined, file: PlUokikFile) =>
-  id === undefined ? undefined : (plUokikFileUrl(id, file.name) ?? undefined);
+const metadataAddressOf = (id: string | undefined, file: PlUokikFile) => {
+  if (id === undefined) {
+    return undefined;
+  }
+  const address = plUokikFileUrl(id, file.name);
+  return address === null
+    ? new MetadataUrlDefect({
+        message: "Attachment name cannot construct a safe metadata URL",
+        reason: "invalid-url",
+      })
+    : toMetadataUrl(address, "constructed");
+};
 
 /** What the decision page states, under the keys the inventory names. */
-const pageMetadataOf = ({
-  detail,
-  files,
-  id,
-  row,
-}: PageMetadataOptions): Record<string, unknown> => {
+const pageMetadataOf = ({ detail, files, id, row }: PageMetadataOptions) => {
   const practices = listOf(
     fieldText(detail, PL_UOKIK_LABEL.PRACTICE)?.replaceAll("\n", ";"),
   );
@@ -1333,7 +1341,7 @@ const pageMetadataOf = ({
         return {
           name: file.name,
           title: file.title,
-          documentUrl: addressOf(id, file),
+          documentUrl: metadataAddressOf(id, file),
           status: fetched?.status,
           sha256:
             fetched?.bytes === undefined ? undefined : sha256(fetched.bytes),
@@ -1346,7 +1354,7 @@ const pageMetadataOf = ({
     appealRulings: fieldFiles(detail, PL_UOKIK_LABEL.RULINGS).map((file) => ({
       name: file.name,
       title: file.title,
-      documentUrl: addressOf(id, file),
+      documentUrl: metadataAddressOf(id, file),
       sourceDocumentId:
         id === undefined ? undefined : plUokikRulingId(id, file.name),
     })),
@@ -1469,67 +1477,73 @@ export const assemblePlUokikDecision = async ({
   // never published under no authority.
   const courtUnknown = detail !== undefined && court === undefined;
   const listingOnly = missing !== undefined || courtUnknown;
-  const decision: IngestionResult = plainTextIngestionResult({
-    caseNumber,
-    ...(placeholder
-      ? { caseNumberIsPlaceholder: true }
-      : { identifiers: plUokikDecisionIdentifiers(caseNumber) }),
-    sourceDocumentId: id,
-    ...(quarantined ? {} : repairAliasesOf(row)),
-    court: authority,
-    country: PL_UOKIK_COUNTRY,
-    language: PL_UOKIK_LANGUAGE,
-    ...(decisionDate === undefined ? {} : { decisionDate }),
-    decisionType: PL_UOKIK_DECISION_TYPE,
-    ...(document === null ? {} : { fulltext: document.fulltext }),
-    ...(listingOnly ? { isListingOnly: true } : {}),
-    ...(sourceUrl === undefined ? {} : { sourceUrl }),
-    ...(firstFileUrl === undefined ? {} : { documentUrl: firstFileUrl }),
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: checkedDecisionMetadata({
+  const decision: IngestionResult = plainTextIngestionResult(
+    {
       caseNumber,
+      ...(placeholder
+        ? { caseNumberIsPlaceholder: true }
+        : { identifiers: plUokikDecisionIdentifiers(caseNumber) }),
+      sourceDocumentId: id,
+      ...(quarantined ? {} : repairAliasesOf(row)),
       court: authority,
-      decisionDate,
+      country: PL_UOKIK_COUNTRY,
+      language: PL_UOKIK_LANGUAGE,
+      ...(decisionDate === undefined ? {} : { decisionDate }),
       decisionType: PL_UOKIK_DECISION_TYPE,
-      unid: row.unid,
-      noteId: row.noteId,
-      register,
-      decisionNumber: number.length === 0 ? undefined : number,
-      decisionNumberAsListed: row.decisionNumber,
-      decisionDateAsListed: row.datePrinted,
-      ...pageMetadataOf({
-        detail,
-        row,
-        id: quarantined ? undefined : id,
-        files,
-      }),
-      ...(missing === undefined ? {} : { detailStatus: missing }),
-      ...(courtUnknown ? { quarantineReason: "court-not-stated" } : {}),
-      ...appealWatchOf(detail),
-      ...documentStateOf({
-        listingOnly,
-        read,
-        files,
-        listed: decisionFiles.length,
-      }),
-    }),
-    // The files are stored beside the envelope rather than in it, so a
-    // corrected file under an unchanged page has to change the hash too.
-    rawHash: hashContent(
-      [sourceRaw, ...kept.map(({ bytes }) => sha256(bytes))].join("\n"),
-    ),
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK],
-    documentAst,
-    sourceRaw,
-    ...(kept.length === 0
-      ? {}
-      : {
-          sourceRawObjects: Object.fromEntries(
-            kept.map((file, index) => [plUokikFileObjectName(index), file]),
-          ),
-        }),
-    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  });
+      ...(document === null ? {} : { fulltext: document.fulltext }),
+      ...(listingOnly ? { isListingOnly: true } : {}),
+      ...(sourceUrl === undefined ? {} : { sourceUrl }),
+      ...(firstFileUrl === undefined ? {} : { documentUrl: firstFileUrl }),
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      metadata: checkedDecisionMetadata(
+        {
+          caseNumber,
+          court: authority,
+          decisionDate,
+          decisionType: PL_UOKIK_DECISION_TYPE,
+          unid: row.unid,
+          noteId: row.noteId,
+          register,
+          decisionNumber: number.length === 0 ? undefined : number,
+          decisionNumberAsListed: row.decisionNumber,
+          decisionDateAsListed: row.datePrinted,
+          ...pageMetadataOf({
+            detail,
+            row,
+            id: quarantined ? undefined : id,
+            files,
+          }),
+          ...(missing === undefined ? {} : { detailStatus: missing }),
+          ...(courtUnknown ? { quarantineReason: "court-not-stated" } : {}),
+          ...appealWatchOf(detail),
+          ...documentStateOf({
+            listingOnly,
+            read,
+            files,
+            listed: decisionFiles.length,
+          }),
+        },
+        PL_UOKIK_METADATA_URL_SCHEMA,
+      ),
+      // The files are stored beside the envelope rather than in it, so a
+      // corrected file under an unchanged page has to change the hash too.
+      rawHash: hashContent(
+        [sourceRaw, ...kept.map(({ bytes }) => sha256(bytes))].join("\n"),
+      ),
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK],
+      documentAst,
+      sourceRaw,
+      ...(kept.length === 0
+        ? {}
+        : {
+            sourceRawObjects: Object.fromEntries(
+              kept.map((file, index) => [plUokikFileObjectName(index), file]),
+            ),
+          }),
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    PL_UOKIK_METADATA_URL_SCHEMA,
+  );
   return listingOnly
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };
@@ -1648,58 +1662,61 @@ export const assemblePlUokikRuling = async ({
     [RULING_NAME_PART]: file.name,
   });
   const caseNumber = read?.caseNumber ?? id;
-  return plainTextIngestionResult({
-    caseNumber,
-    ...(read === undefined ? { caseNumberIsPlaceholder: true } : {}),
-    sourceDocumentId: id,
-    court: read?.court ?? "",
-    country: PL_UOKIK_COUNTRY,
-    language: PL_UOKIK_LANGUAGE,
-    ...(read === undefined
-      ? {}
-      : { decisionDate: read.decisionDate, decisionType: read.decisionType }),
-    ...(parsed === undefined ? {} : { fulltext: parsed.fulltext }),
-    // A ruling whose header could not be read is kept, not published: what
-    // it is keyed and filed by would otherwise be a guess.
-    ...(read === undefined ? { isListingOnly: true } : {}),
-    sourceUrl,
-    ...(documentUrl === undefined ? {} : { documentUrl }),
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: checkedDecisionMetadata({
+  return plainTextIngestionResult(
+    {
       caseNumber,
+      ...(read === undefined ? { caseNumberIsPlaceholder: true } : {}),
+      sourceDocumentId: id,
       court: read?.court ?? "",
-      decisionDate: read?.decisionDate,
-      decisionType: read?.decisionType,
-      recordClass: "court-ruling",
-      uokikDecision: decision,
-      attachmentName: file.name,
-      attachmentTitle: file.title,
-      attachmentStatus: fetched.status,
-      attachmentSha256: kept === undefined ? undefined : sha256(kept.bytes),
+      country: PL_UOKIK_COUNTRY,
+      language: PL_UOKIK_LANGUAGE,
       ...(read === undefined
-        ? { rulingStatus: status }
-        : {
-            divisionAsPrinted: read.divisionAsPrinted,
-            rulingKeys: rulingKeysOf(read),
-          }),
-    }),
-    rawHash: hashContent(
-      [sourceRaw, ...(kept === undefined ? [] : [sha256(kept.bytes)])].join(
-        "\n",
+        ? {}
+        : { decisionDate: read.decisionDate, decisionType: read.decisionType }),
+      ...(parsed === undefined ? {} : { fulltext: parsed.fulltext }),
+      // A ruling whose header could not be read is kept, not published: what
+      // it is keyed and filed by would otherwise be a guess.
+      ...(read === undefined ? { isListingOnly: true } : {}),
+      sourceUrl,
+      ...(documentUrl === undefined ? {} : { documentUrl }),
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      metadata: checkedDecisionMetadata({
+        caseNumber,
+        court: read?.court ?? "",
+        decisionDate: read?.decisionDate,
+        decisionType: read?.decisionType,
+        recordClass: "court-ruling",
+        uokikDecision: decision,
+        attachmentName: file.name,
+        attachmentTitle: file.title,
+        attachmentStatus: fetched.status,
+        attachmentSha256: kept === undefined ? undefined : sha256(kept.bytes),
+        ...(read === undefined
+          ? { rulingStatus: status }
+          : {
+              divisionAsPrinted: read.divisionAsPrinted,
+              rulingKeys: rulingKeysOf(read),
+            }),
+      }),
+      rawHash: hashContent(
+        [sourceRaw, ...(kept === undefined ? [] : [sha256(kept.bytes)])].join(
+          "\n",
+        ),
       ),
-    ),
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK],
-    documentAst: parsed?.documentAst ?? EMPTY_AST,
-    sourceRaw,
-    ...(kept === undefined
-      ? {}
-      : {
-          sourceRawObjects: {
-            [RULING_OBJECT]: kept,
-          },
-        }),
-    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  });
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK],
+      documentAst: parsed?.documentAst ?? EMPTY_AST,
+      sourceRaw,
+      ...(kept === undefined
+        ? {}
+        : {
+            sourceRawObjects: {
+              [RULING_OBJECT]: kept,
+            },
+          }),
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    PL_UOKIK_METADATA_URL_SCHEMA,
+  );
 };
 
 type BuildOptions = {

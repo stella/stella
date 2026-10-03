@@ -1,5 +1,3 @@
-import type { StatuteCountry } from "@/lib/statute-route";
-
 /**
  * An act an alias names: its number in the collection that published it,
  * and the short name a reader recognises it by.
@@ -74,6 +72,7 @@ export const STATUTE_ALIASES = {
     zp: CZE_ACTS.labourCode,
     "zakonik prace": CZE_ACTS.labourCode,
     tz: CZE_ACTS.criminalCode,
+    trz: CZE_ACTS.criminalCode,
     "trestni zakonik": CZE_ACTS.criminalCode,
     tr: CZE_ACTS.criminalProcedure,
     "trestni rad": CZE_ACTS.criminalProcedure,
@@ -109,10 +108,16 @@ export const STATUTE_ALIASES = {
     "civilny sporovy poriadok": SVK_ACTS.civilDisputes,
     "spravny poriadok": SVK_ACTS.administrativeProcedure,
   },
-} as const satisfies Record<StatuteCountry, Record<string, StatuteAliasTarget>>;
+} as const satisfies Record<string, Record<string, StatuteAliasTarget>>;
+
+export type StatuteQueryCountry = keyof typeof STATUTE_ALIASES;
+
+export const isStatuteQueryCountry = (
+  country: string,
+): country is StatuteQueryCountry => Object.hasOwn(STATUTE_ALIASES, country);
 
 export const resolveStatuteAlias = (
-  country: StatuteCountry,
+  country: StatuteQueryCountry,
   foldedText: string,
 ): StatuteAliasTarget | null => {
   const aliases: Record<string, StatuteAliasTarget> = STATUTE_ALIASES[country];
