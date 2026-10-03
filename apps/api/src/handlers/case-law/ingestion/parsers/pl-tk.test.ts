@@ -462,6 +462,7 @@ test("excludes script and style from ruling metadata", () => {
   expect(publication?.text).toBe("Dz.U. 2026");
   expect(publication?.links).toHaveLength(1);
   expect(publication?.links.at(0)?.text).toBe("ISAP");
-  // A defect object stringifies to "[object Object]" and fails.
-  expect(String(publication?.links.at(0)?.url)).toBe("https://example.org/");
+  const url = publication?.links.at(0)?.url;
+  // A defect object is not a string and fails the comparison.
+  expect(typeof url === "string" && url === "https://example.org/").toBe(true);
 });

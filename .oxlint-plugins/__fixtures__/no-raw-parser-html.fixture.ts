@@ -58,4 +58,4 @@ table.text("fixture text");
 // expect-clean: no-raw-parser-html/no-raw-parser-html
 void Bun.file("fixture.html").text();
 // expect-clean: no-raw-parser-html/no-raw-parser-html
-new Response("fixture text").text();
+void new Response("fixture text").text();
