@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 3.5.3
+
+### Patch Changes
+
+- [#4600](https://github.com/stella/stella/pull/4600) [`2e1ebc2`](https://github.com/stella/stella/commit/2e1ebc2c4bc5c91baf821f904242173f0801bd63) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Accept grouped case-law search continuation cursors.
+
 ## 3.5.2
 
 ### Patch Changes
