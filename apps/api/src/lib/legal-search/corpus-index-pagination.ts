@@ -9,19 +9,16 @@ import type { RegistryRequestObservation } from "@stll/business-registries/share
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
-import type {
-  CorpusIndexHit,
-  CorpusIndexScoredSearchResponse,
-} from "@/api/lib/legal-search/corpus-index-client";
 import {
-  CorpusIndexError,
+  type CorpusIndexHit,
+  type CorpusIndexScoredSearchResponse,
+  type CorpusIndexError,
   getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import {
   CORPUS_BM25_PASSAGE_LIMIT,
   CORPUS_BM25_RATIO_POWER,
-  CORPUS_AUTHORITY_PASSAGE_LIMIT,
   CORPUS_AUTHORITY_LEXICAL_RANK_DECAY,
   type CorpusIndexRankingMode,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
@@ -1005,76 +1002,6 @@ const bm25TopScore = (hits: readonly ScoredPassage[]): number | null => {
   return topScore;
 };
 
-type ReadAuthorityLaneOptions = {
-  observer: RegistryRequestObservation;
-  cluster: QuickwitCluster;
-  indexId: string;
-  query: string;
-};
-
-/** One bounded same-query read; only complete positive-authority tiers enter. */
-const readAuthorityLane = async ({
-  observer,
-  cluster,
-  indexId,
-  query,
-}: ReadAuthorityLaneOptions) => {
-  const laneStartedAt = performance.now();
-  const lane = await getCorpusIndexClient(cluster).search({
-    observer,
-    indexId,
-    query,
-    maxHits: CORPUS_AUTHORITY_PASSAGE_LIMIT + 1,
-    sortBy: "citation_authority",
-  });
-  const indexMs = performance.now() - laneStartedAt;
-  if (lane.isErr()) {
-    return failCorpusIndexSearch(lane.error);
-  }
-  const passages = lane.value.hits.length;
-  const authorityOf = (hit: CorpusIndexHit): number => {
-    const authority = hit["citation_authority"];
-    if (
-      typeof authority !== "number" ||
-      !Number.isFinite(authority) ||
-      authority < 0
-    ) {
-      return failCorpusIndexSearch(
-        new CorpusIndexError({
-          status: 200,
-          message: "Authority lane received an invalid citation authority",
-        }),
-      );
-    }
-    return authority;
-  };
-  const cutoff = lane.value.hits.at(CORPUS_AUTHORITY_PASSAGE_LIMIT - 1);
-  const lookahead = lane.value.hits.at(CORPUS_AUTHORITY_PASSAGE_LIMIT);
-  // Native sorting cannot break authority ties by text identity. Admit only
-  // complete tiers, so shuffled physical copies cannot change the universe.
-  const tiedCutoff =
-    cutoff !== undefined &&
-    lookahead !== undefined &&
-    authorityOf(cutoff) === authorityOf(lookahead)
-      ? authorityOf(cutoff)
-      : null;
-  const admitted = lane.value.hits
-    .slice(0, CORPUS_AUTHORITY_PASSAGE_LIMIT)
-    .filter((hit) => {
-      const authority = authorityOf(hit);
-      return authority > 0 && (tiedCutoff === null || authority > tiedCutoff);
-    })
-    .toSorted((left, right) => {
-      const leftClause = passageClause(left) ?? "";
-      const rightClause = passageClause(right) ?? "";
-      if (leftClause < rightClause) {
-        return -1;
-      }
-      return leftClause > rightClause ? 1 : 0;
-    });
-  return { hits: admitted, passages, indexMs };
-};
-
 type ExperimentalLexicalScoreOptions = {
   mode: Exclude<CorpusIndexRankingMode, "off">;
   rank: number;
@@ -1201,36 +1128,9 @@ const readExperimentalSearchPage = async <TContext>(
       anchorIdById.set(id, anchor);
     }
   }
-  let scanRounds = 1;
-  let authorityIndexMs = 0;
-  let authorityPassages = 0;
-  if (mode === "authority-rank") {
-    const lane = await readAuthorityLane({ observer, cluster, indexId, query });
-    scanRounds += 1;
-    authorityIndexMs = lane.indexMs;
-    authorityPassages = lane.passages;
-    for (const hit of lane.hits) {
-      const id = extractId(hit);
-      if (id === null || passageCountById.has(id)) {
-        continue;
-      }
-      // No global lexical rank is known for this matching lane-only document.
-      // Zero is a conservative lexical lower bound, stable across every page.
-      candidates.push({ id, score: 0 });
-      passageCountById.set(id, 1);
-      const clause = passageClause(hit);
-      if (clause !== null) {
-        passageClauseById.set(id, clause);
-      }
-      const anchor = readAnchorId(hit);
-      if (anchor !== null) {
-        anchorIdById.set(id, anchor);
-      }
-    }
-  }
-  // The stop proof is the finite candidate universe: both bounded lanes are
-  // fully read before blending, folding, or applying the cursor. Pagination
-  // never moves to a new window with different scores or representatives.
+  // The serving passage index has no citation_authority field. Authority is
+  // hydrated by rankCandidates from Postgres over this finite lexical universe.
+  // Replay the whole universe before blending, grouping, and cursor filtering.
   const ranking = await rankCandidates(candidates, mode);
   const windowed = windowAfterCursor(ranking.ranked, parsedCursor);
   const pageRanked = windowed.slice(0, limit);
@@ -1272,9 +1172,9 @@ const readExperimentalSearchPage = async <TContext>(
     nextCursor,
     paginationOutcome: SEARCH_PAGINATION_COMPLETE,
     scan: {
-      rounds: scanRounds,
-      passagesScanned: hits.length + authorityPassages,
-      indexMs: indexMs + authorityIndexMs + snippets.indexMs,
+      rounds: 1,
+      passagesScanned: hits.length,
+      indexMs: indexMs + snippets.indexMs,
       earlyStopped: false,
       roundCapHit: false,
       highlightRounds: snippets.rounds,

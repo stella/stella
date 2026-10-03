@@ -17,10 +17,8 @@ export type CorpusIndexRankingMode =
 // enabling it. One projected read stays below the engine's 10,000 offset cap.
 export const CORPUS_BM25_PASSAGE_LIMIT = 7000;
 export const CORPUS_BM25_RATIO_POWER = 0.25;
-// Both lanes are replayed in full before grouping and cursor filtering.
-export const CORPUS_AUTHORITY_PASSAGE_LIMIT = 256;
+// Authority is hydrated after the bounded lexical scan.
 export const CORPUS_AUTHORITY_LEXICAL_RANK_DECAY = 1200;
-export const CORPUS_AUTHORITY_EXTRA_ENGINE_CALLS = 1;
 
 export const corpusRankingCursorTarget = (
   target: string | null,
@@ -37,7 +35,6 @@ export const corpusRankingCursorTarget = (
             CORPUS_BM25_RATIO_POWER,
             ...(mode === "authority-rank"
               ? [
-                  CORPUS_AUTHORITY_PASSAGE_LIMIT,
                   CORPUS_AUTHORITY_LEXICAL_RANK_DECAY,
                   CORPUS_EXPERIMENTAL_AUTHORITY_WEIGHT,
                 ]

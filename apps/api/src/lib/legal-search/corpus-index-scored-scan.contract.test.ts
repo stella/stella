@@ -333,7 +333,7 @@ const readScanPage = async ({
     },
     unseenScoreUpperBound: (next) =>
       stableBlendUpperBound(next, DEFAULT_AUTHORITY_WEIGHT),
-    rankCandidates: async (candidates) => ({
+    rankCandidates: async (candidates, effectiveRankingMode) => ({
       context: null,
       groups: candidates
         .filter(({ id }) => {
@@ -352,6 +352,7 @@ const readScanPage = async ({
             ),
         ),
         authorityById: new Map(),
+        rankingMode: effectiveRankingMode,
       }),
     }),
   });
@@ -631,6 +632,57 @@ describe.skipIf(!runEngineTests)(
         ).length;
         expect(tied).toBeGreaterThan(PAGE_SIZE);
         expect(scored).toEqual(native);
+      },
+      ENGINE_TIMEOUT_MS,
+    );
+
+    test.each(ENTRIES)(
+      "authority ranking sends supported candidate requests for a %s entry",
+      async (_kind, entry) => {
+        // This index uses the production v7 mapping, which has no authority
+        // field. Exercise the full candidate path so an added lane must also
+        // satisfy the real engine's mapping and request contract.
+        const query = handlerQuery(entry);
+        const universe = await readScored({
+          query,
+          from: 0,
+          size: CORPUS_BM25_PASSAGE_LIMIT + 1,
+        });
+        expect(universe.hits.length).toBeGreaterThan(20);
+        expect(universe.hits.length).toBeLessThan(CORPUS_BM25_PASSAGE_LIMIT);
+        const best = new Map<string, number>();
+        for (const { fields, score } of universe.hits) {
+          const id = fields["document_id"];
+          if (typeof id === "string" && !best.has(id)) {
+            best.set(id, score);
+          }
+        }
+        const read = await readScanPage({
+          query,
+          parsedCursor: null,
+          scanTransport: {
+            type: "scored",
+            fields: ["document_id", "chunk_id", "anchor_id"],
+          },
+          rankingMode: "authority-rank",
+          limit: best.size,
+        });
+        expect(read.pageRanked.map(({ id }) => id).toSorted()).toEqual(
+          [...best.keys()].toSorted(),
+        );
+        expect(read.pageRanked.at(0)?.lexicalScore).toBe(1);
+        expect(
+          read.pageRanked.every(
+            ({ lexicalScore }) => lexicalScore > 0 && lexicalScore <= 1,
+          ),
+        ).toBe(true);
+        expect(new Set(read.pageRanked.map(({ id }) => id)).size).toBe(
+          best.size,
+        );
+        expect(read.scan.rounds).toBe(1);
+        expect(read.scan.highlightRounds).toBeGreaterThan(0);
+        expect(read.snippetById.size).toBeGreaterThan(0);
+        expect(read.nextCursor).toBeNull();
       },
       ENGINE_TIMEOUT_MS,
     );
