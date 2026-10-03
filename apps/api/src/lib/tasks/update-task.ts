@@ -919,9 +919,8 @@ export const updateTaskHandler = async function* ({
   // Settlement already updates the task and records its audit. A status-only
   // decision has no remaining fields to write; a second update in an outer
   // transaction would recheck its workspace FK while still holding the run.
-  const hasRemainingChanges = Object.entries(rest).some(
-    ([key, value]) =>
-      key !== "taskId" && key !== "workflowReason" && value !== undefined,
+  const hasRemainingChanges = Object.keys(rest).some(
+    (key) => key !== "taskId" && key !== "workflowReason",
   );
   if (!hasRemainingChanges) {
     return Result.ok({ success: true });
