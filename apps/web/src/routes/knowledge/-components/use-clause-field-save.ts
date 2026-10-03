@@ -1,10 +1,9 @@
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/toast";
-
-import type { ToAPIErrorProps } from "@/lib/errors/api";
+import { toAPIError, type ToAPIErrorProps } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 // Eden response shape the persist call returns; only the error branch is read
 // here, so the success payload stays `unknown`.
@@ -44,13 +43,9 @@ export const useClauseFieldSave = ({
   // Single funnel for both failure channels: a thrown `persist` (network
   // failure) and an `.error` Eden response both revert the draft and show
   // the same localized toast.
-  const fail = (description: string) => {
+  const fail = (error: unknown, description: string) => {
     onError?.();
-    stellaToast.add({
-      type: "error",
-      title: t("clauses.saveFailed"),
-      description,
-    });
+    notifyUserError(error, t("clauses.saveFailed"), { description });
   };
 
   return async (rawText: string) => {
@@ -61,13 +56,16 @@ export const useClauseFieldSave = ({
 
     const result = await Result.tryPromise(async () => await persist(next));
     if (Result.isError(result)) {
-      fail(t("common.unexpectedError"));
+      fail(result.error, t("common.unexpectedError"));
       return;
     }
 
     const response = result.value;
     if (response.error) {
-      fail(userErrorMessage(response.error, t("common.unexpectedError")));
+      fail(
+        toAPIError(response.error),
+        userErrorMessage(response.error, t("common.unexpectedError")),
+      );
       return;
     }
 

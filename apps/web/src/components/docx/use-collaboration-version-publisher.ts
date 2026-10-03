@@ -10,6 +10,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -146,10 +147,8 @@ export const useCollaborationVersionPublisher = ({
       });
       if (pendingPublication === null) {
         finishPublishing();
-        stellaToast.add({
+        notifyUserError(undefined, t("folio.createVersionFailedTitle"), {
           description: t("folio.createVersionFailedDescription"),
-          title: t("folio.createVersionFailedTitle"),
-          type: "error",
         });
         return false;
       }
@@ -168,11 +167,11 @@ export const useCollaborationVersionPublisher = ({
     finishPublishing();
     if (Result.isError(publishResult)) {
       getAnalytics().captureError(publishResult.error);
-      stellaToast.add({
-        description: t("folio.createVersionFailedDescription"),
-        title: t("folio.createVersionFailedTitle"),
-        type: "error",
-      });
+      notifyUserError(
+        publishResult.error,
+        t("folio.createVersionFailedTitle"),
+        { description: t("folio.createVersionFailedDescription") },
+      );
       return false;
     }
     if (publishResult.value.error) {
@@ -199,11 +198,11 @@ export const useCollaborationVersionPublisher = ({
       ) {
         pendingCollaborationPublicationRef.current = null;
       }
-      stellaToast.add({
-        description: t("folio.createVersionFailedDescription"),
-        title: t("folio.createVersionFailedTitle"),
-        type: "error",
-      });
+      notifyUserError(
+        toAPIError(publishResult.value.error),
+        t("folio.createVersionFailedTitle"),
+        { description: t("folio.createVersionFailedDescription") },
+      );
       return false;
     }
 

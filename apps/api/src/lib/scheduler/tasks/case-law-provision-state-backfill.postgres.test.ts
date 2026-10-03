@@ -1,9 +1,10 @@
-import { Err, panic } from "better-result";
+import { Err, panic, Result } from "better-result";
 import type { SQL } from "bun";
 import { describe, expect, spyOn, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
 import {
   PROVISION_EXTRACTION_ADMISSION,
   PROVISION_EXTRACTION_ADMISSION_REVISION,
@@ -17,7 +18,10 @@ import {
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { logger } from "@/api/lib/observability/logger";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
-import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import {
+  SCHEDULER_BACKFILL_CONFIG,
+  SCHEDULER_BACKFILL_IDS,
+} from "@/api/lib/scheduler/backfill-config";
 import { runSchedulerOnce } from "@/api/lib/scheduler/runner";
 import type {
   SchedulerDb,
@@ -34,6 +38,7 @@ const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 type FixtureOptions = {
+  phase?: "initial" | "resumed";
   statementTimeoutMs?: number;
   beforeQuery?: (
     statement: string,
@@ -51,7 +56,11 @@ const withFixture = async (
     operator: SQL;
     schema: string;
     checkpoint: () => Promise<{
-      batch: { stableBatches: number; heldSince: number | null };
+      batch: {
+        stableBatches: number;
+        heldSince: number | null;
+        holdUntil: number | null;
+      };
     }>;
   }) => Promise<void>,
 ) => {
@@ -99,7 +108,13 @@ const withFixture = async (
       const checkpoint = async () => {
         const row = (
           await operator.unsafe<
-            { batch: { stableBatches: number; heldSince: number | null } }[]
+            {
+              batch: {
+                stableBatches: number;
+                heldSince: number | null;
+                holdUntil: number | null;
+              };
+            }[]
           >(
             `SELECT batch FROM ${schema}.database_backfill_states WHERE name = $1`,
             [SCHEDULER_BACKFILL_IDS.provisionState],
@@ -107,10 +122,16 @@ const withFixture = async (
         ).at(0);
         return row ?? panic("missing provision task checkpoint");
       };
+      let now = Date.parse("2026-10-02T12:00:00Z");
       const createTask = ({
+        phase = "initial",
         statementTimeoutMs,
         beforeQuery = async () => {},
       }: FixtureOptions = {}) => {
+        // A resumed worker must start after any hold persisted by earlier runs.
+        if (phase === "resumed") {
+          now += SCHEDULER_BACKFILL_CONFIG.holdBackoffCapMs;
+        }
         const events: string[] = [];
         const failures: unknown[] = [];
         const controller = new AbortController();
@@ -164,7 +185,6 @@ const withFixture = async (
                 }),
               ),
           });
-        let now = Date.parse("2026-10-02T12:00:00Z");
         const actualTask = createCaseLawProvisionStateBackfillTask({
           withConnection,
           clock: () => now++,
@@ -271,7 +291,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
           `SELECT name FROM ${schema}.case_law_provision_repair_cursors`,
         ),
       ).toHaveLength(0);
-      const resumed = createTask();
+      const resumed = createTask({ phase: "resumed" });
       await resumed.run();
       expect(resumed.failures).toEqual([]);
       expect(
@@ -282,6 +302,45 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
     });
   }, 120_000);
 
+  test("a resumed provision worker completes after a shared-slot hold", async () => {
+    await withFixture(async ({ createTask, operator, schema, checkpoint }) => {
+      const session = await operator.reserve();
+      const slot = createHeavyWorkSlot({
+        kind: "operator_job",
+        session: {
+          query: async (statement, parameters) =>
+            await session.unsafe<{ acquired: boolean }[]>(statement, [
+              ...parameters,
+            ]),
+        },
+      });
+      const held = createTask();
+      try {
+        expect(await slot.tryAcquire()).toEqual(Result.ok(true));
+        await held.run();
+      } finally {
+        await slot.close();
+        session.release();
+      }
+      expect(held.failures).toEqual([]);
+      expect((await checkpoint()).batch.holdUntil).not.toBeNull();
+      expect(
+        await operator.unsafe<{ name: string }[]>(
+          `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
+        ),
+      ).toHaveLength(0);
+      const resumed = createTask({ phase: "resumed" });
+      await resumed.run();
+      expect(resumed.failures).toEqual([]);
+      expect(
+        await operator.unsafe<{ name: string }[]>(
+          `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
+        ),
+      ).toHaveLength(2);
+      expect((await checkpoint()).batch.heldSince).toBeNull();
+    });
+  });
+
   test("two workers finishing the real provision steps converge on completion", async () => {
     await withFixture(async ({ createTask, operator, schema, checkpoint }) => {
       const first = createTask();
@@ -289,7 +348,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
       await Promise.all([first.run(), second.run()]);
       // A worker refused the shared slot may leave a durable hold. A later
       // completed run must safely settle the same checkpoint under its lock.
-      const resumed = createTask();
+      const resumed = createTask({ phase: "resumed" });
       await resumed.run();
       expect([
         ...first.failures,
@@ -333,7 +392,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
         ),
       ).toHaveLength(2);
       expect((await checkpoint()).batch.stableBatches).toBe(2);
-      const resumed = createTask();
+      const resumed = createTask({ phase: "resumed" });
       await resumed.run();
       expect(resumed.failures).toEqual([]);
       expect((await checkpoint()).batch.stableBatches).toBe(0);

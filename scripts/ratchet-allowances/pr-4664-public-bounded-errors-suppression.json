@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "apps/api/src/lib/search/project-response-text.ts: the one reviewed DeepMutable<T> cast in projectResponseText needs a named no-unsafe-type-assertion suppression; the value is a fresh structuredClone deep copy (see its SAFETY comment)."
+}

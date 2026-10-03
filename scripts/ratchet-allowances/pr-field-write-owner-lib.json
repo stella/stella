@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "apps/api/src/lib/fields is the single owner of field value writes (write-field.ts); REST, kanban, MCP and chat call it, and no-direct-field-write bans other writers."
+}

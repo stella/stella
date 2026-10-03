@@ -1444,3 +1444,15 @@ for (const name of [
     }
   });
 }
+
+test("competition metadata ignores excluded HTML in every label and value", async () => {
+  const html = await pageOf(APPEALED);
+  const contaminated = html.replaceAll(
+    "</td>",
+    "<script>hidden-script</script><style>hidden-style</style></td>",
+  );
+  expect(contaminated).not.toBe(html);
+  const expected = parsePlUokikDetail(html);
+  expect(expected).not.toBeNull();
+  expect(parsePlUokikDetail(contaminated)).toEqual(expected);
+});

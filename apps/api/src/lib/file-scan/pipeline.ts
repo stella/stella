@@ -9,10 +9,12 @@ import type { ScanFinding, ScanVerdict } from "@/api/lib/file-scan/types";
 import { yaraScanner, yaraWindowedRules } from "@/api/lib/file-scan/yara";
 
 const MAX_ZIP_ENTRIES = 1000;
+const MAX_INFLATED_BYTES = 500 * 1024 * 1024;
+const MAX_INSPECTION_BUFFER_BYTES = 8 * 1024 * 1024;
 
 const zipBombGuard = createZipBombGuard({
   maxEntries: MAX_ZIP_ENTRIES,
-  maxTotalUncompressedBytes: 500 * 1024 * 1024,
+  maxTotalUncompressedBytes: MAX_INFLATED_BYTES,
   maxCompressionRatio: 1000,
 });
 
@@ -23,7 +25,9 @@ const archiveContentScanner = createArchiveContentScanner({
   rules: yaraWindowedRules,
   budget: {
     windowBytes: 1024 * 1024,
-    maxEvidenceBytes: 8 * 1024 * 1024,
+    maxEvidenceBytes: MAX_INSPECTION_BUFFER_BYTES,
+    maxNestedEntryBytes: MAX_INSPECTION_BUFFER_BYTES,
+    maxTotalInflatedBytes: MAX_INFLATED_BYTES,
     timeBudgetMs: 30_000,
   },
   guard: zipBombGuard,

@@ -314,8 +314,8 @@ const searchDecisions = async ({
       }
       return {
         country,
-        result: await search(
-          {
+        result: await search({
+          body: {
             query,
             limit,
             country,
@@ -323,9 +323,9 @@ const searchDecisions = async ({
               ? {}
               : { cursor: position.cursor }),
           },
-          caseLawPublicReadDb,
+          caseLawDb: caseLawPublicReadDb,
           observer,
-        ),
+        }),
       } as const;
     },
   });

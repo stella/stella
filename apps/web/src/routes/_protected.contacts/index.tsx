@@ -84,6 +84,7 @@ import { contactsKeys, contactsOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
@@ -181,10 +182,7 @@ function ContactsPage() {
     setIsExporting(false);
 
     if (Result.isError(result)) {
-      stellaToast.add({
-        title: userErrorFromThrown(result.error, t("contacts.exportFailed")),
-        type: "error",
-      });
+      notifyUserError(result.error, t("contacts.exportFailed"));
       return;
     }
 
@@ -302,13 +300,11 @@ function ContactsPage() {
               onClick={() => {
                 const request = fetchNextPage().then((result) => {
                   if (result.isError) {
-                    stellaToast.add({
+                    notifyUserError(result.error, t("errors.actionFailed"), {
                       description: userErrorFromThrown(
                         result.error,
                         t("common.unexpectedError"),
                       ),
-                      title: t("errors.actionFailed"),
-                      type: "error",
                     });
                   }
                   return result;
@@ -540,10 +536,7 @@ const ContactRowActions = ({ contact }: { contact: ContactItem }) => {
           });
         },
         onError: (error) => {
-          stellaToast.add({
-            title: userErrorFromThrown(error, t("errors.actionFailed")),
-            type: "error",
-          });
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -551,10 +544,7 @@ const ContactRowActions = ({ contact }: { contact: ContactItem }) => {
 
   const handleDeleteOpen = () => {
     if (contact.clientMatterCount > 0) {
-      stellaToast.add({
-        title: deleteBlockedDescription,
-        type: "error",
-      });
+      notifyUserError(undefined, deleteBlockedDescription);
       return;
     }
 
@@ -863,10 +853,7 @@ const CreateContactDialog = ({
           (birthDate.year || birthDate.month || birthDate.day) &&
           !dateOfBirth
         ) {
-          stellaToast.add({
-            title: t("contacts.invalidDateOfBirth"),
-            type: "error",
-          });
+          notifyUserError(undefined, t("contacts.invalidDateOfBirth"));
           return;
         }
         const firstName =
@@ -924,10 +911,7 @@ const CreateContactDialog = ({
     const ico = normalizeIcoInput(form.state.values.registrationNumber);
 
     if (ico.length !== 8) {
-      stellaToast.add({
-        title: t("contacts.create.invalidIco"),
-        type: "error",
-      });
+      notifyUserError(undefined, t("contacts.create.invalidIco"));
       return;
     }
 
@@ -941,10 +925,7 @@ const CreateContactDialog = ({
       const hit = data.type === "lookup" ? data.hit : null;
 
       if (!hit) {
-        stellaToast.add({
-          title: t("contacts.create.aresNotFound"),
-          type: "error",
-        });
+        notifyUserError(undefined, t("contacts.create.aresNotFound"));
         return;
       }
 
@@ -959,10 +940,7 @@ const CreateContactDialog = ({
       });
     } catch (error) {
       getAnalytics().captureError(error);
-      stellaToast.add({
-        title: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsAresLoading(false);
     }

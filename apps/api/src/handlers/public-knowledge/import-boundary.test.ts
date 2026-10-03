@@ -14,10 +14,12 @@ const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const apiRoot = path.join(repoRoot, "apps/api/src");
 const routeFile = path.join(apiRoot, "handlers/public-knowledge/routes.ts");
 
-// The factory, env, and error translator are trusted boundary modules. Their
-// broad shared dependency graphs do not grant a public handler access to data.
+// The factory, env, the feature-flag owner, and error translator are trusted
+// boundary modules. Their broad shared dependency graphs do not grant a public
+// handler access to data.
 const boundaryLeaves = new Set([
   "env.ts",
+  "lib/deployment-feature.ts",
   "lib/api-handlers.ts",
   "lib/errors/tagged-errors.ts",
 ]);

@@ -33,7 +33,7 @@ const isDemoAccount = ({
   config: DemoAccountConfig;
 }) =>
   config.email !== undefined &&
-  email.trim().toLowerCase() === config.email.toLowerCase();
+  email.trim().toLowerCase() === config.email.trim().toLowerCase();
 
 type DemoAccountAccessOptions = {
   email: string;
@@ -137,7 +137,9 @@ const ACCOUNT_PERMISSION_POLICY = {
 
 export const requiresStandardAccount = (
   permissions: Partial<Record<keyof typeof statements, readonly string[]>>,
+  accountAccess?: "standard",
 ) =>
+  accountAccess === "standard" ||
   Object.entries(ACCOUNT_PERMISSION_POLICY).some(
     ([resource, policy]) =>
       policy === "restricted" &&
