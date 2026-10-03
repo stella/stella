@@ -12,6 +12,7 @@ import {
 import { searchLegislationSuccessResponseSchema } from "@/api/handlers/legislation/search-schema";
 import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
+import { escapeSearchHtml } from "@/api/lib/search/highlight";
 
 const unicode = fc
   .array(
@@ -59,6 +60,50 @@ const assertBalanced = (headline: string) => {
   expect(depth).toBe(0);
   expect(headline.replaceAll(/<\/?mark>/gu, "")).not.toContain("<");
 };
+
+test("search projection preserves whole escaped entities at the byte boundary", () => {
+  assertProperty(
+    "search projection preserves whole escaped entities at the byte boundary",
+    fc.property(
+      fc.array(fc.constantFrom("&", "<", ">", '"', "'"), {
+        minLength: 1,
+        maxLength: 30,
+      }),
+      fc.integer({ min: 0, max: 4 }),
+      (characters, depth) => {
+        const entities = characters.map(escapeSearchHtml);
+        const escaped = entities.join("");
+        const tagBytes = depth * ("<mark>".length + "</mark>".length);
+        // Exercise every possible cut inside the randomly generated entities,
+        // including the exact fit while reserving all closing tags.
+        for (let remaining = 0; remaining <= escaped.length; remaining += 1) {
+          const prefix = "a".repeat(
+            LIMITS.legislationSearchTextBytes.headline - tagBytes - remaining,
+          );
+          const headline =
+            "<mark>".repeat(depth) + prefix + escaped + "</mark>".repeat(depth);
+          const result = projectLegislationSearchHit(hitWithText("", headline));
+          const projected = result.headline ?? "";
+          let kept = "";
+          for (const entity of entities) {
+            if (kept.length + entity.length > remaining) {
+              break;
+            }
+            kept += entity;
+          }
+          expect(projected).toBe(
+            "<mark>".repeat(depth) + prefix + kept + "</mark>".repeat(depth),
+          );
+          expect(Buffer.byteLength(projected)).toBeLessThanOrEqual(
+            LIMITS.legislationSearchTextBytes.headline,
+          );
+          assertBalanced(projected);
+        }
+      },
+    ),
+    { numRuns: 100 },
+  );
+});
 
 test("search projection bounds Unicode text and balances highlight markup", () => {
   assertProperty(

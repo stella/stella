@@ -49,6 +49,9 @@ const MARK_OPEN = "<mark>";
 const MARK_CLOSE = "</mark>";
 
 const truncateHeadlineBytes = (text: string, maxBytes: number): string => {
+  // Match entity syntax rather than mirroring the escaper's substitutions;
+  // every complete named or numeric entity occupies one atomic text unit.
+  const entityPattern = /&(?:[a-z][a-z0-9]*|#(?:[0-9]+|x[0-9a-f]+));/iuy;
   let cursor = 0;
   let result = "";
   let bytes = 0;
@@ -80,7 +83,11 @@ const truncateHeadlineBytes = (text: string, maxBytes: number): string => {
     if (codePoint === undefined) {
       break;
     }
-    const character = String.fromCodePoint(codePoint);
+    let character = String.fromCodePoint(codePoint);
+    if (character === "&") {
+      entityPattern.lastIndex = cursor;
+      character = entityPattern.exec(text)?.[0] ?? character;
+    }
     const scalar = character.toWellFormed();
     const size = Buffer.byteLength(scalar, "utf-8");
     if (bytes + size + depth * MARK_CLOSE.length > maxBytes) {

@@ -10,6 +10,10 @@ import {
 import type { StatuteSearchHit } from "@/features/statutes/queries/statutes";
 import messages from "@/i18n/langs/en.json";
 
+import { projectLegislationSearchHit } from "../../../../../api/src/handlers/legislation/search-response";
+import { LIMITS } from "../../../../../api/src/lib/limits";
+import { escapeSearchHtml } from "../../../../../api/src/lib/search/highlight";
+
 const hit = {
   match: { type: "strict" },
   documentId: "act-1",
@@ -36,7 +40,7 @@ const render = ({
   hasNextPage?: boolean;
 }) =>
   renderToStaticMarkup(
-    <IntlProvider locale="en" messages={messages}>
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <StatuteSearchResults
         hits={hits}
         isLoading={isLoading}
@@ -49,6 +53,43 @@ const render = ({
   );
 
 describe("public statute section results", () => {
+  test("the web decoder never receives a partial entity from bounded headlines", () => {
+    for (const character of ["&", "<", ">", '"', "'"]) {
+      const entity = escapeSearchHtml(character);
+      for (const highlighted of [false, true]) {
+        const tagBytes = highlighted ? "<mark></mark>".length : 0;
+        for (let remaining = 1; remaining <= entity.length; remaining += 1) {
+          const prefix = "a".repeat(
+            LIMITS.legislationSearchTextBytes.headline - tagBytes - remaining,
+          );
+          const text = prefix + entity;
+          const projected = projectLegislationSearchHit({
+            ...hit,
+            headline: highlighted ? `<mark>${text}</mark>` : text,
+          });
+          const expected =
+            prefix + (remaining === entity.length ? character : "");
+          // Compare through the real decoder and React renderer, so escaped
+          // fragments such as &l cannot survive as visible publisher text.
+          expect(
+            renderToStaticMarkup(
+              <StatuteSearchSnippet headline={projected.headline ?? ""} />,
+            ),
+          ).toBe(
+            renderToStaticMarkup(
+              <StatuteSearchSnippet
+                headline={
+                  highlighted
+                    ? `<mark>${escapeSearchHtml(expected)}</mark>`
+                    : escapeSearchHtml(expected)
+                }
+              />,
+            ),
+          );
+        }
+      }
+    }
+  });
   test("loading and exhausted empty results are distinct", () => {
     expect(render({ isLoading: true })).toContain("Loading");
     expect(render({ isLoading: true })).not.toContain("No results");

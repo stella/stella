@@ -1,7 +1,12 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { t } from "elysia";
 import nodePath from "node:path";
 
-import { isSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  createSafePublicHandler,
+  isSafePublicHandler,
+} from "@/api/lib/api-handlers";
 
 import allowlist from "./public-response-text-bounds.allowlist.json";
 
@@ -21,12 +26,46 @@ const hasStringBound = (schema: SchemaNode): boolean =>
 // JSON Schema maxLength counts Unicode code points, so any finite maxLength
 // implies a finite UTF-8 byte bound (at most four bytes per code point).
 const unboundedStringFields = (schema: unknown, path: string): string[] => {
+  if (schema === false) {
+    return [];
+  }
   if (!isSchemaNode(schema)) {
+    return [path];
+  }
+  if (isSchemaNode(schema["not"]) && Object.keys(schema["not"]).length === 0) {
     return [];
   }
   const fields: string[] = [];
   if (typeof schema["$ref"] === "string") {
-    fields.push(`${path} unresolved-reference`);
+    return [`${path} unresolved-reference`];
+  }
+  const types = Array.isArray(schema["type"])
+    ? schema["type"]
+    : [schema["type"]];
+  const knownTypes = [
+    "string",
+    "number",
+    "integer",
+    "boolean",
+    "null",
+    "object",
+    "array",
+  ];
+  const hasKnownType =
+    types.length > 0 && types.every((type) => knownTypes.includes(type));
+  const hasBranches = ["anyOf", "oneOf", "allOf"].some(
+    (keyword) => Array.isArray(schema[keyword]) && schema[keyword].length > 0,
+  );
+  // An absent or unfamiliar type is not evidence that strings are excluded.
+  // Composition schemas are inspected branch by branch, including Any/Unknown.
+  if (
+    (!hasKnownType && "type" in schema) ||
+    (!hasKnownType &&
+      !hasBranches &&
+      !("const" in schema) &&
+      !Array.isArray(schema["enum"]))
+  ) {
+    fields.push(path);
   }
   const admitsString =
     schema["type"] === "string" ||
@@ -34,10 +73,22 @@ const unboundedStringFields = (schema: unknown, path: string): string[] => {
   if (admitsString && !hasStringBound(schema)) {
     fields.push(path);
   }
+  if (
+    types.includes("object") &&
+    !hasBranches &&
+    !isSchemaNode(schema["properties"]) &&
+    !isSchemaNode(schema["patternProperties"]) &&
+    schema["additionalProperties"] === undefined
+  ) {
+    fields.push(`${path}.*`);
+  }
   if (isSchemaNode(schema["properties"])) {
     for (const [name, property] of Object.entries(schema["properties"])) {
       fields.push(...unboundedStringFields(property, `${path}.${name}`));
     }
+  }
+  if (types.includes("array") && schema["items"] === undefined) {
+    fields.push(`${path}[]`);
   }
   if (schema["items"] !== undefined) {
     if (Array.isArray(schema["items"])) {
@@ -57,10 +108,12 @@ const unboundedStringFields = (schema: unknown, path: string): string[] => {
       fields.push(...unboundedStringFields(branch, path));
     }
   }
-  if (isSchemaNode(schema["additionalProperties"])) {
-    fields.push(
-      ...unboundedStringFields(schema["additionalProperties"], `${path}.*`),
-    );
+  // Elysia cleans undeclared response properties by default; an explicit
+  // additional-properties schema opts values into the serialized response.
+  for (const keyword of ["additionalProperties", "unevaluatedProperties"]) {
+    if (schema[keyword] !== undefined) {
+      fields.push(...unboundedStringFields(schema[keyword], `${path}.*`));
+    }
   }
   if (isSchemaNode(schema["patternProperties"])) {
     for (const property of Object.values(schema["patternProperties"])) {
@@ -91,12 +144,12 @@ const publicRouteUnboundedFields = (
       fields.push(`${prefix} response-schema`);
       continue;
     }
+    const statuses = Object.keys(response);
+    // TypeBox Any and Unknown have no enumerable type keyword. Only a
+    // nonempty HTTP-status map can be interpreted as response alternatives.
     if (
-      "type" in response ||
-      "anyOf" in response ||
-      "oneOf" in response ||
-      "allOf" in response ||
-      "$ref" in response
+      statuses.length === 0 ||
+      !statuses.every((status) => /^[1-5]\d{2}$/u.test(status))
     ) {
       fields.push(...unboundedStringFields(response, `${prefix} response`));
       continue;
@@ -158,6 +211,170 @@ describe("anonymous response text bounds", () => {
     expect(
       Object.keys(allowlist).filter((field) => !(field in existing)),
     ).toEqual([]);
+  });
+
+  test.each([
+    ["Any", t.Any()],
+    ["Unknown", t.Unknown()],
+    ["an integer wire-schema string branch", t.Integer()],
+    ["a union containing Any", t.Union([t.Number(), t.Any()])],
+    ["a union containing Unknown", t.Union([t.Number(), t.Unknown()])],
+    ["an intersection containing Any", t.Intersect([t.Number(), t.Any()])],
+    [
+      "an intersection containing Unknown",
+      t.Intersect([t.Number(), t.Unknown()]),
+    ],
+    ["an empty schema", {}],
+    ["an unfamiliar type", { type: "unreviewed" }],
+    [
+      "an unfamiliar type mixed with number",
+      { type: ["number", "unreviewed"] },
+    ],
+    [
+      "an unfamiliar type mixed with bounded string",
+      { type: ["string", "unreviewed"], maxLength: 12 },
+    ],
+    ["an unfamiliar keyword", { unreviewed: true }],
+    ["a true schema", true],
+    ["a malformed schema", null],
+  ])("the guard treats %s as unbounded", (_name, schema) => {
+    expect(unboundedStringFields(schema, "fixture")).toContain("fixture");
+  });
+
+  test("known string-free and finite scalar schemas remain bounded", () => {
+    for (const schema of [
+      t.Number(),
+      { type: "integer" },
+      t.Boolean(),
+      t.Null(),
+      t.Never(),
+      t.Literal("ready"),
+      t.Literal(1),
+      t.Union([t.Number(), t.Null()]),
+      t.String({ maxLength: 12 }),
+      false,
+    ]) {
+      expect(unboundedStringFields(schema, "fixture")).toEqual([]);
+    }
+  });
+
+  test("unknown nested values and open containers remain unbounded", () => {
+    expect(
+      unboundedStringFields(
+        t.Object({
+          any: t.Any(),
+          unknown: t.Unknown(),
+          nested: t.Array(t.Unknown()),
+          values: t.Record(t.String(), t.Any()),
+        }),
+        "fixture",
+      ),
+    ).toEqual([
+      "fixture.any",
+      "fixture.unknown",
+      "fixture.nested[]",
+      "fixture.values.*",
+    ]);
+    expect(unboundedStringFields({ type: "object" }, "fixture")).toEqual([
+      "fixture.*",
+    ]);
+    expect(unboundedStringFields(t.Object({}), "fixture")).toEqual([]);
+    expect(
+      unboundedStringFields(
+        {
+          allOf: [t.Object({})],
+          unevaluatedProperties: t.Unknown(),
+        },
+        "fixture",
+      ),
+    ).toEqual(["fixture.*"]);
+    expect(unboundedStringFields({ type: "array" }, "fixture")).toEqual([
+      "fixture[]",
+    ]);
+    for (const additionalProperties of [
+      true,
+      "unreviewed",
+      {},
+      t.Any(),
+      t.Unknown(),
+    ]) {
+      expect(
+        unboundedStringFields(
+          {
+            type: "object",
+            additionalProperties,
+          },
+          "fixture",
+        ),
+      ).toEqual(["fixture.*"]);
+    }
+    expect(
+      unboundedStringFields(
+        {
+          type: "object",
+          additionalProperties: false,
+        },
+        "fixture",
+      ),
+    ).toEqual([]);
+    expect(
+      unboundedStringFields({ type: "array", items: false }, "fixture"),
+    ).toEqual([]);
+    expect(
+      unboundedStringFields(
+        { type: "array", items: { type: "unreviewed" } },
+        "fixture",
+      ),
+    ).toEqual(["fixture[]"]);
+  });
+
+  test("top-level unconstrained schemas are not mistaken for empty status maps", () => {
+    const { handler } = createSafePublicHandler(
+      {
+        mcp: { type: "internal", reason: "health_infra" },
+        cache: { kind: "none" },
+      },
+      async function* () {
+        return Result.ok({});
+      },
+    );
+    for (const response of [
+      t.Any(),
+      t.Unknown(),
+      {},
+      { futureKeyword: true },
+    ]) {
+      expect(
+        publicRouteUnboundedFields([
+          {
+            method: "GET",
+            path: "/fixture",
+            handler,
+            hooks: { response },
+          },
+        ]),
+      ).toEqual(["GET /fixture response"]);
+    }
+    expect(
+      publicRouteUnboundedFields([
+        {
+          method: "GET",
+          path: "/fixture",
+          handler,
+          hooks: { response: true },
+        },
+      ]),
+    ).toEqual(["GET /fixture response-schema"]);
+    expect(
+      publicRouteUnboundedFields([
+        {
+          method: "GET",
+          path: "/fixture",
+          handler,
+          hooks: { response: { 200: t.Any(), 400: t.Unknown() } },
+        },
+      ]),
+    ).toEqual(["GET /fixture 200", "GET /fixture 400"]);
   });
 
   test("the guard rejects a newly unbounded fixture field", () => {
