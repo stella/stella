@@ -4,6 +4,7 @@ import { t } from "elysia";
 import { toMachineApiKeySummary } from "@/api/handlers/api-keys/mint";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { MachineApiKeyScope } from "@/api/lib/machine-api-key-config";
@@ -28,6 +29,7 @@ const listMachineApiKeysQuerySchema = t.Object({
 const config = {
   query: listMachineApiKeysQuerySchema,
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "provider_secret" },
 } satisfies HandlerConfig;
 

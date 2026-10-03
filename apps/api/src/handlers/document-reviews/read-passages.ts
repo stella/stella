@@ -18,6 +18,7 @@ import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { readReferencePassageTexts } from "@/api/lib/document-review/reference-passages";
 
@@ -25,6 +26,7 @@ const config = {
   description:
     "Read the text of reference passages by id. Answers only the passages whose matter the caller can open; every other review surface carries passage ids and reads their words here.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
   body: t.Object({

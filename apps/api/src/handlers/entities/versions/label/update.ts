@@ -4,6 +4,7 @@ import { updateVersionAnnotation } from "@/api/handlers/entities/version-annotat
 import type { VersionAnnotationTarget } from "@/api/handlers/entities/version-annotation";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 
 const paramsSchema = workspaceParams({
@@ -22,6 +23,7 @@ const config = {
     "on. An annotation only, like entities.versions.description.update, which " +
     "carries the longer note. A tombstoned version is refused.",
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "save_document" },
   params: paramsSchema,
   body: bodySchema,

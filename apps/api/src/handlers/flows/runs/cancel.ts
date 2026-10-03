@@ -4,6 +4,7 @@ import { flowRunParamsSchema } from "@/api/handlers/flows/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { cancelFlowRun } from "@/api/lib/flows/flow-executor";
 
 const config = {
@@ -12,6 +13,7 @@ const config = {
     "run id and the status it settled on. Work already committed by steps " +
     "that finished is not undone.",
   permissions: { flow: ["run"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

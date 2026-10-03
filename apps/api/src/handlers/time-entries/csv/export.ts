@@ -13,6 +13,7 @@ import {
 import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/export-query";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { escapeCSV } from "@/api/lib/csv";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -107,7 +108,7 @@ export const exportCsvHandler = async ({
 };
 
 const config = {
-  accountAccess: "standard",
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "Export a matter's client time entries as CSV text, one row per entry with " +
     "date, timekeeper name, activity group, work item, minutes, rate, amount, billable flag, " +

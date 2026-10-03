@@ -4,10 +4,12 @@ import { and, eq } from "drizzle-orm";
 import { mcpConnectors, mcpUserConnections } from "@/api/db/schema";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "mcp_transport" },
   access: "read",
 } satisfies HandlerConfig;

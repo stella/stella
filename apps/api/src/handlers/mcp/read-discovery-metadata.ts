@@ -6,6 +6,7 @@ import type {
   PublicHandlerConfig,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   createMcpMetadataHeaders,
@@ -14,6 +15,7 @@ import {
 
 const config = {
   cache: { kind: "public", maxAge: 300 },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
 } as const satisfies PublicHandlerConfig;
 

@@ -18,6 +18,7 @@ import { resolveIdJagIdentity } from "@/api/lib/agent-auth-idjag";
 import type { IdJagIdentityOutcome } from "@/api/lib/agent-auth-idjag";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 
@@ -45,6 +46,7 @@ const config = {
       assertion: t.String({ minLength: 1, maxLength: 8192 }),
     }),
   ]),
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },
 } satisfies PublicHandlerConfig;

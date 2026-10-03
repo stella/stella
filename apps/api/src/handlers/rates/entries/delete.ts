@@ -6,6 +6,7 @@ import { rateEntries } from "@/api/db/schema";
 import { loadRateEntry } from "@/api/handlers/rates/existing-rate-entry";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 
 const deleteRateEntryBodySchema = t.Object({
@@ -23,6 +24,7 @@ const deleteRateEntry = createSafeHandler(
       "a rate table, leaving the table and its other lines in place. Use " +
       "rates.delete to remove the whole table instead.",
     permissions: { rate: ["delete"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",

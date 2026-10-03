@@ -5,6 +5,7 @@ import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { suggestColumnPrompt } from "@/api/lib/properties/column-prompt-suggestion";
 
@@ -48,6 +49,7 @@ const config = {
     "optionally the prompt as it stands. Returns one single-line prompt of " +
     "at most 280 characters and stores nothing. Consumes AI usage.",
   permissions: { property: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

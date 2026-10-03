@@ -6,6 +6,7 @@ import { createNumberSeriesBody } from "@/api/handlers/number-series/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   MAX_NUMBER_SERIES_SEQUENCE_DIGITS,
   validateNumberPattern,
@@ -15,6 +16,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const config = {
   description: "Create a document number series in the active organization.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createNumberSeriesBody,
 } satisfies HandlerConfig;

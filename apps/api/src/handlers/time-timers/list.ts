@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { timeTimers } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { ownedTimers, timerItem } from "@/api/lib/billing/time-timers";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -22,6 +23,7 @@ const listMyTimeTimers = createSafeRootHandler(
     description:
       "List your running and paused timers in the active organization. Use each returned timer ID to update, pause, resume, confirm or discard it. Follow nextCursor to read the next page.",
     permissions: { timeEntry: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     access: "read",
     mcp: {
       type: "capability",

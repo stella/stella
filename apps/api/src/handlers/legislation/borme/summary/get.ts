@@ -5,6 +5,7 @@ import { getBormeSummary } from "@stll/boe";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 
 const paramsSchema = t.Object({
   date: t.String({ pattern: "^\\d{8}$" }),
@@ -16,6 +17,7 @@ const bormeSummary = createSafeRootHandler(
       "Read the BORME summary the Spanish commercial registry gazette " +
       "published on one date, given as YYYYMMDD.",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       readClass: "public",

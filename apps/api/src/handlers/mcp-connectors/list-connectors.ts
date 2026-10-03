@@ -9,6 +9,7 @@ import { mcpConnectorUrlIdentity } from "@/api/handlers/mcp-connectors/url-norma
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -25,6 +26,7 @@ import createMcpConnector from "./create-connector";
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "mcp_transport" },
   access: "read",
 } satisfies HandlerConfig;

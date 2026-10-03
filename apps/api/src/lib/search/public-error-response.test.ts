@@ -12,6 +12,7 @@ import {
   safePublicHandlerResponseSchemasWithStatusText,
   safeHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   projectPublicErrorBody,
@@ -75,6 +76,7 @@ test("public error projection bounds serialized Unicode and issue collections", 
 });
 
 const publicConfig = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "health_infra" },
   cache: { kind: "none" },
   response: safePublicHandlerResponseSchemasWithStatusText(

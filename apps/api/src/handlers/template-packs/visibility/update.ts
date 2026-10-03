@@ -6,6 +6,7 @@ import { organizationSettings } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withDescription } from "@/api/lib/custom-schema";
 
@@ -22,6 +23,7 @@ const config = {
     "Pass hidden true to stop offering packs in the template library; " +
     "templates already installed are unaffected. Owners and admins only.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

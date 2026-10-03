@@ -9,6 +9,7 @@ import { Result } from "better-result";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { readDocumentReviewRunDetail } from "@/api/lib/document-review/read-run-detail";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -17,6 +18,7 @@ const config = {
   description:
     "Read one document review run: its status, progress, pinned basis, and the findings committed so far.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
   params: workspaceParams({ runId: tSafeId("documentReviewRun") }),

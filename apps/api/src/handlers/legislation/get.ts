@@ -16,6 +16,7 @@ import {
 import { projectStatuteReader } from "@/api/handlers/legislation/reader-response";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
@@ -137,6 +138,7 @@ const config = {
     "is null otherwise. Only documents from sources cleared for " +
     "redistribution are returned; anything else reads as not found.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "read_statute" },
   access: "read",
   params: t.Object({ documentId: tSafeId("legislationDocument") }),

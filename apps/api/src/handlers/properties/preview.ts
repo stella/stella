@@ -8,6 +8,7 @@ import { aiHandlerError } from "@/api/lib/ai-error";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -57,6 +58,7 @@ const config = {
     "unusable on that document, unsupported when the document cannot be " +
     "processed, or empty when the model returned nothing. Consumes AI usage.",
   permissions: { property: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   // A model call runs even though nothing is persisted: an AI generation
   // kickoff is a write by the same rule as any other (see CapabilityAccess).
   access: "write",

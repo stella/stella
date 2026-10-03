@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { STARTER_PLAYBOOKS } from "@/api/lib/workflow/starter-playbooks";
 
 const config = {
@@ -11,6 +12,7 @@ const config = {
     "positions it holds. Metadata only, enough to render a picker; create " +
     "one with playbooks.from-starter.create.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

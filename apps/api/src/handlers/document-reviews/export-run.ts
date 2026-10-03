@@ -17,6 +17,7 @@ import {
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
   buildIssuesTableRows,
@@ -65,7 +66,7 @@ const withoutExtension = (name: string): string => {
 };
 
 const config = {
-  accountAccess: "standard",
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "Download a document review run as an issues table (XLSX, DOCX or CSV).",
   permissions: { workspace: ["read"] },

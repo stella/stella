@@ -7,6 +7,7 @@ import { loadManagedSkill } from "@/api/handlers/skills/managed-skill";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 
 const deleteSkillParamsSchema = t.Object({
@@ -20,6 +21,7 @@ const config = {
     "or owner and private skills only by their author; bundled skills, which " +
     "cannot be edited, can still be deleted here.",
   permissions: { agentSkill: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

@@ -14,6 +14,7 @@ import {
 import type { FileThreadMessagePage } from "@/api/handlers/chat/file-thread-shared";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 
@@ -44,6 +45,7 @@ const config = {
   // chat-access permission every chat read endpoint declares (get-threads,
   // get-messages).
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   query: readFileThreadQuerySchema,
 } satisfies WorkspaceHandlerConfig;

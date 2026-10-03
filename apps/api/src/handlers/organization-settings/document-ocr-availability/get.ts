@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { isDocumentOcrWorkerAvailable } from "@/api/lib/document-processing-readiness";
 
 const config = {
@@ -11,6 +12,7 @@ const config = {
   // The response is only an ephemeral availability bit; it exposes no worker
   // topology or provider configuration.
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

@@ -5,6 +5,7 @@ import { env } from "@/api/env";
 import { startAnonymousUpgrade } from "@/api/lib/agent-auth";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -12,6 +13,7 @@ const config = {
     claim_token: t.String({ minLength: 1, maxLength: 256 }),
     email: t.String({ format: "email", maxLength: 320 }),
   }),
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },
 } satisfies PublicHandlerConfig;

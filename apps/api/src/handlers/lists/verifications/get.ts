@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readVerificationRun } from "@/api/lib/lists/verification/read-run";
@@ -14,6 +15,7 @@ const config = {
     "supported, tension and contradicted), the facts it rests on, and the " +
     "claim's current review (null while nobody has acted on it).",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",

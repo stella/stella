@@ -2,6 +2,7 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 
 import { updateCategoryBodySchema, updateCategoryHandler } from "../categories";
@@ -17,6 +18,7 @@ const config = {
     "the fields you pass are written. A category cannot become its own " +
     "parent, and a move that would make the tree circular is refused.",
   permissions: { clause: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "knowledge_library_admin",

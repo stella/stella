@@ -17,6 +17,7 @@ import {
 } from "@/api/handlers/time-entries/suggestions/schemas";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { readTimePolicy } from "@/api/lib/billing-time";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
@@ -293,6 +294,7 @@ const createTimeSuggestionDecision = createSafeHandler(
       "the suggestion for good and is idempotent: repeating it returns the " +
       "decision already stored, including an earlier accept.",
     permissions: { timeEntry: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",

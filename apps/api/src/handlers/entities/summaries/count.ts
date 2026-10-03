@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { entities } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 
 const config = {
   description:
@@ -12,6 +13,7 @@ const config = {
     "total for entities.summaries.list, whose pages carry no count of their " +
     "own.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "list_documents" },
   access: "read",
   query: t.Object({}),

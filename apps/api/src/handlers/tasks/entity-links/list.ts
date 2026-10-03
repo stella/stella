@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -18,6 +19,7 @@ const listEntityLinks = createSafeHandler(
       "entity at the other end and its kind. Change them with " +
       "tasks.entity-links.create and tasks.entity-links.delete.",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_tasks" },
     access: "read",
     params: listEntityLinksParamsSchema,

@@ -1,5 +1,6 @@
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 
 import { createCategoryBodySchema, createCategoryHandler } from "../categories";
 
@@ -10,6 +11,7 @@ const config = {
     "its maximum number of categories, or when the named parent does not " +
     "exist.",
   permissions: { clause: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "knowledge_library_admin",

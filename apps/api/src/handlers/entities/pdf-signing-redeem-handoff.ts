@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { env } from "@/api/env";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { redeemPdfSigningHandoff } from "@/api/lib/files/pdf-signing/sessions";
@@ -18,6 +19,7 @@ const stripTrailingSlashes = (value: string) => {
 };
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: permissiveBodySchema({ keys: ["handoffToken"] }),
 } satisfies TokenHandlerConfig;

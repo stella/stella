@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createStellaStyleEditorPreset } from "@/api/lib/style-set-editor";
 
 const config = {
@@ -9,6 +10,7 @@ const config = {
     "Read the built-in stella style preset as editor settings, the starting " +
     "point for a new style set. Takes no arguments and reads no stored data.",
   permissions: { styleSet: ["use"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",

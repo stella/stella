@@ -5,6 +5,7 @@ import { PDF_SIGNING_SESSION_CLOSE_REASONS } from "@/api/db/schema";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { closePdfSigningSession } from "@/api/lib/files/pdf-signing/close-session";
 import {
@@ -20,6 +21,7 @@ const cancelPayloadSchema = t.Object({
 });
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: permissiveBodySchema({ keys: ["sessionToken", "reason"] }),
   params: permissiveRouteSchema({ keys: ["sessionId"] }),

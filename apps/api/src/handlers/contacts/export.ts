@@ -16,6 +16,7 @@ import {
   AUDIT_RESOURCE_TYPE,
   CONTACT_DIRECTORY_AUDIT_RESOURCE_ID,
 } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { escapeCSV } from "@/api/lib/csv";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -31,7 +32,7 @@ const CONTACT_EXPORT_CSV_MEDIA_TYPE = "text/csv; charset=utf-8";
 const CONTACT_EXPORT_JSON_MEDIA_TYPE = "application/json";
 
 const config = {
-  accountAccess: "standard",
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "Export the contact directory as a bounded CSV or versioned JSON download.",
   permissions: { workspace: ["read"] },

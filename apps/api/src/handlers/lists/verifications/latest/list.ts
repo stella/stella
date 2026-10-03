@@ -11,6 +11,7 @@ import { t } from "elysia";
 import { legalListClaims, legalListVerificationRuns } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import {
@@ -36,6 +37,7 @@ const config = {
     "verdict state. A file never verified is absent from the answer. Earlier " +
     "runs are in lists.verifications.list.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",

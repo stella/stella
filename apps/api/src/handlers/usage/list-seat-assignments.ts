@@ -4,6 +4,7 @@ import { asc, eq } from "drizzle-orm";
 import { usageEntitlements, usageSeatAssignments } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { LIMITS } from "@/api/lib/limits";
 
 /**
@@ -18,6 +19,7 @@ const config = {
     "limits, with the total capacity. Requires organization-settings " +
     "management access.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   access: "read",
   mcp: { type: "internal", reason: "hosted_billing" },
 } satisfies HandlerConfig;

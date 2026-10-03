@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { maskDeepLKey, resolveDeepLBaseUrl } from "@/api/lib/deepl/deepl";
 
@@ -17,6 +18,7 @@ type DeepLConfig =
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "provider_secret" },
 } satisfies HandlerConfig;
 

@@ -6,6 +6,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { documentReviewRuns, playbookDefinitions } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
@@ -100,6 +101,7 @@ const config = {
   description:
     "List the current user's recently used playbooks in the active organization.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

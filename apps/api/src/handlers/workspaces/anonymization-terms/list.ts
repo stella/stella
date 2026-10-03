@@ -4,6 +4,7 @@ import { asc, eq } from "drizzle-orm";
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -13,6 +14,7 @@ const config = {
     "variants, and enabled flag. Organization-wide terms are not included; " +
     "read those with organization-settings.anonymization-blacklist.get.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

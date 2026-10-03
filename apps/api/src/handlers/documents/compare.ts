@@ -19,6 +19,7 @@ import type {
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import type { DocumentSource } from "@/api/lib/document-source";
@@ -120,6 +121,7 @@ const config = {
     "redline is already saved: open it in stella instead of creating it again.",
   requestTimeoutMs: DOCUMENT_COMPARE_REQUEST_TIMEOUT_MS,
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "compare_documents" },
   access: "write",
   params: workspaceParams({ documentId: tSafeId("entity") }),

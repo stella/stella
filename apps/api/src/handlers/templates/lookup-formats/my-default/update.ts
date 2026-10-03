@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { setLookupFormatUserDefault } from "@/api/lib/templates/lookup-formats/set-user-default";
@@ -15,6 +16,7 @@ const config = {
   // format picker may choose their own default, so workspace:read is the
   // grant, not a floor under a missing one.
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

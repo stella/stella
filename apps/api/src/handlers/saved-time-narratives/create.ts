@@ -6,6 +6,7 @@ import { savedTimeNarratives } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -16,6 +17,7 @@ const config = {
   description:
     "Save a personal named time narrative for reuse across matters in the active organization.",
   permissions: { timeEntry: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: t.Object({
     name: t.String({ minLength: 1, maxLength: 128 }),

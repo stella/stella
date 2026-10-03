@@ -8,6 +8,7 @@ import {
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { getCliClientMetadataDocument } from "@/api/lib/auth/oauth-own-client-documents";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -43,6 +44,7 @@ const toResponse = (
 const readCliClientMetadata = createSafeBoundedPublicHandler(
   {
     cache: { kind: "public", maxAge: 3600 },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },
     response: safePublicHandlerResponseSchemasWithStatusText(
       cliClientMetadataResponseSchema,

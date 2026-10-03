@@ -5,6 +5,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { buildTemplateCheckFindings } from "@/api/handlers/templates/check-template";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
@@ -114,6 +115,7 @@ const config = {
     "type, selects with no options, and formulas or conditions referring to " +
     "unknown paths. Read-only: it reports, it never repairs.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

@@ -8,6 +8,7 @@ import { templateFills } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -290,6 +291,7 @@ const config = {
     "and AI-fillable fields are resolved automatically; AI-fillable fields " +
     "are drafted when you omit them.",
   permissions: { template: ["use"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: { type: "tool", name: "fill_template" },
   transport: {

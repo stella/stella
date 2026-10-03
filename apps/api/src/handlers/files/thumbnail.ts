@@ -9,6 +9,7 @@ import type {
 } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { fileFieldQuery } from "@/api/lib/files/read-file";
@@ -26,6 +27,7 @@ const FILE_THUMBNAIL_URL_EXPIRY_SECONDS = 15 * 60;
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },
   access: "read",
   params: workspaceParams({ fieldId: tSafeId("field") }),

@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
@@ -59,6 +60,7 @@ const config = {
   // entities/ocr/create.ts does; workspace:read alone would let a member
   // with no document-processing grant start metered AI review runs.
   permissions: { workspace: ["read"], entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   // Creating a run writes a row and enqueues metered model work, so it must
   // never be reachable through a read-only consent even though the permission
   // gate that fronts the whole review surface is a workspace read.

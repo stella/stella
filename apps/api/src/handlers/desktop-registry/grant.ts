@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { issueDesktopAccountGrant } from "@/api/lib/auth";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { DESKTOP_ACCOUNT_PERMISSION } from "@/api/lib/business-registries/desktop/config";
 import {
   CACHE_CONTROL_HEADER,
@@ -14,6 +15,7 @@ import {
 export default createSafeRootHandler(
   {
     permissions: DESKTOP_ACCOUNT_PERMISSION,
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },
     body: t.Object(
       {

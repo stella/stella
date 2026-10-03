@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { vatRates } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { vatRateOnDate } from "@/api/lib/billing/vat-rates";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -54,6 +55,7 @@ true satisfies UnexpectedVatRateListColumn extends never ? true : never;
 const config = {
   description: "List active VAT rates in the active organization.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: {
     type: "capability",
     readClass: "tenant",

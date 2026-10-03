@@ -4,6 +4,7 @@ import { updateVersionAnnotation } from "@/api/handlers/entities/version-annotat
 import type { VersionAnnotationTarget } from "@/api/handlers/entities/version-annotation";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 
 const paramsSchema = workspaceParams({
@@ -22,6 +23,7 @@ const config = {
     "changes. A version tombstoned by entities.versions.delete is refused. " +
     "Use entities.versions.label.update for the short label instead.",
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "save_document" },
   params: paramsSchema,
   body: bodySchema,

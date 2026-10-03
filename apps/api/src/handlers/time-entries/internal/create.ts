@@ -7,6 +7,7 @@ import {
 } from "@stll/api-contract";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { lockTimePolicy } from "@/api/lib/billing-time";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
@@ -21,6 +22,7 @@ const createInternalTimeEntry = createSafeRootHandler(
     description:
       "Record internal work for yourself in the active organization without a matter. Requires work date (YYYY-MM-DD), IANA timezoneId, positive whole durationMinutes, and narrative. Internal work has no billable value; monthly locks, edit windows, and narrative policy still apply. Returns the entry id and activityGroup. Internal entries await administrator approval when no approver is assigned.",
     permissions: { timeEntry: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     access: "write",
     mcp: {
       type: "capability",

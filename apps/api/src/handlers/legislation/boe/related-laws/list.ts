@@ -6,6 +6,7 @@ import type { RelationType } from "@stll/boe";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 
 const paramsSchema = t.Object({
   lawId: t.String({ pattern: "^BOE-[A-Z]-\\d{4}-\\d+$" }),
@@ -30,6 +31,7 @@ const boeRelatedLaws = createSafeRootHandler(
       "relationType: modifies, modifiedBy, derogates, derogatedBy, or all " +
       "(the default).",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "search_boe_legislation" },
     access: "read",
     params: paramsSchema,

@@ -17,6 +17,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   BILINGUAL_ROW_DISPOSITION,
   BILINGUAL_RUN_ACTIVE_STATUSES,
@@ -34,6 +35,7 @@ const config = {
   description:
     "Start an asynchronous translation of a bilingual document using the reviewed row dispositions and glossary. Returns a run ID to poll.",
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: { type: "internal", reason: "document_processing" },
   params: workspaceParams({}),

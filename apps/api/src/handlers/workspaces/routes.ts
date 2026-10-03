@@ -52,6 +52,7 @@ import { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import {
   organizationResourceSetUpdates,
@@ -75,6 +76,7 @@ const workspaceRealtimeUpdates = workspaceResourceSetUpdates(
 const readWorkspace = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, session, workspaceId }) {
@@ -96,6 +98,7 @@ const readWorkspace = createSafeHandler(
 const readOverview = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
@@ -116,6 +119,7 @@ const readOverview = createSafeHandler(
 const readWorkspaceContacts = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
@@ -136,6 +140,7 @@ const readWorkspaceContacts = createSafeHandler(
 const readWorkspaceMembers = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
   } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, workspaceId }) {

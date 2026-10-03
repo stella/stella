@@ -3,6 +3,7 @@ import { and, eq, ne } from "drizzle-orm";
 
 import { docxSuggestions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { syncReviewFindingsForSuggestions } from "@/api/lib/document-review/suggestion-finding-sync";
 import {
@@ -36,6 +37,7 @@ const REVERT_OUTCOME = {
 const revertDocxSuggestion = createSafeHandler(
   {
     permissions: { entity: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "document_processing" },
     params: workspaceParams({
       entityId: tSafeId("entity"),

@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { savedTimeNarratives } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -48,6 +49,7 @@ const config = {
   description:
     "List the signed-in user's saved time narratives in the active organization, ordered by name with cursor pagination.",
   permissions: { timeEntry: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

@@ -6,6 +6,7 @@ import { TEMPLATE_PACK_SLUG_PATTERN } from "@stll/template-packs/schema";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -50,6 +51,7 @@ const config = {
     "list and, when already installed in the organization, the installed " +
     "template id. Also reports whether the organization hides pack offers.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

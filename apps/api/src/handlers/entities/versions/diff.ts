@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { loadEntityVersionDiffSources } from "@/api/handlers/entities/version-diff-sources";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 
@@ -15,6 +16,7 @@ const config = {
     "documents.compare for a DOCX redline between versions you " +
     "choose.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "read_document" },
   access: "read",
   params: workspaceParams({

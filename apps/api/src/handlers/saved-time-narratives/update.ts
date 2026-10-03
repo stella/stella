@@ -6,6 +6,7 @@ import { savedTimeNarratives } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -19,6 +20,7 @@ const config = {
   description:
     "Update a personal saved time narrative in the active organization.",
   permissions: { timeEntry: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: savedTimeNarrativeParamsSchema,
   body: t.Object({

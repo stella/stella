@@ -7,6 +7,7 @@ import {
   createSafePublicHandler,
   isSafePublicHandler,
 } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 
 import allowlist from "./public-response-text-bounds.allowlist.json";
 
@@ -481,6 +482,7 @@ describe("anonymous response text bounds", () => {
   test("top-level unconstrained schemas are not mistaken for empty status maps", () => {
     const { handler } = createSafePublicHandler(
       {
+        accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "health_infra" },
         cache: { kind: "none" },
       },

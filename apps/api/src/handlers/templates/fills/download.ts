@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import { tJsonObject, tSafeId } from "@/api/lib/custom-schema";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
@@ -26,7 +27,7 @@ const fillByIdParamsSchema = t.Object({
 });
 
 const config = {
-  accountAccess: "standard",
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "Fill a stored template and return the finished document as DOCX (the " +
     "default) or PDF. values is an object mapping each field path to its value; " +

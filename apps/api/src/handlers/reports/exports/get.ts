@@ -16,6 +16,7 @@ import { and, eq } from "drizzle-orm";
 import { reportExports } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
@@ -38,7 +39,7 @@ const downloadFileName = (resultS3Key: string): string =>
 // at export-view.ts, so a caller with nothing to poll could never have
 // reached one.
 const config = {
-  accountAccess: "standard",
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "Read a report export's status. Completed downloads include a short-lived URL; workspace exports include the created document ID.",
   permissions: { workspace: ["read"] },

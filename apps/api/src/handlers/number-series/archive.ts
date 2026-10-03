@@ -6,11 +6,13 @@ import { numberSeriesParams } from "@/api/handlers/number-series/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   description: "Archive a number series so it cannot allocate another number.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: numberSeriesParams,
 } satisfies HandlerConfig;

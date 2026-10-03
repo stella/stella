@@ -6,12 +6,14 @@ import { researchColumnParamsSchema } from "@/api/handlers/case-law/research/sch
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   description:
     "Remove one of the organization's question columns, with every answer it holds.",
   permissions: { caseLawResearch: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
   params: researchColumnParamsSchema,
 } satisfies HandlerConfig;
