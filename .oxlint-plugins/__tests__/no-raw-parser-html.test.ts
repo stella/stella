@@ -1,5 +1,9 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
+import {
+  readGitTree,
+  sourceOwners,
+} from "../../scripts/check-parser-versions.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 setDefaultTimeout(20_000);
@@ -9,6 +13,72 @@ const lint = async (lines: readonly string[], sourcePath = "parser.ts") =>
   await lintSingleRule(RULE_NAME, lines.join("\n"), { sourcePath });
 
 describe.serial("HTML parser helper ownership", () => {
+  test("covers every registered parser owner in the root lint scope", async () => {
+    const root = new URL("../../", import.meta.url).pathname;
+    const configured = await Bun.file(`${root}oxlint.config.ts`).text();
+    const ruleIndex = configured.indexOf(
+      '"no-raw-parser-html/no-raw-parser-html": "error"',
+    );
+    expect(ruleIndex).toBeGreaterThan(-1);
+    const scopeStart = configured.lastIndexOf("files:", ruleIndex);
+    const scope = configured.slice(scopeStart, ruleIndex);
+    const files = /files:\s*\[([\s\S]*?)\]/u.exec(scope)?.at(1) ?? "";
+    const excludes = /excludeFiles:\s*\[([\s\S]*?)\]/u.exec(scope)?.at(1) ?? "";
+    const includeGlobs = [...files.matchAll(/"([^"]+)"/gu)].map(
+      (match) => match[1] ?? "",
+    );
+    const excludeGlobs = [...excludes.matchAll(/"([^"]+)"/gu)].map(
+      (match) => match[1] ?? "",
+    );
+    const matches = (patterns: readonly string[], file: string) =>
+      patterns.some((pattern) => new Bun.Glob(pattern).match(file));
+
+    const head = readGitTree("HEAD");
+    expect(head.type).toBe("ok");
+    if (head.type !== "ok") {
+      return;
+    }
+    const census = sourceOwners(head.files);
+    expect(census.errors).toEqual([]);
+    expect(census.registryErrors).toEqual([]);
+    expect(census.owners.size).toBeGreaterThan(0);
+    const ownerModules = new Set(
+      census.registeredSources.map((source) => source.module),
+    );
+    for (const parserPath of census.parserFiles) {
+      expect(matches(includeGlobs, parserPath)).toBe(true);
+      expect(matches(excludeGlobs, parserPath)).toBe(false);
+    }
+    const parserPaths = new Set(census.parserFiles);
+    for (const pattern of includeGlobs.filter(
+      (glob) => glob.includes("/adapters/") || glob.includes("/parsers/"),
+    )) {
+      for await (const file of new Bun.Glob(pattern).scan({ cwd: root })) {
+        parserPaths.add(file);
+      }
+    }
+    expect(parserPaths.size).toBeGreaterThan(0);
+    for (const parserPath of parserPaths) {
+      if (matches(excludeGlobs, parserPath)) {
+        continue;
+      }
+      expect(matches(includeGlobs, parserPath)).toBe(true);
+    }
+
+    const bannedHtml = [
+      'import * as cheerio from "cheerio";',
+      'const $ = cheerio.load("<table><tr><td><script>hidden</script></td></tr></table>");',
+      '$("main").text();',
+      '$("table").find("tr");',
+      'const tag = "p"; tag !== "style";',
+    ];
+    for (const ownerModule of ownerModules) {
+      expect(matches(includeGlobs, ownerModule)).toBe(true);
+      expect(matches(excludeGlobs, ownerModule)).toBe(false);
+      expect(await lint(bannedHtml, ownerModule)).toEqual([3, 4, 5]);
+    }
+  });
+
   test("rejects raw text reads through load aliases, selection aliases and typed parameters", async () => {
     expect(
       await lint([
@@ -72,6 +142,7 @@ describe.serial("HTML parser helper ownership", () => {
         'table.find("[data-kind=td], [data-tag=script], .tr");',
         '$("main").find("p, td, div");',
         'table.attr("style"); table.text("fixture text");',
+        '$("form, script").length;',
         'Bun.file("fixture.html").text(); new Response("fixture").text();',
         'const items = [{ text: () => "Visible" }]; items.find((item) => item.text());',
         'const $other = (selector: string) => selector; $other("table tr");',
@@ -136,6 +207,32 @@ describe.serial("HTML parser helper ownership", () => {
         '$("record").text(); $("table tr");',
         'const tags = new Set(["script", "style"]);',
       ]),
+    ).toEqual([]);
+  });
+
+  test("follows XML provenance through stable state properties", async () => {
+    expect(
+      await lint([
+        'import * as cheerio from "cheerio";',
+        'const xml = cheerio.load("<record></record>", { xml: true });',
+        'const html = cheerio.load("<p></p>");',
+        "const state = { $: xml };",
+        'const readXml = ($: cheerio.CheerioAPI) => $("record").text();',
+        "readXml(state.$);",
+        'const readHtml = ($: cheerio.CheerioAPI) => $("p").text();',
+        "readHtml(html);",
+      ]),
+    ).toEqual([7]);
+
+    const root = new URL("../../", import.meta.url).pathname;
+    const plUodoPath =
+      "apps/api/src/handlers/case-law/ingestion/parsers/pl-uodo.ts";
+    expect(
+      await lintSingleRule(
+        RULE_NAME,
+        await Bun.file(`${root}${plUodoPath}`).text(),
+        { sourcePath: plUodoPath },
+      ),
     ).toEqual([]);
   });
 

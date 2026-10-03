@@ -949,3 +949,15 @@ describe("listing one issue date for reconciliation", () => {
     );
   });
 });
+
+test("procurement metadata ignores excluded HTML in every label and value", async () => {
+  const pageHtml = await fixtureText("pl-kio-detail-8247.html");
+  const contaminated = pageHtml.replaceAll(
+    "</label>",
+    "<script>hidden-script</script><style>hidden-style</style></label>",
+  );
+  expect(contaminated).not.toBe(pageHtml);
+  const expected = readPlKioDetail(pageHtml);
+  expect(expected).not.toBeNull();
+  expect(readPlKioDetail(contaminated)).toEqual(expected);
+});

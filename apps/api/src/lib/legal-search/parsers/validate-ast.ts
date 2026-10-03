@@ -1,4 +1,4 @@
-// parser-output-unchanged: the validator only reports; no parser's output changes
+// parser-output-unchanged: the shared visible-text helper excludes the same script/style nodes as the previous removal; validation diagnostics and stored parser output are unchanged.
 /**
  * AST sanity checker.
  *

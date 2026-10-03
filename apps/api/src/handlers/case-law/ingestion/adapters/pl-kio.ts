@@ -1,5 +1,3 @@
-// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
-// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 /**
  * Polish public-procurement rulings from the UZP decision database.
@@ -91,6 +89,7 @@ import {
   hashContent,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
@@ -315,13 +314,13 @@ export const readPlKioListing = (html: string): PlKioListingPage | null => {
       const item: PlKioListingItem = { html: $.html(element) };
       const node = $(element);
       node.find("label").each((_, label) => {
-        const name = collapse($(label).text()).replace(/:$/u, "");
+        const name = collapse(visibleHtmlText($(label))).replace(/:$/u, "");
         if (!isListingLabel(name)) {
           return;
         }
         const parent = $(label).parent().clone();
         parent.find("label").remove();
-        item[LISTING_LABELS[name]] = presentText(parent.text());
+        item[LISTING_LABELS[name]] = presentText(visibleHtmlText(parent));
       });
       const href = node.find("a.link-details").attr("href");
       item.id =
@@ -470,13 +469,14 @@ export const readPlKioDetail = (html: string): PlKioDetail | null => {
   }
 
   const heading = presentText(
-    $("#pageContent h2.section-title")
-      .first()
-      .clone()
-      .children()
-      .remove()
-      .end()
-      .text(),
+    visibleHtmlText(
+      $("#pageContent h2.section-title")
+        .first()
+        .clone()
+        .children()
+        .remove()
+        .end(),
+    ),
   );
   const kindHref = $('a[href^="/Home/PdfMetrics/"]').attr("href");
   const kindText =
@@ -489,7 +489,7 @@ export const readPlKioDetail = (html: string): PlKioDetail | null => {
   const fields = new Map<string, string>();
   const cases: PlKioCase[] = [];
   metrics.find("label").each((_, element) => {
-    const label = collapse($(element).text());
+    const label = collapse(visibleHtmlText($(element)));
     const container = $(element).parent();
     if (isCaseListLabel(label)) {
       // Recorded even when empty, so the inventory sees the label.
@@ -497,7 +497,7 @@ export const readPlKioDetail = (html: string): PlKioDetail | null => {
       container.find("li").each((__, item) => {
         cases.push(
           ...plKioCaseOf(
-            $(item).text(),
+            visibleHtmlText($(item)),
             label === "Sygnatura akt / Sygnatura KIO / Sposób rozstrzygnięcia",
           ),
         );
@@ -506,18 +506,18 @@ export const readPlKioDetail = (html: string): PlKioDetail | null => {
     }
     const value = container.clone();
     value.find("label").remove();
-    fields.set(label, collapse(value.text()));
+    fields.set(label, collapse(visibleHtmlText(value)));
   });
 
   const lists = new Map<string, string[]>();
   metrics.find("b").each((_, element) => {
-    const title = collapse($(element).text());
+    const title = collapse(visibleHtmlText($(element)));
     const items = $(element)
       .nextAll("p")
       .first()
       .find("a")
       .toArray()
-      .flatMap((anchor) => $(anchor).text().split("|"))
+      .flatMap((anchor) => visibleHtmlText($(anchor)).split("|"))
       .map((item) => presentText(item))
       .filter((item) => item !== undefined);
     lists.set(title, items);

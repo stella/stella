@@ -3138,7 +3138,9 @@ export default defineConfig({
     {
       files: [
         "apps/api/src/handlers/case-law/ingestion/parsers/**/*.ts",
+        "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
         "apps/api/src/handlers/legislation/**/parsers/**/*.ts",
+        "apps/api/src/handlers/legislation/ingestion/adapters/**/*.ts",
         "apps/api/src/lib/legal-search/parsers/**/*.ts",
         ".oxlint-plugins/__fixtures__/no-raw-parser-html.fixture.ts",
       ],

@@ -232,6 +232,59 @@ class ParserHtmlProvenance {
     );
   }
 
+  stableObjectMemberKind(
+    expression: AstNode,
+    seen: Set<unknown>,
+  ): CheerioKind | null {
+    if (expression.type !== "MemberExpression") {
+      return null;
+    }
+    const object = unwrapExpression(expression.object);
+    const property = this.propertyName(expression);
+    if (!isIdentifierReference(object) || property === null) {
+      return null;
+    }
+    const variable = resolveVariable(this.context, object);
+    const initializer = variable === null ? null : stableInitializer(variable);
+    if (initializer?.type !== "ObjectExpression") {
+      return null;
+    }
+    const writesMember = this.programNodes.some((candidate) => {
+      const target =
+        candidate.type === "AssignmentExpression"
+          ? candidate.left
+          : candidate.type === "UpdateExpression" ||
+              (candidate.type === "UnaryExpression" &&
+                candidate.operator === "delete")
+            ? candidate.argument
+            : null;
+      if (!isAstNode(target) || target.type !== "MemberExpression") {
+        return false;
+      }
+      const targetObject = unwrapExpression(target.object);
+      return (
+        isIdentifierReference(targetObject) &&
+        resolveVariable(this.context, targetObject) === variable &&
+        this.propertyName(target) === property
+      );
+    });
+    if (writesMember) {
+      return null;
+    }
+    const value = initializer.properties.find((entry) => {
+      if (!isAstNode(entry) || entry.type !== "Property") {
+        return false;
+      }
+      const key = isIdentifier(entry.key)
+        ? entry.key.name
+        : this.constantString(entry.key);
+      return key === property;
+    });
+    return isAstNode(value) && value.type === "Property"
+      ? this.cheerioKind(value.value, seen)
+      : null;
+  }
+
   annotatedKind(
     node: unknown,
     seen = new Set<unknown>(),
@@ -295,6 +348,9 @@ class ParserHtmlProvenance {
     if (isIdentifierReference(expression)) {
       const variable = resolveVariable(this.context, expression);
       return variable === null ? null : this.bindingKind(variable, seen);
+    }
+    if (expression.type === "MemberExpression") {
+      return this.stableObjectMemberKind(expression, seen);
     }
     if (expression.type !== "CallExpression") {
       return null;
@@ -406,6 +462,9 @@ class ParserHtmlProvenance {
 
   parameterXmlMode(variable: Variable, seen: Set<unknown>): boolean {
     let xmlOnly = !this.htmlFile;
+    if (xmlOnly) {
+      return true;
+    }
     const definition = variable.defs.at(0);
     const definitionNode: unknown = definition?.node;
     // A typed local helper's XML parameters retain the caller's mode;
@@ -513,7 +572,13 @@ export default eslintCompatPlugin({
               context.report({ node, messageId: "tableDescendants" });
             }
             if (EXCLUDED_SELECTOR.test(tags)) {
-              context.report({ node, messageId: "excludedTags" });
+              const isPresenceCheck =
+                isAstNode(node.parent) &&
+                node.parent.type === "MemberExpression" &&
+                provenance.propertyName(node.parent) === "length";
+              if (!isPresenceCheck) {
+                context.report({ node, messageId: "excludedTags" });
+              }
             }
           },
           BinaryExpression(node) {

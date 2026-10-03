@@ -2425,3 +2425,15 @@ describe("czUsAdapter.reparseStoredRaw", () => {
     }
   });
 });
+
+test("record card ignores excluded HTML in every label and value", async () => {
+  const html = await recordCardFixture("cz-us-record-card-dissents.html.gz");
+  const contaminated = html.replaceAll(
+    "</td>",
+    "<script>hidden-script</script><style>hidden-style</style></td>",
+  );
+  expect(contaminated).not.toBe(html);
+  const expected = parseNalusDetail(html);
+  expect(expected).not.toBeNull();
+  expect(parseNalusDetail(contaminated)).toEqual(expected);
+});
