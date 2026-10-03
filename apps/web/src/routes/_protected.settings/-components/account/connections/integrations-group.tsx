@@ -39,7 +39,6 @@ import {
   ListItemStatus,
   ListItemTitle,
 } from "@stll/ui/list";
-import { stellaToast } from "@stll/ui/toast";
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { McpAuthorizationReview } from "@/components/mcp-authorization-review";
@@ -49,7 +48,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   isEffectivelyInstalled,
   type CatalogueMcp,
@@ -227,16 +226,13 @@ export const IntegrationsGroup = ({
                 )}
               </ListItemContent>
               <ListItemActions>
-                {canApprove &&
-                  review !== undefined &&
-                  review !== null &&
-                  review.issuer !== null && (
-                    <ApproveAuthorizationButton
-                      connectorSlug={connectorSlug}
-                      issuer={review.issuer}
-                      endpointOrigins={review.endpointOrigins}
-                    />
-                  )}
+                {canApprove && review.issuer !== null && (
+                  <ApproveAuthorizationButton
+                    connectorSlug={connectorSlug}
+                    issuer={review.issuer}
+                    endpointOrigins={review.endpointOrigins}
+                  />
+                )}
                 {status && (
                   <ListItemStatus tone={status.tone}>
                     {t(status.labelKey)}
@@ -304,11 +300,7 @@ const ApproveAuthorizationButton = ({
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        description: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
   return (
