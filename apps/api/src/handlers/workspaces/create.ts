@@ -95,6 +95,7 @@ export const createWorkspaceHandler = async function* ({
           ? Array.from(new Set(body.memberUserIds))
           : [];
 
+      const grantedUserIds = [...new Set([userId, ...requestedMemberUserIds])];
       const orgFilter = eq(workspaces.organizationId, organizationId);
 
       const [countResult, duplicatedNames, settings, client, orgMembers] =
@@ -130,18 +131,16 @@ export const createWorkspaceHandler = async function* ({
                 .limit(1)
                 .then((rows) => rows.at(0) ?? null)
             : Promise.resolve(null),
-          requestedMemberUserIds.length > 0
-            ? tx
-                .select({ userId: member.userId })
-                .from(member)
-                .where(
-                  and(
-                    eq(member.organizationId, organizationId),
-                    inArray(member.userId, requestedMemberUserIds),
-                  ),
-                )
-                .for("update")
-            : Promise.resolve([]),
+          tx
+            .select({ userId: member.userId })
+            .from(member)
+            .where(
+              and(
+                eq(member.organizationId, organizationId),
+                inArray(member.userId, grantedUserIds),
+              ),
+            )
+            .for("update"),
         ]);
 
       const activeCount = countResult.at(0)?.total ?? 0;
@@ -155,7 +154,7 @@ export const createWorkspaceHandler = async function* ({
         );
       }
 
-      if (orgMembers.length !== requestedMemberUserIds.length) {
+      if (orgMembers.length !== grantedUserIds.length) {
         return Result.err(
           new HandlerError({
             status: 400,

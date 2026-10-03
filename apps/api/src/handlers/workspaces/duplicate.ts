@@ -627,6 +627,7 @@ export const createDuplicateWorkspace = (
                       ),
                     ),
                   )
+                  .for("key share")
               : Promise.resolve([]),
           ]);
 

@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { t } from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -28,6 +29,7 @@ import { tUserId, workspaceParams } from "@/api/lib/custom-schema";
 import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { clearMemberAssignments } from "@/api/lib/member-assignment-offboarding";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcastSessionEvent, revokeWorkspaceSseAccess } from "@/api/lib/sse";
@@ -42,6 +44,7 @@ const config = {
   permissions: { workspace: ["update"] },
   mcp: { type: "covered", by: "manage_organization" },
   params: workspaceParams({ userId: tUserId }),
+  body: t.Optional(t.Object({ reassign_to: t.Optional(tUserId) })),
 } satisfies WorkspaceHandlerConfig;
 
 export type RemoveWorkspaceMemberProps = {
@@ -49,6 +52,7 @@ export type RemoveWorkspaceMemberProps = {
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   actorUserId: SafeId<"user">;
+  reassignTo?: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   dependencies?: RemoveWorkspaceMemberDependencies | undefined;
 };
@@ -107,6 +111,7 @@ export const removeWorkspaceMemberHandler = async function* ({
   workspaceId,
   userId,
   actorUserId,
+  reassignTo,
   recordAuditEvent,
   dependencies = defaultRemoveWorkspaceMemberDependencies,
 }: RemoveWorkspaceMemberProps) {
@@ -155,6 +160,17 @@ export const removeWorkspaceMemberHandler = async function* ({
         });
       }
 
+      if (
+        reassignTo &&
+        (reassignTo === userId ||
+          !lockedRows.some((row) => row.userId === reassignTo))
+      ) {
+        throw new HandlerError({
+          status: 400,
+          message: "User is not a member of this workspace",
+        });
+      }
+
       const activeTimers = await tx
         .select({ id: timeEntries.id })
         .from(timeEntries)
@@ -189,6 +205,15 @@ export const removeWorkspaceMemberHandler = async function* ({
         });
       }
 
+      await clearMemberAssignments({
+        tx,
+        scope: { type: "workspace", workspaceId },
+        userId,
+        actorUserId,
+        reassignTo,
+        recordAuditEvent,
+      });
+
       const deleteResult = await tx
         .delete(workspaceMembers)
         .where(
@@ -214,6 +239,10 @@ export const removeWorkspaceMemberHandler = async function* ({
           ),
         );
 
+      const nextOwnerUserId = reassignTo ?? null;
+      const nextWorkStatus = reassignTo
+        ? WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT
+        : WORK_OBLIGATION_STATUS.UNASSIGNED;
       if (ownedWork.length > 0) {
         const activeEntityIds = ownedWork.map(({ entityId }) => entityId);
         const now = new Date();
@@ -221,8 +250,8 @@ export const removeWorkspaceMemberHandler = async function* ({
         await tx
           .update(workObligations)
           .set({
-            ownerUserId: null,
-            status: WORK_OBLIGATION_STATUS.UNASSIGNED,
+            ownerUserId: nextOwnerUserId,
+            status: nextWorkStatus,
             acknowledgedAt: null,
             acknowledgedByUserId: null,
             updatedAt: now,
@@ -251,7 +280,7 @@ export const removeWorkspaceMemberHandler = async function* ({
             details: {
               type: "ownership_changed",
               previousOwnerUserId: userId,
-              nextOwnerUserId: null,
+              nextOwnerUserId,
               cause: "owner_removed_from_workspace",
             },
             occurredAt: now,
@@ -305,10 +334,10 @@ export const removeWorkspaceMemberHandler = async function* ({
           resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
           resourceId: work.entityId,
           changes: {
-            ownerUserId: { old: userId, new: null },
+            ownerUserId: { old: userId, new: nextOwnerUserId },
             status: {
               old: work.status,
-              new: WORK_OBLIGATION_STATUS.UNASSIGNED,
+              new: nextWorkStatus,
             },
           },
           metadata: { cause: "owner_removed_from_workspace" },
@@ -366,6 +395,7 @@ export const createRemoveWorkspaceMember = (
       safeDb,
       workspaceId,
       params: { userId },
+      body,
       user,
       recordAuditEvent,
     }) {
@@ -375,6 +405,10 @@ export const createRemoveWorkspaceMember = (
         workspaceId,
         userId: brandPersistedUserId(userId),
         actorUserId: user.id,
+        reassignTo:
+          body?.reassign_to === undefined
+            ? undefined
+            : brandPersistedUserId(body.reassign_to),
         recordAuditEvent,
         dependencies,
       });

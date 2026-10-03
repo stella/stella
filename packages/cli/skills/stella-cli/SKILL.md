@@ -330,7 +330,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella task delete`
   - `--task-id` — Task entity ID to delete (string)
 - `stella task list`
-  - optional: --matter-id, --task-id, --assignee (me|any), --date-from, --date-to, --status
+  - optional: --matter-id, --task-id, --assignee (me|any|unassigned), --date-from, --date-to, --status
 - `stella task save`
   - optional: --task-id, --matter-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
 - `stella template configure-fields`

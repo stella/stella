@@ -35,7 +35,7 @@ import { cents } from "@/api/lib/money";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
-import { validateOrgUserIds } from "@/api/lib/validated-org-user-id";
+import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
 
 export const createContactBodySchema = t.Object({
   id: tSafeId("contact"),
@@ -220,11 +220,11 @@ export const createContactHandler = async function* ({
         attorneyIds.push(body.responsibleAttorneyId);
       }
 
-      const validAttorneyIds = await validateOrgUserIds(
+      const validAttorneyIds = await lockOrgUserIdsForAssignment({
         tx,
-        attorneyIds.map((attorneyId) => brandPersistedUserId(attorneyId)),
+        userIds: attorneyIds.map(brandPersistedUserId),
         organizationId,
-      );
+      });
       if (!validAttorneyIds) {
         return { kind: "invalid_attorney" };
       }

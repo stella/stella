@@ -72,6 +72,8 @@ import { SessionsCard } from "@/routes/_protected.settings/-components/account/s
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
+import { validAccountDeletionReassignments } from "./-components/account/deletion-reassignments.logic";
+
 export const Route = createFileRoute("/_protected/settings/account/profile")({
   component: ProfilePage,
   pendingComponent: ProfilePagePending,
@@ -406,17 +408,10 @@ function ProfilePageBody() {
     }
     group.tasks.push(task);
   }
-  const allActiveTasksHaveReassignments = activeTasks.every((task) => {
-    const reassignedUserId = reassignments[task.entityId];
-    if (!reassignedUserId) {
-      return false;
-    }
-
-    return activeTaskMembers.some(
-      (member) =>
-        member.workspaceId === task.workspaceId &&
-        member.userId === reassignedUserId,
-    );
+  const selectedTaskReassignmentsAreValid = validAccountDeletionReassignments({
+    tasks: activeTasks,
+    members: activeTaskMembers,
+    reassignments,
   });
   let dialogStep:
     | "loading"
@@ -890,7 +885,7 @@ function ProfilePageBody() {
                   dialogStep === "loading" ||
                   dialogStep === "pendingTasksError" ||
                   !deleteAccountConfirmation.confirmed ||
-                  (dialogStep === "tasks" && !allActiveTasksHaveReassignments)
+                  (dialogStep === "tasks" && !selectedTaskReassignmentsAreValid)
                 }
                 loading={sendOtpMutation.isPending}
               >

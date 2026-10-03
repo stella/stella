@@ -34,7 +34,7 @@ import { pickDefined } from "@/api/lib/pick-defined";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
-import { validateOrgUserIds } from "@/api/lib/validated-org-user-id";
+import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
 
 const updateContactBodySchema = t.Object({
   type: t.Optional(contactTypeSchema),
@@ -101,28 +101,6 @@ export const updateContactHandler = async function* ({
     attorneyIds.push(body.responsibleAttorneyId);
   }
 
-  if (attorneyIds.length > 0) {
-    const validAttorneyIds = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await validateOrgUserIds(
-            tx,
-            attorneyIds.map((attorneyId) => brandPersistedUserId(attorneyId)),
-            organizationId,
-          ),
-      ),
-    );
-
-    if (!validAttorneyIds) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "User is not a member of this organization",
-        }),
-      );
-    }
-  }
-
   const {
     defaultHourlyRate,
     metadata,
@@ -133,6 +111,20 @@ export const updateContactHandler = async function* ({
 
   const outcome = yield* Result.await(
     safeDb(async (tx) => {
+      const validAttorneyIds = await lockOrgUserIdsForAssignment({
+        tx,
+        userIds: attorneyIds.map(brandPersistedUserId),
+        organizationId,
+      });
+      if (!validAttorneyIds) {
+        return {
+          kind: "invalid" as const,
+          error: new HandlerError({
+            status: 400,
+            message: "User is not a member of this organization",
+          }),
+        };
+      }
       const existingRows = await tx
         .select({
           id: contacts.id,

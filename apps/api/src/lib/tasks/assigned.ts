@@ -12,13 +12,11 @@ import { entityQueryScopeCondition } from "@/api/lib/entities/query-scope";
 export const TASK_ASSIGNEE_FILTER = {
   ME: "me",
   ANY: "any",
+  UNASSIGNED: "unassigned",
 } as const;
 export type TaskAssigneeFilter =
   (typeof TASK_ASSIGNEE_FILTER)[keyof typeof TASK_ASSIGNEE_FILTER];
-export const TASK_ASSIGNEE_FILTERS = [
-  TASK_ASSIGNEE_FILTER.ME,
-  TASK_ASSIGNEE_FILTER.ANY,
-] as const satisfies readonly TaskAssigneeFilter[];
+export const TASK_ASSIGNEE_FILTERS = Object.values(TASK_ASSIGNEE_FILTER);
 
 /** Whose tasks a list keeps, as a condition over `entities`. */
 export const taskAssigneeCondition = ({
@@ -31,6 +29,10 @@ export const taskAssigneeCondition = ({
   switch (assignee) {
     case TASK_ASSIGNEE_FILTER.ANY:
       return undefined;
+    case TASK_ASSIGNEE_FILTER.UNASSIGNED:
+      return sql`not exists (select 1 from ${taskAssignees}
+        where ${taskAssignees.entityId} = ${entities.id}
+          and ${taskAssignees.workspaceId} = ${entities.workspaceId})`;
     case TASK_ASSIGNEE_FILTER.ME:
       // Any assignee role counts: a reviewer is as responsible as an assignee.
       return sql`exists (select 1 from ${taskAssignees}

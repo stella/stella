@@ -133,7 +133,7 @@ describe("createWorkspaces", () => {
         return {
           from: () => ({
             where: () => ({
-              for: async () => [],
+              for: async () => [{ userId: "user_test123" }],
             }),
           }),
         };
@@ -165,5 +165,45 @@ describe("createWorkspaces", () => {
       response: { message: "Workspaces limit reached" },
     });
     expect(clientSelectCalls).toBe(0);
+  });
+  test("personal creation holds its creator's organization membership", async () => {
+    let strength: string | undefined;
+    const { safeDb, scopedDb } = createScopedDbMock({
+      select: (fields: Record<string, unknown>) => ({
+        from: () => ({
+          where: () => {
+            if ("total" in fields) {
+              return Promise.resolve([{ total: 0 }]);
+            }
+            if ("name" in fields) {
+              return Promise.resolve([]);
+            }
+            return {
+              for: async (lock: string) => {
+                strength = lock;
+                return [];
+              },
+            };
+          },
+        }),
+      }),
+      query: { organizationSettings: { findFirst: async () => null } },
+    });
+    const response = await createWorkspaces.handler(
+      createContext({
+        body: {
+          id: toSafeId<"workspace">(Bun.randomUUIDv7()),
+          name: "Personal fixture",
+          filePropertyName: "Files",
+        },
+        safeDb,
+        scopedDb,
+      }),
+    );
+    expect(strength).toBe("update");
+    expect(response).toMatchObject({
+      code: 400,
+      response: { message: "Some users are not members of this organization" },
+    });
   });
 });

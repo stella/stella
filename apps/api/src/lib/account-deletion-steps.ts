@@ -1,14 +1,4 @@
-import {
-  and,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  ne,
-  notExists,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
@@ -31,6 +21,7 @@ import {
   agentSkills,
   aiMemories,
   chatThreads,
+  contacts,
   correspondence,
   correspondenceAllowedSenders,
   correspondenceFilers,
@@ -88,6 +79,10 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey, createUserFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  clearMemberAssignments,
+  tryLockMemberCleanupWorkspace,
+} from "@/api/lib/member-assignment-offboarding";
 import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
 import {
   brandPersistedOrganizationId,
@@ -356,14 +351,15 @@ export const REASSIGN_ACTIVE_TASKS_TABLES = [
   correspondenceFilers,
   correspondenceAllowedSenders,
   taskAssignees,
+  contacts,
   workObligations,
   member,
   workspaceMembers,
 ] as const satisfies readonly PgTable[];
 
 /**
- * 5. Active task assignee records require handoff. Completed/cancelled
- * assignments remain as historical activity on the deleted user row.
+ * 5. Requested active-task handoffs are applied; remaining assignments are
+ * cleared. Task rows and former-assignee audit history remain.
  *
  * Also drops the user's `member` and `workspaceMembers` rows — membership
  * deletion happens after task handoff (see step 4's comment).
@@ -388,6 +384,35 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
     .from(member)
     .where(eq(member.userId, currentUserId))
     .for("update");
+  // Organization membership -> workspace -> matter membership -> obligation/entity.
+  // Taking the workspace prefix also keeps audit FKs consistent with flow writes.
+  let afterWorkspaceId: SafeId<"workspace"> | undefined;
+  while (true) {
+    // db-await-in-loop: acquire the workspace prefix in bounded ascending pages.
+    const departingMatters = await tx
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .innerJoin(
+        workspaceMembers,
+        eq(workspaceMembers.workspaceId, workspaces.id),
+      )
+      .where(
+        and(
+          eq(workspaceMembers.userId, currentUserId),
+          afterWorkspaceId ? gt(workspaces.id, afterWorkspaceId) : undefined,
+        ),
+      )
+      .orderBy(workspaces.id)
+      .limit(LIMITS.memberRemovalCleanupBatchSize);
+    if (departingMatters.length === 0) {
+      break;
+    }
+    for (const { id } of departingMatters) {
+      // db-await-in-loop: retain existing org-member locks without inverse waiting.
+      await tryLockMemberCleanupWorkspace(tx, id);
+    }
+    afterWorkspaceId = departingMatters.at(-1)?.id;
+  }
   // Delegation locks a requested workspace membership before locking its
   // obligation. Hold the departing user's membership rows first so a
   // concurrent delegation either lands before this cleanup and is cleared,
@@ -413,49 +438,6 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
         "Too many active task assignments to reassign during account deletion.",
     });
   }
-
-  await tx.delete(taskAssignees).where(
-    and(
-      eq(taskAssignees.userId, currentUserId),
-      inArray(
-        taskAssignees.entityId,
-        tx
-          .select({ entityId: entities.id })
-          .from(entities)
-          .where(
-            and(
-              eq(entities.kind, "task"),
-              or(
-                isNull(entities.status),
-                inArray(entities.status, ACTIVE_TASK_REASSIGNMENT_STATUSES),
-              ),
-            ),
-          ),
-      ),
-      notExists(
-        tx
-          .select({ one: sql`1` })
-          .from(workspaceMembers)
-          .innerJoin(
-            workspaces,
-            eq(workspaces.id, workspaceMembers.workspaceId),
-          )
-          .innerJoin(
-            member,
-            and(
-              eq(member.organizationId, workspaces.organizationId),
-              eq(member.userId, currentUserId),
-            ),
-          )
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, taskAssignees.workspaceId),
-              eq(workspaceMembers.userId, currentUserId),
-            ),
-          ),
-      ),
-    ),
-  );
 
   if (currentTaskAssignments.length > 0) {
     const reassignmentTargets = buildAccountDeletionTaskReassignmentTargets({
@@ -728,6 +710,13 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
       }),
     );
   }
+
+  await clearMemberAssignments({
+    tx,
+    scope: { type: "account" },
+    userId: brandPersistedUserId(currentUserId),
+    actorUserId: brandPersistedUserId(currentUserId),
+  });
 
   // Account deletion anonymizes the user row, so the assignee FK's SET NULL
   // never fires. Historical filer and approver references remain intact.

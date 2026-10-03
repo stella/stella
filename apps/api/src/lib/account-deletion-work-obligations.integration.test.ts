@@ -11,6 +11,7 @@ import { and, eq, inArray, TransactionRollbackError } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
+  contacts,
   entities,
   taskAssignees,
   WORK_OBLIGATION_STATUS,
@@ -242,4 +243,92 @@ describe("account deletion governed ownership", () => {
 
     throw new Error("Expected the integration test transaction to roll back");
   });
+});
+
+test("account erasure defaults to unassigned tasks and retains attorney history", async () => {
+  try {
+    await testDb.transaction(async (tx) => {
+      const taskIds = [createSafeId<"entity">(), createSafeId<"entity">()];
+      await tx.insert(entities).values(
+        taskIds.map((id, index) => ({
+          id,
+          workspaceId: ids.wsA2,
+          kind: "task" as const,
+          name: "Preserved task",
+          status: index === 0 ? "open" : "completed",
+        })),
+      );
+      await tx.insert(taskAssignees).values(
+        taskIds.map((entityId) => ({
+          entityId,
+          workspaceId: ids.wsA2,
+          userId: ids.userA1,
+          role: "assignee" as const,
+        })),
+      );
+      const contactId = createSafeId<"contact">();
+      await tx.insert(contacts).values({
+        id: contactId,
+        organizationId: ids.orgA,
+        type: "person",
+        displayName: "Assigned contact",
+        originatingAttorneyId: ids.userA1,
+        responsibleAttorneyId: ids.userA2,
+      });
+      const count = await reassignActiveTaskAssignmentsAndDropMemberships({
+        tx: asTestRaw<Transaction>(tx),
+        currentUserId: ids.userA1,
+        deletionRequestId: createSafeId<"accountDeletionRequest">(),
+        reassignments: [],
+      });
+      expect(count).toBe(0);
+      expect(await tx.$count(entities, inArray(entities.id, taskIds))).toBe(2);
+      expect(
+        await tx.$count(
+          taskAssignees,
+          inArray(taskAssignees.entityId, taskIds),
+        ),
+      ).toBe(0);
+      expect(
+        await tx
+          .select({
+            originating: contacts.originatingAttorneyId,
+            responsible: contacts.responsibleAttorneyId,
+          })
+          .from(contacts)
+          .where(eq(contacts.id, contactId)),
+      ).toEqual([{ originating: null, responsible: ids.userA2 }]);
+      const history = await tx
+        .select({
+          resourceId: auditLogs.resourceId,
+          changes: auditLogs.changes,
+        })
+        .from(auditLogs)
+        .where(inArray(auditLogs.resourceId, [...taskIds, contactId]));
+      expect(history).toHaveLength(3);
+      for (const taskId of taskIds) {
+        expect(history).toContainEqual(
+          expect.objectContaining({
+            resourceId: taskId,
+            changes: expect.objectContaining({
+              assigneeUserId: { old: ids.userA1, new: null },
+            }),
+          }),
+        );
+      }
+      expect(history).toContainEqual(
+        expect.objectContaining({
+          resourceId: contactId,
+          changes: expect.objectContaining({
+            originatingAttorneyId: { old: ids.userA1, new: null },
+          }),
+        }),
+      );
+      throw new TransactionRollbackError();
+    });
+  } catch (error) {
+    if (!(error instanceof TransactionRollbackError)) {
+      throw error;
+    }
+  }
 });

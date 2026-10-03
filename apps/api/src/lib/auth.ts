@@ -118,12 +118,14 @@ import {
 } from "@/api/lib/email/email";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   AUTH_RATE_LIMITS,
   EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
   LIMITS,
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
+import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
 import { isMemberRole } from "@/api/lib/member-roles";
 import {
   mapMembershipInvariantError,
@@ -159,6 +161,7 @@ import { memoizePerRequest } from "@/api/lib/request-memo";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
+  parseAuthProviderId,
 } from "@/api/lib/safe-id-boundaries";
 import {
   assertSelfhostEmailOtpAllowed,
@@ -171,7 +174,6 @@ import {
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
 import { revokeUserSseAccess } from "@/api/lib/sse";
-import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
 import { includes, isRecord } from "@/api/lib/type-guards";
 import {
   checkMemberAdmission,
@@ -1068,6 +1070,277 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       ),
   });
 
+  const organizationPlugin = organization({
+    ...BETTER_AUTH_ORGANIZATION_OPTIONS,
+    ac,
+    roles,
+    organizationHooks: {
+      ...organizationLifecycleHooks,
+      async beforeCreateOrganization({ user }) {
+        requireDemoAccountAccess(
+          checkConfiguredDemoAccountAccess({
+            email: user.email,
+            operation: "growth",
+          }),
+        );
+        await Promise.resolve();
+      },
+      async beforeDeleteOrganization({ organization: org }) {
+        // Complete the deletion here, before the plugin's adapter runs.
+        // Everything that names the organization cascades away with it, and
+        // those rows are the only description of the objects it owns:
+        // object erasure is key-driven from database rows, nothing lists a
+        // storage prefix, and the bucket expires only staging and export
+        // keys. So the erasure instructions and the cascade have to reach
+        // durable storage together, which is what this single transaction
+        // gives — it records the instructions into the reference-free
+        // tombstone tables, clears the chat rows that own storage, and
+        // deletes the organization row itself. The adapter's own delete
+        // then finds nothing left and returns the organization it read
+        // before this hook, so the endpoint's response is unchanged.
+        //
+        // Deleting the row here, rather than letting it commit separately,
+        // is the point: instructions committed ahead of a cascade that then
+        // failed would name a live organization's documents.
+        //
+        // `org.id` is read off the row the plugin already loaded, so this is
+        // where it becomes the ownership id. `rootDb` bypasses row-level
+        // security exactly as the plugin's own adapter does.
+        const organizationId = brandPersistedOrganizationId(org.id);
+        const teardown = await Result.tryPromise({
+          try: async () =>
+            await rootDb.transaction(
+              async (tx) =>
+                await completeOrganizationDeletion({
+                  organizationId,
+                  tx,
+                }),
+            ),
+          catch: (cause) => cause,
+        });
+        if (Result.isError(teardown)) {
+          captureError(teardown.error, { organizationId });
+          if (teardown.error instanceof OrganizationStorageTeardownBoundError) {
+            throw new APIError("BAD_REQUEST", {
+              error: "organization_storage_too_large",
+              message: teardown.error.message,
+            });
+          }
+          throw new APIError("INTERNAL_SERVER_ERROR", {
+            message: "Failed to delete the organization's stored files",
+          });
+        }
+
+        // Redis is not part of the durability contract: the request rows
+        // are committed and the cleanup reconciler claims every pending one
+        // on its own schedule. Accelerating a bounded prefix keeps a large
+        // organization from fanning out an unbounded number of queue calls
+        // or holding the response open behind the slowest of them.
+        await handoffCommittedEntityDeletionCleanupBatch({
+          captureDeliveryError: captureError,
+          enqueueCleanup: enqueueEntityDeletionCleanup,
+          requestIds: teardown.value.requestIds,
+        });
+      },
+      // A readable refusal before the plugin writes anything; the
+      // `member_organization_capacity` trigger is what holds the bound
+      // under concurrent additions.
+      async beforeCreateInvitation({ organization: org, invitation, inviter }) {
+        await requireAssignableMemberRole(
+          brandPersistedOrganizationId(org.id),
+          invitation.role,
+        );
+        requireDemoAccountAccess(
+          checkConfiguredDemoAccountAccess({
+            email: inviter.email,
+            operation: "growth",
+          }),
+        );
+        requireDemoAccountAccess(
+          checkConfiguredDemoAccountAccess({
+            email: invitation.email,
+            operation: "growth",
+          }),
+        );
+        await refuseBeyondMemberCapacity(
+          brandPersistedOrganizationId(org.id),
+          "invitation",
+        );
+      },
+      async beforeAcceptInvitation({ organization: org, user }) {
+        requireDemoAccountAccess(
+          checkConfiguredDemoAccountAccess({
+            email: user.email,
+            operation: "growth",
+          }),
+        );
+        await refuseBeyondMemberCapacity(
+          brandPersistedOrganizationId(org.id),
+          "membership",
+        );
+      },
+      async beforeAddMember({ organization: org, user, member: addedMember }) {
+        const endpoint = tryGetCurrentAuthEndpointContext();
+        if (endpoint?.path === "/organization/create") {
+          // Better Auth supplies the creator role, before a membership or
+          // browser session exists on the system provisioning path.
+          if (
+            addedMember.role !== BETTER_AUTH_ORGANIZATION_OPTIONS.creatorRole
+          ) {
+            throw new APIError("BAD_REQUEST", {
+              code: "invalid_member_role",
+              message: "Select one product membership role.",
+            });
+          }
+        } else {
+          await requireAssignableMemberRole(
+            brandPersistedOrganizationId(org.id),
+            addedMember.role,
+          );
+        }
+        requireDemoAccountAccess(
+          checkConfiguredDemoAccountAccess({
+            email: user.email,
+            operation: "growth",
+          }),
+        );
+        await refuseBeyondMemberCapacity(
+          brandPersistedOrganizationId(org.id),
+          "membership",
+        );
+      },
+      async beforeUpdateMemberRole({
+        member: updatedMember,
+        newRole,
+        organization: org,
+      }) {
+        await requireAssignableMemberRole(
+          brandPersistedOrganizationId(org.id),
+          newRole,
+        );
+        if (newRole !== "owner") {
+          await refuseLastOwnerChange(
+            brandPersistedOrganizationId(org.id),
+            updatedMember.role,
+          );
+        }
+      },
+      async afterRemoveMember({ member: removedMember, organization: org }) {
+        const organizationId = brandPersistedOrganizationId(org.id);
+        const userId = brandPersistedUserId(removedMember.userId);
+        await rootDb.transaction(async (tx) => {
+          await revokeOrganizationMemberAuthArtifacts(tx, {
+            organizationId,
+            userId,
+          });
+          await clearOrganizationCorrespondenceAssignments({
+            tx,
+            organizationId,
+            userId,
+          });
+        });
+        // Their notification stream for this organization outlives the
+        // membership otherwise: it is authorized once at connect time and
+        // only re-checked on the next event.
+        await revokeUserSseAccess(userId, organizationId);
+      },
+      async beforeRemoveMember({ member: removedMember, organization: org }) {
+        // Branded here, at the boundary: both ids are read off persisted
+        // rows by the plugin, not supplied by the caller, so these become ownership
+        // ids for the tenant predicates the helper applies.
+        const organizationId = brandPersistedOrganizationId(org.id);
+        const userId = brandPersistedUserId(removedMember.userId);
+        await refuseLastOwnerChange(organizationId, removedMember.role);
+        const endpoint = tryGetCurrentAuthEndpointContext();
+        const headers =
+          endpoint?.headers instanceof Headers
+            ? endpoint.headers
+            : endpoint?.request?.headers;
+        const session = headers
+          ? await getAuth().api.getSession({
+              headers,
+              query: { disableCookieCache: true, disableRefresh: true },
+            })
+          : null;
+        if (!session) {
+          throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
+        }
+        const input =
+          endpoint && isRecord(endpoint.body)
+            ? endpoint.body["reassign_to"]
+            : undefined;
+        if (
+          input !== undefined &&
+          (typeof input !== "string" ||
+            parseAuthProviderId<"user">(input) === null)
+        ) {
+          throw new APIError("BAD_REQUEST", {
+            message: "User is not a member of this workspace",
+          });
+        }
+        const reassignTo =
+          typeof input === "string" ? brandPersistedUserId(input) : undefined;
+        const removal = await Result.tryPromise({
+          try: async () =>
+            await rootDb.transaction(async (tx) => {
+              await removeOrganizationMemberInTransaction({
+                tx,
+                organizationId,
+                memberId: removedMember.id,
+                userId,
+                actorUserId: brandPersistedUserId(session.user.id),
+                reassignTo,
+              });
+            }),
+          catch: (error) =>
+            HandlerError.is(error)
+              ? new APIError(
+                  error.status === 409 ? "CONFLICT" : "BAD_REQUEST",
+                  {
+                    message: error.message,
+                    code: error.code,
+                    retryable: error.retryable,
+                  },
+                )
+              : mapMembershipInvariantError(error),
+        });
+        if (Result.isError(removal)) {
+          if (
+            !(removal.error instanceof APIError) ||
+            removal.error.statusCode >= 500
+          ) {
+            observeFailure(removal.error, {
+              sink: MEMBERSHIP_REMOVAL_FAILED,
+              ctx: { organizationId },
+            });
+          }
+          throw removal.error;
+        }
+      },
+    },
+    async sendInvitationEmail(data, request) {
+      const inviteLink = `${env.FRONTEND_URL}/auth/accept-invitation/${data.id}`;
+      if (isLocalDevOpen()) {
+        // oxlint-disable-next-line no-console -- dev-only invitation-link echo for local testing
+        console.log(`[DEV] Org invitation for ${data.email}: ${inviteLink}`);
+        return;
+      }
+
+      const lang = extractLangFromRequest(request);
+      await sendOrganizationInvitation({
+        email: data.email,
+        inviteLink,
+        invitedByUsername: data.inviter.user.name,
+        organizationName: data.organization.name,
+        lang,
+      });
+    },
+  });
+  const removalBody = organizationPlugin.endpoints.removeMember.options.body;
+  organizationPlugin.endpoints.removeMember.options.body = removalBody.extend({
+    reassign_to: removalBody.shape.memberIdOrEmail.optional(),
+  });
+
   const auth = betterAuth({
     trustedOrigins: [
       ...frontendOrigins({
@@ -1386,264 +1659,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       // Must be registered after `twoFactorWithSignInGate` so its after-hook
       // runs after the two-factor hook has set the pending-challenge response.
       socialSignInTwoFactorRedirectPlugin,
-      organization({
-        ...BETTER_AUTH_ORGANIZATION_OPTIONS,
-        ac,
-        roles,
-        organizationHooks: {
-          ...organizationLifecycleHooks,
-          async beforeCreateOrganization({ user }) {
-            requireDemoAccountAccess(
-              checkConfiguredDemoAccountAccess({
-                email: user.email,
-                operation: "growth",
-              }),
-            );
-            await Promise.resolve();
-          },
-          async beforeDeleteOrganization({ organization: org }) {
-            // Complete the deletion here, before the plugin's adapter runs.
-            // Everything that names the organization cascades away with it, and
-            // those rows are the only description of the objects it owns:
-            // object erasure is key-driven from database rows, nothing lists a
-            // storage prefix, and the bucket expires only staging and export
-            // keys. So the erasure instructions and the cascade have to reach
-            // durable storage together, which is what this single transaction
-            // gives — it records the instructions into the reference-free
-            // tombstone tables, clears the chat rows that own storage, and
-            // deletes the organization row itself. The adapter's own delete
-            // then finds nothing left and returns the organization it read
-            // before this hook, so the endpoint's response is unchanged.
-            //
-            // Deleting the row here, rather than letting it commit separately,
-            // is the point: instructions committed ahead of a cascade that then
-            // failed would name a live organization's documents.
-            //
-            // `org.id` is read off the row the plugin already loaded, so this is
-            // where it becomes the ownership id. `rootDb` bypasses row-level
-            // security exactly as the plugin's own adapter does.
-            const organizationId = brandPersistedOrganizationId(org.id);
-            const teardown = await Result.tryPromise({
-              try: async () =>
-                await rootDb.transaction(
-                  async (tx) =>
-                    await completeOrganizationDeletion({
-                      organizationId,
-                      tx,
-                    }),
-                ),
-              catch: (cause) => cause,
-            });
-            if (Result.isError(teardown)) {
-              captureError(teardown.error, { organizationId });
-              if (
-                teardown.error instanceof OrganizationStorageTeardownBoundError
-              ) {
-                throw new APIError("BAD_REQUEST", {
-                  error: "organization_storage_too_large",
-                  message: teardown.error.message,
-                });
-              }
-              throw new APIError("INTERNAL_SERVER_ERROR", {
-                message: "Failed to delete the organization's stored files",
-              });
-            }
-
-            // Redis is not part of the durability contract: the request rows
-            // are committed and the cleanup reconciler claims every pending one
-            // on its own schedule. Accelerating a bounded prefix keeps a large
-            // organization from fanning out an unbounded number of queue calls
-            // or holding the response open behind the slowest of them.
-            await handoffCommittedEntityDeletionCleanupBatch({
-              captureDeliveryError: captureError,
-              enqueueCleanup: enqueueEntityDeletionCleanup,
-              requestIds: teardown.value.requestIds,
-            });
-          },
-          // A readable refusal before the plugin writes anything; the
-          // `member_organization_capacity` trigger is what holds the bound
-          // under concurrent additions.
-          async beforeCreateInvitation({
-            organization: org,
-            invitation,
-            inviter,
-          }) {
-            await requireAssignableMemberRole(
-              brandPersistedOrganizationId(org.id),
-              invitation.role,
-            );
-            requireDemoAccountAccess(
-              checkConfiguredDemoAccountAccess({
-                email: inviter.email,
-                operation: "growth",
-              }),
-            );
-            requireDemoAccountAccess(
-              checkConfiguredDemoAccountAccess({
-                email: invitation.email,
-                operation: "growth",
-              }),
-            );
-            await refuseBeyondMemberCapacity(
-              brandPersistedOrganizationId(org.id),
-              "invitation",
-            );
-          },
-          async beforeAcceptInvitation({ organization: org, user }) {
-            requireDemoAccountAccess(
-              checkConfiguredDemoAccountAccess({
-                email: user.email,
-                operation: "growth",
-              }),
-            );
-            await refuseBeyondMemberCapacity(
-              brandPersistedOrganizationId(org.id),
-              "membership",
-            );
-          },
-          async beforeAddMember({
-            organization: org,
-            user,
-            member: addedMember,
-          }) {
-            const endpoint = tryGetCurrentAuthEndpointContext();
-            if (endpoint?.path === "/organization/create") {
-              // Better Auth supplies the creator role, before a membership or
-              // browser session exists on the system provisioning path.
-              if (
-                addedMember.role !==
-                BETTER_AUTH_ORGANIZATION_OPTIONS.creatorRole
-              ) {
-                throw new APIError("BAD_REQUEST", {
-                  code: "invalid_member_role",
-                  message: "Select one product membership role.",
-                });
-              }
-            } else {
-              await requireAssignableMemberRole(
-                brandPersistedOrganizationId(org.id),
-                addedMember.role,
-              );
-            }
-            requireDemoAccountAccess(
-              checkConfiguredDemoAccountAccess({
-                email: user.email,
-                operation: "growth",
-              }),
-            );
-            await refuseBeyondMemberCapacity(
-              brandPersistedOrganizationId(org.id),
-              "membership",
-            );
-          },
-          async beforeUpdateMemberRole({
-            member: updatedMember,
-            newRole,
-            organization: org,
-          }) {
-            await requireAssignableMemberRole(
-              brandPersistedOrganizationId(org.id),
-              newRole,
-            );
-            if (newRole !== "owner") {
-              await refuseLastOwnerChange(
-                brandPersistedOrganizationId(org.id),
-                updatedMember.role,
-              );
-            }
-          },
-          async afterRemoveMember({
-            member: removedMember,
-            organization: org,
-          }) {
-            const organizationId = brandPersistedOrganizationId(org.id);
-            const userId = brandPersistedUserId(removedMember.userId);
-            await rootDb.transaction(async (tx) => {
-              await revokeOrganizationMemberAuthArtifacts(tx, {
-                organizationId,
-                userId,
-              });
-              await clearOrganizationCorrespondenceAssignments({
-                tx,
-                organizationId,
-                userId,
-              });
-            });
-            // Their notification stream for this organization outlives the
-            // membership otherwise: it is authorized once at connect time and
-            // only re-checked on the next event.
-            await revokeUserSseAccess(userId, organizationId);
-          },
-          async beforeRemoveMember({
-            member: removedMember,
-            organization: org,
-          }) {
-            // Branded here, at the boundary: both ids are read off persisted
-            // rows by the plugin, not supplied by the caller, so these become ownership
-            // ids for the tenant predicates the helper applies.
-            const organizationId = brandPersistedOrganizationId(org.id);
-            const userId = brandPersistedUserId(removedMember.userId);
-            await refuseLastOwnerChange(organizationId, removedMember.role);
-            const removal = await Result.tryPromise({
-              try: async () =>
-                await rootDb.transaction(async (tx) => {
-                  const timerClose = await closeRemovedMemberActiveTimer({
-                    organizationId,
-                    tx,
-                    userId,
-                  });
-                  if (Result.isError(timerClose)) {
-                    throw timerClose.error;
-                  }
-                  // Better Auth deletes the member after this hook, outside this
-                  // transaction. Remove the exact row here so a timer cannot start
-                  // between the timer check and membership removal.
-                  await tx
-                    .delete(member)
-                    .where(
-                      and(
-                        eq(member.id, removedMember.id),
-                        eq(member.organizationId, organizationId),
-                        eq(member.userId, userId),
-                      ),
-                    );
-                }),
-              catch: mapMembershipInvariantError,
-            });
-            if (Result.isError(removal)) {
-              if (
-                !(removal.error instanceof APIError) ||
-                removal.error.statusCode >= 500
-              ) {
-                observeFailure(removal.error, {
-                  sink: MEMBERSHIP_REMOVAL_FAILED,
-                  ctx: { organizationId },
-                });
-              }
-              throw removal.error;
-            }
-          },
-        },
-        async sendInvitationEmail(data, request) {
-          const inviteLink = `${env.FRONTEND_URL}/auth/accept-invitation/${data.id}`;
-          if (isLocalDevOpen()) {
-            // oxlint-disable-next-line no-console -- dev-only invitation-link echo for local testing
-            console.log(
-              `[DEV] Org invitation for ${data.email}: ${inviteLink}`,
-            );
-            return;
-          }
-
-          const lang = extractLangFromRequest(request);
-          await sendOrganizationInvitation({
-            email: data.email,
-            inviteLink,
-            invitedByUsername: data.inviter.user.name,
-            organizationName: data.organization.name,
-            lang,
-          });
-        },
-      }),
+      organizationPlugin,
       oauthProvider({
         loginPage: OAUTH_UI_LOGIN_PATH,
         consentPage: OAUTH_UI_CONSENT_PATH,

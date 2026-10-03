@@ -4,7 +4,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { entities, taskAssignees } from "@/api/db/schema";
+import { entities } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -12,6 +12,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  lockTaskAssignmentMembers,
+  writeTaskAssignments,
+  removeTaskAssignment,
+} from "@/api/lib/tasks/assignment-membership";
 
 const moveAssigneeBodySchema = t.Object({
   taskId: tSafeId("entity"),
@@ -30,18 +35,8 @@ type MoveAssigneeTxResult =
   | { ok: true }
   | { ok: false; status: 400 | 404 | 409; message: string };
 
-// Shared task-assignee move logic: removes `fromUserId` and adds `toUserId`
-// (whichever are non-null) in a single transaction, so a kanban lane drag
-// never leaves a task with neither assignee when the add half would have
-// failed on its own. Guards mirror tasks.assignees.add and
-// tasks.assignees.remove: the task must exist, must not be read-only, and a
-// new `toUserId` must be a member of the workspace — all re-checked INSIDE
-// the same transaction that locks the task row (`for("update")`) and does
-// the writes, so a concurrent read-only transition or member removal
-// between a separate validation transaction and the write can never slip
-// through (see handlers/entities/rename.ts and handlers/properties/update.ts
-// for the same lock-then-guard-in-tx shape). Idempotent in both directions,
-// exactly like the handlers it replaces for this call site.
+// Lock workspace -> membership -> task for both halves of a move. A failed
+// destination validation preserves the previous assignments and their audit.
 export const moveAssigneeHandler = async function* ({
   safeDb,
   workspaceId,
@@ -61,6 +56,11 @@ export const moveAssigneeHandler = async function* ({
 
   const txResult = yield* Result.await(
     safeDb(async (tx): Promise<MoveAssigneeTxResult> => {
+      const members = await lockTaskAssignmentMembers({
+        tx,
+        workspaceId,
+        userIds: toUserId === null ? [] : [toUserId],
+      });
       const taskRows = await tx
         .select({ id: entities.id, readOnly: entities.readOnly })
         .from(entities)
@@ -81,48 +81,35 @@ export const moveAssigneeHandler = async function* ({
         return { ok: false, status: 409, message: "Task is read-only" };
       }
 
-      if (toUserId !== null) {
-        const member = await tx.query.workspaceMembers.findFirst({
-          where: {
-            workspaceId: { eq: workspaceId },
-            userId: toUserId,
-          },
-          columns: { id: true },
-        });
-        if (!member) {
-          return {
-            ok: false,
-            status: 400,
-            message: "User is not a member of this workspace",
-          };
-        }
+      if (toUserId !== null && !members.has(toUserId)) {
+        return {
+          ok: false,
+          status: 400,
+          message: "User is not a member of this workspace",
+        };
       }
 
       if (fromUserId !== null) {
-        await tx
-          .delete(taskAssignees)
-          .where(
-            and(
-              eq(taskAssignees.entityId, taskId),
-              eq(taskAssignees.userId, fromUserId),
-              eq(taskAssignees.workspaceId, workspaceId),
-            ),
-          );
+        await removeTaskAssignment({
+          tx,
+          workspaceId,
+          entityId: taskId,
+          userId: fromUserId,
+        });
       }
 
       if (toUserId !== null) {
-        await tx
-          .insert(taskAssignees)
-          .values({
-            entityId: taskId,
-            workspaceId,
-            userId: toUserId,
-            role: TASK_ASSIGNEE_ROLE.ASSIGNEE,
-          })
-          .onConflictDoUpdate({
-            target: [taskAssignees.entityId, taskAssignees.userId],
-            set: { role: TASK_ASSIGNEE_ROLE.ASSIGNEE },
-          });
+        await writeTaskAssignments({
+          tx,
+          workspaceId,
+          assignments: [
+            {
+              entityId: taskId,
+              userId: toUserId,
+              role: TASK_ASSIGNEE_ROLE.ASSIGNEE,
+            },
+          ],
+        });
       }
 
       const events: AuditEvent[] = [];

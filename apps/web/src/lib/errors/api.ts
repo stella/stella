@@ -100,6 +100,7 @@ const RAW_INTERNAL_TOOL_ERROR_CODE = {
 const CODE_ERROR_KEYS = {
   [CLAUSE_VERSION_LIMIT_ERROR_CODE]: "clauses.versionLimitReached",
   [PUBLIC_COUNTRY_UNAVAILABLE_CODE]: "errors.api.publicCountryUnavailable",
+  member_removal_busy: "errors.api.concurrencyBusy",
   access_denied: "errors.apiCodes.accessDenied",
   account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",
   account_deletion_otp_invalid: "errors.apiCodes.accountDeletionOtpInvalid",

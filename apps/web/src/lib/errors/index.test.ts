@@ -46,6 +46,20 @@ describe("API request retries", () => {
 });
 
 describe("toAPIError", () => {
+  test("member cleanup contention uses the shared localized retry message", () => {
+    const error = toAPIError({
+      status: 409,
+      value: {
+        code: "member_removal_busy",
+        retryable: true,
+        message: "Private transport detail",
+      },
+    });
+    expect(error.message).toBe(
+      "Other work is in progress. Please try again shortly.",
+    );
+  });
+
   test("localizes string payloads by status and preserves the raw message", () => {
     const error = toAPIError({
       status: 400,

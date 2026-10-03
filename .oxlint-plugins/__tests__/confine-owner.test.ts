@@ -1,5 +1,6 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
+import { OWNERSHIP } from "../../scripts/ownership.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 setDefaultTimeout(20_000);
@@ -48,5 +49,26 @@ describe.serial("confine-owner member-call rows", () => {
 
   test("leaves files outside the scoped paths alone", async () => {
     expect(await lint("apps/web/src/store.ts")).toEqual([]);
+  });
+});
+
+describe.serial("task assignment ownership", () => {
+  const entry = OWNERSHIP.find(({ id }) => id === "task-assignment-membership");
+  test("confines direct and aliased assignment primitives to their owners", async () => {
+    expect(entry).toBeDefined();
+    const source =
+      'import { taskAssignees as assignments } from "@/api/db/schema";\nawait tx.insert(assignments).values({});\n';
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions: { entries: [entry] },
+        sourcePath: "apps/api/src/handlers/tasks/new-writer.ts",
+      }),
+    ).toEqual([1]);
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions: { entries: [entry] },
+        sourcePath: "apps/api/src/lib/tasks/assignment-membership.ts",
+      }),
+    ).toEqual([]);
   });
 });
