@@ -40,14 +40,12 @@ const shapes = fc.array(
 const wrappers = fc.array(fc.constantFrom("div", "section", "blockquote"), {
   maxLength: 3,
 });
-const htmlId =
-  "Czech constitutional HTML body markers retain their source order";
 
 test(
-  htmlId,
+  "Czech constitutional HTML body markers retain their source order",
   () => {
     assertProperty(
-      htmlId,
+      "Czech constitutional HTML body markers retain their source order",
       fc.property(
         markerPlan,
         shapes,
@@ -56,8 +54,9 @@ test(
           const fixture = cheerio.load(
             `<html><body><header>headerqzexcluded</header><span id="lblDecisionForm">NÁLEZ</span><div class="DocContent"><p>Ústavní soud rozhodl takto: Návrh se zamítá.</p><p>Odůvodnění: Posouzení návrhu.</p>${fragments.join("")}<script>scriptqzexcluded</script><style>styleqzexcluded</style></div><footer>footerqzexcluded</footer></body></html>`,
           );
-          for (const tag of ancestors)
-            {fixture(".DocContent").wrapInner(`<${tag}></${tag}>`);}
+          for (const tag of ancestors) {
+            fixture(".DocContent").wrapInner(`<${tag}></${tag}>`);
+          }
           const injected = injectMarkupMarkers({
             source: fixture.html(),
             selector: ".DocContent",
@@ -95,7 +94,6 @@ test(
   propertyTestTimeout(30_000),
 );
 
-const rtfId = "Czech constitutional RTF body markers retain their source order";
 const runs = fc.array(
   fc.constantFrom(
     "<p>Text odstavce.</p>",
@@ -106,10 +104,10 @@ const runs = fc.array(
 );
 
 test(
-  rtfId,
+  "Czech constitutional RTF body markers retain their source order",
   () => {
     assertProperty(
-      rtfId,
+      "Czech constitutional RTF body markers retain their source order",
       fc.property(markerPlan, runs, (plan, paragraphs) => {
         const injected = injectMarkupMarkers({
           source: `<html><body>${paragraphs.join("")}</body></html>`,
@@ -137,8 +135,9 @@ test(
           "visibleqzexcluded",
           "headerqzexcluded",
           "footerqzexcluded",
-        ])
-          {expect(parsed.fulltext).not.toContain(excluded);}
+        ]) {
+          expect(parsed.fulltext).not.toContain(excluded);
+        }
         expect(
           validateAst(
             buildValidationHtml(["Ústavní soud rozhodl.", ...texts]),

@@ -924,3 +924,37 @@ describe("embedded RTF text destinations", () => {
     ]);
   });
 });
+
+test("excludes scripts and styles from the HTML fallback", () => {
+  for (const container of ["div class='DocContent'", "section"]) {
+    const tag = container.split(" ").at(0);
+    const parsed = parseUsDecisionHtml(
+      baseInput(
+        `<span id="lblDecisionForm">NÁLEZ</span><${container}>Visible<script>scriptqzexcluded</script><style>styleqzexcluded</style></${tag}>`,
+      ),
+    );
+    expect(parsed.fulltext).toContain("Visible");
+    expect(parsed.fulltext).not.toContain("scriptqzexcluded");
+    expect(parsed.fulltext).not.toContain("styleqzexcluded");
+  }
+});
+
+test("excludes all RTF header and footer destinations", () => {
+  for (const destination of [
+    "header",
+    "headerf",
+    "headerl",
+    "headerr",
+    "footer",
+    "footerf",
+    "footerl",
+    "footerr",
+  ]) {
+    const parsed = parseUsDecisionHtml(
+      baseInput(
+        `<input id="docContentHidden" value="{\\rtf1{\\${destination} furnitureqzexcluded}Visible\\par}">`,
+      ),
+    );
+    expect(parsed.fulltext).toBe("Visible");
+  }
+});

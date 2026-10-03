@@ -31,20 +31,21 @@ const shapes = fc.array(
 const wrappers = fc.array(fc.constantFrom("div", "section", "blockquote"), {
   maxLength: 3,
 });
-const id = "Czech supreme body markers retain their source order";
 
 test(
-  id,
+  "Czech supreme body markers retain their source order",
   () => {
     assertProperty(
-      id,
+      "Czech supreme body markers retain their source order",
       fc.property(
         markerPlan,
         shapes,
         wrappers,
         (plan, fragments, ancestors) => {
           let body = `<p>Nejvyšší soud rozhodl takto: Návrh se zamítá.</p><p>Odůvodnění: Posouzení návrhu.</p>${fragments.join("")}`;
-          for (const tag of ancestors) {body = `<${tag}>${body}</${tag}>`;}
+          for (const tag of ancestors) {
+            body = `<${tag}>${body}</${tag}>`;
+          }
           const fixture = cheerio.load(
             `<html><body><table id="box-table-a"><tr><td>Soud:</td><td>metadataqzexcluded</td></tr></table><p class="fixture-title" align="center">ROZSUDEK</p>${body}<script>scriptqzexcluded</script><style>styleqzexcluded</style></body></html>`,
           );
