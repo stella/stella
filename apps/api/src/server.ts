@@ -141,6 +141,7 @@ import {
 } from "@/api/lib/client-ip";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -622,7 +623,7 @@ const scopeRequestAsyncStores = (): void => {
   api.wrap(
     (handleRequest) => async (request: Request) =>
       runWithRequestScope(async () => {
-        if (!env.FEATURE_ACTION_ADMISSION) {
+        if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
           return handleRequest(request);
         }
         return withFinalResponseCompletion(request, async () =>
@@ -682,10 +683,10 @@ const startServer = async (): Promise<void> => {
       rejectUnauthorized: envBase.REDIS_TLS_REJECT_UNAUTHORIZED,
     }).unwrap("Redis connection configuration must be valid.");
     logger.info("redis.connection.mode", { mode });
-    if (env.FEATURE_ACTION_ADMISSION) {
+    if (isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
       detached(startActionAdmissionRedis(), "admission-store.start");
     }
-    if (env.FEATURE_MCP_READ_FENCE) {
+    if (isDeploymentFeatureEnabled("FEATURE_MCP_READ_FENCE")) {
       detached(startMcpReadFenceRedis(), "read-fence-store.start");
     }
   }

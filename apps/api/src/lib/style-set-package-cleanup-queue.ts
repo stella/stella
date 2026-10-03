@@ -6,7 +6,6 @@ import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
 import { styleSets } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
@@ -21,6 +20,7 @@ import type {
   RequeueableQueue,
 } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
   deleteOrganizationFileWithSignal,
@@ -307,7 +307,7 @@ export const deleteUnreferencedStyleSetPackage = async (
     });
     return;
   }
-  if (env.FEATURE_FILE_USAGE_LIMITS) {
+  if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
     const deleted = await deleteOrganizationFileWithSignal(
       s3Key,
       AbortSignal.timeout(10_000),

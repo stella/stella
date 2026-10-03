@@ -8,7 +8,6 @@ import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields, pendingUploads, workspaces } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -26,6 +25,7 @@ import {
   objectWriterSettlementAfterCleanup,
   startBufferIntentHeartbeat,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { validateParentIdForInsert } from "@/api/lib/entities/validate-parent-id";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
@@ -308,7 +308,7 @@ export const createEntityFromBuffer = async ({
     };
 
     try {
-      if (!env.FEATURE_FILE_USAGE_LIMITS) {
+      if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
         await withTimeout(
           async (signal) =>
             await putS3ObjectWithSignal(s3Key, bytes, mimeType, signal),
