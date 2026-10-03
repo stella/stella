@@ -27,6 +27,93 @@ const table = pgTable("recorder_rows", { id: integer().primaryKey() });
 
 if (runPostgresTests && databaseUrl) {
   describe("real transaction recording", () => {
+    test("records alias UPDATE writes against the real table", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const recorder = createTransactionRecorder({
+          tables: { recorder_entities: "entity" },
+        });
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`CREATE TEMP TABLE recorder_entities (id integer PRIMARY KEY)`,
+          );
+          await tx.execute(sql`INSERT INTO recorder_entities VALUES (1)`);
+          const trace: TransactionTrace = { events: [] };
+          const restore = recorder.instrument(tx, trace);
+          try {
+            for (const statement of [
+              sql`UPDATE recorder_entities AS e SET id = e.id`,
+              sql`UPDATE recorder_entities e SET id = e.id`,
+              sql`UPDATE recorder_entities AS "set" SET id = "set".id`,
+              sql`UPDATE recorder_entities SET id = id`,
+            ]) {
+              trace.events.length = 0;
+              await tx.execute(statement);
+              expect(
+                trace.events.map((event) => [
+                  event.type,
+                  event.aggregate,
+                  event.mode,
+                  "table" in event ? event.table : undefined,
+                ]),
+              ).toEqual([
+                ["firstWrite", "entity", "update", "recorder_entities"],
+                ["writeLock", "entity", "update", "recorder_entities"],
+              ]);
+            }
+          } finally {
+            restore();
+          }
+        });
+      });
+    });
+
+    test("attributes outer row locks to their enclosing SELECT across closed subqueries", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const recorder = createTransactionRecorder({
+          tables: {
+            recorder_workspaces: "workspace",
+            recorder_entities: "entity",
+          },
+        });
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`CREATE TEMP TABLE recorder_workspaces (id integer PRIMARY KEY)`,
+          );
+          await tx.execute(
+            sql`CREATE TEMP TABLE recorder_entities (id integer PRIMARY KEY)`,
+          );
+          await tx.execute(sql`INSERT INTO recorder_workspaces VALUES (1)`);
+          await tx.execute(sql`INSERT INTO recorder_entities VALUES (1)`);
+          const trace: TransactionTrace = { events: [] };
+          const restore = recorder.instrument(tx, trace);
+          try {
+            for (const statement of [
+              sql`SELECT * FROM recorder_workspaces WHERE id IN (SELECT id FROM recorder_entities) FOR UPDATE`,
+              sql`SELECT (SELECT id FROM recorder_entities) AS entity_id FROM recorder_workspaces FOR UPDATE`,
+              sql`SELECT * FROM recorder_workspaces WHERE EXISTS (SELECT 1 FROM recorder_entities WHERE id IN (SELECT id FROM recorder_entities)) FOR UPDATE`,
+              sql`WITH locked AS (SELECT * FROM recorder_workspaces WHERE id IN (SELECT id FROM recorder_entities) FOR UPDATE) SELECT * FROM locked`,
+              sql`SELECT * FROM recorder_workspaces w WHERE id IN (SELECT id FROM recorder_entities) FOR UPDATE OF w`,
+            ]) {
+              trace.events.length = 0;
+              const rows = await tx.execute(statement);
+              expect(rows).toHaveLength(1);
+              expect(
+                trace.events.map((event) => [
+                  event.type,
+                  event.aggregate,
+                  "table" in event ? event.table : undefined,
+                ]),
+              ).toEqual([["rowLock", "workspace", "recorder_workspaces"]]);
+            }
+          } finally {
+            restore();
+          }
+        });
+      });
+    });
+
     test("records raw and builder lock modes, bound parameters, and only the first successful write", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();

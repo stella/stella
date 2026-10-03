@@ -61,6 +61,48 @@ const statementShape = (statement: string) =>
     " ",
   );
 
+// Closed subqueries neither own the enclosing lock clause nor supply its targets.
+const enclosingSelectScope = (preceding: string) => {
+  let depth = 0;
+  let start: number | undefined;
+  const tokens = [...preceding.matchAll(/"(?:[^"]|"")*"|\bselect\b|[()]/giu)];
+  for (const token of tokens.toReversed()) {
+    const value = token[0].toLowerCase();
+    if (value === ")") {
+      depth += 1;
+    } else if (value === "(") {
+      depth -= 1;
+      if (depth < 0) {
+        break;
+      }
+    } else if (value === "select" && depth === 0) {
+      start = token.index;
+      break;
+    }
+  }
+  if (start === undefined) {
+    panic("Missing enclosing SELECT for recorded row lock");
+  }
+  const scope = preceding.slice(start);
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const token of scope.matchAll(/"(?:[^"]|"")*"|[()]/gu)) {
+    if (token[0] === "(") {
+      if (depth === 0) {
+        parts.push(scope.slice(cursor, token.index), " ");
+      }
+      depth += 1;
+    } else if (token[0] === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        cursor = token.index + 1;
+      }
+    }
+  }
+  parts.push(scope.slice(cursor));
+  return parts.join("");
+};
+
 const isExecutor = (
   value: unknown,
 ): value is (params?: unknown[]) => Promise<unknown> =>
@@ -149,7 +191,7 @@ export const createTransactionRecorder = ({
     const writes = [
       ...shape.matchAll(
         new RegExp(
-          `\\b(insert\\s+into|delete\\s+from|update(?=\\s+${QUALIFIED_IDENTIFIER}\\s+(?:${IDENTIFIER}\\s+)?set\\b))\\s+(${QUALIFIED_IDENTIFIER})`,
+          `\\b(insert\\s+into|delete\\s+from|update(?=\\s+${QUALIFIED_IDENTIFIER}\\s+(?:(?:as\\s+)?${IDENTIFIER}\\s+)?set\\b))\\s+(${QUALIFIED_IDENTIFIER})`,
           "giu",
         ),
       ),
@@ -210,9 +252,7 @@ export const createTransactionRecorder = ({
       return;
     }
     for (const lock of rowLocks) {
-      const preceding = shape.slice(0, lock.index);
-      const select = [...preceding.matchAll(/\bselect\b/giu)].at(-1);
-      const scope = preceding.slice(select?.index ?? 0);
+      const scope = enclosingSelectScope(shape.slice(0, lock.index));
       const sources = new Map<string, string>();
       for (const source of scope.matchAll(
         new RegExp(
