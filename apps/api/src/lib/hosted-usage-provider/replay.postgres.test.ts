@@ -471,33 +471,36 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
     );
   });
 
-  test("allocation replay refuses a receipt outside the current entitlement period", async () => {
-    await withReplayFixture(async (tx, { seedReceipt, insertPolicy }) => {
-      await insertPolicy();
-      const entitlementId = `replay-${Bun.randomUUIDv7()}`;
-      const allocationId = `replay-${Bun.randomUUIDv7()}`;
-      await seedReceipt({ eventId: entitlementId });
-      expect((await runReplay({ tx, eventId: entitlementId })).kind).toBe(
-        "applied",
-      );
-      await seedReceipt({
-        eventId: allocationId,
-        eventType: "allocation.created",
-        processedAt: "2026-07-02T00:00:00Z",
-        data: { allocation_reason: "addon" },
+  for (const occurredAt of ["2026-07-02T00:00:00Z", undefined]) {
+    test(`allocation replay refuses a receipt outside the current entitlement period using ${occurredAt === undefined ? "receipt time" : "provider time"}`, async () => {
+      await withReplayFixture(async (tx, { seedReceipt, insertPolicy }) => {
+        await insertPolicy();
+        const entitlementId = `replay-${Bun.randomUUIDv7()}`;
+        const allocationId = `replay-${Bun.randomUUIDv7()}`;
+        await seedReceipt({ eventId: entitlementId });
+        expect((await runReplay({ tx, eventId: entitlementId })).kind).toBe(
+          "applied",
+        );
+        await seedReceipt({
+          eventId: allocationId,
+          eventType: "allocation.created",
+          processedAt:
+            occurredAt === undefined ? "2026-07-02T00:00:00Z" : START,
+          data: { allocation_reason: "addon", occurred_at: occurredAt },
+        });
+        for (const mode of ["dry_run", "apply"] as const) {
+          expect(
+            (await runReplay({ tx, eventId: allocationId, mode })).kind,
+          ).toBe("allocation_period_elapsed");
+        }
+        const receipt = await tx
+          .select()
+          .from(hostedUsageWebhookEvents)
+          .where(eq(hostedUsageWebhookEvents.eventId, allocationId));
+        expect(receipt.at(0)?.replayAudit).toBeNull();
       });
-      for (const mode of ["dry_run", "apply"] as const) {
-        expect(
-          (await runReplay({ tx, eventId: allocationId, mode })).kind,
-        ).toBe("allocation_period_elapsed");
-      }
-      const receipt = await tx
-        .select()
-        .from(hostedUsageWebhookEvents)
-        .where(eq(hostedUsageWebhookEvents.eventId, allocationId));
-      expect(receipt.at(0)?.replayAudit).toBeNull();
     });
-  });
+  }
 
   test("an already allocated ignored receipt becomes a terminal duplicate allocation", async () => {
     await withReplayFixture(

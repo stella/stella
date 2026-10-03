@@ -113,7 +113,7 @@ const replayReceiptInTx = async ({
     .where(
       and(
         eq(hostedUsageWebhookEvents.result, "ignored"),
-        notInArray(hostedUsageWebhookEvents.eventId, selectedEventIds),
+        notInArray(hostedUsageWebhookEvents.eventId, [...selectedEventIds]),
         or(
           sql`${hostedUsageWebhookEvents.payload}->'data'->>'id' = ${event.output.data.id}`,
           sql`${hostedUsageWebhookEvents.payload}->'data'->>'account_ref' = ${event.output.data.account_ref}`,
@@ -315,6 +315,7 @@ export const replayProviderEventsBatch = async ({
     for (const eventId of eventIds) {
       const attempt = await Result.tryPromise({
         try: async () =>
+          // db-await-in-loop: ordered replay transactions/savepoints let later receipts see earlier effects and isolate each failure
           await runAttemptTransaction(
             async (tx) =>
               await replayReceiptInTx({

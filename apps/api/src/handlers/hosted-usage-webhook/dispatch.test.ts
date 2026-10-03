@@ -25,7 +25,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   HostedUsageAllocationPayload,
-  HostedUsageEntitlementPayload,
+  HostedUsageWebhookEvent,
 } from "@/api/lib/hosted-usage-provider/event-schemas";
 import {
   assertUsageAvailable,
@@ -144,10 +144,15 @@ const withRolledBackTx = async (
   }
 };
 
+type EntitlementFixturePayload = Extract<
+  HostedUsageWebhookEvent,
+  { type: "entitlement.created" }
+>["data"];
+
 const buildEntitlementPayload = (
   fx: Fixture,
-  overrides: Partial<HostedUsageEntitlementPayload> = {},
-): HostedUsageEntitlementPayload => ({
+  overrides: Partial<EntitlementFixturePayload> = {},
+): EntitlementFixturePayload => ({
   id: fx.hostedEntitlementExternalId,
   status: "active",
   account_ref: fx.hostedAccountRef,
