@@ -175,7 +175,6 @@ afterAll(async () => {
     .where(eq(bufferObjectCleanupIntents.organizationId, organizationId));
   await testDb.delete(templates).where(eq(templates.id, templateId));
   await testDb.delete(templates).where(eq(templates.id, otherTemplateId));
-  await testDb.delete(member).where(eq(member.userId, userId));
   await testDb.delete(organization).where(eq(organization.id, organizationId));
   await testDb
     .delete(organization)
