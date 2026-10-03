@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   CASE_LAW_MAINTENANCE_LANE,
   holdCaseLawMaintenanceLane,
@@ -261,6 +263,9 @@ describe("case-law maintenance lane", () => {
       },
     };
     const hold = await holdCaseLawMaintenanceLane({ sql: fake, now: () => 0 });
-    expect(hold.release()).rejects.toThrow("Maintenance lane was not held");
+    expect(await rejectionOf(hold.release())).toHaveProperty(
+      "message",
+      expect.stringContaining("Maintenance lane was not held"),
+    );
   });
 });

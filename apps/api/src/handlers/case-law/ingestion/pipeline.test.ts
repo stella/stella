@@ -59,10 +59,12 @@ import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
+  markListingOnly,
   observedDocketOf,
   sanitizeResult,
   partialObservationFromMetadata,
@@ -456,6 +458,23 @@ describe("sanitizeResult — decision date bounds", () => {
 });
 
 describe("sanitizeResult — shared partial-observation quality", () => {
+  test("secondary refusal retains document detail until a write proves no document exists", () => {
+    const refused = sanitizeResult({
+      ...baseResult(EMPTY_AST),
+      observationDetail: "secondary-refused",
+    });
+    expect(partialObservationFromMetadata(refused.metadata)).toEqual({
+      caseNumberIsPlaceholder: false,
+      detail: "secondary-refused",
+    });
+    expect(
+      partialObservationFromMetadata(markListingOnly(refused.metadata)),
+    ).toEqual({
+      caseNumberIsPlaceholder: false,
+      detail: "listing-only",
+    });
+  });
+
   test("persists adapter-neutral quality and removes it after detail recovery", () => {
     const partial = sanitizeResult({
       ...baseResult(EMPTY_AST),
@@ -464,17 +483,18 @@ describe("sanitizeResult — shared partial-observation quality", () => {
     });
     expect(partialObservationFromMetadata(partial.metadata)).toEqual({
       caseNumberIsPlaceholder: true,
-      isListingOnly: true,
+      detail: "listing-only",
     });
 
     const recovered = sanitizeResult({
       ...partial,
       caseNumberIsPlaceholder: undefined,
       isListingOnly: undefined,
+      observationDetail: "complete",
     });
     expect(partialObservationFromMetadata(recovered.metadata)).toEqual({
       caseNumberIsPlaceholder: false,
-      isListingOnly: false,
+      detail: "complete",
     });
   });
 });
@@ -1137,6 +1157,7 @@ describe("runIngestionPipeline — document observer failures", () => {
 
       const wrappedAdapter = defineSourceAdapter({
         ...czNsAdapter,
+        documentStage: ADAPTER_MANIFESTS[czNsAdapter.key].documentStage,
         fetchPage: async () => {
           for (let fetch = 0; fetch < 100; fetch++) {
             await observePublisherDocumentFetch({

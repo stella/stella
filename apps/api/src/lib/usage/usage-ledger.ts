@@ -49,8 +49,8 @@ import type {
   UsageServiceTier,
   UsageEntitlementStatus,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
 import { currentActionCostIdentity } from "@/api/lib/usage/action-costs/context";
 import { CONFIGURED_ACCESS_STATE } from "@/api/lib/usage/configured-access";
@@ -136,7 +136,7 @@ export const resolveUsageConsumption = async ({
   currentPeriodStart,
   asOf,
 }: ResolveUsageConsumptionInput): Promise<boolean> => {
-  if (!env.FEATURE_CONFIGURED_ACCESS) {
+  if (!isDeploymentFeatureEnabled("FEATURE_CONFIGURED_ACCESS")) {
     return originalAccess;
   }
   const snapshot = await readOrganizationAccessSnapshot(tx, organizationId);

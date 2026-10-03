@@ -34,12 +34,12 @@ import {
   properties,
   workspaces,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import {
@@ -559,7 +559,7 @@ export const finalizeEntityCreate = async function* ({
     const deleted = Result.flatten(
       await Result.tryPromise({
         try: async () => {
-          if (env.FEATURE_FILE_USAGE_LIMITS) {
+          if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
             return await deleteOrganizationFileWithSignal(
               finalKey,
               AbortSignal.timeout(10_000),

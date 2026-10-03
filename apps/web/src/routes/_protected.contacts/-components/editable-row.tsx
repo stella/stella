@@ -3,12 +3,12 @@ import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/input";
-import { stellaToast } from "@stll/ui/toast";
 
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import type { ContactUpdate } from "@/lib/contacts/mutations";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   buildNumericContactPayload,
   buildTextContactPayload,
@@ -62,10 +62,7 @@ export const EditableRow = ({
         policy.maxLength !== null &&
         trimmed.length > policy.maxLength
       ) {
-        stellaToast.add({
-          title: t("errors.actionFailed"),
-          type: "error",
-        });
+        notifyUserError(undefined, t("errors.actionFailed"));
         return;
       }
 
@@ -74,17 +71,14 @@ export const EditableRow = ({
         const result = buildNumericContactPayload(field, trimmed);
         if (result.status === "invalid") {
           const message = t("errors.actionFailed");
-          stellaToast.add({ title: message, type: "error" });
+          notifyUserError(undefined, message);
           setError(message);
           return;
         }
         payload = result.payload;
       } else {
         if (field === "displayName" && !trimmed) {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+          notifyUserError(undefined, t("errors.actionFailed"));
           return;
         }
         payload = buildTextContactPayload(field, trimmed);

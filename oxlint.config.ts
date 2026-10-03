@@ -8,6 +8,7 @@ import {
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
+import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
   SHADCN_LINT_JS_PLUGINS,
@@ -45,6 +46,16 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
 // document an owner that no rule can yet prove.
 const enforcedOwnershipEntries = OWNERSHIP.filter(
   (entry) => entry.enforcement.kind !== "none",
+);
+
+// Public route files may build handlers only from the factories whose context
+// is anonymous. The ban lists every other factory, so a new one is banned
+// until its scope says otherwise.
+const anonymousHandlerFactories = factoriesWhere(
+  ({ context }) => context === "anonymous",
+);
+const nonAnonymousHandlerFactories = factoriesWhere(
+  ({ context }) => context !== "anonymous",
 );
 
 const PUBLIC_SSR_AMBIENT_STATE_MESSAGE =
@@ -152,12 +163,15 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-swallowed-item-error.fixture.test.ts", [
     "no-swallowed-item-error/no-test-swallowed-error",
   ]),
+  fixtureRuleOverride("provider-call-error-message.fixture.ts", [
+    "provider-call-error-message/provider-call-error-message",
+  ]),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
     rules: publicSsrAmbientStateRules,
   },
   fixtureRuleOverride("auth-lifecycle.fixture.ts", [
-    "auth-lifecycle/after-remove-member-revokes-artifacts",
+    "auth-lifecycle/member-removal-revokes-artifacts",
     "auth-lifecycle/no-direct-auth-artifact-delete",
   ]),
   fixtureRuleOverride("forbid-process-env-outside-env-ts.fixture.ts", [
@@ -166,6 +180,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("forbid-dev-runner-config-reads.fixture.ts", [
     "forbid-dev-runner-config-reads/forbid-dev-runner-config-reads",
+  ]),
+  fixtureRuleOverride("no-raw-deployment-feature-read.fixture.ts", [
+    "no-raw-deployment-feature-read/no-raw-deployment-feature-read",
   ]),
   fixtureRuleOverride("docs-source-policy.fixture.ts", [
     "docs-source-policy/docs-source-policy",
@@ -216,6 +233,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-tenant-page-limit.fixture.tsx", [
     "require-tenant-page-limit/require-tenant-page-limit",
   ]),
+  fixtureRuleOverride("require-tenant-page-limit.fixture.impostor.ts", [
+    "require-tenant-page-limit/require-tenant-page-limit",
+  ]),
   fixtureRuleOverride("no-optional-mutation-command.fixture.ts", [
     "no-optional-mutation-command/no-optional-mutation-command",
   ]),
@@ -250,6 +270,12 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-raw-public-law-seo.fixture.ts", [
     "no-raw-public-law-seo/no-raw-public-law-seo",
+  ]),
+  fixtureRuleOverride("no-discarded-toast-error.fixture.ts", [
+    "no-discarded-toast-error/no-discarded-toast-error",
+  ]),
+  fixtureRuleOverride("no-direct-error-toast.fixture.ts", [
+    "no-direct-error-toast/no-direct-error-toast",
   ]),
   fixtureRuleOverride("no-raw-router-invalidation.fixture.ts", [
     "no-raw-router-invalidation/no-raw-router-invalidation",
@@ -296,6 +322,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-direct-property-table-write.fixture.ts", [
     "no-direct-property-table-write/no-direct-property-table-write",
   ]),
+  fixtureRuleOverride("no-direct-field-write.fixture.ts", [
+    "no-direct-field-write/no-direct-field-write",
+  ]),
   fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
     "no-direct-pdf-save/no-direct-pdf-save",
   ]),
@@ -333,6 +362,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-focused-tests",
     "bun-test-hygiene/no-disabled-tests",
     "bun-test-hygiene/no-identical-title",
+    "bun-test-hygiene/no-promise-matchers",
     "bun-test-hygiene/no-unmanaged-database-client",
   ]),
   fixtureRuleOverride("no-untyped-updates.fixture.ts", [
@@ -913,6 +943,7 @@ export default defineConfig({
       "error",
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
     "tagged-error-requires-message/tagged-error-requires-message": "error",
+    "provider-call-error-message/provider-call-error-message": "error",
     "require-custom-jsonb-column/require-custom-jsonb-column": "error",
     // The column-cast allowlist lives in per-file overrides below, scoped to
     // the files that own the schema objects, so the same spelling elsewhere
@@ -931,6 +962,9 @@ export default defineConfig({
     "no-raw-zip-load/no-raw-zip-load": "error",
     "no-direct-property-table-write/no-direct-property-table-write": "error",
     "no-direct-entity-insert/no-direct-entity-insert": "error",
+    "no-direct-field-write/no-direct-field-write": "error",
+    "no-direct-legislation-revision-write/no-direct-legislation-revision-write":
+      "error",
     "no-unvalidated-clause-write/no-unvalidated-clause-write": "error",
     "no-direct-template-version-write/no-direct-template-version-write":
       "error",
@@ -1250,6 +1284,8 @@ export default defineConfig({
     "./.oxlint-plugins/require-loader-prefetch.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
+    "./.oxlint-plugins/no-discarded-toast-error.ts",
+    "./.oxlint-plugins/no-direct-error-toast.ts",
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
     "./.oxlint-plugins/no-beforeload-redirect.ts",
@@ -1267,6 +1303,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-parser-validator-calls.ts",
+    "./.oxlint-plugins/no-raw-parser-html.ts",
     "./.oxlint-plugins/no-swallowed-item-error.ts",
     "./.oxlint-plugins/no-raw-decision-text-fields.ts",
     "./.oxlint-plugins/no-unowned-file-version-write.ts",
@@ -1276,6 +1313,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-untranslated-jsx-literal.ts",
     "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
     "./.oxlint-plugins/forbid-dev-runner-config-reads.ts",
+    "./.oxlint-plugins/no-raw-deployment-feature-read.ts",
     "./.oxlint-plugins/docs-source-policy.ts",
     "./.oxlint-plugins/confine-server-reads.ts",
     "./.oxlint-plugins/no-facade-imports.ts",
@@ -1303,6 +1341,8 @@ export default defineConfig({
     "./.oxlint-plugins/scanned-file-boundary.ts",
     "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
+    "./.oxlint-plugins/no-direct-field-write.ts",
+    "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
     "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
     "./.oxlint-plugins/no-direct-entity-insert.ts",
@@ -1317,7 +1357,9 @@ export default defineConfig({
     "./.oxlint-plugins/require-contained-handler.ts",
     "./.oxlint-plugins/suppression-hygiene.ts",
     "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
+    "./.oxlint-plugins/no-array-built-typebox-union.ts",
     "./.oxlint-plugins/tagged-error-requires-message.ts",
+    "./.oxlint-plugins/provider-call-error-message.ts",
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
     "./.oxlint-plugins/no-bare-jsonb-cast.ts",
     "./.oxlint-plugins/no-hand-rolled-sql-case.ts",
@@ -1408,6 +1450,7 @@ export default defineConfig({
         "bun-test-hygiene/no-focused-tests": "error",
         "bun-test-hygiene/no-disabled-tests": "error",
         "bun-test-hygiene/no-identical-title": "error",
+        "bun-test-hygiene/no-promise-matchers": "error",
       },
     },
     {
@@ -2295,6 +2338,18 @@ export default defineConfig({
       },
     },
     {
+      // A union over a computed array has a non-tuple type, so its `Static`
+      // collapses while the runtime schema still validates.
+      files: [
+        "apps/api/src/**/*.ts",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-array-built-typebox-union.fixture.ts",
+      ],
+      rules: {
+        "no-array-built-typebox-union/no-array-built-typebox-union": "error",
+      },
+    },
+    {
       // The other half of the detached-promise guard: `.catch(() => null)`
       // passes every floating-promise check while discarding the rejection,
       // which is what the `void` ban exists to prevent. Product code only;
@@ -3040,6 +3095,8 @@ export default defineConfig({
         ],
         "require-router-select/require-router-select": "error",
         "no-optional-mutation-command/no-optional-mutation-command": "error",
+        "no-discarded-toast-error/no-discarded-toast-error": "error",
+        "no-direct-error-toast/no-direct-error-toast": "error",
         "no-raw-router-invalidation/no-raw-router-invalidation": "error",
         "require-matter-affordance/require-matter-affordance": "error",
         "security-guards/no-unsanitized-href": "error",
@@ -3138,6 +3195,26 @@ export default defineConfig({
         ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture.test.ts",
       ],
       rules: { "no-swallowed-item-error/no-test-swallowed-error": "error" },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/parsers/**/*.ts",
+        "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
+        "apps/api/src/lib/legal-search/parsers/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-raw-parser-html.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.ts",
+        "**/__fixtures__/**",
+        // This test support oracle checks retention independently of the
+        // production HTML helpers; sharing their reads would make it vacuous.
+        "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/test-oracle.ts",
+      ],
+      rules: { "no-raw-parser-html/no-raw-parser-html": "error" },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/no-raw-parser-html.fixture.ts"],
+      rules: { "no-raw-parser-html/no-raw-parser-html": "error" },
     },
     {
       files: [
@@ -3652,6 +3729,47 @@ export default defineConfig({
       },
     },
     {
+      // Deployment feature flags are read through `isDeploymentFeatureEnabled`
+      // so every surface shares one local-development policy per flag.
+      files: ["apps/api/src/**/*.ts"],
+      rules: {
+        "no-raw-deployment-feature-read/no-raw-deployment-feature-read": [
+          "error",
+          {
+            allowedReads: [
+              // Scheduled governed-workflow work follows the raw flag: local
+              // development opens the work-obligation routes, not background
+              // jobs that write obligations on a timer.
+              {
+                file: "apps/api/src/lib/scheduler/jobs.ts",
+                flags: ["FEATURE_GOVERNED_WORKFLOW"],
+              },
+              {
+                file: "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts",
+                flags: ["FEATURE_GOVERNED_WORKFLOW"],
+              },
+              {
+                file: "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts",
+                flags: ["FEATURE_GOVERNED_WORKFLOW"],
+              },
+              // Unresolved: agent billing tools open FEATURE_USAGE in local
+              // development while the usage routes and the hosted usage
+              // provider follow the raw flag. Kept raw until one policy is
+              // chosen; production reads the flag either way.
+              {
+                file: "apps/api/src/handlers/usage/routes.ts",
+                flags: ["FEATURE_USAGE"],
+              },
+              {
+                file: "apps/api/src/lib/hosted-usage-provider/config.ts",
+                flags: ["FEATURE_USAGE"],
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
       // fetch() without a timeout is allowed in throwaway / non-runtime
       // surfaces: sandbox playground, load tests, tooling scripts, build
       // configs, unit tests. Product runtime code (apps/api including its
@@ -3911,7 +4029,7 @@ export default defineConfig({
     {
       files: ["apps/api/src/**/*.{ts,tsx}"],
       rules: {
-        "auth-lifecycle/after-remove-member-revokes-artifacts": "error",
+        "auth-lifecycle/member-removal-revokes-artifacts": "error",
         "auth-lifecycle/no-direct-auth-artifact-delete": "error",
         "mcp-security/no-direct-oauth-client-join": "error",
         "no-raw-error-logging/no-raw-error-logging": "error",
@@ -4391,12 +4509,6 @@ export default defineConfig({
               noZodImport,
               apiValibotJsonSchemaImport,
               {
-                name: "@/api/lib/api-handlers",
-                importNames: ["createHandler", "createRootHandler"],
-                message:
-                  "Use 'createSafeHandler' or 'createSafeRootHandler' instead.",
-              },
-              {
                 name: "@/api/lib/branded-types",
                 importNames: ["toSafeId"],
                 message:
@@ -4516,15 +4628,8 @@ export default defineConfig({
               ...apiProviderAdapterImports,
               {
                 name: "@/api/lib/api-handlers",
-                importNames: ["createHandler", "createRootHandler"],
-                message:
-                  "Use 'createSafeHandler' or 'createSafeRootHandler' instead.",
-              },
-              {
-                name: "@/api/lib/api-handlers",
-                importNames: ["createSafeHandler", "createSafeRootHandler"],
-                message:
-                  "Public route files must use createSafePublicHandler and must not receive authenticated handler context.",
+                importNames: nonAnonymousHandlerFactories,
+                message: `Public route files may use only the anonymous handler factories (${anonymousHandlerFactories.join(", ")}) and must not receive authenticated handler context.`,
               },
               {
                 name: "@/api/lib/auth",

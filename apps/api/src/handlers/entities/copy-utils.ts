@@ -5,12 +5,12 @@ import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import type { EntityStamp } from "@/api/lib/document-counter";
 import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
@@ -392,7 +392,7 @@ const stageAndCopyFiles = async ({
     return { ...source, targetKey, newFileId };
   });
   const prepareFile = async ({ sourceKey, targetKey }: FileMapping) => {
-    const source = env.FEATURE_FILE_USAGE_LIMITS
+    const source = isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
       ? await headObject(sourceKey)
       : Result.ok({ contentLength: 0 });
     if (Result.isError(source)) {

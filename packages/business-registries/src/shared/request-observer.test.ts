@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { performRegistryRequest } from "./http";
 import { observeRegistryRequest } from "./request-observer";
 
@@ -44,14 +46,16 @@ test("explicit observations report callback failures and leave outbound attempts
     const controller = new AbortController();
     controller.abort(new TypeError("fixture abort"));
     expect(
-      performRegistryRequest({
-        observer,
-        signal: controller.signal,
-        url: "https://fixture.invalid",
-        wrapRequestError: (error) =>
-          new TypeError("fixture transport failure", { cause: error }),
-      }),
-    ).rejects.toThrow("fixture abort");
+      await rejectionOf(
+        performRegistryRequest({
+          observer,
+          signal: controller.signal,
+          url: "https://fixture.invalid",
+          wrapRequestError: (error) =>
+            new TypeError("fixture transport failure", { cause: error }),
+        }),
+      ),
+    ).toHaveProperty("message", expect.stringContaining("fixture abort"));
     expect(outbound).toBe(3);
     expect(observed).toBe(3);
   } finally {

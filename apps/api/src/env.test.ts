@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { DEMO_ACCOUNT_OTP_WARNING_EVENT } from "@/api/lib/auth/demo-account-otp-policy";
+
 const baseEnv = {
   DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella",
   S3_ENDPOINT: "http://localhost:9000",
@@ -71,6 +73,68 @@ const readDerivedDatabaseUrl = (env: Record<string, string | undefined>) => {
 };
 
 describe("API environment", () => {
+  test("configured sign-in codes preserve readiness and bounded warnings", () => {
+    const otpModuleUrl = new URL("lib/demo-account-otp.ts", import.meta.url)
+      .href;
+    const routesModuleUrl = new URL(
+      "handlers/health/routes.ts",
+      import.meta.url,
+    ).href;
+    const script = `const { getDemoAccountOtpOverride } = await import(${JSON.stringify(otpModuleUrl)});
+      const { createHealthRoute } = await import(${JSON.stringify(routesModuleUrl)});
+      const codes = [" Account@Example.Test ", "standard@example.test", "standard@example.test", "account@example.test"].map(email => getDemoAccountOtpOverride({ email, type: "sign-in" }) ?? null);
+      const route = createHealthRoute({ probeReadiness: async () => ({ status: "ready" }) });
+      const response = await route.handle(new Request("http://localhost/ready"));
+      console.log(JSON.stringify({ status: response.status, codes }));`;
+    const result = spawnApiEnvironment(
+      {
+        ...baseEnv,
+        DEMO_ACCOUNT_EMAIL: " Account@Example.Test ",
+        DEMO_ACCOUNT_OTP: "654321",
+      },
+      script,
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    const response = result.stdout.toString().trim().split("\n").at(-1);
+    expect(response).toBeDefined();
+    if (response === undefined) {
+      throw new Error("Response must be present");
+    }
+    expect(JSON.parse(response)).toEqual({
+      status: 200,
+      codes: ["654321", null, null, "654321"],
+    });
+    const warnings = result.stderr
+      .toString()
+      .trim()
+      .split("\n")
+      .filter((line) => line.includes(DEMO_ACCOUNT_OTP_WARNING_EVENT));
+    expect(warnings).toHaveLength(1);
+    for (const warning of warnings) {
+      expect(JSON.parse(warning)).toMatchObject({
+        severity: "WARN",
+        message: DEMO_ACCOUNT_OTP_WARNING_EVENT,
+      });
+      expect(warning).not.toContain("example.test");
+      expect(warning).not.toContain("654321");
+    }
+  });
+
+  test("uses configured credentials in strict mode and examples in local development", () => {
+    const example = {
+      ...baseEnv,
+      BETTER_AUTH_SECRET: "your-secret-at-least-32-chars-long",
+    };
+    const strict = bootApiEnvironment(example);
+    expect(strict.exitCode).not.toBe(0);
+    expect(strict.stderr.toString()).toContain(
+      "BETTER_AUTH_SECRET must use configured values",
+    );
+    expect(strict.stderr.toString()).not.toContain(example.BETTER_AUTH_SECRET);
+    const local = bootApiEnvironment({ ...example, ...LOCAL_DEV_ENV });
+    expect(local.exitCode, local.stderr.toString()).toBe(0);
+  });
+
   test("preserves structured stdout when loading the environment", () => {
     const result = spawnApiEnvironment(
       baseEnv,
