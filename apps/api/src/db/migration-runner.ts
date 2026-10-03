@@ -6,6 +6,7 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import { getMigrationsToRun } from "drizzle-orm/migrator.utils";
 import { migrate as pgCoreMigrate } from "drizzle-orm/pg-core";
 
+import type { ConfiguredEbsConfiguration } from "../lib/db/ebs-signal-reader";
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
 import {
   assertMigrationHistory,
@@ -20,6 +21,9 @@ import {
   CORPUS_SCHEMA_LANE_LOCK_STATEMENTS,
   CORPUS_SCHEMA_LANE_UNLOCK_SQL,
 } from "./corpus-schema-lane";
+import { createOnlineIndexHold } from "./online-index-gate";
+import type { OnlineIndexHoldRef } from "./online-index-gate";
+import { openOnlineIndexObserver } from "./online-index-observer";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import { runOnlineMigrations } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
@@ -284,20 +288,31 @@ const preflightAndAdopt = async ({
 
 type RunMigrationsOptions = {
   connection: ReservedSQL;
+  /** The database `connection` belongs to; index builds observe it apart. */
+  databaseUrl: string;
   migrationsFolder: string;
+  /** Resolved before the migrator connects; a missing one never gets here. */
+  ebs: ConfiguredEbsConfiguration;
   migrationsSchema?: string;
   migrationsTable?: string;
   runOnline?: typeof runOnlineMigrations;
+  onlineIndexHold?: OnlineIndexHoldRef;
 };
 
 export const runMigrations = async ({
   connection,
+  databaseUrl,
   migrationsFolder,
+  ebs,
   migrationsSchema = "drizzle",
   migrationsTable = "__drizzle_migrations",
   runOnline = runOnlineMigrations,
+  onlineIndexHold = createOnlineIndexHold(),
 }: RunMigrationsOptions) => {
   let laneHeld = false;
+  // A terminated session already dropped its advisory locks; unlocking on the
+  // closed connection would replace the monitoring error with a close error.
+  const session: { state: "open" | "terminated" } = { state: "open" };
   try {
     await connection.unsafe(bootstrapRoleSql);
     const [liftTimeout, takeLane, restoreTimeout] =
@@ -385,6 +400,10 @@ export const runMigrations = async ({
       remedy: "Migration completion requires every bundled migration hash.",
     });
     const onlineConnection: OnlineMigrationConnection = {
+      terminate: async () => {
+        session.state = "terminated";
+        await connection.close({ timeout: 0 });
+      },
       execute: async (query, params = []) => {
         await connection.unsafe(query, [...params]);
       },
@@ -392,17 +411,71 @@ export const runMigrations = async ({
         await connection.unsafe(query, [...params]),
       release: (): void => undefined,
     };
-    await runOnline({
-      reserve: async () => await Promise.resolve(onlineConnection),
-    });
-    return {
-      status: "applied" as const,
-      predictedNames: predicted.map(({ name }) => name),
-      insertedNames: inserted.map(({ name }) => name),
-    };
+    const online = await runOnline(
+      { reserve: async () => await Promise.resolve(onlineConnection) },
+      {
+        indexGate: { ebs, hold: onlineIndexHold },
+        reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
+      },
+    );
+    const predictedNames = predicted.map(({ name }) => name);
+    const insertedNames = inserted.map(({ name }) => name);
+    if (online.type === "deferred") {
+      return {
+        status: "online_deferred" as const,
+        index: online.index,
+        retryAfterMs: online.retryAfterMs,
+        predictedNames,
+        insertedNames,
+      };
+    }
+    return { status: "applied" as const, predictedNames, insertedNames };
   } finally {
-    if (laneHeld) {
+    if (laneHeld && session.state === "open") {
       await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
     }
   }
+};
+
+type RunMigrationsResult = Awaited<ReturnType<typeof runMigrations>>;
+
+type SettledMigrationsResult = Exclude<
+  RunMigrationsResult,
+  { status: "online_deferred" }
+>;
+
+type RunMigrationsUntilSettledOptions = RunMigrationsOptions & {
+  sleep?: (milliseconds: number) => Promise<void>;
+};
+
+/**
+ * Runs the migrator until its online phase completes. A deferred index build
+ * ends the run, which releases the corpus schema lane, so corpus writers keep
+ * running while the build waits for health. The next run takes the lane
+ * again, re-reads the ledger (a newer bundle may have moved it meanwhile), and
+ * resumes the online phase at the deferred index. The hold spans the runs, so
+ * a long one alerts once.
+ */
+export const runMigrationsUntilSettled = async ({
+  sleep = Bun.sleep,
+  onlineIndexHold = createOnlineIndexHold(),
+  ...options
+}: RunMigrationsUntilSettledOptions): Promise<SettledMigrationsResult> => {
+  const result = await runMigrations({ ...options, onlineIndexHold });
+  if (result.status !== "online_deferred") {
+    return result;
+  }
+  process.stdout.write(
+    `${JSON.stringify({
+      event: "migrate.online_deferred",
+      index: result.index,
+      retryAfterMs: result.retryAfterMs,
+    })}\n`,
+  );
+  await sleep(result.retryAfterMs);
+  return await runMigrationsUntilSettled({
+    ...options,
+    sleep,
+    onlineIndexHold,
+  });
 };
