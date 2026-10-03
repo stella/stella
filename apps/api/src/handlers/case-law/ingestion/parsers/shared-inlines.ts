@@ -32,6 +32,11 @@ export const visibleHtmlText = (el: cheerio.Cheerio<AnyNode>): string => {
   return copy.not(EXCLUDED_HTML_SELECTOR).text();
 };
 
+/** Repair-only projection for quarantine identities stored before visible text. */
+export const legacyQuarantineHtmlText = (
+  el: cheerio.Cheerio<AnyNode>,
+): string => el.text();
+
 /** Nested table text belongs to the outer cell's inline tree, once. */
 export const ownTableRows = (table: cheerio.Cheerio<AnyNode>) =>
   table

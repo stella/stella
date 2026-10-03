@@ -1,4 +1,5 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -12,6 +13,8 @@ import {
 import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/decisions/slug";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
+import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -1002,6 +1005,126 @@ if (!databaseUrl || !runPostgresTests) {
       expect(isRecord(row) ? Number(row["count"]) : 0).toBe(1);
       expect(isRecord(row) ? Number(row["canonicalCount"]) : 0).toBe(1);
       expect(isRecord(row) ? Number(row["fallbackCount"]) : 0).toBe(0);
+    });
+
+    test("adopts a stored raw-text NALUS quarantine identity after publisher recovery", async () => {
+      const caseNumber = "Pl.ÚS 46999/24";
+      const legacyId = `nalus-quarantine:${hashContent(
+        JSON.stringify({
+          stablePrimaryText: "Jan NovákoldPrimary()",
+          stableActionsText: "oldAction()",
+          stableDetailText: caseNumber,
+          stableCounterText: "1",
+        }),
+      )}`;
+      const listing = `<html><body>Výsledky 1 - 1 z celkem 1
+        <table>
+          <tr class="resultData0"><td></td><td>
+            <a href="ResultDetail.aspx?malformed=true&pos=1&cnt=1">${caseNumber} #1</a><br />
+            Jan Novák<script>oldPrimary()</script>
+          </td></tr>
+          <tr class="resultData0" valign="top"><td>
+            <img onclick='javascript:ShowLink("https://nalus.usoud.cz/Search/GetText.aspx?sz=Pl-46999-24_1", "Odkaz", "")' /><script>oldAction()</script>
+          </td></tr>
+        </table>Výsledky 1 - 1 z celkem 1</body></html>`;
+      const sleepSpy = spyOn(Bun, "sleep").mockResolvedValue(undefined);
+      const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
+        async (input, init) => {
+          const url = new URL(
+            input instanceof Request ? input.url : String(input),
+          );
+          if (url.pathname.endsWith("/Search/Search.aspx")) {
+            if (init?.method === "POST") {
+              return new Response(null, {
+                status: 302,
+                headers: { Location: "/Search/Results.aspx" },
+              });
+            }
+            return new Response(`<html><body>
+            <input id="__VIEWSTATE" value="view-state" />
+            <input id="__VIEWSTATEGENERATOR" value="generator" />
+            <input id="__EVENTVALIDATION" value="validation" />
+            <select name="ctl00$MainContent$resultsPageSize" id="ctl00_MainContent_resultsPageSize">
+              <option selected="selected" value="20">20</option>
+            </select>
+          </body></html>`);
+          }
+          if (url.pathname.endsWith("/Search/Results.aspx")) {
+            return new Response(listing);
+          }
+          return new Response("missing", { status: 404 });
+        },
+      );
+      const page = await Result.tryPromise(
+        async () =>
+          await czUsAdapter.fetchPage(
+            "search:historical:2026-08-07:2024:collect:0:0:-",
+            {},
+          ),
+      );
+      fetchSpy.mockRestore();
+      sleepSpy.mockRestore();
+      if (Result.isError(page)) {
+        return panic(page.error.message);
+      }
+      if (Result.isError(page.value)) {
+        return panic(page.value.error.message);
+      }
+      const recovered = page.value.value.decisions.at(0);
+      expect(page.value.value.decisions).toHaveLength(1);
+      if (!recovered) {
+        return panic("Expected recovered NALUS observation");
+      }
+      expect(recovered.sourceDocumentId).toBe("nalus-sz:Pl-46999-24_1");
+      expect(recovered.sourceDocumentIdRepairAliases).toContain(legacyId);
+      expect(recovered.sourceDocumentIdAliases ?? []).not.toContain(legacyId);
+      await processDecision({
+        input: {
+          ...recovered,
+          sourceDocumentId: legacyId,
+          sourceDocumentIdAliases: undefined,
+          sourceDocumentIdRepairAliases: undefined,
+          rawHash: "legacy-nalus-script-quarantine",
+        },
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      const [stored] = await db
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(
+          and(
+            eq(caseLawDecisions.sourceId, sourceId),
+            eq(caseLawDecisions.sourceDocumentId, legacyId),
+          ),
+        );
+      expect(stored).toBeDefined();
+      for (const observationOrder of [2n, 3n]) {
+        await processDecision({
+          input: recovered,
+          observationOrder,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:01.000Z"),
+        });
+      }
+      const rows = await db
+        .select({
+          id: caseLawDecisions.id,
+          sourceDocumentId: caseLawDecisions.sourceDocumentId,
+        })
+        .from(caseLawDecisions)
+        .where(
+          and(
+            eq(caseLawDecisions.sourceId, sourceId),
+            eq(caseLawDecisions.caseNumber, caseNumber),
+          ),
+        );
+      expect(rows).toEqual([
+        { id: stored?.id, sourceDocumentId: recovered.sourceDocumentId },
+      ]);
     });
 
     test("uses heuristic repair aliases only when an owner already exists", async () => {

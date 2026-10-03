@@ -71,13 +71,19 @@ const SELECTOR_METHODS = new Set([
 ]);
 const COMPARISONS = new Set(["===", "!==", "==", "!="]);
 type CheerioKind = "api" | "selection" | "xmlApi" | "xmlSelection";
-const TABLE_SELECTOR = /(?:^|[\s>,+~(])(?:tr|td)(?=$|[\s>,+~).#:[*])/iu;
+const TABLE_TAGS = "(?:tr|td|th)";
+const TABLE_SELECTOR = new RegExp(
+  String.raw`(?:^|[\s>,+~(])${TABLE_TAGS}(?=$|[\s>,+~).#:[*])`,
+  "iu",
+);
 const EXCLUDED_SELECTOR =
   /(?:^|[\s>,+~(])(?:script|style)(?=$|[\s>,+~).#:[*])/iu;
 const ROW_SELECTOR = /(?:^|[\s>,+~(])tr(?=$|[\s>,+~).#:[*])/iu;
 const TABLE_ROOT_SELECTOR = /(?:^|[\s>,+~(])table(?=$|[\s>,+~).#:[*])/iu;
-const OTHER_TAG_SELECTOR =
-  /(?:^|[\s>,+~(])(?!(?:tr|td)(?=$|[\s>,+~).#:[*]))[a-z][a-z\d-]*(?=$|[\s>,+~).#:[*])/iu;
+const OTHER_TAG_SELECTOR = new RegExp(
+  String.raw`(?:^|[\s>,+~(])(?!${TABLE_TAGS}(?=$|[\s>,+~).#:[*]))[a-z][a-z\d-]*(?=$|[\s>,+~).#:[*])`,
+  "iu",
+);
 
 // Attribute values and quoted strings are not tag selectors: `[data-kind="td"]`
 // and `[style]` describe ordinary visible elements.

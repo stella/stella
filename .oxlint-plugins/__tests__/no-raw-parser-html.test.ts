@@ -112,8 +112,15 @@ describe.serial("HTML parser helper ownership", () => {
         '$("table > tbody > tr");',
         '$("table td");',
         'table.find("p, td, div");',
+        'table.find("th");',
+        'table.find("td, th");',
+        'table.find("thead > tr > th.heading");',
+        'const headers = "th"; table.find(headers);',
+        '$("table th");',
+        '$("table td, th");',
+        'table.find("p, th, div");',
       ]),
-    ).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    ).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
   });
 
   test("rejects comparisons, switch cases, sets, includes lists and exclusion selectors", async () => {
@@ -147,6 +154,8 @@ describe.serial("HTML parser helper ownership", () => {
         'const items = [{ text: () => "Visible" }]; items.find((item) => item.text());',
         'const $other = (selector: string) => selector; $other("table tr");',
         '{ const table = { text: () => "Visible" }; table.text(); }',
+        '$("main").find("p, th, div");',
+        'table.find("[data-kind=th], .th, #th");',
       ]),
     ).toEqual([]);
   });

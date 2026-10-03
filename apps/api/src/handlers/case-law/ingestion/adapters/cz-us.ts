@@ -58,6 +58,7 @@ import {
 import { czechConstitutionalIdentifiersFromParallelCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import {
+  legacyQuarantineHtmlText,
   ownTableRows,
   visibleHtmlText,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
@@ -1664,32 +1665,43 @@ const parseResultPage = ({
       // fingerprint.
       const stablePrimary = primary.clone();
       stablePrimary.find("a[href*='ResultDetail.aspx']").remove();
-      const stablePrimaryText = visibleHtmlText(stablePrimary).replace(
-        ecli ?? "",
-        "",
-      );
       const stableActions = actions.clone();
       stableActions
         .find("[onclick*='GetText.aspx?sz='], a[href*='GetText.aspx?sz=']")
         .remove();
-      const stableFingerprintFields = {
-        stablePrimaryText,
-        stableActionsText: visibleHtmlText(stableActions),
-      };
-      const stableDetailTexts = [...new Set([listedCaseNumber, ""])];
-      const stableCounterTexts = [
-        ...new Set([counterText ?? szCounter ?? "", ""]),
+      // Visible text defines new identities; raw text only locates audited rows
+      // stored before the projection changed.
+      const quarantineRepairIds = [
+        ...new Set(
+          [visibleHtmlText, legacyQuarantineHtmlText].flatMap((readText) => {
+            const projectionDetailText = readText(detail);
+            const counter = /#(?<counter>\d+)\s*$/u.exec(projectionDetailText)
+              ?.groups?.["counter"];
+            const stableDetailTexts = [
+              ...new Set([
+                projectionDetailText.replace(/#\d+\s*$/u, "").trim(),
+                "",
+              ]),
+            ];
+            const stableCounterTexts = [
+              ...new Set([counter ?? szCounter ?? "", ""]),
+            ];
+            return stableDetailTexts.flatMap((stableDetailText) =>
+              stableCounterTexts.map((stableCounterText) =>
+                quarantineFingerprint({
+                  stablePrimaryText: readText(stablePrimary).replace(
+                    ecli ?? "",
+                    "",
+                  ),
+                  stableActionsText: readText(stableActions),
+                  stableDetailText,
+                  stableCounterText,
+                }),
+              ),
+            );
+          }),
+        ),
       ];
-      const quarantineRepairIds = stableDetailTexts.flatMap(
-        (stableDetailText) =>
-          stableCounterTexts.map((stableCounterText) =>
-            quarantineFingerprint({
-              ...stableFingerprintFields,
-              stableDetailText,
-              stableCounterText,
-            }),
-          ),
-      );
       const quarantineId =
         quarantineRepairIds[0] ?? panic("Missing quarantine id");
       const publisherIdentity = exactPublisherIdentity ?? {

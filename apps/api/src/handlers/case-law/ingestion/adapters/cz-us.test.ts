@@ -24,6 +24,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { NalusRateLimitedError } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
@@ -45,6 +46,8 @@ type ResultRow = {
   ecli?: string | undefined;
   textUrl?: string | null | undefined;
   textActionLabel?: string | undefined;
+  primaryExtraHtml?: string;
+  actionsExtraHtml?: string;
 };
 
 /**
@@ -178,10 +181,10 @@ const makeResultsPage = (
       return `
 <tr class='resultData${(index + renderPositionOffset) % 2}'>
   <td></td>
-  <td><a href='${detailUrl}'>${row.listedCaseNumber ?? row.caseNumber}${counterLabel}</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
+  <td><a href='${detailUrl}'>${row.listedCaseNumber ?? row.caseNumber}${counterLabel}</a><br />${row.ecli ?? ""}<br />Jan Novák${row.primaryExtraHtml ?? ""}</td>
 </tr>
 <tr class='resultData${(index + renderPositionOffset) % 2}' valign="top">
-  <td>${textAction}</td>
+  <td>${textAction}${row.actionsExtraHtml ?? ""}</td>
 </tr>`;
     })
     .join("");
@@ -1873,6 +1876,48 @@ describe("czUsAdapter.fetchPage", () => {
       quarantined?.sourceDocumentId,
     );
   });
+
+  test.each(["script", "style"])(
+    "retains stored raw-text quarantine fingerprints as repair-only aliases for %s",
+    async (tag) => {
+      const row = {
+        sz: "",
+        caseNumber: "Pl.ÚS 12/24",
+        date: "4. 1. 2024",
+        textUrl: null,
+        primaryExtraHtml: `<${tag}>oldPrimary()</${tag}>`,
+        actionsExtraHtml: `<${tag}>oldAction()</${tag}>`,
+      };
+      // The digest is pinned to the pre-cutover projection, independent of
+      // the current text reader and alias construction.
+      const legacyId = `nalus-quarantine:${hashContent(
+        JSON.stringify({
+          stablePrimaryText: "Jan NovákoldPrimary()",
+          stableActionsText: "oldAction()",
+          stableDetailText: "Pl.ÚS 12/24",
+          stableCounterText: "1",
+        }),
+      )}`;
+      installSearchMock({ rows: [row] });
+      const quarantined = unwrap(
+        await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+      ).decisions.at(0);
+      expect(quarantined?.sourceDocumentId).not.toBe(legacyId);
+      expect(quarantined?.sourceDocumentIdRepairAliases).toBeUndefined();
+
+      installSearchMock({
+        rows: [{ ...row, sz: "Pl-12-24_1", textUrl: undefined }],
+      });
+      const recovered = unwrap(
+        await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+      ).decisions.at(0);
+      expect(recovered?.sourceDocumentIdRepairAliases).toContain(legacyId);
+      expect(recovered?.sourceDocumentIdRepairAliases).toContain(
+        quarantined?.sourceDocumentId,
+      );
+      expect(recovered?.sourceDocumentIdAliases).not.toContain(legacyId);
+    },
+  );
 
   test("recovers a missing listed docket from the decision detail", async () => {
     installSearchMock({

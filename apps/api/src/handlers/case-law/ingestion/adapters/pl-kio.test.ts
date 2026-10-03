@@ -28,6 +28,7 @@ import {
   readPlKioDetail,
   readPlKioListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
@@ -961,3 +962,63 @@ test("procurement metadata ignores excluded HTML in every label and value", asyn
   expect(expected).not.toBeNull();
   expect(readPlKioDetail(contaminated)).toEqual(expected);
 });
+
+test.each(["script", "style"])(
+  "procurement recovery retains the stored raw-text quarantine fingerprint for %s content",
+  (tag) => {
+    const cleanHtml = listingRow("30306", "KIO 2681/25", "01-09-2025");
+    const contaminated = cleanHtml.replace(
+      "KIO 2681/25",
+      () => `KIO 2681/25<${tag}>hidden-content</${tag}>`,
+    );
+    expect(contaminated).not.toBe(cleanHtml);
+    const item = readPlKioListing(listingPage(1, [contaminated]))?.rows.at(0);
+    const cleanItem = readPlKioListing(listingPage(1, [cleanHtml]))?.rows.at(0);
+    expect(item).toBeDefined();
+    expect(cleanItem).toBeDefined();
+    if (item === undefined || cleanItem === undefined) {
+      return;
+    }
+    const canonical = plKioListingIdentity({ ...item, id: undefined });
+    expect(canonical).toEqual(
+      plKioListingIdentity({ ...cleanItem, id: undefined }),
+    );
+    const storedLegacyId = `uzp-quarantine:${hashContent(
+      JSON.stringify({
+        court: "Krajowa Izba Odwoławcza",
+        documentType: "wyrok",
+        signature: "KIO 2681/25hidden-content",
+        issueDate: "01-09-2025",
+      }),
+    )}`;
+    expect(canonical.type).toBe("document");
+    if (canonical.type !== "document") {
+      return;
+    }
+    expect(canonical).not.toEqual({
+      type: "document",
+      sourceDocumentId: storedLegacyId,
+    });
+    const recovered = built(
+      assemblePlKioDecision({
+        item,
+        detailHtml: undefined,
+        documentHtml: undefined,
+      }),
+    );
+    expect(recovered.sourceDocumentId).toBe("30306");
+    expect(recovered.sourceDocumentIdRepairAliases).toContain(storedLegacyId);
+    expect(recovered.sourceDocumentIdRepairAliases).toContain(
+      canonical.sourceDocumentId,
+    );
+    const held = built(
+      assemblePlKioDecision({
+        item: { ...item, id: undefined },
+        detailHtml: undefined,
+        documentHtml: undefined,
+      }),
+    );
+    expect(held.sourceDocumentId).not.toBe(storedLegacyId);
+    expect(held.sourceDocumentIdRepairAliases).toBeUndefined();
+  },
+);
