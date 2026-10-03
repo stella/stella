@@ -297,6 +297,12 @@ test("sentinel reads pass only with a matching early overflow decision", () => {
 });
 
 test("offset pagination must be on the limited query chain", () => {
+  expect(
+    findTransferReads(
+      file,
+      "const exportRows = () => tx.select().limit(LIMITS.exportRowLimit).offset(0);",
+    ).map(({ kind }) => kind),
+  ).toEqual(["constant-limit"]);
   for (const query of [
     "tx.select().limit(LIMITS.pageSize).offset(page * LIMITS.pageSize)",
     "tx.select().offset(page * LIMITS.pageSize).limit(LIMITS.pageSize)",

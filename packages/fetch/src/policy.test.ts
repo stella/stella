@@ -47,6 +47,31 @@ afterEach(() => {
 });
 
 describe("response timeout policies", () => {
+  test("abort after an ignoring fetcher resolves cancels the response body", async () => {
+    for (const type of ["headers", "idle"] as const) {
+      const controller = new AbortController();
+      const reason = new DOMException("Caller aborted", "AbortError");
+      let cancelledWith: unknown;
+      const body = new ReadableStream<Uint8Array>({
+        cancel(value) {
+          cancelledWith = value;
+        },
+      });
+      const request = createFetchWithTimeout(async () => {
+        const response = new Response(body);
+        queueMicrotask(() => controller.abort(reason));
+        return response;
+      });
+      await expect(
+        request("https://example.com", {
+          signal: controller.signal,
+          timeout: { type, ms: 1000 },
+        }),
+      ).rejects.toBe(reason);
+      expect(cancelledWith).toBe(reason);
+    }
+  });
+
   test("idle timeout preserves a completed body when consumption starts later", async () => {
     jest.useFakeTimers();
     const fixture = streamFixture();

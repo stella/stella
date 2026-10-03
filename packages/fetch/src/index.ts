@@ -67,7 +67,10 @@ const executeFetchWithTimeout = async (
   const response = await Promise.resolve()
     .then(() => activeFetcher(input, { ...init, signal: combined }))
     .finally(clear);
-  combined.throwIfAborted();
+  if (combined.aborted) {
+    await response.body?.cancel(combined.reason).catch(() => undefined);
+    throw combined.reason;
+  }
   if (timeout.type === "headers" || response.body === null) {
     return response;
   }

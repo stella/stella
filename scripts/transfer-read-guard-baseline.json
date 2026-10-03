@@ -1974,6 +1974,13 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
+    "file": "apps/api/src/lib/usage/assignment-capacity.ts",
+    "function": "module/trimAssignmentsToCapacity",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Capacity trimming offsets retained assignments; prove the assignment table cap covers every excess row before deleting the selected rows."
+  },
+  {
     "file": "apps/api/src/lib/usage/policy-catalog.ts",
     "function": "module/readUsagePolicyCatalog",
     "kind": "constant-limit",

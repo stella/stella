@@ -613,15 +613,18 @@ const limitDisposition = ({
     return "exempt";
   }
   const chain = queryChain(node);
+  const inputs = paginationNames(root);
   if (
     chain.some(
       (call) =>
-        callName(call.expression) === "offset" && call.arguments.length > 0,
+        callName(call.expression) === "offset" &&
+        call.arguments.some((argument) =>
+          referencesPagination({ node: argument, inputs }),
+        ),
     )
   ) {
     return "exempt";
   }
-  const inputs = paginationNames(root);
   if (
     chain.some(
       (call) =>
