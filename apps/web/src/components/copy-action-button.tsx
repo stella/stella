@@ -5,9 +5,9 @@ import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
 import { CopyButton } from "@stll/ui/copy-button";
-import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 type CopyActionButtonProps = Omit<
   ComponentProps<typeof CopyButton>,
@@ -27,7 +27,7 @@ export const CopyActionButton = ({ text, ...props }: CopyActionButtonProps) => {
     const copied = await copyToClipboard(text);
     if (Result.isError(copied)) {
       getAnalytics().captureError(copied.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(copied.error, t("errors.actionFailed"));
       return false;
     }
     return true;

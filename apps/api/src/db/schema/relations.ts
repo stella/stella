@@ -102,6 +102,7 @@ import {
   legalListSections,
 } from "./lists";
 import {
+  mcpConnectorAuthorizationReviews,
   mcpConnectors,
   mcpOAuthClients,
   mcpOAuthState,
@@ -240,6 +241,7 @@ export const relations = defineRelations(
     fileChatThreads,
     templateChatThreads,
     mcpConnectors,
+    mcpConnectorAuthorizationReviews,
     mcpOAuthClients,
     mcpUserConnections,
     mcpOAuthState,

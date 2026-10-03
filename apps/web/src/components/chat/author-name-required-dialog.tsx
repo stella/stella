@@ -16,11 +16,11 @@ import {
 } from "@stll/ui/dialog";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Input } from "@stll/ui/input";
-import { stellaToast } from "@stll/ui/toast";
 
 import { authClient } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 const PREFERRED_NAME_MAX_LENGTH = 120;
 
@@ -65,8 +65,8 @@ export const AuthorNameRequiredDialog = ({
       });
       onNameSaved();
     },
-    onError: () => {
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 

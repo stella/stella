@@ -916,21 +916,16 @@ export const caseLawDecisions = p.pgTable(
       .where(
         sql`${t.fulltext} is null and ${t.documentUrl} is not null and ${t.documentFetchRequestedAt} is not null`,
       ),
-    // Deferred-document queue, remaining tier: newest decisions first,
-    // per source. Matches the loader's ORDER BY so the head of the queue
-    // is a bounded index range scan rather than a sort over the backlog.
-    // Attempt count is deliberately not a key column: leading with it
-    // ordered every retry behind the whole untried backlog, and keeping
-    // it here would make the index unable to serve the order that fixed
-    // that.
+    // Date-led drain: exclude corpus-served rows from the ordered backlog,
+    // using the same outstanding predicate as every document queue read.
     p
-      .index("case_law_decisions_document_pending_date_idx")
+      .index("case_law_decisions_document_outstanding_date_idx")
       .on(t.sourceId, t.decisionDate.desc().nullsLast(), t.id)
-      .where(sql`${t.fulltext} is null and ${t.documentUrl} is not null`),
+      .where(pendingDeferredDocumentSql(t)),
     // Presence probe for every unfilled deferred document, including rows
     // cooling down or parked. Its exact predicate excludes corpus-served
     // trimmed rows, so an empty probe ranges over this index rather than the
-    // full pending-date index or the decisions table.
+    // decisions table.
     p
       .index("case_law_decisions_document_outstanding_idx")
       .on(t.sourceId, t.id)

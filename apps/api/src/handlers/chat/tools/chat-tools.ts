@@ -4,12 +4,10 @@ import {
 } from "@stll/api-contract";
 import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
-import { roles } from "@stll/permissions";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageEventLane } from "@/api/db/schema";
-import { env } from "@/api/env";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import {
   CHAT_EDIT_APPLY_MODE,
@@ -100,6 +98,10 @@ import type {
 } from "@/api/lib/chat/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { FIELD_VALUE_WRITE_PERMISSIONS } from "@/api/lib/fields/write-field";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 
 const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
@@ -156,8 +158,8 @@ export const areWebResearchToolsRegistered = ({
  * section may steer the model to the tool.
  */
 export const areTemplateAuthoringToolsRegistered = (
-  memberRole: keyof typeof roles,
-): boolean => roles[memberRole].authorize({ template: ["create"] }).success;
+  memberRole: AuthorizedMemberRole,
+): boolean => hasMemberPermission(memberRole, { template: ["create"] });
 
 type SubagentToolsRegisteredProps = {
   delegationDepth?: number | undefined;
@@ -189,7 +191,7 @@ type ResolveRegisteredDocxEditModeOptions = {
   activeFile: GetChatToolsProps["activeFile"];
   editApplyMode: ChatEditApplyMode;
   hasActiveDocxEditClient: boolean;
-  memberRole: keyof typeof roles;
+  memberRole: AuthorizedMemberRole;
   recordAuditEventAvailable: boolean;
   requestWorkspaceId: SafeId<"workspace"> | null;
   toolWorkspaceIds: AuthorizedToolWorkspaceIds;
@@ -229,9 +231,9 @@ export const resolveRegisteredDocxEditMode = ({
     return null;
   }
 
-  const canEditWorkspaceDocument = roles[memberRole].authorize({
+  const canEditWorkspaceDocument = hasMemberPermission(memberRole, {
     entity: ["update"],
-  }).success;
+  });
   return canEditWorkspaceDocument ? CHAT_EDIT_APPLY_MODE.auto : null;
 };
 
@@ -325,7 +327,7 @@ export type GetChatToolsProps = {
    * REST fill route enforces), so a role with `template: []` (e.g.
    * external) sees no template tools.
    */
-  memberRole: keyof typeof roles;
+  memberRole: AuthorizedMemberRole;
   // Required (not optional): the template tools eagerly resolve an AI model for
   // usage metering, which needs the org's BYOK config on deployments without a
   // platform provider. A missing value silently falls back and fails there, so
@@ -557,7 +559,7 @@ const createAuthorizedWorkspaceDocumentTools = ({
     recordAuditEvent === undefined ||
     !toolWorkspaceIds.includes(requestWorkspaceId) ||
     workspaceStatusById?.get(requestWorkspaceId) !== "active" ||
-    !roles[memberRole].authorize({ entity: ["create"] }).success
+    !hasMemberPermission(memberRole, { entity: ["create"] })
   ) {
     return {};
   }
@@ -569,6 +571,55 @@ const createAuthorizedWorkspaceDocumentTools = ({
     workspaceId: requestWorkspaceId,
     recordAuditEvent,
     refRegistry,
+  });
+};
+
+type CreateAuthorizedWorkspaceToolsProps = Pick<
+  GetChatToolsProps,
+  | "memberRole"
+  | "recordAuditEvent"
+  | "refRegistry"
+  | "scopedDb"
+  | "toolWorkspaceIds"
+  | "userId"
+  | "workspaceStatusById"
+> & { forValidation: boolean };
+
+/**
+ * Workspace tools write field values, so they are offered only to a member
+ * whose authority covers that write (the field owner re-checks it on every
+ * call). Validation keeps them so a persisted call still parses. When the
+ * chat is not pinned to any specific matter, `toolWorkspaceIds` is the user's
+ * full accessible set; the matter is resolved per-call by the chat client
+ * (sticky thread-local matter or matter-pick UI). A chat turn runs on the
+ * member's own session, so its authority is the unattenuated role.
+ */
+const createAuthorizedWorkspaceTools = ({
+  forValidation,
+  memberRole,
+  recordAuditEvent,
+  refRegistry,
+  scopedDb,
+  toolWorkspaceIds,
+  userId,
+  workspaceStatusById,
+}: CreateAuthorizedWorkspaceToolsProps): WorkspaceTools => {
+  if (
+    !forValidation &&
+    !hasMemberPermission(memberRole, FIELD_VALUE_WRITE_PERMISSIONS)
+  ) {
+    return {};
+  }
+  return createWorkspaceTools({
+    allowedWorkspaceIds: toolWorkspaceIds,
+    fieldWriter: {
+      authority: memberRole,
+      recordAuditEvent,
+      userId,
+      workspaceStatusById,
+    },
+    refRegistry,
+    scopedDb,
   });
 };
 
@@ -641,7 +692,7 @@ const honouredSkillDeclarations = ({
 
 export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
-    memoryEnabled = env.FEATURE_AI_MEMORY,
+    memoryEnabled = isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
     safeDb,
     scopedDb,
     pinServerValidatedWorkspaceId,
@@ -937,9 +988,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ? {}
       : createRememberTools({
           canManageWorkspaceMemory:
-            roles[memberRole].authorize({
+            hasMemberPermission(memberRole, {
               workspace: ["update"],
-            }).success &&
+            }) &&
             workspaceId !== null &&
             workspaceStatusById?.get(workspaceId) === "active",
           organizationId,
@@ -955,23 +1006,24 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     tools: externalTools,
   });
 
-  // Workspace tools are always registered. When the chat is not
-  // pinned to any specific matter, `toolWorkspaceIds` is the user's
-  // full accessible set; the matter is resolved per-call by the
-  // chat client (sticky thread-local matter or matter-pick UI).
-  const workspaceTools = createWorkspaceTools({
-    allowedWorkspaceIds: toolWorkspaceIds,
+  const workspaceTools = createAuthorizedWorkspaceTools({
+    forValidation,
+    memberRole,
+    recordAuditEvent,
     refRegistry,
     scopedDb,
+    toolWorkspaceIds,
+    userId,
+    workspaceStatusById,
   });
 
   // Template library tools: list, describe, and fill templates. Their
   // execute fns rely on org RLS alone, so gate registration on the same
   // `template: ["use"]` grant the REST fill route enforces; a
   // chat-capable role without it sees no template tools.
-  const canUseTemplates = roles[memberRole].authorize({
+  const canUseTemplates = hasMemberPermission(memberRole, {
     template: ["use"],
-  }).success;
+  });
   const templateTools = canUseTemplates
     ? createTemplateTools({
         scopedDb,

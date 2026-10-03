@@ -27,11 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
-import { stellaToast } from "@stll/ui/toast";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 type SkillScope = "team" | "private";
 type BlueprintId =
@@ -130,10 +130,8 @@ const BlueprintGallerySheetBody = ({
       onOpenChange(false);
     },
     onError: (error) => {
-      stellaToast.add({
-        title: t("common.unexpectedError"),
+      notifyUserError(error, t("common.unexpectedError"), {
         description: userErrorFromThrown(error, t("common.unexpectedError")),
-        type: "error",
       });
     },
   });

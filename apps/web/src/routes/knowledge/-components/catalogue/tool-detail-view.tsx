@@ -17,7 +17,7 @@ import { ToolDetailPanelView } from "@/features/knowledge/views/tools/tool-detai
 import type { KnowledgeToolDetail } from "@/features/knowledge/views/tools/tools-seam";
 import { SIDE_RAIL_TAB_ICON_SIZE_PX, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   isEffectivelyInstalled,
   type CatalogueDisplayEntry,
@@ -164,10 +164,7 @@ const ToolDetailContent = ({
         });
       },
       onError: (error) => {
-        stellaToast.add({
-          title: userErrorFromThrown(error, t("catalogue.installFailed")),
-          type: "error",
-        });
+        notifyUserError(error, t("catalogue.installFailed"));
       },
     });
   };

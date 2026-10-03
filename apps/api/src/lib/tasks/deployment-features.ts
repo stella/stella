@@ -1,4 +1,4 @@
-import { env } from "@/api/env";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 
 export type TaskDeploymentFeatures = {
   governedWorkflow: boolean;
@@ -6,6 +6,6 @@ export type TaskDeploymentFeatures = {
 };
 
 export const deployedTaskFeatures = (): TaskDeploymentFeatures => ({
-  governedWorkflow: env.FEATURE_GOVERNED_WORKFLOW,
-  legalLists: env.FEATURE_LEGAL_LISTS,
+  governedWorkflow: isDeploymentFeatureEnabled("FEATURE_GOVERNED_WORKFLOW"),
+  legalLists: isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
 });

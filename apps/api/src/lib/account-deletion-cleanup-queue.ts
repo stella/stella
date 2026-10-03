@@ -157,7 +157,9 @@ export const enqueuePendingAccountDeletionCleanupRequests = async (
 export const initAccountDeletionCleanupWorker = ({
   db,
 }: BullMqWorkerContext) => {
-  const workerConnection = createBullMqConnection();
+  const workerConnection = createBullMqConnection({
+    storeClass: "durable-coordination",
+  });
   const cleanupRequestDeps = createAccountDeletionCleanupRequestDeps(db);
 
   const worker = new Worker<AccountDeletionCleanupJobData>(

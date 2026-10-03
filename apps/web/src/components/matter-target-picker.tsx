@@ -28,7 +28,6 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -56,6 +55,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   useCreateEntities,
   useMoveEntity,
@@ -640,11 +640,8 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
                   "matter-target-picker.invalidate-moved-folder",
                 );
               },
-              onError: () => {
-                stellaToast.add({
-                  title: t("errors.actionFailed"),
-                  type: "error",
-                });
+              onError: (error) => {
+                notifyUserError(error, t("errors.actionFailed"));
               },
             },
           );
