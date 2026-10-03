@@ -254,7 +254,10 @@ const extensionsWithScopePolicy = (
   });
 
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- keeps the caller's option types on the returned plugin
-export const createStellaOAuthProvider = <O extends OAuthOptions<Scope[]>>(
+export const createStellaOAuthProvider = <
+  O extends OAuthOptions<Scope[]> &
+    Required<Pick<OAuthOptions<Scope[]>, "scopes" | "extensions">>,
+>(
   options: O,
   { verifiedOrigins }: { verifiedOrigins: readonly string[] },
 ) => {
@@ -265,12 +268,9 @@ export const createStellaOAuthProvider = <O extends OAuthOptions<Scope[]>>(
   }
   const policy: OAuthScopePolicyContext = {
     verifiedOrigins,
-    providerScopes: options.scopes ?? [],
+    providerScopes: options.scopes,
   };
-  const extensions = extensionsWithScopePolicy(
-    options.extensions ?? [],
-    policy,
-  );
+  const extensions = extensionsWithScopePolicy(options.extensions, policy);
   const policyOptions: O = { ...options, extensions };
   const provider = oauthProvider(policyOptions);
   // Registration has its own capability policy; discovery retains the
