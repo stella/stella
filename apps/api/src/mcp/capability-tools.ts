@@ -391,7 +391,9 @@ const isEndpointDefinition = (value: unknown): value is EndpointDefinition =>
  * expose the expected endpoint shape (a generated-artifact drift the registry
  * test would also catch); the caller maps that to `internal_error`.
  */
-const loadEndpoint = async (id: string): Promise<EndpointDefinition | null> => {
+export const loadCapabilityEndpoint = async (
+  id: string,
+): Promise<EndpointDefinition | null> => {
   const dispatch = (await getDispatchById()).get(id);
   if (!dispatch) {
     return null;
@@ -1043,7 +1045,7 @@ const loadEndpointGuarded = async (
 ): Promise<GuardedEndpoint> => {
   let endpoint: EndpointDefinition | null;
   try {
-    endpoint = await loadEndpoint(id);
+    endpoint = await loadCapabilityEndpoint(id);
   } catch (error) {
     captureError(error, { source: "mcp", toolName });
     endpoint = null;
