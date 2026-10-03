@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { ELI_COLLECTION_BY_STATUTE_ACT_COLLECTION } from "@stll/api-contract/statute-acts";
+import { STATUTE_ACTS } from "@stll/api-contract/statute-acts";
 import {
   isStatuteQueryCountry,
   resolveStatuteAlias,
 } from "@stll/api-contract/statute-aliases";
+import { statuteGazetteEliCollection } from "@stll/api-contract/statute-gazette";
 import { foldStatuteQuery } from "@stll/api-contract/statute-query-intent";
 
 import type {
@@ -21,9 +22,6 @@ import { PROVISION_CITATION_PROFILES } from "./provision-citation-profiles";
 const KNOWN_DIVERGENCES = [
   "cze obč. zák.: statute box 89/2012 sb, citation reader 40/1964 Sb.",
 ];
-
-const ELI_COLLECTIONS: Record<string, string> =
-  ELI_COLLECTION_BY_STATUTE_ACT_COLLECTION;
 
 /** Read through the profile contract, where every entry may carry a window. */
 const PROFILES: readonly JurisdictionProfile[] = Object.values(
@@ -59,7 +57,7 @@ describe("statute box aliases and citation-reader profiles", () => {
           if (
             target.number === String(number) &&
             target.year === String(year) &&
-            target.collection === ELI_COLLECTIONS[collection]
+            target.collection === statuteGazetteEliCollection(collection)
           ) {
             continue;
           }
@@ -70,5 +68,25 @@ describe("statute box aliases and citation-reader profiles", () => {
       }
     }
     expect(divergences).toEqual(KNOWN_DIVERGENCES);
+  });
+
+  // A profile that restates a shared act's number by hand would drift from it
+  // silently; it must reference the shared identity instead.
+  test("name every shared act by its shared identity", () => {
+    const sharedWorks = Object.values(STATUTE_ACTS).flatMap((acts) =>
+      Object.values(acts).map(({ work }) => work),
+    );
+    const restated: string[] = [];
+    for (const profile of PROFILES) {
+      for (const { identifier } of [...profile.aliases, ...profile.titles]) {
+        const shared = sharedWorks.find(
+          (work) => describeWork(work) === describeWork(identifier),
+        );
+        if (shared !== undefined && shared !== identifier) {
+          restated.push(`${profile.jurisdiction} ${describeWork(identifier)}`);
+        }
+      }
+    }
+    expect(restated).toEqual([]);
   });
 });

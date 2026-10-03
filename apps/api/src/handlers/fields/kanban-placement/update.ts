@@ -4,14 +4,15 @@ import { t } from "elysia";
 import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
-import {
-  upsertFieldContentSchema,
-  upsertFieldHandler,
-} from "@/api/handlers/fields/upsert";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  FIELD_VALUE_WRITE_PERMISSIONS,
+  upsertFieldContentSchema,
+  writeFieldValue,
+} from "@/api/lib/fields/write-field";
 import type { FlowRunCompletionNotice } from "@/api/lib/flows/flow-run-actor";
 import { notifyFlowRunActorOfCompletion } from "@/api/lib/flows/flow-run-completion-notice";
 import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
@@ -38,7 +39,7 @@ export const createUpdateKanbanPlacement = ({
       description:
         "Move one entity across writable Kanban axes in one transaction. " +
         "The request may change a task status, up to two property values, or both.",
-      permissions: { entity: ["create", "update"] },
+      permissions: FIELD_VALUE_WRITE_PERMISSIONS,
       mcp: {
         type: "capability",
         reason: "workspace_schema",
@@ -50,7 +51,14 @@ export const createUpdateKanbanPlacement = ({
         fields: t.Array(fieldAssignmentSchema, { maxItems: 2 }),
       }),
     },
-    async function* ({ safeDb, workspaceId, body, user, recordAuditEvent }) {
+    async function* ({
+      safeDb,
+      workspaceId,
+      body,
+      user,
+      memberRole,
+      recordAuditEvent,
+    }) {
       if (body.status === undefined && body.fields.length === 0) {
         return Result.err(
           new HandlerError({ status: 400, message: "Kanban move is empty" }),
@@ -101,12 +109,15 @@ export const createUpdateKanbanPlacement = ({
             body.fields.map(
               async (field) =>
                 await Result.gen(() =>
-                  upsertFieldHandler({
+                  writeFieldValue({
                     safeDb: txSafeDb,
+                    authority: memberRole,
                     workspaceId,
                     userId: user.id,
                     recordAuditEvent,
-                    body: { entityId: body.entityId, ...field },
+                    entityId: body.entityId,
+                    propertyId: field.propertyId,
+                    content: field.content,
                     flushSearchRepairs: false,
                   }),
                 ),
