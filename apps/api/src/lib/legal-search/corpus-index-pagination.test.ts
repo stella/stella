@@ -543,7 +543,7 @@ describe("the scan is bounded by engine round trips", () => {
         if (cursor === null) {
           break;
         }
-        windows.add(cursor.windowStart ?? 0);
+        windows.add(cursor.windowStart);
         expect(cursor.excludedGroups).toBeUndefined();
       }
       expect(cursor).toBeNull();
