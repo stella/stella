@@ -339,6 +339,34 @@ export const envApiServerSchema = {
   ),
 
   /**
+   * How `STELLA_CLIENT_ADDRESS_HEADER` spells the address: `with-port` (as
+   * `cloudfront-viewer-address` does) or `bare`.
+   */
+  STELLA_CLIENT_ADDRESS_FORMAT: v.optional(
+    v.picklist(["with-port", "bare"]),
+    "with-port",
+  ),
+
+  /**
+   * Comma-separated values the edge sends in `x-stella-origin-verify` (current
+   * first, then the next one during a rotation). When set, the client address
+   * header is read only from requests carrying one of them.
+   */
+  STELLA_ORIGIN_VERIFY_SECRET: v.optional(
+    v.pipe(
+      v.string(),
+      v.check(
+        (value) =>
+          value
+            .split(",")
+            .map((part) => part.trim())
+            .every((part) => part.length >= 32),
+        "each value must be at least 32 characters",
+      ),
+    ),
+  ),
+
+  /**
    * Comma-separated user IDs allowed to publish an in-app announcement to
    * every member of their active organization. Announcements are an operator
    * capability, not a role: the deployment operator names the accounts here,

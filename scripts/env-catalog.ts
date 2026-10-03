@@ -468,7 +468,11 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
   STELLA_CLIENT_ADDRESS_HEADER:
-    "Header the edge sets to the viewer address with its port (e.g. cloudfront-viewer-address). Read only from STELLA_TRUSTED_PROXY_CIDRS peers; set only when every route to the API adds it.",
+    "Header the edge sets to the viewer address (e.g. cloudfront-viewer-address; see STELLA_CLIENT_ADDRESS_FORMAT). Read only from STELLA_TRUSTED_PROXY_CIDRS peers; set only when every route to the API adds it.",
+  STELLA_CLIENT_ADDRESS_FORMAT:
+    "How STELLA_CLIENT_ADDRESS_HEADER spells the address: with-port (default, e.g. cloudfront-viewer-address) or bare.",
+  STELLA_ORIGIN_VERIFY_SECRET:
+    "Comma-separated values the edge sends in x-stella-origin-verify (current, then next during a rotation). When set, the client address header is read only from requests carrying one of them.",
   STELLA_TRUSTED_PROXY_CIDRS:
     "Comma-separated CIDRs for proxies directly in front of the API. Never trust public client ranges.",
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS:
