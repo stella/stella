@@ -1,8 +1,9 @@
 import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
-import { t } from "elysia";
+import Elysia, { t } from "elysia";
 import fc from "fast-check";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -228,4 +229,77 @@ test("provision previews preserve whole escaped entities at every cut", () => {
       },
     ),
   );
+});
+
+test("reader response serialization preserves the complete official AST and text while bounding metadata", async () => {
+  const officialText = "§ 1 Řádné znění zákona 👩‍⚖️ &amp; ".repeat(10_000);
+  const documentAst = {
+    version: 1,
+    source: {
+      system: "official-publisher",
+      documentId: "act-1",
+      webUrl: "https://example.test/act/1",
+      printUrl: "https://example.test/act/1/print",
+    },
+    metadata: {
+      caseNumber: null,
+      ecli: null,
+      court: null,
+      decisionDate: null,
+      decisionType: null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      {
+        id: "paragraph-1",
+        anchorId: "par_1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: officialText }],
+        plainText: officialText,
+      },
+    ],
+  } satisfies DocumentAst;
+  const { isDefault: _isDefault, ...metadata } = version(officialText);
+  const projected = projectStatuteReader({
+    ...metadata,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+    citationCaseCount: 0,
+    allowsDerivedAi: true,
+    documentAst,
+    fulltext: officialText,
+    sections: [
+      { index: 0, type: "unknown", title: officialText, text: officialText },
+    ],
+  });
+  expect(Buffer.byteLength(officialText)).toBeGreaterThan(
+    readerTextBytes.provisionText,
+  );
+  expect(Buffer.byteLength(projected.title)).toBeLessThanOrEqual(
+    readerTextBytes.title,
+  );
+  expect(
+    Buffer.byteLength(projected.sections?.at(0)?.title ?? ""),
+  ).toBeLessThanOrEqual(readerTextBytes.sectionTitle);
+  const app = new Elysia().get("/statute", () => projected, {
+    response: { 200: statuteReaderSuccessResponseSchema },
+  });
+  const response = await app.handle(new Request("http://localhost/statute"));
+  expect(response.status).toBe(200);
+  // Compare the actual wire object, including all inline text, to the complete
+  // source fixture: schema encoding must not clean or narrow the AST payload.
+  expect(await response.json()).toEqual({
+    ...projected,
+    documentAst,
+    fulltext: officialText,
+    sections: [
+      {
+        index: 0,
+        type: "unknown",
+        title: projected.sections?.at(0)?.title,
+        text: officialText,
+      },
+    ],
+  });
 });
