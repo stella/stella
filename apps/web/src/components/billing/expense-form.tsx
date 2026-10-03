@@ -3,6 +3,10 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@stll/api-contract";
+import {
+  CURRENCY_CODE_LENGTH,
+  currencyCodeSchema,
+} from "@stll/api-contract/currency-code";
 import { tryToMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -65,7 +69,10 @@ export const ExpenseForm = ({
         v.check((matterId) => matterId.length > 0, t("billing.matterRequired")),
       ),
       dateIncurred: v.string(),
-      currency: v.string(),
+      currency: v.message(
+        currencyCodeSchema,
+        t("billing.sellerProfiles.invalidCurrency"),
+      ),
       category: v.picklist(EXPENSE_CATEGORIES),
       description: v.string(),
       billable: v.boolean(),
@@ -229,7 +236,7 @@ export const ExpenseForm = ({
             {(field) => (
               <Input
                 dir="ltr"
-                maxLength={3}
+                maxLength={CURRENCY_CODE_LENGTH}
                 onChange={(e) =>
                   field.handleChange(e.currentTarget.value.toUpperCase())
                 }

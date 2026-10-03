@@ -12,6 +12,7 @@ import {
   VIEW_SORTS_MAX,
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "@stll/api-contract";
+import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import {
@@ -362,7 +363,7 @@ export const LIMITS = {
   practiceJurisdictionsPerOrganization: 12,
   entityNameMaxLength: ENTITY_NAME_MAX_LENGTH,
   workspaceContributors: 5,
-  searchQueryMaxLength: 500,
+  searchQueryMaxLength: SEARCH_QUERY_MAX_LENGTH,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
   /** Maximum visible text returned by any global-search preview response. */

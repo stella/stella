@@ -5,6 +5,10 @@ import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import {
+  CURRENCY_CODE_LENGTH,
+  currencyCodeSchema,
+} from "@stll/api-contract/currency-code";
 import { tryToMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -315,7 +319,10 @@ const CreateRateTableForm = ({
   const t = useTranslations();
   const schema = v.strictObject({
     name: requiredTrimmedStringSchema(t("common.required")),
-    currency: v.string(),
+    currency: v.message(
+      currencyCodeSchema,
+      t("billing.sellerProfiles.invalidCurrency"),
+    ),
     isDefault: v.boolean(),
   });
 
@@ -371,7 +378,7 @@ const CreateRateTableForm = ({
             {(field) => (
               <Input
                 dir="ltr"
-                maxLength={3}
+                maxLength={CURRENCY_CODE_LENGTH}
                 onChange={(e) =>
                   field.handleChange(e.currentTarget.value.toUpperCase())
                 }
