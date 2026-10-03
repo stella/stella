@@ -1872,7 +1872,10 @@ export const refreshEcjStoredFormex = async ({
       cooldownUntilEpochMs: error.cooldownUntilEpochMs,
     };
   }
-  const fetched = fetchedResult.value;
+  if (Result.isError(fetchedResult.value)) {
+    return { type: "retryable-exhausted" };
+  }
+  const fetched = fetchedResult.value.value;
   if (fetched.type === "not-located") {
     return { type: "formex-not-located" };
   }
@@ -1943,7 +1946,7 @@ export const fetchNotice = async ({
   languageUri,
   signal,
   fetch: fetchRequest = fetchPublisher,
-}: FetchNoticeOptions): Promise<EcjNoticeRead> => {
+}: FetchNoticeOptions): Promise<Result<EcjNoticeRead, AdapterFetchError>> => {
   const cellarLanguage = languageUri.startsWith(CELLAR_LANGUAGE_PREFIX)
     ? languageUri.slice(CELLAR_LANGUAGE_PREFIX.length).toLowerCase()
     : undefined;
@@ -1963,7 +1966,7 @@ export const fetchNotice = async ({
     },
   });
   if (response.status === 404 || response.status === 410) {
-    return { type: "not-published", status: response.status };
+    return Result.ok({ type: "not-published", status: response.status });
   }
   if (!response.ok && !isRetryableStatus(response.status)) {
     logger.warn("case_law.ingestion.notice_unavailable", {
@@ -1971,18 +1974,26 @@ export const fetchNotice = async ({
       httpStatus: response.status,
       celex,
     });
-    return { type: "refused", status: response.status };
+    return Result.ok({ type: "refused", status: response.status });
   }
   if (!response.ok) {
-    throw new AdapterFetchError({
-      message: `Cellar notice HTTP ${response.status} for ${celex}`,
-      adapterKey: ADAPTER_KEYS.EU_ECJ,
-      cursor: null,
-      httpStatus: response.status,
-    });
+    return Result.err(
+      new AdapterFetchError({
+        message: `Cellar notice HTTP ${response.status} for ${celex}`,
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        cursor: null,
+        httpStatus: response.status,
+      }),
+    );
   }
-  return { type: "present", xml: await response.text() };
+  return Result.ok({ type: "present", xml: await response.text() });
 };
+
+type EcjFormexRead =
+  | { type: "fetched"; formex: string }
+  | { type: "gone" }
+  | { type: "refused"; status: number }
+  | { type: "not-located" };
 
 /**
  * The Formex manifestation of this expression, addressed from the notice.
@@ -1999,17 +2010,12 @@ const fetchFormex = async (
     url: string,
     init: Parameters<typeof fetchPublisher>[1],
   ) => Promise<Response> = fetchPublisher,
-): Promise<
-  | { type: "fetched"; formex: string }
-  | { type: "gone" }
-  | { type: "refused"; status: number }
-  | { type: "not-located" }
-> => {
+): Promise<Result<EcjFormexRead, AdapterFetchError>> => {
   const manifestation = manifestations.find(
     (candidate) => candidate.type === FORMEX_MANIFESTATION_TYPE,
   );
   if (manifestation === undefined) {
-    return { type: "not-located" };
+    return Result.ok({ type: "not-located" });
   }
   // The address comes from the notice, so it is held to Cellar's host.
   const contentUrl = publisherTarget(
@@ -2022,7 +2028,7 @@ const fetchFormex = async (
       reason: contentUrl.error.message,
       url: contentUrl.error.url,
     });
-    return { type: "not-located" };
+    return Result.ok({ type: "not-located" });
   }
   const response = await fetchRequest(contentUrl.value, {
     fetchStage: "document",
@@ -2036,7 +2042,7 @@ const fetchFormex = async (
     },
   });
   if (response.status === 404 || response.status === 410) {
-    return { type: "gone" };
+    return Result.ok({ type: "gone" });
   }
   if (!response.ok) {
     logger.warn("case_law.ingestion.formex_unavailable", {
@@ -2045,24 +2051,26 @@ const fetchFormex = async (
       url: contentUrl.value,
     });
     if (isRetryableStatus(response.status)) {
-      throw new AdapterFetchError({
-        message: `Cellar Formex HTTP ${response.status}`,
-        adapterKey: ADAPTER_KEYS.EU_ECJ,
-        cursor: null,
-        httpStatus: response.status,
-      });
+      return Result.err(
+        new AdapterFetchError({
+          message: `Cellar Formex HTTP ${response.status}`,
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          cursor: null,
+          httpStatus: response.status,
+        }),
+      );
     }
-    return { type: "refused", status: response.status };
+    return Result.ok({ type: "refused", status: response.status });
   }
   if (
     mediaTypeOf(response.headers.get("content-type") ?? "") !== ZIP_MEDIA_TYPE
   ) {
-    return { type: "fetched", formex: await response.text() };
+    return Result.ok({ type: "fetched", formex: await response.text() });
   }
-  return {
+  return Result.ok({
     type: "fetched",
     formex: await readEcjFormexArchive(await response.arrayBuffer()),
-  };
+  });
 };
 
 export const readEcjFormexArchive = async (
@@ -2109,51 +2117,84 @@ export const buildDecision = async (
   // Fetch the language-specific XHTML stream from Cellar. The
   // human-facing EUR-Lex HTML endpoint is WAF-protected and may return
   // a challenge instead of document content to server-side callers.
-  const manifestation = await fetchManifestation({
-    manifestationId,
-    celex,
-    lang,
-    signal: AbortSignal.any([
-      signal,
-      AbortSignal.timeout(MANIFESTATION_LOOKUP_TIMEOUT),
-    ]),
+  const readResult = await Result.tryPromise({
+    try: async () => {
+      const manifestation = await fetchManifestation({
+        manifestationId,
+        celex,
+        lang,
+        signal: AbortSignal.any([
+          signal,
+          AbortSignal.timeout(MANIFESTATION_LOOKUP_TIMEOUT),
+        ]),
+      });
+      if (Result.isError(manifestation)) {
+        return manifestation;
+      }
+      const served = manifestation.value;
+      if (!served) {
+        return Result.ok(undefined);
+      }
+      const noticeResult = await fetchNotice({
+        celex,
+        languageUri: binding.language.value,
+        signal,
+      });
+      if (Result.isError(noticeResult)) {
+        return noticeResult;
+      }
+      const noticeRead = noticeResult.value;
+      const notice = noticeRead.type === "present" ? noticeRead.xml : undefined;
+      const formexRead =
+        notice === undefined
+          ? undefined
+          : await fetchFormex(parseEcjNotice(notice).manifestations, signal);
+      if (formexRead !== undefined && Result.isError(formexRead)) {
+        return formexRead;
+      }
+      return Result.ok({
+        served,
+        noticeRead,
+        notice,
+        formexResult: formexRead?.value,
+      });
+    },
+    catch: (error) => error,
   });
-
-  if (Result.isError(manifestation)) {
-    const { error } = manifestation;
-    if (!(error.cause instanceof DOMException)) {
+  const fetched = readResult.andThen((result) =>
+    Result.isError(result) ? Result.err(result.error) : Result.ok(result.value),
+  );
+  if (Result.isError(fetched)) {
+    const { error } = fetched;
+    if (
+      error instanceof AdapterFetchError &&
+      !(error.cause instanceof DOMException)
+    ) {
       captureError(error);
     }
     // The adapter and fixture callers expose a rejecting promise contract.
     throw error;
   }
-  const served = manifestation.value;
-  if (!served) {
+  if (fetched.value === undefined) {
     return undefined;
   }
-
-  const noticeRead = await fetchNotice({
-    celex,
-    languageUri: binding.language.value,
-    signal,
-  });
-  const notice = noticeRead.type === "present" ? noticeRead.xml : undefined;
-  const formexResult =
-    notice === undefined
-      ? undefined
-      : await fetchFormex(parseEcjNotice(notice).manifestations, signal);
+  const { served, noticeRead, notice, formexResult } = fetched.value;
   const formex =
     formexResult?.type === "fetched" ? formexResult.formex : undefined;
-  const parts = ecjRawParts({ binding, html: served.html, notice, formex });
-  if (noticeRead.type === "refused") {
-    parts[RAW_PART.NOTICE_STATE] = `notice:refused:${noticeRead.status}`;
-  }
-  if (formexResult !== undefined && formexResult.type !== "fetched") {
-    parts[RAW_PART.FORMEX_STATE] =
-      formexResult.type === "refused"
-        ? `formex:refused:${formexResult.status}`
-        : `formex:${formexResult.type}`;
-  }
+  const parts = {
+    ...ecjRawParts({ binding, html: served.html, notice, formex }),
+    ...(noticeRead.type === "refused"
+      ? { [RAW_PART.NOTICE_STATE]: `notice:refused:${noticeRead.status}` }
+      : {}),
+    ...(formexResult !== undefined && formexResult.type !== "fetched"
+      ? {
+          [RAW_PART.FORMEX_STATE]:
+            formexResult.type === "refused"
+              ? `formex:refused:${formexResult.status}`
+              : `formex:${formexResult.type}`,
+        }
+      : {}),
+  };
 
   return ecjDecisionFromParts({
     celex,

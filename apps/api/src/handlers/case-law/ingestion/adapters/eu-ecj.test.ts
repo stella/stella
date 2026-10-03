@@ -752,7 +752,10 @@ describe("language variant completion", () => {
       const rejectedBinding = withManifestation(
         {
           ...firstFixtureBinding,
-          ecli: { type: "literal", value: String.raw`\rtf1 ECLI:EU:C:2024:49` },
+          ecli: {
+            ...firstFixtureBinding.ecli,
+            value: String.raw`\rtf1 ECLI:EU:C:2024:49`,
+          },
         },
         { cellarLanguage: "ENG", manifestationId: rejectedId },
       );
@@ -797,7 +800,10 @@ describe("language variant completion", () => {
       const lastId = "5f978357-b5e4-11ee-b164-01aa75ed71a1.0006.05";
       const rejectedBinding = {
         ...enBinding,
-        ecli: { type: "literal", value: String.raw`\rtf1 ECLI:EU:C:2024:49` },
+        ecli: {
+          ...enBinding.ecli,
+          value: String.raw`\rtf1 ECLI:EU:C:2024:49`,
+        },
       };
       const lastBinding = withManifestation(rejectedBinding, {
         cellarLanguage: "ENG",

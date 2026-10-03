@@ -155,7 +155,7 @@ describe("notice publication outcomes", () => {
   const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
   beforeEach(() => {
-    Bun.sleep = () => Promise.resolve();
+    Bun.sleep = async () => {};
   });
   afterEach(() => {
     globalThis.fetch = originalFetch;
@@ -165,7 +165,11 @@ describe("notice publication outcomes", () => {
   test("a 500 notice rejects the item and a later attempt can build it", async () => {
     let noticeRequests = 0;
     globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      if (String(input).includes("/resource/celex/")) {
+      if (
+        (input instanceof Request ? input.url : String(input)).includes(
+          "/resource/celex/",
+        )
+      ) {
         noticeRequests += 1;
         return new Response(null, { status: noticeRequests === 1 ? 500 : 404 });
       }
@@ -174,15 +178,24 @@ describe("notice publication outcomes", () => {
       });
     });
 
-    await expect(
-      buildDecision(binding, AbortSignal.timeout(5000)),
-    ).rejects.toThrow("Cellar notice HTTP 500");
+    const initial = await Result.tryPromise({
+      try: async () => buildDecision(binding, AbortSignal.timeout(5000)),
+      catch: (error) => error,
+    });
+    expect(Result.isError(initial)).toBe(true);
+    if (
+      !Result.isError(initial) ||
+      !(initial.error instanceof AdapterFetchError)
+    ) {
+      throw new TypeError("Expected a notice fetch failure");
+    }
+    expect(initial.error.message).toContain("Cellar notice HTTP 500");
     const retried = await buildDecision(binding, AbortSignal.timeout(5000));
     expect(noticeRequests).toBe(2);
     expect(retried?.fulltext?.length).toBeGreaterThan(100);
     expect(retried?.judges).toBeUndefined();
   });
-  const readNotice = (status: number) =>
+  const readNotice = async (status: number) =>
     fetchNotice({
       celex: CELEX,
       languageUri: binding.language.value,
@@ -191,9 +204,9 @@ describe("notice publication outcomes", () => {
         new Response(status === 200 ? noticeEn : null, { status }),
     });
 
-  for (const status of [404, 410]) {
+  for (const status of [404, 410] as const) {
     test(`HTTP ${status} states the notice is not published`, async () => {
-      expect(await readNotice(status)).toEqual({
+      expect((await readNotice(status)).unwrap()).toEqual({
         type: "not-published",
         status,
       });
@@ -202,28 +215,32 @@ describe("notice publication outcomes", () => {
 
   for (const status of [408, 429, 500, 502, 503, 504]) {
     test(`HTTP ${status} propagates a notice read failure`, async () => {
-      await expect(readNotice(status)).rejects.toBeInstanceOf(
-        AdapterFetchError,
-      );
-      await expect(readNotice(status)).rejects.toThrow(
-        `Cellar notice HTTP ${status}`,
-      );
+      const result = await readNotice(status);
+      expect(Result.isError(result)).toBe(true);
+      if (!Result.isError(result)) {
+        throw new TypeError("Expected a notice read failure");
+      }
+      expect(result.error).toBeInstanceOf(AdapterFetchError);
+      expect(result.error.message).toContain(`Cellar notice HTTP ${status}`);
     });
   }
 
   test.each([400, 401, 403, 405, 422])(
     "HTTP %s is a terminal notice refusal",
     async (status) => {
-      expect(await readNotice(status)).toEqual({ type: "refused", status });
+      expect((await readNotice(status)).unwrap()).toEqual({
+        type: "refused",
+        status,
+      });
     },
   );
 
   test.each([400, 401, 403, 405, 422])(
     "a notice refusal %s retains the row and a later publication changes its hash",
     async (status) => {
-      let noticeStatus = status;
+      let noticeStatus: number = status;
       globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = String(input);
+        const url = input instanceof Request ? input.url : String(input);
         if (url.includes("/resource/celex/")) {
           return new Response(noticeStatus === 200 ? noticeEn : null, {
             status: noticeStatus,
@@ -258,9 +275,9 @@ describe("notice publication outcomes", () => {
   test.each([400, 401, 403, 404, 410, 408, 429, 500, 503])(
     "a Formex HTTP %s permits only terminal reads and later content changes the hash",
     async (status) => {
-      let formexStatus = status;
+      let formexStatus: number = status;
       globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = String(input);
+        const url = input instanceof Request ? input.url : String(input);
         if (url.includes("/resource/celex/")) {
           return new Response(noticeEn, {
             headers: { "Content-Type": "application/xml" },
@@ -278,12 +295,20 @@ describe("notice publication outcomes", () => {
       });
       const initial = buildDecision(binding, AbortSignal.timeout(5000));
       if ([408, 429, 500, 503].includes(status)) {
-        await expect(initial).rejects.toThrow(
+        const outcome = await Result.tryPromise({
+          try: async () => initial,
+          catch: (error) => error,
+        });
+        expect(Result.isError(outcome)).toBe(true);
+        if (!Result.isError(outcome)) {
+          throw new TypeError("Expected a Formex fetch failure");
+        }
+        expect(outcome.error).toBeInstanceOf(
           status === 429 ? PublisherRateLimitRefusalError : AdapterFetchError,
         );
       } else {
         const incomplete = await initial;
-        expect(incomplete?.metadata.formexCelex).toBeUndefined();
+        expect(incomplete?.metadata["formexCelex"]).toBeUndefined();
         const incompleteParts = decodeSourceRawEnvelope(
           incomplete?.sourceRaw ?? "",
         );
@@ -298,7 +323,7 @@ describe("notice publication outcomes", () => {
           AbortSignal.timeout(5000),
         );
         expect(complete?.fulltext).toBe(incomplete?.fulltext);
-        expect(complete?.metadata.formexCelex).toBeDefined();
+        expect(complete?.metadata["formexCelex"]).toBeDefined();
         expect(complete?.rawHash).not.toBe(incomplete?.rawHash);
         const replayed = await reparse(storedFrom(incomplete?.sourceRaw ?? ""));
         expect(replayed.type).toBe("parsed");
@@ -353,7 +378,7 @@ describe("notice publication outcomes", () => {
     async (refusedPart) => {
       let status = 200;
       globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = String(input);
+        const url = input instanceof Request ? input.url : String(input);
         if (url.includes("/resource/celex/")) {
           const noticeStatus = refusedPart === "notice" ? status : 200;
           return new Response(noticeStatus === 200 ? noticeEn : null, {
@@ -378,14 +403,14 @@ describe("notice publication outcomes", () => {
         return sanitizeResult(result);
       };
       const complete = await read();
-      expect(complete.metadata.noticeCelex).toBeDefined();
-      expect(complete.metadata.publisherCaseNumber).toBeDefined();
-      expect(complete.metadata.formexCelex).toBeDefined();
+      expect(complete.metadata["noticeCelex"]).toBeDefined();
+      expect(complete.metadata["publisherCaseNumber"]).toBeDefined();
+      expect(complete.metadata["formexCelex"]).toBeDefined();
       expect(
-        decodeSourceRawEnvelope(complete.sourceRaw ?? "")?.notice,
+        decodeSourceRawEnvelope(complete.sourceRaw ?? "")?.["notice"],
       ).toBeDefined();
       expect(
-        decodeSourceRawEnvelope(complete.sourceRaw ?? "")?.formex,
+        decodeSourceRawEnvelope(complete.sourceRaw ?? "")?.["formex"],
       ).toBeDefined();
       const existing = storedDecision(complete);
       const persisted = { ...existing, sourceRaw: complete.sourceRaw };
@@ -592,7 +617,10 @@ describe("notice publication outcomes", () => {
   );
 
   test("a published notice retains its bytes", async () => {
-    expect(await readNotice(200)).toEqual({ type: "present", xml: noticeEn });
+    expect((await readNotice(200)).unwrap()).toEqual({
+      type: "present",
+      xml: noticeEn,
+    });
   });
 
   test("Formex publication and content changes alter the source hash without changing fulltext", async () => {
@@ -804,7 +832,12 @@ describe("stored Formex refresh", () => {
   test("a successful Formex refresh removes an earlier refusal marker", async () => {
     const outcome = await refreshEcjStoredFormex({
       stored: refreshStored({
-        ...ecjRawParts({ binding, html: documentEn, notice: noticeEn }),
+        ...ecjRawParts({
+          binding,
+          html: documentEn,
+          notice: noticeEn,
+          formex: undefined,
+        }),
         "formex-state": "formex:refused:403",
       }),
       signal,
@@ -814,7 +847,7 @@ describe("stored Formex refresh", () => {
       throw new TypeError(`Expected refreshed, got ${outcome.type}`);
     }
     const parts = decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "");
-    expect(parts?.formex).toBe(formexEn);
+    expect(parts?.["formex"]).toBe(formexEn);
     expect(parts?.["formex-state"]).toBeUndefined();
     expect(outcome.decision.observationDetail).toBe("complete");
   });
