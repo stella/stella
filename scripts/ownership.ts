@@ -19,7 +19,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
-import { MEMBER_RUN_QUEUES } from "../apps/api/src/lib/member-run-queues.ts";
 import { formattedLikeRepository } from "./generated-artifacts.ts";
 
 // A file the rule accepts besides the owner itself. `path` is a
@@ -608,9 +607,15 @@ export const OWNERSHIP = [
       specifiers: ["@/api/lib/root-scoped-db"],
       names: ["createRootRunActor"],
       allowed: [
-        ...MEMBER_RUN_QUEUES.map((run) => ({
-          path: run.module,
-          reason: `Member run on the ${run.queue} queue; reads its inputs through inputDb.`,
+        // Kept equal to MEMBER_RUN_QUEUES by apps/api/src/lib/member-run-queues.test.ts.
+        ...[
+          "apps/api/src/lib/document-review/run-queue.ts",
+          "apps/api/src/lib/document-translation/run-queue.ts",
+          "apps/api/src/lib/bilingual/run-queue.ts",
+          "apps/api/src/handlers/reports/report-export-queue.ts",
+        ].map((modulePath) => ({
+          path: modulePath,
+          reason: "Member run; reads its inputs through inputDb.",
         })),
         {
           path: "apps/api/src/lib/lists/verification/run-queue.ts",

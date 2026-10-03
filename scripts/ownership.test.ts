@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
+import { MEMBER_RUN_QUEUES } from "../apps/api/src/lib/member-run-queues.ts";
 import type { OwnershipEntry } from "./ownership";
 import {
   OWNERSHIP,
@@ -101,4 +102,21 @@ describe("validateOwnership", () => {
       "duplicate ownership id: example",
     ]);
   });
+});
+
+test("the run actor allowlist names exactly the member-run queues", () => {
+  const row = OWNERSHIP.find(({ id }) => id === "member-run-actor");
+  const allowed =
+    row?.enforcement.kind === "import"
+      ? row.enforcement.allowed.map(({ path }) => path)
+      : [];
+  const memberRunModules: string[] = MEMBER_RUN_QUEUES.map(
+    ({ module }) => module,
+  );
+  expect(allowed.filter((path) => memberRunModules.includes(path))).toEqual(
+    memberRunModules,
+  );
+  expect(allowed.filter((path) => !memberRunModules.includes(path))).toEqual([
+    "apps/api/src/lib/lists/verification/run-queue.ts",
+  ]);
 });
