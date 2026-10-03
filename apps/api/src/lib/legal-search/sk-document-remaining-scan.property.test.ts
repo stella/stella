@@ -1,4 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
@@ -15,7 +16,11 @@ import {
   MAX_PRIORITY_FETCH_ATTEMPTS,
   remainingDocumentCandidateQuery,
 } from "@/api/lib/legal-search/sk-document-backfill";
-import { createRemainingDocumentScan } from "@/api/lib/legal-search/sk-document-remaining-scan";
+import { createPendingDocumentQueue } from "@/api/lib/legal-search/sk-document-queue";
+import {
+  DOCUMENT_SCAN_PAGE_LIMIT,
+  createRemainingDocumentScan,
+} from "@/api/lib/legal-search/sk-document-remaining-scan";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const SOURCE_ID = asTestRaw<SafeId<"caseLawSource">>(
@@ -139,7 +144,7 @@ test("sk-document.remaining-scan.database-equivalence-and-crash-replay", async (
               });
               pageCalls += 1;
               examined += page.length;
-              expect(page.length).toBeLessThanOrEqual(pageSize);
+              expect(page.length).toBeLessThanOrEqual(DOCUMENT_SCAN_PAGE_LIMIT);
               return page;
             },
           });
@@ -147,35 +152,48 @@ test("sk-document.remaining-scan.database-equivalence-and-crash-replay", async (
           scan: ReturnType<typeof createRemainingDocumentScan>,
         ) => {
           const selected = [];
-          // An ineligible page may emit nothing while later pages remain;
-          // exhaust by the fixture's independent upper bound, not output size.
+          const queue = createPendingDocumentQueue({
+            loaders: { loadRequested: async () => [], loadRemaining: scan },
+            now: () => 0,
+            pageSize,
+            requestedPollIntervalMs: 0,
+          });
           for (let step = 0; step <= rows.length; step += 1) {
-            selected.push(...(await scan(pageSize)));
+            const result = await queue.next();
+            switch (result.type) {
+              case "row":
+                selected.push(result.row.decision);
+                break;
+              case "exhausted":
+                return selected;
+              case "budget-spent":
+                break;
+              default: {
+                result satisfies never;
+                panic("Unexpected document queue outcome");
+              }
+            }
           }
           return selected;
         };
         const scan = newScan();
         expect(await drain(scan)).toEqual(expected);
-        expect(examined).toBeLessThanOrEqual(rows.length);
+        expect(examined).toBeLessThanOrEqual(
+          rows.length * (Math.ceil(rows.length / pageSize) + 1),
+        );
         expect(pageCalls).toBeLessThanOrEqual(
           Math.ceil(rows.length / pageSize) + 1,
         );
         const exhaustedCalls = pageCalls;
-        expect(await scan(pageSize)).toEqual([]);
+        expect(await scan(pageSize)).toEqual({ type: "exhausted" });
         expect(pageCalls).toBe(exhaustedCalls);
 
         // A crash discards unprocessed rows buffered beside the cursor.
         // Persist only one claim; restarting must recover the rest of its page.
         const beforeCrash = newScan();
-        let firstPage = await beforeCrash(pageSize);
-        for (
-          let step = 0;
-          firstPage.length === 0 && step < rows.length;
-          step += 1
-        ) {
-          firstPage = await beforeCrash(pageSize);
-        }
-        const claimed = firstPage.at(0);
+        const firstPage = await beforeCrash(pageSize);
+        const claimed =
+          firstPage.type === "rows" ? firstPage.rows.at(0) : undefined;
         expect(claimed).toBeDefined();
         if (!claimed) {
           throw new TypeError("Expected a ready decision before crash");

@@ -8,7 +8,7 @@ import type {
 
 /** Outstanding rows examined in one drain cycle, including ineligible rows. */
 export const DOCUMENT_SCAN_ROW_BUDGET = 1000;
-/** Three cursor ranges plus one periodic head probe share the cycle budget. */
+/** Candidate page size, independent of the number of ready rows requested. */
 export const DOCUMENT_SCAN_PAGE_LIMIT = Math.floor(
   DOCUMENT_SCAN_ROW_BUDGET / 4,
 );
@@ -24,52 +24,102 @@ type RemainingDocumentScanOptions = {
   now?: () => number;
 };
 
+export type RemainingDocumentScanResult =
+  | { type: "rows"; rows: PendingDocument[] }
+  | { type: "budget-spent" }
+  | { type: "exhausted" };
+
 /**
- * The cursor is a read position, not a processing checkpoint. It lives with
- * the queue's buffer; a crash discards both and replays from the newest row.
- * Durable per-document claims exclude completed or cooling work on replay.
+ * Read cursors live with the queue buffer, not as durable checkpoints.
+ * A restart replays unclaimed rows; durable claims exclude cooling work.
  */
 export const createRemainingDocumentScan = ({
   loadPage,
   now = () => Temporal.Now.instant().epochMilliseconds,
 }: RemainingDocumentScanOptions) => {
-  let after: RemainingDocumentCursor | undefined;
-  let reprobeAt = Number.NEGATIVE_INFINITY;
-  let headReprobeAt = Number.NEGATIVE_INFINITY;
+  let savedAfter: RemainingDocumentCursor | undefined;
+  let savedReprobeAt = Number.NEGATIVE_INFINITY;
+  let savedHeadReprobeAt = Number.NEGATIVE_INFINITY;
+  let savedHead: { after?: RemainingDocumentCursor } | undefined;
 
-  const readyDocuments = (page: RemainingDocumentCandidate[]) =>
-    page
-      .filter(({ ready }) => ready)
-      .map(({ ready: _ready, ...decision }) => decision);
-
-  return async (limit: number): Promise<PendingDocument[]> => {
-    if (now() < reprobeAt || limit <= 0) {
-      return [];
+  return async (limit: number): Promise<RemainingDocumentScanResult> => {
+    let after = savedAfter;
+    let reprobeAt = savedReprobeAt;
+    let headReprobeAt = savedHeadReprobeAt;
+    let head = savedHead ? { ...savedHead } : undefined;
+    // Publish read progress together with the ready buffer. A failed page
+    // read must replay any ready rows collected earlier in this call.
+    const finish = (result: RemainingDocumentScanResult) => {
+      savedAfter = after;
+      savedReprobeAt = reprobeAt;
+      savedHeadReprobeAt = headReprobeAt;
+      savedHead = head;
+      return result;
+    };
+    if (now() < reprobeAt) {
+      return { type: "exhausted" };
     }
-    const pageLimit = Math.min(limit, DOCUMENT_SCAN_PAGE_LIMIT);
-    // New decisions and newly due retries must not wait behind an active
-    // archive sweep. Probe the newest bounded window on its own cadence.
-    if (now() >= headReprobeAt) {
-      if (after) {
-        const head = readyDocuments(await loadPage({ limit: pageLimit }));
-        headReprobeAt = now() + DOCUMENT_SCAN_REPROBE_MS;
-        if (head.length > 0) {
-          return head;
+    if (limit <= 0) {
+      return { type: "budget-spent" };
+    }
+    if (!head && after && now() >= headReprobeAt) {
+      head = {};
+    }
+    if (!after && !head) {
+      headReprobeAt = now() + DOCUMENT_SCAN_REPROBE_MS;
+    }
+    let examined = 0;
+    const rows: PendingDocument[] = [];
+    while (examined < DOCUMENT_SCAN_ROW_BUDGET) {
+      const cursor = head ? head.after : after;
+      const pageLimit = Math.min(
+        DOCUMENT_SCAN_PAGE_LIMIT,
+        DOCUMENT_SCAN_ROW_BUDGET - examined,
+      );
+      const page = await loadPage({
+        limit: pageLimit,
+        ...(cursor ? { after: cursor } : {}),
+      });
+      examined += page.length;
+      let consumed = 0;
+      for (const { ready, ...decision } of page) {
+        const next = { decisionDate: decision.decisionDate, id: decision.id };
+        if (head) {
+          head.after = next;
+        } else {
+          after = next;
         }
-      } else {
+        consumed += 1;
+        if (ready) {
+          rows.push(decision);
+        }
+        if (rows.length === limit) {
+          break;
+        }
+      }
+      const exhausted = consumed === page.length && page.length < pageLimit;
+      if (head && rows.length > 0) {
+        head = undefined;
         headReprobeAt = now() + DOCUMENT_SCAN_REPROBE_MS;
+        return finish({ type: "rows", rows });
+      }
+      if (head && exhausted) {
+        head = undefined;
+        headReprobeAt = now() + DOCUMENT_SCAN_REPROBE_MS;
+      } else if (!head && exhausted) {
+        after = undefined;
+        reprobeAt = now() + DOCUMENT_SCAN_REPROBE_MS;
+        headReprobeAt = reprobeAt;
+        return finish(
+          rows.length > 0 ? { type: "rows", rows } : { type: "exhausted" },
+        );
+      }
+      if (rows.length === limit || (rows.length > 0 && exhausted)) {
+        return finish({ type: "rows", rows });
       }
     }
-    const page = await loadPage({
-      limit: pageLimit,
-      ...(after ? { after } : {}),
-    });
-    const last = page.at(-1);
-    after = last ? { decisionDate: last.decisionDate, id: last.id } : undefined;
-    if (page.length < pageLimit) {
-      after = undefined;
-      reprobeAt = now() + DOCUMENT_SCAN_REPROBE_MS;
-    }
-    return readyDocuments(page);
+    return finish(
+      rows.length > 0 ? { type: "rows", rows } : { type: "budget-spent" },
+    );
   };
 };
