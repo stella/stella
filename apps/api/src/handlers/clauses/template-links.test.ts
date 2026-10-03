@@ -71,8 +71,14 @@ describe("clauseBodyToPlainText", () => {
     const body = [
       { text: "{% if penalty %}", isDirective: true },
       { text: "Visible." },
+      { text: "{% endif %}", isDirective: true },
     ];
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { penalty: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [{ runs: [{ text: "Visible." }] }],
     });
     expect(clauseBodyToPlainText(body)).toContain("{% if penalty %}");

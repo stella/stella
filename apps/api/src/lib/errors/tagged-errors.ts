@@ -1,3 +1,4 @@
+// parser-output-unchanged: optional clause provenance affects template refusals only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: adapter stop kinds and TimeoutError reexport preserve successful parsed records.
 import { panic, TaggedError } from "better-result";
 
@@ -123,6 +124,9 @@ export type HandlerErrorProps<
   message: string;
   /** Corrective action for agent and CLI clients; never requires parsing `message`. */
   hint?: string | undefined;
+  clause?:
+    | { slotKey: string; id?: string | undefined; name?: string | undefined }
+    | undefined;
   contactUrl?: ActionAdmissionRefusal["contactUrl"];
   retryable?: boolean | undefined;
   /**
@@ -158,6 +162,7 @@ export class HandlerError<
   declare code?: HandlerErrorCode | undefined;
   declare status: TStatus;
   declare hint?: string | undefined;
+  declare clause?: HandlerErrorProps["clause"];
   declare contactUrl?: string | undefined;
   declare retryable?: boolean | undefined;
   declare usage?: HandlerErrorUsageDetail | undefined;
@@ -173,6 +178,7 @@ export class HandlerError<
     this.code = props.code;
     this.status = props.status;
     this.hint = props.hint;
+    this.clause = props.clause;
     this.contactUrl = props.contactUrl;
     this.retryable = props.retryable;
     this.usage = props.usage;

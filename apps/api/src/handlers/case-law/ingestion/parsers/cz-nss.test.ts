@@ -1136,3 +1136,14 @@ describe("table caption retention", () => {
     ]);
   });
 });
+
+test("retains nested table text once and excludes non-content cell tags", () => {
+  const parsed = parseNssDecisionHtml(
+    baseInput(
+      "<table><tr><td>Outer<table><tr><td>qzmarkerInner<script>scriptqzexcluded</script><style>styleqzexcluded</style></td></tr></table></td></tr></table>",
+    ),
+  );
+  expect(parsed.fulltext.split("qzmarkerInner").length - 1).toBe(1);
+  expect(parsed.fulltext).not.toContain("scriptqzexcluded");
+  expect(parsed.fulltext).not.toContain("styleqzexcluded");
+});

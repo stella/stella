@@ -29,9 +29,9 @@ import {
   referencePassageIds,
 } from "@/api/lib/document-review/reference-passages";
 import {
+  basisForReader,
   findingForReader,
   readableReferenceWorkspaces,
-  referencesForReader,
   referenceWorkspacesByPosition,
 } from "@/api/lib/document-review/reference-visibility";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
@@ -145,10 +145,7 @@ const exportDocumentReviewRun = createSafeHandler(
       basis: run.basis,
     });
     const positionWorkspaces = referenceWorkspacesByPosition(run.basis);
-    const basis = {
-      ...run.basis,
-      references: referencesForReader(run.basis.references, readable),
-    };
+    const basis = basisForReader(run.basis, readable);
     const rows = buildIssuesTableRows({
       basis,
       passageTextById,
