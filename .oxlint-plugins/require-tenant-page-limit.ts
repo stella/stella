@@ -1,5 +1,6 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { factoriesWhere } from "../apps/api/src/lib/safe-handler-factories.ts";
 import {
   filenameForContext,
   getImportedName,
@@ -18,6 +19,9 @@ const LIMITS_MODULE = "@/api/lib/limits";
 const NORMALIZER = "normalizeTenantPageLimit";
 const PAGE_VARIABLES = new Set(["limit", "pageSize", "windowSize"]);
 const REQUEST_ROOTS = new Set(["query", "body", "input", "parsed"]);
+const ANONYMOUS_HANDLER_FACTORIES = new Set<string>(
+  factoriesWhere(({ context }) => context === "anonymous"),
+);
 
 // Public corpus readers have their own page budgets and do not own a tenant
 // action. Native MCP tools stay in scope even when they call those readers.
@@ -171,9 +175,8 @@ export default eslintCompatPlugin({
                 pageSources.defaults.add(local);
               }
               if (
-                node.source.value === "@/api/lib/api-handlers" &&
-                (imported === "createSafePublicHandler" ||
-                  imported === "createSafeBoundedPublicHandler")
+                imported !== null &&
+                ANONYMOUS_HANDLER_FACTORIES.has(imported)
               ) {
                 anonymousPublic = true;
               }

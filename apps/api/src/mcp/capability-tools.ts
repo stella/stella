@@ -32,6 +32,10 @@ import {
   isServiceClassification,
   type CatalogServiceClassification,
 } from "@/api/lib/rate-limit/service-classification";
+import {
+  HANDLER_KINDS,
+  type HandlerKind,
+} from "@/api/lib/safe-handler-factories";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { advertisedSchemas } from "@/api/mcp/advertised-schema";
@@ -99,16 +103,6 @@ type CapabilityMcpDisposition =
   | { type: "tool"; name: string }
   | { type: "covered"; by: string }
   | { type: "capability"; reason: string };
-
-const HANDLER_KINDS = [
-  "workspace",
-  "root",
-  "session",
-  "token",
-  "public",
-] as const;
-
-type HandlerKind = (typeof HANDLER_KINDS)[number];
 
 type CatalogEntry = {
   id: string;

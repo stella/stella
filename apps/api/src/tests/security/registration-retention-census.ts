@@ -1,6 +1,8 @@
 import path from "node:path";
 import ts from "typescript";
 
+import { factoriesWhere } from "@/api/lib/safe-handler-factories";
+
 type CensusOptions = {
   sources: ReadonlyMap<string, string>;
   roots: readonly string[];
@@ -8,10 +10,10 @@ type CensusOptions = {
   declarations: ReadonlySet<string>;
 };
 
-const factories = new Set([
-  "createSafePublicHandler",
-  "createSafeTokenHandler",
-]);
+// Handlers whose caller the framework did not authenticate.
+const factories = new Set<string>(
+  factoriesWhere(({ context }) => context !== "authenticated"),
+);
 const routeMethods = new Set([
   "get",
   "post",
