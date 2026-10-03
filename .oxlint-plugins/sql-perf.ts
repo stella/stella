@@ -1,6 +1,7 @@
 // Guard reviewable SQL scan shapes. Existing unsuppressed hits are held by a
 // per-file shrink-only baseline; a new hit reports every unsuppressed site in
 // that file. A nearby sql-perf-allow comment must give a concrete bound.
+// Per-source counts require single-source equality; grouped source facets are not covered.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import path from "node:path";
@@ -32,6 +33,9 @@ export default eslintCompatPlugin({
           "or-subquery": message("OR with a subquery operand"),
           "optional-keyset": message(
             "An optional keyset bound (<param> IS NULL OR <column> > <param>)",
+          ),
+          "per-source-full-count": message(
+            "Per-source full COUNT or SUM(1) aggregation over a corpus table",
           ),
           comment: "{{reason}}",
         },

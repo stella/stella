@@ -14,6 +14,7 @@ import {
   timeTimers,
   timeTimerConfirmations,
 } from "./billing";
+import { billingArrangements } from "./billing-arrangements";
 import {
   caseLawCitations,
   caseLawCourtWeights,
@@ -187,6 +188,7 @@ export const relations = defineRelations(
     timeEntries,
     timeTimers,
     timeTimerConfirmations,
+    billingArrangements,
     billingCodes,
     sellerProfiles,
     numberSeries,
@@ -411,6 +413,10 @@ export const relations = defineRelations(
       billingCodes: r.many.billingCodes({
         from: r.workspaces.id,
         to: r.billingCodes.workspaceId,
+      }),
+      billingArrangement: r.one.billingArrangements({
+        from: r.workspaces.id,
+        to: r.billingArrangements.workspaceId,
       }),
       rateTables: r.many.rateTables({
         from: r.workspaces.id,
@@ -1016,6 +1022,12 @@ export const relations = defineRelations(
       invoice: r.one.invoices({
         from: r.timeEntries.invoiceId,
         to: r.invoices.id,
+      }),
+    },
+    billingArrangements: {
+      workspace: r.one.workspaces({
+        from: r.billingArrangements.workspaceId,
+        to: r.workspaces.id,
       }),
     },
     rateTables: {

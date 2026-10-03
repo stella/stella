@@ -193,3 +193,83 @@ test("refuses a currency change whose scaled rate leaves the safe range", async 
     .where(eq(rateTables.id, rateTableId));
   expect(table?.currency).toBe("JPY");
 });
+
+test("the default flag can be cleared only while another table in the matter stays default", async () => {
+  await testDb
+    .update(rateTables)
+    .set({ isDefault: false })
+    .where(eq(rateTables.workspaceId, ids.wsA1));
+  const firstId = toSafeId<"rateTable">(Bun.randomUUIDv7());
+  const secondId = toSafeId<"rateTable">(Bun.randomUUIDv7());
+  await testDb.insert(rateTables).values([
+    {
+      id: firstId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      name: "First default",
+      currency: "USD",
+      isDefault: true,
+    },
+    {
+      id: secondId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      name: "Second default",
+      currency: "USD",
+      isDefault: true,
+    },
+    // Another matter's default never stands in for this matter's.
+    {
+      id: toSafeId<"rateTable">(Bun.randomUUIDv7()),
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA2,
+      name: "Other matter default",
+      currency: "USD",
+      isDefault: true,
+    },
+  ]);
+  const unset = async (id: SafeId<"rateTable">) =>
+    await updateRateTableHandler.handler(
+      createTestHandlerContext<UpdateRateTableCtx>({
+        workspaceId: ids.wsA1,
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        safeDb: scopedSafeDb(),
+        body: { id, isDefault: false },
+      }),
+    );
+  const defaults = async () => {
+    const rows = await testDb
+      .select({ id: rateTables.id })
+      .from(rateTables)
+      .where(
+        and(
+          eq(rateTables.workspaceId, ids.wsA1),
+          eq(rateTables.isDefault, true),
+        ),
+      );
+    return rows.map((row) => row.id);
+  };
+  const refused = {
+    code: 400,
+    response: {
+      message: "Cannot unset default: no other default rate table exists",
+    },
+  };
+
+  expect(await unset(firstId)).toEqual({ id: firstId });
+  expect(await defaults()).toEqual([secondId]);
+
+  expect(await unset(secondId)).toMatchObject(refused);
+  expect(await defaults()).toEqual([secondId]);
+
+  // A table that is not the default is refused the same way once the matter
+  // has no default left to keep.
+  expect(await unset(firstId)).toEqual({ id: firstId });
+  await testDb
+    .update(rateTables)
+    .set({ isDefault: false })
+    .where(eq(rateTables.id, secondId));
+  expect(await unset(firstId)).toMatchObject(refused);
+  expect(await defaults()).toEqual([]);
+});

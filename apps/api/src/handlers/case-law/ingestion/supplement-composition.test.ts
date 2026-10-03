@@ -24,6 +24,7 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 type Ruling = SupplementJudgmentCandidate & { id: string };
 
@@ -270,7 +271,7 @@ const paragraph = (index: number, text: string): ParagraphBlock => ({
   plainText: text,
 });
 
-const judgment: IngestionResult = {
+const judgment: IngestionResult = plainTextIngestionResult({
   caseNumber: "IV Ka 95/18",
   court: "Sąd Okręgowy we Wrocławiu",
   country: "POL",
@@ -295,7 +296,7 @@ const judgment: IngestionResult = {
     },
     paragraph(2, "Sąd utrzymuje w mocy zaskarżony wyrok."),
   ]),
-};
+});
 
 const reasons: StoredSupplement = {
   sourceDocumentId: "339001",
@@ -355,13 +356,15 @@ describe("a judgment composed with its reasons", () => {
         (block) => block.type === "heading" && block.role === "decision-title",
       ),
     ).toHaveLength(1);
-    expect(composed.metadata[DOCUMENT_SUPPLEMENTS_METADATA_KEY]).toEqual([
-      {
-        kind: DECISION_SUPPLEMENT_KIND.REASONS,
-        sourceDocumentId: "339001",
-        sourceUrl: "https://www.saos.org.pl/judgments/339001",
-      },
-    ]);
+    expect(
+      Bun.deepEquals(composed.metadata[DOCUMENT_SUPPLEMENTS_METADATA_KEY], [
+        {
+          kind: DECISION_SUPPLEMENT_KIND.REASONS,
+          sourceDocumentId: "339001",
+          sourceUrl: "https://www.saos.org.pl/judgments/339001",
+        },
+      ]),
+    ).toBe(true);
   });
 
   test("hashes the observation and every supplement version, and nothing else", () => {

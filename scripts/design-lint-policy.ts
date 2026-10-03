@@ -123,10 +123,11 @@ export const SIZE_LINT_POLICY_OVERRIDES =
  *
  * `require-bounded-request-schema` and `no-unbounded-response-body` are not
  * design rules: they are API size-bound guards whose findings need scope
- * analysis, so no lexical `scripts/ratchet.ts` counter can measure them. They,
- * and the function shape limits above, ride this per-file, oxlint-measured
- * backlog because it is the one debt mechanism that counts with the rule
- * itself.
+ * analysis, so no lexical `scripts/ratchet.ts` counter can measure them.
+ * `no-computed-key-record-assignment` resolves its receiver by scope for the
+ * same reason. They, and the function shape limits above, ride this per-file,
+ * oxlint-measured backlog because it is the one debt mechanism that counts
+ * with the rule itself.
  */
 export const DESIGN_LINT_BACKLOG_RULES = [
   "shadcn/no-restyle",
@@ -135,6 +136,7 @@ export const DESIGN_LINT_BACKLOG_RULES = [
   "no-imported-class-constant/no-imported-class-constant",
   "require-bounded-request-schema/require-bounded-request-schema",
   "no-unbounded-response-body/no-unbounded-response-body",
+  "no-computed-key-record-assignment/no-computed-key-record-assignment",
   ...SIZE_LINT_BACKLOG_RULES,
 ] as const;
 
@@ -379,6 +381,7 @@ export const DESIGN_LINT_MEASURED_RULES = {
   "no-imported-class-constant/no-imported-class-constant": "off",
   "require-bounded-request-schema/require-bounded-request-schema": "off",
   "no-unbounded-response-body/no-unbounded-response-body": "off",
+  "no-computed-key-record-assignment/no-computed-key-record-assignment": "off",
 } satisfies DummyRuleMap &
   Record<keyof typeof SHADCN_LINT_RULES, DummyRuleMap[string]>;
 

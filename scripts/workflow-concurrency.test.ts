@@ -357,16 +357,23 @@ const recording = {
   },
 };
 
-test("an unrelated label cannot supersede a baseline recording", async () => {
-  const file = "network-baseline-record.yml";
-  const key = await groupFor(file, recording);
-  expect(await groupFor(file, { ...recording, run_id: 2 })).toBe(key);
-  expect(
-    await groupFor(file, {
-      ...recording,
-      event: { ...recording.event, label: { name: "unrelated" } },
-    }),
-  ).not.toBe(key);
+test("main recordings serialize without cancelling a committed baseline", async () => {
+  const source = await Bun.file(
+    new URL("network-baseline-record.yml", WORKFLOWS_URL),
+  ).text();
+  const parsed: unknown = Bun.YAML.parse(source);
+  expect(isRecord(parsed) && parsed["concurrency"]).toMatchObject({
+    "cancel-in-progress": false,
+  });
+  const main = {
+    ...recording,
+    event_name: "push",
+    ref: "refs/heads/main",
+    event: {},
+  };
+  expect(await groupFor("network-baseline-record.yml", main)).toBe(
+    await groupFor("network-baseline-record.yml", { ...main, run_id: 2 }),
+  );
 });
 
 test("manual CI replaces the same branch while PRs and merge groups stay isolated", async () => {

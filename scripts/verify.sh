@@ -11,7 +11,8 @@
 # checks there.
 #
 # Usage:
-#   bun run verify           # affected packages vs origin/main (CI PR behavior)
+#   bun run verify           # affected packages vs the canonical repository's
+#                            # main (CI PR behavior; upstream/main in a fork)
 #   bun run verify --all     # full run, no --affected (CI nightly behavior)
 #   bun run verify --db-await-in-loop
 #                            # also run the whole-program database-await check,
@@ -24,7 +25,7 @@ repo_root="$(cd "$script_dir/.." && pwd)"
 cd "$repo_root"
 
 affected_flag="--affected"
-base_ref="origin/main"
+base_ref=""
 db_await_in_loop="false"
 
 while [[ $# -gt 0 ]]; do
@@ -52,6 +53,12 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ -z "$base_ref" ]]; then
+  source "$script_dir/canonical-base.sh"
+  base_ref="$(canonical_base_ref)" || exit 1
+fi
+echo "verify: comparing against $base_ref"
 
 if [[ -n "$affected_flag" ]]; then
   export TURBO_SCM_BASE="$base_ref"
@@ -133,13 +140,12 @@ run_typecheck_coverage() {
 
 run_ratchet_guard() {
   # Whole-repo convention metrics (see RATCHET_METRICS in scripts/ratchet.ts)
-  # that may only ever decrease vs a
-  # committed baseline. A rise fails; a fall just prompts
-  # `bun scripts/ratchet.ts --write`. The --self-test run
+  # that may only decrease vs the measured merge base. Decreases require no
+  # generated file edit. The --self-test run
   # first proves each counter counts what it claims, so a broken guard cannot
   # pass silently.
   bun scripts/ratchet.ts --self-test || return 1
-  bun scripts/ratchet.ts --check
+  bun scripts/ratchet.ts --check --base "$(git merge-base "$base_ref" HEAD)"
 }
 
 run_result_boundary_enrolment_guard() {
@@ -229,6 +235,7 @@ run_cli_registry_snapshot() {
   # The CLI and shared chat-policy projections must match the live MCP registry:
   # regenerate all of them and fail on any diff so a registry change cannot
   # silently ship stale CLI, web approval, or skill behavior.
+  bun apps/api/scripts/generate-capability-runtime.ts || return 1
   (cd packages/cli && bun run codegen) || return 1
   (cd packages/cli && bun run codegen:runtime) || return 1
   git diff --exit-code -- \
@@ -332,7 +339,7 @@ run_step "Lockfile workspace-version guard" bun scripts/check-lockfile-workspace
 run_step "Quarantine-exclude guards" run_quarantine_exclude_guard
 run_step "Standalone lockfile guard" run_standalone_lockfile_guard
 run_step "Policy evidence" bun run policies:check
-run_step "Marketing content evidence" bun run marketing:check
+run_step "Marketing content check" bun run marketing:check
 run_step "Marketing recording verification self-test" bun test \
   scripts/check-marketing-recordings.test.ts
 run_step "Environment tooling self-test" bun test scripts/env-tool.test.ts
@@ -406,6 +413,7 @@ run_step "MCP coverage guard" run_mcp_coverage_guard
 run_step "MCP surface baseline self-test" bun apps/api/scripts/mcp-surface-baseline.ts --self-test
 run_step "CLI registry snapshot" run_cli_registry_snapshot
 run_step "CLI runtime package parity" bun test scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
+run_step "Capability shard merge and package parity" bun test scripts/capability-shard-merge.test.ts scripts/capability-shard-pack.test.ts
 run_step "CLI contract changeset guard" bun scripts/check-cli-contract-changeset.ts --base "$base_ref"
 run_step "MCP App bundle" run_mcp_app_bundle
 run_step "Capability catalog drift" run_capability_catalog

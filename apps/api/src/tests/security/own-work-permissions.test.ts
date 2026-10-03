@@ -27,7 +27,10 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { MemberRole } from "@/api/lib/member-roles";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import {
+  hasMemberPermission,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 /**
@@ -86,7 +89,7 @@ const contextForRole = (role: MemberRole): unknown => ({
       "019e7000-0000-7000-8000-000000000002",
     ),
   },
-  memberRole: { role },
+  memberRole: sessionMemberRole(role),
   safeDb: refusingDb,
   scopedDb: async () => {
     throw new DatabaseError({ message: "scopedDb must not be called" });
@@ -143,7 +146,7 @@ describe("own-work permissions", () => {
     for (const role of [...GRANTED_ROLES, "external"] as const) {
       expect(
         hasMemberPermission(
-          { role },
+          sessionMemberRole(role),
           grantDesktopRegistryKey.config.permissions,
         ),
       ).toBe(true);
@@ -211,7 +214,10 @@ describe("own-work permissions", () => {
         expect({
           file,
           role,
-          granted: hasMemberPermission({ role }, endpoint.config.permissions),
+          granted: hasMemberPermission(
+            sessionMemberRole(role),
+            endpoint.config.permissions,
+          ),
         }).toEqual({ file, role, granted: true });
       }
     }
