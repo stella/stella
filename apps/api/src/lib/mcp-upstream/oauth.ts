@@ -743,12 +743,16 @@ export const refreshOAuthToken = async ({
 
   if (Result.isError(token)) {
     const cause = token.error.cause;
+    const errorBody =
+      cause instanceof FetchBoundaryError && cause.status === 400
+        ? cause.body
+        : undefined;
     const oauthError =
-      cause instanceof FetchBoundaryError && cause.status === 400 && cause.body
-        ? Result.try(() =>
-            v.parse(v.object({ error: v.string() }), JSON.parse(cause.body)),
-          )
-        : null;
+      errorBody === undefined || errorBody.length === 0
+        ? null
+        : Result.try(() =>
+            v.parse(v.object({ error: v.string() }), JSON.parse(errorBody)),
+          );
     return Result.err(
       new HandlerError({
         status: 502,
