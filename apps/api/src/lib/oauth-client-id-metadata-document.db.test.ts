@@ -112,44 +112,27 @@ const refusalFrom = async (response: Response): Promise<string> => {
 };
 
 describe("OAuth client ID metadata documents", () => {
-  test("retains configured capabilities for discovered apps", async () => {
-    const clientId = "https://capabilities.example.com/oauth/client.json";
-    documentsByUrl.set(
-      clientId,
-      metadataDocument({
-        client_id: clientId,
-        scope: "stella:admin_read stella:admin_write stella:external_mcps",
-      }),
-    );
-    const response = await authorize(clientId, REDIRECT_URI);
-    expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toContain("oauth_query=");
-    const context = await getAuth().$context;
-    const client = await context.adapter.findOne<
-      SchemaClient<readonly string[]>
-    >({
-      model: "oauthClient",
-      where: [{ field: "clientId", value: clientId }],
-    });
-    expect(client?.clientDiscoveryId).toBe("cimd");
-    expect(client?.scopes).toEqual(
-      expect.arrayContaining([
-        "stella:admin_read",
-        "stella:admin_write",
-        "stella:external_mcps",
-      ]),
-    );
-    const requestedScope =
-      "stella:admin_read stella:admin_write stella:external_mcps";
+  const ELEVATED_SCOPES = [
+    "stella:admin_read",
+    "stella:admin_write",
+    "stella:external_mcps",
+  ];
+  const ELEVATED_SCOPE = ELEVATED_SCOPES.join(" ");
+
+  const elevatedIn = (scope: string | null) =>
+    (scope ?? "").split(" ").filter((value) => ELEVATED_SCOPES.includes(value));
+
+  /** The scope the provider signs into the authorization request it continues. */
+  const signedScope = async (clientId: string, scope: string | null) => {
+    requestsIssued += 1;
     const parameters = new URLSearchParams({
       client_id: clientId,
       redirect_uri: REDIRECT_URI,
       response_type: "code",
       code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
       code_challenge_method: "S256",
-      scope: requestedScope,
+      ...(scope === null ? {} : { scope }),
     });
-    requestsIssued += 1;
     const authorized = await getAuth().handler(
       new Request(`${getAuthEndpointUrl("oauth2/authorize")}?${parameters}`, {
         headers: { "x-forwarded-for": `198.51.100.${String(requestsIssued)}` },
@@ -161,7 +144,49 @@ describe("OAuth client ID metadata documents", () => {
       v.string(),
       new URLSearchParams(new URL(location).hash.slice(1)).get("oauth_query"),
     );
-    expect(new URLSearchParams(signed).get("scope")).toBe(requestedScope);
+    return new URLSearchParams(signed).get("scope");
+  };
+
+  test("grants other discovered apps the open capability subset", async () => {
+    const clientId = "https://capabilities.example.com/oauth/client.json";
+    documentsByUrl.set(
+      clientId,
+      metadataDocument({
+        client_id: clientId,
+        scope: `openid ${ELEVATED_SCOPE}`,
+      }),
+    );
+    // The first request discovers the app and names no scope.
+    const discovered = await signedScope(clientId, null);
+    expect(discovered?.split(" ")).toContain("stella:read");
+    expect(elevatedIn(discovered)).toEqual([]);
+    const context = await getAuth().$context;
+    const client = await context.adapter.findOne<
+      SchemaClient<readonly string[]>
+    >({
+      model: "oauthClient",
+      where: [{ field: "clientId", value: clientId }],
+    });
+    expect(client?.clientDiscoveryId).toBe("cimd");
+    expect(await signedScope(clientId, null)).toBe(discovered);
+    expect(await signedScope(clientId, `openid ${ELEVATED_SCOPE}`)).toBe(
+      "openid",
+    );
+  });
+
+  test("retains configured capabilities for documented apps", async () => {
+    const clientId = "https://claude.ai/oauth/claude-code-client-metadata";
+    documentsByUrl.set(
+      clientId,
+      metadataDocument({
+        client_id: clientId,
+        scope: `openid ${ELEVATED_SCOPE}`,
+      }),
+    );
+    expect(elevatedIn(await signedScope(clientId, null))).toEqual(
+      ELEVATED_SCOPES,
+    );
+    expect(await signedScope(clientId, ELEVATED_SCOPE)).toBe(ELEVATED_SCOPE);
   });
 
   test("accepts a document whose redirect_uris cover the request", async () => {

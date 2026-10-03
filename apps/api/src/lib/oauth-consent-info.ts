@@ -120,6 +120,23 @@ export const getVerifiedOAuthOrigins = (configuredUrls: readonly string[]) =>
     return [url.origin];
   });
 
+/**
+ * Whether a client identified by a client metadata document is a known one:
+ * its document lives under Stella's own origins or at a documented location.
+ */
+export const isVerifiedClientMetadataDocument = (
+  clientId: string,
+  verifiedOrigins: readonly string[],
+): boolean => {
+  const url = URL.parse(clientId);
+  return (
+    url !== null &&
+    url.username === "" &&
+    url.password === "" &&
+    (verifiedOrigins.includes(url.origin) || isVerifiedThirdPartyClientId(url))
+  );
+};
+
 type OAuthConsentClient = Pick<
   SchemaClient,
   "clientId" | "name" | "redirectUris" | "clientDiscoveryId"
@@ -140,11 +157,7 @@ export const getOAuthConsentInfo = (
     ],
     clientIdHost: clientUrl?.host ?? null,
     unverified: client.clientDiscoveryId
-      ? !clientUrl ||
-        !(
-          verifiedOrigins.includes(clientUrl.origin) ||
-          isVerifiedThirdPartyClientId(clientUrl)
-        )
+      ? !isVerifiedClientMetadataDocument(client.clientId, verifiedOrigins)
       : redirects.length === 0 ||
         redirects.some(
           (url) =>

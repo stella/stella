@@ -123,6 +123,38 @@ describe("OAuth consent app details", () => {
     ).toBe(true);
   });
 
+  test("an app with one documented and one other redirect is unverified", () => {
+    for (const documented of [
+      "https://chatgpt.com/connector/oauth/abc123",
+      "https://global.consent.azure-apim.net/redirect/abc123",
+    ]) {
+      expect(redirectUnverified(documented)).toBe(false);
+      expect(
+        getOAuthConsentInfo(
+          {
+            clientId: "example-client",
+            name: "Example connector",
+            redirectUris: [documented, "https://connector.example/callback"],
+            clientDiscoveryId: null,
+          },
+          origins,
+        ).unverified,
+      ).toBe(true);
+    }
+  });
+
+  test("an encoded separator never counts as one assigned segment", () => {
+    for (const uri of [
+      "https://chatgpt.com/connector/oauth/a%2Fb",
+      "https://chatgpt.com/connector/oauth/a%2fb",
+      "https://chatgpt.com/connector/oauth/%2F",
+      "https://global.consent.azure-apim.net/redirect/a%2Fb",
+      "https://global.consent.azure-apim.net/redirect/%2E%2E%2Fother",
+    ]) {
+      expect(redirectUnverified(uri)).toBe(true);
+    }
+  });
+
   test("recognizes documented client metadata documents", () => {
     for (const [clientId, unverified] of [
       ["https://claude.ai/oauth/claude-code-client-metadata", false],

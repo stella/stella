@@ -7,6 +7,8 @@ import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import {
+  OAUTH_ENDPOINT_POLICY,
+  OAUTH_SCOPE_POLICY_PATHS,
   OPEN_REGISTRATION_SCOPES,
   OAUTH_REGISTRATION_SCOPE_POLICY,
 } from "@/api/lib/oauth-registration-policy";
@@ -27,6 +29,8 @@ import {
 import {
   authorizeOAuthClient,
   consentAndExchange,
+  exchangeOAuthCode,
+  grantOAuthClient,
   readSignedQuery,
   registerOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
@@ -419,5 +423,155 @@ describe("OAuth dynamic client registration", () => {
     expect(response.status).toBe(400);
     const refused = v.parse(registrationErrorSchema, await response.json());
     expect(refused.error).toBe(fixture.error);
+  });
+});
+
+describe("OAuth capability policy", () => {
+  const openSubset = (scopes: readonly string[]) =>
+    scopes
+      .filter((scope) => OPEN_REGISTRATION_SCOPES.includes(scope))
+      .toSorted();
+
+  const elevatedScopes = Object.entries(OAUTH_REGISTRATION_SCOPE_POLICY)
+    .filter(([, policy]) => policy === "elevated")
+    .map(([scope]) => scope);
+
+  const expectOpenGrant = (scope: string) => {
+    const granted = scope.split(" ");
+    expect(granted).toContain("stella:read");
+    for (const elevated of elevatedScopes) {
+      expect(granted).not.toContain(elevated);
+    }
+  };
+
+  /** A registration whose stored scope list predates the capability policy. */
+  const registerWithEveryScope = async (email: string) => {
+    registrationsIssued += 1;
+    const client = await registerOAuthClient(
+      `203.0.113.${String(registrationsIssued)}`,
+    );
+    const context = await getAuth().$context;
+    await context.adapter.update({
+      model: "oauthClient",
+      where: [{ field: "clientId", value: client.clientId }],
+      update: { scopes: [...MCP_OAUTH_SCOPES] },
+    });
+    const browser = await signInHuman(email);
+    const organization = await getAuth().api.createOrganization({
+      body: { name: "Consent flow", slug: `consent-${Bun.randomUUIDv7()}` },
+      headers: browser.headers(),
+    });
+    await browser.setActiveOrganization(organization.id);
+    return { browser, client, context };
+  };
+
+  test("applies the open capability subset when a request names no scope", async () => {
+    const { browser, client } = await registerWithEveryScope(
+      "no-scope@example.test",
+    );
+    const { codeVerifier, redirect: consentPage } = await authorizeOAuthClient(
+      browser,
+      client,
+      null,
+    );
+    expect(consentPage.pathname).toBe("/consent");
+    const shownScope = v.parse(
+      v.string(),
+      new URLSearchParams(readSignedQuery(consentPage)).get("scope"),
+    );
+    expect(shownScope.split(" ").toSorted()).toEqual(
+      openSubset(MCP_OAUTH_SCOPES),
+    );
+    const grant = await consentAndExchange({
+      browser,
+      client,
+      codeVerifier,
+      consentPage,
+    });
+    expectOpenGrant(grant.scope);
+  });
+
+  test("applies the open capability subset over an earlier wider consent", async () => {
+    const { browser, client, context } = await registerWithEveryScope(
+      "earlier-consent@example.test",
+    );
+    await grantOAuthClient(browser, client);
+    await context.adapter.update({
+      model: "oauthConsent",
+      where: [{ field: "clientId", value: client.clientId }],
+      update: { scopes: [...MCP_OAUTH_SCOPES] },
+    });
+    const { codeVerifier, redirect } = await authorizeOAuthClient(
+      browser,
+      client,
+      null,
+    );
+    // The earlier consent covers the request, so no consent page is shown.
+    expect(redirect.pathname).not.toBe("/consent");
+    expect(redirect.searchParams.get("code")).toEqual(expect.any(String));
+    const grant = await exchangeOAuthCode({ client, codeVerifier, redirect });
+    expectOpenGrant(grant.scope);
+  });
+
+  test.each(["/oauth2/create-client", "/oauth2/update-client"])(
+    "does not serve %s",
+    async (path) => {
+      const browser = await signInHuman(
+        `client-management-${Bun.randomUUIDv7()}@example.test`,
+      );
+      const response = await getAuth().handler(
+        new Request(getAuthEndpointUrl(path.slice(1)), {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: browser.cookieHeader(),
+          },
+          body: JSON.stringify({
+            client_id: "example-client",
+            redirect_uris: ["https://connector.example/callback"],
+            scope: "stella:read stella:admin_write",
+            update: { scope: "stella:read stella:admin_write" },
+          }),
+        }),
+      );
+      expect(response.status).toBe(404);
+    },
+  );
+
+  test("every provider endpoint has a decided policy", async () => {
+    const auth = getAuth();
+    const endpoints = Object.values(auth.api).flatMap((endpoint) => {
+      const path: unknown = Reflect.get(endpoint, "path");
+      return typeof path === "string" && path.includes("oauth2")
+        ? [{ path, endpoint }]
+        : [];
+    });
+    expect([...new Set(endpoints.map(({ path }) => path))].toSorted()).toEqual(
+      Object.keys(OAUTH_ENDPOINT_POLICY).toSorted(),
+    );
+    const policies: Record<string, string> = OAUTH_ENDPOINT_POLICY;
+    for (const { path, endpoint } of endpoints) {
+      const policy = policies[path];
+      if (policy === "disabled") {
+        expect(auth.options.disabledPaths).toContain(path);
+        const response = await auth.handler(
+          new Request(getAuthEndpointUrl(path.slice(1)), { method: "POST" }),
+        );
+        expect(response.status, path).toBe(404);
+      }
+      if (policy === "server-only") {
+        const options: unknown = Reflect.get(endpoint, "options");
+        expect(options, path).toMatchObject({
+          metadata: { SERVER_ONLY: true },
+        });
+      }
+      if (policy === "scope-policy") {
+        expect(OAUTH_SCOPE_POLICY_PATHS.has(path), path).toBe(true);
+      }
+    }
+    expect([...OAUTH_SCOPE_POLICY_PATHS].toSorted()).toEqual([
+      "/oauth2/authorize",
+      "/oauth2/register",
+    ]);
   });
 });
