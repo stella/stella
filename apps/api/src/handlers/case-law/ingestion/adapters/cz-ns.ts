@@ -1,4 +1,5 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
@@ -1328,6 +1329,15 @@ export const czNsAdapter = defineSourceAdapter({
    * compare against what is held.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            unid: payload["unid"],
+            caseNumber: payload["caseNumber"],
+            additionalCaseNumbers: payload["additionalCaseNumbers"],
+          }
+        : null,
     firstSlice: CZ_NS_FIRST_SLICE,
     ...czNsDaySlices.walk,
     tipWindowDays: CZ_NS_TIP_WINDOW_DAYS,

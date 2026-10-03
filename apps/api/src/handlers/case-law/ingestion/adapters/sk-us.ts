@@ -1,4 +1,5 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 import * as v from "valibot";
 /**
@@ -2602,6 +2603,57 @@ export const skUsAdapter = defineSourceAdapter({
    * each item the way the ingest would, and compare against what is held.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            documentId: payload["documentId"],
+            docType: payload["docType"],
+            title: payload["title"],
+            content: payload["content"],
+            extension: payload["extension"],
+            size: payload["size"],
+            contentType: payload["contentType"],
+            mkDocumentType: payload["mkDocumentType"],
+            mkRSAPNumberOfFile: payload["mkRSAPNumberOfFile"],
+            mkRVPNumberOfFile: payload["mkRVPNumberOfFile"],
+            mkECLI: payload["mkECLI"],
+            mkDateOfDecision: payload["mkDateOfDecision"],
+            mkDateOfLegalForce: payload["mkDateOfLegalForce"],
+            mkPublicationDate: payload["mkPublicationDate"],
+            mkFormOfDecision: payload["mkFormOfDecision"],
+            mkTypeOfDecision: payload["mkTypeOfDecision"],
+            mkTypeOfProceeding: payload["mkTypeOfProceeding"],
+            mkTypeOfNegotiation: payload["mkTypeOfNegotiation"],
+            mkDecisionInTermsOf: payload["mkDecisionInTermsOf"],
+            mkResultOfNegotiation: payload["mkResultOfNegotiation"],
+            mkCause: payload["mkCause"],
+            mkJudgeReporter: payload["mkJudgeReporter"],
+            mkDifferentView: payload["mkDifferentView"],
+            mkWordRegister: payload["mkWordRegister"],
+            mkMaterialRegister: payload["mkMaterialRegister"],
+            mkComplainedLegalRegulation: payload["mkComplainedLegalRegulation"],
+            mkClarificationOfLegalRegulation:
+              payload["mkClarificationOfLegalRegulation"],
+            mkFileReference: payload["mkFileReference"],
+            mkReferences: payload["mkReferences"],
+            mkTypeOfProposer: payload["mkTypeOfProposer"],
+            mkAffectedLegalRegulation: payload["mkAffectedLegalRegulation"],
+            mkUnderage: payload["mkUnderage"],
+            mkIncludeToZnaU: payload["mkIncludeToZnaU"],
+            mkEntryDate: payload["mkEntryDate"],
+            mkFormOfEntry: payload["mkFormOfEntry"],
+            mkTypeOfEntry: payload["mkTypeOfEntry"],
+            mkParentIdDecision: payload["mkParentIdDecision"],
+            mkLawReportsNumber: payload["mkLawReportsNumber"],
+            mkVolumeOfLawReports: payload["mkVolumeOfLawReports"],
+            mkYearOfLawReports: payload["mkYearOfLawReports"],
+            mkTimePeriodZNaU: payload["mkTimePeriodZNaU"],
+            mkClauseTitle: payload["mkClauseTitle"],
+            mkClauseText: payload["mkClauseText"],
+            mkWebTitle: payload["mkWebTitle"],
+          }
+        : null,
     firstSlice: SK_US_FIRST_SLICE,
     sliceOf: skUsSliceOf,
     nextSlice: skUsNextSlice,

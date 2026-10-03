@@ -1,4 +1,5 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
  * Polish public-procurement rulings from the UZP decision database.
  *
@@ -1698,6 +1699,17 @@ export const plKioAdapter = defineSourceAdapter({
   getTotalCount: plKioTotalCount,
 
   reconciliation: {
+    // Listing identity and decision labels exclude row markup and result coordinates.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            id: payload["id"],
+            court: payload["court"],
+            documentType: payload["documentType"],
+            signature: payload["signature"],
+            issueDate: payload["issueDate"],
+          }
+        : null,
     firstSlice: PL_KIO_FIRST_SLICE,
     ...plKioDaySlices.walk,
     tipWindowDays: PL_KIO_TIP_WINDOW_DAYS,

@@ -1,4 +1,5 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result, TaggedError } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
@@ -1339,6 +1340,33 @@ const buildFindokPageItems = async ({
   return { decisions, itemBuildFailures };
 };
 
+// Manifest row content excludes snapshot generation, traversal coordinates, and repair aliases.
+const findokListingRevision = (payload: unknown) => {
+  if (!isRecord(payload) || !isRecord(payload["item"])) {
+    return null;
+  }
+  const item = payload["item"];
+  return {
+    collection: payload["collection"],
+    content: {
+      type: item["type"],
+      appdat: item["appdat"],
+      behoerde: item["behoerde"],
+      dokumentId: item["dokumentId"],
+      dokumenttyp: item["dokumenttyp"],
+      gueltig: item["gueltig"],
+      gueltigAb: item["gueltigAb"],
+      gz: item["gz"],
+      inFindokSeitDate: item["inFindokSeitDate"],
+      pathPdf: item["pathPdf"],
+      pathZip: item["pathZip"],
+      stammNr: item["stammNr"],
+      titel: item["titel"],
+      reason: item["reason"],
+    },
+  };
+};
+
 export const createAtFindokAdapter = (
   dependencyOverrides: Partial<AtFindokDependencies> = {},
 ): SourceAdapter & { readonly key: typeof ADAPTER_KEYS.AT_FINDOK } => {
@@ -1360,6 +1388,7 @@ export const createAtFindokAdapter = (
     maxSyncPages: 1,
 
     reconciliation: {
+      revisionOf: findokListingRevision,
       firstSlice: `${COLLECTIONS.ufs.firstYear}-ufs`,
       sliceOf: tipSlice,
       nextSlice: (slice) => atFindokNextSlice(slice, dependencies.now()),

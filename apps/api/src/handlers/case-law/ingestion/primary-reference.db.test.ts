@@ -266,6 +266,7 @@ const replayerFor = async (
       throw new Error("a replay must never fetch from the publisher");
     },
     reconciliation: {
+      revisionOf: (payload) => payload,
       firstSlice: "1970-01-01",
       sliceOf: () => "1970-01-01",
       nextSlice: () => null,

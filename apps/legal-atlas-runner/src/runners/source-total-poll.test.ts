@@ -58,6 +58,7 @@ const adapter = (
     },
     getTotalCount,
     reconciliation: {
+      revisionOf: (payload) => payload,
       firstSlice: "1970-01-01",
       sliceOf: () => "1970-01-01",
       nextSlice: () => null,

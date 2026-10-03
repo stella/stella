@@ -1,5 +1,6 @@
 // parser-output-unchanged: observer wiring returns the adapter’s same normalized SyncPage.
 // parser-output-unchanged: replay outcome type gains an optional legacy docket; no parser output changes.
+// parser-output-unchanged: The required reconciliation revision projection changes retry bookkeeping, not parsed decision output.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
@@ -1068,6 +1069,11 @@ export type HeldRowRules = {
  * what it holds for a slice, independently of the cursor the crawl advanced.
  */
 export type SourceReconciliation = SourceSliceWalk & {
+  /**
+   * Per-record content/identity signal, excluding listing coordinates and corpus-wide revisions.
+   * Classify each new payload field as content/identity (include it) or traversal/repair metadata (exclude it).
+   */
+  revisionOf: (payload: unknown) => unknown;
   /**
    * Whether a stored row counts as held only when it carries the document,
    * and not when it carries the listing metadata alone.

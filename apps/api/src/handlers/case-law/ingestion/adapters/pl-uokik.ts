@@ -1,4 +1,5 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK) adapter.
  *
@@ -2601,6 +2602,14 @@ export const plUokikAdapter = defineSourceAdapter({
   getTotalCount: countPlUokikDecisions,
 
   reconciliation: {
+    // The view position moves on every publication; the UNID and column describe this decision.
+    revisionOf: (payload) => {
+      if (!isRecord(payload)) {
+        return null;
+      }
+      const row = normalizePlUokikRow(payload);
+      return { unid: row.unid, noteId: row.noteId, column: row.column };
+    },
     firstSlice: PL_UOKIK_UNDATED_SLICE,
     sliceOf: yearOf,
     nextSlice: plUokikNextSlice,

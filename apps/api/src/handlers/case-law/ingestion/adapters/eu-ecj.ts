@@ -1,4 +1,5 @@
 // parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
@@ -2872,6 +2873,14 @@ export const euEcjAdapter = defineSourceAdapter({
    * is held.
    */
   reconciliation: {
+    // CELEX and language identify a manifestation; the listing exposes no content change signal.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            celex: payload["celex"],
+            language: payload["language"],
+          }
+        : null,
     firstSlice: COURT_EPOCH_YEAR,
     sliceOf: ecjYearOf,
     nextSlice: ecjNextSlice,
