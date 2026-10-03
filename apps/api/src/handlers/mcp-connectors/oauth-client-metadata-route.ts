@@ -9,6 +9,4 @@ import metadataHandler from "@/api/handlers/mcp-connectors/read-client-metadata"
 // routes must stay public (no auth macro).
 export const mcpOAuthClientMetadataRoute = new Elysia({ prefix: "/mcp" })
   .get("/oauth/client-metadata.json", metadataHandler.handler)
-  .get("/oauth/cli-client-metadata.json", cliMetadataHandler.handler, {
-    response: cliMetadataHandler.config.response,
-  });
+  .get("/oauth/cli-client-metadata.json", cliMetadataHandler.handler);
