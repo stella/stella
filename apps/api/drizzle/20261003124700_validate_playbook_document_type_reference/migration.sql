@@ -1,4 +1,4 @@
--- requires: 20261003124100_playbook_document_type_reference
+-- requires: 20261003124600_playbook_document_type_reference
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 -- Commit the prerequisite and its migration receipt before validation.
