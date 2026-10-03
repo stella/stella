@@ -1,3 +1,4 @@
+// parser-output-unchanged: Crawl search availability and row-count checks control retries without changing parsed decision output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
@@ -1983,17 +1984,29 @@ const DATE_TO_FIELD =
   "vyhledavaciSekce[1].vyhledavaciPodminka[0]" +
   ".vyhledavaciPodminkaHodnota[0].HodnotaDatumACasDo";
 
-/**
- * What one day-filtered search answered with.
- *
- * `statedCount` is the court's own record count for the day and `null` where
- * the page states none — the difference between a day that holds nothing and a
- * page that is not a results page at all.
- */
-type SearchResult = {
-  html: string;
-  continuation: ListingContinuation | undefined;
-  statedCount: number | null;
+type SearchResult =
+  | {
+      type: "present";
+      html: string;
+      continuation: ListingContinuation;
+      statedCount: number;
+    }
+  | { type: "absent"; html: string; statedCount: 0 }
+  | { type: "unavailable"; error: AdapterFetchError };
+
+/** Both listing walks retry unreadable searches without advancing their day. */
+const requireSearchResult = (read: SearchResult) => {
+  switch (read.type) {
+    case "present":
+    case "absent":
+      return read;
+    case "unavailable":
+      invalidateSession();
+      throw read.error;
+    default:
+      read satisfies never;
+      return panic(`Unexpected NSS search read: ${JSON.stringify(read)}`);
+  }
 };
 
 /**
@@ -2035,13 +2048,15 @@ const executeSearch = async (
   });
 
   if (!response.ok) {
-    invalidateSession();
-    throw new AdapterFetchError({
-      message: `NSS search failed: ${response.status}`,
-      adapterKey: ADAPTER_KEYS.CZ_NSS,
-      cursor: date,
-      httpStatus: response.status,
-    });
+    return {
+      type: "unavailable",
+      error: new AdapterFetchError({
+        message: `NSS search failed: ${response.status}`,
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        cursor: date,
+        httpStatus: response.status,
+      }),
+    };
   }
 
   // Merge any new cookies (overwriting stale names)
@@ -2052,11 +2067,32 @@ const executeSearch = async (
 
   const html = await response.text();
 
-  return {
-    html,
-    continuation: extractContinuation(html),
-    statedCount: statedResultCount(html),
-  };
+  const statedCount = statedResultCount(html);
+  if (statedCount === null) {
+    return {
+      type: "unavailable",
+      error: new AdapterFetchError({
+        message: `NSS stated no result count for ${date}`,
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        cursor: date,
+      }),
+    };
+  }
+  if (statedCount === 0) {
+    return { type: "absent", html, statedCount };
+  }
+  const continuation = extractContinuation(html);
+  if (continuation === undefined || continuation.conditions === "[]") {
+    return {
+      type: "unavailable",
+      error: new AdapterFetchError({
+        message: `NSS results for ${date} carried no pagination state`,
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        cursor: date,
+      }),
+    };
+  }
+  return { type: "present", html, continuation, statedCount };
 };
 
 type FetchResultPageOptions = {
@@ -2360,11 +2396,9 @@ const czNssDaySlices = createCalendarDaySliceWalk({
  * replays the day's search itself, because the loop calls it one page at a
  * time and carries nothing between the calls.
  *
- * A failed request is thrown, never flattened into an empty page. The crawl
- * can afford to read an unreadable page as "nothing here" because a cursor
- * that moves on can be walked again; a ledger row cannot, since an outage
- * recorded as an empty day makes that day settled and it is never revisited.
- * So only the court's own count answers what a day holds: `Počet nalezených
+ * A failed request is thrown, never flattened into an empty page. Both walks
+ * hold their progress when a search is unreadable. Only the court's own count
+ * answers what a day holds: `Počet nalezených
  * záznamů: 0` is an empty slice, and everything else — a non-2xx, a session
  * page served instead of results, a results page stating no count — is an
  * error the engine retries on a later pass.
@@ -2381,23 +2415,12 @@ const listCzNssSlicePage = async ({
     signal ?? AbortSignal.timeout(CZ_NSS_LISTING_TIMEOUT_MS);
 
   const session = await getSession(effectiveSignal);
-  const search = await executeSearch(session, slice, effectiveSignal);
-
-  if (search.statedCount === null) {
-    // A 200 that is not a results page is what an expired ASP.NET session
-    // looks like: the portal re-renders the unsubmitted form. Dropping the
-    // session turns one expiry into one failed request instead of ten minutes
-    // of them.
-    invalidateSession();
-    throw new AdapterFetchError({
-      message: `NSS stated no result count for ${slice}`,
-      adapterKey: ADAPTER_KEYS.CZ_NSS,
-      cursor: slice,
-    });
-  }
+  const search = requireSearchResult(
+    await executeSearch(session, slice, effectiveSignal),
+  );
 
   const firstPageRows = parseResultRows(search.html);
-  if (search.statedCount === 0) {
+  if (search.type === "absent") {
     if (firstPageRows.length > 0) {
       // The page contradicts itself, so neither number can be trusted for a
       // ledger row. Refused rather than resolved in either direction.
@@ -2411,17 +2434,6 @@ const listCzNssSlicePage = async ({
   }
 
   const { continuation } = search;
-  if (continuation === undefined) {
-    // Same reasoning as the missing count: a results page always carries the
-    // state its own infinite scroll pages with, so a page without it is not
-    // one the current session produced.
-    invalidateSession();
-    throw new AdapterFetchError({
-      message: `NSS results for ${slice} carried no pagination state`,
-      adapterKey: ADAPTER_KEYS.CZ_NSS,
-      cursor: slice,
-    });
-  }
 
   const continued =
     page === 0
@@ -2730,21 +2742,26 @@ export const czNssAdapter = defineSourceAdapter({
         const session = await getSession(effectiveSignal);
 
         // 2. Execute search for this date
-        const searchResult = await executeSearch(
-          session,
-          date,
-          effectiveSignal,
+        const searchResult = requireSearchResult(
+          await executeSearch(session, date, effectiveSignal),
         );
 
-        const { continuation } = searchResult;
-        if (continuation === undefined || continuation.conditions === "[]") {
-          // Not a results page; advance to next day
+        if (searchResult.type === "absent") {
+          const rows = parseResultRows(searchResult.html);
+          if (rows.length > 0) {
+            throw new AdapterFetchError({
+              message: `NSS stated no records for ${date} while rendering ${rows.length}`,
+              adapterKey: ADAPTER_KEYS.CZ_NSS,
+              cursor,
+            });
+          }
           const next = nextDay(date);
           return {
             decisions: [],
             nextCursor: next <= today ? `${next}:0` : `${today}:0`,
           };
         }
+        const { continuation } = searchResult;
 
         // Page 0 results are inline in the search response.
         const continued =
@@ -2771,6 +2788,18 @@ export const czNssAdapter = defineSourceAdapter({
         const rows = parseResultRows(
           continued === null ? searchResult.html : continued.value,
         );
+        const expectedRows = czNssExpectedRows({
+          page,
+          statedCount: searchResult.statedCount,
+        });
+        if (rows.length < expectedRows) {
+          invalidateSession();
+          throw new AdapterFetchError({
+            message: `NSS page ${page} of ${date} carried ${rows.length} of the ${expectedRows} rows its stated count of ${searchResult.statedCount} requires`,
+            adapterKey: ADAPTER_KEYS.CZ_NSS,
+            cursor,
+          });
+        }
         const decisions: IngestionResult[] = [];
         let failed = 0;
 

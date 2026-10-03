@@ -1112,6 +1112,67 @@ describe("cz-nss fetchPage", () => {
     setSystemTime();
   });
 
+  test("an unreadable search fails and refreshes the session before retry", async () => {
+    const { requests } = installStub({
+      search: [
+        htmlResponse(SESSION_PAGE),
+        htmlResponse(
+          searchPage({ statedCount: 0, rows: [], withScript: false }),
+        ),
+      ],
+    });
+    const cursor = `${SLICE}:0`;
+    const failed = await czNssAdapter.fetchPage(cursor, {});
+    expect(Result.isError(failed)).toBe(true);
+    if (Result.isError(failed)) {
+      expect(String(failed.error)).toContain("stated no result count");
+    }
+    const sessionReads = requests.filter(
+      ({ method }) => method === "GET",
+    ).length;
+    const retried = await czNssAdapter.fetchPage(cursor, {});
+    expect(Result.isError(retried)).toBe(false);
+    expect(Result.isError(retried) ? null : retried.value.nextCursor).toBe(
+      "2026-06-11:0",
+    );
+    expect(requests.filter(({ method }) => method === "GET").length).toBe(
+      sessionReads + 1,
+    );
+  });
+
+  test("a short inline page fails before reading documents", async () => {
+    const { requests } = installStub({
+      search: [
+        htmlResponse(searchPage({ statedCount: 2, rows: [MUNICIPAL_ROW] })),
+      ],
+    });
+    const result = await czNssAdapter.fetchPage(`${SLICE}:0`, {});
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(String(result.error)).toContain("carried 1 of the 2 rows");
+    }
+    expect(requests.some(({ url }) => url.includes("/Dokument"))).toBe(false);
+  });
+
+  test("a counted day without pagination state fails", async () => {
+    installStub({
+      search: [
+        htmlResponse(
+          searchPage({
+            statedCount: 1,
+            rows: [MUNICIPAL_ROW],
+            withScript: false,
+          }),
+        ),
+      ],
+    });
+    const result = await czNssAdapter.fetchPage(`${SLICE}:0`, {});
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(String(result.error)).toContain("carried no pagination state");
+    }
+  });
+
   test("a full continuation page moves the cursor on within the day", async () => {
     // A continuation page is full at half the inline page's size, so a crawl
     // measuring it against the inline size ends the day here and never asks
