@@ -37,7 +37,9 @@ const CANCELLED_RUN_ID = "0198f2c4-2d44-7c31-9a10-3b1d2f4c5e64";
 
 describe("presenting review history", () => {
   const error = new Error("History read failed");
-  const retry = () => Promise.reject(error);
+  const retry = async () => {
+    throw error;
+  };
 
   test("failed history cannot show the launcher without a known run", () => {
     const history = queryView({

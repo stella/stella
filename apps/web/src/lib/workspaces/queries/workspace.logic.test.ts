@@ -3,7 +3,9 @@ import { expect, test } from "bun:test";
 import { workflowActionsDisabled } from "./workspace.logic";
 
 const readError = new Error("Read failed");
-const retry = () => Promise.reject(readError);
+const retry = async () => {
+  throw readError;
+};
 
 test("disables workflow actions until the status is known", () => {
   expect(workflowActionsDisabled({ type: "pending" })).toBe(true);

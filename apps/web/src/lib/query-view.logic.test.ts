@@ -1,4 +1,5 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 import fc from "fast-check";
 
@@ -7,8 +8,10 @@ import { assertProperty } from "@stll/property-testing";
 import { queryView } from "./query-view.logic";
 
 const FETCH_STATUSES = ["idle", "fetching", "paused"] as const;
-const readError = { message: "Read failed" };
-const refetch = mock(() => Promise.reject(readError));
+const readError = new Error("Read failed");
+const refetch = mock(async () => {
+  throw readError;
+});
 
 describe("query view states", () => {
   test("keeps empty placeholder data pending until a response succeeds", async () => {
@@ -80,7 +83,13 @@ describe("query view states", () => {
       expect(view.error).toBe(readError);
       expect(view.retry).toBe(refetch);
       const before = refetch.mock.calls.length;
-      await expect(view.retry()).rejects.toBe(readError);
+      const retryResult = await Result.tryPromise(
+        async () => await view.retry(),
+      );
+      expect(Result.isError(retryResult)).toBe(true);
+      if (Result.isError(retryResult)) {
+        expect(retryResult.error.cause).toBe(readError);
+      }
       expect(refetch.mock.calls.length).toBe(before + 1);
     });
 
