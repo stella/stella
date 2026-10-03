@@ -3,6 +3,7 @@ import type { PermissionInput } from "@stll/permissions";
 import type { MemberRole } from "@/api/lib/member-roles";
 import {
   hasMemberPermission,
+  authorizedMemberRole,
   SESSION_CREDENTIAL,
 } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -32,13 +33,14 @@ export type McpEffectiveAuthority = {
 export const mcpMemberAuthority = ({
   memberRole,
   credentialPermissions,
-}: McpEffectiveAuthority): AuthorizedMemberRole => ({
-  role: memberRole,
-  credential:
-    credentialPermissions === undefined
-      ? SESSION_CREDENTIAL
-      : { type: "attenuated", permissions: credentialPermissions },
-});
+}: McpEffectiveAuthority): AuthorizedMemberRole =>
+  authorizedMemberRole({
+    role: memberRole,
+    credential:
+      credentialPermissions === undefined
+        ? SESSION_CREDENTIAL
+        : { type: "attenuated", permissions: credentialPermissions },
+  });
 
 /**
  * The single authorization read for MCP: a request may perform `permissions`

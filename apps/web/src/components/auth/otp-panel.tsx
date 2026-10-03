@@ -30,6 +30,7 @@ import {
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 
 const renderEmail = (chunks: ReactNode) => (
@@ -125,16 +126,15 @@ export const OTPPanel = ({
       });
 
       if (error) {
-        stellaToast.add({
-          title:
-            error.status === HTTP_TOO_MANY_REQUESTS
-              ? t("auth.rateLimitExceeded")
-              : userErrorFromThrown(
-                  toAuthClientError(error),
-                  t("errors.actionFailed"),
-                ),
-          type: "error",
-        });
+        notifyUserError(
+          toAuthClientError(error),
+          error.status === HTTP_TOO_MANY_REQUESTS
+            ? t("auth.rateLimitExceeded")
+            : userErrorFromThrown(
+                toAuthClientError(error),
+                t("errors.actionFailed"),
+              ),
+        );
         throw toAuthClientError(error);
       }
 
@@ -168,7 +168,7 @@ export const OTPPanel = ({
         setOtp("");
         const cause = toAuthClientError(signInError);
         const title = verifyErrorTitle(signInError, cause);
-        stellaToast.add({ title, type: "error" });
+        notifyUserError(cause, title);
         throw new AlreadyToastedError({ message: title, cause });
       }
 
@@ -212,10 +212,7 @@ export const OTPPanel = ({
       if (AlreadyToastedError.is(error)) {
         return;
       }
-      stellaToast.add({
-        title: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 

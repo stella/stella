@@ -3,7 +3,6 @@ import Elysia, { t } from "elysia";
 
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
-import { env } from "@/api/env";
 import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
@@ -28,6 +27,10 @@ import {
 import listDecisionCitations from "@/api/handlers/case-law/decisions/list-citations";
 import { createSafePublicSubjectFollowUpHandler } from "@/api/handlers/case-law/decisions/public-subject";
 import readCaseLawCoverage from "@/api/handlers/case-law/decisions/read-coverage";
+import {
+  projectDecisionReader,
+  readDecisionResponseSchema,
+} from "@/api/handlers/case-law/decisions/read-response";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import {
   searchDecisionsBodySchema,
@@ -60,20 +63,42 @@ import {
   attachDecisionProvisionPreviews,
   readDecisionDate,
 } from "@/api/handlers/case-law/provisions/previews-for-decision";
-import { createSafeBoundedPublicHandler } from "@/api/lib/api-handlers";
+import { projectProvisionPreview } from "@/api/handlers/case-law/provisions/response";
+import {
+  citationCountsSuccessResponseSchema,
+  citingDecisionsSuccessResponseSchema,
+  decisionProvisionsSuccessResponseSchema,
+} from "@/api/handlers/case-law/provisions/response-schema";
+import {
+  corpusStatusResponseSchema,
+  decisionFacetsResponseSchema,
+  latestDecisionsResponseSchema,
+  listDecisionsResponseSchema,
+  sitemapDecisionsResponseSchema,
+  sitemapShardsResponseSchema,
+} from "@/api/handlers/case-law/public-response-schemas";
+import {
+  createSafeBoundedPublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
+} from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import {
   readPublicLawCountry,
   tPublicLawCountry,
 } from "@/api/lib/legal-search/public-law-country";
+import { isPublicLawEnabled } from "@/api/lib/legal-search/public-law-feature";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
-import { isLocalDevOpen } from "@/api/runtime-mode";
+import { projectResponseText } from "@/api/lib/search/project-response-text";
 
 const listDecisions = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      listDecisionsResponseSchema,
+    ),
     query: listDecisionsQuerySchema,
   },
   async function* ({ query }) {
@@ -83,7 +108,20 @@ const listDecisions = createSafeBoundedPublicHandler(
       ),
     );
 
-    return Result.ok(response);
+    return Result.ok(
+      projectResponseText(
+        "items" in response
+          ? {
+              ...response,
+              items: response.items.map((item) => ({
+                ...item,
+                createdAt: item.createdAt.toISOString(),
+              })),
+            }
+          : response,
+        listDecisionsResponseSchema,
+      ),
+    );
   },
 );
 
@@ -91,6 +129,9 @@ export const readStatuteCitationCounts = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      citationCountsSuccessResponseSchema,
+    ),
     query: statuteCitationCountsQuerySchema,
   },
   async function* ({ query }) {
@@ -100,7 +141,9 @@ export const readStatuteCitationCounts = createSafeBoundedPublicHandler(
           await readStatuteCitationCountsHandler(query, caseLawPublicReadDb),
       ),
     );
-    return Result.ok(response);
+    return Result.ok(
+      projectResponseText(response, citationCountsSuccessResponseSchema),
+    );
   },
 );
 
@@ -108,6 +151,9 @@ const listDecisionFacets = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      decisionFacetsResponseSchema,
+    ),
     query: listDecisionFacetsQuerySchema,
   },
   async function* ({ query }) {
@@ -115,7 +161,9 @@ const listDecisionFacets = createSafeBoundedPublicHandler(
       Result.tryPromise(async () => await listDecisionFacetsHandler(query)),
     );
 
-    return Result.ok(response);
+    return Result.ok(
+      projectResponseText(response, decisionFacetsResponseSchema),
+    );
   },
 );
 
@@ -123,6 +171,9 @@ const listLatestDecisions = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      latestDecisionsResponseSchema,
+    ),
     query: listLatestDecisionsQuerySchema,
   },
   async function* ({ query }) {
@@ -133,7 +184,9 @@ const listLatestDecisions = createSafeBoundedPublicHandler(
       ),
     );
 
-    return Result.ok(response);
+    return Result.ok(
+      projectResponseText(response, latestDecisionsResponseSchema),
+    );
   },
 );
 
@@ -141,6 +194,9 @@ const readCaseLawCorpusStatus = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      corpusStatusResponseSchema,
+    ),
     query: readCaseLawCorpusStatusQuerySchema,
   },
   async function* ({ query }) {
@@ -151,7 +207,7 @@ const readCaseLawCorpusStatus = createSafeBoundedPublicHandler(
       ),
     );
 
-    return Result.ok(response);
+    return Result.ok(projectResponseText(response, corpusStatusResponseSchema));
   },
 );
 
@@ -161,6 +217,7 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
     cache: { kind: "none" },
     params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
     query: readDecisionQuerySchema,
+    response: readDecisionResponseSchema,
   },
   caseLawDb: caseLawPublicReadDb,
   locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),
@@ -168,12 +225,16 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
     await readDecisionHandler({ subject, citationsCursor }),
   // Unauthenticated: hydrates when a slot is free, but never persists
   // demand — see `recordDemand`. Runs after the gated transaction closes.
-  followUp: async (read) =>
-    await hydrateDeferredDocument(
+  followUp: async (read) => {
+    const hydrated = await hydrateDeferredDocument(
       read,
       false,
       DECISION_DOCUMENT_HYDRATION.onDemand,
-    ),
+    );
+    return "documentPending" in hydrated
+      ? projectDecisionReader(hydrated)
+      : hydrated;
+  },
 });
 
 const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
@@ -181,6 +242,7 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
     mcp: { type: "covered", by: "read_case_law_decision" },
     cache: { kind: "none" },
     params: t.Object({ slug: t.String({ minLength: 1, maxLength: 256 }) }),
+    response: readDecisionResponseSchema,
     query: t.Composite([
       readDecisionQuerySchema,
       t.Object({
@@ -200,13 +262,39 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
   },
   read: async (subject, { query: { citationsCursor } }) =>
     await readDecisionHandler({ subject, citationsCursor }),
-  followUp: async (read) =>
-    await hydrateDeferredDocument(
+  followUp: async (read) => {
+    const hydrated = await hydrateDeferredDocument(
       read,
       false,
       DECISION_DOCUMENT_HYDRATION.onDemand,
-    ),
+    );
+    return "documentPending" in hydrated
+      ? projectDecisionReader(hydrated)
+      : hydrated;
+  },
 });
+
+const projectDecisionProvisionPage = async (
+  page: Extract<
+    Awaited<ReturnType<typeof listDecisionProvisionsHandler>>,
+    { items: unknown[] }
+  >,
+  decisionDate: string | null,
+) => {
+  const withPreviews = await attachDecisionProvisionPreviews({
+    page,
+    decisionDate,
+    legislationDb: legislationPublicReadDb,
+  });
+  return projectResponseText(
+    {
+      ...page,
+      ...withPreviews,
+      previews: withPreviews.previews.map(projectProvisionPreview),
+    },
+    decisionProvisionsSuccessResponseSchema,
+  );
+};
 
 /**
  * Provision references of a decision, each with the wording it points at.
@@ -218,6 +306,9 @@ const listDecisionProvisions = createSafePublicSubjectFollowUpHandler({
   config: {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      decisionProvisionsSuccessResponseSchema,
+    ),
     params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
     query: listDecisionProvisionsQuerySchema,
   },
@@ -229,14 +320,7 @@ const listDecisionProvisions = createSafePublicSubjectFollowUpHandler({
   }),
   followUp: async ({ page, decisionDate }) =>
     "items" in page
-      ? {
-          ...page,
-          ...(await attachDecisionProvisionPreviews({
-            page,
-            decisionDate,
-            legislationDb: legislationPublicReadDb,
-          })),
-        }
+      ? await projectDecisionProvisionPage(page, decisionDate)
       : page,
 });
 
@@ -245,6 +329,9 @@ const listCitingDecisions = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      citingDecisionsSuccessResponseSchema,
+    ),
     query: listCitingDecisionsQuerySchema,
   },
   async function* ({ query }) {
@@ -255,7 +342,9 @@ const listCitingDecisions = createSafeBoundedPublicHandler(
       ),
     );
 
-    return Result.ok(response);
+    return Result.ok(
+      projectResponseText(response, citingDecisionsSuccessResponseSchema),
+    );
   },
 );
 
@@ -282,6 +371,9 @@ const listSitemapShardDecisions = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      sitemapDecisionsResponseSchema,
+    ),
     query: sitemapShardDecisionsQuerySchema,
   },
   async function* ({ query }) {
@@ -292,7 +384,26 @@ const listSitemapShardDecisions = createSafeBoundedPublicHandler(
       ),
     );
 
-    return Result.ok(response);
+    return Result.ok(
+      projectResponseText(
+        "items" in response
+          ? {
+              ...response,
+              items: response.items.map((item) => ({
+                ...item,
+                updatedAt: item.updatedAt.toISOString(),
+                languageAlternates: item.languageAlternates.map(
+                  (alternate) => ({
+                    ...alternate,
+                    updatedAt: alternate.updatedAt.toISOString(),
+                  }),
+                ),
+              })),
+            }
+          : response,
+        sitemapDecisionsResponseSchema,
+      ),
+    );
   },
 );
 
@@ -300,6 +411,9 @@ const listSitemapShards = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
+    response: safePublicHandlerResponseSchemasWithStatusText(
+      sitemapShardsResponseSchema,
+    ),
   },
   async function* () {
     const response = yield* Result.await(
@@ -308,7 +422,9 @@ const listSitemapShards = createSafeBoundedPublicHandler(
       ),
     );
 
-    return Result.ok(response);
+    return Result.ok(
+      projectResponseText(response, sitemapShardsResponseSchema),
+    );
   },
 );
 
@@ -319,43 +435,48 @@ const listSitemapShards = createSafeBoundedPublicHandler(
 export const publicCaseLawRoute = new Elysia({
   prefix: "/case",
 })
-  .onBeforeHandle(({ set }) => {
-    if (isLocalDevOpen() || env.FEATURE_PUBLIC_LAW) {
-      return undefined;
-    }
-
-    set.status = 404;
-    return { error: "Not Found" } as const;
+  .use(deploymentFeatureGate(isPublicLawEnabled))
+  .get("/coverage", readCaseLawCoverage.handler, {
+    response: readCaseLawCoverage.config.response,
   })
-  .get("/coverage", readCaseLawCoverage.handler)
   .get("/decisions", listDecisions.handler, {
     query: listDecisions.config.query,
+    response: listDecisions.config.response,
   })
   .get("/decisions/facets", listDecisionFacets.handler, {
     query: listDecisionFacets.config.query,
+    response: listDecisionFacets.config.response,
   })
   .get("/decisions/status", readCaseLawCorpusStatus.handler, {
     query: readCaseLawCorpusStatus.config.query,
+    response: readCaseLawCorpusStatus.config.response,
   })
   .get("/decisions/latest", listLatestDecisions.handler, {
     query: listLatestDecisions.config.query,
+    response: listLatestDecisions.config.response,
   })
   .get("/decisions/by-slug/:slug", readDecisionBySlug.handler, {
     params: readDecisionBySlug.config.params,
     query: readDecisionBySlug.config.query,
+    response: readDecisionBySlug.config.response,
   })
   .get("/decisions/:decisionId", readDecision.handler, {
     params: readDecision.config.params,
     query: readDecision.config.query,
+    response: readDecision.config.response,
   })
   .get("/decisions/:decisionId/citations", listDecisionCitations.handler, {
     params: listDecisionCitations.config.params,
     query: listDecisionCitations.config.query,
+    response: listDecisionCitations.config.response,
   })
   .get(
     "/decisions/:decisionId/citations/summary",
     summarizeDecisionCitations.handler,
-    { params: summarizeDecisionCitations.config.params },
+    {
+      params: summarizeDecisionCitations.config.params,
+      response: summarizeDecisionCitations.config.response,
+    },
   )
   .get(
     "/decisions/:decisionId/citations/leading",
@@ -363,26 +484,33 @@ export const publicCaseLawRoute = new Elysia({
     {
       params: listLeadingCitations.config.params,
       query: listLeadingCitations.config.query,
+      response: listLeadingCitations.config.response,
     },
   )
   .get("/decisions/:decisionId/provisions", listDecisionProvisions.handler, {
     params: listDecisionProvisions.config.params,
     query: listDecisionProvisions.config.query,
+    response: listDecisionProvisions.config.response,
   })
   .get("/judges/:judgeId/portrait", readJudgePortrait.handler, {
     params: readJudgePortrait.config.params,
   })
   .get("/provisions/citing-decisions", listCitingDecisions.handler, {
     query: listCitingDecisions.config.query,
+    response: listCitingDecisions.config.response,
   })
   .get("/provisions/citation-counts", readStatuteCitationCounts.handler, {
     query: readStatuteCitationCounts.config.query,
+    response: readStatuteCitationCounts.config.response,
   })
   .post("/decisions/search", searchDecisions.handler, {
     body: searchDecisions.config.body,
     response: searchDecisions.config.response,
   })
-  .get("/sitemap/shards", listSitemapShards.handler)
+  .get("/sitemap/shards", listSitemapShards.handler, {
+    response: listSitemapShards.config.response,
+  })
   .get("/sitemap/decisions/shard", listSitemapShardDecisions.handler, {
     query: listSitemapShardDecisions.config.query,
+    response: listSitemapShardDecisions.config.response,
   });

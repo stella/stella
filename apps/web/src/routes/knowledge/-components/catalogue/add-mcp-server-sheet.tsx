@@ -21,6 +21,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import { openMcpOAuthWindow } from "@/lib/mcp-oauth-channel";
@@ -72,13 +73,11 @@ export const AddMcpServerSheet = ({
   };
 
   const handleApiError = (error: unknown) => {
-    stellaToast.add({
-      title: t("knowledge.mcp.errorTitle"),
+    notifyUserError(error, t("knowledge.mcp.errorTitle"), {
       description: userErrorFromThrown(
         error,
         t("knowledge.mcp.errorDescription"),
       ),
-      type: "error",
     });
   };
 
@@ -97,10 +96,8 @@ export const AddMcpServerSheet = ({
       if (data.type === "oauth2") {
         const openStatus = openMcpOAuthWindow(data.authorizeUrl);
         if (openStatus === "invalid") {
-          stellaToast.add({
-            title: t("knowledge.mcp.errorTitle"),
+          notifyUserError(undefined, t("knowledge.mcp.errorTitle"), {
             description: t("knowledge.mcp.errorDescription"),
-            type: "error",
           });
           return;
         }

@@ -10,7 +10,6 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon, Minimize2Icon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 
 import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";
 import { DownloadSplitButton } from "@/components/inspector/download-rendition-menu";
@@ -28,6 +27,7 @@ import { PdfSignButton } from "@/components/inspector/pdf-sign-button";
 import type { DesktopOpenTarget } from "@/components/inspector/use-desktop-file-open";
 import Tooltip from "@/components/tooltip";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 export type MatterOrigin = {
   color: string | null;
@@ -124,8 +124,8 @@ export const FileTabHeaderActions = ({
         fileName: tab.fileName,
         variant,
         workspaceId: tab.workspaceId,
-        onError: (message) => {
-          stellaToast.add({ title: message, type: "error" });
+        onError: (message, error) => {
+          notifyUserError(error, message);
         },
       }),
       "file-tab-panel.download-tab-file",

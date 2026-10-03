@@ -25,14 +25,17 @@ import {
 } from "@/api/lib/custom-schema";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { tLegalAlternatives } from "@/api/lib/legal-search/legal-alternatives";
-import {
-  tPublicCountryUnavailable,
-  tPublicLawCountry,
-} from "@/api/lib/legal-search/public-law-country";
+import { tPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { searchPaginationOutcomeSchema } from "@/api/lib/search/pagination-outcome-schema";
 import { safePublicHandlerErrorOrStatusTextResponseSchema } from "@/api/lib/search/public-error-response";
+import {
+  boundedString,
+  nullableBoundedString,
+} from "@/api/lib/search/response-text-bounds";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
+
+import { CASE_SEARCH_TEXT_BYTES as bytes } from "./search-response-limits";
 
 export const searchDecisionsBodySchema = t.Object({
   query: t.String({
@@ -82,13 +85,13 @@ export const searchDecisionsBodySchema = t.Object({
 const searchWarningSchema = t.Object(
   {
     code: t.UnionEnum([...CASE_LAW_SEARCH_WARNING_CODES]),
-    message: t.String(),
-    hint: t.String(),
+    message: boundedString(bytes.warning),
+    hint: boundedString(bytes.warning),
   },
   { additionalProperties: false },
 );
 
-const nullableStringSchema = t.Union([t.String(), t.Null()]);
+const nullableStringSchema = nullableBoundedString(bytes.date);
 
 const decisionIdentifierSchema = t.Object(
   {
@@ -98,7 +101,7 @@ const decisionIdentifierSchema = t.Object(
       t.Literal(DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION),
       t.Literal(DECISION_IDENTIFIER_TYPES.REPORTER_CITATION),
     ]),
-    value: t.String(),
+    value: boundedString(bytes.identifier),
   },
   { additionalProperties: false },
 );
@@ -114,22 +117,26 @@ const decisionIdentifiersSchema = Type.Unsafe<DecisionIdentifiers>(
 
 const languageAlternateSchema = t.Object(
   {
-    caseNumber: t.String(),
-    country: t.String(),
-    court: t.String(),
+    caseNumber: boundedString(bytes.caseNumber),
+    country: boundedString(bytes.country),
+    court: boundedString(bytes.court),
     decisionDate: nullableStringSchema,
-    id: t.String(),
-    language: t.String(),
-    slug: nullableStringSchema,
+    id: boundedString(bytes.id),
+    language: boundedString(bytes.language),
+    slug: nullableBoundedString(bytes.slug),
   },
   { additionalProperties: false },
 );
 
 // SAFETY: JSON arrays have no readonly marker; the static type preserves the
 // canonical readonly view without copying every result on this search path.
-const languageAlternatesSchema = Type.Unsafe<
+export const languageAlternatesSchema = Type.Unsafe<
   readonly PublicDecisionLanguageAlternate[]
->(t.Array(languageAlternateSchema));
+>(
+  t.Array(languageAlternateSchema, {
+    maxItems: LIMITS.caseLawLanguageAlternatesPerGroupMax,
+  }),
+);
 
 /**
  * One filter value a reader can narrow to, with how many DECISIONS the query
@@ -144,20 +151,21 @@ const languageAlternatesSchema = Type.Unsafe<
 const searchFacetBucketsSchema = t.Array(
   t.Object(
     {
-      value: t.String(),
-      label: nullableStringSchema,
-      count: t.Integer({ minimum: 0 }),
+      value: boundedString(bytes.facet),
+      label: nullableBoundedString(bytes.label),
+      count: Type.Integer({ minimum: 0 }),
     },
     { additionalProperties: false },
   ),
+  { maxItems: LIMITS.caseLawYearFacetLimit },
 );
 
 const sourceFacetBucketsSchema = t.Array(
   t.Object(
     {
-      value: t.String(),
-      label: nullableStringSchema,
-      count: t.Integer({ minimum: 0 }),
+      value: boundedString(bytes.facet),
+      label: nullableBoundedString(bytes.label),
+      count: Type.Integer({ minimum: 0 }),
       // Elysia's TypeBox module inference needs a tuple; a mapped array becomes never.
       countType: t.Union([
         t.Literal(FACET_COUNT_TYPE.EXACT),
@@ -167,6 +175,7 @@ const sourceFacetBucketsSchema = t.Array(
     },
     { additionalProperties: false },
   ),
+  { maxItems: LIMITS.caseLawYearFacetLimit },
 );
 
 /**
@@ -178,10 +187,14 @@ const searchCourtTiersSchema = t.Array(
   t.Object(
     {
       tierLabel: t.UnionEnum([...COURT_TIER_LABELS]),
-      courts: searchFacetBucketsSchema,
+      courts: {
+        ...searchFacetBucketsSchema,
+        maxItems: LIMITS.caseLawFacetLimit,
+      },
     },
     { additionalProperties: false },
   ),
+  { maxItems: COURT_TIER_LABELS.length },
 );
 
 export const searchDecisionsSuccessResponseSchema = t.Object(
@@ -189,31 +202,31 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
     hits: t.Array(
       t.Object(
         {
-          decisionId: t.String(),
-          caseNumber: t.String(),
+          decisionId: boundedString(bytes.id),
+          caseNumber: boundedString(bytes.caseNumber),
           /** What kind of reference `caseNumber` is. */
           caseNumberType: t.UnionEnum([...DECISION_PRIMARY_REFERENCE_TYPES]),
-          slug: nullableStringSchema,
-          ecli: nullableStringSchema,
+          slug: nullableBoundedString(bytes.slug),
+          ecli: nullableBoundedString(bytes.identifier),
           identifiers: decisionIdentifiersSchema,
-          court: t.String(),
+          court: boundedString(bytes.court),
           /**
            * The court's short form, null where nothing states one. A reader
            * scans it; the court name beside it carries the meaning on its own,
            * so an unknown abbreviation is never a placeholder.
            */
-          courtAbbreviation: nullableStringSchema,
+          courtAbbreviation: nullableBoundedString(bytes.courtAbbreviation),
           /** Where the court stands, which is what the abbreviation is drawn as. */
           courtTier: t.UnionEnum([...COURT_TIER_LABELS]),
-          country: t.String(),
-          language: t.String(),
+          country: boundedString(bytes.country),
+          language: boundedString(bytes.language),
           languageAlternates: languageAlternatesSchema,
           decisionDate: nullableStringSchema,
-          decisionType: nullableStringSchema,
-          sourceUrl: nullableStringSchema,
+          decisionType: nullableBoundedString(bytes.decisionType),
+          sourceUrl: nullableBoundedString(bytes.sourceUrl),
           headnote: decisionHeadnotePreviewSchema,
-          headline: nullableStringSchema,
-          anchorId: nullableStringSchema,
+          headline: nullableBoundedString(bytes.headline),
+          anchorId: nullableBoundedString(bytes.anchorId),
           citationCount: t.Number(),
           // The stored `ln(1 + weighted citations)` score search ranks by, so
           // a caller can order or threshold on the same number the blend uses.
@@ -221,11 +234,12 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
           // Passages of this decision the query matched, within the scanned
           // window: breadth, not weight. One on the Postgres branch and on an
           // identifier lookup, which score whole decisions.
-          matchingPassages: t.Integer({ minimum: 1 }),
-          createdAt: t.String(),
+          matchingPassages: Type.Integer({ minimum: 1 }),
+          createdAt: boundedString(bytes.date),
         },
         { additionalProperties: false },
       ),
+      { maxItems: LIMITS.caseLawSearchPageSizeMax },
     ),
     // Page one only. The counts describe the whole result set, not the page,
     // so they do not change as a reader pages and are not recomputed.
@@ -243,7 +257,9 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
       t.Null(),
     ]),
     total: searchTotalSchema,
-    nextCursor: nullableStringSchema,
+    nextCursor: nullableBoundedString(
+      CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+    ),
     paginationOutcome: searchPaginationOutcomeSchema,
     /**
      * The query the engine actually answered: the words it required, with a
@@ -252,12 +268,14 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
      * so a caller paging or repeating sends this back rather than rebuilding
      * it.
      */
-    queryUsed: t.String(),
+    queryUsed: boundedString(bytes.queryUsed),
     /**
      * What this search answered that the request did not ask for. Empty for
      * a search that required every word and found something.
      */
-    warnings: t.Array(searchWarningSchema),
+    warnings: t.Array(searchWarningSchema, {
+      maxItems: CASE_LAW_SEARCH_WARNING_CODES.length,
+    }),
   },
   { additionalProperties: false },
 );
@@ -266,10 +284,7 @@ export const searchDecisionsResponseSchema = {
   ...safePublicHandlerResponseSchemasWithStatusText(
     searchDecisionsSuccessResponseSchema,
   ),
-  503: t.Union([
-    safePublicHandlerErrorOrStatusTextResponseSchema,
-    tPublicCountryUnavailable,
-  ]),
+  503: safePublicHandlerErrorOrStatusTextResponseSchema,
   404: t.Union([
     safePublicHandlerErrorOrStatusTextResponseSchema,
     t.Object(

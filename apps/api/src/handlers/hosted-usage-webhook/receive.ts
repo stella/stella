@@ -183,8 +183,8 @@ export const receiveHostedUsageWebhook = async (
   // contract before validating it. For the neutral provider this is a
   // pass-through; the Polar adapter renames `subscription.*` / `order.*`
   // events into `entitlement.*` / `allocation.*`. We record the native
-  // event type and original payload for audit, and dispatch on the
-  // normalised event.
+  // event type for audit, and dispatch on the normalised event. Storage
+  // retains only the dispatch projection and digest.
   //
   // Validation happens BEFORE opening a transaction. Unknown event types
   // are recorded in their own tiny transaction (insert with
@@ -209,6 +209,7 @@ export const receiveHostedUsageWebhook = async (
       eventId,
       eventType: envelope.type,
       payload,
+      rawBody,
     });
     if (recorded === UNKNOWN_EVENT_RECORD.retry) {
       // Nothing committed: the record's insert and result update share one
@@ -233,6 +234,8 @@ export const receiveHostedUsageWebhook = async (
         eventId,
         eventType: envelope.type,
         payload,
+        rawBody,
+        event,
         initialResult: "ok",
       });
       if (inserted.kind === "duplicate") {
@@ -302,11 +305,13 @@ const persistUnknownEventType = async ({
   eventId,
   eventType,
   payload,
+  rawBody,
 }: {
   runTransaction: WebhookTransactionRunner;
   eventId: string;
   eventType: string;
   payload: Record<string, unknown>;
+  rawBody: string;
 }): Promise<UnknownEventRecord> => {
   try {
     await runTransaction(async (tx) => {
@@ -315,6 +320,8 @@ const persistUnknownEventType = async ({
         eventId,
         eventType,
         payload,
+        rawBody,
+        event: null,
         initialResult: "ignored",
       });
       if (inserted.kind === "fresh") {

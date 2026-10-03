@@ -9,6 +9,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { APIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import {
   reportExportDetailOptions,
@@ -82,30 +83,18 @@ export const ReportExportTracker = ({
       .catch((error: unknown) => analytics.captureError(error));
 
     if (settledDetail === undefined) {
-      const toast = {
-        type: "error" as const,
-        title: t("workspaces.views.reportExport.failed"),
+      notifyUserError(undefined, t("workspaces.views.reportExport.failed"), {
+        toastId,
         description: t("common.unexpectedError"),
-      };
-      if (toastId === undefined) {
-        stellaToast.add(toast);
-      } else {
-        stellaToast.update(toastId, toast);
-      }
+      });
       return;
     }
 
     if (settledDetail.status === "failed") {
-      const toast = {
-        type: "error" as const,
-        title: t("workspaces.views.reportExport.failed"),
+      notifyUserError(undefined, t("workspaces.views.reportExport.failed"), {
+        toastId,
         description: settledDetail.error ?? t("common.unexpectedError"),
-      };
-      if (toastId === undefined) {
-        stellaToast.add(toast);
-      } else {
-        stellaToast.update(toastId, toast);
-      }
+      });
       return;
     }
 
@@ -124,11 +113,11 @@ export const ReportExportTracker = ({
         });
         if (Result.isError(result)) {
           analytics.captureError(result.error);
-          stellaToast.add({
-            type: "error",
-            title: t("workspaces.views.reportExport.failed"),
-            description: t("common.unexpectedError"),
-          });
+          notifyUserError(
+            result.error,
+            t("workspaces.views.reportExport.failed"),
+            { description: t("common.unexpectedError") },
+          );
         }
       };
       const toast = {
@@ -185,10 +174,10 @@ export const ReportExportTracker = ({
           if (Result.isError(result)) {
             analytics.captureError(result.error);
           }
-          stellaToast.add({
-            type: "error",
-            title: t("common.unexpectedError"),
-          });
+          notifyUserError(
+            Result.isError(result) ? result.error : undefined,
+            t("common.unexpectedError"),
+          );
         }
       };
       const toast = {
@@ -211,16 +200,10 @@ export const ReportExportTracker = ({
       return;
     }
 
-    const toast = {
-      type: "error" as const,
-      title: t("workspaces.views.reportExport.failed"),
+    notifyUserError(undefined, t("workspaces.views.reportExport.failed"), {
+      toastId,
       description: t("common.unexpectedError"),
-    };
-    if (toastId === undefined) {
-      stellaToast.add(toast);
-    } else {
-      stellaToast.update(toastId, toast);
-    }
+    });
   }, [
     analytics,
     navigate,

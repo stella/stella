@@ -42,7 +42,7 @@ const legalListRealtimeUpdates = workspaceResourceSetUpdates(
 );
 
 export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
-  .use(deploymentFeatureGate(legalListsDeployed()))
+  .use(deploymentFeatureGate(legalListsDeployed))
   .use(workspaceAccessMacro)
   .use(resourceRealtime)
   .use(permissionMacro)

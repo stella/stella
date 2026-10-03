@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
-import { env } from "@/api/env";
 import {
   readStatuteByEliHandler,
   readStatuteByEliQuerySchema,
@@ -64,9 +63,10 @@ import {
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
+import { isPublicLawEnabled } from "@/api/lib/legal-search/public-law-feature";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { safePublicHandlerErrorOrStatusTextResponseSchema } from "@/api/lib/search/public-error-response";
-import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const listStatutes = createSafeBoundedPublicHandler(
   {
@@ -339,13 +339,7 @@ const listStatuteSitemapStatutes = createSafeBoundedPublicHandler(
 export const publicLegislationRoute = new Elysia({
   prefix: "/law",
 })
-  .onBeforeHandle(({ status }) => {
-    if (isLocalDevOpen() || env.FEATURE_PUBLIC_LAW) {
-      return undefined;
-    }
-
-    return status(404, { message: "Not Found" });
-  })
+  .use(deploymentFeatureGate(isPublicLawEnabled))
   .get("/statutes", listStatutes.handler, {
     query: listStatutes.config.query,
     response: listStatutes.config.response,
