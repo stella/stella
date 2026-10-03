@@ -39,10 +39,6 @@ export const createPublicCorpusGlobalRateLimitOptions = (
       counterKeyGenerator: () => scope,
       localMax,
       onLocalFallback: () => {
-        emitPublicCorpusAdmissionMetric({
-          class: routeClass,
-          outcome: "local_fallback",
-        });
         logger.warn("api.public_corpus.global_local_fallback", {
           class: routeClass,
           localMax,

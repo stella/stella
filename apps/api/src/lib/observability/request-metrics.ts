@@ -441,7 +441,7 @@ const ACTION_RESPONSE_OVERSIZE_METRIC = "ActionResponseOversize";
 
 type PublicCorpusAdmissionMetric = {
   class: Exclude<PublicCorpusClass, "browse">;
-  outcome: "acquired" | "refused" | "local_fallback";
+  outcome: "refused";
 };
 
 export const emitPublicCorpusAdmissionMetric = (

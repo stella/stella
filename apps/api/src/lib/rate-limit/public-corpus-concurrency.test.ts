@@ -3,7 +3,10 @@ import { Elysia } from "elysia";
 
 import { env } from "@/api/env";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
-import type { emitPublicCorpusAdmissionMetric } from "@/api/lib/observability/request-metrics";
+import {
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
 import { getPublicCorpusClassPolicy } from "@/api/public-corpus-policy";
 
 import { publicCorpusConcurrencyLimit } from "./public-corpus-concurrency";
@@ -21,8 +24,11 @@ const aggregatePaths = [
 ] as const;
 
 const createCapacityApp = () => {
-  const observations: Parameters<typeof emitPublicCorpusAdmissionMetric>[0][] =
-    [];
+  const observations: Parameters<
+    NonNullable<
+      NonNullable<Parameters<typeof publicCorpusConcurrencyLimit>[0]>["observe"]
+    >
+  >[0][] = [];
   const pending: { finish: () => void; fail: (error: unknown) => void }[] = [];
   const work = ({ request }: { request: Request }) => {
     if (request.headers.has("x-capacity-probe")) {
@@ -68,6 +74,38 @@ const probeRequest = (route: { path: string; method: string }) =>
   new Request(request(route), { headers: { "x-capacity-probe": "1" } });
 
 describe("public corpus active request capacity", () => {
+  test("capacity telemetry emits refusals while accepted requests emit no metric lines", async () => {
+    const lines: string[] = [];
+    setMetricLineSinkForTesting((line) => lines.push(line));
+    const completion = Promise.withResolvers<string>();
+    const middleware = publicCorpusConcurrencyLimit();
+    const app = new Elysia()
+      .use(middleware.shared)
+      .post("/v1/case/decisions/search", ({ request: incoming }) =>
+        incoming.headers.has("x-capacity-probe") ? "probe" : completion.promise,
+      )
+      .get("/v1/law/statutes", () => "browse");
+    const route = { method: "POST", path: "/v1/case/decisions/search" };
+    const running = Array.from(
+      { length: getPublicCorpusClassPolicy().classes.search.concurrency },
+      () => app.handle(request(route)),
+    );
+    try {
+      await app.handle(request({ method: "GET", path: "/v1/law/statutes" }));
+      expect(lines).toEqual([]);
+      expect((await app.handle(probeRequest(route))).status).toBe(429);
+      expect(lines).toHaveLength(1);
+      expect(JSON.parse(lines[0])).toMatchObject({
+        class: "search",
+        outcome: "refused",
+        PublicCorpusAdmissions: 1,
+      });
+    } finally {
+      completion.resolve("done");
+      await Promise.all(running);
+      resetMetricLineSinkForTesting();
+    }
+  });
   test("search, aggregate and sitemap work share one total capacity while browse remains available", async () => {
     const { app, pending, observations } = createCapacityApp();
     const sitemap = { method: "GET", path: "/v1/case/sitemap/shards" };

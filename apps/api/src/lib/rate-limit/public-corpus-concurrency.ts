@@ -12,13 +12,23 @@ import {
 } from "@/api/public-corpus-policy";
 
 type PublicCorpusConcurrencyOptions = {
-  observe?: typeof emitPublicCorpusAdmissionMetric;
+  observe?: (event: {
+    class: Exclude<PublicCorpusClass, "browse">;
+    outcome: "acquired" | "refused";
+  }) => void;
 };
 
 // One instance belongs to the process-wide HTTP composition, not to a route
 // or address. Admission is synchronous and never queues behind busy work.
 export const publicCorpusConcurrencyLimit = ({
-  observe = emitPublicCorpusAdmissionMetric,
+  observe = (event) => {
+    if (event.outcome === "refused") {
+      emitPublicCorpusAdmissionMetric({
+        class: event.class,
+        outcome: event.outcome,
+      });
+    }
+  },
 }: PublicCorpusConcurrencyOptions = {}) => {
   const policyLimits = getPublicCorpusClassPolicy();
   const active = new Map(
@@ -60,8 +70,9 @@ export const publicCorpusConcurrencyLimit = ({
         }
         const routeClass = policy.class;
         const classActive = active.get(routeClass);
-        if (classActive === undefined)
-          {panic("Missing public corpus concurrency class");}
+        if (classActive === undefined) {
+          panic("Missing public corpus concurrency class");
+        }
         const capacity =
           routeClass === "sitemap"
             ? policyLimits.totalConcurrency

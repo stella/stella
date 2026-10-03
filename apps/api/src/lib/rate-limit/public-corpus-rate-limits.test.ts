@@ -17,6 +17,7 @@ import {
 } from "./public-corpus-rate-limits";
 import {
   InMemoryRateLimitContext,
+  rateLimit,
   type RequestIpServer,
   scopedGenerator,
 } from "./rate-limit";
@@ -32,6 +33,7 @@ const request = (path: string, method = "GET") =>
 
 const createBindings = () => {
   const contexts = new Map<string, InMemoryRateLimitContext>();
+  const increments = new Map<string, number>();
   const peers = new WeakMap<Request, RequestIpServer>();
   const optionsByScope = new Map<
     string,
@@ -47,7 +49,18 @@ const createBindings = () => {
     const generator =
       options.counterKeyGenerator ?? scopedGenerator(options.scope);
     return {
-      context,
+      context: {
+        init: (configuration) => context.init(configuration),
+        increment: (key, duration, requestTime) => {
+          increments.set(
+            options.scope,
+            (increments.get(options.scope) ?? 0) + 1,
+          );
+          return context.increment(key, duration, requestTime);
+        },
+        decrement: (key) => context.decrement(key),
+        kill: () => context.kill(),
+      },
       generator: (incoming, server) =>
         generator(incoming, peers.get(incoming) ?? server),
     };
@@ -55,6 +68,7 @@ const createBindings = () => {
   return {
     binding,
     optionsByScope,
+    increments,
     send: async ({ app, incoming, address }: PeerRequestOptions) => {
       peers.set(incoming, { requestIP: () => ({ address }) });
       return await app.handle(incoming);
@@ -169,10 +183,10 @@ describe("public corpus fleet request budgets", () => {
           })
         ).status,
       ).toBe(200);
-      expect(lines.length).toBeGreaterThan(0);
+      expect(lines).toHaveLength(3);
       for (const routeClass of ["search", "aggregate", "sitemap"]) {
         expect(admissionCount({ lines, routeClass, outcome: "acquired" })).toBe(
-          3,
+          0,
         );
         expect(admissionCount({ lines, routeClass, outcome: "refused" })).toBe(
           1,
@@ -272,9 +286,9 @@ describe("public corpus fleet request budgets", () => {
             ).status,
           ).toBe(200);
         }
-        expect(admissionCount({ lines, routeClass, outcome: "acquired" })).toBe(
-          max,
-        );
+        expect(
+          bindings.increments.get(`public-corpus-global-${routeClass}`),
+        ).toBe(max);
         expect(
           (
             await bindings.send({
@@ -284,9 +298,9 @@ describe("public corpus fleet request budgets", () => {
             })
           ).status,
         ).toBe(429);
-        expect(admissionCount({ lines, routeClass, outcome: "acquired" })).toBe(
-          max,
-        );
+        expect(
+          bindings.increments.get(`public-corpus-global-${routeClass}`),
+        ).toBe(max);
         expect(
           (
             await bindings.send({
@@ -296,9 +310,9 @@ describe("public corpus fleet request budgets", () => {
             })
           ).status,
         ).toBe(200);
-        expect(admissionCount({ lines, routeClass, outcome: "acquired" })).toBe(
-          max + 1,
-        );
+        expect(
+          bindings.increments.get(`public-corpus-global-${routeClass}`),
+        ).toBe(max + 1);
         expect(
           (
             await bindings.send({
@@ -309,13 +323,14 @@ describe("public corpus fleet request budgets", () => {
           ).status,
         ).toBe(200);
       }
+      expect(lines).toEqual([]);
     } finally {
       bindings.kill();
       resetMetricLineSinkForTesting();
     }
   });
 
-  test("Redis outage fallback keeps warm traffic in its local bound and emits a bounded metric", async () => {
+  test("Redis outage fallback retains warm traffic and emits a metric only on refusal", async () => {
     let available = true;
     let count = 0;
     const lines: string[] = [];
@@ -333,7 +348,7 @@ describe("public corpus fleet request budgets", () => {
         "public-corpus-global-search",
       );
       if (!captured?.onLocalFallback) {
-        panic("Global policy must emit a fallback metric");
+        panic("Global policy must report local fallback");
       }
       expect(captured.localMax).toBe(2);
       const context = new RedisRateLimitContext({
@@ -354,20 +369,31 @@ describe("public corpus fleet request budgets", () => {
       context.init({ duration: options.duration });
       try {
         expect(
-          (await context.increment("fleet", options.duration, 1000)).count,
+          (await context.increment(captured.scope, options.duration)).count,
         ).toBe(1);
         available = false;
         expect(
-          (await context.increment("fleet", options.duration, 1001)).count,
+          (await context.increment(captured.scope, options.duration)).count,
         ).toBe(2);
         expect(
-          (await context.increment("fleet", options.duration, 1002)).count,
+          (await context.increment(captured.scope, options.duration)).count,
         ).toBeGreaterThan(options.max);
-        expect(lines).toHaveLength(2);
+        expect(lines).toEqual([]);
+        const app = new Elysia()
+          .use(rateLimit({ ...options, context }))
+          .post(
+            `${STELLA_API_VERSION_PREFIX}/case/decisions/search`,
+            () => "search",
+          );
+        const response = await app.handle(
+          request("/case/decisions/search", "POST"),
+        );
+        expect(response.status).toBe(429);
+        expect(lines).toHaveLength(1);
         for (const line of lines) {
           expect(JSON.parse(line)).toMatchObject({
             class: "search",
-            outcome: "local_fallback",
+            outcome: "refused",
             PublicCorpusAdmissions: 1,
             _aws: {
               CloudWatchMetrics: [{ Dimensions: [["class", "outcome"]] }],
