@@ -489,18 +489,16 @@ describe("duplicate name collisions", () => {
         tx: asTestRaw<Transaction>(tx),
         workspaceId: scope.targetWorkspaceId,
       });
-      const [first, second] = await Promise.all([
-        resolvePlannedName({
-          parentId: scope.targetParentId,
-          name: "a?.docx",
-          kind: "document",
-        }),
-        resolvePlannedName({
-          parentId: scope.targetParentId,
-          name: "a*.docx",
-          kind: "document",
-        }),
-      ]);
+      const first = resolvePlannedName({
+        parentId: scope.targetParentId,
+        name: "a?.docx",
+        kind: "document",
+      });
+      const second = resolvePlannedName({
+        parentId: scope.targetParentId,
+        name: "a*.docx",
+        kind: "document",
+      });
       const otherParent = resolvePlannedName({
         parentId: scope.otherParentId,
         name: "a*.docx",
