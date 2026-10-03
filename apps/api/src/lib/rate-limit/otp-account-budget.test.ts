@@ -87,6 +87,14 @@ const reserveAllowed = async (
 };
 
 describe("account verification budget", () => {
+  test("gives the demo account a smaller budget over the same window", () => {
+    expect(DEMO_OTP_ACCOUNT_BUDGET).toEqual({
+      max: 5,
+      durationMs: OTP_ACCOUNT_BUDGET.durationMs,
+    });
+    expect(DEMO_OTP_ACCOUNT_BUDGET.max).toBeLessThan(OTP_ACCOUNT_BUDGET.max);
+  });
+
   const nativeVerificationCases = [
     { path: "/sign-in/email-otp", type: "sign-in", extra: {} },
     {
@@ -168,7 +176,7 @@ describe("account verification budget", () => {
     context.init({
       duration: OTP_ACCOUNT_BUDGET.durationMs,
     });
-    const budget = createOtpAccountBudget(context);
+    const budget = createOtpAccountBudget(context, undefined);
     try {
       for (
         let attempt = 0;
@@ -332,7 +340,7 @@ describe("account verification budget", () => {
   });
   test("counts unsuccessful verifications until the account window ends", async () => {
     const counter = createCounter();
-    const budget = createOtpAccountBudget(counter.context);
+    const budget = createOtpAccountBudget(counter.context, undefined);
     for (let attempt = 0; attempt < OTP_ACCOUNT_BUDGET.max; attempt += 1) {
       const key = await reserveAllowed(
         budget,
@@ -378,7 +386,7 @@ describe("account verification budget", () => {
   });
 
   test("successful verifications return their reservation", async () => {
-    const budget = createOtpAccountBudget(createCounter().context);
+    const budget = createOtpAccountBudget(createCounter().context, undefined);
     for (let attempt = 0; attempt < OTP_ACCOUNT_BUDGET.max * 2; attempt += 1) {
       await budget.complete(
         await reserveAllowed(budget, "account@example.test"),
@@ -388,7 +396,7 @@ describe("account verification budget", () => {
   });
 
   test("bounds simultaneous account reservations", async () => {
-    const budget = createOtpAccountBudget(createCounter().context);
+    const budget = createOtpAccountBudget(createCounter().context, undefined);
     const outcomes = await Promise.all(
       Array.from(
         { length: OTP_ACCOUNT_BUDGET.max * 2 },

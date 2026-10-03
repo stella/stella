@@ -38,7 +38,7 @@ const isOtpVerificationPath = (
 
 export const createOtpAccountBudget = (
   context: Pick<RateLimitContext, "increment" | "decrement">,
-  demoAccountEmail?: string,
+  demoAccountEmail: string | undefined,
 ) => ({
   reserve: async (email: string) => {
     const normalizedEmail = email.trim().toLowerCase();

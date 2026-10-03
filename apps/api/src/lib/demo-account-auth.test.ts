@@ -221,6 +221,7 @@ describe("account authentication operations", () => {
           },
         ],
         ["/api-key/create", { name: "Sample key" }],
+        ["/update-user", { name: "Renamed" }],
       ] as const) {
         const response = await postAuth({
           auth: demo.auth,

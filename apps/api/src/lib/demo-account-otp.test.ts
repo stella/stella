@@ -1,4 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import { resolveDemoAccountOtp } from "@/api/lib/auth/demo-account-otp-policy";
 
@@ -9,6 +12,28 @@ const CONFIGURED = {
 };
 
 describe("configured sign-in codes", () => {
+  it("returns the fixed code only for an address equal to the configured one", () => {
+    assertProperty(
+      "configured sign-in code matches the exact address only",
+      fc.property(
+        fc.string({ minLength: 1, maxLength: 12 }),
+        fc.constantFrom("prefix", "suffix", "subdomain", "plus"),
+        (extra, shape) => {
+          const email = {
+            prefix: `${extra}demo@example.com`,
+            suffix: `demo@example.com${extra}`,
+            subdomain: `demo@${extra}.example.com`,
+            plus: `demo+${extra}@example.com`,
+          }[shape];
+          const matches = email.trim().toLowerCase() === CONFIGURED.demoEmail;
+          expect(
+            resolveDemoAccountOtp({ email, type: "sign-in", ...CONFIGURED }),
+          ).toBe(matches ? CONFIGURED.demoOtp : undefined);
+        },
+      ),
+    );
+  });
+
   it("returns the fixed code only for the configured address on sign-in", () => {
     expect(
       resolveDemoAccountOtp({

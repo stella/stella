@@ -53,6 +53,7 @@ export const createDemoAuthSessionGuard = (config: DemoAccountConfig) =>
       ctx.path.startsWith("/two-factor/") ||
       ctx.path === "/link-social" ||
       ctx.path === "/delete-user" ||
+      ctx.path === "/update-user" ||
       ctx.path === "/change-email" ||
       ctx.path.startsWith("/email-otp/request-email-change") ||
       ctx.path === "/email-otp/change-email"

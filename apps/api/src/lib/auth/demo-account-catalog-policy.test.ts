@@ -348,6 +348,7 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/files/routes.ts#printPdfEndpoint",
   "apps/api/src/handlers/files/routes.ts#scrubbedDownloadEndpoint",
   "apps/api/src/handlers/files/routes.ts#stampedDownloadEndpoint",
+  "apps/api/src/handlers/mcp-connectors/approve-authorization.ts",
   "apps/api/src/handlers/mcp-connectors/connect.ts",
   "apps/api/src/handlers/mcp-connectors/create-connection.ts",
   "apps/api/src/handlers/mcp-connectors/create-connector.ts",
