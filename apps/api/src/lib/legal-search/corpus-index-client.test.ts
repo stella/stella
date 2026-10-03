@@ -26,6 +26,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import { judgeCorpusProjectionCleanupSettlement } from "@/api/lib/legal-search/corpus-index-projection-settlement-judgement";
+import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import {
   type CorpusSearchOrder,
   RELEVANCE_ORDER,
@@ -602,6 +603,9 @@ const readSortedPage = async (order: CorpusSearchOrder) => {
     unseenScoreUpperBound: () => 0,
     rankCandidates: async (candidates) => ({
       context: null,
+      groups: candidates.map((candidate) =>
+        corpusSearchGroupToken(candidate.id),
+      ),
       ranked: candidates.map((candidate) => ({
         id: candidate.id,
         score: candidate.score,
