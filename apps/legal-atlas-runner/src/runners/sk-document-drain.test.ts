@@ -22,11 +22,11 @@ import type {
   DecisionDocumentOutcome,
   PendingDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
-import type {
-  PendingDocumentQueue,
-  QueuedDocument,
+import type { PendingDocumentQueue } from "@/api/lib/legal-search/sk-document-queue";
+import {
+  createPendingDocumentQueue,
+  DOCUMENT_TIER,
 } from "@/api/lib/legal-search/sk-document-queue";
-import { DOCUMENT_TIER } from "@/api/lib/legal-search/sk-document-queue";
 
 import {
   DRAIN_CHECK_SLICE_MS,
@@ -110,12 +110,18 @@ const pending = (caseNumber: string): PendingDocument => ({
 const queueOf = (caseNumbers: readonly string[]): PendingDocumentQueue => {
   const remaining = [...caseNumbers];
   return {
-    next: async (): Promise<QueuedDocument | undefined> => {
+    next: async () => {
       const caseNumber = remaining.shift();
       return await Promise.resolve(
         caseNumber === undefined
-          ? undefined
-          : { tier: DOCUMENT_TIER.REMAINING, decision: pending(caseNumber) },
+          ? { type: "exhausted" }
+          : {
+              type: "row",
+              row: {
+                tier: DOCUMENT_TIER.REMAINING,
+                decision: pending(caseNumber),
+              },
+            },
       );
     },
   };
@@ -363,12 +369,12 @@ const backlogQueue = ({
         (attemptedAt === undefined || now() - attemptedAt >= cooldownMs),
     );
     if (row === undefined) {
-      return undefined;
+      return { type: "exhausted" };
     }
     row.attemptedAt = now();
     return await Promise.resolve({
-      tier: DOCUMENT_TIER.REMAINING,
-      decision: pending(row.caseNumber),
+      type: "row",
+      row: { tier: DOCUMENT_TIER.REMAINING, decision: pending(row.caseNumber) },
     });
   },
 });
@@ -544,9 +550,62 @@ describe("sk document drain", () => {
     expect(gaps.at(-1)).toBe(TIMING.failureBackoffMaxMs);
   });
 
-  test("an empty queue backs off instead of polling at the fetch rate", async () => {
+  test("a spent scan budget continues at the fetch gap until exhaustion permits idle backoff", async () => {
+    let scans = 0;
     const run = await runDrain({
-      queue: queueOf([]),
+      queue: (now) =>
+        createPendingDocumentQueue({
+          now,
+          pageSize: 20,
+          requestedPollIntervalMs: 1000,
+          loaders: {
+            loadRequested: async () => [],
+            loadRemaining: async () => {
+              scans += 1;
+              if (scans <= 3) {
+                return { type: "budget-spent" };
+              }
+              if (scans === 4) {
+                return { type: "rows", rows: [pending("ready-after-budgets")] };
+              }
+              return { type: "exhausted" };
+            },
+          },
+        }),
+      respond: () => OUTCOMES.filled,
+      polls: 9,
+    });
+
+    expect(fetchedAt(run, "ready-after-budgets")).toBe(3 * TIMING.fetchDelayMs);
+    expect(gapsBetween(run, "poll")).toEqual([
+      TIMING.fetchDelayMs,
+      TIMING.fetchDelayMs,
+      TIMING.fetchDelayMs,
+      TIMING.fetchDelayMs,
+      1000,
+      2000,
+      4000,
+      8000,
+    ]);
+    expect(run.summaries.at(0)).toMatchObject({
+      attempted: 1,
+      filled: 1,
+      failed: 0,
+    });
+  });
+
+  test("an exhausted queue backs off instead of polling at the fetch rate", async () => {
+    const run = await runDrain({
+      queue: (now) =>
+        createPendingDocumentQueue({
+          now,
+          pageSize: 20,
+          requestedPollIntervalMs: 1000,
+          loaders: {
+            loadRequested: async () => [],
+            loadRemaining: async () => ({ type: "exhausted" }),
+          },
+        }),
       respond: () => OUTCOMES.filled,
       polls: 5,
     });
@@ -565,8 +624,11 @@ describe("sk document drain", () => {
           const decision = script.shift();
           return await Promise.resolve(
             decision === undefined
-              ? undefined
-              : { tier: DOCUMENT_TIER.REMAINING, decision },
+              ? { type: "exhausted" }
+              : {
+                  type: "row",
+                  row: { tier: DOCUMENT_TIER.REMAINING, decision },
+                },
           );
         },
       };
