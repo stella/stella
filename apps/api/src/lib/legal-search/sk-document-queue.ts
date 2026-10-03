@@ -73,11 +73,11 @@ export type PendingDocumentQueueOptions = {
  * never merged: a requested document that arrives while a bulk page is
  * half-consumed still overtakes the remainder of that page.
  *
- * Nothing here remembers which decisions it has served. It does not have
- * to: fetching a decision claims it, and a claimed decision leaves both
- * tiers for the length of its cooldown, so the next page starts past it.
- * A decision whose fetch failed before it could be claimed comes back,
- * which is the retry.
+ * The remaining loader carries the bounded outstanding scan's read cursor;
+ * the buffer and cursor share the queue's lifetime. Durable claims exclude
+ * cooling rows on a restart, while unprocessed buffered rows replay from
+ * the newest boundary. A periodic head probe admits newly due decisions
+ * while the archive sweep continues.
  */
 export const createPendingDocumentQueue = ({
   loaders,

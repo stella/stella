@@ -1,4 +1,4 @@
-// parser-output-unchanged: fetch processing uses the atomic claim snapshot; parsing is unchanged.
+// parser-output-unchanged: bound the deferred queue scan; fetch processing and parsing are unchanged.
 /**
  * Fetch and parse the PDFs behind Slovak court decisions.
  *
@@ -44,6 +44,7 @@ import {
   type DocumentStageObserver,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { skDocumentErrorDiagnostics } from "@stll/legal-atlas/sk-document-fetch-diagnostics";
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -117,6 +118,11 @@ import {
   storesNoCorpusDocumentSql,
 } from "@/api/lib/legal-search/sk-document-pending-sql";
 import type { PendingDocumentTierLoaders } from "@/api/lib/legal-search/sk-document-queue";
+import {
+  createRemainingDocumentScan,
+  DOCUMENT_SCAN_PAGE_LIMIT,
+  DOCUMENT_SCAN_REPROBE_MS,
+} from "@/api/lib/legal-search/sk-document-remaining-scan";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
@@ -421,13 +427,8 @@ const belowParkingThreshold = lt(
  * written to object storage) or one of the empty shapes (written before
  * the document existed) means there is still nothing to read.
  *
- * The hash test is a residual filter: the partial indexes behind the two
- * tiers are predicated on the text column and the document URL only,
- * because an index predicate would have to spell the hashes out as
- * literals and could then drift from these. Under the deployed storage
- * mode nothing carries a hash, so the filter costs nothing; a canonical
- * cutover should revisit it, since a fully drained corpus would leave
- * the scan walking trimmed rows to conclude the queue is empty.
+ * The outstanding indexes share the exact predicate, including the corpus
+ * hash test, so corpus-served rows leave the indexed queue after trimming.
  */
 /**
  * SQL for "object storage holds no document for this row".
@@ -626,7 +627,10 @@ const remainingCursorPredicate = ({
       );
 
 /**
- * Remaining tier: newest decision first. A fresh decision is the one a
+ * One-shot remaining-tier page: newest decision first. The continuous
+ * drain uses bounded outstanding candidate pages below so cooldown rows
+ * cannot make a cycle scan the entire ready-tier backlog.
+ * A fresh decision is the one a
  * reader is most likely to open next, and the crawl adds to this end of
  * the range, so draining from it keeps the readable window current
  * instead of chasing the oldest page in the archive.
@@ -647,6 +651,61 @@ export const loadRemainingDocuments = async ({
       after ? remainingCursorPredicate(after) : undefined,
     ),
   });
+
+/** Readiness is projected after the indexed candidate LIMIT, never a scan filter. */
+export const remainingDocumentCandidateQuery = ({
+  tx,
+  sourceId,
+  limit,
+  after,
+}: {
+  tx: Transaction;
+  sourceId: SafeId<"caseLawSource">;
+  limit: number;
+  after?: RemainingDocumentCursor;
+}) => {
+  const pageLimit = Math.min(limit, DOCUMENT_SCAN_PAGE_LIMIT);
+  const page = (cursorWhere?: SQL) =>
+    tx
+      .select({
+        ...PENDING_DOCUMENT_COLUMNS,
+        ready: sql<boolean>`coalesce(${remainingDocumentPredicate}, false)`.as(
+          "ready",
+        ),
+      })
+      .from(caseLawDecisions)
+      .where(
+        and(
+          eq(caseLawDecisions.sourceId, sourceId),
+          pendingDocumentPredicate,
+          cursorWhere,
+        ),
+      )
+      .orderBy(...remainingDocumentOrder)
+      .limit(pageLimit);
+  if (after === undefined || after.decisionDate === null) {
+    return page(after ? remainingCursorPredicate(after) : undefined);
+  }
+  // Mixed DESC/ASC order cannot use a tuple comparison. Separate tight
+  // ranges prevent the OR boundary becoming a filter over the entire prefix.
+  const candidates = page(
+    and(
+      eq(caseLawDecisions.decisionDate, after.decisionDate),
+      gt(caseLawDecisions.id, after.id),
+    ),
+  )
+    .unionAll(page(lt(caseLawDecisions.decisionDate, after.decisionDate)))
+    .unionAll(page(isNull(caseLawDecisions.decisionDate)))
+    .as("outstanding_candidates");
+  return tx
+    .select()
+    .from(candidates)
+    .orderBy(
+      sql`${candidates.decisionDate} desc nulls last`,
+      asc(candidates.id),
+    )
+    .limit(pageLimit);
+};
 
 /**
  * Whether any document remains outstanding, including work that is cooling
@@ -706,13 +765,38 @@ export const scopedPendingDocumentTierLoaders = (
   scopedDb: ScopedDb,
 ): PendingDocumentTierLoaders => {
   let sourceId: SafeId<"caseLawSource"> | undefined;
+  let sourceReprobeAt = Number.NEGATIVE_INFINITY;
 
   const resolveSourceId = async (): Promise<
     SafeId<"caseLawSource"> | undefined
   > => {
-    sourceId ??= await loadDeferredDocumentSourceId(scopedDb);
+    if (
+      sourceId !== undefined ||
+      Temporal.Now.instant().epochMilliseconds < sourceReprobeAt
+    ) {
+      return sourceId;
+    }
+    sourceId = await loadDeferredDocumentSourceId(scopedDb);
+    sourceReprobeAt =
+      Temporal.Now.instant().epochMilliseconds + DOCUMENT_SCAN_REPROBE_MS;
     return sourceId;
   };
+
+  const loadRemaining = createRemainingDocumentScan({
+    loadPage: async ({ limit, after }) => {
+      const id = await resolveSourceId();
+      return id === undefined
+        ? []
+        : await scopedDb((tx) =>
+            remainingDocumentCandidateQuery({
+              tx,
+              sourceId: id,
+              limit,
+              ...(after ? { after } : {}),
+            }),
+          );
+    },
+  });
 
   return {
     loadRequested: async (limit) => {
@@ -721,35 +805,33 @@ export const scopedPendingDocumentTierLoaders = (
         ? []
         : await loadRequestedDocuments({ scopedDb, sourceId: id, limit });
     },
-    loadRemaining: async (limit) => {
-      const id = await resolveSourceId();
-      return id === undefined
-        ? []
-        : await loadRemainingDocuments({ scopedDb, sourceId: id, limit });
-    },
+    loadRemaining,
   };
 };
 
 /**
- * One page of the queue: decisions a reader asked for first, then the
- * newest of the rest. Both tiers are keyset-ordered against a partial
- * index and bounded by `limit`, so neither scans the backlog. The
- * worker walks the same two tiers as a stream; see
- * `sk-document-queue.ts`.
+ * One ready page: decisions a reader asked for first, then the newest
+ * of the rest. The worker's continuous stream additionally limits rows
+ * examined before checking readiness; see `sk-document-queue.ts`.
  */
 export const loadPendingDocuments = async (
   scopedDb: ScopedDb,
   limit: number,
 ): Promise<PendingDocument[]> => {
-  const { loadRemaining, loadRequested } =
-    scopedPendingDocumentTierLoaders(scopedDb);
-
-  const requested = await loadRequested(limit);
+  const sourceId = await loadDeferredDocumentSourceId(scopedDb);
+  if (sourceId === undefined) {
+    return [];
+  }
+  const requested = await loadRequestedDocuments({ scopedDb, sourceId, limit });
   if (requested.length >= limit) {
     return requested;
   }
 
-  const remaining = await loadRemaining(limit - requested.length);
+  const remaining = await loadRemainingDocuments({
+    scopedDb,
+    sourceId,
+    limit: limit - requested.length,
+  });
   return [...requested, ...remaining];
 };
 
