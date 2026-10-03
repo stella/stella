@@ -160,6 +160,11 @@ export const ROOT_CONNECTION_DOORS = [
           reason:
             "The review-gate resolver files the notice when an approval finishes the run.",
         },
+        {
+          path: "apps/api/src/handlers/fields/kanban-placement/update.ts",
+          reason:
+            "Kanban collects the resolver's run-derived notice and files it after its outer transaction commits.",
+        },
       ],
     },
   },
