@@ -9,7 +9,6 @@ import {
   sendAdmissionRedisCommand,
   type AdmissionRedisClient,
 } from "@/api/lib/admission-redis";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
@@ -35,9 +34,7 @@ export const closeMcpReadFenceRedis = () => fenceRedis.close();
 export const startMcpReadFenceRedis = async () => {
   const connection = await fenceRedis.ready();
   if (Result.isError(connection)) {
-    captureError(connection.error, {
-      operation: "read-fence-store.start",
-    });
+    await Promise.reject(connection.error);
   }
 };
 

@@ -12,7 +12,6 @@ import {
   type AdmissionRedisClient,
   type AdmissionRedisReady,
 } from "@/api/lib/admission-redis";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   ActionAdmissionError,
@@ -68,9 +67,7 @@ export const closeActionAdmissionRedis = () => admissionRedis.close();
 export const startActionAdmissionRedis = async () => {
   const connection = await admissionRedis.ready();
   if (Result.isError(connection)) {
-    captureError(connection.error, {
-      operation: "admission-store.start",
-    });
+    await Promise.reject(connection.error);
   }
 };
 
