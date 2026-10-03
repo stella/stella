@@ -182,6 +182,8 @@ const INTERNAL_SERVER_KEYS = new Set([
   "S3_REGION",
   "S3_SCOPED_SIGNING_ROLE_ARN",
   "SELFHOST_LOCAL_PASSWORD_AUTH",
+  "SESSION_TOKEN_ROTATION_ENABLED",
+  "SESSION_LIFETIME_CAP_ENABLED",
   "SES_CONFIGURATION_SET",
   "SES_REGION",
   "SKIP_MIGRATION_CHECK",
@@ -460,6 +462,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'S3 secret access key. Required with S3_CREDENTIALS_PROVIDER="env"; otherwise omit it with the access-key ID.',
   SECURITY_CANARY_API_KEY_SHA256:
     "SHA-256 digest of a decoy machine API key. Keep its plaintext outside this environment.",
+  SESSION_TOKEN_ROTATION_ENABLED:
+    "Rotate browser session credentials on refresh. Defaults off; enable after every API instance supports prior credentials.",
+  SESSION_LIFETIME_CAP_ENABLED:
+    "Apply the ninety-day session cap at startup after one idle hour. Defaults off; enable after activity tracking is established.",
   SES_REGION: "AWS region used for SES transactional email delivery.",
   SMTP_HOST: "SMTP relay hostname.",
   SMTP_PORT: "SMTP relay port.",
@@ -627,7 +633,7 @@ const sectionFor = (name: string) => {
     return "AI providers";
   }
   if (
-    /^(BETTER_AUTH|GOOGLE_AUTH|MICROSOFT_AUTH|SELFHOST|SECURITY_CANARY)/u.test(
+    /^(BETTER_AUTH|GOOGLE_AUTH|MICROSOFT_AUTH|SELFHOST|SECURITY_CANARY|SESSION_)/u.test(
       name,
     )
   ) {
@@ -953,6 +959,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "RAILWAY_SMOKE_WEB_URL",
   "RAILWAY_TEMPLATE_ENVIRONMENT",
   "RAILWAY_TEMPLATE_PROJECT_ID",
+  // CI names the revision the convention ratchet measures as its base.
+  "RATCHET_BASE_REF",
   "RECORD_ANTHROPIC_API_KEY",
   "RECORD_BEDROCK_API_KEY",
   "RECORD_GOOGLE_API_KEY",

@@ -37,7 +37,6 @@ import Tooltip from "@/components/tooltip";
 import { sessionsKeys, sessionsOptions } from "@/lib/account/queries";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient, revokeAuthSession } from "@/lib/auth-client";
-import type { SessionRevocationToken } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAuthClientError } from "@/lib/errors/auth";
@@ -174,7 +173,7 @@ const SessionsCardContent = () => {
                         {t("account.sessions.currentSession")}
                       </span>
                     ) : (
-                      <RevokeSessionButton token={session.token} />
+                      <RevokeSessionButton sessionId={session.id} />
                     )}
                   </TableCell>
                 </TableRow>
@@ -198,17 +197,17 @@ const SessionsCardContent = () => {
 };
 
 type RevokeSessionButtonProps = {
-  token: SessionRevocationToken;
+  sessionId: string;
 };
 
-const RevokeSessionButton = ({ token }: RevokeSessionButtonProps) => {
+const RevokeSessionButton = ({ sessionId }: RevokeSessionButtonProps) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
   const revokeSession = useMutation({
-    mutationFn: async (sessionToken: SessionRevocationToken) => {
-      const result = await revokeAuthSession({ token: sessionToken });
+    mutationFn: async (sessionIdToRevoke: string) => {
+      const result = await revokeAuthSession({ sessionId: sessionIdToRevoke });
 
       if (result.error) {
         stellaToast.add({
@@ -240,7 +239,7 @@ const RevokeSessionButton = ({ token }: RevokeSessionButtonProps) => {
   return (
     <Button
       loading={revokeSession.isPending}
-      onClick={() => revokeSession.mutate(token)}
+      onClick={() => revokeSession.mutate(sessionId)}
       size="xs"
       variant="ghost"
     >

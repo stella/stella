@@ -40,6 +40,7 @@ const routeFixtures = async ({ context }: Harness) => {
       });
       await route
         .fulfill({ body: "<p>Slow page</p>", contentType: "text/html" })
+        // swallow-ok: delayed response races deliberate navigation cancellation in the containment stop test
         .catch(() => undefined);
       return;
     }

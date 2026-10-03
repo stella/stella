@@ -429,6 +429,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             ).toEqual([A]);
           } finally {
             release.resolve(undefined);
+            // swallow-ok: finally drains the first migration runner after its applied result has been asserted
             await firstRun.catch(() => undefined);
             first.release();
             second.release();

@@ -155,6 +155,7 @@ const driveCallback =
       "state",
       options.state ?? parsed.searchParams.get("state") ?? "",
     );
+    // swallow-ok: callback server may close after responding; login result and stored token are asserted by callers
     await fetch(callback).catch(() => {});
   };
 

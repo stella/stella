@@ -140,9 +140,8 @@ run_typecheck_coverage() {
 
 run_ratchet_guard() {
   # Whole-repo convention metrics (see RATCHET_METRICS in scripts/ratchet.ts)
-  # that may only ever decrease vs a
-  # committed baseline. A rise fails; a fall just prompts
-  # `bun scripts/ratchet.ts --write`. The --self-test run
+  # that may only decrease vs the measured merge base. Decreases require no
+  # generated file edit. The --self-test run
   # first proves each counter counts what it claims, so a broken guard cannot
   # pass silently.
   bun scripts/ratchet.ts --self-test || return 1
@@ -339,7 +338,7 @@ run_step "Lockfile workspace-version guard" bun scripts/check-lockfile-workspace
 run_step "Quarantine-exclude guards" run_quarantine_exclude_guard
 run_step "Standalone lockfile guard" run_standalone_lockfile_guard
 run_step "Policy evidence" bun run policies:check
-run_step "Marketing content evidence" bun run marketing:check
+run_step "Marketing content check" bun run marketing:check
 run_step "Marketing recording verification self-test" bun test \
   scripts/check-marketing-recordings.test.ts
 run_step "Environment tooling self-test" bun test scripts/env-tool.test.ts
