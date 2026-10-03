@@ -156,8 +156,12 @@ test("a crash mid-buffer replays unclaimed rows from the newest boundary", async
   const restarted = fixture(rows);
   const replay = await restarted.queue.next();
   expect(replay.type).toBe("row");
+  const second = rows.at(1);
+  if (!second) {
+    throw new TypeError("Expected a second candidate");
+  }
   if (replay.type === "row") {
-    expect(replay.row.decision.id).toBe(rows.at(1)?.id);
+    expect(replay.row.decision.id).toBe(second.id);
   }
 });
 
@@ -255,8 +259,12 @@ for (const order of ["dated", "ties", "null tail", "dated to null"] as const) {
       const calls = f.calls();
       const next = await f.queue.next();
       expect(next.type).toBe("row");
+      const due = archive.at(20 + cycle * 20);
+      if (!due) {
+        throw new TypeError("Expected a ready archive row after the cursor");
+      }
       if (next.type === "row") {
-        expect(next.row.decision.id).toBe(archive.at(20 + cycle * 20)?.id);
+        expect(next.row.decision.id).toBe(due.id);
       }
       // One page reaches the cursor; the second belongs to the sweep.
       expect(f.calls() - calls).toBe(2);

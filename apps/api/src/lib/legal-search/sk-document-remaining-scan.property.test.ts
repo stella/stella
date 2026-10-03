@@ -198,7 +198,11 @@ test("sk-document.remaining-scan.database-equivalence-and-crash-replay", async (
         if (!claimed) {
           throw new TypeError("Expected a ready decision before crash");
         }
-        expect(claimed).toEqual(expected.at(0));
+        const newest = expected.at(0);
+        if (!newest) {
+          throw new TypeError("Expected a ready decision in the old order");
+        }
+        expect(claimed).toEqual(newest);
         await client.query(
           completedClaim
             ? "UPDATE case_law_decisions SET fulltext = 'completed' WHERE id = $1"
