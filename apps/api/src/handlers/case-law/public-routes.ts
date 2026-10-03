@@ -83,12 +83,13 @@ import {
 } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import {
   readPublicLawCountry,
   tPublicLawCountry,
 } from "@/api/lib/legal-search/public-law-country";
+import { isPublicLawEnabled } from "@/api/lib/legal-search/public-law-feature";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
-import { publicLawFeatureGate } from "@/api/lib/public-law-feature";
 import { projectResponseText } from "@/api/lib/search/project-response-text";
 
 const listDecisions = createSafePublicHandler(
@@ -434,7 +435,7 @@ const listSitemapShards = createSafePublicHandler(
 export const publicCaseLawRoute = new Elysia({
   prefix: "/case",
 })
-  .use(publicLawFeatureGate)
+  .use(deploymentFeatureGate(isPublicLawEnabled))
   .get("/coverage", readCaseLawCoverage.handler, {
     response: readCaseLawCoverage.config.response,
   })

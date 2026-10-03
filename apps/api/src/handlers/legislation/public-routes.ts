@@ -46,8 +46,9 @@ import {
 } from "@/api/handlers/legislation/versions";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
+import { isPublicLawEnabled } from "@/api/lib/legal-search/public-law-feature";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
-import { publicLawFeatureGate } from "@/api/lib/public-law-feature";
 
 const listStatutes = createSafePublicHandler(
   {
@@ -275,7 +276,7 @@ const listStatuteSitemapStatutes = createSafePublicHandler(
 export const publicLegislationRoute = new Elysia({
   prefix: "/law",
 })
-  .use(publicLawFeatureGate)
+  .use(deploymentFeatureGate(isPublicLawEnabled))
   .get("/statutes", listStatutes.handler, {
     query: listStatutes.config.query,
   })
