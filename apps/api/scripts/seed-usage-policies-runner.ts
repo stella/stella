@@ -12,7 +12,6 @@ import {
   eq,
   inArray,
   notInArray,
-  or,
   sql,
   getTableColumns,
 } from "drizzle-orm";
@@ -175,7 +174,7 @@ const seedPolicies = async ({ db, seeds }: SeedPoliciesOptions) => {
           .onConflictDoUpdate({
             target: usagePolicies.policyKey,
             set,
-            setWhere: or(...changed),
+            setWhere: sql.join(changed, sql` OR `),
           })
           .returning({ inserted: sql<boolean>`xmax = 0` });
         const row = written.at(0);

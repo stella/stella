@@ -1,4 +1,5 @@
-import { expect, test } from "bun:test";
+import { panic } from "better-result";
+import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -12,8 +13,11 @@ import { runSeedReport } from "./seed-usage-policies-runner";
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
-if (databaseUrl && runPostgres) {
+describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
   test("PostgreSQL reports committed insert, replay, update, hiding and rollback outcomes", async () => {
+    if (!databaseUrl) {
+      panic("DATABASE_URL required");
+    }
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       const { db } = openClient({ max: 1 });
       const dir = mkdtempSync(nodePath.join(tmpdir(), "policy-postgres-"));
@@ -96,6 +100,4 @@ if (databaseUrl && runPostgres) {
       }
     });
   });
-} else {
-  test.skip("PostgreSQL policy results require DATABASE_URL and STELLA_RUN_POSTGRES_TESTS=true", () => {});
-}
+});
