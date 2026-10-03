@@ -66,6 +66,7 @@ const runEngineTests = process.env["STELLA_RUN_CORPUS_ENGINE_TESTS"] === "true";
 const MANIFEST = CORPUS_INDEX_MANIFESTS.case_law_v7;
 const INDEX_ID = `case_law_v7_contract_${Date.now().toString(36)}`;
 const TIED_INDEX_ID = `${INDEX_ID}_tied`;
+const PROVISION_INDEX_ID = `${INDEX_ID}_provision`;
 const REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000001",
 );
@@ -442,8 +443,17 @@ describe.skipIf(!runEngineTests)(
           throw new Error(`ingest ${String(response.status)}`);
         }
       }
+      const provisionCreated = await client.createIndex(
+        corpusIndexConfigFromManifest(MANIFEST, PROVISION_INDEX_ID),
+        "unobserved",
+      );
+      if (provisionCreated.isErr()) {
+        throw provisionCreated.error;
+      }
+      // Its own index: the ENTRIES scans rank every candidate they reach, and
+      // these documents carry no projection count and no batch composition.
       const provisionResponse = await fetch(
-        `${String(mutationBase)}/api/v1/${INDEX_ID}/ingest?commit=force`,
+        `${String(mutationBase)}/api/v1/${PROVISION_INDEX_ID}/ingest?commit=force`,
         {
           method: "POST",
           headers: { "content-type": "application/x-ndjson" },
@@ -487,7 +497,7 @@ describe.skipIf(!runEngineTests)(
     }, ENGINE_TIMEOUT_MS);
 
     afterAll(async () => {
-      for (const indexId of [INDEX_ID, TIED_INDEX_ID]) {
+      for (const indexId of [INDEX_ID, TIED_INDEX_ID, PROVISION_INDEX_ID]) {
         const deleted = await client.deleteIndex(indexId, "unobserved");
         if (deleted.isErr()) {
           throw deleted.error;
@@ -508,11 +518,17 @@ describe.skipIf(!runEngineTests)(
           source: PROVISION_SOURCE_ID,
         });
         expect(variantQuery).not.toBe(offQuery);
-        const off = await readScored({ query: offQuery, from: 0, size: 10 });
+        const off = await readScored({
+          query: offQuery,
+          from: 0,
+          size: 10,
+          indexId: PROVISION_INDEX_ID,
+        });
         const variant = await readScored({
           query: variantQuery,
           from: 0,
           size: 10,
+          indexId: PROVISION_INDEX_ID,
         });
         const offIds = new Set(
           off.hits.map(({ fields }) => fields["document_id"]),
