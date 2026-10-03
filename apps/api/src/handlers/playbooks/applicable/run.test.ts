@@ -4,7 +4,7 @@ import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-p
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { OpenPlaybookRunResult } from "@/api/lib/document-review/open-playbook-run";
-import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/workflow/materialize-playbook-run";
+import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";

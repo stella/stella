@@ -93,6 +93,7 @@ const createPlaybookScopedDb = (playbook: unknown) =>
         await run({
           query: {
             playbookDefinitions: { findFirst: async () => playbook },
+            documentTypes: { findFirst: async () => null },
           },
         }),
     ),
@@ -960,42 +961,85 @@ describe("MCP knowledge tools", () => {
     });
   });
 
-  test("run_playbook preserves a materialization refusal and its corrective action", async () => {
-    loadLatestApprovedVersionMock.mockResolvedValue(null);
-    const refusal = {
+  const runRefusals = {
+    file_property_type_immutable: {
       ok: false,
       status: 422,
       code: FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
       retryable: false,
-      message:
-        "File property types cannot be changed. Keep the existing type; create a custom property for other values.",
-      hint: "Keep the existing ASK content.type, or add a new playbook position for values of another type.",
-    } as const satisfies MaterializePlaybookRunResult;
-    materializePlaybookRunMock.mockResolvedValue(refusal);
+      message: "File property types cannot be changed.",
+      hint: "Keep the existing ASK content.type, or add a new playbook position.",
+    },
+    playbook_scope_unresolved: {
+      ok: false,
+      status: 400,
+      code: "playbook_scope_unresolved",
+      retryable: false,
+      message: "The document-type scope cannot be resolved.",
+      hint: "Configure a matching Document Type classifier before running it.",
+    },
+    properties_limit_reached: {
+      ok: false,
+      status: 400,
+      code: "properties_limit_reached",
+      message: "The matter has reached its property limit.",
+    },
+  } as const satisfies Record<
+    Extract<MaterializePlaybookRunResult, { ok: false }>["code"],
+    Extract<MaterializePlaybookRunResult, { ok: false }>
+  >;
 
+  test.each(Object.values(runRefusals))(
+    "run_playbook preserves $code and its corrective action",
+    async (refusal) => {
+      loadLatestApprovedVersionMock.mockResolvedValue(null);
+      materializePlaybookRunMock.mockResolvedValue(refusal);
+      const result = await handleMcpToolCall({
+        args: { matter_id: MATTER_ID, playbook_id: PLAYBOOK_ID },
+        context: createContext({
+          scopedDb: createPlaybookScopedDb({
+            id: PLAYBOOK_ID,
+            name: "Playbook",
+            positions: positionsSaying("File content"),
+            scope: null,
+          }),
+        }),
+        toolName: "run_playbook",
+      });
+      const { ok: _ok, status: _status, ...details } = refusal;
+      expect(materializePlaybookRunMock).toHaveBeenCalledTimes(1);
+      expect(result.isError).toBe(true);
+      expect(parseToolPayload(result)).toEqual({ error: details });
+      expect(createPlaybookTableRunsMock).not.toHaveBeenCalled();
+      expect(startWorkflowMock).not.toHaveBeenCalled();
+    },
+  );
+
+  test("run_playbook forwards the real unresolved-scope refusal before materialization", async () => {
+    loadLatestApprovedVersionMock.mockResolvedValue(null);
     const result = await handleMcpToolCall({
       args: { matter_id: MATTER_ID, playbook_id: PLAYBOOK_ID },
       context: createContext({
         scopedDb: createPlaybookScopedDb({
           id: PLAYBOOK_ID,
-          name: "Playbook",
-          positions: positionsSaying("File content"),
-          scope: null,
+          name: "Scoped playbook",
+          positions: positionsSaying("Scoped content"),
+          scope: { documentTypeKey: "missing_type" },
         }),
       }),
       toolName: "run_playbook",
     });
-
-    expect(materializePlaybookRunMock).toHaveBeenCalledTimes(1);
     expect(result.isError).toBe(true);
-    expect(parseToolPayload(result)).toMatchObject({
+    expect(parseToolPayload(result)).toEqual({
       error: {
-        code: "validation_error",
-        message: refusal.message,
-        hint: refusal.hint,
+        code: "playbook_scope_unresolved",
+        message:
+          "This playbook is scoped to a document type, but the workspace has no matching Document Type classifier to gate on.",
+        hint: "Configure a matching Document Type classifier or change the playbook document-type scope before running it.",
         retryable: false,
       },
     });
+    expect(materializePlaybookRunMock).not.toHaveBeenCalled();
     expect(createPlaybookTableRunsMock).not.toHaveBeenCalled();
     expect(startWorkflowMock).not.toHaveBeenCalled();
   });

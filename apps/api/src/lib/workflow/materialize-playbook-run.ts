@@ -19,6 +19,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { remapNodePropertyIds } from "@/api/lib/conditions/ast-utils";
+import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import { LIMITS } from "@/api/lib/limits";
 import { createDefaultTool } from "@/api/lib/properties/create-schema";
 import { deletePlaybookColumns } from "@/api/lib/properties/delete-playbook-columns";
@@ -196,12 +197,6 @@ export const resolveDocTypeGate = async ({
     label: documentType.label,
   };
 };
-
-export const PLAYBOOK_RUN_FAILURE_CODE = {
-  PROPERTIES_LIMIT: "properties_limit_reached",
-  SCOPE_UNRESOLVED: "playbook_scope_unresolved",
-  FILE_PROPERTY_TYPE_IMMUTABLE: FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
-} as const;
 
 type ScopeRefusal = {
   ok: false;

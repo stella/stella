@@ -7,6 +7,7 @@ import { workspaceParams } from "@/api/lib/custom-schema";
 import { loadLatestApprovedVersions } from "@/api/lib/document-review/approved-playbook-versions";
 import type { OpenPlaybookRunResult } from "@/api/lib/document-review/open-playbook-run";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
+import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import {
   PLAYBOOK_RUN_START_OUTCOME,
   playbookRunStartOutcome,
@@ -15,7 +16,6 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { LIMITS } from "@/api/lib/limits";
 import { startWorkflow } from "@/api/lib/workflow-queue";
-import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/workflow/materialize-playbook-run";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 import { resolveApplicablePlaybooks } from "@/api/lib/workflow/route-playbooks";
 

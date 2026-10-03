@@ -10,6 +10,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
 import type { OpenPlaybookRunResult } from "@/api/lib/document-review/open-playbook-run";
+import { playbookRunFailureDetails } from "@/api/lib/document-review/playbook-run-refusal";
 import {
   PLAYBOOK_RUN_START_OUTCOME,
   playbookRunStartOutcome,
@@ -135,17 +136,7 @@ export const createRunPlaybook = (
 
       if (!txResult.ok) {
         return Result.err(
-          new HandlerError({
-            status: txResult.status,
-            message: txResult.message,
-            ...(txResult.status === 422
-              ? {
-                  code: txResult.code,
-                  hint: txResult.hint,
-                  retryable: txResult.retryable,
-                }
-              : {}),
-          }),
+          new HandlerError(playbookRunFailureDetails(txResult)),
         );
       }
 

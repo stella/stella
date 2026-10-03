@@ -45,6 +45,7 @@ import {
   type McpRequestContext,
 } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { isMcpErrorCode } from "@/api/mcp/error-codes";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import type { CapabilityDispatchEntry } from "@/api/mcp/generated/capability-dispatch";
 import {
@@ -750,7 +751,10 @@ const mapStatusResponse = (
     });
   }
   return structuredErrorResult({
-    code,
+    code:
+      isRecord(responseBody) && isMcpErrorCode(responseBody["code"])
+        ? responseBody["code"]
+        : code,
     message,
     hint:
       isRecord(responseBody) && typeof responseBody["hint"] === "string"

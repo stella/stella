@@ -48,6 +48,7 @@ import {
 } from "@/api/lib/clauses/types";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
+import { playbookRunFailureDetails } from "@/api/lib/document-review/playbook-run-refusal";
 import {
   PLAYBOOK_RUN_START_OUTCOME,
   playbookRunStartOutcome,
@@ -2003,17 +2004,7 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
   const outcome = txResult.value;
   if (!outcome.ok) {
     return internalFailureResult(
-      new HandlerError({
-        status: outcome.status,
-        message: outcome.message,
-        ...(outcome.status === 422
-          ? {
-              code: outcome.code,
-              hint: outcome.hint,
-              retryable: outcome.retryable,
-            }
-          : {}),
-      }),
+      new HandlerError(playbookRunFailureDetails(outcome)),
     );
   }
 

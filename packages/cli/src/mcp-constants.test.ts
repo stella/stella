@@ -16,3 +16,11 @@ test("admission refusals distinguish retryable failures from operator action", (
     EXIT_CODES.server,
   );
 });
+
+test.each([
+  "properties_limit_reached",
+  "playbook_scope_unresolved",
+  "file_property_type_immutable",
+])("%s remains correctable through the CLI", (code) => {
+  expect(resolveMcpErrorCodeExit(code)).toBe(EXIT_CODES.validation);
+});

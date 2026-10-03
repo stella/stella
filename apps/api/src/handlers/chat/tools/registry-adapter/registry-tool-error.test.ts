@@ -7,6 +7,8 @@ import {
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
 
+import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
+import type { ChatToolErrorKind } from "@/api/lib/errors/tagged-errors";
 import type { InternalToolError } from "@/api/mcp/tool-types";
 
 import {
@@ -47,6 +49,31 @@ describe("registry tool error projection", () => {
       });
     }
   });
+  test("preserves playbook refusal codes and recovery fields through chat", () => {
+    const expectedKinds = {
+      properties_limit_reached: "limit",
+      playbook_scope_unresolved: "invalid-input",
+      file_property_type_immutable: "invalid-input",
+    } as const satisfies Record<
+      (typeof PLAYBOOK_RUN_FAILURE_CODE)[keyof typeof PLAYBOOK_RUN_FAILURE_CODE],
+      ChatToolErrorKind
+    >;
+    for (const code of Object.values(PLAYBOOK_RUN_FAILURE_CODE)) {
+      const details = {
+        code,
+        message: "The playbook cannot run.",
+        hint: "Correct the matter configuration before running it.",
+        retryable: false,
+      };
+      const projected = toRegistryChatToolError({
+        type: "structured",
+        ...details,
+      });
+      expect(projected.kind).toBe(expectedKinds[code]);
+      expect(JSON.parse(projected.message)).toEqual({ error: details });
+    }
+  });
+
   test("keeps oversized read results recoverable through a smaller request", () => {
     const error = {
       type: "structured",

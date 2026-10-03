@@ -42,7 +42,7 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
-import { statusCodeToErrorCode } from "@/api/mcp/error-codes";
+import { isMcpErrorCode, statusCodeToErrorCode } from "@/api/mcp/error-codes";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import type { ToolConfirmation } from "@/api/mcp/tool-confirmation";
 import type {
@@ -729,7 +729,7 @@ export const internalFailureResult = (
     const code = statusCodeToErrorCode(error.status);
     if (code !== "internal_error") {
       return structuredErrorResult({
-        code,
+        code: isMcpErrorCode(error.code) ? error.code : code,
         message: error.message,
         // A handler that rejected specific input entries names them here, so
         // the envelope carries the same `issues[].path` detail a schema

@@ -1,5 +1,7 @@
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 
+import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
+
 /**
  * Machine-readable error codes for the MCP tool-error envelope. The MCP server
  * is used almost exclusively by AI agents (and the companion CLI), so every
@@ -10,6 +12,7 @@ import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
  */
 export const MCP_ERROR_CODES = [
   ...Object.values(ACTION_ADMISSION_CODES),
+  ...Object.values(PLAYBOOK_RUN_FAILURE_CODE),
   /** Input failed validation at the tool boundary (shape, type, range). */
   "validation_error",
   /** The read result needs a smaller selection or page. */
@@ -55,6 +58,9 @@ export const MCP_ERROR_CODES = [
 ] as const;
 
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
+
+export const isMcpErrorCode = (code: unknown): code is McpErrorCode =>
+  MCP_ERROR_CODES.some((candidate) => candidate === code);
 
 /**
  * Map a backing safe handler's HTTP-ish status onto a stable envelope code,
