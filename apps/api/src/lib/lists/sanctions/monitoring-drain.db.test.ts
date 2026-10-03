@@ -6,6 +6,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { loadavg } from "node:os";
 
 import { compareCodeUnit } from "@stll/collation";
+import { rejectionOf } from "@stll/property-testing/rejection";
 import type { SanctionsEntry } from "@stll/sanctions";
 
 import { organization } from "@/api/db/auth-schema";
@@ -251,13 +252,15 @@ test(
     };
     const now = futureNow();
     expect(
-      drainSanctionsContactMarks({
-        db: abortAfterClaim,
-        organizationId: orgId,
-        now,
-        signal: controller.signal,
-      }),
-    ).rejects.toThrow("synthetic drain crash");
+      await rejectionOf(
+        drainSanctionsContactMarks({
+          db: abortAfterClaim,
+          organizationId: orgId,
+          now,
+          signal: controller.signal,
+        }),
+      ),
+    ).toMatchObject({ message: "synthetic drain crash" });
     expect(await markFor(contact.id)).toBeDefined();
     await drainSanctionsContactMarks({
       db: scopedDb,
@@ -323,14 +326,16 @@ test(
       .delete(sanctionsContactMarks)
       .where(eq(sanctionsContactMarks.contactId, contact.id));
     expect(
-      scopedDb(async (tx) => {
-        await requestSanctionsMonitoringRefresh(tx, {
-          organizationId: orgId,
-          contactIds: [contact.id],
-        });
-        throw new Error("synthetic audit rollback");
-      }),
-    ).rejects.toThrow("synthetic audit rollback");
+      await rejectionOf(
+        scopedDb(async (tx) => {
+          await requestSanctionsMonitoringRefresh(tx, {
+            organizationId: orgId,
+            contactIds: [contact.id],
+          });
+          throw new Error("synthetic audit rollback");
+        }),
+      ),
+    ).toMatchObject({ message: "synthetic audit rollback" });
     expect(await markFor(contact.id)).toBeUndefined();
     await scopedDb(async (tx) => {
       await requestSanctionsMonitoringRefresh(tx, {
@@ -346,14 +351,16 @@ test(
     });
     expect((await markFor(contact.id))?.generation).toBe(1n);
     expect(
-      scopedDb(
-        async (tx) =>
-          await requestSanctionsMonitoringRefresh(tx, {
-            organizationId: orgId,
-            contactIds: Array.from({ length: 10_001 }, () => contact.id),
-          }),
+      await rejectionOf(
+        scopedDb(
+          async (tx) =>
+            await requestSanctionsMonitoringRefresh(tx, {
+              organizationId: orgId,
+              contactIds: Array.from({ length: 10_001 }, () => contact.id),
+            }),
+        ),
       ),
-    ).rejects.toThrow("contact cap");
+    ).toMatchObject({ message: expect.stringContaining("contact cap") });
     expect(
       await scopedFor(otherOrg)(
         async (tx) => await tx.select().from(sanctionsOrganizationMarks),
@@ -940,7 +947,7 @@ test(
       const editionId = await seedIdentityEdition(futureNow());
       const subjects = [
         { displayName: "Alexandrov Zhuravlev", entryIds: ["identity-a"] },
-        { displayName: "12345 !!!", entryIds: [] },
+        { displayName: "!!!", entryIds: [] },
         { displayName: "Marisol Benitez", entryIds: [] },
         { displayName: "Kwame Nkrumah", entryIds: ["identity-d"] },
       ];
@@ -976,7 +983,7 @@ test(
                 now,
               })
             ).at(0) ?? panic("Independent screening missing");
-          if (fixture.displayName === "12345 !!!") {
+          if (fixture.displayName === "!!!") {
             expect(result.isErr()).toBe(true);
             return { displayName: fixture.displayName, outcome: null };
           }
@@ -1087,7 +1094,7 @@ test(
         ).toBe(true);
         const eu = coverage.find(({ sourceId }) => sourceId === "eu");
         expect(eu).toMatchObject(
-          contact.displayName === "12345 !!!"
+          contact.displayName === "!!!"
             ? { status: "unavailable", reason: "load-failed", editionId }
             : {
                 status: fixture.entryIds.length ? "possible-match" : "clear",
@@ -1095,7 +1102,7 @@ test(
                 editionId,
               },
         );
-        if (contact.displayName === "12345 !!!") {
+        if (contact.displayName === "!!!") {
           expect(coverage.every(({ status }) => status === "unavailable")).toBe(
             true,
           );
@@ -1400,7 +1407,16 @@ test(
       "drain-identity-fields",
     );
     const cases = {
-      type: { initial: {}, update: { type: "organization" } },
+      type: {
+        initial: {},
+        update: {
+          type: "organization",
+          dateOfBirthYear: null,
+          dateOfBirthMonth: null,
+          dateOfBirthDay: null,
+          nationalityCodes: [],
+        },
+      },
       displayName: { initial: {}, update: { displayName: "Edited Identity" } },
       organizationName: {
         initial: {
@@ -1449,6 +1465,13 @@ test(
                   dateOfBirthDay: 5,
                   nationalityCodes: ["CZ"],
                   ...initial,
+                  ...("type" in initial &&
+                    initial.type === "organization" && {
+                      dateOfBirthYear: null,
+                      dateOfBirthMonth: null,
+                      dateOfBirthDay: null,
+                      nationalityCodes: [],
+                    }),
                 })
                 .returning(),
           )
@@ -1566,7 +1589,7 @@ test(
           async (tx) =>
             await tx
               .update(contacts)
-              .set({ displayName: "123 !!!" })
+              .set({ displayName: "!!!" })
               .where(eq(contacts.id, original.id))
               .returning(),
         )
