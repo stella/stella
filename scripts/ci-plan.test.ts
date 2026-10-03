@@ -1682,7 +1682,7 @@ test("a manual run supersedes only an older manual run on the same branch", () =
     Bun.YAML.parse(workflow),
   ).concurrency;
   expect(concurrency["cancel-in-progress"]).toBe(
-    `\${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}`,
+    `\${{ inputs.heavy_only != true && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') }}`,
   );
   expect(concurrency.group).toContain(
     "github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref)",
@@ -3498,11 +3498,21 @@ const queueOnlyJobs = v.parse(
 
 // Evaluate the actual predicate with a successful trusted plan. Unfamiliar
 // expression syntax fails closed instead of silently evading parity.
-type DepthContext = { event: Event; depth: SuiteDepth };
-const runsAtDepth = (condition: string, { event, depth }: DepthContext) => {
+type DepthContext = { event: Event; depth: SuiteDepth; heavyOnly?: boolean };
+const runsAtDepth = (
+  condition: string,
+  { event, depth, heavyOnly }: DepthContext,
+) => {
   const expression = condition
     .replaceAll(/\balways\(\)/gu, "true")
     .replaceAll(/\bcancelled\(\)/gu, "false")
+    .replaceAll(
+      /\binputs\.heavy_only\s*(==|!=)\s*(true|false)\b/gu,
+      (_, operator: string, expected: string) => {
+        const equal = (heavyOnly === true) === (expected === "true");
+        return String(operator === "==" ? equal : !equal);
+      },
+    )
     .replaceAll(
       /([\w.-]+)\s*(==|!=)\s*'([^']*)'/gu,
       (_, context: string, operator: string, expected: string) => {
@@ -3511,6 +3521,10 @@ const runsAtDepth = (condition: string, { event, depth }: DepthContext) => {
           actual = event;
         } else if (context === "needs.ci-plan.outputs.suite_depth") {
           actual = depth;
+        } else if (
+          context === "needs.ci-plan.outputs.heavy_web_build_required"
+        ) {
+          actual = String(heavyOnly === true);
         } else if (context.startsWith("needs.ci-plan.outputs.")) {
           actual = "true";
         } else if (/^needs\.[\w-]+\.result$/u.test(context)) {
@@ -3720,6 +3734,43 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
   ).toEqual([`${name}: stale queue-only exception`]);
   expect(() =>
     runsAtDepth("contains(github.ref, 'main')", {
+      event: EVENT.pullRequest,
+      depth: SUITE_DEPTH.fast,
+    }),
+  ).toThrow("Unknown CI predicate syntax");
+});
+
+test("parity treats absent or false heavy-only input as ordinary event execution", () => {
+  for (const event of [
+    EVENT.pullRequest,
+    EVENT.mergeGroup,
+    EVENT.workflowDispatch,
+  ]) {
+    for (const heavyOnly of [undefined, false, true]) {
+      const context = {
+        event,
+        depth: SUITE_DEPTH.full,
+        ...(heavyOnly === undefined ? {} : { heavyOnly }),
+      };
+      expect(runsAtDepth("inputs.heavy_only == true", context)).toBe(
+        heavyOnly === true,
+      );
+      expect(runsAtDepth("inputs.heavy_only != true", context)).toBe(
+        heavyOnly !== true,
+      );
+      expect(
+        runsAtDepth(
+          "needs.ci-plan.outputs.heavy_web_build_required == 'true'",
+          context,
+        ),
+      ).toBe(heavyOnly === true);
+      expect(runsAtDepth(jobIf(ciJobs["heavy-web-build"]), context)).toBe(
+        heavyOnly === true,
+      );
+    }
+  }
+  expect(() =>
+    runsAtDepth("inputs.unknown == true", {
       event: EVENT.pullRequest,
       depth: SUITE_DEPTH.fast,
     }),

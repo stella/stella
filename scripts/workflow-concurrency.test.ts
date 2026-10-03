@@ -338,6 +338,7 @@ const groupFor = async (file: string, github: ConcurrencyContext) => {
     String(
       new Script(expression).runInNewContext({
         github,
+        inputs: {},
         format: (template: string, ...values: (string | number)[]) =>
           template.replace(/\{(\d+)\}/gu, (_placeholder, index: string) =>
             String(values.at(Number(index)) ?? ""),
