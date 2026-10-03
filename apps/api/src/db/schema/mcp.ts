@@ -11,12 +11,12 @@ import {
   isNotNull,
   isNull,
   jsonb,
+  mcpConnectorAuthorizationReviewPolicies,
   mcpConnectorPolicies,
   mcpOAuthClientPolicies,
   mcpOAuthStatePolicies,
   mcpUserConnectionPolicies,
   organization,
-  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -175,16 +175,7 @@ export const mcpConnectorAuthorizationReviews = p.pgTable.withRLS(
     p
       .index("mcp_connector_authorization_reviews_connector_idx")
       .on(table.connectorId),
-    ...orgPolicies().map((policy) =>
-      policy.for === "update"
-        ? p.pgPolicy(policy.name, {
-            for: policy.for,
-            to: policy.to,
-            using: policy.using,
-            withCheck: policy.using,
-          })
-        : policy,
-    ),
+    ...mcpConnectorAuthorizationReviewPolicies(),
   ],
 );
 
