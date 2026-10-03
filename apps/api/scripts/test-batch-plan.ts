@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import ts from "typescript";
 
 import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
@@ -343,9 +343,12 @@ export const parseRssMeasurementArguments = (arguments_: readonly string[]) => {
     "runner image",
   );
   const source = readTestRssSource(
-    JSON.parse(
-      takeOption("--measure-rss-source", '{"runId":"local","job":"local"}'),
-    ),
+    Result.try((): unknown =>
+      JSON.parse(
+        takeOption("--measure-rss-source", '{"runId":"local","job":"local"}'),
+      ),
+    ).unwrapOr(undefined) ??
+      panic("--measure-rss-source must be a JSON object"),
   );
   return {
     mode: "measure-rss",
