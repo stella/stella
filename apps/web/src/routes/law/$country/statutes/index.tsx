@@ -186,8 +186,8 @@ export const Route = createFileRoute("/law/$country/statutes/")({
       });
     }
   },
-  loader: ({ cause, context: { queryClient }, deps, params }) =>
-    loadPublicStatutesIndex({
+  loader: async ({ cause, context: { queryClient }, deps, params }) =>
+    await loadPublicStatutesIndex({
       cause,
       country: params.country,
       queryClient,
