@@ -635,6 +635,24 @@ export const evaluateMergeBar = (
 const MAX_GREEN_BASE_DRIFT = 20;
 const COMPARE_FILE_LIMIT = 300;
 
+// The ratchet judges a PR against the base tree with these sources, so a green
+// run from before main changed any of them applied different rules than the
+// merge queue will. The test binds this list to `scripts/ratchet.ts`'s local
+// import closure.
+export const RATCHET_DEFINITION_PATHS = [
+  "packages/api-contract/src/mcp.ts",
+  "packages/scripts/src/tsgo-compiler-options.ts",
+  "packages/scripts/src/typescript-program.ts",
+  "scripts/db-await-in-loop.ts",
+  "scripts/generated-artifacts.ts",
+  "scripts/lint-suppressions.ts",
+  "scripts/ownership.ts",
+  "scripts/ratchet.ts",
+  "scripts/result-boundary-globs.ts",
+  "scripts/root-connection-shapes.ts",
+  "scripts/source-globs.ts",
+] as const;
+
 class StaleGreenResultError extends TaggedError("StaleGreenResultError")<{
   message: string;
 }> {}
@@ -738,6 +756,14 @@ export const checkGreenResultFreshness = ({
     if (typeof file["previous_filename"] === "string") {
       changedPaths.add(file["previous_filename"]);
     }
+  }
+  const ratchetChanges = RATCHET_DEFINITION_PATHS.filter((filename) =>
+    changedPaths.has(filename),
+  );
+  if (ratchetChanges.length > 0) {
+    return refuse(
+      `main changed the ratchet since the green run: ${ratchetChanges.join(", ")}`,
+    );
   }
   const overlap = readPullFiles().filter((filename) =>
     changedPaths.has(filename),

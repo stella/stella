@@ -1,6 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,6 +22,7 @@ import {
   isReleasePullRequest,
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
+  RATCHET_DEFINITION_PATHS,
   readMergeHandoff,
   requiredChecksSucceeded,
   verifyFrontOfQueue,
@@ -1585,6 +1593,50 @@ describe("green result freshness", () => {
         expect(result.error.message).toContain("merge main and let CI re-run");
       }
     }
+  });
+
+  test("a ratchet change on main refuses green results computed under the old rules", () => {
+    for (const filename of RATCHET_DEFINITION_PATHS) {
+      const result = checkGreenResultFreshness(
+        readers({ status: "ahead", ahead_by: 1, files: [{ filename }] }),
+      );
+      expect(result.isErr(), filename).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toContain(
+          `main changed the ratchet since the green run: ${filename}`,
+        );
+      }
+    }
+  });
+
+  test("the ratchet definition list is the ratchet's local import closure", () => {
+    const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
+    const closure = new Set<string>();
+    const pending = ["scripts/ratchet.ts"];
+    for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
+      if (closure.has(file)) {
+        continue;
+      }
+      closure.add(file);
+      const source = readFileSync(path.join(repositoryRoot, file), "utf-8");
+      for (const [, specifier] of source.matchAll(
+        /^(?:import|export)\b[^;]*?\bfrom "(\.{1,2}\/[^"]+)"/gmu,
+      )) {
+        if (specifier === undefined) {
+          continue;
+        }
+        const resolved = path.posix.join(path.posix.dirname(file), specifier);
+        const candidate = /\.(?:ts|json)$/u.test(resolved)
+          ? resolved
+          : `${resolved}.ts`;
+        if (existsSync(path.join(repositoryRoot, candidate))) {
+          pending.push(candidate);
+        }
+      }
+    }
+    expect([...RATCHET_DEFINITION_PATHS].toSorted()).toEqual(
+      [...closure].filter((file) => file.endsWith(".ts")).toSorted(),
+    );
   });
 
   test("more than twenty commits, rewritten history and truncated files refuse stale green", () => {
