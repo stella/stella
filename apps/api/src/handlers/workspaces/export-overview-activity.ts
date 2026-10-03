@@ -25,6 +25,7 @@ type MatterActivityExportFormat =
   (typeof MATTER_ACTIVITY_EXPORT_FORMATS)[number];
 
 const config = {
+  accountAccess: "standard",
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",

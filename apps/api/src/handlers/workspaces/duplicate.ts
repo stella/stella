@@ -75,6 +75,7 @@ import { portableLayout } from "@/api/lib/views/utils";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
+  accountAccess: "standard",
   description:
     "Copy a matter into a new one: its columns with their dependencies, " +
     "views, members, party contacts, client, billing reference, colour, and " +
