@@ -1947,16 +1947,11 @@ export const TemplateForm = ({
           type: "warning",
           title: t("common.unexpectedError"),
         });
-      } else {
-        for (const warning of clauseWarnings.value) {
-          stellaToast.add({
-            type: "warning",
-            title: t("clauses.legacyDirectiveWarning", {
-              clauseName: warning.clauseName,
-              version: warning.version ?? "none",
-            }),
-          });
-        }
+      } else if (clauseWarnings.value > 0) {
+        stellaToast.add({
+          type: "warning",
+          title: t("templates.checkWarnings", { count: clauseWarnings.value }),
+        });
       }
       onDone(filename);
     },

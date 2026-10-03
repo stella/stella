@@ -53,10 +53,13 @@ globalThis.fetch = Object.assign(
     }
     if (url.pathname === "/v1/templates/discover") {
       const body = init?.body;
+      if (!(body instanceof FormData) && typeof body !== "string") {
+        throw new TypeError("expected a FormData or JSON request body");
+      }
       const payload =
         body instanceof FormData
           ? { templateId: body.get("templateId"), file: body.get("file") }
-          : JSON.parse(String(body));
+          : JSON.parse(body);
       expect(payload.file).toBeUndefined();
       const templateId = payload.templateId;
       discoveredTemplateIds.push(templateId);

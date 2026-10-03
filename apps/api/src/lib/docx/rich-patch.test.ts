@@ -33,6 +33,30 @@ const pPrOf = (paragraph: slimdom.Element): string => {
 };
 
 describe("owned OOXML placeholder patching", () => {
+  test.each(["body", "cell"])(
+    "empty rich clauses retain section properties in a %s",
+    (container) => {
+      const section =
+        '<w:pPr><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:headerReference w:type="default"/></w:sectPr></w:pPr>';
+      const paragraph = `<w:p>${section}<w:r><w:t>{{slot}}</w:t></w:r></w:p>`;
+      const xml = WRAP(
+        container === "body"
+          ? paragraph
+          : `<w:tbl><w:tr><w:tc>${paragraph}</w:tc></w:tr></w:tbl>`,
+      );
+      const result = patchXmlPart(xml, { slot: { paragraphs: [] } });
+      const paragraphs = paragraphsOf(result.xml);
+      expect(paragraphs).toHaveLength(1);
+      const filled = paragraphs.at(0);
+      const original = paragraphsOf(xml).at(0);
+      if (!filled || !original) {
+        throw new Error("expected section paragraph");
+      }
+      expect(pPrOf(filled)).toBe(pPrOf(original));
+      expect(paragraphTextOf(filled)).toBe("");
+    },
+  );
+
   test("replaces plain string placeholders in text", () => {
     const result = replacePlaceholdersInText("Hello {{name}}", {
       name: "world",

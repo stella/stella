@@ -2,10 +2,7 @@ import cors from "@elysia/cors";
 import { panic } from "better-result";
 import { Elysia } from "elysia";
 
-import {
-  CHAT_TURN_ID_HEADER,
-  STELLA_API_VERSION_PREFIX,
-} from "@stll/api-contract";
+import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { redisConnectionConfig } from "@stll/redis-config";
 
@@ -138,6 +135,7 @@ import {
   resolveSignupRateLimitClientIp,
   stampClientAddressHeader,
 } from "@/api/lib/client-ip";
+import { CORS_EXPOSED_HEADERS } from "@/api/lib/cors-exposed-headers";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
@@ -271,12 +269,6 @@ if (isLocalDevOpen()) {
 }
 
 const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
-const CORS_EXPOSED_HEADERS = [
-  "Content-Disposition",
-  "X-Ai-Field-Errors",
-  REQUEST_ID_HEADER,
-  CHAT_TURN_ID_HEADER,
-];
 
 const api = new Elysia()
   .use(createAuthResponseCookiesPlugin())

@@ -161,6 +161,28 @@ export const removeBlockUnit = (unit: slimdom.Node): void => {
   if (!parent) {
     return;
   }
+  if (isElement(unit) && unit.namespaceURI === W_NS && unit.localName === "p") {
+    const properties = [...unit.childNodes].find(
+      (child) =>
+        isElement(child) &&
+        child.namespaceURI === W_NS &&
+        child.localName === "pPr",
+    );
+    if (
+      properties &&
+      isElement(properties) &&
+      properties.getElementsByTagNameNS(W_NS, "sectPr").length > 0
+    ) {
+      // A section boundary owns page layout and header/footer references.
+      // Retain that empty paragraph when its ordinary content is removed.
+      for (const child of [...unit.childNodes]) {
+        if (child !== properties) {
+          unit.removeChild(child);
+        }
+      }
+      return;
+    }
+  }
   // Resolve the containers to repair from the PARENT, not the direct
   // parent-child relation: a row-level content control wraps its `w:tr` in
   // `w:sdt`/`w:sdtContent`, so the enclosing table is an ancestor rather than

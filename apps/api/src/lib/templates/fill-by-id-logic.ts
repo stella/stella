@@ -1,10 +1,11 @@
+import { Result } from "better-result";
 /**
  * `templates.fills.download`'s fill logic, factored out of the endpoint module
  * (`handlers/templates/fills/download.ts`) so that module can keep to one default
  * `{ config, handler }` export while this generator stays directly testable.
  */
 
-import { Result } from "better-result";
+import { CLAUSE_WARNINGS_HEADER } from "@stll/api-contract/template-fill-headers";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { templateFills } from "@/api/db/schema";
@@ -166,8 +167,8 @@ export const fillByIdLogic = async function* ({
   const additionalHeaders = new Headers();
   if (result.clauseWarnings.length > 0) {
     additionalHeaders.set(
-      "X-Clause-Warnings",
-      encodeURIComponent(JSON.stringify(result.clauseWarnings)),
+      CLAUSE_WARNINGS_HEADER,
+      String(result.clauseWarnings.length),
     );
   }
   if (result.aiFieldErrors.length > 0) {

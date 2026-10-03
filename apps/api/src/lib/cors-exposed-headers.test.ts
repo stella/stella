@@ -1,0 +1,39 @@
+import cors from "@elysia/cors";
+import { expect, test } from "bun:test";
+import { Elysia } from "elysia";
+
+import { CLAUSE_WARNINGS_HEADER } from "@stll/api-contract/template-fill-headers";
+
+import { CORS_EXPOSED_HEADERS } from "./cors-exposed-headers";
+
+test("cross-origin downloads expose bounded clause warning counts", async () => {
+  const api = new Elysia()
+    .use(
+      cors({
+        origin: "https://app.example",
+        exposeHeaders: CORS_EXPOSED_HEADERS,
+      }),
+    )
+    .get(
+      "/download",
+      () =>
+        new Response("document", {
+          headers: { [CLAUSE_WARNINGS_HEADER]: "1000000" },
+        }),
+    );
+  const response = await api.handle(
+    new Request("http://localhost/download", {
+      headers: { Origin: "https://app.example" },
+    }),
+  );
+  expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+    "https://app.example",
+  );
+  expect(
+    response.headers
+      .get("Access-Control-Expose-Headers")
+      ?.split(",")
+      .map((header) => header.trim().toLowerCase()),
+  ).toContain(CLAUSE_WARNINGS_HEADER.toLowerCase());
+  expect(response.headers.get(CLAUSE_WARNINGS_HEADER)).toBe("1000000");
+});

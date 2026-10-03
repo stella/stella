@@ -21,7 +21,10 @@ import {
   getOrganizationRegistryAvailability,
   getOrganizationRegistryDispatch,
 } from "@/api/lib/business-registries/credentials";
-import { inspectLegacyClauseDirectives } from "@/api/lib/clauses/clause-directives";
+import {
+  validateClauseBodyDirectives,
+  inspectLegacyClauseDirectives,
+} from "@/api/lib/clauses/clause-directives";
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
 import {
   discoverTemplateWithClauses,
@@ -581,8 +584,8 @@ export const discoverTemplateSource = async ({
     source.templateId === undefined
       ? []
       : await discoverClauseSlots(source.file);
-  const bodies: Record<string, ClauseBody> = {};
-  const clauses: Record<string, ClauseProvenance> = {};
+  const bodyByKey = new Map<string, ClauseBody>();
+  const clauseByKey = new Map<string, ClauseProvenance>();
   if (source.templateId !== undefined && slots.length > 0) {
     const resolved = await resolveClauseSlotSources(
       source.templateId,
@@ -591,20 +594,22 @@ export const discoverTemplateSource = async ({
       organizationId,
     );
     for (const [key, entry] of resolved) {
-      bodies[key] = entry.body;
-      clauses[key] = entry.clause;
+      bodyByKey.set(key, entry.body);
+      clauseByKey.set(key, entry.clause);
     }
   }
   for (const slot of slots) {
     const override = clauseOverrides?.[slot.patchKey];
     if (override !== undefined) {
-      bodies[slot.patchKey] = override;
-      clauses[slot.patchKey] = {
+      bodyByKey.set(slot.patchKey, override);
+      clauseByKey.set(slot.patchKey, {
         slotKey: slot.patchKey,
         resolution: "override",
-      };
+      });
     }
   }
+  const bodies = Object.fromEntries(bodyByKey);
+  const clauses = Object.fromEntries(clauseByKey);
   const discovered = await discoverTemplateWithClauses({
     file: source.file,
     bodies,
@@ -681,6 +686,58 @@ export const clauseDirectiveRecoveryHint = (
   }
 };
 
+type ClauseDirectiveErrorOptions = {
+  error: HandlerError<422>;
+  clause: ClauseProvenance;
+  slot: ApplyClausePatchesOptions["slots"][number];
+};
+
+const clauseDirectiveError = ({
+  error,
+  clause,
+  slot,
+}: ClauseDirectiveErrorOptions) => {
+  const identity = `${clause.name ?? slot.name}${clause.id === undefined ? "" : ` (${clause.id})`}`;
+  return new HandlerError({
+    status: 422,
+    code: error.code,
+    retryable: false,
+    clause,
+    message: `Clause ${identity} in slot ${slot.patchKey} has invalid directives: ${error.message}`,
+    hint: clauseDirectiveRecoveryHint(clause),
+    issues: error.issues,
+  });
+};
+
+const validateAuthoredClauseOverrides = ({
+  slots,
+  bodies,
+  clauses,
+}: Pick<ApplyClausePatchesOptions, "slots" | "bodies" | "clauses">): Result<
+  void,
+  HandlerError<422>
+> => {
+  for (const slot of slots) {
+    const clause = clauses[slot.patchKey];
+    if (clause?.resolution !== "override") {
+      continue;
+    }
+    const body =
+      bodies[slot.patchKey] ??
+      panic(`Missing override body for ${slot.patchKey}`);
+    const validation = validateClauseBodyDirectives(body);
+    if (Result.isError(validation)) {
+      const error = clauseDirectiveError({
+        error: validation.error,
+        clause,
+        slot,
+      });
+      return Result.err(error);
+    }
+  }
+  return Result.ok(undefined);
+};
+
 const applyClausePatches = ({
   slots,
   bodies,
@@ -720,17 +777,9 @@ const applyClausePatches = ({
       namedConditions,
     });
     if (Result.isError(patch)) {
-      const identity = `${clause.name ?? slot.name}${clause.id === undefined ? "" : ` (${clause.id})`}`;
-      const error = new HandlerError({
-        status: 422,
-        code: patch.error.code,
-        retryable: false,
-        clause,
-        message: `Clause ${identity} in slot ${slot.patchKey} has invalid directives: ${patch.error.message}`,
-        hint,
-        issues: patch.error.issues,
-      });
-      return Result.err(error);
+      return Result.err(
+        clauseDirectiveError({ error: patch.error, clause, slot }),
+      );
     }
     record[slot.patchKey] = patch.value;
   }
@@ -842,6 +891,41 @@ const unusedFilledValues = ({
       ),
   );
 
+type FillInputContractOptions = {
+  manifest: TemplateManifest;
+  discovered: DiscoveredTemplate;
+};
+
+const templateFillInputContract = ({
+  manifest,
+  discovered,
+}: FillInputContractOptions) => {
+  const rawInputSources = collectRawTemplateInputSources({
+    fields: discovered.fields,
+    placeholderPaths: discovered.placeholders.map(
+      (placeholder) => placeholder.name,
+    ),
+  });
+  return collectTemplateInputKeys({
+    type: "manifest",
+    derivedOutputPaths: manifest.fields.flatMap((field) => {
+      const paths = isFillableTemplateInputField(field) ? [] : [field.path];
+      if (field.lookup !== undefined) {
+        for (const format of field.lookup.formats) {
+          paths.push(`${field.path}.${format.key}`);
+        }
+      }
+      return paths;
+    }),
+    fillableFieldPaths: manifest.fields
+      .filter(isFillableTemplateInputField)
+      .map((field) => field.path),
+    livePaths: rawInputSources.terminalPaths,
+    arrayPaths: rawInputSources.arrayPaths,
+    primitiveArrayPaths: rawInputSources.primitiveArrayPaths,
+  });
+};
+
 /**
  * Shared fill recipe over an already-loaded DOCX: discover linked content,
  * gate required fields, run manifest fill steps (lookups, composites, formulas,
@@ -877,36 +961,25 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
       organizationId,
       clauseOverrides,
     });
+  // Authored overrides must be valid before quota checks, lookups or AI work.
+  const overrideValidation = validateAuthoredClauseOverrides({
+    slots,
+    bodies,
+    clauses,
+  });
+  if (Result.isError(overrideValidation)) {
+    return {
+      error: overrideValidation.error.message,
+      storedTemplateError: overrideValidation.error,
+    };
+  }
   let strictInputPlaceholders: string[] | null = null;
 
   if (unusedValuePolicy === "reject") {
     strictInputPlaceholders = discovered.placeholders.map(
       (placeholder) => placeholder.name,
     );
-    const rawInputSources = collectRawTemplateInputSources({
-      fields: discovered.fields,
-      placeholderPaths: discovered.placeholders.map(
-        (placeholder) => placeholder.name,
-      ),
-    });
-    const inputContract = collectTemplateInputKeys({
-      type: "manifest",
-      derivedOutputPaths: manifest.fields.flatMap((field) => {
-        const paths = isFillableTemplateInputField(field) ? [] : [field.path];
-        if (field.lookup !== undefined) {
-          for (const format of field.lookup.formats) {
-            paths.push(`${field.path}.${format.key}`);
-          }
-        }
-        return paths;
-      }),
-      fillableFieldPaths: manifest.fields
-        .filter(isFillableTemplateInputField)
-        .map((field) => field.path),
-      livePaths: rawInputSources.terminalPaths,
-      arrayPaths: rawInputSources.arrayPaths,
-      primitiveArrayPaths: rawInputSources.primitiveArrayPaths,
-    });
+    const inputContract = templateFillInputContract({ manifest, discovered });
     const unusedKeys = findUnusedTemplateValueKeys({
       contract: inputContract,
       values,

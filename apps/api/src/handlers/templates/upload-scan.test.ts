@@ -42,15 +42,19 @@ const makeAttachedTemplateDocx = async (): Promise<File> => {
 };
 
 type RejectionBody = {
-  code?: string;
-  issues?: { code?: string | undefined }[];
+  code?: string | undefined;
+  issues?: unknown[] | undefined;
 };
 
 const expectSecurityRejection = (body: RejectionBody): void => {
   expect(body.code).toBe(API_FILE_SECURITY_REJECTED_ERROR_CODE);
-  expect(body.issues?.map(({ code }) => code)).toContain(
-    "ooxml_attached_template",
-  );
+  expect(
+    body.issues?.map((issue) =>
+      typeof issue === "object" && issue !== null && "code" in issue
+        ? issue.code
+        : undefined,
+    ),
+  ).toContain("ooxml_attached_template");
 };
 
 const expectHandlerRejection = (result: unknown): void => {

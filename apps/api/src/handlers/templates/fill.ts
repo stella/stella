@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { CLAUSE_WARNINGS_HEADER } from "@stll/api-contract/template-fill-headers";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { templateFills } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -201,8 +203,8 @@ export const fillHandler = async ({
   const additionalHeaders = new Headers();
   if (result.clauseWarnings.length > 0) {
     additionalHeaders.set(
-      "X-Clause-Warnings",
-      encodeURIComponent(JSON.stringify(result.clauseWarnings)),
+      CLAUSE_WARNINGS_HEADER,
+      String(result.clauseWarnings.length),
     );
   }
   if (result.aiFieldErrors.length > 0) {

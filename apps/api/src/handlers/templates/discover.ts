@@ -33,11 +33,22 @@ type DiscoverProps = {
   scopedDb?: ScopedDb | undefined;
 };
 
+type DiscoverResult = Result<
+  {
+    fields: ReturnType<typeof mergeManifestWithDiscovery>;
+    conditions: ReturnType<typeof manifestNamedConditions>;
+    structureErrors: Awaited<
+      ReturnType<typeof discoverTemplate>
+    >["structureErrors"];
+  },
+  HandlerError
+>;
+
 export const discoverHandler = async ({
   organizationId,
   scopedDb,
   body: { file, templateId },
-}: DiscoverProps) => {
+}: DiscoverProps): Promise<DiscoverResult> => {
   if (templateId !== undefined) {
     if (scopedDb === undefined) {
       panic("Stored template discovery requires scopedDb");
@@ -95,11 +106,8 @@ export const discoverHandler = async ({
 
 const config = {
   description:
-    "Inspect an uploaded DOCX and report the fillable fields it carries: the " +
-    "markers found in the document, each configured by the filters written " +
-    "in it, the named conditions from that manifest, and any structural " +
-    "marker errors. With templateId, inspects the stored template and linked " +
-    "clauses using the fill discovery owner; otherwise reads the supplied bytes. Stores nothing.",
+    "Inspect DOCX fields, marker configuration, named conditions and structural errors. " +
+    "With templateId, resolve the stored template and linked clauses; otherwise inspect uploaded bytes. Stores nothing.",
   permissions: { workspace: ["read"] },
   mcp: {
     type: "capability",

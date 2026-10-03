@@ -54,6 +54,7 @@ export const importHandler = async function* ({
 }: ImportProps) {
   const text = await file.text();
   const clauseWarnings: ClauseDirectiveWarning[] = [];
+  const errors: string[] = [];
 
   // Try parsing as JSON first
   const parseJsonResult = Result.try((): unknown => JSON.parse(text));
@@ -78,7 +79,7 @@ export const importHandler = async function* ({
     }
 
     if (parsed.clauses.length === 0) {
-      return Result.ok({ created: 0, skipped: 0, errors: [] });
+      return Result.ok({ created: 0, skipped: 0, errors, clauseWarnings });
     }
 
     for (const item of parsed.clauses) {
@@ -171,7 +172,6 @@ export const importHandler = async function* ({
       });
     }
 
-    const errors: string[] = [];
     const prepared = toProcess.map((item) => {
       const clauseId = createSafeId<"clause">();
       const categoryId = item.categoryName
@@ -322,7 +322,7 @@ export const importHandler = async function* ({
   }
 
   if (dataRows.length === 0) {
-    return Result.ok({ created: 0, skipped: 0, errors: [] });
+    return Result.ok({ created: 0, skipped: 0, errors, clauseWarnings });
   }
 
   // Check org limit
@@ -463,7 +463,7 @@ export const importHandler = async function* ({
     }),
   );
 
-  return Result.ok({ created: result.count, skipped, errors: [] });
+  return Result.ok({ created: result.count, skipped, errors, clauseWarnings });
 };
 
 const config = {

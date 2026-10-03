@@ -326,12 +326,6 @@ export const fillTemplate = async (
   // Discover what the template actually contains
   const discovered = await discoverPlaceholders(data);
   const templateNames = new Set(discovered.map((p) => p.name));
-  const providedNames = new Set(Object.keys(effectiveValues));
-
-  const unmatchedPlaceholders = [...templateNames].filter(
-    (name) => !providedNames.has(name),
-  );
-
   // For unused-value detection, compare against the original
   // user-supplied keys (not the expanded __each_ keys)
   const originalKeys = new Set(Object.keys(values));
@@ -349,6 +343,12 @@ export const fillTemplate = async (
   const filled = await stripManifest(
     await fillTemplateWithValues(data, effectiveValues),
   );
+
+  // Inspect the delivered content, including rich clause patches inserted
+  // after the original template discovery and surviving conditional removal.
+  const unmatchedPlaceholders = [
+    ...new Set((await discoverPlaceholders(filled)).map(({ name }) => name)),
+  ];
 
   return {
     file: derivedScannedFile(template, filled),

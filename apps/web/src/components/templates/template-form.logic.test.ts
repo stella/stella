@@ -147,26 +147,29 @@ describe("fill-form grouping", () => {
 });
 
 describe("download clause diagnostics", () => {
-  test("decodes clause identity and version without trusting the header", () => {
-    const warnings = [
-      { code: "CLAUSE_LEGACY_DIRECTIVES", clauseName: "Závazek", version: 3 },
-      { code: "CLAUSE_LEGACY_DIRECTIVES", clauseName: "التزام", version: null },
-    ];
-    const result = readClauseWarnings(
-      new Headers({
-        "X-Clause-Warnings": encodeURIComponent(JSON.stringify(warnings)),
-      }),
-    );
-    expect(result.isOk() && result.value).toEqual(warnings);
-    const empty = readClauseWarnings(new Headers());
-    expect(empty.isOk() && empty.value).toEqual([]);
+  test.each([0, 1, 10_000, 4_294_967_295])(
+    "reads the bounded warning count %s",
+    (count) => {
+      const result = readClauseWarnings(
+        new Headers({ "X-Clause-Warnings": String(count) }),
+      );
+      expect(result.isOk() && result.value).toBe(count);
+      expect(String(count).length).toBeLessThanOrEqual(10);
+    },
+  );
+  test("an absent header means no clause warnings", () => {
+    const result = readClauseWarnings(new Headers());
+    expect(result.isOk() && result.value).toBe(0);
   });
   test.each([
     "%",
     "null",
-    '[{"code":"unknown","clauseName":"Terms","version":1}]',
-    '[{"code":"CLAUSE_LEGACY_DIRECTIVES","clauseName":"Terms","version":0}]',
-  ])("rejects malformed clause diagnostics %s", (encoded) => {
+    "-1",
+    "1.5",
+    "01",
+    "10000000000",
+    '[{"clauseName":"Terms"}]',
+  ])("rejects malformed warning counts %s", (encoded) => {
     expect(
       readClauseWarnings(new Headers({ "X-Clause-Warnings": encoded })).isErr(),
     ).toBe(true);

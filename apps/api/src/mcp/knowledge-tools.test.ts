@@ -398,9 +398,8 @@ describe("MCP knowledge tools", () => {
       const result = await handleMcpToolCall({
         args: {
           ...(mode === "update"
-            ? { clause_id: CLAUSE_ID }
+            ? { clause_id: CLAUSE_ID, snapshot_version: true }
             : { title: "Terms" }),
-          snapshot_version: true,
           body: [
             {
               text: "{% if enabled %}",

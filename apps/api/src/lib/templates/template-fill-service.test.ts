@@ -1867,3 +1867,70 @@ test.each(["latest", "pinned", "explicit"] as const)(
     }
   },
 );
+
+describe("clause fill boundaries", () => {
+  test("authored override validation precedes usage and collaborator work", async () => {
+    const file = await authorFieldMarkers(
+      await makeDocx(WRAP(P('{{ clause("Terms") }}') + P("{{ drafted }}"))),
+      [{ path: "drafted", aiPrompt: "Draft the provision" }],
+    );
+    let usageCalls = 0;
+    let collaboratorCalls = 0;
+    const result = await fillTemplateDocx({
+      source: {
+        name: "Terms",
+        fileName: "terms.docx",
+        file,
+        templateId: toSafeId<"template">("tmpl_1"),
+      },
+      values: {},
+      scopedDb: stubScopedDb([{ text: "Stored" }]),
+      organizationId,
+      requiredFields: "allow-partial",
+      useRecording: "caller",
+      clauseOverrides: {
+        "@clause:Terms": [clauseDirective("{% if enabled %}")],
+      },
+      assertUsageAvailable: async () => {
+        usageCalls++;
+        return null;
+      },
+      aiCollaborators: async () => {
+        collaboratorCalls++;
+        return {};
+      },
+    });
+    expect(result).toMatchObject({
+      storedTemplateError: { status: 422, code: "clause_directives_invalid" },
+    });
+    expect(usageCalls).toBe(0);
+    expect(collaboratorCalls).toBe(0);
+  });
+
+  test.each(["enforce", "allow-partial"] as const)(
+    "reports remaining clause fields with %s required fields",
+    async (requiredFields) => {
+      const file = await makeDocx(WRAP(P('{{ clause("Terms") }}')));
+      const result = await fillTemplateDocx({
+        source: {
+          name: "Terms",
+          fileName: "terms.docx",
+          file,
+          templateId: toSafeId<"template">("tmpl_1"),
+        },
+        values: {},
+        scopedDb: stubScopedDb([{ text: "Buyer: {{ buyer }}" }]),
+        organizationId,
+        requiredFields,
+        useRecording: "caller",
+      });
+      if (!("file" in result)) {
+        panic("expected filled document");
+      }
+      expect((await extractTexts(result.file)).join("")).toContain(
+        "{{ buyer }}",
+      );
+      expect(result.unmatchedPlaceholders).toEqual(["buyer"]);
+    },
+  );
+});
