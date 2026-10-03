@@ -52,7 +52,7 @@ export const publicCorpusConcurrencyLimit = ({
     lease();
   };
 
-  const middleware = (scope: "statute" | "shared") =>
+  return (
     new Elysia()
       .onBeforeHandle({ as: "scoped" }, ({ request, set, status }) => {
         if (env.E2E_DISABLE_AUTH_RATE_LIMIT) {
@@ -60,12 +60,6 @@ export const publicCorpusConcurrencyLimit = ({
         }
         const policy = resolvePublicCorpusPolicy(request);
         if (policy === undefined || policy.class === "browse") {
-          return undefined;
-        }
-        if (
-          (policy.route === "GET /law/statutes/search") !==
-          (scope === "statute")
-        ) {
           return undefined;
         }
         const routeClass = policy.class;
@@ -110,6 +104,6 @@ export const publicCorpusConcurrencyLimit = ({
       })
       .onAfterResponse({ as: "scoped" }, ({ request }) => {
         release(request);
-      });
-  return { shared: middleware("shared"), statute: middleware("statute") };
+      })
+  );
 };

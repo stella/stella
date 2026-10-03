@@ -5,12 +5,11 @@ import { Elysia } from "elysia";
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import { env } from "@/api/env";
-import { isPublicStatuteSearchRateLimitedRequest } from "@/api/handlers/legislation/public-search-rate-limit";
-import { createPublicStatuteSearchRateLimitComposition } from "@/api/handlers/legislation/public-search-rate-limit-composition";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import { createPublicCorpusRateLimitComposition } from "@/api/lib/rate-limit/public-corpus-rate-limit-composition";
 import {
   getPublicCorpusClassPolicy,
   PUBLIC_CORPUS_ROUTE_POLICY,
@@ -93,14 +92,13 @@ type PeerRequestOptions = {
 };
 
 const createApp = (binding: typeof createRedisRateLimit) => {
-  const composition = createPublicStatuteSearchRateLimitComposition({
-    routes: new Elysia().get("/law/statutes/search", () => "search"),
+  const composition = createPublicCorpusRateLimitComposition({
     createRedisBinding: binding,
   });
   return new Elysia().group(STELLA_API_VERSION_PREFIX, (app) =>
     app
-      .use(composition.shared)
-      .use(composition.publicLegislation)
+      .use(composition)
+      .get("/law/statutes/search", () => "search")
       .post("/case/decisions/search", () => "search")
       .get("/law/statutes/facets", () => "aggregate")
       .get("/case/decisions/facets", () => "aggregate")
@@ -133,6 +131,65 @@ const admissionCount = ({
   }).length;
 
 describe("public corpus fleet request budgets", () => {
+  for (const refused of [
+    { path: "/law/statutes/search/", method: "HEAD" },
+    { path: "/case/decisions/search/", method: "POST" },
+  ] as const) {
+    test(`statute and case-law searches from one address share one budget: refuses ${refused.method} ${refused.path}`, async () => {
+      const bindings = createBindings();
+      const app = createApp(bindings.binding);
+      const { max } = getPublicCorpusClassPolicy().classes.search.address;
+      const alternating = [
+        { path: "/law/statutes/search", method: "GET" },
+        { path: "/case/decisions/search", method: "POST" },
+        { path: "/law/statutes/search/", method: "HEAD" },
+        { path: "/case/decisions/search/", method: "POST" },
+      ] as const;
+      try {
+        for (let index = 0; index < max; index += 1) {
+          const route = alternating.at(index % alternating.length);
+          if (route === undefined) {
+            panic("Missing alternating search route");
+          }
+          expect(
+            (
+              await bindings.send({
+                app,
+                incoming: request(route.path, route.method),
+                address: "192.0.2.1",
+              })
+            ).status,
+          ).toBe(200);
+        }
+        const limited = await bindings.send({
+          app,
+          incoming: request(refused.path, refused.method),
+          address: "192.0.2.1",
+        });
+        expect(limited.status).toBe(429);
+        expect(limited.headers.get("RateLimit-Limit")).toBe(String(max));
+        expect(limited.headers.get("Retry-After")).toMatch(/^\d+$/u);
+        expect(Object.fromEntries(bindings.increments)).toEqual({
+          "public-corpus-search": max + 1,
+          "public-corpus-global-search": max,
+        });
+        for (const route of alternating) {
+          expect(
+            (
+              await bindings.send({
+                app,
+                incoming: request(route.path, route.method),
+                address: "192.0.2.2",
+              })
+            ).status,
+          ).toBe(200);
+        }
+      } finally {
+        bindings.kill();
+      }
+    });
+  }
+
   test("accepted requests report the tightest applicable address or fleet policy", async () => {
     const bindings = createBindings();
     const previous = env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX;
@@ -188,14 +245,13 @@ describe("public corpus fleet request budgets", () => {
         }
         return await completion.promise;
       };
-      const composition = createPublicStatuteSearchRateLimitComposition({
-        routes: new Elysia().get("/law/statutes/search", work),
+      const composition = createPublicCorpusRateLimitComposition({
         createRedisBinding: bindings.binding,
       });
       const app = new Elysia().group(STELLA_API_VERSION_PREFIX, (group) =>
         group
-          .use(composition.shared)
-          .use(composition.publicLegislation)
+          .use(composition)
+          .get("/law/statutes/search", work)
           .post("/case/decisions/search", work)
           .get("/law/statutes/facets", work)
           .get("/law/sitemap/shards", work),
@@ -262,19 +318,15 @@ describe("public corpus fleet request budgets", () => {
       const separator = route.indexOf(" ");
       const method = route.slice(0, separator);
       const path = route.slice(separator + 1);
-      return (method === "GET" ? [method, "HEAD"] : [method]).map(
-        (requestMethod) => ({
-          path,
-          method: requestMethod,
-          addressScope: isPublicStatuteSearchRateLimitedRequest(
-            request(path, requestMethod),
-          )
-            ? "public-statute-search"
-            : "public-corpus-search",
-        }),
+      return (method === "GET" ? [method, "HEAD"] : [method]).flatMap(
+        (requestMethod) =>
+          [path, `${path}/`].map((requestPath) => ({
+            path: requestPath,
+            method: requestMethod,
+          })),
       );
     });
-  for (const { path, method, addressScope } of searchRoutes) {
+  for (const { path, method } of searchRoutes) {
     test(`search address refusals preserve fleet capacity without double charging: ${method} ${path}`, async () => {
       const previous = env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX;
       const bindings = createBindings();
@@ -301,15 +353,11 @@ describe("public corpus fleet request budgets", () => {
             })
           ).status,
         ).toBe(429);
-        expect(bindings.increments.get(addressScope)).toBe(4);
-        expect(
-          bindings.increments.get(
-            addressScope === "public-statute-search"
-              ? "public-corpus-search"
-              : "public-statute-search",
-          ),
-        ).toBeUndefined();
-        expect(bindings.increments.get("public-corpus-global-search")).toBe(3);
+        // Only the class buckets named by the policy table charge search.
+        expect(Object.fromEntries(bindings.increments)).toEqual({
+          "public-corpus-search": 4,
+          "public-corpus-global-search": 3,
+        });
         expect(
           (
             await bindings.send({

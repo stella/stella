@@ -105,6 +105,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "PUBLIC_CORPUS_SEARCH_P95_SECONDS",
   "PUBLIC_CORPUS_AGGREGATE_P95_SECONDS",
   "PUBLIC_CORPUS_SITEMAP_P95_SECONDS",
+  "PUBLIC_CORPUS_SEARCH_ADDRESS_MAX",
   "PUBLIC_CORPUS_SEARCH_GLOBAL_MAX",
   "PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX",
   "PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX",
@@ -323,6 +324,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Maximum root pool size. Keep its sum with DATABASE_RLS_POOL_MAX, plus one connection for the periodic login check outside local development, within the process connection budget.",
   PUBLIC_CORPUS_RESERVED_CONNECTIONS:
     "Public corpus concurrent-work reservation when using the root pool. Unset reserves max(1, floor(DATABASE_ROOT_POOL_MAX / 4)); values are capped at the root pool size. A dedicated PUBLIC_LAW_DATABASE_URL uses its own pool limits.",
+  PUBLIC_CORPUS_SEARCH_ADDRESS_MAX:
+    "Statute and case-law full-text search requests per minute shared by one client address, capped at half the search global budget.",
   PUBLIC_LAW_DATABASE_POOL_MAX:
     "Maximum connections in the optional local read-only public-law pool.",
   PUBLIC_LAW_DATABASE_URL:
@@ -737,6 +740,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   PUBLIC_CORPUS_AGGREGATE_P95_SECONDS: ENV_CREDENTIAL_KIND.notCredential,
   PUBLIC_CORPUS_ASSUMED_REPLICAS: ENV_CREDENTIAL_KIND.notCredential,
   PUBLIC_CORPUS_RESERVED_CONNECTIONS: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_SEARCH_ADDRESS_MAX: ENV_CREDENTIAL_KIND.notCredential,
   PUBLIC_CORPUS_SEARCH_GLOBAL_MAX: ENV_CREDENTIAL_KIND.notCredential,
   PUBLIC_CORPUS_SEARCH_P95_SECONDS: ENV_CREDENTIAL_KIND.notCredential,
   PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX: ENV_CREDENTIAL_KIND.notCredential,

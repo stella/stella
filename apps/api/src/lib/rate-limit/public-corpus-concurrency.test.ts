@@ -48,8 +48,7 @@ const createCapacityApp = () => {
     },
   });
   const app = new Elysia()
-    .use(middleware.shared)
-    .use(middleware.statute)
+    .use(middleware)
     .get("/v1/law/statutes/search", work)
     .get("/v1/case/decisions", () => "browse")
     .post("/v1/case/decisions/search", work)
@@ -87,7 +86,7 @@ describe("public corpus active request capacity", () => {
     const completion = Promise.withResolvers<string>();
     const middleware = publicCorpusConcurrencyLimit();
     const app = new Elysia()
-      .use(middleware.shared)
+      .use(middleware)
       .post("/v1/case/decisions/search", async ({ request: incoming }) =>
         incoming.headers.has("x-capacity-probe") ? "probe" : completion.promise,
       )
