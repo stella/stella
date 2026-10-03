@@ -242,6 +242,7 @@ const fetchImdsCredentials = async ({
 
 // Set only by `configureS3ForTesting`; production always uses the env.
 let _endpointOverride: string | null = null;
+let _writeTimeoutOverride: number | null = null;
 const s3Endpoint = (): string => _endpointOverride ?? envBase.S3_ENDPOINT;
 
 const buildS3Client = (
@@ -588,6 +589,7 @@ export const writeS3ObjectWithRetry = async (
   object: S3ObjectWrite,
   write: S3ObjectWriter = writeViaClient,
 ): Promise<S3ObjectWriteCertainty> => {
+  const timeoutMs = _writeTimeoutOverride ?? S3_WRITE_TIMEOUT_MS;
   let lastError: unknown;
   let priorAttemptMayCompleteLate = false;
   for (let attempt = 1; attempt <= S3_WRITE_MAX_ATTEMPTS; attempt += 1) {
@@ -595,7 +597,7 @@ export const writeS3ObjectWithRetry = async (
       try: async () =>
         await withTimeout(async () => await write(object), {
           label: "s3 object write",
-          timeoutMs: S3_WRITE_TIMEOUT_MS,
+          timeoutMs,
         }),
       catch: (cause) => cause,
     });
@@ -1496,10 +1498,13 @@ export const deleteCorpusS3ObjectWithSignal = async (
  */
 export const configureS3ForTesting = ({
   endpoint,
+  writeTimeoutMs,
 }: {
   endpoint: string;
+  writeTimeoutMs?: number;
 }): void => {
   _endpointOverride = endpoint;
+  _writeTimeoutOverride = writeTimeoutMs ?? null;
   const credentials = staticCredentialsFromEnv();
   _client = buildS3Client(envBase.S3_BUCKET, credentials);
   _abortableClient = buildAbortableS3Client(credentials);
@@ -1511,6 +1516,7 @@ export const configureS3ForTesting = ({
 
 export const resetS3ForTesting = (): void => {
   _endpointOverride = null;
+  _writeTimeoutOverride = null;
   _client = null;
   _abortableClient = null;
   _corpusClient = null;

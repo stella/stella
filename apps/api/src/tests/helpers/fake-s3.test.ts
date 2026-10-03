@@ -33,6 +33,20 @@ describe("fake S3 carries the real s3 helpers", () => {
     fake.stop();
   });
 
+  test("a held PUT exposes completion only after applying its bytes", async () => {
+    const key = "org_1/ws_1/held.txt";
+    const hold = fake.holdNext({ method: "PUT", keyIncludes: key });
+    const pending = writeS3ObjectWithRetry({ key, data: "held bytes" });
+    await hold.reached;
+    expect(fake.objects.has(`${bucket}/${key}`)).toBe(false);
+    hold.release();
+    await hold.completed;
+    expect(
+      new TextDecoder().decode(fake.objects.get(`${bucket}/${key}`)?.bytes),
+    ).toBe("held bytes");
+    await pending;
+  });
+
   test("round-trips an object through the SDK and presigned transports", async () => {
     const bytes = new TextEncoder().encode("hello object");
     await putS3ObjectWithSignal(
