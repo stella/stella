@@ -167,6 +167,7 @@ export const mintSmokeSession = async (
   await rootDb.insert(session).values({
     id: `smoke-session-${token}`,
     token,
+    refreshMode: "fixed",
     userId: record.user.id,
     activeOrganizationId: record.org.id,
     expiresAt,

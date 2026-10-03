@@ -45,7 +45,7 @@ import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";
-import { managementRoles } from "@/lib/organization/consts";
+import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { pageTitle } from "@/lib/page-title";
 import { isBillingSettingsAccessible } from "@/routes/_protected.settings/-components/organization/billing-settings.logic";
 
@@ -64,6 +64,7 @@ type NavTo =
   | "/settings/account/beta"
   | "/settings/organization/members"
   | "/settings/organization/matter-numbering"
+  | "/settings/organization/number-series"
   | "/settings/organization/vat-rates"
   | "/settings/organization/billing"
   | "/settings/organization/time-policy"
@@ -133,6 +134,11 @@ const ORGANIZATION_SECTION = {
       icon: UsersIcon,
     },
     {
+      to: "/settings/organization/number-series",
+      labelKey: "billing.numberSeries.title",
+      icon: HashIcon,
+    },
+    {
       to: "/settings/organization/vat-rates",
       labelKey: "billing.vatRates.title",
       icon: BanknoteIcon,
@@ -188,7 +194,7 @@ const NAV_ITEM_CLASS = cn(
 function SettingsLayout() {
   const t = useTranslations();
   const { data: role } = useQuery({ ...roleOptions, throwOnError: true });
-  const showOrganization = role !== undefined && managementRoles.includes(role);
+  const showOrganization = hasOrganizationManagementAccess(role);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -222,6 +228,8 @@ function SettingsLayout() {
     ...ORGANIZATION_SECTION,
     items: ORGANIZATION_SECTION.items.filter(
       (item) =>
+        (item.to !== "/settings/organization/number-series" ||
+          billingAccessible) &&
         (item.to !== "/settings/organization/vat-rates" || billingAccessible) &&
         (item.to !== "/settings/organization/billing" || billingAccessible) &&
         (item.to !== "/settings/organization/time-policy" ||

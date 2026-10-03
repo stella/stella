@@ -8,6 +8,10 @@ import { publicCountryUnavailable } from "@stll/api-contract/public-country-capa
 
 import { legislationDocuments, statuteSitemapShards } from "@/api/db/schema";
 import {
+  projectStatuteSitemapShard,
+  projectStatuteSitemapStatute,
+} from "@/api/handlers/legislation/catalog-response";
+import {
   SITEMAP_ALL_BUCKET,
   statuteBucketSql,
   statuteWorksQuery,
@@ -71,11 +75,13 @@ export const listStatuteSitemapShardsHandler = async (
   }
 
   return {
-    items: shards.map((shard) => ({
-      bucket: shard.bucket,
-      country: getCountryPathSegment(shard.country),
-      lastmod: shard.lastmod,
-    })),
+    items: shards.map((shard) =>
+      projectStatuteSitemapShard({
+        bucket: shard.bucket,
+        country: getCountryPathSegment(shard.country),
+        lastmod: shard.lastmod,
+      }),
+    ),
     limit: LIMITS.statuteSitemapIndexEntryLimit,
     nextCursor: null,
   };
@@ -145,7 +151,7 @@ export const listStatuteSitemapStatutesHandler = async (
   }
 
   return {
-    items: rows,
+    items: rows.map(projectStatuteSitemapStatute),
     limit: LIMITS.statuteSitemapShardUrlLimit,
     nextCursor: null,
   };

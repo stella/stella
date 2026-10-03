@@ -20,11 +20,18 @@ import {
 
 import { SIGNAL_EVENT_TYPE, signalEvents, signals } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import getSignal from "@/api/handlers/signals/get";
 import listSignals from "@/api/handlers/signals/list";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { MemberRole } from "@/api/lib/member-roles";
 import { encodePaginationCursor } from "@/api/lib/pagination";
+import {
+  authorizedMemberRole,
+  SESSION_CREDENTIAL,
+} from "@/api/lib/permission-authorization";
+import type { CredentialAuthority } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -122,12 +129,14 @@ const runListAs = async ({
   organizationId,
   workspaceIds,
   role,
+  credential = SESSION_CREDENTIAL,
   query = {},
 }: {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   workspaceIds: SafeId<"workspace">[];
-  role: ListContext["memberRole"]["role"];
+  role: MemberRole;
+  credential?: CredentialAuthority;
   query?: ListContext["query"];
 }) => {
   const scopedDb = createScopedDb(testDb, workspaceIds, organizationId, userId);
@@ -141,7 +150,7 @@ const runListAs = async ({
         workspaceIds.map((id) => ({ id, status: "active" })),
       getWorkspaceAccess: async () => null,
       createAuditRecorder: () => recordAuditEvent,
-      memberRole: { role },
+      memberRole: authorizedMemberRole({ role, credential }),
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       managedAIResidency: "eu" as const,
@@ -221,6 +230,54 @@ describe("signal visibility", () => {
         role: "owner",
       }),
     ).toEqual(["scoped A1", "unscoped A"]);
+  });
+
+  test("an owner's credential spends triage only when it carries it", async () => {
+    const withoutTriage: CredentialAuthority = {
+      type: "attenuated",
+      permissions: { workspace: ["read"] },
+    };
+    const withTriage: CredentialAuthority = {
+      type: "attenuated",
+      permissions: { workspace: ["read"], signal: ["triage"] },
+    };
+    const owner = {
+      userId: ids.userA1,
+      organizationId: ids.orgA,
+      workspaceIds: [ids.wsA1],
+      role: "owner" as const,
+    };
+
+    // Scoped readers keep their ordinary view; only the firm queue needs triage.
+    expect(await listAs({ ...owner, credential: withoutTriage })).toEqual([
+      "scoped A1",
+    ]);
+    expect(await listAs({ ...owner, credential: withTriage })).toEqual([
+      "scoped A1",
+      "unscoped A",
+    ]);
+
+    expect(unscopedSignalA).not.toBeNull();
+    if (!unscopedSignalA) {
+      throw new Error("Expected the unscoped signal fixture");
+    }
+    const getAs = async (credential: CredentialAuthority) =>
+      await getSignal.handler(
+        asTestRaw<Parameters<typeof getSignal.handler>[0]>({
+          memberRole: authorizedMemberRole({ role: "owner", credential }),
+          params: { signalId: unscopedSignalA },
+          safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+          scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+          session: { activeOrganizationId: ids.orgA },
+          user: { id: ids.userA1 },
+          request: new Request("https://example.test/signals/get"),
+          route: "/test/signals/get",
+          recordAuditEvent: async () => undefined,
+          createAuditRecorder: () => async () => undefined,
+        }),
+      );
+    expect(await getAs(withoutTriage)).toMatchObject({ code: 404 });
+    expect(await getAs(withTriage)).toMatchObject({ title: "unscoped A" });
   });
 
   test("a hidden unscoped signal cannot be used as a pagination cursor", async () => {

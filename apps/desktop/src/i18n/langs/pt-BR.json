@@ -52,6 +52,11 @@
     "takenOverLocalError": "A edição no desktop foi movida para outro dispositivo. Esta cópia local está preservada."
   },
   "dialog": {
+    "accountWindowTitle": "Conectar conta",
+    "accountTitle": "Conectar esta conta?",
+    "accountSubtitle": "Conecte o stella desktop a esta conta e organização.",
+    "accountEmail": "Conta",
+    "organizationName": "Organização",
     "allow": "Permitir",
     "apiUrl": "URL da API",
     "cancel": "Cancelar",

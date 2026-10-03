@@ -15,6 +15,7 @@ import { detached } from "@/lib/detached";
 import { fetchDevOtp } from "@/lib/dev-otp";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 import { devQuickStartRuntime } from "./dev-quick-start-runtime";
 import {
@@ -207,15 +208,13 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
 
     if (Result.isError(result)) {
       analytics.captureError(result.error);
-      stellaToast.add({
-        title: DEV_QUICK_START_COPY.errorTitle,
+      notifyUserError(result.error, DEV_QUICK_START_COPY.errorTitle, {
         description: DevQuickStartError.is(result.error)
           ? ERROR_MESSAGES[result.error.code]
           : userErrorFromThrown(
               result.error,
               DEV_QUICK_START_COPY.errorFallback,
             ),
-        type: "error",
       });
       return;
     }
@@ -326,15 +325,13 @@ export const DevQuickStartContinuation = ({
 
     if (Result.isError(result)) {
       analytics.captureError(result.error);
-      stellaToast.add({
-        title: DEV_QUICK_START_COPY.errorTitle,
+      notifyUserError(result.error, DEV_QUICK_START_COPY.errorTitle, {
         description: DevQuickStartError.is(result.error)
           ? ERROR_MESSAGES[result.error.code]
           : userErrorFromThrown(
               result.error,
               DEV_QUICK_START_COPY.errorFallback,
             ),
-        type: "error",
       });
       return;
     }

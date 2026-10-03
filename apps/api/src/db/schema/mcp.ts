@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm";
+
 import { MCP_CONNECTION_STATUSES, MCP_CONNECTOR_AUTH_TYPES } from "./chat";
 import type {
   McpConnectionStatus,
@@ -9,6 +11,7 @@ import {
   isNotNull,
   isNull,
   jsonb,
+  mcpConnectorAuthorizationReviewPolicies,
   mcpConnectorPolicies,
   mcpOAuthClientPolicies,
   mcpOAuthStatePolicies,
@@ -48,6 +51,9 @@ export const mcpConnectors = p.pgTable(
     // oauth2 connectors. Surfaced as the connector's vendor. Server-level
     // and identical for every member, so it lives on the shared row.
     oauthIssuer: p.text("oauth_issuer"),
+    oauthConfirmedEndpointOrigins: jsonb(
+      "oauth_confirmed_endpoint_origins",
+    ).$type<string[]>(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -109,6 +115,71 @@ export const mcpOAuthClients = p.pgTable(
   ],
 );
 
+export const MCP_AUTHORIZATION_REVIEW_STATUSES = [
+  "needs_reapproval",
+  "approved",
+] as const;
+
+export const mcpConnectorAuthorizationReviews = p.pgTable.withRLS(
+  "mcp_connector_authorization_reviews",
+  {
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    connectorId: safeUuid<"mcpConnector">("connector_id").notNull(),
+    observedIssuer: p.text("observed_issuer"),
+    approvedIssuer: p.text("approved_issuer"),
+    observedEndpointOrigins: jsonb("observed_endpoint_origins")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    approvedEndpointOrigins: jsonb("approved_endpoint_origins").$type<
+      string[]
+    >(),
+    status: p
+      .text("status", { enum: MCP_AUTHORIZATION_REVIEW_STATUSES })
+      .notNull()
+      .default("needs_reapproval"),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p.primaryKey({
+      columns: [table.organizationId, table.connectorId],
+      name: "mcp_authorization_reviews_pk",
+    }),
+    p
+      .foreignKey({
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+        name: "mcp_authorization_reviews_organization_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.connectorId],
+        foreignColumns: [mcpConnectors.id],
+        name: "mcp_authorization_reviews_connector_fk",
+      })
+      .onDelete("cascade"),
+    p.check(
+      "mcp_authorization_review_status_check",
+      sql`${table.status} IN (${sql.join(
+        MCP_AUTHORIZATION_REVIEW_STATUSES.map((status) => sql`${status}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "mcp_authorization_review_approval_check",
+      sql`${table.status} <> 'approved' OR ${table.approvedIssuer} IS NOT NULL`,
+    ),
+    p
+      .index("mcp_connector_authorization_reviews_connector_idx")
+      .on(table.connectorId),
+    ...mcpConnectorAuthorizationReviewPolicies(),
+  ],
+);
+
 export type CachedMcpToolDefinition = {
   description?: string;
   exposedName: string;
@@ -142,6 +213,8 @@ export const mcpUserConnections = p.pgTable(
     scope: p.text(),
     resourceUrl: p.text("resource_url"),
     authorizationServerUrl: p.text("authorization_server_url"),
+    refreshLeaseExpiresAt: timestamptz("refresh_lease_expires_at"),
+    refreshRetryAfter: timestamptz("refresh_retry_after"),
     expiresAt: timestamptz("expires_at"),
     cachedTools: jsonb("cached_tools").$type<
       CachedMcpToolDefinition[] | null

@@ -47,6 +47,7 @@
     "./safe-id": "./src/safe-id.ts",
     "./public-country-capability": "./src/public-country-capability.ts",
     "./search": "./src/search.ts",
+    "./template-fill-headers": "./src/template-fill-headers.ts",
     "./time-entry-types": "./src/time-entry-types.ts",
     "./us-court-abbreviations": "./src/us-court-abbreviations.ts",
     "./us-courts": "./src/us-courts.ts",
@@ -56,7 +57,11 @@
     "./signals": "./src/signals.ts",
     "./sse-heartbeat": "./src/sse-heartbeat.ts",
     "./statute-route": "./src/statute-route.ts",
-    "./workflow-status": "./src/workflow-status.ts"
+    "./workflow-status": "./src/workflow-status.ts",
+    "./statute-gazette": "./src/statute-gazette.ts",
+    "./statute-acts": "./src/statute-acts.ts",
+    "./statute-aliases": "./src/statute-aliases.ts",
+    "./statute-query-intent": "./src/statute-query-intent.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

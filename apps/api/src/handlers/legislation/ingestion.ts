@@ -5,16 +5,21 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
 import type { LegislationWindowDispositionBasis } from "@stll/api-contract/legislation-expression";
-import { createStatuteSlug } from "@stll/api-contract/statute-route";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
-import { corpusStorageMode } from "@/api/env-base";
 import { restrictLegislationDocumentUrls } from "@/api/handlers/legislation/ingestion/outbound-urls";
 import {
+  LegislationRevision,
+  LEGISLATION_CORPUS_DEPENDENCIES,
+} from "@/api/handlers/legislation/revision";
+import type {
+  LegislationCorpusDependencies,
+  LegislationRevisionProjection,
+} from "@/api/handlers/legislation/revision";
+import {
   defectiveJunctions,
-  storedWindow,
   windowDisposition,
 } from "@/api/handlers/legislation/version-windows";
 import type { StoredWindow } from "@/api/handlers/legislation/version-windows";
@@ -25,22 +30,14 @@ import {
   CORPUS_SOURCE_TYPE,
   INGESTION_CHECKPOINT_STATUS,
 } from "@/api/lib/corpus-ingestion-checkpoint";
-import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
-  sanitizeMetadata,
-  stripDangerousChars,
-} from "@/api/lib/legal-search/corpus-sanitize";
-import {
-  corpusContentHash,
   planCorpusDocumentWrite,
   storedCorpusWrite,
-  writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
-import type { CorpusWriteOutcome } from "@/api/lib/legal-search/corpus-storage";
 import {
   canStartCyclePage,
   startCycleDeadline,
@@ -68,6 +65,9 @@ import {
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
+
+export { legislationSourceHash } from "@/api/handlers/legislation/revision";
+export type { LegislationCorpusDependencies } from "@/api/handlers/legislation/revision";
 
 /**
  * Legislation ingestion. The canonical, source-agnostic entry is
@@ -102,30 +102,6 @@ export type ProcessLegislationResult =
        */
       type: "source-raw-write-failed";
     };
-
-const sanitizeInput = (
-  input: LegislationDocumentInput,
-): LegislationDocumentInput => ({
-  ...input,
-  eli: stripDangerousChars(input.eli),
-  title: stripDangerousChars(input.title),
-  fulltext:
-    input.fulltext === null || input.fulltext === undefined
-      ? null
-      : stripDangerousChars(input.fulltext),
-  sourceRaw:
-    input.sourceRaw === undefined
-      ? undefined
-      : stripDangerousChars(input.sourceRaw),
-  metadata: sanitizeMetadata(input.metadata ?? {}),
-  expression:
-    input.expression === undefined
-      ? undefined
-      : {
-          ...input.expression,
-          publisherId: stripDangerousChars(input.expression.publisherId),
-        },
-});
 
 /**
  * The writer contract this code writes under. A database fence refuses a
@@ -199,19 +175,18 @@ const preserveLegislationCorpusWriteRetry = async ({
 
 type SettleLegislationCorpusProjectionInput = {
   documentId: SafeId<"legislationDocument">;
-  expectedSourceHash: string;
-  outcome: CorpusWriteOutcome | null;
+  projection: LegislationRevisionProjection;
   scopedDb: ScopedDb;
 };
 
 /** Settle corpus pointers and the matching desired projection as one CAS. */
 const settleLegislationCorpusProjection = async ({
   documentId,
-  expectedSourceHash,
-  outcome,
+  projection,
   scopedDb,
 }: SettleLegislationCorpusProjectionInput): Promise<boolean> =>
   await scopedDb(async (tx) => {
+    const { sourceHash: expectedSourceHash, outcome } = projection;
     const projectionLock = await lockActiveCorpusProjectionSourceTx(tx, {
       family: "legislation",
       entityId: documentId,
@@ -257,64 +232,6 @@ const settleLegislationCorpusProjection = async ({
     }
     return true;
   });
-
-/**
- * Hash over every persisted, search-visible field — not just the corpus
- * payload — so a source re-emitting identical text with changed metadata
- * (title, status, dates, URLs) still updates the row instead of hitting
- * the dedup skip.
- *
- * `rawHash` is in it for the opposite reason: a publisher may change
- * something this parser does not yet read, and without the observation
- * fingerprint that change hashes identically and the row can never be
- * refreshed once a later parser learns to read it.
- *
- * The version's classification is appended only when it is one a writer could
- * not state before classifications existed, so every hash stored before then
- * keeps its bytes and an unchanged re-ingest of such a row stays a skip.
- */
-export const legislationSourceHash = (
-  input: LegislationDocumentInput,
-  window: StoredWindow,
-  classification: LegislationExpressionClassification,
-): string => {
-  const typed = typedLegislationClassification(classification);
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(
-    JSON.stringify([
-      input.eli,
-      input.title,
-      input.country,
-      input.language,
-      input.documentType ?? null,
-      input.status ?? "current",
-      input.effectiveDate ?? null,
-      // The stored bounds, not the declaration: a connector that starts
-      // declaring the same publisher date differently has changed what the
-      // row says, and the hash has to move with the column.
-      window.versionValidFrom,
-      window.versionValidTo,
-      input.fulltext ?? null,
-      input.sections ?? null,
-      input.ast ?? null,
-      input.sourceUrl ?? null,
-      input.documentUrl ?? null,
-      input.metadata ?? {},
-      input.rawHash,
-      input.sourceRawContentType ?? null,
-      ...(typed === null
-        ? []
-        : [
-            [
-              typed.expressionKind,
-              typed.windowDisposition,
-              typed.windowDispositionBasis,
-            ],
-          ]),
-    ]),
-  );
-  return hasher.digest("hex");
-};
 
 /**
  * Report a version whose window does not meet its neighbours' edge to edge.
@@ -673,6 +590,94 @@ const writeDecidedVersionTx = async (
   return id;
 };
 
+type CommitLegislationVersionOptions = {
+  revision: LegislationRevision;
+  existing: StoredVersion | undefined;
+  stated: LegislationExpressionClassification;
+  sourceRaw: StoredSourceRaw;
+  corpusMode: LegislationCorpusDependencies["mode"];
+  scopedDb: ScopedDb;
+};
+
+/**
+ * Update the version's row, or insert it. Under the identity lock a writer
+ * that found nothing looks once more before inserting: a concurrent writer
+ * may have stored the version since, and then its row is this version's row.
+ *
+ * The row is read again under its lock and the classification decided from
+ * that read, not the one before the payload write: a withdrawal committed in
+ * between is what the row now says, and a write decided from the older read
+ * would lift it.
+ */
+const commitLegislationVersion = async ({
+  revision,
+  existing,
+  stated,
+  sourceRaw,
+  corpusMode,
+  scopedDb,
+}: CommitLegislationVersionOptions) =>
+  await scopedDb(async (tx) => {
+    const input = revision.input;
+    await declareWriterContract(tx);
+    // Settle and the write-error retry take the projection source before the
+    // row; this write takes them in the same order so they cannot deadlock.
+    const projectionLock =
+      corpusMode === "off" || existing === undefined
+        ? null
+        : await lockActiveCorpusProjectionSourceTx(tx, {
+            family: "legislation",
+            entityId: existing.id,
+          });
+    const publisherId = input.expression?.publisherId;
+    let row =
+      existing === undefined
+        ? undefined
+        : await lockStoredVersionTx(
+            tx,
+            eq(legislationDocuments.id, existing.id),
+          );
+    if (row === undefined && publisherId !== undefined) {
+      await lockExpressionIdentity(tx, input, publisherId);
+      row = await lockStoredVersionTx(tx, byPublisherId(input, publisherId));
+    }
+    const decided = storedClassification(input, stated, row);
+    // The new body reaches object storage only after this commit. Until it
+    // settles, the stored pointers would serve the previous body under this
+    // write's metadata, so a changed body clears them: reads use the columns
+    // written here and the search projection stops serving the old passages.
+    const bodyChanged =
+      corpusMode !== "off" &&
+      row !== undefined &&
+      row.contentHash !== revision.contentHash;
+    const decidedValues = {
+      ...revision.values(sourceRaw),
+      ...decided,
+      ...(bodyChanged || corpusMode === "off"
+        ? {
+            textS3Key: null,
+            normalizedS3Key: null,
+            astS3Key: null,
+            contentHash: null,
+          }
+        : {}),
+      sourceHash: revision.sourceHash(decided),
+    };
+    const id = await writeDecidedVersionTx(tx, row, decidedValues, publisherId);
+    if (bodyChanged && projectionLock !== null) {
+      await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+        lock: projectionLock,
+        subject: { family: "legislation", entityId: id },
+      });
+    }
+    return {
+      id,
+      row,
+      classification: decided,
+      sourceHash: decidedValues.sourceHash,
+    };
+  });
+
 const selectStoredVersion = async (
   scopedDb: ScopedDb,
   where: SQL | undefined,
@@ -838,16 +843,6 @@ const findStoredVersion = async ({
   return await findByPublisherId({ input, publisherId, scopedDb });
 };
 
-export type LegislationCorpusDependencies = {
-  mode: CorpusStorageMode;
-  write: typeof writeCorpusDocument;
-};
-
-const LEGISLATION_CORPUS_DEPENDENCIES: LegislationCorpusDependencies = {
-  mode: corpusStorageMode,
-  write: writeCorpusDocument,
-};
-
 type ProcessLegislationDocumentOptions = {
   corpus?: LegislationCorpusDependencies | undefined;
   /** Test seam; production writes through the object-storage client. */
@@ -871,26 +866,22 @@ export const processLegislationDocument = async (
     writeSourceRaw = writeRawSourcePayload,
   }: ProcessLegislationDocumentOptions = {},
 ): Promise<ProcessLegislationResult> => {
-  const input = sanitizeInput(raw);
-  const text = input.fulltext ?? null;
-  const sections = input.sections ?? null;
-  const ast = input.ast ?? null;
-  const window = storedWindow(input.version);
+  const revision = new LegislationRevision(raw);
+  const input = revision.input;
+  const window = revision.window;
   const stated = statedClassification(input);
-  const expectedContentHash = corpusContentHash({ text, sections, ast });
+  const expectedContentHash = revision.contentHash;
 
   let existing = await findStoredVersion({ input, window, scopedDb });
   let classification = storedClassification(input, stated, existing);
-  let sourceHash = legislationSourceHash(input, window, classification);
+  let sourceHash = revision.sourceHash(classification);
   const existingCorpusPlan =
     existing === undefined
       ? null
       : planCorpusDocumentWrite({
           documentId: existing.id,
           jurisdiction: input.country,
-          text,
-          sections,
-          ast,
+          ...revision.payload,
           stored: storedCorpusWrite(existing),
         });
   const corpusAlreadySettled =
@@ -912,8 +903,7 @@ export const processLegislationDocument = async (
   ) {
     await settleLegislationCorpusProjection({
       documentId: existing.id,
-      expectedSourceHash: sourceHash,
-      outcome: null,
+      projection: revision.withoutCorpusWrite(classification),
       scopedDb,
     });
     return {
@@ -930,71 +920,13 @@ export const processLegislationDocument = async (
     return { type: "source-raw-write-failed" };
   }
 
-  const values = {
-    sourceId: input.sourceId,
-    eli: input.eli,
-    slug: createStatuteSlug({ eli: input.eli, title: input.title }),
-    title: input.title,
-    country: input.country,
-    language: input.language,
-    documentType: input.documentType ?? null,
-    status: input.status ?? "current",
-    effectiveDate: input.effectiveDate ?? null,
-    ...window,
-    fulltext: text,
-    sections,
-    documentAst: ast,
-    sourceUrl: input.sourceUrl ?? null,
-    documentUrl: input.documentUrl ?? null,
-    metadata: input.metadata ?? {},
-    ...sourceRaw,
-    ...(corpus.mode === "off"
-      ? {
-          textS3Key: null,
-          normalizedS3Key: null,
-          astS3Key: null,
-          contentHash: null,
-        }
-      : {}),
-  };
-
-  /**
-   * Update the version's row, or insert it. Under the identity lock a writer
-   * that found nothing looks once more before inserting: a concurrent writer
-   * may have stored the version since, and then its row is this version's row.
-   *
-   * The row is read again under its lock and the classification decided from
-   * that read, not the one before the payload write: a withdrawal committed in
-   * between is what the row now says, and a write decided from the older read
-   * would lift it.
-   */
-  const written = await scopedDb(async (tx) => {
-    await declareWriterContract(tx);
-    const publisherId = input.expression?.publisherId;
-    let row =
-      existing === undefined
-        ? undefined
-        : await lockStoredVersionTx(
-            tx,
-            eq(legislationDocuments.id, existing.id),
-          );
-    if (row === undefined && publisherId !== undefined) {
-      await lockExpressionIdentity(tx, input, publisherId);
-      row = await lockStoredVersionTx(tx, byPublisherId(input, publisherId));
-    }
-    const decided = storedClassification(input, stated, row);
-    const decidedValues = {
-      ...values,
-      ...decided,
-      sourceHash: legislationSourceHash(input, window, decided),
-    };
-    const id = await writeDecidedVersionTx(tx, row, decidedValues, publisherId);
-    return {
-      id,
-      row,
-      classification: decided,
-      sourceHash: decidedValues.sourceHash,
-    };
+  const written = await commitLegislationVersion({
+    revision,
+    existing,
+    stated,
+    sourceRaw,
+    corpusMode: corpus.mode,
+    scopedDb,
   });
   const { id } = written;
   const inserted = written.row === undefined;
@@ -1019,13 +951,11 @@ export const processLegislationDocument = async (
   // decision, not an oversight.
   if (corpus.mode !== "off") {
     try {
-      const outcome = await corpus.write({
+      const projection = await revision.writeCorpus({
         documentId: id,
-        jurisdiction: input.country,
-        text,
-        sections,
-        ast,
         stored: existing === undefined ? null : storedCorpusWrite(existing),
+        classification,
+        write: corpus.write,
       });
       // An unchanged outcome means the row already records exactly these
       // pointers; a written or skipped-empty outcome records the keys, or
@@ -1036,8 +966,7 @@ export const processLegislationDocument = async (
       // hash the previously indexed text would remain searchable forever.
       await settleLegislationCorpusProjection({
         documentId: id,
-        expectedSourceHash: sourceHash,
-        outcome,
+        projection,
         scopedDb,
       });
     } catch (error) {
@@ -1057,8 +986,7 @@ export const processLegislationDocument = async (
   } else {
     await settleLegislationCorpusProjection({
       documentId: id,
-      expectedSourceHash: sourceHash,
-      outcome: null,
+      projection: revision.withoutCorpusWrite(classification),
       scopedDb,
     });
   }

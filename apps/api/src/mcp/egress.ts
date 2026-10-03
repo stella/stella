@@ -395,7 +395,13 @@ const finalizeCompatSearch = async ({
     }
   }
 
-  return toolDataResult({ nextCursor: plan.nextCursor, results });
+  return toolDataResult({
+    nextCursor: plan.nextCursor,
+    ...(plan.paginationOutcome === undefined
+      ? {}
+      : { paginationOutcome: plan.paginationOutcome }),
+    results,
+  });
 };
 
 const finalizeCompatFetch = async ({

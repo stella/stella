@@ -35,7 +35,6 @@ import {
 import { Input } from "@stll/ui/input";
 import { MenuSection } from "@stll/ui/menu-section";
 import type { OverlayLayer } from "@stll/ui/overlay-layer";
-import { stellaToast } from "@stll/ui/toast";
 import { contentDir } from "@stll/ui/use-content-dir";
 
 import {
@@ -51,6 +50,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -123,10 +123,7 @@ export const SavedSearches = ({
   };
   const onMutationError = (error: Error) => {
     analytics.captureError(error);
-    stellaToast.add({
-      title: t("common.somethingWentWrong"),
-      type: "error",
-    });
+    notifyUserError(error, t("common.somethingWentWrong"));
   };
 
   const createMutation = useMutation({

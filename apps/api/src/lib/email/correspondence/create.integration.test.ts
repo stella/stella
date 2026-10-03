@@ -34,6 +34,7 @@ import updateCorrespondence from "@/api/handlers/workspaces/correspondence/updat
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import { eraseCorrespondenceActorDisplays } from "@/api/lib/email/correspondence/offboarding";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -135,7 +136,7 @@ const parsedMessage = (provenance: CorrespondenceProvenance) =>
 const commonContext = () => ({
   safeDb: safeDbFor(ids.userA1, ids.wsA1),
   workspaceId: ids.wsA1,
-  memberRole: { role: "owner" },
+  memberRole: sessionMemberRole("owner"),
   request: new Request("https://api.example.test/v1/correspondence"),
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
@@ -241,7 +242,7 @@ describe("matter correspondence", () => {
     const common = {
       safeDb,
       workspaceId: ids.wsA1,
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       request: new Request("https://api.example.test/v1/correspondence"),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -303,7 +304,7 @@ describe("matter correspondence", () => {
 
     const admin = {
       safeDb: safeDbFor(ids.userAdmin, ids.wsA1),
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       request: new Request("https://api.example.test/v1/correspondence"),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userAdmin },
@@ -430,7 +431,7 @@ describe("matter correspondence", () => {
       const common = {
         safeDb: safeDbFor(ids.userA1, ids.wsA1),
         workspaceId: ids.wsA1,
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         request: new Request("https://api.example.test/v1/correspondence"),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -751,7 +752,20 @@ describe("matter correspondence", () => {
       });
       const removedMemberships: (typeof member.$inferSelect)[] = [];
       const removedAssignments: (typeof workspaceMembers.$inferSelect)[] = [];
+      const retainedOwnerId = Bun.randomUUIDv7();
       try {
+        await testDb.insert(user).values({
+          id: retainedOwnerId,
+          name: "Retained organization owner",
+          email: `${retainedOwnerId}@example.test`,
+        });
+        await testDb.insert(member).values({
+          id: Bun.randomUUIDv7(),
+          organizationId: ids.orgA,
+          userId: retainedOwnerId,
+          role: "owner",
+          createdAt: new Date(),
+        });
         for (const originalUser of originalUsers) {
           await testDb
             .update(user)
@@ -871,6 +885,7 @@ describe("matter correspondence", () => {
         if (removedAssignments.length) {
           await testDb.insert(workspaceMembers).values(removedAssignments);
         }
+        await testDb.delete(user).where(eq(user.id, retainedOwnerId));
       }
     },
   );

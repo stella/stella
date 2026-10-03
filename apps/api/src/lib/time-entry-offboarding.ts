@@ -16,6 +16,7 @@ import {
   getTimePeriodLockError,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
+import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import {
   lockTimerOwner,
   ownedTimers,
@@ -187,6 +188,12 @@ export const closeRemovedMemberActiveTimer = async ({
         },
         metadata: { cause: "organization_member_removed" },
       });
+      if (activeTimer.workspaceId !== null) {
+        await recordBillingCapCrossings(tx, {
+          workspaceId: activeTimer.workspaceId,
+          recordAuditEvent,
+        });
+      }
     }
   }
   await pauseRunningTimers({
