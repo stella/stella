@@ -22,7 +22,7 @@ import type {
   IngestionResult,
   StoredRawReparseInput,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
+import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import {
   assemblePlUokikDecision,

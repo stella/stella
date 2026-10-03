@@ -670,3 +670,49 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
     });
   }
 });
+
+describe("Slovak detail refusals preserve listing-only decisions", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test.each([401, 403, 429])(
+    "a detail HTTP %s keeps the listed decision and advances the page",
+    async (status) => {
+      const stored = await storedDecision(TRANSFERRED_FILE_ID);
+      const raw: unknown = JSON.parse(stored.sourceRaw);
+      const listing = isRecord(raw) ? raw["listItem"] : undefined;
+      if (!isRecord(listing)) {
+        panic("the recorded decision has no listing item");
+      }
+      let detailRequests = 0;
+      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.searchParams.has("page")) {
+          return Response.json({ rozhodnutieList: [listing], numFound: 1 });
+        }
+        if (url.pathname.includes("/v1/sud/")) {
+          return new Response("registry unavailable", { status: 404 });
+        }
+        expect(
+          decodeURIComponent(url.pathname).endsWith(`/${TRANSFERRED_FILE_ID}`),
+        ).toBe(true);
+        detailRequests += 1;
+        return new Response("refused", { status });
+      });
+
+      const page = (await skCourtsAdapter.fetchPage(null, {})).unwrap();
+      expect(detailRequests).toBe(1);
+      expect(page.decisions).toHaveLength(1);
+      const decision = page.decisions.at(0);
+      expect(decision?.caseNumber === TRANSFERRED_FILE_DOCKET).toBe(true);
+      const parts = decodeSourceRawEnvelope(decision?.sourceRaw ?? "");
+      expect(parts?.["listing"]).toBe(JSON.stringify(listing));
+      expect(parts?.["detail"]).toBeUndefined();
+      expect(page.nextCursor).not.toBeNull();
+    },
+  );
+});

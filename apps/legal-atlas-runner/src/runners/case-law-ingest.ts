@@ -25,6 +25,7 @@ import {
   type DocumentStageObservation,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { observeDocumentStageSafely } from "@stll/legal-atlas/document-stage-observer";
+import type { IngestionStopKind } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
 
 import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
@@ -48,10 +49,7 @@ import {
   listAdapters,
   skCourtsDocumentFetch,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import {
-  CYCLE_HALT_REASON,
-  runIngestionPipeline,
-} from "@/api/handlers/case-law/ingestion/pipeline";
+import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
   RECONCILIATION_INGEST_BUDGET_MS,
@@ -66,7 +64,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/source-totals";
 import { backfillLegislationSearchIndex } from "@/api/handlers/legislation/search-index";
 import { captureError } from "@/api/lib/analytics/capture";
-import { IngestionStallError } from "@/api/lib/errors/tagged-errors";
+import {
+  IngestionStallError,
+  ingestionStopKindOf,
+} from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { backfillSearchIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -104,20 +105,20 @@ import {
   type CitationResolutionStep,
   runCitationResolutionDrain,
 } from "./citation-resolution-drain";
+import { executeIngestionCycle } from "./cycle-execution";
 import {
   CYCLE_CADENCE,
   CYCLE_CADENCE_DELAY_MS,
   CYCLE_OUTCOME,
   type CadenceStreaks,
   type CycleCadence,
-  type CycleOutcome,
   type CycleResult,
   INITIAL_CADENCE_STREAKS,
   INITIAL_STALL_ALERT,
   type StallAlertState,
   cycleMadeProgress,
   stepCadence,
-  stepStallAlert,
+  stepAdapterCycleHealth,
 } from "./cycle-progress";
 import {
   createIngestionHealthRefresh,
@@ -449,7 +450,7 @@ const inFlightCycles = new Set<string>();
 const cyclesSinceWatchdogTick = new Set<string>();
 
 /** Sources whose current no-progress episode reached the alert threshold. */
-const stalledAdapters = new Set<AdapterKey>();
+const stalledAdapters = new Map<AdapterKey, IngestionStopKind>();
 
 const writeHeartbeat = () => {
   void Bun.write(
@@ -695,49 +696,36 @@ const runOneCycle = async (
   const startedAt = new Date();
   const t0 = performance.now();
 
-  let outcome: CycleOutcome = CYCLE_OUTCOME.COMPLETED;
-  let errorMessage: string | null = null;
-  let result: Awaited<ReturnType<typeof runIngestionPipeline>> | null = null;
-
+  let execution: Awaited<ReturnType<typeof executeIngestionCycle>>;
   try {
     const adapter = getAdapter(adapterKey);
-
-    result = await runIngestionPipeline({
-      source,
-      sourceLease,
-      scopedDb: ingestionDb,
-      acquireStoredTotalAdmission: getStoredTotalMaintenance().acquireAdmission,
-      dbSlot: dbWriteSemaphore,
-      cycle: {
-        budgetMs: adapter?.maxCycleMs ?? MAX_CYCLE_MS,
-        abortEarlyOn: [drainController.signal],
-      },
-      ...(bounds.maxPages !== undefined && { maxPages: bounds.maxPages }),
-      ...(bounds.maxDecisions !== undefined && {
-        maxDecisions: bounds.maxDecisions,
+    execution = await executeIngestionCycle({
+      cursorBefore,
+      describeFailure: (error) => ({
+        stopKind: ingestionStopKindOf(error),
+        message: `[${errorTag(error)}] ${error instanceof Error ? error.message : String(error)}`,
       }),
+      recordPages: (pages) => {
+        pagesSinceStart += pages;
+      },
+      runPipeline: async () =>
+        await runIngestionPipeline({
+          source,
+          sourceLease,
+          scopedDb: ingestionDb,
+          acquireStoredTotalAdmission:
+            getStoredTotalMaintenance().acquireAdmission,
+          dbSlot: dbWriteSemaphore,
+          cycle: {
+            budgetMs: adapter?.maxCycleMs ?? MAX_CYCLE_MS,
+            abortEarlyOn: [drainController.signal],
+          },
+          ...(bounds.maxPages !== undefined && { maxPages: bounds.maxPages }),
+          ...(bounds.maxDecisions !== undefined && {
+            maxDecisions: bounds.maxDecisions,
+          }),
+        }),
     });
-    // Before the halt-reason handling and the ingestion-event write below:
-    // pages already completed are durable regardless of how this cycle ends,
-    // and a stalled event write must not hide them from the heartbeat.
-    pagesSinceStart += result.pagesProcessed;
-    if (result.haltReason?.startsWith("Decision cap")) {
-      // A requested sample bound is a successful outcome, not a failure.
-      logInfo(`[${adapterKey}] ${result.haltReason}`);
-    } else if (result.haltReason) {
-      outcome =
-        result.haltReason === CYCLE_HALT_REASON.TIMEOUT
-          ? CYCLE_OUTCOME.TIMEOUT
-          : CYCLE_OUTCOME.FAILED;
-      errorMessage = result.haltReason.slice(0, 2048);
-    }
-  } catch (error) {
-    outcome = CYCLE_OUTCOME.FAILED;
-    errorMessage =
-      `[${errorTag(error)}] ${error instanceof Error ? error.message : String(error)}`.slice(
-        0,
-        2048,
-      );
   } finally {
     try {
       await sourceLease.release();
@@ -750,6 +738,8 @@ const runOneCycle = async (
     return { type: "drained" };
   }
 
+  const { result, cycle, errorMessage } = execution;
+  const { outcome } = cycle;
   const durationMs = Math.round(performance.now() - t0);
   const cursorAfter = result !== null ? result.nextCursor : cursorBefore;
 
@@ -793,16 +783,7 @@ const runOneCycle = async (
     logError(`[${adapterKey}] Failed: ${errorMessage ?? "no error recorded"}`);
   }
 
-  return {
-    cycle: {
-      outcome,
-      inserted: result?.inserted ?? 0,
-      skipped: result?.skipped ?? 0,
-      pagesProcessed: result?.pagesProcessed ?? 0,
-      cursorAdvanced: cursorAfter !== cursorBefore,
-    },
-    type: "ran",
-  };
+  return { cycle, type: "ran" };
 };
 
 /**
@@ -825,7 +806,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
     }
     let leaseBusy = false;
     /** Null when the cycle never ran (lease busy), so it folds no evidence. */
-    let progressVerdict: boolean | null = null;
+    let finishedCycle: CycleResult | null = null;
     try {
       // Bound concurrent cycles: the fetch/enrich/parse phase runs outside
       // the DB-write slot, so without this every source crawls its backlog
@@ -872,7 +853,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         // A stall is a cycle that advanced no page, whatever its outcome; a halt
         // or a timeout that still walked pages moved the cursor.
         const madeProgress = cycleMadeProgress(cycle);
-        progressVerdict = madeProgress;
+        finishedCycle = cycle;
 
         if (outcome === CYCLE_OUTCOME.FAILED && !madeProgress) {
           backoffFailures++;
@@ -899,7 +880,14 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       }
     } catch (error) {
       // A thrown cycle made no forward progress either.
-      progressVerdict = false;
+      finishedCycle = {
+        outcome: CYCLE_OUTCOME.FAILED,
+        stopKind: ingestionStopKindOf(error),
+        inserted: 0,
+        skipped: 0,
+        pagesProcessed: 0,
+        cursorAdvanced: false,
+      };
       backoffFailures++;
       const msg = error instanceof Error ? error.message : String(error);
       if (isTransientConnectionError(error)) {
@@ -914,22 +902,20 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
     // exception capture fires once per episode, when it begins, so a source
     // outage reaches error tracking as one alert instead of one event per
     // failed fetch.
-    if (progressVerdict !== null) {
-      const stall = stepStallAlert(
+    if (finishedCycle !== null) {
+      const { stall, stopKind } = stepAdapterCycleHealth({
+        adapterKey,
+        cycle: finishedCycle,
         stallAlert,
-        progressVerdict,
-        SUSTAINED_FAILURE_THRESHOLD,
-      );
+        stalledAdapters,
+        threshold: SUSTAINED_FAILURE_THRESHOLD,
+      });
       stallAlert = stall.state;
-      if (stallAlert.captured) {
-        stalledAdapters.add(adapterKey);
-      } else {
-        stalledAdapters.delete(adapterKey);
-      }
       if (stall.sustained !== null) {
         logger.error("case_law.ingestion.sustained_failure", {
           adapterKey,
           noProgressStreak: stall.sustained,
+          stopKind,
         });
         if (stall.capture) {
           captureError(

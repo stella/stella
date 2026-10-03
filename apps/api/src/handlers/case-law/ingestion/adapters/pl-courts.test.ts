@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   decodeSourceRawEnvelope,
@@ -34,6 +34,7 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { PL_COURTS_METADATA_URL_SCHEMA } from "./pl-courts.metadata-urls";
 
@@ -531,4 +532,45 @@ test("SAOS detail null URLs and chambers fall back to the listing", async () => 
   });
   expect(decision.metadata).toHaveProperty("href", url);
   expect(decision.metadata).toHaveProperty("chambers[0].href", url);
+});
+
+describe("SAOS detail refusals preserve the dump crawl's storage policy", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test.each([401, 403, 429])(
+    "a detail HTTP %s preserves the existing dump fallback or refusal",
+    async (status) => {
+      const listing = await rowById(DUMP_PAGE, 332_735);
+      let detailRequests = 0;
+      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.pathname.includes("/dump/")) {
+          return Response.json({ items: [listing] });
+        }
+        expect(url.pathname.endsWith("/332735")).toBe(true);
+        detailRequests += 1;
+        return new Response("refused", { status });
+      });
+
+      const page = (await plCourtsAdapter.fetchPage(null, {})).unwrap();
+      expect(detailRequests).toBe(1);
+      if (status === 429) {
+        expect(page.decisions).toEqual([]);
+      } else {
+        expect(page.decisions).toHaveLength(1);
+        const decision = page.decisions.at(0);
+        expect(decision?.caseNumber).toBe(
+          decisionFrom({ listingRow: listing, detail: null }).caseNumber,
+        );
+        expect(decodeSourceRawEnvelope(decision?.sourceRaw ?? "")).toEqual({
+          "listing-dump": JSON.stringify(listing),
+        });
+      }
+    },
+  );
 });

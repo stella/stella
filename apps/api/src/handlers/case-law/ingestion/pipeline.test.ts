@@ -13,6 +13,10 @@ import {
   DOCUMENT_FETCH_EVENT,
   type DocumentStageObserver,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
+import {
+  CYCLE_HALT_REASON,
+  INGESTION_STOP_KIND,
+} from "@stll/legal-atlas/ingestion-cycle";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -36,10 +40,7 @@ import {
   bareCitationKey,
   decisionIdentifiersFromStoredMetadata,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
-import {
-  CYCLE_HALT_REASON,
-  runIngestionPipeline,
-} from "@/api/handlers/case-law/ingestion/pipeline";
+import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { wrappedErrorDetail } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -53,6 +54,7 @@ import {
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
+  AdapterFetchError,
   TimeoutError,
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
@@ -124,6 +126,10 @@ const cursorOnlyDb =
   (onCursor: (cursor: string | null | undefined) => void): ScopedDb =>
   async (callback) => {
     const tx = {
+      insert: () => ({ values: insertedValues }),
+      query: {
+        caseLawDecisions: { findFirst: async () => undefined },
+      },
       select: () => ({
         from: (table: unknown) => ({
           where: () => ({
@@ -853,6 +859,7 @@ describe("runIngestionPipeline — database timeouts", () => {
     expect(result.pagesProcessed).toBe(0);
     expect(result.nextCursor).toBe("cursor-1");
     expect(result.haltReason?.startsWith("Database timeout;")).toBe(true);
+    expect(result.stopKind).toBe(INGESTION_STOP_KIND.INTERNAL_ERROR);
     expect(persistedCursor).toBe("cursor-1");
   });
 });
@@ -1027,6 +1034,7 @@ describe("runIngestionPipeline — failure records", () => {
     expect(result.nextCursor).toBe("cursor-1");
     expect(result.pagesProcessed).toBe(0);
     expect(result.haltReason).toContain("cursor held for retry");
+    expect(result.stopKind).toBe(INGESTION_STOP_KIND.INTERNAL_ERROR);
     expect(result.skipped).toBe(1);
   });
 });
@@ -1215,10 +1223,186 @@ describe("runIngestionPipeline — document observer failures", () => {
 });
 
 describe("runIngestionPipeline — cycle deadline", () => {
-  /**
-   * The cursor advance is the only database work these cases reach: neither
-   * starts a page that returns decisions.
-   */
+  for (const stopKind of [
+    "source_unreachable",
+    "publisher_refusal",
+    "adapter_error",
+  ] as const) {
+    test(`propagates ${stopKind} and holds the last cursor`, async () => {
+      const source = caseLawSourceRow({ name: "Stopped source" });
+      czNsAdapter.fetchPage = async () =>
+        Result.err(
+          new AdapterFetchError({
+            message: "Page unavailable",
+            adapterKey: "cz-ns",
+            cursor: source.syncCursor,
+            stopKind,
+          }),
+        );
+      let persistedCursor: string | null | undefined;
+      const result = await runIngestionPipeline({
+        source,
+        sourceLease: testSourceLease(source),
+        acquireStoredTotalAdmission: async () => "held",
+        scopedDb: cursorOnlyDb((cursor) => {
+          persistedCursor = cursor;
+        }),
+        maxPages: 1,
+      });
+      expect(result.stopKind).toBe(stopKind);
+      expect(result.pagesProcessed).toBe(0);
+      expect(result.nextCursor).toBe(source.syncCursor);
+      expect(persistedCursor).toBe(source.syncCursor);
+    });
+  }
+
+  test("classifies a publisher 503 without an injected stop kind", async () => {
+    const source = caseLawSourceRow({ name: "Unavailable source" });
+    czNsAdapter.fetchPage = async () =>
+      Result.err(
+        new AdapterFetchError({
+          message: "Publisher unavailable",
+          adapterKey: "cz-ns",
+          cursor: source.syncCursor,
+          httpStatus: 503,
+        }),
+      );
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      acquireStoredTotalAdmission: async () => "held",
+      scopedDb: cursorOnlyDb(() => undefined),
+    });
+    expect(result.stopKind).toBe(INGESTION_STOP_KIND.SOURCE_UNREACHABLE);
+    expect(result.nextCursor).toBe(source.syncCursor);
+  });
+
+  test.each([
+    { ending: "request", expected: INGESTION_STOP_KIND.SOURCE_UNREACHABLE },
+    { ending: "cycle", expected: INGESTION_STOP_KIND.DEADLINE },
+  ] as const)(
+    "classifies a rejected fetch when the $ending budget expires",
+    async ({ ending, expected }) => {
+      const source = caseLawSourceRow({ name: "Rejected-fetch source" });
+      const drain = new AbortController();
+      let fetches = 0;
+      czNsAdapter.fetchPage = async (_cursor, _config, signal) => {
+        fetches++;
+        expect(signal?.aborted).toBe(false);
+        if (ending === "cycle") {
+          drain.abort();
+        }
+        expect(signal?.aborted).toBe(ending === "cycle");
+        throw new DOMException("The request timed out", "TimeoutError");
+      };
+      let persistedCursor: string | null | undefined;
+      const result = await runIngestionPipeline({
+        source,
+        sourceLease: testSourceLease(source),
+        acquireStoredTotalAdmission: async () => "held",
+        scopedDb: cursorOnlyDb((cursor) => {
+          persistedCursor = cursor;
+        }),
+        cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+      });
+      expect(fetches).toBe(1);
+      expect(result.stopKind).toBe(expected);
+      expect(result.pagesProcessed).toBe(0);
+      expect(result.nextCursor).toBe(source.syncCursor);
+      expect(persistedCursor).toBe(source.syncCursor);
+    },
+  );
+
+  test("a failed source-raw write holds the cursor as an internal error", async () => {
+    const source = caseLawSourceRow({ name: "Write-failure source" });
+    const fake = startFakeS3();
+    fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [
+          { ...baseResult(EMPTY_AST), sourceRaw: "<html>source</html>" },
+        ],
+        nextCursor: "cursor-2",
+      });
+    try {
+      const result = await runIngestionPipeline({
+        source,
+        sourceLease: testSourceLease(source),
+        acquireStoredTotalAdmission: async () => "held",
+        scopedDb: cursorOnlyDb(() => undefined),
+        maxPages: 1,
+      });
+      expect(
+        fake.requests.filter(({ method }) => method === "PUT"),
+      ).toHaveLength(1);
+      expect(result.haltReason).toContain("source raw write failure");
+      expect(result.stopKind).toBe(INGESTION_STOP_KIND.INTERNAL_ERROR);
+      expect(result.pagesProcessed).toBe(0);
+      expect(result.nextCursor).toBe(source.syncCursor);
+    } finally {
+      fake.stop();
+    }
+  });
+
+  test("the cycle deadline overrides a typed publisher refusal", async () => {
+    const source = caseLawSourceRow({ name: "Deadline source" });
+    const drain = new AbortController();
+    czNsAdapter.fetchPage = async () => {
+      drain.abort();
+      return Result.err(
+        new AdapterFetchError({
+          message: "Publisher refusal at cycle end",
+          adapterKey: "cz-ns",
+          cursor: source.syncCursor,
+          httpStatus: 403,
+        }),
+      );
+    };
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      acquireStoredTotalAdmission: async () => "held",
+      scopedDb: cursorOnlyDb(() => undefined),
+      cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+    });
+    expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
+    expect(result.pagesProcessed).toBe(0);
+  });
+
+  test("a page budget timeout is a deadline while the cycle still has time", async () => {
+    const source = caseLawSourceRow({ name: "Page-budget source" });
+    const originalPageTimeout = czNsAdapter.pageTimeoutMs;
+    const originalFetch = czNsAdapter.fetchPage;
+    czNsAdapter.pageTimeoutMs = 1;
+    czNsAdapter.fetchPage = async (_cursor, _config, signal) => {
+      await new Promise<void>((resolve) => {
+        signal?.addEventListener("abort", () => resolve(), { once: true });
+      });
+      return Result.err(
+        new AdapterFetchError({
+          message: "Page request stopped",
+          adapterKey: "cz-ns",
+          cursor: source.syncCursor,
+          httpStatus: 403,
+        }),
+      );
+    };
+    try {
+      const result = await runIngestionPipeline({
+        source,
+        sourceLease: testSourceLease(source),
+        acquireStoredTotalAdmission: async () => "held",
+        scopedDb: cursorOnlyDb(() => undefined),
+        cycle: { budgetMs: 60_000 },
+      });
+      expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
+      expect(result.pagesProcessed).toBe(0);
+    } finally {
+      czNsAdapter.pageTimeoutMs = originalPageTimeout;
+      czNsAdapter.fetchPage = originalFetch;
+    }
+  });
+
   test("stops before a page the remaining budget cannot cover", async () => {
     const source = caseLawSourceRow({ name: "Short-budget source" });
 
@@ -1245,6 +1429,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
     expect(fetches).toBe(0);
     expect(result.pagesProcessed).toBe(0);
     expect(result.haltReason).toBe(CYCLE_HALT_REASON.TIMEOUT);
+    expect(result.stopKind).toBe("deadline");
     expect(result.nextCursor).toBe("cursor-1");
     expect(persistedCursor).toBe("cursor-1");
   });

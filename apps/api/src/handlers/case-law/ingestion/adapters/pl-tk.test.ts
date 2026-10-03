@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 /**
  * pl-tk against pages the Tribunal's portal served.
  *
@@ -7,8 +7,18 @@ import { Result } from "better-result";
  * listing is generated in the print view's own markup, so the walk's
  * arithmetic is checked against rows whose positions are known.
  */
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setSystemTime,
+  test,
+} from "bun:test";
 import * as cheerio from "cheerio";
+
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import {
   decodeSourceRawEnvelope,
@@ -17,18 +27,24 @@ import {
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assemblePlTkDecision,
+  createPlTkSessionCooldown,
+  createPlTkPublisherSessionCooldown,
   encodePlTkCursor,
   parsePlTkCursor,
   parsePlTkListingPage,
   PL_TK_PAGE_SIZE,
   PL_TK_QUARANTINE_PREFIX,
+  PL_TK_SESSION_REFUSAL_COOLDOWN_MS,
   plTkAdapter,
+  plTkSessionCooldown,
   plTkBatchWindow,
   plTkRawPartsOf,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import type { PlTkListingRow } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import { plConstitutionalTribunalRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
+import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { sanitizeMetadata } from "@/api/lib/legal-search/corpus-sanitize";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -186,16 +202,279 @@ const installPortal = (options: PortalOptions): SeenRequest[] => {
 
 const originalFetch = globalThis.fetch;
 const originalSleep = Bun.sleep;
+let fixtureClock = Temporal.Now.instant().epochMilliseconds;
 
 beforeEach(() => {
+  // Each fixture starts after the preceding session-refusal cooldown expired.
+  fixtureClock += DAY_IN_MS + 1;
+  setSystemTime(fixtureClock);
   Bun.sleep = async () => {
     // Nothing here is live.
   };
 });
 
+afterAll(() => {
+  setSystemTime();
+});
+
 afterEach(() => {
   globalThis.fetch = originalFetch;
   Bun.sleep = originalSleep;
+});
+
+describe("portal session outcomes", () => {
+  test.each([401, 429])(
+    "%i entry refusal preserves Retry-After and parks later cycles",
+    async (entryStatus) => {
+      const cursor = "merits:1645,0,0";
+      const startedAt = Temporal.Now.instant().epochMilliseconds;
+      let requests = 0;
+      globalThis.fetch = asFetchMock(async () => {
+        requests++;
+        return new Response("entry refused", {
+          status: entryStatus,
+          headers: { "Retry-After": "3" },
+        });
+      });
+      const first = await plTkAdapter.fetchPage(cursor, {});
+      if (Result.isOk(first)) {
+        throw new TypeError("Expected an entry refusal");
+      }
+      expect(first.error).toMatchObject({
+        httpStatus: entryStatus,
+        retryAfter: "3",
+        stopKind: "publisher_refusal",
+        cursor,
+      });
+      expect(await plTkSessionCooldown.read(cursor)).toMatchObject({
+        value: startedAt + 3000,
+      });
+      for (let cycle = 0; cycle < 5; cycle++) {
+        const parked = await plTkAdapter.fetchPage(cursor, {});
+        if (Result.isOk(parked)) {
+          throw new TypeError("Expected a parked session entry");
+        }
+        expect(parked.error.stopKind).toBe("publisher_refusal");
+        expect(requests).toBe(1);
+      }
+      setSystemTime(startedAt + 3000);
+      await plTkAdapter.fetchPage(cursor, {});
+      expect(requests).toBe(2);
+      fixtureClock = Temporal.Now.instant().epochMilliseconds;
+    },
+  );
+
+  test("cooldown writes the publisher key and bounded TTL through the gate client", async () => {
+    const startedAt =
+      Math.floor(Temporal.Now.instant().epochMilliseconds / 1000) * 1000;
+    const intervalMs = publisherRequestIntervalMs(ADAPTER_KEYS.PL_TK);
+    const cases = [
+      { header: undefined, wait: DAY_IN_MS },
+      { header: "invalid", wait: DAY_IN_MS },
+      { header: "-1", wait: DAY_IN_MS },
+      { header: "999999999999999999999", wait: DAY_IN_MS },
+      { header: "86401", wait: DAY_IN_MS },
+      { header: "0", wait: intervalMs },
+      { header: "3", wait: 3000 },
+      {
+        header: new Date(startedAt + 3_600_000).toUTCString(),
+        wait: 3_600_000,
+      },
+      { header: new Date(startedAt - 60_000).toUTCString(), wait: intervalMs },
+    ];
+    for (const { header, wait } of cases) {
+      setSystemTime(startedAt);
+      let now = startedAt;
+      const values = new Map<string, { deadline: number; ttl: number }>();
+      const writes: { key: string; ttl: number }[] = [];
+      const dependencies = {
+        redis: () => ({
+          send: (command: string, args: string[]) => {
+            expect(command).toBe("EVAL");
+            expect(args.at(1)).toBe("1");
+            const key = args.at(2);
+            if (key === undefined) {
+              return panic("Expected the cooldown key");
+            }
+            expect(key).toBe("{case-law:publisher-gate:trybunal-pl}:cooldown");
+            const value = values.get(key);
+            if (args.at(3) === undefined) {
+              expect(args.at(0)).toContain(
+                "return untilAt > now and untilAt or 0",
+              );
+              return value !== undefined && value.deadline > now
+                ? value.deadline
+                : 0;
+            }
+            expect(args.at(0)).toContain(
+              'redis.call("PSETEX", KEYS[1], untilAt - now, tostring(untilAt))',
+            );
+            const duration = Number(args.at(3));
+            const deadline = Math.max(value?.deadline ?? now, now + duration);
+            values.set(key, { deadline, ttl: deadline - now });
+            writes.push({ key, ttl: deadline - now });
+            return deadline;
+          },
+        }),
+        sleep: async () => undefined,
+      };
+      const parked = await createPlTkPublisherSessionCooldown(
+        dependencies,
+      ).park("cursor", header);
+      expect(parked).toMatchObject({ value: startedAt + wait });
+      expect(writes).toEqual([
+        { key: "{case-law:publisher-gate:trybunal-pl}:cooldown", ttl: wait },
+      ]);
+      expect(
+        await createPlTkPublisherSessionCooldown(dependencies).read("cursor"),
+      ).toMatchObject({ value: startedAt + wait });
+      now = startedAt + wait;
+      expect(
+        await createPlTkPublisherSessionCooldown(dependencies).read("cursor"),
+      ).toMatchObject({ value: null });
+    }
+  });
+
+  test("cooldown infrastructure failures retain their internal kind", async () => {
+    const cursor = "merits:1645,0,0";
+    const cause = Object.assign(new TypeError("Redis command failed"), {
+      code: "ECONNRESET",
+    });
+    const gate = createPlTkSessionCooldown({
+      read: async () => {
+        throw cause;
+      },
+      defer: async () => {
+        throw cause;
+      },
+    });
+    for (const outcome of [await gate.read(cursor), await gate.park(cursor)]) {
+      if (Result.isOk(outcome)) {
+        throw new TypeError("Expected the gate operation to fail");
+      }
+      expect(outcome.error).toMatchObject({
+        stopKind: "internal_error",
+        cursor,
+        cause,
+      });
+    }
+  });
+
+  test("an entry refusal parks repeated cycles until the 24-hour expiry", async () => {
+    const cursor = "merits:1645,0,0";
+    const startedAt = Temporal.Now.instant().epochMilliseconds;
+    let requests = 0;
+    globalThis.fetch = asFetchMock(async () => {
+      requests++;
+      return new Response("entry refused", { status: 403 });
+    });
+    const first = await plTkAdapter.fetchPage(cursor, {});
+    if (Result.isOk(first)) {
+      throw new TypeError("Expected an entry refusal");
+    }
+    expect(first.error).toMatchObject({
+      httpStatus: 403,
+      stopKind: "publisher_refusal",
+      cursor,
+    });
+    expect(requests).toBe(1);
+    expect(PL_TK_SESSION_REFUSAL_COOLDOWN_MS).toBe(24 * 60 * 60 * 1000);
+
+    for (let cycle = 1; cycle < 48; cycle++) {
+      setSystemTime(startedAt + cycle * 30 * 60 * 1000);
+      const parked = await plTkAdapter.fetchPage(cursor, {});
+      if (Result.isOk(parked)) {
+        throw new TypeError("Expected the session entry to stay paused");
+      }
+      expect(parked.error).toMatchObject({
+        stopKind: "publisher_refusal",
+        cursor,
+      });
+      expect(parked.error.httpStatus).toBeUndefined();
+      expect(requests).toBe(1);
+    }
+    setSystemTime(startedAt + PL_TK_SESSION_REFUSAL_COOLDOWN_MS - 1);
+    const beforeExpiry = await plTkAdapter.fetchPage(cursor, {});
+    expect(Result.isError(beforeExpiry)).toBe(true);
+    expect(requests).toBe(1);
+
+    setSystemTime(startedAt + PL_TK_SESSION_REFUSAL_COOLDOWN_MS);
+    const retried = await plTkAdapter.fetchPage(cursor, {});
+    if (Result.isOk(retried)) {
+      throw new TypeError("Expected the fresh entry attempt to be refused");
+    }
+    expect(retried.error.httpStatus).toBe(403);
+    expect(requests).toBe(2);
+    fixtureClock = Temporal.Now.instant().epochMilliseconds;
+  });
+
+  test("an entry refusal stops before search or listing", async () => {
+    const body = await Bun.file(
+      new URL("pl-tk-entry-refused.html", ADAPTER_FIXTURES),
+    ).text();
+    const seen: string[] = [];
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      seen.push(requestUrl(input));
+      return new Response(body, { status: 403 });
+    });
+
+    const result = await plTkAdapter.fetchPage("merits:1645,0,0", {});
+    if (Result.isOk(result)) {
+      throw new TypeError("Expected the entry refusal to stop the page");
+    }
+    expect(result.error.stopKind).toBe("publisher_refusal");
+    expect(result.error.httpStatus).toBe(403);
+    expect(result.error.cursor).toBe("merits:1645,0,0");
+    expect(seen).toEqual(["https://ipo.trybunal.gov.pl/ipo/"]);
+  });
+
+  test("a refusal after successful bootstrap holds the cursor without reopening", async () => {
+    const seen: string[] = [];
+    globalThis.fetch = asFetchMock(async (input, init) => {
+      const url = new URL(requestUrl(input));
+      seen.push(url.pathname);
+      if (url.pathname === "/ipo/") {
+        return html("<html></html>", [
+          "JSESSIONID=fixture-session; Path=/ipo; Secure; HttpOnly",
+        ]);
+      }
+      expect(new Headers(init?.headers).get("Cookie")).toContain(
+        "JSESSIONID=fixture-session",
+      );
+      return new Response("the portal opened no session", { status: 403 });
+    });
+
+    const result = await plTkAdapter.fetchPage("merits:1645,0,0", {});
+    if (Result.isOk(result)) {
+      throw new TypeError("Expected the search refusal to stop the page");
+    }
+    expect(result.error.stopKind).toBe("publisher_refusal");
+    expect(result.error.httpStatus).toBe(403);
+    expect(result.error.cursor).toBe("merits:1645,0,0");
+    expect(seen).toEqual(["/ipo/", "/ipo/Szukaj"]);
+    // Assert before moving the fixture clock: a search refusal is not an entry refusal.
+    expect(await plTkSessionCooldown.read("merits:1645,0,0")).toMatchObject({
+      value: null,
+    });
+    await plTkAdapter.fetchPage("merits:1645,0,0", {});
+    expect(seen).toEqual(["/ipo/", "/ipo/Szukaj", "/ipo/", "/ipo/Szukaj"]);
+  });
+
+  test("an entry transport failure is source unreachable and makes one request", async () => {
+    let requests = 0;
+    globalThis.fetch = asFetchMock(async () => {
+      requests += 1;
+      throw new TypeError("Unable to connect");
+    });
+
+    const result = await plTkAdapter.fetchPage("merits:1645,0,0", {});
+    if (Result.isOk(result)) {
+      throw new TypeError("Expected the transport failure to stop the page");
+    }
+    expect(result.error.stopKind).toBe("source_unreachable");
+    expect(result.error.httpStatus).toBeUndefined();
+    expect(requests).toBe(1);
+  });
 });
 
 // ── The print view ───────────────────────────────────────
@@ -396,6 +675,12 @@ describe("a crawl page against the portal", () => {
     const listing = seen.find(
       (request) => request.url.pathname === "/ipo/SzukajDrukuj",
     );
+    expect(listing?.cookie).toContain('JSESSIONID="s1.Internet-C:ipo"');
+    expect(
+      casePages.every(
+        (request) => request.cookie === 'JSESSIONID="s1.Internet-C:ipo"',
+      ),
+    ).toBe(true);
     expect(listing?.cookie).toContain("Okres=Since1986");
     expect(listing?.cookie).toContain("RodzajRozstrzygniecia=300");
   });
