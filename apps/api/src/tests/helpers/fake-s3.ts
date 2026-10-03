@@ -62,6 +62,7 @@ export type FakeS3HoldMatch = {
 };
 
 export type FakeS3Hold = {
+  readonly isReached: boolean;
   /** Settles once a matching request is held. */
   readonly reached: Promise<undefined>;
   /** Settles after the held request has applied and produced its response. */
@@ -540,18 +541,23 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
       failures.push({ failure, remaining: failure.times ?? 1 });
     },
     holdNext: (match) => {
+      let isReached = false;
       const reached = Promise.withResolvers<undefined>();
       const released = Promise.withResolvers<undefined>();
       const completed = Promise.withResolvers<undefined>();
       holds.push({
         match,
         reached: () => {
+          isReached = true;
           reached.resolve(undefined);
         },
         released: released.promise,
         completed: () => completed.resolve(undefined),
       });
       return {
+        get isReached() {
+          return isReached;
+        },
         reached: reached.promise,
         completed: completed.promise,
         release: () => {

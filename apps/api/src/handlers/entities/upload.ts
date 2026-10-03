@@ -34,11 +34,10 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  cleanupObjectAfterWriter,
   lockObjectCleanupIntentsForWriter,
-  objectWriterSettlementAfterCleanup,
   reserveObjectCleanupIntent,
   retirePublishedObjectCleanupIntentsInTransaction,
-  settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { hasPersistedGeneratedDocumentActiveDraftContext } from "@/api/lib/chat/active-draft-context";
 import { getGeneratedDocumentDraftState } from "@/api/lib/chat/created-draft";
@@ -63,6 +62,7 @@ import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
 import {
   organizationFileUsageHandlerError,
+  OrganizationFileUsageError,
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
@@ -949,7 +949,7 @@ export const uploadEntityHandler = async function* ({
     }),
   );
   // Exhausted attempts can still finish late; only a confirmed write narrows this.
-  let writeState: S3ObjectWriteCertainty = S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
+  let writeState: S3ObjectWriteCertainty | "never-written" = "never-written";
   let keepUploadedFile = false;
   try {
     if (env.FEATURE_FILE_USAGE_LIMITS) {
@@ -958,12 +958,17 @@ export const uploadEntityHandler = async function* ({
         objectKey: sourceKey,
         sizeBytes: storedSizeBytes,
         ...(fileUsageDb === undefined ? {} : { db: fileUsageDb }),
-        write: async () =>
-          await writeS3ObjectWithRetry({
-            contentType: file.type,
-            data: storedBytes,
-            key: sourceKey,
-          }),
+        write: async () => {
+          writeState = S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
+          return await writeS3ObjectWithRetry(
+            {
+              contentType: file.type,
+              data: storedBytes,
+              key: sourceKey,
+            },
+            { type: "cleanup-intent", intent: cleanupIntentId },
+          );
+        },
       });
       if (Result.isError(organizationFileWrite)) {
         return Result.err(
@@ -972,15 +977,25 @@ export const uploadEntityHandler = async function* ({
       }
       writeState = organizationFileWrite.value;
     } else {
+      writeState = S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN;
       writeState = yield* Result.await(
-        Result.tryPromise(
-          async () =>
-            await writeS3ObjectWithRetry({
-              contentType: file.type,
-              data: storedBytes,
-              key: sourceKey,
+        Result.tryPromise({
+          try: async () =>
+            await writeS3ObjectWithRetry(
+              {
+                contentType: file.type,
+                data: storedBytes,
+                key: sourceKey,
+              },
+              { type: "cleanup-intent", intent: cleanupIntentId },
+            ),
+          catch: (cause) =>
+            new OrganizationFileUsageError({
+              reason: "storage_unavailable",
+              message: "Organization file usage is unavailable",
+              cause,
             }),
-        ),
+        }),
       );
     }
     const entityId = createSafeId<"entity">();
@@ -1315,19 +1330,17 @@ export const uploadEntityHandler = async function* ({
     });
   } finally {
     if (!keepUploadedFile) {
-      const cleanupSucceeded = await cleanupUploadedS3Keys({
-        keys: s3Keys,
-        fileId,
-        workspaceId,
-        fileUsageDb,
-      });
-      const settled = await settleObjectCleanupIntentsAfterWriter({
-        intentIds: [cleanupIntentId],
-        objectState: objectWriterSettlementAfterCleanup({
-          cleanupSucceeded,
-          writeState,
-        }),
+      const settled = await cleanupObjectAfterWriter({
         safeDb,
+        intentId: cleanupIntentId,
+        writeState,
+        deleteObject: async () =>
+          await cleanupUploadedS3Keys({
+            keys: s3Keys,
+            fileId,
+            workspaceId,
+            fileUsageDb,
+          }),
       });
       if (Result.isError(settled)) {
         observeFailure(settled.error, {
