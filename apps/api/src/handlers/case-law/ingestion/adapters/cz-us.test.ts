@@ -1317,7 +1317,7 @@ describe("czUsAdapter.fetchPage", () => {
         ecli: second.ecli ?? null,
         decisionDate: second.decisionDate ?? null,
         decisionType: second.decisionType ?? null,
-        sourceUrl: second.sourceUrl,
+        sourceUrl: second.sourceUrl ?? null,
         documentUrl: second.documentUrl ?? null,
         metadata: second.metadata,
       });
@@ -2447,7 +2447,7 @@ describe("czUsAdapter.reparseStoredRaw", () => {
         type: TEXT_FIELD_TYPE.ABSENT,
         reason,
       });
-      expect(outcome.result.metadata["abstractState"]).toBe(state);
+      expect(String(outcome.result.metadata["abstractState"])).toBe(state);
     });
   }
 

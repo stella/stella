@@ -189,20 +189,26 @@ const FIELDS_TO_RETURN: string[] = [];
 
 // ── Cursor helpers ──────────────────────────────────────────
 
-type YearCursor = { year: number; offset: number };
+type YearCursor = { year: number; offset: number } & (
+  | { status: "walking" }
+  | { status: "refused-frontier" }
+);
 
 const parseCursor = (cursor: string | null): YearCursor => {
   if (!cursor) {
-    return { year: FIRST_YEAR, offset: 0 };
+    return { year: FIRST_YEAR, offset: 0, status: "walking" };
   }
 
   // New format: "YYYY:offset"
-  const match = /^(?<year>\d{4}):(?<offset>\d+)$/u.exec(cursor);
-  const { year, offset } = match?.groups ?? {};
+  const match = /^(?<year>\d{4}):(?<offset>\d+)(?<refused>:refused)?$/u.exec(
+    cursor,
+  );
+  const { year, offset, refused } = match?.groups ?? {};
   if (year && offset) {
     return {
       year: Number.parseInt(year, 10),
       offset: Number.parseInt(offset, 10),
+      status: refused ? "refused-frontier" : "walking",
     };
   }
 
@@ -212,13 +218,14 @@ const parseCursor = (cursor: string | null): YearCursor => {
   // archive (~52k decisions, takes a few hours to crawl through).
   const legacyOffset = Number.parseInt(cursor, 10);
   if (!Number.isNaN(legacyOffset)) {
-    return { year: FIRST_YEAR, offset: 0 };
+    return { year: FIRST_YEAR, offset: 0, status: "walking" };
   }
 
-  return { year: FIRST_YEAR, offset: 0 };
+  return { year: FIRST_YEAR, offset: 0, status: "walking" };
 };
 
-const encodeCursor = (c: YearCursor): string => `${c.year}:${c.offset}`;
+const encodeCursor = (c: { year: number; offset: number }): string =>
+  `${c.year}:${c.offset}`;
 
 // ── Search API types ─────────────────────────────────────
 
@@ -1849,8 +1856,10 @@ const listedWindow = (data: SearchResponse): ListedWindow => ({
  *
  * A refused subtree may have no count, including adjacent poison records;
  * a sibling can still supply the count for the enclosing page. If the whole
- * page serves nothing, it cannot distinguish poison records from an outage
- * and its caller rejects it. The shared split budget bounds that work.
+ * page serves nothing, it cannot distinguish poison records from an empty
+ * range. Reconciliation rejects it; the crawl records the refusal and parks
+ * its current frontier with bounded polling. The shared split budget bounds
+ * that work.
  *
  * A one-record refusal is confirmed by a second request before it is reported
  * unserved. An unidentifiable item is excluded from the slice rather than
@@ -2690,22 +2699,53 @@ export const skUsAdapter = defineSourceAdapter({
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
       try: async () => {
-        const { year, offset } = parseCursor(cursor);
+        const { year, offset, status } = parseCursor(cursor);
         const currentYear = Temporal.Now.plainDateISO().year;
 
-        const { items, numFound } = await listSkUsWindow({
-          budget: { remaining: SPLIT_REQUEST_BUDGET },
-          offset,
-          pageSize: PAGE_SIZE,
-          range: { from: `${year}-01-01`, to: `${year}-12-31` },
-          signal,
-          slice: encodeCursor({ year, offset }),
-        });
+        const range = { from: `${year}-01-01`, to: `${year}-12-31` };
+        const slice = encodeCursor({ year, offset });
+        let window: ListedWindow;
+        if (status === "refused-frontier") {
+          const read = await searchWindow({
+            offset,
+            pageSize: PAGE_SIZE,
+            range,
+            signal,
+            slice,
+          });
+          window =
+            read.type === "unavailable"
+              ? { items: [], numFound: null }
+              : listedWindow(read.data);
+        } else {
+          window = await listSkUsWindow({
+            budget: { remaining: SPLIT_REQUEST_BUDGET },
+            offset,
+            pageSize: PAGE_SIZE,
+            range,
+            signal,
+            slice,
+          });
+        }
+        const { items, numFound } = window;
         if (numFound === null) {
-          throw unservedWindowError(
-            encodeCursor({ year, offset }),
-            `offset ${offset}`,
-          );
+          // No sub-window states a count: empty and wholly refused years are
+          // indistinguishable. Reconciliation audits historical months; the
+          // current frontier rechecks one window until it can be read again.
+          logger.warn("case_law.ingestion.unserved_crawl_window", {
+            adapterKey: ADAPTER_KEYS.SK_US,
+            year,
+            offset,
+            reconciliation: "monthly_listing_reports_unserved_records",
+          });
+          return {
+            decisions: [],
+            itemBuildFailures: { type: "item_build_failed", count: PAGE_SIZE },
+            nextCursor:
+              year < currentYear
+                ? encodeCursor({ year: year + 1, offset: 0 })
+                : `${slice}:refused`,
+          };
         }
 
         if (items.length === 0) {

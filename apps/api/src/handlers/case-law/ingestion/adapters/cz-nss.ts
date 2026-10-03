@@ -1402,29 +1402,37 @@ const readDetailPage = async (
   session: SessionState,
   signal: AbortSignal,
 ): Promise<DetailRead> => {
-  try {
-    const response = await fetchPublisher(
-      `${BASE_URL}/DokumentDetail/Index/${documentId}`,
-      {
-        fetchStage: "document",
-        adapterKey: ADAPTER_KEYS.CZ_NSS,
-        signal,
-        headers: {
-          ...COMMON_HEADERS,
-          Cookie: session.cookies,
+  const attempt = await Result.tryPromise({
+    try: async () => {
+      const response = await fetchPublisher(
+        `${BASE_URL}/DokumentDetail/Index/${documentId}`,
+        {
+          fetchStage: "document",
+          adapterKey: ADAPTER_KEYS.CZ_NSS,
+          signal,
+          headers: {
+            ...COMMON_HEADERS,
+            Cookie: session.cookies,
+          },
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
         },
-        timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-      },
-    );
-    if (response.status === 404) {
-      return { type: "absent" };
-    }
-    if (!response.ok) {
-      return { type: "unavailable" };
-    }
+      );
+      if (response.status === 404) {
+        return { type: "absent" } as const satisfies DetailRead;
+      }
+      if (!response.ok) {
+        return { type: "unavailable" } as const satisfies DetailRead;
+      }
 
-    return { type: "read", html: await response.text() };
-  } catch (error) {
+      return {
+        type: "read",
+        html: await response.text(),
+      } as const satisfies DetailRead;
+    },
+    catch: (cause: unknown) => cause,
+  });
+  if (Result.isError(attempt)) {
+    const error = attempt.error;
     if (signal.aborted) {
       throw error;
     }
@@ -1434,6 +1442,7 @@ const readDetailPage = async (
     });
     return { type: "unavailable" };
   }
+  return attempt.value;
 };
 
 const fetchDetailMetadata = async (

@@ -1568,22 +1568,48 @@ describe("the sk-us steady-state frontier", () => {
     return result.unwrap();
   };
 
-  test.each(["2025:120", PARKED_CURSOR])(
-    "an unavailable crawl window holds cursor %s for retry",
-    async (cursor) => {
+  test.each([
+    { cursor: "2025:120", nextCursor: "2026:0" },
+    { cursor: PARKED_CURSOR, nextCursor: `${PARKED_CURSOR}:refused` },
+  ])(
+    "a wholly refused crawl window checkpoints $cursor as $nextCursor",
+    async ({ cursor, nextCursor }) => {
       const stub = mockFetch({ search: [{ type: "status", status: 204 }] });
-      const result = await skUsAdapter.fetchPage(cursor, {});
+      const page = await fetchPageAt(cursor);
       expect(stub.calls()).toBeLessThanOrEqual(30);
       expect(stub.downloads()).toBe(0);
-      expect(result.isErr()).toBe(true);
-      if (result.isOk()) {
-        throw new Error("Unavailable crawl window returned a checkpoint");
-      }
-      expect(result.error).toBeInstanceOf(AdapterFetchError);
-      expect(result.error.cursor).toBe(cursor);
-      expect(result.error.message).toContain("search returned no body");
+      expect(page.decisions).toEqual([]);
+      expect(page.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 10,
+      });
+      expect(page.nextCursor).toBe(nextCursor);
     },
   );
+
+  test("a refused current frontier polls once and resumes its plain cursor when served", async () => {
+    const refusedCursor = `${PARKED_CURSOR}:refused`;
+    const refused = mockFetch({ search: [{ type: "status", status: 204 }] });
+    const waiting = await fetchPageAt(refusedCursor);
+    expect(refused.calls()).toBe(1);
+    expect(refused.downloads()).toBe(0);
+    expect(waiting.nextCursor).toBe(refusedCursor);
+    expect(waiting.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 10,
+    });
+
+    const served = mockFetch({
+      search: [
+        { type: "page", documents: NEW_DOCUMENTS, numFound: YEAR_NUM_FOUND },
+      ],
+    });
+    const recovered = await fetchPageAt(waiting.nextCursor);
+    expect(served.calls()).toBe(1);
+    expect(served.downloads()).toBe(NEW_DOCUMENTS.length);
+    expect(recovered.decisions).toHaveLength(NEW_DOCUMENTS.length);
+    expect(recovered.nextCursor).toBe(`2026:${YEAR_NUM_FOUND}`);
+  });
 
   test.each(
     [[0], [4], [9], [3, 4], [4, 5]].map((poisonIndices) => ({ poisonIndices })),
@@ -1623,7 +1649,9 @@ describe("the sk-us steady-state frontier", () => {
       const page = await fetchPageAt(PARKED_CURSOR);
 
       expect(confirmations).toBe(2 * poisonIndices.length);
-      expect(page.decisions.map(({ caseNumber }) => caseNumber)).toEqual(
+      expect(
+        page.decisions.map(({ caseNumber }) => String(caseNumber)),
+      ).toEqual(
         documents
           .filter((_, index) => !poisonIndices.includes(index))
           .map(({ mkRSAPNumberOfFile }) => mkRSAPNumberOfFile),

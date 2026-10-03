@@ -721,11 +721,15 @@ describe("the crawl keeps a refused row as its listing", () => {
       const hasValidLink = !("odkaz" in drift);
       const identity =
         "odkaz" in drift
-          ? { type: "case-number", caseNumber: "18 C 130/2024", language: "cs" }
-          : {
+          ? ({
+              type: "case-number",
+              caseNumber: "18 C 130/2024",
+              language: "cs",
+            } as const satisfies ReturnType<typeof czRegionalListingIdentity>)
+          : ({
               type: "document",
               sourceDocumentId: "e21716f9-8855-4a85-a7e6-9af23622661b",
-            };
+            } as const satisfies ReturnType<typeof czRegionalListingIdentity>);
       expect(czRegionalListingIdentity(raw)).toEqual(identity);
       const listed = await listCzRegionalDayPage({
         date: "2025-06-11",

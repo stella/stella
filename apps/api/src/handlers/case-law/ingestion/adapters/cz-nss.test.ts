@@ -1147,34 +1147,40 @@ describe("cz-nss fetchPage", () => {
       installStub({
         search: Array.from({ length: 7 }, () => htmlResponse(SESSION_PAGE)),
       });
-      let cursor: string | null = `${SLICE}:0`;
+      const cursor: { current: string | null } = { current: `${SLICE}:0` };
       for (const attempt of [1, 2]) {
-        const result = (await czNssAdapter.fetchPage(cursor, {})).unwrap();
-        cursor = result.nextCursor;
-        expect(JSON.parse(cursor ?? "")).toEqual({
+        const result = (
+          await czNssAdapter.fetchPage(cursor.current, {})
+        ).unwrap();
+        cursor.current = result.nextCursor;
+        expect(JSON.parse(cursor.current ?? "")).toEqual({
           date: SLICE,
           page: 0,
           missingCountAttempts: attempt,
         });
       }
-      const skipped = (await czNssAdapter.fetchPage(cursor, {})).unwrap();
+      const skipped = (
+        await czNssAdapter.fetchPage(cursor.current, {})
+      ).unwrap();
       expect(skipped.nextCursor).toBe("2026-06-11:0");
       expect(skipped.itemBuildFailures).toEqual({
         type: "item_build_failed",
         count: 1,
       });
-      cursor = skipped.nextCursor;
+      cursor.current = skipped.nextCursor;
       for (const attempt of [1, 2]) {
-        const result = (await czNssAdapter.fetchPage(cursor, {})).unwrap();
-        cursor = result.nextCursor;
-        expect(JSON.parse(cursor ?? "")).toEqual({
+        const result = (
+          await czNssAdapter.fetchPage(cursor.current, {})
+        ).unwrap();
+        cursor.current = result.nextCursor;
+        expect(JSON.parse(cursor.current ?? "")).toEqual({
           date: "2026-06-11",
           page: 0,
           missingCountAttempts: attempt,
         });
       }
       const nextDaySkipped = (
-        await czNssAdapter.fetchPage(cursor, {})
+        await czNssAdapter.fetchPage(cursor.current, {})
       ).unwrap();
       expect(nextDaySkipped.nextCursor).toBe("2026-06-12:0");
       expect(

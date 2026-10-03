@@ -3,6 +3,7 @@
 import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
+import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import { splitCaseReference } from "@/api/handlers/case-law/case-number";
@@ -104,6 +105,8 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
  * Cursor format: "YYYY-MM-DD:page" (e.g. "2026-03-01:0").
  * Pages are 0-indexed. A null cursor starts from 30 days ago.
  */
+
+const MAX_FINALDOC_RESPONSE_BYTES = 20 * 1024 * 1024;
 
 const itemBuildFailed = failureSink({
   event: "case_law.ingestion.item_build_failed",
@@ -646,7 +649,18 @@ const fetchFinaldoc = async (
       });
     }
 
-    const raw = await response.text();
+    const bytes =
+      response.body === null
+        ? new Uint8Array()
+        : await readCappedBytes(response.body, MAX_FINALDOC_RESPONSE_BYTES);
+    if (bytes === null) {
+      throw new AdapterFetchError({
+        message: `CZ Regional document exceeds ${MAX_FINALDOC_RESPONSE_BYTES} bytes`,
+        adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+        cursor: null,
+      });
+    }
+    const raw = new TextDecoder().decode(bytes);
     const validatedPage = validatePublisherPage({
       body: raw,
       headers: response.headers,
