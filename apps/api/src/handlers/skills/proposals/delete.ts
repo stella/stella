@@ -83,7 +83,12 @@ const deleteSkillProposal = createSafeRootHandler(
         }
         if (
           existing.authorId !== user.id &&
-          !canManageSkill({ skill, memberRole, userId: user.id })
+          !canManageSkill({
+            skill,
+            memberRole,
+            userId: user.id,
+            spends: "update",
+          })
         ) {
           throw new HandlerError({ status: 403, message: "Forbidden" });
         }

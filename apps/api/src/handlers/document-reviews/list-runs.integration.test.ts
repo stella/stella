@@ -27,6 +27,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DocumentReviewRunBasis } from "@/api/lib/document-review/run-contract";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -145,7 +146,7 @@ describe("document review run history across versions", () => {
 
     const result = await listDocumentReviewRuns.handler(
       asTestRaw<Parameters<typeof listDocumentReviewRuns.handler>[0]>({
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         params: { workspaceId: ids.wsA1 },
         query: { entityId: ids.entityA1, fileFieldId: laterFieldId },
         recordAuditEvent: async () => undefined,

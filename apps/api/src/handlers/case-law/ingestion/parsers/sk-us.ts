@@ -163,6 +163,11 @@ const readMarkupLines = ($: cheerio.CheerioAPI): MarkupLine[] => {
       if (!isTag(child)) {
         return;
       }
+      // A script's source and a stylesheet are markup, never the decision's
+      // text, whatever element they sit in.
+      if (child.name === "script" || child.name === "style") {
+        return;
+      }
       const element = $(child);
       if (child.name === "br") {
         close();

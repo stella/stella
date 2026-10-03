@@ -23,6 +23,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FlowStep } from "@/api/lib/flows/flow-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { WORK_OBLIGATION_TRANSITIONS } from "@/api/lib/work-obligations/transitions";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -167,7 +168,7 @@ const contextBase = (userId: SafeId<"user">) => {
     getAccessibleWorkspaces: async () => [{ id: ids.wsA1, status: "active" }],
     getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" }),
     createAuditRecorder: () => recordAuditEvent,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu" as const,
@@ -208,7 +209,7 @@ const transition = async (
       ...contextBase(userId),
       ...(options.role === undefined
         ? {}
-        : { memberRole: { role: options.role } }),
+        : { memberRole: sessionMemberRole(options.role) }),
       body: {
         action,
         ...(options.reason === undefined ? {} : { reason: options.reason }),

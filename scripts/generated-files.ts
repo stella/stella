@@ -1,7 +1,3 @@
-import { BASELINE_PATHS } from "./baseline-paths";
-
-export const RATCHET_GENERATOR_ID = "ratchet-improvements";
-
 type GeneratorCheck =
   | { check: readonly string[]; checkedBy?: never; unchecked?: never }
   | { check: null; checkedBy: string; unchecked?: never }
@@ -34,24 +30,6 @@ const MODEL_CATALOG_INPUTS = [
 ] as const;
 
 export const GENERATORS = [
-  {
-    id: RATCHET_GENERATOR_ID,
-    outputKind: "committed",
-    outputs: [BASELINE_PATHS.ratchet],
-    // Whole-tree metrics include source, configuration and workspace structure.
-    inputs: ["**"],
-    write: [
-      "bun",
-      "--no-install",
-      "--no-env-file",
-      "scripts/ratchet.ts",
-      "--write-improvements-only",
-    ],
-    check: null,
-    checkedBy: "Ratchet guard",
-    autofix: true,
-    after: [],
-  },
   {
     id: "capability-catalog",
     outputKind: "committed",
@@ -246,7 +224,7 @@ export const GENERATORS = [
   },
   {
     id: "route-tree",
-    outputKind: "committed",
+    outputKind: "derived",
     outputs: ["apps/web/src/routeTree.gen.ts"],
     inputs: [
       "apps/web/src/routes/**",
@@ -269,7 +247,7 @@ export const GENERATORS = [
     inputs: MODEL_CATALOG_INPUTS,
     write: ["bun", "--filter", "@stll/ai-catalog", "gen:rates"],
     check: null,
-    checkedBy: "Model catalog snapshot drift guard",
+    checkedBy: "Model catalog snapshot drift check",
     autofix: false,
     after: [],
   },
@@ -280,7 +258,7 @@ export const GENERATORS = [
     inputs: MODEL_CATALOG_INPUTS,
     write: ["bun", "--filter", "@stll/ai-catalog", "gen:capabilities"],
     check: null,
-    checkedBy: "Model catalog snapshot drift guard",
+    checkedBy: "Model catalog snapshot drift check",
     autofix: false,
     after: [],
   },
@@ -754,12 +732,12 @@ export const generatorsForFiles = (files: readonly string[]) => {
 };
 
 export const allowedOutputs = (generators: readonly Generator[]) => [
-  // The ratchet output requires a separate trusted proof, never the plan alone.
+  // A planner cannot authorize recreating the retired ratchet budget.
   ...new Set(
     generators
       .filter((generator) => generator.outputKind === "committed")
       .flatMap((generator) => generator.outputs)
-      .filter((output) => output !== BASELINE_PATHS.ratchet),
+      .filter((output) => output !== "scripts/ratchet-baseline.json"),
   ),
 ];
 

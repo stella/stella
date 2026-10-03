@@ -14,6 +14,7 @@ import { panic, Result } from "better-result";
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
 import { listSkillMetadata, readDocumentedChatReads } from "@stll/skills";
 
+import { isChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import {
   EAGER_CHAT_READ_TOOLS,
   toDocumentedChatReads,
@@ -64,24 +65,27 @@ import {
  */
 
 /**
- * The chat-projectable read tools, in registry order. Derived from the
+ * The reads a chat script may call, in registry order. Derived from the
  * `as const` registry array so each `access: "read"` element's `name` narrows
- * to the `RegistryReadToolName` union (no cast); the ref-field map then decides
- * chat projectability per tool.
+ * to the `RegistryReadToolName` union (no cast); the ref-field map decides chat
+ * projectability and the read script policy which of those are script
+ * functions.
  */
-export const chatProjectableReadToolNames =
-  (): readonly RegistryReadToolName[] => {
-    const names: RegistryReadToolName[] = [];
-    for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
-      if (definition.access !== "read") {
-        continue;
-      }
-      if (READ_TOOL_REF_FIELD_MAP[definition.name].chatProjectable) {
-        names.push(definition.name);
-      }
+export const chatScriptReadToolNames = (): readonly RegistryReadToolName[] => {
+  const names: RegistryReadToolName[] = [];
+  for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
+    if (definition.access !== "read") {
+      continue;
     }
-    return names;
-  };
+    if (
+      READ_TOOL_REF_FIELD_MAP[definition.name].chatProjectable &&
+      isChatScriptRead(definition.name)
+    ) {
+      names.push(definition.name);
+    }
+  }
+  return names;
+};
 
 /**
  * The `execute_typescript` runner that Stella's sandbox owns unchanged. Passed to
@@ -112,7 +116,7 @@ const chatReadToolDescription = (toolName: RegistryReadToolName): string => {
   const entry = READ_TOOL_REF_FIELD_MAP[toolName];
   if (!entry.chatProjectable) {
     // Non-projectable tools never enter the chat catalog
-    // (`chatProjectableReadToolNames` filters them out); the plain
+    // (`chatScriptReadToolNames` filters them out); the plain
     // description satisfies the type without inventing a shape.
     return definition.description;
   }
@@ -141,7 +145,7 @@ const buildChatReadTools = ({
     ...EAGER_CHAT_READ_TOOLS,
     ...documentedReads,
   ]);
-  return chatProjectableReadToolNames().map((toolName) => {
+  return chatScriptReadToolNames().map((toolName) => {
     const definition =
       getStaticMcpToolDefinition(toolName) ??
       panic(`Chat read tool ${toolName} is missing from the static registry`);
@@ -216,7 +220,7 @@ const SCRIPT_FUNCTION_PREFIX = "external_";
  * a script misspelled.
  */
 const CHAT_SCRIPT_READ_FUNCTIONS: ReadonlySet<string> = new Set(
-  chatProjectableReadToolNames().map(
+  chatScriptReadToolNames().map(
     (toolName) => `${SCRIPT_FUNCTION_PREFIX}${toolName}`,
   ),
 );

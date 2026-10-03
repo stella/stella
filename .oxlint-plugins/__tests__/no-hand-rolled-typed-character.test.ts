@@ -33,6 +33,19 @@ describe("no-hand-rolled-typed-character", () => {
     ).toEqual([1, 3, 8]);
   });
 
+  test("rejects length vetoes and literal trigger sets", async () => {
+    expect(
+      await lint(
+        [
+          "const rejects = (event: KeyboardEvent) => !event.altKey && event.key.length !== 1;",
+          'const accepts = (event: KeyboardEvent) => !event.altKey && ["@", "/"].includes(event.key);',
+          'const command = (event: KeyboardEvent) => (event.metaKey || event.ctrlKey) && !event.altKey && ["c", "v"].includes(event.key);',
+          'const named = (event: KeyboardEvent) => !event.altKey && ["Enter", "Tab"].includes(event.key);',
+        ].join("\n"),
+      ),
+    ).toEqual([1, 2]);
+  });
+
   test("leaves Mod shortcuts, named keys and nested handlers alone", async () => {
     expect(
       await lint(

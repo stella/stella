@@ -2,8 +2,6 @@ import { Result } from "better-result";
 import { and, asc, eq, gt, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { isOrganizationManagementRole } from "@stll/permissions";
-
 import { timeTimers, workspaces } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
@@ -15,6 +13,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
@@ -91,7 +90,7 @@ const listRunningMemberTimers = createSafeRootHandler(
     }),
   },
   async function* ({ safeDb, session, user, memberRole, query }) {
-    if (!isOrganizationManagementRole(memberRole.role)) {
+    if (!hasManagementPermission(memberRole, { timeEntry: ["approve"] })) {
       return Result.err(
         new HandlerError({
           status: 403,
