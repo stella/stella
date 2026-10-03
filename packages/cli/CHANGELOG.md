@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 3.5.1
+
+### Patch Changes
+
+- [#4489](https://github.com/stella/stella/pull/4489) [`a2690f4`](https://github.com/stella/stella/commit/a2690f4225ce99d3f661e333e1db9fc8e68f300f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Report strict and relaxed legislation matches and preserve search phases in continuation cursors.
+
 ## 3.5.0
 
 ### Minor Changes

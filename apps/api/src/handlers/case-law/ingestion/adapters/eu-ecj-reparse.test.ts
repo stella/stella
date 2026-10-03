@@ -246,3 +246,75 @@ describe("eu-ecj reparseStoredRaw", () => {
     });
   });
 });
+
+test("SPARQL transport JSON URL scalars preserve entity spelling through the real builder", async () => {
+  globalThis.fetch = asFetchMock(
+    mock(() =>
+      Promise.resolve(
+        new Response(fulltextHtml, {
+          headers: { "Content-Type": "text/html" },
+        }),
+      ),
+    ),
+  );
+  const cdmType = "https://example.org/ontology?a=1&amp;b=2#judgement";
+  const decision = await buildDecision(
+    { ...enBinding, type: { type: "uri", value: cdmType } },
+    AbortSignal.timeout(30_000),
+  );
+  if (decision === undefined) {
+    throw new TypeError("Expected the fixture manifestation to parse");
+  }
+  expect(decision.metadata).toHaveProperty("cdmType", cdmType);
+  expect(decision.metadata).toHaveProperty(
+    "manifestationUri",
+    enBinding.manifestation.value,
+  );
+  expect(decision.metadata).toHaveProperty(
+    "languageUri",
+    enBinding.language.value,
+  );
+  const replayed = await reparse(storedFrom(decision));
+  if (replayed.type !== "parsed") {
+    throw new TypeError(`Expected parsed, got ${replayed.type}`);
+  }
+  expect(replayed.result.metadata).toHaveProperty("cdmType", cdmType);
+});
+
+test("legacy persisted URI fields reject unsafe values without losing or multiplying diagnostics on replay", async () => {
+  const decision = await crawlDecision();
+  const replayed = await reparse(
+    storedFrom(decision, {
+      raw: new TextEncoder().encode(fulltextHtml),
+      contentType: "text/html",
+      metadata: {
+        ...decision.metadata,
+        manifestationUri: "/relative",
+        languageUri: "ftp://example.org/document",
+        cdmType: "data:text/plain,ontology",
+      },
+    }),
+  );
+  if (replayed.type !== "parsed") {
+    throw new TypeError(`Expected parsed, got ${replayed.type}`);
+  }
+  for (const key of ["manifestationUri", "languageUri", "cdmType"]) {
+    expect(Object.hasOwn(replayed.result.metadata, key)).toBe(false);
+  }
+  expect(replayed.result.metadata).toHaveProperty("metadataUrlDiagnostics", {
+    entries: [
+      { address: "manifestationUri", reason: "invalid-url" },
+      { address: "languageUri", reason: "unsafe-protocol" },
+      { address: "cdmType", reason: "unsafe-protocol" },
+    ],
+    overflowCount: 0,
+  });
+  const second = await reparse(storedFrom(replayed.result));
+  if (second.type !== "parsed") {
+    throw new TypeError(`Expected parsed, got ${second.type}`);
+  }
+  expect(second.result.metadata).toHaveProperty(
+    "metadataUrlDiagnostics",
+    replayed.result.metadata["metadataUrlDiagnostics"],
+  );
+});

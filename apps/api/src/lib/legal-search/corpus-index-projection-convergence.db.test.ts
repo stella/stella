@@ -278,6 +278,14 @@ const BLOCKING_REVISION_SHAPES = {
     deleteOpstamp: 7n,
     deleteTaskCreatedAt: NOW,
   },
+  cleanup_stalled: {
+    appendStartedAt: NOW,
+    appendPublishBarrierAt: NOW,
+    cleanupNotBefore: NOW,
+    cleanupStartedAt: NOW,
+    deleteOpstamp: 7n,
+    deleteTaskCreatedAt: NOW,
+  },
 } as const satisfies Record<
   BlockingIntentStatus,
   Partial<typeof corpusIndexProjectionIntents.$inferInsert>

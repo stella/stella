@@ -671,7 +671,7 @@ mechanics, and similar), not gaps in coverage.
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
-| hosted_billing | 6 |
+| hosted_billing | 7 |
 | mcp_transport | 11 |
 | native_tool_ui | 9 |
 | provider_secret | 27 |

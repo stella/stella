@@ -8,7 +8,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
@@ -65,6 +65,7 @@ import {
 } from "@/api/lib/legal-search/raw-source-storage";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // Written reasons SAOS publishes apart from their ruling, through the real
@@ -1115,6 +1116,56 @@ describe("the reasons' stored payload", () => {
     expect(await citationsOf(ruling.id)).toEqual([]);
   });
 
+  test("supplement erasure persists the registered judgment URL spelling through the pipeline entry", async () => {
+    const fixture = await newSource();
+    await db
+      .update(caseLawSources)
+      .set({ adapterKey: sql`'retired-' || ${caseLawSources.id}` })
+      .where(eq(caseLawSources.adapterKey, ADAPTER_KEYS.PL_COURTS));
+    await db
+      .update(caseLawSources)
+      .set({ adapterKey: ADAPTER_KEYS.PL_COURTS })
+      .where(eq(caseLawSources.id, fixture.sourceId));
+    const rootUrl = "https://example.test/?root=&amp;amp;&encoded=%26";
+    const nestedUrl = "https://example.test/?nested=&amp;lt;b&amp;gt;";
+    const rulingRow = {
+      ...RULING,
+      href: rootUrl,
+      division: { id: 1083, href: nestedUrl, court: { id: 42, name: COURT } },
+    };
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    await ingestDecision(fixture, decisionOf(rulingRow));
+    const absorbed = await decisionBy(fixture.sourceId, "339001");
+    const ruling = await decisionBy(fixture.sourceId, "339002");
+    expect(ruling.fulltext).toContain(REASONS_TEXT);
+    expect(ruling.metadata).toMatchObject({
+      href: rootUrl,
+      division: { href: nestedUrl },
+    });
+    await advanceSourceCounter(fixture.sourceId);
+
+    const erased = await redactCaseLawDecisionWithSupplementHolders({
+      decisionId: absorbed.id,
+      scopedDb,
+      readStoredRaw,
+      reparseStoredRaw,
+      leaseWaitMs: 0,
+    });
+    expect(Result.isOk(erased) && erased.value.holders).toEqual([
+      { type: "recomposed", judgmentId: ruling.id },
+    ]);
+    const rebuilt = await decisionBy(fixture.sourceId, "339002");
+    expect(rebuilt.fulltext).toContain(RULING_TEXT);
+    expect(rebuilt.fulltext).not.toContain(REASONS_TEXT);
+    expect(rebuilt.metadata).toMatchObject({
+      href: rootUrl,
+      division: { href: nestedUrl },
+    });
+    expect(
+      rebuilt.metadata?.[DOCUMENT_SUPPLEMENTS_METADATA_KEY],
+    ).toBeUndefined();
+  });
+
   test("erased after joining a ruling whose payload cannot be read withhold that ruling", async () => {
     const fixture = await newSource();
     await ingestDecision(fixture, decisionOf(RULING));
@@ -1193,6 +1244,45 @@ describe("the reasons' stored payload", () => {
     ).toEqual([]);
     expect(rawKeysUnder(fixture.sourceId, ruling.id)).toEqual([]);
   });
+});
+
+test("a supplement and its standalone decision share one persisted source schema lookup", async () => {
+  const fixture = await newSource();
+  let schemaReads = 0;
+  const countedDb = drizzle({
+    client,
+    relations: { ...relations, ...authRelationsPart },
+    logger: {
+      logQuery(query) {
+        if (
+          query.startsWith("select ") &&
+          query.includes('"adapter_key"') &&
+          query.includes('from "case_law_sources"')
+        ) {
+          schemaReads += 1;
+        }
+      },
+    },
+  });
+  const countedScopedDb: ScopedDb = async (callback) =>
+    await countedDb.transaction(async (tx) => await callback(asTestRaw(tx)));
+  const placed = await processSupplement({
+    supplement: supplementOf(REASONS),
+    sourceId: fixture.sourceId,
+    scopedDb: countedScopedDb,
+    observedAt: new Date("2026-09-23T10:00:00.000Z"),
+    nextObservationOrder: fixture.nextObservationOrder,
+    reparseStoredRaw,
+    readStoredRaw,
+  });
+  expect(placed).toMatchObject({
+    status: PROCESS_DECISION_STATUS.COMPLETE,
+    disposition: { type: "standalone", reason: "no-judgment" },
+  });
+  expect((await decisionBy(fixture.sourceId, "339001")).fulltext).toContain(
+    REASONS_TEXT,
+  );
+  expect(schemaReads).toBe(1);
 });
 
 test("a jurisdiction keyed by publisher document takes no docket-keyed supplement", async () => {

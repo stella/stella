@@ -12,6 +12,7 @@
 import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import * as cheerio from "cheerio";
 
 import {
   decodeSourceRawEnvelope,
@@ -34,6 +35,7 @@ import {
   PL_UOKIK_DETAIL_STATUS,
   PL_UOKIK_DOCUMENT_ABSENCE,
   PL_UOKIK_FILE_STATUS,
+  PL_UOKIK_LABEL,
   PL_UOKIK_UNDATED_SLICE,
   plUokikAdapter,
   plUokikDayOfDetailDate,
@@ -1311,3 +1313,134 @@ describe("the field inventory", () => {
     ).toContain("listing.@newkey");
   });
 });
+
+test("constructed decision and appeal addresses survive metadata projection as scalar URLs", async () => {
+  const entry = entryOf(await capturedEntries(), WITH_RULINGS);
+  const page = await pageOf(WITH_RULINGS);
+  const detail = parsePlUokikDetail(page) ?? panic("fixture has no detail");
+  const attachmentFiles = detail.fields.flatMap(({ files }) => files);
+  let statedPage = page;
+  for (const file of attachmentFiles) {
+    statedPage = statedPage.replaceAll(
+      file.name,
+      () => `${file.name}&amp;amp;copy`,
+    );
+  }
+  const statedDetail =
+    parsePlUokikDetail(statedPage) ?? panic("fixture has no detail");
+  const decision = decisionOf(await buildFrom(entry, statedPage));
+  for (const [label, key] of [
+    [PL_UOKIK_LABEL.DECISION_FILES, "decisionFiles"],
+    [PL_UOKIK_LABEL.RULINGS, "appealRulings"],
+  ] as const) {
+    const declared = decision.metadata[key];
+    const expected =
+      statedDetail.fields.find((field) => field.label === label)?.files ?? [];
+    expect(Array.isArray(declared)).toBe(true);
+    expect(expected.length).toBeGreaterThan(0);
+    expect(Array.isArray(declared) ? declared.length : 0).toBe(expected.length);
+    for (const [index, file] of expected.entries()) {
+      const attachment = Array.isArray(declared)
+        ? declared.at(index)
+        : undefined;
+      expect(isRecord(attachment) ? attachment["documentUrl"] : undefined).toBe(
+        plUokikFileUrl(WITH_RULINGS, file.name) ?? undefined,
+      );
+    }
+  }
+  expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+});
+
+for (const name of [
+  "decision&amp;copy.pdf",
+  "decision%26amp%3B.pdf",
+  "decision with spaces.pdf",
+  "nested/decision.pdf",
+  "../decision.pdf",
+  "decision?query.pdf",
+  "decision#fragment.pdf",
+  "decision\\path.pdf",
+]) {
+  test(`constructed attachment metadata URL filename boundary: ${name}`, async () => {
+    const entry = entryOf(await capturedEntries(), WITH_RULINGS);
+    const $ = cheerio.load(await pageOf(WITH_RULINGS));
+    const labels = [PL_UOKIK_LABEL.DECISION_FILES, PL_UOKIK_LABEL.RULINGS];
+    $("div.ck-content table tr").each((_, element) => {
+      const cells = $(element).children("td");
+      const label = cells.first().text().trim().replace(/:$/u, "");
+      if (labels.some((expected) => expected === label)) {
+        cells
+          .last()
+          .find("a[href]")
+          .attr("href", `/$FILE/${encodeURIComponent(name)}`);
+      }
+    });
+    const page = $.html();
+    const detail = parsePlUokikDetail(page) ?? panic("fixture has no detail");
+    const decision = decisionOf(await buildFrom(entry, page));
+    if (name.includes("\\")) {
+      for (const label of labels) {
+        const files =
+          detail.fields.find((field) => field.label === label)?.files ?? [];
+        expect(files.length).toBeGreaterThan(0);
+        for (const file of files) {
+          expect(file.name).toBe(name);
+        }
+      }
+      expect(decision.plainTextOutcome.type).toBe("item_build_failed");
+      if (decision.plainTextOutcome.type === "item_build_failed") {
+        expect(decision.plainTextOutcome.error.reason).toBe("rtf-syntax");
+      }
+      expect(decision.metadata).toHaveProperty(
+        "plainTextFailureReason",
+        "rtf-syntax",
+      );
+      expect(decision.metadata["decisionFiles"]).toBeUndefined();
+      expect(decision.metadata["appealRulings"]).toBeUndefined();
+      expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+      expect(decision.documentUrl).toBeUndefined();
+      return;
+    }
+    const expectedUrl = plUokikFileUrl(WITH_RULINGS, name);
+    const diagnostics: { address: string; reason: string }[] = [];
+    for (const [label, key] of [
+      [PL_UOKIK_LABEL.DECISION_FILES, "decisionFiles"],
+      [PL_UOKIK_LABEL.RULINGS, "appealRulings"],
+    ] as const) {
+      const files =
+        detail.fields.find((field) => field.label === label)?.files ?? [];
+      expect(files.length).toBeGreaterThan(0);
+      const stored = decision.metadata[key];
+      expect(Array.isArray(stored) ? stored.length : 0).toBe(files.length);
+      for (const index of files.keys()) {
+        const attachment = Array.isArray(stored) ? stored.at(index) : undefined;
+        if (expectedUrl === null) {
+          expect(
+            isRecord(attachment) && Object.hasOwn(attachment, "documentUrl"),
+          ).toBe(false);
+          diagnostics.push({
+            address: `${key}[${index}].documentUrl`,
+            reason: "invalid-url",
+          });
+        } else {
+          expect(
+            isRecord(attachment) ? attachment["documentUrl"] : undefined,
+          ).toBe(expectedUrl);
+        }
+      }
+    }
+    if (expectedUrl === null) {
+      expect(decision.documentUrl).toBeUndefined();
+      if (diagnostics.length === 0) {
+        expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+      } else {
+        expect(decision.metadata).toHaveProperty("metadataUrlDiagnostics", {
+          entries: diagnostics,
+          overflowCount: 0,
+        });
+      }
+    } else {
+      expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+    }
+  });
+}

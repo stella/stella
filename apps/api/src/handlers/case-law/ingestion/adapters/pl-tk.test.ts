@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * pl-tk against pages the Tribunal's portal served.
  *
@@ -6,8 +7,6 @@
  * listing is generated in the print view's own markup, so the walk's
  * arithmetic is checked against rows whose positions are known.
  */
-
-import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -17,6 +16,7 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
+import * as cheerio from "cheerio";
 
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
@@ -43,7 +43,9 @@ import {
 import type { PlTkListingRow } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import { plConstitutionalTribunalRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { sanitizeMetadata } from "@/api/lib/legal-search/corpus-sanitize";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const ADAPTER_FIXTURES = new URL("__fixtures__/", import.meta.url);
@@ -962,7 +964,7 @@ describe("a ruling built from its case page", () => {
       metadata: decision.metadata,
     });
     expect(replayed).toEqual({ type: "parsed", result: decision });
-    expect(decision.metadata["footnotes"]).toEqual([
+    expect(decision.metadata).toHaveProperty("footnotes", [
       expect.stringContaining("Rozstrzygnięcie wydane z naruszeniem przepisów"),
       expect.stringContaining("Powołane orzeczenia TK"),
     ]);
@@ -1416,4 +1418,104 @@ describe("the cross-source key and the shared docket grammar", () => {
       }),
     ).toBeUndefined();
   });
+});
+
+test("publication links retain one HTML attribute decode through metadata projection", async () => {
+  const page = (await caseFixture("pl-tk-case-k-2-26.html.gz")).replaceAll(
+    "https://otkzu.trybunal.gov.pl/2026/A/83",
+    "https://otkzu.trybunal.gov.pl/2026/A/83?a=1&amp;amp;b=2#part",
+  );
+  const decision = decisionOf(rowFor({}), page);
+  const publications = decision.metadata["publications"];
+  const publication = Array.isArray(publications)
+    ? publications.at(0)
+    : undefined;
+  const links = isRecord(publication) ? publication["links"] : undefined;
+  const link = Array.isArray(links) ? links.at(0) : undefined;
+  expect(isRecord(link) ? link["url"] : undefined).toBe(
+    "https://otkzu.trybunal.gov.pl/2026/A/83?a=1&amp;b=2#part",
+  );
+  expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+});
+
+for (const candidate of [
+  "https://example.org/document?a=1&amp;b=2#part",
+  "https://example.org/%26amp%3B?a=1&b=2",
+  " https://EXAMPLE.org:443/document?a=1&amp;b=2#part ",
+  '<a href="https://example.org/document">document</a>',
+  "//example.org/document?a=1&b=2",
+  "/ipo/document?a=1&b=2",
+  "ftp://example.org/document",
+  "data:text/plain,document",
+  "mailto:publisher@example.org",
+  "/ipo/dok?dok=F 1.pdf",
+  "/ipo/dok?dok=F:1.pdf",
+  "/ipo/dok?dok=F\n1.pdf",
+  "/ipo/dok?dok=F\u200b1.pdf",
+  "",
+  "   ",
+  ["javascript", "alert(1)"].join(":"),
+]) {
+  test(`all tribunal metadata URL paths use parser-decoded addresses: ${candidate}`, async () => {
+    const $ = cheerio.load(await caseFixture("pl-tk-case-k-2-26.html.gz"));
+    const documents = $('[id="sprawaForm:tabView:dokumentyWSprawie"]');
+    expect(documents.length).toBe(1);
+    documents.empty().append("<ul><li><a>source document</a></li></ul>");
+    documents.find("a").attr("href", candidate);
+    $('a[href="https://otkzu.trybunal.gov.pl/2026/A/83"]').attr(
+      "href",
+      candidate,
+    );
+    $('[id="sprawaForm:tabView:pobierzDoc25564"]').attr("href", candidate);
+    const decision = decisionOf(rowFor({}), $.html());
+    const caseDocuments = decision.metadata["caseDocuments"];
+    const document = Array.isArray(caseDocuments)
+      ? caseDocuments.at(0)
+      : undefined;
+    const publications = decision.metadata["publications"];
+    const publication = Array.isArray(publications)
+      ? publications.at(0)
+      : undefined;
+    const links = isRecord(publication) ? publication["links"] : undefined;
+    const link = Array.isArray(links) ? links.at(0) : undefined;
+    if (
+      URL.canParse(candidate, "https://ipo.trybunal.gov.pl/ipo/") &&
+      candidate.trim().length > 0 &&
+      ["http:", "https:"].includes(
+        new URL(candidate, "https://ipo.trybunal.gov.pl/ipo/").protocol,
+      )
+    ) {
+      const expected = new URL(candidate, "https://ipo.trybunal.gov.pl/ipo/")
+        .href;
+      expect(isRecord(document) ? document["url"] : undefined).toBe(expected);
+      expect(isRecord(link) ? link["url"] : undefined).toBe(expected);
+      expect(decision.metadata).toHaveProperty("wordDocumentUrl", expected);
+    } else {
+      expect(isRecord(document) && Object.hasOwn(document, "url")).toBe(false);
+      expect(isRecord(link) && Object.hasOwn(link, "url")).toBe(false);
+      expect(Object.hasOwn(decision.metadata, "wordDocumentUrl")).toBe(false);
+      expect(decision.documentUrl).toBeUndefined();
+      expect(caseDocuments).toBeUndefined();
+      expect(links).toEqual([]);
+    }
+    expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+  });
+}
+
+test("ordinary tribunal rows omit undefined metadata from stored JSON", async () => {
+  const decision = decisionOf(
+    rowFor({}),
+    await caseFixture("pl-tk-case-k-2-26.html.gz"),
+  );
+  const stored = sanitizeMetadata(decision.metadata);
+  for (const key of [
+    "listingDefect",
+    "originatesFrom",
+    "joinedCases",
+    "signalledCase",
+  ]) {
+    expect(stored).not.toHaveProperty(key);
+  }
+  const noDocket = decisionOf(rowFor({ caseNumber: undefined }), undefined);
+  expect(sanitizeMetadata(noDocket.metadata)).not.toHaveProperty("rulingKeys");
 });

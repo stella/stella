@@ -8,6 +8,7 @@ import {
 } from "../lib/db/migration-history";
 import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
+import { CORPUS_PROJECTION_CLEANUP_STALL_REPAIR } from "./corpus-projection-cleanup-stall-repair";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import { DECISION_DATE_CEILING_REPAIR } from "./decision-date-ceiling-repair";
 import type {
@@ -380,6 +381,7 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
+  CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
   // Not behind one migration: the OAuth resource set is derived from the MCP
   // audiences in application code, so it is the code that moves and the rows
   // that follow. Its completion is the startup census, so the deploy that

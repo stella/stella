@@ -27,6 +27,7 @@ import { publicCountryUnavailableSchema } from "@stll/api-contract/public-countr
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
   SEARCH_TOTAL_TYPE,
+  LEGISLATION_SEARCH_MATCH_TYPES,
 } from "@stll/api-contract/search";
 import type { SearchTotal } from "@stll/api-contract/search";
 import {
@@ -1905,6 +1906,9 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
           effectiveDate: v.nullable(v.string()),
           eli: v.string(),
           language: v.string(),
+          match: v.strictObject({
+            type: v.picklist(LEGISLATION_SEARCH_MATCH_TYPES),
+          }),
           resourceName: passthroughId(),
           score: v.number(),
           snippet: v.nullable(v.string()),
