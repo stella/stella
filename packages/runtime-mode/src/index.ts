@@ -1,5 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { SECRET_EXAMPLES } from "./secret-examples.generated";
+
 /** The NODE_ENV values a server process accepts. */
 export const NODE_ENV = {
   development: "development",
@@ -166,4 +168,24 @@ export const readRuntimeMode = (): ResolvedRuntime => {
     return panic(resolved.error.message);
   }
   return resolved.value;
+};
+
+type SecretExampleInvariantOptions = {
+  values: Record<string, string | undefined>;
+  runtimeMode: RuntimeMode;
+};
+
+export const secretExampleInvariantViolation = ({
+  values,
+  runtimeMode,
+}: SecretExampleInvariantOptions): string | null => {
+  if (runtimeMode.mode === RUNTIME_MODE.open) {
+    return null;
+  }
+  const names = Object.entries(SECRET_EXAMPLES)
+    .filter(([name, example]) => values[name] === example)
+    .map(([name]) => name);
+  return names.length === 0
+    ? null
+    : `${names.join(", ")} must use configured values in strict runtime mode; example values are for local development.`;
 };

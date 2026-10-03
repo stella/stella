@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 const baseEnv = {
-  DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella",
+  DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella-test",
   S3_ENDPOINT: "http://localhost:9000",
   S3_BUCKET: "stella-test",
   S3_REGION: "us-east-1",
-  REDIS_URL: "redis://localhost:6379",
+  REDIS_URL: "redis://localhost:6380",
   BETTER_AUTH_SECRET: "x".repeat(32),
   BETTER_AUTH_URL: "http://localhost:3001",
   FRONTEND_URL: "http://localhost:3000",
@@ -71,6 +71,21 @@ const readDerivedDatabaseUrl = (env: Record<string, string | undefined>) => {
 };
 
 describe("API environment", () => {
+  test("uses configured credentials in strict mode and examples in local development", () => {
+    const example = {
+      ...baseEnv,
+      BETTER_AUTH_SECRET: "your-secret-at-least-32-chars-long",
+    };
+    const strict = bootApiEnvironment(example);
+    expect(strict.exitCode).not.toBe(0);
+    expect(strict.stderr.toString()).toContain(
+      "BETTER_AUTH_SECRET must use configured values",
+    );
+    expect(strict.stderr.toString()).not.toContain(example.BETTER_AUTH_SECRET);
+    const local = bootApiEnvironment({ ...example, ...LOCAL_DEV_ENV });
+    expect(local.exitCode, local.stderr.toString()).toBe(0);
+  });
+
   test("preserves structured stdout when loading the environment", () => {
     const result = spawnApiEnvironment(
       baseEnv,

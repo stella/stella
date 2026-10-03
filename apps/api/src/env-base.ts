@@ -10,6 +10,8 @@
 import { createEnv } from "@t3-oss/env-core";
 import { panic } from "better-result";
 
+import { secretExampleInvariantViolation } from "@stll/runtime-mode";
+
 import { resolveDatabaseUrl } from "@/api/db-url";
 import {
   envBaseInvariantViolation,
@@ -19,6 +21,14 @@ import {
 import { resolveCorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { resolveCorpusMemberLayout } from "@/api/lib/legal-search/corpus-member-layout";
 import { runtimeMode } from "@/api/runtime-mode";
+
+const exampleViolation = secretExampleInvariantViolation({
+  values: process.env,
+  runtimeMode: runtimeMode(),
+});
+if (exampleViolation !== null) {
+  panic(exampleViolation);
+}
 
 const baseRuntimeEnv = resolveApiEnvironmentPlaceholders({
   schema: envBaseServerSchema,
