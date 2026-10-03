@@ -193,12 +193,14 @@ describe("public corpus fleet request budgets", () => {
           .get("/law/statutes/facets", work)
           .get("/law/sitemap/shards", work),
       );
-      const running = Array.from({ length: capacity }, async (_, index) =>
-        await bindings.send({
-          app,
-          incoming: request(path, method),
-          address: `192.0.2.${index + 1}`,
-        }),
+      const running = Array.from(
+        { length: capacity },
+        async (_, index) =>
+          await bindings.send({
+            app,
+            incoming: request(path, method),
+            address: `192.0.2.${index + 1}`,
+          }),
       );
       try {
         await Promise.race([
@@ -394,7 +396,9 @@ describe("public corpus fleet request budgets", () => {
     env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = 100;
     const app = createApp(bindings.binding);
     const lines: string[] = [];
-    setMetricLineSinkForTesting((line) => lines.push(line));
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
     try {
       for (const { path, max, routeClass } of [
         { path: "/law/statutes/facets", max: 60, routeClass: "aggregate" },
@@ -463,7 +467,9 @@ describe("public corpus fleet request budgets", () => {
     const lines: string[] = [];
     const bindings = createBindings();
     const previous = env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX;
-    setMetricLineSinkForTesting((line) => lines.push(line));
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
     try {
       env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX =
         2 * env.PUBLIC_CORPUS_ASSUMED_REPLICAS;
