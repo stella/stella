@@ -21,6 +21,11 @@ import type {
   PendingDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
 
+const availableBudget: OnDemandDocumentDeps["withFetchBudget"] = async (
+  _adapterKey,
+  operation,
+) => ({ status: "completed", value: await operation() });
+
 const pending = (): PendingDocument => ({
   id: createSafeId<"caseLawDecision">(),
   caseNumber: "1T/1/2026",
@@ -95,6 +100,8 @@ const recorder = (
       release();
     },
     deps: {
+      recordPacingOutcome: () => {},
+      withFetchBudget: availableBudget,
       recordRequest: async (id) => {
         requested.push(id);
         await Promise.resolve();
@@ -124,16 +131,19 @@ describe("deferred document read-through", () => {
 
     const readers = [
       readThroughDeferredDocument({
+        adapterKey: "sk-courts",
         decision,
         deps,
         recordDemand: true,
       }),
       readThroughDeferredDocument({
+        adapterKey: "sk-courts",
         decision,
         deps,
         recordDemand: true,
       }),
       readThroughDeferredDocument({
+        adapterKey: "sk-courts",
         decision,
         deps,
         recordDemand: true,
@@ -152,6 +162,7 @@ describe("deferred document read-through", () => {
     const decision = pending();
 
     const reader = readThroughDeferredDocument({
+      adapterKey: "sk-courts",
       decision,
       deps,
       recordDemand: true,
@@ -167,6 +178,7 @@ describe("deferred document read-through", () => {
     const decision = pending();
 
     const reader = readThroughDeferredDocument({
+      adapterKey: "sk-courts",
       decision,
       deps,
       recordDemand: false,
@@ -185,6 +197,7 @@ describe("deferred document read-through", () => {
     const decision = pending();
 
     const reader = readThroughDeferredDocument({
+      adapterKey: "sk-courts",
       decision,
       deps,
       recordDemand: true,
@@ -199,6 +212,7 @@ describe("deferred document read-through", () => {
     const decision = pending();
 
     const reader = readThroughDeferredDocument({
+      adapterKey: "sk-courts",
       decision,
       deps,
       recordDemand: true,
@@ -216,11 +230,13 @@ describe("deferred document read-through", () => {
 
     release();
     const first = await readThroughDeferredDocument({
+      adapterKey: "sk-courts",
       decision,
       deps,
       recordDemand: true,
     });
     const second = await readThroughDeferredDocument({
+      adapterKey: "sk-courts",
       decision,
       deps,
       recordDemand: true,
@@ -238,16 +254,19 @@ describe("deferred document read-through", () => {
     const { deps, fetched, release } = recorder();
 
     const first = readThroughDeferredDocument({
+      adapterKey: "sk-courts",
       decision: pending(),
       deps,
       recordDemand: true,
     });
     const second = readThroughDeferredDocument({
+      adapterKey: "sk-courts",
       decision: pending(),
       deps,
       recordDemand: true,
     });
     const third = readThroughDeferredDocument({
+      adapterKey: "sk-courts",
       decision: pending(),
       deps,
       recordDemand: true,
@@ -277,6 +296,8 @@ describe("deferred document read-through", () => {
    * budget abandons.
    */
   const badShape = {
+    recordPacingOutcome: () => {},
+    withFetchBudget: availableBudget,
     recordRequest: async () => {
       await Promise.resolve();
     },
@@ -294,6 +315,8 @@ describe("deferred document read-through", () => {
 
   const hostile: Record<string, () => OnDemandDocumentDeps> = {
     "a rejecting fetch": () => ({
+      recordPacingOutcome: () => {},
+      withFetchBudget: availableBudget,
       recordRequest: async () => {
         await Promise.resolve();
       },
@@ -303,6 +326,8 @@ describe("deferred document read-through", () => {
       },
     }),
     "a rejecting demand recording": () => ({
+      recordPacingOutcome: () => {},
+      withFetchBudget: availableBudget,
       recordRequest: async () => {
         await Promise.resolve();
         throw new Error("row locked");
@@ -313,6 +338,8 @@ describe("deferred document read-through", () => {
       },
     }),
     "a fetch that never settles": () => ({
+      recordPacingOutcome: () => {},
+      withFetchBudget: availableBudget,
       recordRequest: async () => {
         await Promise.resolve();
       },
@@ -328,6 +355,7 @@ describe("deferred document read-through", () => {
     test(`${name} reads as metadata-only rather than failing the read`, async () => {
       expect(
         await readThroughDeferredDocument({
+          adapterKey: "sk-courts",
           decision: pending(),
           deps: build(),
           recordDemand: true,

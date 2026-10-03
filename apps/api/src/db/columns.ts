@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import { customType, timestamp } from "drizzle-orm/pg-core";
 
@@ -53,3 +54,20 @@ export const jsonb = customType<{
  */
 export const timestamptz = (name: string) =>
   timestamp(name, { withTimezone: true });
+
+export const bytea = customType<{ data: Buffer }>({
+  dataType: () => "bytea",
+  fromDriver: (value) => {
+    if (Buffer.isBuffer(value)) {
+      return value;
+    }
+    if (value instanceof Uint8Array) {
+      return Buffer.from(value);
+    }
+    if (typeof value === "string") {
+      const hex = value.startsWith("\\x") ? value.slice(2) : value;
+      return Buffer.from(hex, "hex");
+    }
+    return panic(`Unexpected bytea driver value: ${typeof value}`);
+  },
+});

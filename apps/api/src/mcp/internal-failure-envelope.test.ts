@@ -6,6 +6,11 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  credentialPermissionsForContext,
+  readAuthorizedMemberRole,
+  roleForDisplay,
+} from "@/api/lib/permission-authorization";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
 import type { McpToolHandler, McpToolResponse } from "@/api/mcp/tool-types";
@@ -354,15 +359,13 @@ describe("save_time_entry threads backing handler errors correctly", () => {
     });
 
     expect(createTimeEntryHandlerMock).toHaveBeenCalledTimes(1);
-    expect(createTimeEntryHandlerMock.mock.calls.at(0)?.at(0)).toMatchObject({
-      memberRole: {
-        role: "owner",
-        credential: {
-          type: "attenuated",
-          permissions: { timeEntry: ["create"] },
-        },
-      },
-    });
+    const forwarded = readAuthorizedMemberRole(
+      createTimeEntryHandlerMock.mock.calls.at(0)?.at(0) ?? {},
+    );
+    expect(forwarded === null ? null : roleForDisplay(forwarded)).toBe("owner");
+    expect(
+      forwarded === null ? null : credentialPermissionsForContext(forwarded),
+    ).toEqual({ timeEntry: ["create"] });
   });
 });
 

@@ -33,6 +33,8 @@ export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
   "src/handlers/legislation/work-names-plan.db.test.ts",
   // Keep this suite's retained database graph in its own process.
   "src/handlers/chat/thread-durable-refs.integration.test.ts",
+  // Sets the deployment's public address before the environment is read.
+  "src/lib/oauth-cli-client-document.db.test.ts",
 ]);
 
 /**

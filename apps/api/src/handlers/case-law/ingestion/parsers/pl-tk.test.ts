@@ -445,3 +445,24 @@ for (const href of [
     );
   });
 }
+
+test("excludes script and style from ruling metadata", () => {
+  const ruling = readPlTkRuling(
+    `<div id="sprawaForm:tabView:dok_1">
+    <div class="prop"><div class="name">Dotyczy<script>bad-label</script></div><div class="value">Visible<style>bad-value</style> subject</div></div>
+    <div class="prop"><div class="name">Miejsce publikacji</div><div class="value"><table><tr><td><table><tr><td>Dz.U.<script>bad-citation</script> 2026</td><td>other register</td></tr></table></td><td><a href="https://example.org">ISAP<style>bad-link</style></a></td></tr></table></div></div>
+    <div id="tekst_1"><p>Visible decision<script>bad-script</script><style>bad-style</style></p></div>
+  </div>`,
+    "1",
+  );
+  expect(ruling?.textHtml).toBe("<p>Visible decision</p>");
+  expect(ruling?.subject).toBe("Visible subject");
+  expect(ruling?.publications).toHaveLength(1);
+  const publication = ruling?.publications.at(0);
+  expect(publication?.text).toBe("Dz.U. 2026");
+  expect(publication?.links).toHaveLength(1);
+  expect(publication?.links.at(0)?.text).toBe("ISAP");
+  const url = publication?.links.at(0)?.url;
+  // A defect object is not a string and fails the comparison.
+  expect(typeof url === "string" && url === "https://example.org/").toBe(true);
+});

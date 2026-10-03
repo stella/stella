@@ -103,6 +103,7 @@
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
@@ -124,6 +125,7 @@
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
@@ -135,13 +137,6 @@
       "dependsOn": ["generate:api-types", "generate:route-tree"],
       "inputs": ["$TURBO_DEFAULT$"],
       "cache": false
-    },
-    "@stll/redis-config#test": {
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/apps/**",
-        "$TURBO_ROOT$/packages/**"
-      ]
     },
     "transit": {
       "dependsOn": ["^transit"]
@@ -180,7 +175,9 @@
       "cache": false
     },
     "typecheck": {
-      "dependsOn": ["transit"],
+      // A package type-checking @stll/api source needs its generated capability
+      // runtime modules first.
+      "dependsOn": ["transit", "^generate:capability-runtime"],
       // These files live outside each workspace but can change dependency
       // resolution or the shared compiler program. Hash them explicitly so a
       // linked worktree never restores a stale lint or TypeScript result.
@@ -268,7 +265,9 @@
       ]
     },
     "lint": {
-      "dependsOn": ["transit"],
+      // A package type-checking @stll/api source needs its generated capability
+      // runtime modules first.
+      "dependsOn": ["transit", "^generate:capability-runtime"],
       // Type-aware lint reads the same external install and compiler inputs as
       // TypeScript, in addition to Oxlint's root config and plugins.
       "inputs": [
@@ -285,6 +284,7 @@
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
@@ -320,6 +320,7 @@
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
@@ -346,6 +347,7 @@
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
@@ -367,6 +369,7 @@
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json"
@@ -459,6 +462,7 @@
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
@@ -489,6 +493,9 @@
         "$TURBO_ROOT$/.github/workflows/scheduled-run-alerts.yml"
       ]
     },
+    // Lets dependents name `^generate:capability-runtime`; only @stll/api has
+    // the script, configured below.
+    "generate:capability-runtime": {},
     "@stll/api#generate:capability-runtime": {
       "inputs": [
         "scripts/generate-capability-runtime.ts",
@@ -546,6 +553,7 @@
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",

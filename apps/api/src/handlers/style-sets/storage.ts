@@ -5,12 +5,12 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { styleSets } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { writeScannedObject } from "@/api/lib/file-scan/stored-object";
@@ -87,7 +87,9 @@ export const createStoredStyleSet = async ({
     yield* Result.await(claimPackageCleanup(s3Key, styleSetId, enqueueCleanup));
     const writePackage = async () =>
       await writeScannedObject({ file, key: s3Key });
-    const { object: stored } = env.FEATURE_FILE_USAGE_LIMITS
+    const { object: stored } = isDeploymentFeatureEnabled(
+      "FEATURE_FILE_USAGE_LIMITS",
+    )
       ? yield* Result.await(
           writeOrganizationFile({
             organizationId,
@@ -175,7 +177,7 @@ export const createStoredStyleSet = async ({
         const cleanup = Result.flatten(
           await Result.tryPromise({
             try: async () => {
-              if (env.FEATURE_FILE_USAGE_LIMITS) {
+              if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
                 return await deleteOrganizationFileWithSignal(
                   s3Key,
                   AbortSignal.timeout(10_000),
@@ -294,7 +296,9 @@ export const replaceStoredStyleSet = async ({
     yield* Result.await(claimPackageCleanup(s3Key, styleSetId));
     const writePackage = async () =>
       await writeScannedObject({ file, key: s3Key });
-    const { object: stored } = env.FEATURE_FILE_USAGE_LIMITS
+    const { object: stored } = isDeploymentFeatureEnabled(
+      "FEATURE_FILE_USAGE_LIMITS",
+    )
       ? yield* Result.await(
           writeOrganizationFile({
             organizationId,
@@ -461,7 +465,7 @@ export const replaceStoredStyleSet = async ({
         const cleanup = Result.flatten(
           await Result.tryPromise({
             try: async () => {
-              if (env.FEATURE_FILE_USAGE_LIMITS) {
+              if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
                 return await deleteOrganizationFileWithSignal(
                   s3Key,
                   AbortSignal.timeout(10_000),

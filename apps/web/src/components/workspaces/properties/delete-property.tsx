@@ -12,8 +12,8 @@ import {
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import { Trash2Icon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { WorkspaceProperty } from "@/lib/types";
 import { useDeleteProperty } from "@/lib/workspaces/mutations/properties";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
@@ -73,11 +73,8 @@ export const DeleteProperty = ({
                       propertyId: property.id,
                     },
                     {
-                      onError: () => {
-                        stellaToast.add({
-                          title: t("errors.actionFailed"),
-                          type: "error",
-                        });
+                      onError: (error) => {
+                        notifyUserError(error, t("errors.actionFailed"));
                       },
                     },
                   );

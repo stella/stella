@@ -353,6 +353,7 @@ export const corpusIndexProjectionIntents = p.pgTable(
         AND (${t.appendPublishBarrierAt} IS NULL OR ${t.appendPublishBarrierAt}::timestamptz >= ${t.appendStartedAt}::timestamptz)`,
     ),
     ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 

@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { env } from "@/env";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 
 type UsageEntitlementKey = {
@@ -106,4 +106,28 @@ export const usageLaneOptions = ({
     queryFn: fetchUsageLane,
     enabled: env.VITE_FEATURE_USAGE,
     staleTime: USAGE_LANE_STALE_TIME_MS,
+  });
+
+type OrganizationAccessKey = {
+  organizationId: string;
+};
+
+const organizationAccessKeys = {
+  all: ["usage", "access"] as const,
+  byOrganization: ({ organizationId }: OrganizationAccessKey) => [
+    ...organizationAccessKeys.all,
+    organizationId,
+  ],
+};
+
+type OrganizationAccessOptionsInput = QueryOptionsInput<OrganizationAccessKey>;
+
+export const organizationAccessOptions = ({
+  organizationId,
+}: OrganizationAccessOptionsInput) =>
+  queryOptions({
+    queryKey: organizationAccessKeys.byOrganization({ organizationId }),
+    retry: shouldRetryAPIRequest,
+    queryFn: async ({ signal }) =>
+      unwrapEden(await api.usage.access.get({ fetch: { signal } })),
   });

@@ -24,6 +24,7 @@ import queueOnlyReasons from "./ci-queue-only-jobs.json";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
+import { mainHeavyJobs } from "./main-heavy-plan";
 
 const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -309,7 +310,7 @@ test("every release requires both final image smokes regardless of other changed
       "true",
     ]);
   }
-});
+}, 30_000);
 
 test("API image construction and smoke orchestration changes require the final image", () => {
   for (const file of [
@@ -578,7 +579,7 @@ test("a pull request builds the API image for arm64 unless it releases", () => {
       `${label} ${suiteDepth} ${JSON.stringify(files)}`,
     ).toEqual(platforms);
   }
-});
+}, 30_000);
 
 const workflowJobs = (source: string) =>
   v.parse(
@@ -1042,6 +1043,8 @@ const resultGateCase = ({
     args: [],
     env: {
       EVENT: event,
+      QUEUE_DEPTH: "full",
+      THIN_JOBS: "[]",
       GITHUB_RUN_ID: "123",
       FAKE_API_FAILURE: apiFailure ?? "",
       FAKE_CURRENT_RUN: JSON.stringify(currentRun),
@@ -3049,7 +3052,7 @@ test("route-relevant pull requests plan the required route smoke job", () => {
       unplannedScopes: [scope],
     }),
   ).toBe(0);
-});
+}, 30_000);
 
 test("route smoke consumes the production build and fails when its stack cannot run", () => {
   const plan = jobSteps(ciJobs["ci-plan"]).find(
@@ -3339,6 +3342,107 @@ test("drawn property samples are the inputs fc.assert would run", () => {
   expect(separate).toEqual(drawSamples(failedGatedJobs, 100));
 });
 
+test("image checks run on pull requests that change image inputs and bind the fast result gate", () => {
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  for (const { job, broad, scope, cases } of [
+    {
+      job: "docker-checks",
+      broad: "docker_checks_required",
+      scope: "docker_checks_pr_required",
+      cases: [
+        {
+          file: "packages/agent-engine/docker/sandbox.Dockerfile",
+          required: true,
+        },
+        { file: "apps/api/Dockerfile", required: true },
+        { file: "apps/legal-atlas-runner/src/index.ts", required: true },
+        { file: "packages/money/package.json", required: true },
+        { file: ".dockerignore", required: false },
+        { file: "bun.lock", required: true },
+        { file: "apps/api/src/handlers/new.ts", required: false },
+        { file: "packages/agent-engine/src/new.ts", required: false },
+        { file: ".github/workflows/ci.yml", required: false },
+        { file: "docs/guide.md", required: false },
+      ],
+    },
+    {
+      job: "legal-atlas-image",
+      broad: "legal_atlas_image_required",
+      scope: "legal_atlas_image_pr_required",
+      cases: [
+        { file: "apps/legal-atlas-runner/Dockerfile", required: true },
+        { file: "apps/legal-atlas-runner/src/index.ts", required: true },
+        { file: "packages/legal-atlas/src/new.ts", required: true },
+        { file: ".dockerignore", required: true },
+        { file: "bun.lock", required: true },
+        { file: "apps/api/src/handlers/new.ts", required: false },
+        { file: "docs/guide.md", required: false },
+      ],
+    },
+  ]) {
+    const condition = jobIf(ciJobs[job]);
+    expect(condition, job).toContain(
+      "needs.ci-plan.outputs.suite_depth == 'fast'",
+    );
+    expect(condition, job).toContain(
+      `needs.ci-plan.outputs.${scope} == 'true'`,
+    );
+    expect(fastJobScopes[job], job).toBe(scope);
+    expect(fastRequired, job).toContain(job);
+    expect(plan.outputs[scope], job).toBe(
+      `\${{ steps.changed-files.outputs.${scope} }}`,
+    );
+    for (const { file, required } of cases) {
+      const [broadOutput, scopeOutput] = runSelector([file], [broad, scope]);
+      const broadPlanned = String(broadOutput);
+      const planned = scopeOutput === "true";
+      expect(planned, `${job} ${file}`).toBe(required);
+      // A pull request never runs an image check the merge queue would skip.
+      if (planned) {
+        expect(broadPlanned, `${job} ${file}`).toBe("true");
+      }
+      for (const suiteDepth of ["fast", "full"]) {
+        const executable = condition
+          .replaceAll(
+            `needs.ci-plan.outputs.${broad}`,
+            () => `'${broadPlanned}'`,
+          )
+          .replaceAll(
+            `needs.ci-plan.outputs.${scope}`,
+            () => `'${String(planned)}'`,
+          )
+          .replaceAll(
+            "needs.ci-plan.outputs.suite_depth",
+            () => `'${suiteDepth}'`,
+          )
+          .replaceAll("needs.ci-plan.outputs.trusted", "'true'")
+          .replaceAll("github.event_name", "'pull_request'");
+        expect(
+          Bun.spawnSync(["bash", "-c", `[[ ${executable} ]]`]).exitCode,
+          `${job} ${file} ${suiteDepth}`,
+        ).toBe(
+          broadPlanned === "true" && (suiteDepth === "full" || planned) ? 0 : 1,
+        );
+      }
+      for (const result of ["success", "failure", "skipped"]) {
+        expect(
+          evaluateResult({
+            event: EVENT.pullRequest,
+            results: { [job]: result },
+            unplannedScopes: planned ? [] : [scope],
+          }),
+          `${job} ${file} ${result}`,
+        ).toBe(
+          result === "success" || (result === "skipped" && !planned) ? 0 : 1,
+        );
+      }
+    }
+  }
+}, 30_000);
+
 test("each folded service step follows its own dependency scope at PR depth", () => {
   const scopes = [
     "postgres_suites_required",
@@ -3498,10 +3602,15 @@ const queueOnlyJobs = v.parse(
 
 // Evaluate the actual predicate with a successful trusted plan. Unfamiliar
 // expression syntax fails closed instead of silently evading parity.
-type DepthContext = { event: Event; depth: SuiteDepth; heavyOnly?: boolean };
+type DepthContext = {
+  event: Event;
+  depth: SuiteDepth;
+  heavyOnly?: boolean;
+  queueDepth?: "full" | "thin";
+};
 const runsAtDepth = (
   condition: string,
-  { event, depth, heavyOnly }: DepthContext,
+  { event, depth, heavyOnly, queueDepth = "full" }: DepthContext,
 ) => {
   const expression = condition
     .replaceAll(/\balways\(\)/gu, "true")
@@ -3521,6 +3630,8 @@ const runsAtDepth = (
           actual = event;
         } else if (context === "needs.ci-plan.outputs.suite_depth") {
           actual = depth;
+        } else if (context === "needs.ci-plan.outputs.queue_depth") {
+          actual = event === EVENT.mergeGroup ? queueDepth : "full";
         } else if (
           context === "needs.ci-plan.outputs.heavy_web_build_required"
         ) {
@@ -3738,6 +3849,43 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
       depth: SUITE_DEPTH.fast,
     }),
   ).toThrow("Unknown CI predicate syntax");
+});
+
+test("thin merge groups intentionally skip heavy jobs while full parity stays enforced", () => {
+  const heavy = new Set(mainHeavyJobs({ jobs: ciJobs }));
+  for (const { name, condition } of parityJobs) {
+    const full = runsAtDepth(condition, {
+      event: EVENT.mergeGroup,
+      depth: SUITE_DEPTH.full,
+    });
+    expect(
+      runsAtDepth(condition, {
+        event: EVENT.mergeGroup,
+        depth: SUITE_DEPTH.full,
+        queueDepth: "full",
+      }),
+      name,
+    ).toBe(full);
+    expect(
+      runsAtDepth(condition, {
+        event: EVENT.mergeGroup,
+        depth: SUITE_DEPTH.full,
+        queueDepth: "thin",
+      }),
+      name,
+    ).toBe(heavy.has(name) ? false : full);
+    for (const event of [EVENT.pullRequest, EVENT.workflowDispatch]) {
+      expect(
+        runsAtDepth(condition, {
+          event,
+          depth: SUITE_DEPTH.fast,
+          queueDepth: "thin",
+        }),
+        name,
+      ).toBe(runsAtDepth(condition, { event, depth: SUITE_DEPTH.fast }));
+    }
+  }
+  expect(parityViolations(parityJobs, queueOnlyJobs)).toEqual([]);
 });
 
 test("parity treats absent or false heavy-only input as ordinary event execution", () => {

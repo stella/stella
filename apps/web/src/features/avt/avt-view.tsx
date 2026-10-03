@@ -1,10 +1,9 @@
+import * as React from "react";
 /**
  * The AVT view of a matter: the list whose facts documents are checked
  * against, the matter's documents with their latest verification, and the
  * list's anchor facts. Opening a verification replaces the home with it.
  */
-
-import * as React from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -18,12 +17,12 @@ import {
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
-import { stellaToast } from "@stll/ui/toast";
 
 import { AnchorFactsPanel } from "@/features/avt/anchor-facts-panel";
 import { DocumentVerifications } from "@/features/avt/document-verifications";
 import { VerificationDetail } from "@/features/avt/verification-detail";
 import { usePermissions } from "@/hooks/use-permissions";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { useUpdateView } from "@/lib/workspaces/mutations/views";
 import { legalListsOptions } from "@/lib/workspaces/queries/legal-lists";
@@ -122,11 +121,8 @@ const EvidenceListPicker = ({
         }),
       },
       {
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );

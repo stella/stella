@@ -1,10 +1,12 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { panic } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import fc from "fast-check";
 
 import { STATUTE_ALIASES } from "@stll/api-contract/statute-aliases";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   corpusIndexGenerations,
@@ -18,21 +20,23 @@ import {
   rehydrateLegislationCandidates,
   searchLegislationHandler,
 } from "@/api/handlers/legislation/search";
+import { PUBLIC_LEGISLATION_SEARCH_RESPONSE_MAX_BYTES } from "@/api/handlers/legislation/search-response";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { isAfterSearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
+import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
 import {
   inForceToday,
   legislationVersionRef,
 } from "@/api/lib/legal-search/legislation-validity-window";
-import { legislationWorkToken } from "@/api/lib/legal-search/legislation-work-collapse";
 import {
   legislationWorkRefKey,
   readNamedLegislationWorks,
@@ -42,6 +46,8 @@ import type {
   LegislationReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
+import { LIMITS } from "@/api/lib/limits";
+import { TS_HEADLINE_CONFIG } from "@/api/lib/search/highlight";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
@@ -82,6 +88,13 @@ const version = (
   validFrom,
   validTo,
 });
+
+const byteCapVersion = version(
+  "2024/99001",
+  "Byte cap fixture",
+  "2024-01-01",
+  null,
+);
 
 const CODE_TITLE = "89/2012 Sb., občanský zákoník";
 const code2014 = version("2012/89", CODE_TITLE, "2014-01-01", "2020-01-01");
@@ -231,6 +244,24 @@ beforeAll(
         contentHash: `identity-lookup-${String(index)}`,
       })),
     );
+    await db.insert(legislationDocuments).values({
+      id: byteCapVersion.id,
+      sourceId,
+      eli: byteCapVersion.eli,
+      title: byteCapVersion.title,
+      country: "CZE",
+      language: "cs",
+      versionValidFrom: byteCapVersion.validFrom,
+      contentHash: "byte-cap-fixture",
+    });
+    await db.insert(legislationSearchDocuments).values({
+      documentId: byteCapVersion.id,
+      title: byteCapVersion.title,
+      searchableText: "bytecapfixture",
+      language: "cs",
+      regconfig: "simple",
+      tsv: sql`to_tsvector('simple', 'bytecapfixture')`,
+    });
     // The excerpt configuration the Postgres path highlights with.
     await db.execute(
       sql`CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple)`,
@@ -269,7 +300,7 @@ beforeAll(
       ),
       status: "building",
     });
-    const intents = VERSIONS.map((seed) => ({
+    const intents = [...VERSIONS, byteCapVersion].map((seed) => ({
       id: createSafeId<"corpusIndexProjectionIntent">(),
       entityId: seed.id,
     }));
@@ -285,7 +316,7 @@ beforeAll(
         status: "applied" as const,
         appendStartedAt: new Date(),
         appendCommittedAt: new Date(),
-        expectedDocumentCount: 1,
+        expectedDocumentCount: entityId === vat.id ? 3 : 1,
         appliedAt: new Date(),
       })),
     );
@@ -504,8 +535,31 @@ describe("acts the query names come first", () => {
 });
 
 describe("acts an earlier scan window showed", () => {
+  test("only recurring Works consume the carried budget, including the cursor Work", async () => {
+    const result = await rehydrate("smlouva", [
+      [amendment, 0.9],
+      [vat, 0.8],
+      [code2014, 0.7],
+    ]);
+    const tokenOf = (seed: VersionSeed) =>
+      corpusSearchGroupToken(
+        legislationWorkRefKey({ sourceId, eli: seed.eli, language: "cs" }),
+      );
+    expect(new Set(result.groups)).toEqual(
+      new Set([tokenOf(vat), tokenOf(code2014)]),
+    );
+    expect(ids(result)).toContain(String(amendment.id));
+
+    const continuation = await rehydrate(
+      "smlouva",
+      [[vat, 0.8]],
+      String(amendment.id),
+    );
+    expect(continuation.groups).toContain(tokenOf(amendment));
+  });
+
   test("stay off the page when the cursor carries them", async () => {
-    const codeToken = legislationWorkToken(
+    const codeToken = corpusSearchGroupToken(
       legislationWorkRefKey({ sourceId, eli: code2014.eli, language: "cs" }),
     );
     const scan = candidates([code2014, 0.9], [old1964, 0.5]);
@@ -673,4 +727,123 @@ describe("the Postgres search path", () => {
       [String(vat.id), String(vatAmendment.id)].toSorted(),
     );
   });
+});
+
+const oversizedUnicode = fc
+  .array(fc.constantFrom("a", "é", "漢", "😀", "e\u0301", '"', "\\"), {
+    minLength: 1,
+    maxLength: 8,
+  })
+  .map((atoms) => atoms.join("").repeat(6000));
+
+const oversizedDisplayFieldProperty = (provider: "pg-fts" | "corpus-index") =>
+  fc.asyncProperty(oversizedUnicode, async (text) => {
+    expect(Buffer.byteLength(text, "utf-8")).toBeGreaterThan(
+      LIMITS.legislationSearchTextBytes.title,
+    );
+    expect(Buffer.byteLength(text, "utf-8")).toBeGreaterThan(
+      LIMITS.legislationSearchTextBytes.headline,
+    );
+    const fulltext = `bytecapfixture ${"漢".repeat(250)} `.repeat(30);
+    if (provider === "pg-fts") {
+      const raw = await db.execute(sql`SELECT ts_headline(
+          'public.stella_unaccent'::regconfig,
+          ${fulltext},
+          plainto_tsquery('simple', 'bytecapfixture'),
+          ${TS_HEADLINE_CONFIG}
+        ) AS headline`);
+      const headline = raw.rows.at(0)?.["headline"];
+      if (typeof headline !== "string") {
+        panic("byte-cap fixture did not yield a Postgres headline");
+      }
+      expect(Buffer.byteLength(headline, "utf-8")).toBeGreaterThan(
+        LIMITS.legislationSearchTextBytes.headline,
+      );
+    }
+    await db
+      .update(legislationDocuments)
+      .set({ title: text, fulltext })
+      .where(eq(legislationDocuments.id, byteCapVersion.id));
+    const corpusClient = getCorpusIndexClient("q09");
+    const engineSearch =
+      provider === "corpus-index"
+        ? spyOn(corpusClient, "search").mockImplementation(async () =>
+            Result.ok({
+              numHits: 1,
+              hits: [{ document_id: String(byteCapVersion.id) }],
+              snippets: [{ text: [`<b>${text}</b>`] }],
+            }),
+          )
+        : null;
+    try {
+      const response = await searchLegislationHandler(
+        { query: "bytecapfixture", jurisdiction: "CZE", limit: 20 },
+        legislationDb,
+        "unobserved",
+        {
+          provider,
+          loadSearchConfigs: async () => [
+            {
+              regconfig: "simple",
+              useUnaccent: false,
+              includeDefault: true,
+              languages: [],
+            },
+          ],
+          readServingGeneration: async () => ({
+            family: "legislation",
+            generation: GENERATION,
+            cluster: "q09",
+          }),
+        },
+      );
+      if (!("items" in response)) {
+        panic("byte-cap fixture search was refused");
+      }
+      expect(response.items).toHaveLength(1);
+      const hit = response.items.at(0);
+      if (hit === undefined) {
+        panic("byte-cap fixture did not yield a search hit");
+      }
+      if (hit.headline === null) {
+        panic("byte-cap fixture did not yield a highlighted search hit");
+      }
+      expect(hit.documentId).toBe(String(byteCapVersion.id));
+      expect(hit.title).not.toBe(text);
+      expect(Buffer.byteLength(hit.title, "utf-8")).toBeLessThanOrEqual(
+        LIMITS.legislationSearchTextBytes.title,
+      );
+      expect(Buffer.byteLength(hit.headline, "utf-8")).toBeLessThanOrEqual(
+        LIMITS.legislationSearchTextBytes.headline,
+      );
+      expect(hit.title.isWellFormed()).toBe(true);
+      expect(hit.headline.isWellFormed()).toBe(true);
+      let depth = 0;
+      for (const tag of hit.headline.matchAll(/<\/?mark>/gu)) {
+        depth += tag[0] === "<mark>" ? 1 : -1;
+        expect(depth).toBeGreaterThanOrEqual(0);
+      }
+      expect(depth).toBe(0);
+      expect(
+        Buffer.byteLength(JSON.stringify(response), "utf-8"),
+      ).toBeLessThanOrEqual(PUBLIC_LEGISLATION_SEARCH_RESPONSE_MAX_BYTES);
+    } finally {
+      engineSearch?.mockRestore();
+    }
+  });
+
+test("legislation pg-fts search bounds oversized Unicode display fields", async () => {
+  await assertProperty(
+    "legislation pg-fts search bounds oversized Unicode display fields",
+    oversizedDisplayFieldProperty("pg-fts"),
+    { numRuns: 12 },
+  );
+});
+
+test("legislation corpus-index search bounds oversized Unicode display fields", async () => {
+  await assertProperty(
+    "legislation corpus-index search bounds oversized Unicode display fields",
+    oversizedDisplayFieldProperty("corpus-index"),
+    { numRuns: 12 },
+  );
 });

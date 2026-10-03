@@ -1,0 +1,3 @@
+import { RedisClient } from "bun";
+const driver = await import("ioredis");
+createRedisClient();

@@ -45,6 +45,7 @@ import { useCreateContact } from "@/lib/contacts/mutations";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import {
@@ -84,11 +85,8 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
           );
           handleSetClient({ id, displayName: name });
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -113,11 +111,8 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
             "parties-section.invalidate",
           );
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -318,11 +313,8 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
           );
           setSelectedContact({ id, displayName: name });
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -361,11 +353,8 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
           );
           handleClose();
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -506,11 +495,8 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
             "parties-section.invalidate",
           );
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -631,11 +617,8 @@ const AddPartyDialog = ({
           setSelectedContact(null);
           setSelectedRole(null);
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );

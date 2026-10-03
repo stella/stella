@@ -204,7 +204,10 @@ import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import { modelAcceptsStreamingToolUse } from "@/api/lib/tanstack-ai-models";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
-import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
+import {
+  safeTokenUsageFromTerminalChunk,
+  tokenUsageFromTerminalChunk,
+} from "@/api/lib/tanstack-ai-usage";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const MAX_TOOL_STEPS = 100;
@@ -491,7 +494,7 @@ export const streamChat = async ({
     workspaceIds: tenantWorkspaceIds,
   });
 
-  const primaryModel = resolveTanStackTextModel({
+  const primaryModel = await resolveTanStackTextModel({
     dataClass: "customer",
     modelId: devModelId,
     organizationId,
@@ -584,7 +587,7 @@ export const streamChat = async ({
 
   const resolvedFallbackModel =
     devModelId === undefined
-      ? resolveFallbackTextModel({
+      ? await resolveFallbackTextModel({
           organizationId,
           orgAIConfig,
           managedAIResidency,
@@ -981,15 +984,15 @@ type ResolveFallbackTextModelProps = {
   threadId: SafeId<"chatThread">;
 };
 
-const resolveFallbackTextModel = ({
+const resolveFallbackTextModel = async ({
   organizationId,
   orgAIConfig,
   managedAIResidency,
   primaryModel,
   threadId,
-}: ResolveFallbackTextModelProps): ResolvedTanStackTextModel | null => {
+}: ResolveFallbackTextModelProps): Promise<ResolvedTanStackTextModel | null> => {
   try {
-    const fallbackModel = resolveTanStackTextModel({
+    const fallbackModel = await resolveTanStackTextModel({
       dataClass: "customer",
       organizationId,
       orgAIConfig,
@@ -1750,10 +1753,13 @@ const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
   const error = errorForRunErrorChunk(chunk);
   const kind = classifyRunErrorChunk(chunk);
   reportStreamFailure(error, kind);
+  const usage = safeTokenUsageFromTerminalChunk(chunk);
   return {
-    ...chunk,
+    type: EventType.RUN_ERROR,
+    ...(chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp }),
     message: kind,
     code: kind,
+    ...(usage === undefined ? {} : { usage }),
   };
 };
 
@@ -2240,6 +2246,28 @@ const processPersistenceChunk = ({
   return { type: "chunk", chunk, lifecycle };
 };
 
+type FailedRunDetailsOptions = {
+  chunk: PublicStreamChunk;
+  sourceChunk: PublicStreamChunk;
+};
+
+const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
+  if (
+    chunk.type !== EventType.RUN_ERROR ||
+    sourceChunk.type !== EventType.RUN_ERROR
+  ) {
+    panic("Unhandled TanStack failed stream event");
+  }
+  return {
+    chunk,
+    usage: tokenUsageFromTerminalChunk(chunk),
+    outcome: {
+      type: "failed",
+      error: classifyRunErrorChunk(sourceChunk),
+    } as const satisfies ChatTurnOutcome,
+  };
+};
+
 export const processServerChatStream = async function* ({
   abortSignal,
   runSignal = abortSignal,
@@ -2364,16 +2392,14 @@ export const processServerChatStream = async function* ({
       }
       const { chunk, lifecycle } = processed;
       if (lifecycle === "failed") {
-        if (chunk.type !== EventType.RUN_ERROR) {
-          panic("Unhandled TanStack failed stream event");
-        }
-        usage = tokenUsageFromTerminalChunk(chunk) ?? usage;
+        const failure = failedRunDetails({ chunk, sourceChunk });
+        usage = failure.usage ?? usage;
         await terminalize({
           flushProcessor: true,
-          outcome: { type: "failed", error: classifyRunErrorChunk(chunk) },
+          outcome: failure.outcome,
         });
         yield* announceBeforeFailure();
-        yield chunk;
+        yield failure.chunk;
         return;
       }
       yield chunk;
