@@ -113,10 +113,5 @@ test("the run actor allowlist names exactly the member-run queues", () => {
   const memberRunModules: string[] = MEMBER_RUN_QUEUES.map(
     ({ module }) => module,
   );
-  expect(allowed.filter((path) => memberRunModules.includes(path))).toEqual(
-    memberRunModules,
-  );
-  expect(allowed.filter((path) => !memberRunModules.includes(path))).toEqual([
-    "apps/api/src/lib/lists/verification/run-queue.ts",
-  ]);
+  expect(allowed).toEqual(memberRunModules);
 });
