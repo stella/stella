@@ -1213,6 +1213,8 @@ const buildCzRegionalListingFallback = (
     type: "built",
     decision: {
       ...built.decision,
+      // An unreadable link cannot establish that the publisher has no document.
+      isListingOnly: true,
       sourceRaw,
       rawHash: hashContent(sourceRaw),
     },
@@ -1536,22 +1538,14 @@ const listCzRegionalSlicePage = async ({
 
 /**
  * Rebuild a decision from a payload the loop stored verbatim. The payload is
- * revalidated rather than trusted: it may have been parked for days, and a
- * shape the adapter no longer recognises has to be reported as unbuildable
- * instead of parsed on faith.
+ * revalidated by the shared builder so identifiable rows with unreadable
+ * metadata retain their listing fallback for a later retry.
  */
 const buildCzRegionalFromPayload = async (
   payload: unknown,
   signal?: AbortSignal,
 ): Promise<ReconciliationBuildOutcome> =>
-  isCzRegionalApiItem(payload)
-    ? await buildCzRegionalDecision(payload, signal)
-    : {
-        type:
-          czRegionalListingIdentity(payload).type === "unidentifiable"
-            ? "unkeyable"
-            : "detail-unavailable",
-      };
+  await buildCzRegionalDecision(payload, signal);
 
 // ── Source-field inventory ───────────────────────────────
 

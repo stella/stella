@@ -699,18 +699,24 @@ describe("the crawl keeps a refused row as its listing", () => {
     { autor: 7 },
     { autor: { value: "publisher value" } },
     { autor: [7] },
+    { odkaz: 7 },
+    { odkaz: { value: "publisher value" } },
+    { odkaz: [7] },
   ])(
     "a mistyped optional listing field keeps its raw identity and payload (%j)",
-    async ({ autor }) => {
+    async (drift) => {
       const item = await itemByDocket(LISTING, DISTRICT_DOCKET);
-      const raw = { ...item, autor };
+      const raw = { ...item, ...drift };
       expect(isCzRegionalApiItem(raw)).toBe(false);
       const listing = JSON.stringify({ items: [raw], totalPages: 1 });
       globalThis.fetch = asFetchMock(async () => new Response(listing));
-      const identity = {
-        type: "document",
-        sourceDocumentId: "e21716f9-8855-4a85-a7e6-9af23622661b",
-      };
+      const identity =
+        "odkaz" in drift
+          ? { type: "case-number", caseNumber: "18 C 130/2024", language: "cs" }
+          : {
+              type: "document",
+              sourceDocumentId: "e21716f9-8855-4a85-a7e6-9af23622661b",
+            };
       expect(czRegionalListingIdentity(raw)).toEqual(identity);
       const listed = await listCzRegionalDayPage({
         date: "2025-06-11",
@@ -729,6 +735,9 @@ describe("the crawl keeps a refused row as its listing", () => {
           ),
         ).toEqual(raw);
       }
+      expect(await czRegionalAdapter.reconciliation.buildDecision(raw)).toEqual(
+        repaired,
+      );
       const slice = await czRegionalAdapter.reconciliation.listSlicePage({
         slice: "2025-06-11",
         page: 0,
