@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import {
   INGESTION_STOP_KIND,
   type IngestionStopKind,
@@ -50,5 +52,41 @@ export const ingestionHealthRecord = ({
     stalledAdapters: [...stalledAdapters.keys()].toSorted().join(",") || "none",
     stalledAdapterStopKinds: Object.fromEntries(stalledAdapters),
     ...counts,
+  };
+};
+
+const STORED_TOTAL_HEARTBEAT_INTERVAL_MS = 60_000;
+
+type IngestionHealthRefreshOptions = {
+  clock: () => number;
+  emitStoredTotalHeartbeat: () => Promise<void>;
+  refreshCredentials: () => Promise<void>;
+  observeHeartbeatFailure: (error: unknown) => void;
+};
+
+/** A failed telemetry read must neither hot-loop nor starve credential refresh. */
+export const createIngestionHealthRefresh = ({
+  clock,
+  emitStoredTotalHeartbeat,
+  refreshCredentials,
+  observeHeartbeatFailure,
+}: IngestionHealthRefreshOptions) => {
+  let nextStoredTotalHeartbeatAt = 0;
+  let warningStatus: "unreported" | "reported" = "unreported";
+  return async () => {
+    const now = clock();
+    if (now >= nextStoredTotalHeartbeatAt) {
+      // Advance before reading: failures use the same cadence as successes.
+      nextStoredTotalHeartbeatAt = now + STORED_TOTAL_HEARTBEAT_INTERVAL_MS;
+      const heartbeat = await Result.tryPromise({
+        try: emitStoredTotalHeartbeat,
+        catch: (error) => error,
+      });
+      if (heartbeat.isErr() && warningStatus === "unreported") {
+        warningStatus = "reported";
+        observeHeartbeatFailure(heartbeat.error);
+      }
+    }
+    await refreshCredentials();
   };
 };

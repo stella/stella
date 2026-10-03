@@ -18,3 +18,7 @@ packages/*/AGENTS.md linguist-generated=true
 .claude/skills/** linguist-generated=true
 chatgpt-app-submission.json linguist-generated=true
 apps/api/mcp-surface-baseline.json linguist-generated=true
+
+# Capability contracts and dispatch shards are generated from handlers.
+packages/cli/capabilities/*.json linguist-generated=true
+apps/api/src/mcp/generated/capability-dispatch/*.ts linguist-generated=true

@@ -141,3 +141,83 @@ test("a lost slot race resumes below the load resume floor after priority intent
     holdCount: 0,
   });
 });
+
+for (const reading of ["fresh", "aged"] as const) {
+  test(`a timed-out resumed batch preserves its original error when its following decision is ${reading}`, async () => {
+    const config = {
+      ...defaultConfig,
+      hardFloor: 65,
+      resumeFloor: 75,
+      startFloor: 80,
+      busyWindows: [],
+    };
+    let now = Date.parse("2026-10-02T12:00:00Z");
+    const observedAt = new Date(now).toISOString();
+    const databaseError = Object.assign(new Error("statement timeout"), {
+      code: "57014",
+    });
+    let checkpoint: BackfillCheckpoint<string> = {
+      cursor: "saved",
+      batch: {
+        ...initialBatchState(config),
+        heldSince: now - 60_000,
+        holdUntil: now - 1,
+        holdCause: "load",
+        holdCount: 1,
+      },
+    };
+    let workCalls = 0;
+    let persisted = 0;
+    const result = await runAdaptiveBackfillBatch({
+      config,
+      clock: () => now,
+      log: () => {},
+      runInTransaction: async (work) => await work({}),
+      readCheckpoint: async () => checkpoint,
+      persistCheckpoint: async (_tx, next) => {
+        checkpoint = next;
+        persisted += 1;
+      },
+      readVerdict: async () => ({
+        kind: "normal",
+        signals: [
+          {
+            indicator: "ebs_balance",
+            kind: "normal",
+            value: 90,
+            threshold: 80,
+            observedAt,
+            reason: "fresh resume reading",
+          },
+        ],
+      }),
+      slot: { tryAcquire: async () => true, release: () => {} },
+      selectPage: async () => {
+        workCalls += 1;
+        if (reading === "aged") {
+          now += config.maxStalenessMs + 1;
+        }
+        throw databaseError;
+      },
+      needsWork: () => false,
+      persistItems: () => {},
+      isStatementTimeout: (cause) => cause === databaseError,
+    });
+    expect(workCalls).toBe(1);
+    expect(persisted).toBe(1);
+    expect(result.status).toBe("retry");
+    if (result.status !== "retry") {
+      throw databaseError;
+    }
+    expect(result.error).toBe(databaseError);
+    expect(result.error).toMatchObject({ code: "57014" });
+    expect(result.checkpoint.cursor).toBe("saved");
+    if (reading === "aged") {
+      expect(result.checkpoint.batch.holdUntil).toBeGreaterThan(now);
+      expect(result.checkpoint.batch.heldSince).not.toBeNull();
+    } else {
+      expect(result.checkpoint.batch.holdUntil).toBeNull();
+      expect(result.checkpoint.batch.heldSince).toBeNull();
+    }
+  });
+}

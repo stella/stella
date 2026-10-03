@@ -1,6 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,6 +27,7 @@ import {
   verifyFrontOfQueue,
   type MergeBarSnapshot,
 } from "./merge-bar";
+import ratchetDefinitionPaths from "./ratchet-definition-paths.json";
 
 const HEAD_SHA = "1f0c3a7d9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d";
 const OTHER_SHA = "9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d6f0e1b3c";
@@ -30,6 +38,7 @@ type MigrationGatewayOptions = {
   changedFiles?: number;
   repo?: string;
   detailsUrl?: string;
+  claTitle?: string;
 };
 
 const runMigrationGateway = (
@@ -38,6 +47,7 @@ const runMigrationGateway = (
     changedFiles = files.length,
     repo = "stella/stella",
     detailsUrl = "https://github.com/stella/stella/actions/runs/1",
+    claTitle = "",
   }: MigrationGatewayOptions = {},
 ) => {
   const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-files-"));
@@ -72,7 +82,14 @@ case "$*" in
   *check-runs/1*) printf '%s\\n' "$FIXTURE_CHECK_RUN";;
   *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
   *compare/*) printf '%s\\n' '{"status":"identical"}';;
-  *check-runs*) printf '1\\tci-result\\tcompleted\\tsuccess\\n';;
+  *check-runs*)
+    printf '1\\tci-result\\tcompleted\\tsuccess\\t\\n'
+    if [ -n "$FIXTURE_CLA_TITLE" ]; then
+      case "$*" in
+        *'.output.title'*) printf '2\\tcla\\tcompleted\\tfailure\\t%s\\n' "$FIXTURE_CLA_TITLE";;
+        *) printf '2\\tcla\\tcompleted\\tfailure\\n';;
+      esac
+    fi;;
   *pulls/123/files*) printf '%s\\n' "$FIXTURE_FILES";;
   *pulls/123*) printf '%s\\n' "$FIXTURE_CHANGED_FILES";;
   *headRefOid*) printf '%s\\n' '{"headRefOid":"${HEAD_SHA}"}';;
@@ -96,6 +113,7 @@ esac
         PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
         FIXTURE_PULL_REQUEST: pullRequest,
         FIXTURE_CHECK_RUN: JSON.stringify({ details_url: detailsUrl }),
+        FIXTURE_CLA_TITLE: claTitle,
         FIXTURE_FILES: files.map((file) => JSON.stringify(file)).join("\n"),
         FIXTURE_CHANGED_FILES: String(changedFiles),
       },
@@ -116,8 +134,8 @@ const checkRun = (
   name: string,
   status: string,
   conclusion: string | null,
-  { id = 1 } = {},
-) => ({ id, name, status, conclusion });
+  { id = 1, outputTitle = "" } = {},
+) => ({ id, name, status, conclusion, outputTitle });
 
 /** Any repository this one does not enumerate, which the bar treats alike. */
 const PRIVATE_REPO = "stella/private";
@@ -1539,6 +1557,10 @@ describe("green result freshness", () => {
       return comparison;
     },
     readPullFiles: () => ["scripts/shared.ts"],
+    readRatchetDefinitionPaths: (branch: string) => {
+      expect(branch).toBe("main");
+      return ratchetDefinitionPaths;
+    },
   });
 
   test("unchanged base and up to twenty unrelated commits retain green results", () => {
@@ -1575,6 +1597,64 @@ describe("green result freshness", () => {
         expect(result.error.message).toContain("merge main and let CI re-run");
       }
     }
+  });
+
+  test("a ratchet change on main refuses green results computed under the old rules", () => {
+    for (const filename of ratchetDefinitionPaths) {
+      const result = checkGreenResultFreshness(
+        readers({ status: "ahead", ahead_by: 1, files: [{ filename }] }),
+      );
+      expect(result.isErr(), filename).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toContain(
+          `main changed the ratchet since the green run: ${filename}`,
+        );
+      }
+    }
+  });
+
+  test("an unreadable ratchet definition list refuses green results", () => {
+    for (const definitions of [undefined, {}, [], [1], ["ok", null]]) {
+      const result = checkGreenResultFreshness({
+        ...readers({
+          status: "ahead",
+          ahead_by: 1,
+          files: [{ filename: "unrelated.ts" }],
+        }),
+        readRatchetDefinitionPaths: () => definitions,
+      });
+      expect(result.isErr(), JSON.stringify(definitions)).toBe(true);
+    }
+  });
+
+  test("the ratchet definition list is the ratchet's local import closure", () => {
+    const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
+    const closure = new Set<string>();
+    const pending = ["scripts/ratchet.ts"];
+    for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
+      if (closure.has(file)) {
+        continue;
+      }
+      closure.add(file);
+      const source = readFileSync(path.join(repositoryRoot, file), "utf-8");
+      for (const [, specifier] of source.matchAll(
+        /^(?:import|export)\b[^;]*?\bfrom "(\.{1,2}\/[^"]+)"/gmu,
+      )) {
+        if (specifier === undefined) {
+          continue;
+        }
+        const resolved = path.posix.join(path.posix.dirname(file), specifier);
+        const candidate = /\.(?:ts|json)$/u.test(resolved)
+          ? resolved
+          : `${resolved}.ts`;
+        if (existsSync(path.join(repositoryRoot, candidate))) {
+          pending.push(candidate);
+        }
+      }
+    }
+    expect(
+      [...closure].filter((file) => file.endsWith(".ts")).toSorted(),
+    ).toEqual(ratchetDefinitionPaths.toSorted());
   });
 
   test("more than twenty commits, rewritten history and truncated files refuse stale green", () => {
@@ -1694,5 +1774,196 @@ describe("workflow run URL repository identity", () => {
     expect(result.stderr).toContain(
       "ci-result check does not link to a workflow run in this repository",
     );
+  });
+});
+
+describe("contributor signature check", () => {
+  test("unsigned outsiders are refused in both landing modes before generic check handling", () => {
+    for (const landing of ["merge", "merge-when-ready"] as const) {
+      const snapshot = passingSnapshot({
+        landing,
+        checkRuns: [
+          checkRun("ci-result", "completed", "success"),
+          checkRun("cla", "completed", "failure", {
+            id: 2,
+            outputTitle: "CLA_UNSIGNED",
+          }),
+        ],
+      });
+      expect(failedGate(snapshot)).toEqual({
+        decision: "abort",
+        reasons: ["CLA_UNSIGNED"],
+      });
+      expect(
+        evaluateMergeBar(snapshot).gates.find(
+          ({ gate }) => gate === "required-check",
+        )?.detail,
+      ).toContain("I have read the CLA Document and I hereby sign the CLA");
+    }
+  });
+
+  test("unlinked commit authors are refused in both landing modes", () => {
+    for (const landing of ["merge", "merge-when-ready"] as const) {
+      const snapshot = passingSnapshot({
+        landing,
+        checkRuns: [
+          checkRun("ci-result", "completed", "success"),
+          checkRun("cla", "completed", "failure", {
+            id: 2,
+            outputTitle: "CLA_UNLINKED_AUTHOR",
+          }),
+        ],
+      });
+      expect(failedGate(snapshot)).toEqual({
+        decision: "abort",
+        reasons: ["CLA_UNLINKED_AUTHOR"],
+      });
+    }
+  });
+
+  test("CLA verification errors fail closed before required-check configuration", () => {
+    for (const landing of ["merge", "merge-when-ready"] as const) {
+      const snapshot = passingSnapshot({
+        landing,
+        checkRuns: [
+          checkRun("ci-result", "completed", "success"),
+          checkRun("cla", "completed", "failure", {
+            id: 2,
+            outputTitle: "CLA_ERROR",
+          }),
+        ],
+      });
+      expect(failedGate(snapshot)).toEqual({
+        decision: "abort",
+        reasons: ["REQUIRED_CHECK_NOT_SUCCESSFUL"],
+      });
+    }
+  });
+
+  test("verified authors and newest signed verdicts are accepted", () => {
+    for (const landing of ["merge", "merge-when-ready"] as const) {
+      const snapshot = passingSnapshot({
+        landing,
+        requiredCheckRuns: ["ci-result", "cla"],
+        checkRuns: [
+          checkRun("ci-result", "completed", "success"),
+          checkRun("cla", "completed", "failure", {
+            id: 2,
+            outputTitle: "CLA_UNSIGNED",
+          }),
+          checkRun("cla", "completed", "success", {
+            id: 3,
+            outputTitle: "CLA_VERIFIED",
+          }),
+          checkRun(
+            `cla/pr-${passingSnapshot().pullRequest.number}`,
+            "completed",
+            "success",
+            {
+              id: 4,
+              outputTitle: "CLA_VERIFIED",
+            },
+          ),
+        ],
+      });
+      expect(evaluateMergeBar(snapshot).decision).toBe("merge");
+      expect(
+        failedGate({ ...snapshot, checkRunsHeadSha: OTHER_SHA }).reasons,
+      ).toContain("CHECK_RUNS_READ_FOR_STALE_SHA");
+    }
+  });
+
+  test("shared heads enforce only the exact PR opener in both landing modes", () => {
+    for (const landing of ["merge", "merge-when-ready"] as const) {
+      const common = checkRun("cla", "completed", "success", {
+        id: 2,
+        outputTitle: "CLA_VERIFIED",
+      });
+      const own = checkRun(
+        `cla/pr-${passingSnapshot().pullRequest.number}`,
+        "completed",
+        "success",
+        {
+          id: 3,
+          outputTitle: "CLA_VERIFIED",
+        },
+      );
+      const other = checkRun("cla/pr-999", "completed", "failure", {
+        id: 4,
+        outputTitle: "CLA_UNSIGNED",
+      });
+      const snapshot = passingSnapshot({
+        landing,
+        checkRuns: [
+          checkRun("ci-result", "completed", "success"),
+          common,
+          own,
+          other,
+        ],
+      });
+      expect(evaluateMergeBar(snapshot).decision).toBe("merge");
+      expect(
+        failedGate({
+          ...snapshot,
+          checkRuns: [
+            common,
+            checkRun(
+              `cla/pr-${passingSnapshot().pullRequest.number}`,
+              "completed",
+              "failure",
+              {
+                id: 3,
+                outputTitle: "CLA_UNSIGNED",
+              },
+            ),
+          ],
+        }).reasons,
+      ).toContain("CLA_UNSIGNED");
+      for (const pending of [
+        undefined,
+        checkRun(
+          `cla/pr-${passingSnapshot().pullRequest.number}`,
+          "in_progress",
+          null,
+          { id: 3 },
+        ),
+      ]) {
+        expect(
+          evaluateMergeBar({
+            ...snapshot,
+            checkRuns: pending ? [common, pending, other] : [common, other],
+          }).decision,
+        ).toBe("abort");
+      }
+    }
+  });
+
+  test("missing and in-progress signature checks retain the existing landing behavior", () => {
+    for (const checkRuns of [
+      [checkRun("ci-result", "completed", "success")],
+      [
+        checkRun("ci-result", "completed", "success"),
+        checkRun("cla", "in_progress", null, {
+          id: 2,
+          outputTitle: "CLA_CHECKING",
+        }),
+      ],
+    ]) {
+      const snapshot = passingSnapshot({
+        requiredCheckRuns: ["ci-result", "cla"],
+        checkRuns,
+      });
+      expect(failedGate(snapshot).reasons).not.toContain("CLA_UNSIGNED");
+      expect(evaluateMergeBar(snapshot).decision).toBe("abort");
+      expect(
+        evaluateMergeBar({ ...snapshot, landing: "merge-when-ready" }).decision,
+      ).toBe("merge");
+    }
+  });
+
+  test("the real CLI reads the structured check title and refuses unsigned authors", () => {
+    const result = runMigrationGateway([], { claTitle: "CLA_UNSIGNED" });
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain("CLA_UNSIGNED");
   });
 });

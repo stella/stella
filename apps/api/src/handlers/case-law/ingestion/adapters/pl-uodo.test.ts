@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * pl-uodo against records the portal actually served.
  *
@@ -8,8 +9,6 @@
  * decisions. The crawl is driven against a model of the search built over the
  * captured records, honouring the same keyset, offset and order parameters.
  */
-
-import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
@@ -502,29 +501,37 @@ describe("an authority decision", () => {
       buildFrom(await recordOf(RULING_URN), undefined),
     );
 
-    expect(decision.metadata["linkedRulings"]).toEqual([
-      {
-        relation: "defended",
-        date: "2023-11-06",
-        status: "nonfinal",
-        scope: "*",
-        text: undefined,
-        sourceDocumentId: RULING_URN,
-        caseNumber: "II SA/Wa 996/23",
-      },
-    ]);
+    expect(
+      Bun.deepEquals(decision.metadata["linkedRulings"], [
+        {
+          relation: "defended",
+          date: "2023-11-06",
+          status: "nonfinal",
+          scope: "*",
+          text: undefined,
+          sourceDocumentId: RULING_URN,
+          caseNumber: "II SA/Wa 996/23",
+        },
+      ]),
+    ).toBe(true);
     // The link names the ruling the way this source stores it, so the two
     // rows meet on the ruling's identity and on its docket.
     expect(ruling.sourceDocumentId).toBe(RULING_URN);
-    expect(ruling.caseNumber).toBe("II SA/Wa 996/23");
+    expect(ruling.caseNumber === "II SA/Wa 996/23").toBe(true);
   });
 
   test("the rulings and decisions it cites are the publisher's cited-cases list", async () => {
     const decision = builtDecision(
       buildFrom(await recordOf(DECISION_URN), await bodyBytes()),
     );
-    expect(decision.publisherCitedCases).toContain("II SA/Wa 791/21");
-    expect(decision.publisherCitedCases).toContain("I C 566/15");
+    expect(
+      decision.publisherCitedCases?.some(
+        (value) => value === "II SA/Wa 791/21",
+      ),
+    ).toBe(true);
+    expect(
+      decision.publisherCitedCases?.some((value) => value === "I C 566/15"),
+    ).toBe(true);
   });
 });
 
@@ -548,10 +555,12 @@ describe("a court ruling the portal files", () => {
     expect(ruling.documentDelivery).toBeUndefined();
     expect(ruling.fulltext).toBeUndefined();
     expect(ruling.documentAst).toEqual({});
-    expect(ruling.metadata["rulingKeys"]).toEqual([
-      "sa-doc|CB7D6E6DEE",
-      "sa|wojewódzki sąd administracyjny w warszawie|IISA/WA996/23|2023-11-06|wyrok",
-    ]);
+    expect(
+      Bun.deepEquals(ruling.metadata["rulingKeys"], [
+        "sa-doc|CB7D6E6DEE",
+        "sa|wojewódzki sąd administracyjny w warszawie|IISA/WA996/23|2023-11-06|wyrok",
+      ]),
+    ).toBe(true);
   });
 
   test("names its bench by the functions the record prints", async () => {
@@ -1295,8 +1304,9 @@ describe("a decision body the portal does not serve", () => {
       metadata: stored?.metadata ?? {},
     });
     expect(
-      replayed?.type === "parsed" && replayed.result.metadata["detailStatus"],
-    ).toBe(PL_UODO_BODY_STATUS.GONE);
+      replayed?.type === "parsed" &&
+        replayed.result.metadata["detailStatus"] === PL_UODO_BODY_STATUS.GONE,
+    ).toBe(true);
   });
 });
 

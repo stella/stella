@@ -1,3 +1,5 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 /**
  * Polish common courts from the Ministry of Justice's judgments API.
@@ -53,6 +55,7 @@ import {
   DECISION_DOCUMENT_ROLE,
   type DecisionDocumentRole,
 } from "@stll/api-contract/decision-document-role";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -97,6 +100,7 @@ import type {
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   PL_COURTS_RULING_DECISION_TYPES,
   PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
@@ -127,6 +131,8 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -767,7 +773,7 @@ const normalizeSignature = (signature: string): string =>
 
 /** What a ruling key is read from: stored columns only. */
 type CommonCourtRulingKeyInput = Pick<
-  IngestionResult,
+  RawIngestionResult,
   "caseNumber" | "court" | "decisionDate" | "decisionType"
 >;
 
@@ -1155,7 +1161,7 @@ export const assemblePlNcourtDecision = ({
     (alias) => alias !== undefined,
   );
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     ...keyed,
     ...(documentRole === undefined ? {} : { documentRole }),
     sourceDocumentId: id,
@@ -1208,7 +1214,7 @@ export const assemblePlNcourtDecision = ({
     documentAst,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
   return standaloneReasons
     ? {
         type: "supplement",
@@ -1357,7 +1363,7 @@ export const buildPlNcourtQuarantine = (
     [RAW_PART.QUARANTINE]: JSON.stringify(quarantine),
   });
   const court = UNSERVED_ROW_LABEL;
-  return {
+  return plainTextIngestionResult({
     sourceDocumentId: id,
     caseNumber: id,
     caseNumberIsPlaceholder: true,
@@ -1386,7 +1392,7 @@ export const buildPlNcourtQuarantine = (
     documentAst: EMPTY_AST,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 /**
@@ -1421,7 +1427,7 @@ const buildUnkeyedRow = ({
     [RAW_PART.LISTING]: listingXml,
     ...(detailXml === undefined ? {} : { [RAW_PART.DETAIL]: detailXml }),
   });
-  return {
+  return plainTextIngestionResult({
     sourceDocumentId,
     ...(documentRole === undefined ? {} : { documentRole }),
     caseNumber: signature ?? sourceDocumentId,
@@ -1447,7 +1453,7 @@ const buildUnkeyedRow = ({
     documentAst: EMPTY_AST,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 const isGapped = (value: unknown): boolean =>
@@ -1499,12 +1505,14 @@ const mediaTypeOf = (contentType: string | null): string =>
  */
 const request = async ({
   cursor,
+  fetchStage,
   params,
   path,
   signal,
   timeoutMs,
 }: {
   cursor: string;
+  fetchStage: DocumentFetchStage;
   params: Record<string, string>;
   path: string;
   signal?: AbortSignal | undefined;
@@ -1520,7 +1528,12 @@ const request = async ({
   const response = await fetchWithRetry(
     target.toString(),
     { headers: { Accept: "text/xml" }, redirect: "error" },
-    { adapterKey: ADAPTER_KEYS.PL_NCOURT, signal, timeoutMs },
+    {
+      fetchStage,
+      adapterKey: ADAPTER_KEYS.PL_NCOURT,
+      signal,
+      timeoutMs,
+    },
   );
   const bytes =
     response.body === null
@@ -1579,6 +1592,7 @@ const listWindow = async ({
 }): Promise<Result<Listed, AdapterFetchError>> => {
   const requested = await request({
     cursor,
+    fetchStage: "listing",
     params,
     path: "/judgements",
     signal,
@@ -1647,6 +1661,7 @@ const fetchPlNcourtDecision = async ({
   }
   const detail = await request({
     cursor,
+    fetchStage: "document",
     params: { id },
     path: "/judgement/details",
     signal,
@@ -1683,6 +1698,7 @@ const fetchPlNcourtDecision = async ({
   }
   const content = await request({
     cursor,
+    fetchStage: "document",
     params: { id },
     path: "/judgement/content",
     signal,
@@ -2005,6 +2021,7 @@ const positionAliasOf = (
 
 type Built = {
   decisions: IngestionResult[];
+  itemBuildFailures: number;
   supplements: DecisionSupplement[];
   read: number;
   aborted: boolean;
@@ -2018,17 +2035,52 @@ const buildRows = async (
   signal?: AbortSignal,
 ): Promise<Result<Built, AdapterFetchError>> => {
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   const supplements: DecisionSupplement[] = [];
   for (const [index, row] of rows.entries()) {
     if (signal?.aborted) {
-      return Result.ok({ decisions, supplements, read: index, aborted: true });
+      return Result.ok({
+        decisions,
+        itemBuildFailures,
+        supplements,
+        read: index,
+        aborted: true,
+      });
     }
-    const attempted = await fetchPlNcourtDecision({
-      cursor,
-      listingXml: row.fragment,
-      positionAlias: row.positionAlias,
-      signal,
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_NCOURT,
+
+      rawListing: row.fragment,
+      decisionOf: (result) => {
+        if (result.isErr()) {
+          return undefined;
+        }
+        const outcome = result.value;
+        switch (outcome.type) {
+          case "built":
+            return outcome.decision;
+          case "supplement":
+          case "unkeyable":
+            return undefined;
+          default:
+            outcome satisfies never;
+            return panic("Unhandled pl-ncourt decision projection");
+        }
+      },
+      build: async () =>
+        await fetchPlNcourtDecision({
+          cursor,
+          listingXml: row.fragment,
+          positionAlias: row.positionAlias,
+          signal,
+        }),
     });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      continue;
+    }
+    const attempted = captured.value;
     if (Result.isError(attempted)) {
       return attempted;
     }
@@ -2054,6 +2106,7 @@ const buildRows = async (
   }
   return Result.ok({
     decisions,
+    itemBuildFailures,
     supplements,
     read: rows.length,
     aborted: false,
@@ -2288,9 +2341,17 @@ const plNcourtFetchPage = async (
   if (Result.isError(built)) {
     return built;
   }
-  const { decisions, supplements, read } = built.value;
+  const { decisions, itemBuildFailures, supplements, read } = built.value;
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     ...(supplements.length === 0 ? {} : { supplements }),
     sourceUrl: url,
     nextCursor: encodePlNcourtCursor(afterWindow({ cursor, listing, read })),
@@ -2634,6 +2695,7 @@ export const plNcourtCensus = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const plNcourtAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_NCOURT,
   language: PL_NCOURT_LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,
@@ -2655,6 +2717,15 @@ export const plNcourtAdapter = defineSourceAdapter({
   getTotalCount: plNcourtTotalCount,
 
   reconciliation: {
+    // Row XML is the content signal; aliases and quarantine neighbours only locate a result.
+    revisionOf: (payload) => {
+      if (!isSlicePayload(payload)) {
+        return null;
+      }
+      return "listingXml" in payload
+        ? { listingXml: payload.listingXml }
+        : { status: payload.quarantine.status };
+    },
     firstSlice: PL_NCOURT_FIRST_SLICE,
     ...plNcourtDaySlices.walk,
     tipWindowDays: PL_NCOURT_TIP_WINDOW_DAYS,

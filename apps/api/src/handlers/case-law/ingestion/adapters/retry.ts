@@ -1,4 +1,4 @@
-// parser-output-unchanged: refusal stops are opt-in; existing response and retry semantics are unchanged.
+// parser-output-unchanged: retries and fetch-stage observation affect request scheduling and diagnostics only, not parsed output.
 /**
  * The only way a case-law adapter reaches its publisher.
  *
@@ -12,6 +12,7 @@
 import { Result, panic } from "better-result";
 
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
 
@@ -24,6 +25,7 @@ import {
   type PublisherGateId,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -33,8 +35,10 @@ import { INGESTION_USER_AGENT, isTimeoutError } from "./utils";
 export type PublisherFetchInit = FetchWithTimeoutInit & {
   /** Whose publisher budget this request spends. */
   adapterKey: AdapterKey;
+  fetchStage: DocumentFetchStage;
   /** A supplementary publisher, distinct from the decision listing's host. */
   publisherGate?: PublisherGateId | undefined;
+  expectedContentType?: "pdf" | undefined;
   retryPolicy?: "publisher-backoff";
   /** Existing workflows receive refusals; session adapters can stop explicitly. */
   refusalMode?: "return-response" | "stop-refusal" | undefined;
@@ -83,6 +87,8 @@ const fetchPublisherRequest = async (
     adapterKey,
     publisherGate,
     refusalMode: _refusalMode,
+    fetchStage,
+    expectedContentType,
     isRateLimitRedirect: _isRateLimitRedirect,
     ...requestInit
   } = init;
@@ -91,8 +97,18 @@ const fetchPublisherRequest = async (
   } else {
     await reservePublisherGateSlot(publisherGate, requestInit.signal);
   }
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher fetch boundary: the lint rule checks each target where fetchPublisher or fetchWithRetry is called
-  return await fetchWithTimeout(url, requestInit);
+  // Each publisher-backoff attempt re-enters here, so every attempt is gated and observed.
+  const request = async () =>
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher fetch boundary: the lint rule checks each target where fetchPublisher or fetchWithRetry is called
+    await fetchWithTimeout(url, requestInit);
+  if (fetchStage === "listing") {
+    return await request();
+  }
+  return await observePublisherDocumentFetch({
+    source: adapterKey,
+    fetch: request,
+    expectedContentType,
+  });
 };
 
 /**
@@ -117,6 +133,7 @@ type FetchWithRetryOptions = {
    */
   adapterKey: AdapterKey;
   refusalMode?: "return-response" | "stop-refusal" | undefined;
+  fetchStage: DocumentFetchStage;
   /** Maximum retry attempts (default: 2). */
   maxRetries?: number;
   /** Per-request timeout in ms (default: ADAPTER_TIMEOUT.REQUEST). */
@@ -175,6 +192,7 @@ export const fetchWithRetry = async (
     signal,
     adapterKey,
     refusalMode,
+    fetchStage,
   } = opts;
 
   const headers = new Headers(init?.headers);
@@ -191,6 +209,7 @@ export const fetchWithRetry = async (
         ...init,
         adapterKey,
         refusalMode,
+        fetchStage,
         headers,
         timeoutMs,
         signal,

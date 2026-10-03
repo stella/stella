@@ -655,7 +655,7 @@ describe("a crawl page against the portal", () => {
     // The oldest ruling is on the served case page; the others are not, and
     // stay listing-only rows the reconciliation will fetch again.
     expect(decisions[0]?.isListingOnly).toBeUndefined();
-    expect(decisions[0]?.decisionType).toBe("orzeczenie");
+    expect(decisions[0]?.decisionType === "orzeczenie").toBe(true);
     expect(decisions[1]?.isListingOnly).toBe(true);
 
     // K 1/87 has two rulings on this page; its case page is read once.
@@ -707,7 +707,7 @@ describe("a crawl page against the portal", () => {
       (decision) => decision.sourceDocumentId === "5024",
     );
     expect(unrendered?.isListingOnly).toBe(true);
-    expect(unrendered?.caseNumber).toBe("U 3/86");
+    expect(unrendered?.caseNumber === "U 3/86").toBe(true);
     expect(
       decodeSourceRawEnvelope(unrendered?.sourceRaw ?? "")?.["case-page"],
     ).toBeUndefined();
@@ -869,30 +869,36 @@ describe("a ruling built from its case page", () => {
       await caseFixture("pl-tk-case-k-2-26.html.gz"),
     );
 
-    expect(decision.judges).toEqual([
-      { role: "presiding", nameAsPrinted: "Bartłomiej Sochański" },
-      { role: "panel-member", nameAsPrinted: "Stanisław Piotrowicz" },
-      { role: "panel-member", nameAsPrinted: "Bogdan Święczkowski" },
-      { role: "rapporteur", nameAsPrinted: "Wojciech Sych" },
-      { role: "panel-member", nameAsPrinted: "Andrzej Zielonacki" },
-      { role: "dissenting", nameAsPrinted: "Andrzej Zielonacki" },
-    ]);
-    expect(decision.metadata["dissentingOpinions"]).toEqual([
-      "sędziego TK Andrzeja Zielonackiego",
-    ]);
-    expect(decision.court).toBe("Trybunał Konstytucyjny");
-    expect(decision.decisionType).toBe("wyrok");
-    expect(decision.metadata["publications"]).toEqual([
-      {
-        text: "OTK ZU A/2026, poz. 83",
-        links: [
-          {
-            text: "OTK ZU A/2026, poz. 83",
-            url: "https://otkzu.trybunal.gov.pl/2026/A/83",
-          },
-        ],
-      },
-    ]);
+    expect(
+      Bun.deepEquals(decision.judges, [
+        { role: "presiding", nameAsPrinted: "Bartłomiej Sochański" },
+        { role: "panel-member", nameAsPrinted: "Stanisław Piotrowicz" },
+        { role: "panel-member", nameAsPrinted: "Bogdan Święczkowski" },
+        { role: "rapporteur", nameAsPrinted: "Wojciech Sych" },
+        { role: "panel-member", nameAsPrinted: "Andrzej Zielonacki" },
+        { role: "dissenting", nameAsPrinted: "Andrzej Zielonacki" },
+      ]),
+    ).toBe(true);
+    expect(
+      Bun.deepEquals(decision.metadata["dissentingOpinions"], [
+        "sędziego TK Andrzeja Zielonackiego",
+      ]),
+    ).toBe(true);
+    expect(decision.court === "Trybunał Konstytucyjny").toBe(true);
+    expect(decision.decisionType === "wyrok").toBe(true);
+    expect(
+      Bun.deepEquals(decision.metadata["publications"], [
+        {
+          text: "OTK ZU A/2026, poz. 83",
+          links: [
+            {
+              text: "OTK ZU A/2026, poz. 83",
+              url: "https://otkzu.trybunal.gov.pl/2026/A/83",
+            },
+          ],
+        },
+      ]),
+    ).toBe(true);
     expect(decision.fulltext).toContain(
       "Z powyższych przyczyn zdecydowałem się na zgłoszenie zdania odrębnego.",
     );
@@ -912,10 +918,16 @@ describe("a ruling built from its case page", () => {
     expect(judgment.sourceDocumentId).toBe("9897");
     expect(costs.sourceDocumentId).toBe("9895");
     expect(judgment.caseNumber).toBe(costs.caseNumber);
-    expect(judgment.metadata["decisionForm"]).toBe("Wyrok");
-    expect(costs.metadata["decisionForm"]).toBe("Postanowienie dot. kosztów");
-    expect(judgment.metadata["joinedCases"]).toEqual(["SK 42/12"]);
-    expect(costs.metadata["joinedCases"]).toEqual(["SK 42/12"]);
+    expect(judgment.metadata["decisionForm"] === "Wyrok").toBe(true);
+    expect(
+      costs.metadata["decisionForm"] === "Postanowienie dot. kosztów",
+    ).toBe(true);
+    expect(Bun.deepEquals(judgment.metadata["joinedCases"], ["SK 42/12"])).toBe(
+      true,
+    );
+    expect(Bun.deepEquals(costs.metadata["joinedCases"], ["SK 42/12"])).toBe(
+      true,
+    );
   });
 
   test("the same payloads build the same row, and a replay of its envelope builds it again", async () => {
@@ -1083,9 +1095,11 @@ describe("the key a SAOS row and a portal row share", () => {
       await caseFixture("pl-tk-case-k-2-26.html.gz"),
     );
 
-    expect(decision.metadata["rulingKeys"]).toEqual([
-      "tk|k 2/26|2026-06-25|wyrok",
-    ]);
+    expect(
+      Bun.deepEquals(decision.metadata["rulingKeys"], [
+        "tk|k 2/26|2026-06-25|wyrok",
+      ]),
+    ).toBe(true);
   });
 });
 
@@ -1144,7 +1158,9 @@ describe("a listed row the parser cannot read", () => {
     }
     expect(stored.type).toBe("detail-unavailable");
     expect(stored.decision.isListingOnly).toBe(true);
-    expect(stored.decision.metadata["listingDefect"]).toBe("unparseable-row");
+    expect(
+      stored.decision.metadata["listingDefect"] === "unparseable-row",
+    ).toBe(true);
     expect(stored.decision.sourceRaw).toContain(
       JSON.stringify(JSON.stringify(row.rowHtml)).slice(3, -3),
     );
@@ -1203,7 +1219,7 @@ describe("the deciding court", () => {
       await caseFixture("pl-tk-case-k-2-26.html.gz"),
     );
 
-    expect(decision.court).toBe("Trybunał Konstytucyjny");
+    expect(decision.court === "Trybunał Konstytucyjny").toBe(true);
     expect(decision.metadata["quarantineReason"]).toBeUndefined();
   });
 

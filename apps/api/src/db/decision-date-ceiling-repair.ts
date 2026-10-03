@@ -77,7 +77,7 @@ const dialect = new PgDialect();
  * to a parameterised query on the reserved connection, so the whole repair
  * shares the session that holds the online-migrations lock.
  */
-const bindTo = (connection: OnlineMigrationConnection) => ({
+const bindTo = (connection: Pick<OnlineMigrationConnection, "query">) => ({
   execute: async (query: SQL): Promise<unknown> => {
     const { sql: text, params } = dialect.sqlToQuery(query);
     return await connection.query(text, onlineMigrationParams(params));

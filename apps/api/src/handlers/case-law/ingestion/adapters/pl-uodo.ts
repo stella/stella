@@ -1,3 +1,8 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+import { Result, panic } from "better-result";
+
+import { polishAdministrativeDocketOf } from "@stll/api-contract/decision-docket-grammar";
 /**
  * Polish data-protection authority (Prezes UODO) adapter.
  *
@@ -36,10 +41,6 @@
  *
  * Reconciliation slices are decision years, which the search filters on.
  */
-
-import { Result, panic } from "better-result";
-
-import { polishAdministrativeDocketOf } from "@stll/api-contract/decision-docket-grammar";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -81,6 +82,7 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plAdministrativeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-administrative-ruling-keys";
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
@@ -101,6 +103,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -976,6 +979,7 @@ const search = async ({
     url,
     { headers: { Accept: "application/json" }, redirect: "error" },
     {
+      fetchStage: "listing",
       adapterKey: ADAPTER_KEYS.PL_UODO,
       signal,
       timeoutMs: ADAPTER_TIMEOUT.LIST,
@@ -1170,6 +1174,7 @@ const fetchBody = async ({
         target.toString(),
         { headers: { Accept: "application/xml" }, redirect: "error" },
         {
+          fetchStage: "document",
           adapterKey: ADAPTER_KEYS.PL_UODO,
           signal,
           timeoutMs: ADAPTER_TIMEOUT.PAGE,
@@ -1380,7 +1385,7 @@ const assembleAuthorityDecision = ({
   );
 
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     ...docket,
     sourceDocumentId: urn,
     ...repairAliasesOf(row),
@@ -1422,7 +1427,7 @@ const assembleAuthorityDecision = ({
     documentAst,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
   return body === undefined
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };
@@ -1511,7 +1516,7 @@ const assembleCourtRuling = ({
   });
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
     ...(docket.placeholder === true ? { caseNumberIsPlaceholder: true } : {}),
     sourceDocumentId: urn,
@@ -1550,7 +1555,7 @@ const assembleCourtRuling = ({
     documentAst: EMPTY_AST,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
   return { type: "built", decision };
 };
 
@@ -1583,7 +1588,7 @@ const assembleQuarantined = ({
     sourceDocumentId: quarantineId,
   });
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     ...docket,
     sourceDocumentId: quarantineId,
     court,
@@ -1608,7 +1613,7 @@ const assembleQuarantined = ({
     documentAst: EMPTY_AST,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
   return { type: "built", decision };
 };
 
@@ -2400,18 +2405,60 @@ const plUodoFetchPage = async (
   reportSkips(`crawl ${encoded}`, tallyPlUodoSkips(rows));
 
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   for (const payload of listing) {
     if (signal?.aborted) {
       // The cycle stopped partway through the page, so it says nothing about
       // the records it never reached; the page is read again next cycle, and
       // what was stored is stored again under the same hash.
-      return Result.ok({ decisions, sourceUrl: url, nextCursor: encoded });
+      return Result.ok({
+        decisions,
+        ...(itemBuildFailures === 0
+          ? {}
+          : {
+              itemBuildFailures: {
+                type: "item_build_failed" as const,
+                count: itemBuildFailures,
+              },
+            }),
+        sourceUrl: url,
+        nextCursor: encoded,
+      });
     }
-    const attempted = await buildPlUodoDecision({
-      cursor: encoded,
-      listing: payload,
-      signal,
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_UODO,
+
+      rawListing: JSON.stringify(payload),
+      decisionOf: (result) => {
+        if (result.isErr()) {
+          return undefined;
+        }
+        const outcome = result.value;
+        switch (outcome.type) {
+          case "built":
+          case "detail-unavailable":
+            return outcome.decision;
+          case "skipped":
+          case "unkeyable":
+            return undefined;
+          default:
+            outcome satisfies never;
+            return panic("Unhandled pl-uodo decision projection");
+        }
+      },
+      build: async () =>
+        await buildPlUodoDecision({
+          cursor: encoded,
+          listing: payload,
+          signal,
+        }),
     });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      continue;
+    }
+    const attempted = captured.value;
     if (Result.isError(attempted)) {
       return attempted;
     }
@@ -2446,6 +2493,14 @@ const plUodoFetchPage = async (
   const reachedTip = listing.length < CRAWL_PAGE_SIZE;
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: url,
     nextCursor: encodePlUodoCursor(
       reachedTip ? { ...next, parkedOn: todayUtc() } : next,
@@ -2456,6 +2511,7 @@ const plUodoFetchPage = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const plUodoAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_UODO,
   language: PL_UODO_LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,
@@ -2476,6 +2532,31 @@ export const plUodoAdapter = defineSourceAdapter({
   getTotalCount: countPlUodoRecords,
 
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            type: payload["type"],
+            version: payload["version"],
+            id: payload["id"],
+            time: payload["time"],
+            mtime: payload["mtime"],
+            languages: payload["languages"],
+            name: payload["name"],
+            title: payload["title"],
+            refid: payload["refid"],
+            refname: payload["refname"],
+            kind: payload["kind"],
+            parts: payload["parts"],
+            publication: payload["publication"],
+            publicator: payload["publicator"],
+            dates: payload["dates"],
+            entities: payload["entities"],
+            terms: payload["terms"],
+            refs: payload["refs"],
+            resources: payload["resources"],
+          }
+        : null,
     firstSlice: PL_UODO_FIRST_SLICE,
     sliceOf: yearOf,
     nextSlice,

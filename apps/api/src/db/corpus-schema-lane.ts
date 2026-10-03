@@ -42,6 +42,7 @@
  */
 
 import { TaggedError } from "better-result";
+import { setTimeout as abortableSleep } from "node:timers/promises";
 
 import { executedRows } from "../lib/db/executed-rows";
 
@@ -138,6 +139,8 @@ export type RunUnderCorpusSchemaLaneOptions<
   laneWaitMs?: number;
   /** Test seam; `Bun.sleep` otherwise. */
   sleep?: (ms: number) => Promise<void>;
+  signal?: AbortSignal;
+  clock?: () => number;
 };
 
 /** A transaction that ended without running its work: the lane was refused. */
@@ -159,10 +162,15 @@ export const runUnderCorpusSchemaLane = async <
     database,
     work,
     laneWaitMs = CORPUS_SCHEMA_LANE_DEFAULT_WAIT_MS,
-    sleep = Bun.sleep,
+    signal,
+    sleep = async (ms) => await abortableSleep(ms, undefined, { signal }),
+    clock = () => performance.now(),
   }: RunUnderCorpusSchemaLaneOptions<TTransaction, TResult>,
-  waitedMs = 0,
+  wait?: { startedAt: number; waitedMs: number },
 ): Promise<TResult> => {
+  signal?.throwIfAborted();
+  const startedAt = wait?.startedAt ?? clock();
+  const elapsedMs = () => Math.max(wait?.waitedMs ?? 0, clock() - startedAt);
   const outcome = await database.transaction(
     async (tx): Promise<typeof LANE_BUSY | { value: TResult }> => {
       const granted = isCorpusSchemaLaneGranted(
@@ -170,6 +178,14 @@ export const runUnderCorpusSchemaLane = async <
       );
       if (!granted) {
         return LANE_BUSY;
+      }
+      signal?.throwIfAborted();
+      const waitedMs = elapsedMs();
+      if (waitedMs > laneWaitMs) {
+        throw new CorpusSchemaLaneUnavailableError({
+          message: "The corpus schema lane exceeded its operation budget",
+          waitedMs,
+        });
       }
       return { value: await work(tx) };
     },
@@ -179,6 +195,8 @@ export const runUnderCorpusSchemaLane = async <
   }
   // The budget is the caller's, so the last pause ends exactly on it: a try
   // never starts past the budget, and the failure names the budget spent.
+  signal?.throwIfAborted();
+  const waitedMs = elapsedMs();
   const remainingMs = laneWaitMs - waitedMs;
   if (remainingMs <= 0) {
     throw new CorpusSchemaLaneUnavailableError({
@@ -189,7 +207,14 @@ export const runUnderCorpusSchemaLane = async <
   const sleepMs = Math.min(CORPUS_SCHEMA_LANE_RETRY_MS, remainingMs);
   await sleep(sleepMs);
   return await runUnderCorpusSchemaLane(
-    { database, work, laneWaitMs, sleep },
-    waitedMs + sleepMs,
+    {
+      database,
+      work,
+      laneWaitMs,
+      sleep,
+      clock,
+      ...(signal === undefined ? {} : { signal }),
+    },
+    { startedAt, waitedMs: waitedMs + sleepMs },
   );
 };

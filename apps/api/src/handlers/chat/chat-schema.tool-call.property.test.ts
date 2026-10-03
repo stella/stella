@@ -238,3 +238,19 @@ test("keeps a null the tool's schema admits and omits one it refuses", () => {
     ]);
   }
 });
+
+test("text with an own __proto__ key is not the call its input describes", () => {
+  const plainText = '{"a":1}';
+  const protoKeyText = '{"a":1,"__proto__":{"x":1}}';
+  const mismatch = `Chat tool input does not match arguments for ${TOOL_NAME}`;
+
+  // `JSON.parse` keeps `__proto__` as an own key, so each copy is the call a
+  // client or provider could send.
+  for (const [argumentsText, inputText] of [
+    [protoKeyText, plainText],
+    [plainText, protoKeyText],
+  ] as const) {
+    const input: unknown = JSON.parse(inputText);
+    expect(toolCallOutcome({ argumentsText, input }).outcome).toBe(mismatch);
+  }
+});

@@ -1,4 +1,5 @@
-// parser-output-unchanged: opt into publisher retries; fetched response parsing is unchanged.
+// parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
@@ -41,6 +42,7 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import {
   fetchPublisher,
@@ -94,6 +96,7 @@ import {
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -495,6 +498,7 @@ const queryDecisions = async ({
   const query = buildListingQuery({ dateFrom, dateTo, celexFilter });
 
   const response = await fetchPublisher(SPARQL_URL, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     method: "POST",
@@ -802,6 +806,7 @@ const readDocumentResponse = async ({
 }: ReadDocumentOptions): Promise<ManifestationRead> => {
   const url = `${CELLAR_CONTENT_BASE}/${resource}`;
   const response = await fetchPublisher(url, {
+    fetchStage: "document",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     signal,
@@ -1448,7 +1453,7 @@ const ecjDecisionFromParts = ({
   const judges = facts === undefined ? [] : noticeJudges(facts);
   const converterVersion = ecjConverterVersion(html);
 
-  return {
+  return plainTextIngestionResult({
     caseNumber,
     sourceDocumentId: ecjSourceDocumentId(celex, language),
     // What every row this adapter wrote before it stated an id was stored
@@ -1507,7 +1512,7 @@ const ecjDecisionFromParts = ({
     // in the row would lead a replay back to.
     sourceRaw: encodeSourceRawEnvelope(parts),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 /**
@@ -1789,6 +1794,7 @@ const fetchNotice = async (
     return undefined;
   }
   const response = await fetchPublisher(`${CELLAR_CELEX_PREFIX}${celex}`, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     signal,
@@ -1852,6 +1858,7 @@ const fetchFormex = async (
     return { type: "not-located" };
   }
   const response = await fetchRequest(contentUrl.value, {
+    fetchStage: "document",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
     signal,
@@ -2846,6 +2853,7 @@ const EU_ECJ_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const euEcjAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.EU_ECJ,
   sourceSurfaces: EU_ECJ_SOURCE_SURFACES,
   sourceFields: {
@@ -2867,6 +2875,14 @@ export const euEcjAdapter = defineSourceAdapter({
    * is held.
    */
   reconciliation: {
+    // CELEX and language identify a manifestation; the listing exposes no content change signal.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            celex: payload["celex"],
+            language: payload["language"],
+          }
+        : null,
     firstSlice: COURT_EPOCH_YEAR,
     sliceOf: ecjYearOf,
     nextSlice: ecjNextSlice,
@@ -2885,6 +2901,7 @@ export const euEcjAdapter = defineSourceAdapter({
   async getTotalCount(signal) {
     try {
       const response = await fetchPublisher(SPARQL_URL, {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.EU_ECJ,
         retryPolicy: "publisher-backoff",
         method: "POST",
@@ -2936,6 +2953,7 @@ export const euEcjAdapter = defineSourceAdapter({
         });
 
         const decisions: IngestionResult[] = [];
+        let failed = 0;
         const completedVariants = new Set<string>();
 
         // 2. Fetch and parse each language variant
@@ -2950,7 +2968,20 @@ export const euEcjAdapter = defineSourceAdapter({
             continue;
           }
 
-          const decision = await buildDecision(binding, abortSignal);
+          const attempted = await buildPlainTextItem({
+            decisionOf: (value) => value,
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+
+            rawListing: JSON.stringify(binding),
+            build: async () => await buildDecision(binding, abortSignal),
+          });
+          if (attempted.type === "item_build_failed") {
+            failed++;
+            decisions.push(attempted.decision);
+            completedVariants.add(variantKey);
+            continue;
+          }
+          const decision = attempted.value;
           if (!decision) {
             continue;
           }
@@ -2962,7 +2993,11 @@ export const euEcjAdapter = defineSourceAdapter({
         // If the page was aborted mid-iteration, retry
         // the same day on the next run instead of skipping it.
         if (abortSignal.aborted) {
-          return { decisions, nextCursor: dateFrom };
+          return {
+            decisions,
+            nextCursor: dateFrom,
+            itemBuildFailures: { type: "item_build_failed", count: failed },
+          };
         }
 
         // Advance cursor to next day; stop if
@@ -2974,7 +3009,11 @@ export const euEcjAdapter = defineSourceAdapter({
         // a full historical re-scan).
         const nextCursor = nextDate <= today ? nextDate : today;
 
-        return { decisions, nextCursor };
+        return {
+          decisions,
+          nextCursor,
+          itemBuildFailures: { type: "item_build_failed", count: failed },
+        };
       },
       catch: (cause) => {
         const error = adapterCatch(ADAPTER_KEYS.EU_ECJ, cursor)(cause);

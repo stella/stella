@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 
@@ -24,6 +25,7 @@ import {
   statuteSitemapShards,
 } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-content-hash";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -37,12 +39,16 @@ const DECISION_ID_PREFIX = "00000000-0000-7000-8000-";
 const LEGISLATION_DOCUMENT_ID_PREFIX = "00000000-0000-7000-9000-";
 const SAMPLE_DECISION_NUMBER = 12;
 const CASE_LAW_GENERATION = "case_law_v5";
+const emptyContentHash =
+  EMPTY_CORPUS_CONTENT_HASHES.at(0) ??
+  panic("The empty corpus hash fixture must exist");
 
 const makeUuid = (prefix: string, number: number): string =>
   `${prefix}${String(number).padStart(12, "0")}`;
 
 export const QUERY_PLAN_SAMPLE = {
   caseLaw: {
+    sourceId: toSafeId<"caseLawSource">("00000000-0000-7000-8000-000000000001"),
     country: "CZE",
     decisionId: toSafeId<"caseLawDecision">(
       makeUuid(DECISION_ID_PREFIX, SAMPLE_DECISION_NUMBER),
@@ -72,7 +78,7 @@ type QueryPlanSeedDb = Pick<PgliteDatabase, "execute" | "insert">;
 export const seedQueryPlanData = async (
   db: QueryPlanSeedDb,
 ): Promise<QueryPlanSeedResult> => {
-  const caseLawSourceId = createSafeId<"caseLawSource">();
+  const caseLawSourceId = QUERY_PLAN_SAMPLE.caseLaw.sourceId;
   const legislationSourceId = createSafeId<"legislationSource">();
 
   await db.insert(caseLawSources).values(
@@ -129,6 +135,63 @@ export const seedQueryPlanData = async (
         ELSE (1000 + n)::text || 'qpg1'
       END
     FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+  `);
+
+  // Two each stay ready, cool down, sit parked, or follow a failed fetch.
+  // The following rows represent terminal exclusions.
+  await db.execute(sql`
+    UPDATE ${caseLawDecisions}
+    SET document_url = 'https://query-plan.invalid/document.pdf',
+        document_fetch_attempts = CASE
+          WHEN id <= (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad('2', 12, '0'))::uuid
+            THEN 1
+          WHEN id <= (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad('4', 12, '0'))::uuid
+            THEN 5
+          WHEN id <= (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad('6', 12, '0'))::uuid
+            THEN 1
+          ELSE 0
+        END,
+        document_fetch_attempted_at = CASE
+          WHEN id <= (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad('2', 12, '0'))::uuid
+            THEN TIMESTAMPTZ '2099-01-01 00:00:00+00'
+          WHEN id <= (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad('6', 12, '0'))::uuid
+            THEN TIMESTAMPTZ '2024-01-01 00:00:00+00'
+          ELSE NULL
+        END
+    WHERE id BETWEEN
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad('1', 12, '0'))::uuid AND
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad('8', 12, '0'))::uuid
+  `);
+  await db.execute(sql`
+    UPDATE ${caseLawDecisions}
+    SET document_url = 'https://query-plan.invalid/document.pdf',
+        content_hash = md5('corpus-served-' || id::text)
+    WHERE id BETWEEN
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad('9', 12, '0'))::uuid AND
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad('14', 12, '0'))::uuid
+  `);
+  await db.execute(sql`
+    UPDATE ${caseLawDecisions}
+    SET document_url = 'https://query-plan.invalid/document.pdf',
+        fulltext = 'Query plan filled document'
+    WHERE id BETWEEN
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad('15', 12, '0'))::uuid AND
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad('20', 12, '0'))::uuid
+  `);
+  await db.execute(sql`
+    UPDATE ${caseLawDecisions}
+    SET content_hash = ${emptyContentHash}
+    WHERE id BETWEEN
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad('21', 12, '0'))::uuid AND
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad('26', 12, '0'))::uuid
+  `);
+  await db.execute(sql`
+    UPDATE ${caseLawDecisions}
+    SET document_url = 'https://query-plan.invalid/document.pdf',
+        redacted_at = TIMESTAMPTZ '2024-01-01 00:00:00+00'
+    WHERE id BETWEEN
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad('27', 12, '0'))::uuid AND
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad('32', 12, '0'))::uuid
   `);
 
   await db.execute(sql`VACUUM (ANALYZE) ${caseLawDecisions}`);

@@ -349,6 +349,15 @@ for (const resumeFloor of [config.hardFloor, config.startFloor]) {
       lastDurationMs: null,
     });
     expect(result.action).toBe("run");
+    expect(
+      nextBatch({
+        state: held,
+        verdict: await read(resumeFloor - 1),
+        config: boundaryConfig,
+        clock: () => now,
+        lastDurationMs: null,
+      }).action,
+    ).toBe("hold");
   });
 }
 
@@ -420,7 +429,15 @@ test("changing clocks and signal ages preserve causal hysteresis and reset resum
       fc.array(
         fc.record({
           value: fc.integer({ min: 64, max: 80 }),
-          age: fc.integer({ min: -1, max: 900_001 }),
+          age: fc.oneof(
+            fc.constantFrom(
+              -1,
+              0,
+              config.maxStalenessMs,
+              config.maxStalenessMs + 1,
+            ),
+            fc.integer({ min: -1, max: config.maxStalenessMs + 1 }),
+          ),
           elapsed: fc.integer({ min: 1, max: 60_000 }),
         }),
         { minLength: 1, maxLength: 100 },
@@ -479,4 +496,14 @@ test("changing clocks and signal ages preserve causal hysteresis and reset resum
       },
     ),
   );
+});
+
+test("an unrelated hold upgrades to a load hold when a later reading falls below the hard floor", async () => {
+  const unrelated = step(initialBatchState(config), combine([])).state;
+  expect(unrelated.holdCause).toBe("other");
+  const loadHeld = step(unrelated, await read(64)).state;
+  expect(loadHeld.holdCause).toBe("load");
+  expect(loadHeld.heldSince).toBe(unrelated.heldSince);
+  expect(step(loadHeld, await read(74)).action).toBe("hold");
+  expect(step(loadHeld, await read(75)).action).toBe("run");
 });

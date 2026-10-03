@@ -144,6 +144,14 @@ describe("resolveComposerMenuShortcut", () => {
     ).toBeNull();
   });
 
+  test("ignores absent and unrelated typed characters", () => {
+    for (const character of [null, "a", "😀", " "]) {
+      expect(
+        resolveComposerMenuShortcut({ ...baseOptions, character }),
+      ).toBeNull();
+    }
+  });
+
   // Which keystrokes type a character is typedCharacter's contract, pinned
   // per layout next to it; this checks the composer consumes it.
   test("opens for an Option-typed trigger and keeps Cmd shortcuts", () => {

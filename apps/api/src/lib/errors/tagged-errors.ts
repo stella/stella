@@ -1,7 +1,8 @@
-// parser-output-unchanged: adapter errors carry stop kinds; successful parsed records are unchanged.
+// parser-output-unchanged: adapter stop kinds and TimeoutError reexport preserve successful parsed records.
 import { panic, TaggedError } from "better-result";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
+import { TimeoutError } from "@stll/concurrency/with-timeout";
 import { declareFailureClass, FetchBoundaryError } from "@stll/errors";
 import { isConnectionFailure } from "@stll/fetch";
 import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
@@ -11,6 +12,7 @@ import {
 } from "@stll/legal-atlas/ingestion-cycle";
 
 export { FetchBoundaryError } from "@stll/errors";
+export { TimeoutError } from "@stll/concurrency/with-timeout";
 
 export type HandlerErrorStatusCode =
   | 400
@@ -732,14 +734,6 @@ export class ExtractionWorkerError extends TaggedError(
   mimeType: string;
   sizeBytes: number;
   termination: ExtractionWorkerTermination | null;
-}> {}
-
-/** Timeout waiting for a readiness probe, subprocess, or external resource. */
-export class TimeoutError extends TaggedError("TimeoutError")<{
-  message: string;
-  label: string;
-  timeoutMs?: number;
-  cause?: unknown;
 }> {}
 
 /**

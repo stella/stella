@@ -30,7 +30,9 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+import deleteInvoice from "./delete";
 import transitionInvoice from "./transition";
+import updateInvoice from "./update";
 
 setDefaultTimeout(120_000);
 
@@ -127,6 +129,7 @@ describe("invoice transition integration", () => {
       id: first,
     });
     expect(await readNumber(first)).toBe("AUTO-2026-001");
+    await assertAssignedNumber(first, "AUTO-2026-001");
     expect(await runTransition(first, "finalize")).toEqual({ id: first });
     expect(await readNumber(first)).toBe("AUTO-2026-001");
     const third = await seedInvoice({
@@ -136,6 +139,59 @@ describe("invoice transition integration", () => {
     expect(await runTransition(third, "finalize")).toEqual({ id: third });
     expect(await readNumber(third)).toBe("AUTO-2026-003");
     await testDb.delete(numberSeries).where(eq(numberSeries.id, seriesId));
+  });
+
+  test("preserves a manual number through edits after reverting to draft", async () => {
+    const invoiceId = await seedInvoice({
+      status: INVOICE_STATUS.DRAFT,
+      invoiceNumber: "REVERTED-001",
+    });
+    expect(await runTransition(invoiceId, "finalize")).toEqual({
+      id: invoiceId,
+    });
+    expect(await runTransition(invoiceId, "revert_to_draft")).toEqual({
+      id: invoiceId,
+    });
+    await assertAssignedNumber(invoiceId, "REVERTED-001");
+    expect(await runTransition(invoiceId, "finalize")).toEqual({
+      id: invoiceId,
+    });
+    const invoice = await testDb.query.invoices.findFirst({
+      where: { id: { eq: invoiceId } },
+    });
+    expect(invoice?.invoiceNumber).toBe("REVERTED-001");
+  });
+
+  test("a draft that was never finalized can still change, clear and lose its number", async () => {
+    const invoiceId = await seedInvoice({
+      status: INVOICE_STATUS.DRAFT,
+      invoiceNumber: "DRAFT-001",
+    });
+    const context = createContext({
+      invoiceId,
+      action: "finalize",
+      auditEvents: [],
+    });
+    for (const invoiceNumber of ["DRAFT-002", null, "DRAFT-003"]) {
+      expect(
+        await updateInvoice.handler({ ...context, body: { invoiceNumber } }),
+      ).toEqual({ id: invoiceId });
+      const row = await testDb.query.invoices.findFirst({
+        where: { id: { eq: invoiceId } },
+        columns: { invoiceNumber: true },
+      });
+      expect(row?.invoiceNumber).toBe(invoiceNumber);
+    }
+    expect(
+      await deleteInvoice.handler(
+        asTestRaw<Parameters<typeof deleteInvoice.handler>[0]>(context),
+      ),
+    ).toEqual({ deleted: true });
+    expect(
+      await testDb.query.invoices.findFirst({
+        where: { id: { eq: invoiceId } },
+      }),
+    ).toBeUndefined();
   });
 
   test("requires a default series for an unnumbered invoice but preserves a manual number", async () => {
@@ -329,4 +385,38 @@ const readInvoiceStatus = async (invoiceId: SafeId<"invoice">) => {
     columns: { status: true },
   });
   return row?.status ?? null;
+};
+
+const assertAssignedNumber = async (
+  invoiceId: SafeId<"invoice">,
+  assignedNumber: string,
+) => {
+  const context = createContext({
+    invoiceId,
+    action: "finalize",
+    auditEvents: [],
+  });
+  for (const invoiceNumber of [null, `${assignedNumber}-CHANGED`]) {
+    const result = await updateInvoice.handler({
+      ...context,
+      body: { invoiceNumber },
+    });
+    expect(result).toMatchObject({ code: 409 });
+    const invoice = await testDb.query.invoices.findFirst({
+      where: { id: { eq: invoiceId } },
+    });
+    expect(invoice?.invoiceNumber).toBe(assignedNumber);
+  }
+  expect(
+    await updateInvoice.handler({
+      ...context,
+      body: { invoiceNumber: assignedNumber },
+    }),
+  ).toEqual({ id: invoiceId });
+  expect(
+    await updateInvoice.handler({
+      ...context,
+      body: { notes: "Updated notes" },
+    }),
+  ).toEqual({ id: invoiceId });
 };

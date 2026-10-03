@@ -1,3 +1,4 @@
+// parser-output-unchanged: the validator only reports; no parser's output changes
 /**
  * AST sanity checker.
  *
@@ -239,6 +240,9 @@ export const validateAst = (
 
   const $ = cheerio.load(html);
   $("div[style*='-aw-headerfooter-type']").remove();
+  // A script's source and a stylesheet are never the document's text, so a
+  // parser that rightly leaves them out must not read as having lost content.
+  $("script, style").remove();
 
   // <br> is a word boundary in the rendered document, but cheerio's
   // .text() drops it outright, gluing adjacent words ("wraz<br/>z" →

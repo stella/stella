@@ -357,20 +357,22 @@ export const countReplayability = async ({
   sourceId,
   scope,
 }: CountReplayabilityOptions): Promise<ReplayabilitySplit> => {
-  const [counts] = await scopedDb((tx) =>
-    tx
-      .select({
-        storedLocally: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is not null)`,
-        needsRefetch: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is null)`,
-      })
-      .from(caseLawDecisions)
-      .where(
-        and(
-          eq(caseLawDecisions.sourceId, sourceId),
-          replayScopePredicate(scope),
-          isNull(caseLawDecisions.redactedAt),
+  const [counts] = await scopedDb(
+    async (tx) =>
+      // sql-perf-allow: bounded by one explicit operator replay preflight
+      await tx
+        .select({
+          storedLocally: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is not null)`,
+          needsRefetch: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is null)`,
+        })
+        .from(caseLawDecisions)
+        .where(
+          and(
+            eq(caseLawDecisions.sourceId, sourceId),
+            replayScopePredicate(scope),
+            isNull(caseLawDecisions.redactedAt),
+          ),
         ),
-      ),
   );
 
   return {

@@ -1,11 +1,14 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { GENERATORS } from "./generated-files";
+
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const infrastructurePaths = new Set([
   ".github/workflows/ci.yml",
   "scripts/detect-service-suite-changes.ts",
   "scripts/detect-service-suite-changes.test.ts",
+  "scripts/generated-files.ts",
   "scripts/ci-plan.test.ts",
   ".npmrc",
   "scripts/retry.sh",
@@ -120,6 +123,55 @@ const directlyRequired = (file: string, suite: ServiceSuite) => {
     (file.startsWith("apps/api/src/") &&
       (file.includes("backfill") || /\.test\.[jt]sx?$/u.test(file)))
   );
+};
+
+// A derived module is never committed: it exists only once its generator runs,
+// so the generator's declared inputs stand in for it in the import graph.
+// Keyed by plain paths: lookups come from arbitrary import specifiers.
+const DERIVED_OUTPUT_INPUTS: ReadonlyMap<string, readonly string[]> = new Map(
+  GENERATORS.filter(({ outputKind }) => outputKind === "derived").flatMap(
+    ({ outputs, inputs }) => outputs.map((output) => [output, inputs] as const),
+  ),
+);
+
+const derivedInputFiles = (inputs: readonly string[], root: string) =>
+  inputs.flatMap((input) =>
+    /[*?[{]/u.test(input)
+      ? [...new Bun.Glob(input).scanSync({ cwd: root, onlyFiles: true })]
+      : [input],
+  );
+
+/**
+ * The repository files a local import stands for, or undefined when it names
+ * nothing. A derived output maps to its generator inputs whether or not a
+ * local run already generated it.
+ */
+const resolveLocalImport = (
+  candidate: string,
+  root: string,
+): readonly string[] | undefined => {
+  const stem = candidate.replace(/\.[cm]?jsx?$/u, "");
+  const derivedInputs = [candidate, `${stem}.ts`]
+    .map((entry) => DERIVED_OUTPUT_INPUTS.get(entry))
+    .find((inputs) => inputs !== undefined);
+  if (derivedInputs !== undefined) {
+    return derivedInputFiles(derivedInputs, root);
+  }
+  const resolved = [
+    candidate,
+    `${stem}.ts`,
+    `${stem}.tsx`,
+    `${candidate}.ts`,
+    `${candidate}.tsx`,
+    `${candidate}.js`,
+    `${candidate}/index.ts`,
+    `${candidate}/index.tsx`,
+  ].find(
+    (entry) =>
+      existsSync(path.join(root, entry)) &&
+      statSync(path.join(root, entry)).isFile(),
+  );
+  return resolved === undefined ? undefined : [resolved];
 };
 
 // `@stll/<name>/subpath` → `<name>`.
@@ -264,28 +316,14 @@ export const serviceSuiteDependencies = (
       } else {
         continue;
       }
-      const stem = candidate.replace(/\.[cm]?jsx?$/u, "");
-      const resolved = [
-        candidate,
-        `${stem}.ts`,
-        `${stem}.tsx`,
-        `${candidate}.ts`,
-        `${candidate}.tsx`,
-        `${candidate}.js`,
-        `${candidate}/index.ts`,
-        `${candidate}/index.tsx`,
-      ].find(
-        (entry) =>
-          existsSync(path.join(root, entry)) &&
-          statSync(path.join(root, entry)).isFile(),
-      );
+      const resolved = resolveLocalImport(candidate, root);
       if (resolved === undefined) {
         return {
           status: "unresolved" as const,
           message: `Unresolved service-suite import: ${file}: ${specifier}`,
         };
       }
-      pending.push(resolved);
+      pending.push(...resolved);
     }
   }
   const packageError = expandWorkspaceScopes(packageScopes, root);
@@ -369,19 +407,22 @@ export const requiresServiceSuites = (
   root = repositoryRoot,
 ) => Object.values(planServiceSuites(files, root)).some(Boolean);
 
-if (import.meta.main) {
-  const scopes = process.argv.at(2) === "--scopes";
-  const files = process.argv.slice(scopes ? 3 : 2);
+/** The line the CLI prints for its arguments; ci-plan reads it. */
+export const serviceSuiteCliOutput = (args: readonly string[]): string => {
+  const scopes = args.at(0) === "--scopes";
+  const files = args.slice(scopes ? 1 : 0);
   // A missing/deleted dependency or an unreadable graph must widen the scope.
   try {
     const plan = planServiceSuites(files);
-    console.log(
-      scopes
-        ? [plan.postgres, plan.corpus, plan.valkey, plan.collab].join(" ")
-        : Object.values(plan).some(Boolean),
-    );
+    return scopes
+      ? [plan.postgres, plan.corpus, plan.valkey, plan.collab].join(" ")
+      : String(Object.values(plan).some(Boolean));
   } catch (error) {
     console.error(error);
-    console.log(scopes ? "true true true true" : true);
+    return scopes ? "true true true true" : "true";
   }
+};
+
+if (import.meta.main) {
+  console.log(serviceSuiteCliOutput(process.argv.slice(2)));
 }

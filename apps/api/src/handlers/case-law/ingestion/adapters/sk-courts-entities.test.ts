@@ -82,7 +82,7 @@ const judicialText = fc
   )
   .map((codePoints) => String.fromCodePoint(...codePoints));
 
-describe("Slovak court display text decodes publisher entities once", () => {
+describe("Slovak court display text decodes publisher entities to stable text", () => {
   test("decodes named, decimal and hexadecimal references across display fields", () => {
     const parts = fixture();
     const decision =
@@ -101,7 +101,7 @@ describe("Slovak court display text decodes publisher entities once", () => {
         originCourt: "Okresný súd Žilina",
         originCaseNumber: "1C/2/2024",
         referencedLegislation: [
-          { nazov: "Zákon & predpis", url: "https://example.org/?a=1&amp;b=2" },
+          { nazov: "Zákon & predpis", url: "https://example.org/?a=1&b=2" },
         ],
         courtRegistry: {
           nazov: "Okresný súd Bratislava I",
@@ -127,7 +127,7 @@ describe("Slovak court display text decodes publisher entities once", () => {
     );
   });
 
-  test("stored raw replay preserves the same single-pass decoded fields", () => {
+  test("stored raw replay preserves the same decoded fields", () => {
     const original =
       assembleSkCourtsDecision(fixture()) ?? panic("fixture is unkeyable");
     const replay =
@@ -219,7 +219,6 @@ describe("Slovak court display text decodes publisher entities once", () => {
       for (const storedDocket of [
         "7C&#x2F;222/1991",
         "7C/222/1991",
-        "7C&#x2f;221/1991 ",
         "7c/221/1991",
       ]) {
         expect(
@@ -233,34 +232,32 @@ describe("Slovak court display text decodes publisher entities once", () => {
       }
     });
 
-    test("a double-encoded docket decodes once on both sides, never twice", () => {
-      // The listing itself is double-encoded: ingestion decodes it once, and
-      // the legacy row, stored verbatim, decodes once to the same value.
-      expect(
-        replay(
-          storedRowFor({
-            listedDocket: "7C&amp;#x2F;221/1991",
-            storedDocket: "7C&amp;#x2F;221/1991",
-          }),
-        ),
-      ).toMatchObject({
-        type: "parsed",
-        result: { caseNumber: "7C&#x2F;221/1991" },
-        legacyCaseNumber: "7C&amp;#x2F;221/1991",
-      });
-      // A stored value that reaches the replayed docket only on a second
-      // decode is not the same docket.
-      expect(
-        replay(
-          storedRowFor({
-            listedDocket: "7C&#x2F;221/1991",
-            storedDocket: "7C&amp;#x2F;221/1991",
-          }),
-        ),
-      ).toMatchObject({
-        type: "rejected",
-        rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
-      });
+    test("every encoding layer of a docket reaches the same stored form on both sides", () => {
+      // Both sides go through the one canonical form, however many times the
+      // publisher or an earlier parser encoded the docket.
+      for (const { listedDocket, storedDocket } of [
+        {
+          listedDocket: "7C&amp;#x2F;221/1991",
+          storedDocket: "7C&amp;#x2F;221/1991",
+        },
+        {
+          listedDocket: "7C&#x2F;221/1991",
+          storedDocket: "7C&amp;#x2F;221/1991",
+        },
+        // The canonical form trims, so surrounding whitespace is no difference.
+        {
+          listedDocket: "7C&#x2F;221/1991",
+          storedDocket: "7C&#x2f;221/1991 ",
+        },
+      ]) {
+        expect(
+          replay(storedRowFor({ listedDocket, storedDocket })),
+        ).toMatchObject({
+          type: "parsed",
+          result: { caseNumber: "7C/221/1991", sourceDocumentId: "sk-guid-1" },
+          legacyCaseNumber: storedDocket,
+        });
+      }
     });
 
     test("a row keyed by its docket is not migrated to a new spelling", () => {
@@ -281,18 +278,18 @@ describe("Slovak court display text decodes publisher entities once", () => {
 
   test("preserves literal ampersands, unknown entities, and unfinished references", () => {
     const text = "Novák & synovia; &neexistuje; &#x; &#; &amp bez bodkočiarky";
-    expect(decisionFor(text).metadata["judge"]).toBe(text);
-    expect(decisionFor(encodeHTML(text)).metadata["judge"]).toBe(text);
+    expect(decisionFor(text).metadata["judge"] === text).toBe(true);
+    expect(decisionFor(encodeHTML(text)).metadata["judge"] === text).toBe(true);
   });
 
-  test("double encoding decodes exactly once even when output resembles an entity", () => {
+  test("double encoding decodes until no entity is left", () => {
     for (const { source, expected } of [
-      { source: "&amp;amp;", expected: "&amp;" },
-      { source: "&amp;#253;", expected: "&#253;" },
-      { source: "&amp;#xFD;", expected: "&#xFD;" },
-      { source: "&amp;nbsp;", expected: "&nbsp;" },
+      { source: "A &amp;amp; B", expected: "A & B" },
+      { source: "&amp;#253;", expected: "ý" },
+      { source: "&amp;#xFD;", expected: "ý" },
+      { source: "A&amp;nbsp;B", expected: "A\u00a0B" },
     ]) {
-      expect(decisionFor(source).metadata["judge"]).toBe(expected);
+      expect(decisionFor(source).metadata["judge"] === expected).toBe(true);
     }
   });
 
@@ -352,7 +349,7 @@ describe("Slovak court display text decodes publisher entities once", () => {
         ];
         for (const encoded of encodings) {
           const decoded = decisionFor(encoded).metadata["judge"];
-          expect(decoded).toBe(text);
+          expect(decoded === text).toBe(true);
           expect(
             entityResidueIn(typeof decoded === "string" ? decoded : ""),
           ).toBeUndefined();

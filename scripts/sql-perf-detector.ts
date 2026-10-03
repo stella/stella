@@ -3,12 +3,14 @@
 // Flagged: a leading LIKE wildcard, any LIKE on an S3-key column, a
 // function or cast in GROUP BY over a corpus relation, OR with a subquery
 // operand, and an optional keyset bound (`$1 IS NULL OR id > $1`), which no
-// generic plan can use as an index condition. Prefix LIKE on other columns,
+// generic plan can use as an index condition; per-source full corpus counts
+// also fail even when the aggregate has a LIMIT. Prefix LIKE on other columns,
 // SELECT-only expressions, schema constraints, and plain strings pass; the
 // optional bound is also read from plain strings, where `$n` is a parameter.
 // Analysis follows same-file const bindings; imported or runtime-built SQL is
 // opaque. This detector is shared by oxlint and the baseline counter.
 
+import { panic } from "better-result";
 import ts from "typescript";
 
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables.ts";
@@ -19,7 +21,8 @@ export type SqlPerfHit = {
     | "s3-key-like"
     | "group-by-expression"
     | "or-subquery"
-    | "optional-keyset";
+    | "optional-keyset"
+    | "per-source-full-count";
   line: number;
   column: number;
   /**
@@ -38,7 +41,9 @@ export type SqlPerfCommentError = { line: number; message: string };
  * is reported whatever the file's baseline count.
  */
 export const isBaselinedSqlPerfKind = (kind: SqlPerfHit["kind"]): boolean =>
-  kind !== "or-subquery" && kind !== "optional-keyset";
+  kind !== "or-subquery" &&
+  kind !== "optional-keyset" &&
+  kind !== "per-source-full-count";
 
 const LIKE = /\b(?:NOT\s+)?I?LIKE\b/giu;
 const CORPUS =
@@ -531,6 +536,344 @@ const isCorpusColumn = (column: string, bindings: ConstBindings): boolean => {
   );
 };
 
+const FULL_COUNT = /\bcount\s*\([^)]*\)|\bsum\s*\(\s*\+?1(?:\.0+)?\s*\)/iu;
+const SOURCE_COLUMN = /\bsource_id\b|\bsourceId\b/iu;
+const SOURCE_RELATION =
+  /\b(?:case_law_sources|legislation_sources|caseLawSources|legislationSources)\b/u;
+
+const CORPUS_COUNT_TABLE = new RegExp(
+  `\\b(?:${[...REPORT_CORPUS_TABLES].join("|")})\\b`,
+  "iu",
+);
+
+type SqlSourceClause = { kind: "where" | "group" | "on" | null; text: string };
+const SOURCE_EQUALITY_VALUE = String.raw`(?<![\w.$])(?:\$\d+|__SQL_EXPR_\d+__|[+-]?\d+(?:\.\d+)?)(?![\w.])`;
+
+/** Keep outer predicates when a nested SELECT introduces its own FROM. */
+const sourceClauses = (statement: string): SqlSourceClause[] => {
+  const clauses: SqlSourceClause[] = [];
+  const scopes: (SqlSourceClause & { subquery: boolean })[] = [
+    { kind: null, text: "", subquery: false },
+  ];
+  const tokens =
+    /\b(?:SELECT|WHERE|GROUP\s+BY|FROM|JOIN|ON|HAVING|ORDER\s+BY|LIMIT|OFFSET|UNION|RETURNING)\b|[()]/giu;
+  let cursor = 0;
+  const flush = (scope: SqlSourceClause) => {
+    if (scope.kind !== null) {
+      clauses.push({ kind: scope.kind, text: scope.text });
+    }
+    scope.text = "";
+  };
+  for (const token of statement.matchAll(tokens)) {
+    const scope =
+      scopes.at(-1) ?? panic("SQL predicate scanner lost its scope");
+    scope.text += statement.slice(cursor, token.index);
+    cursor = token.index + token[0].length;
+    if (token[0] === "(") {
+      scopes.push({ kind: scope.kind, text: "", subquery: false });
+      continue;
+    }
+    if (token[0] === ")") {
+      const text = scope.text;
+      flush(scope);
+      if (scopes.length > 1) {
+        scopes.pop();
+        const parent =
+          scopes.at(-1) ?? panic("SQL predicate scanner lost its parent scope");
+        if (!scope.subquery) {
+          parent.text += `(${text})`;
+        }
+      }
+      continue;
+    }
+    flush(scope);
+    const kind = token[0].toLowerCase();
+    if (kind === "select") {
+      scope.subquery = true;
+    }
+    if (kind === "where") {
+      scope.kind = "where";
+    } else if (kind.startsWith("group")) {
+      scope.kind = "group";
+    } else if (kind === "on") {
+      scope.kind = "on";
+    } else {
+      scope.kind = null;
+    }
+  }
+  const scope =
+    scopes.at(-1) ?? panic("SQL predicate scanner lost its final scope");
+  scope.text += statement.slice(cursor);
+  for (const remaining of scopes) {
+    flush(remaining);
+  }
+  return clauses;
+};
+
+const sourceFilteredSql = (statement: string): boolean => {
+  const sourceAliases = new Set(["case_law_sources", "legislation_sources"]);
+  for (const match of statement.matchAll(
+    /\b(?:FROM|JOIN)\s+(?:[a-z_]\w*\.)?(?:case_law_sources|legislation_sources)\s+(?:AS\s+)?([a-z_]\w*)/giu,
+  )) {
+    if (match[1] !== undefined) {
+      sourceAliases.add(match[1]);
+    }
+  }
+  return sourceClauses(statement).some(({ kind, text }) => {
+    if (kind !== "where" && kind !== "on") {
+      return false;
+    }
+    const restrictedSourceJoin = [...sourceAliases].some(
+      (alias) =>
+        new RegExp(
+          `\\b${alias}\\.(?:adapter_key|id)\\s*=\\s*(?:\\(\\s*)*${SOURCE_EQUALITY_VALUE}`,
+          "iu",
+        ).test(text) ||
+        new RegExp(
+          `${SOURCE_EQUALITY_VALUE}\\s*=\\s*${alias}\\.(?:adapter_key|id)\\b`,
+          "iu",
+        ).test(text),
+    );
+    return (
+      restrictedSourceJoin ||
+      new RegExp(
+        `\\bsource_id\\b\\s*=\\s*(?:\\(\\s*)*${SOURCE_EQUALITY_VALUE}`,
+        "iu",
+      ).test(text) ||
+      new RegExp(
+        `${SOURCE_EQUALITY_VALUE}\\s*=\\s*(?:[a-z_]\\w*\\.)?source_id\\b`,
+        "iu",
+      ).test(text) ||
+      new RegExp(
+        String.raw`\bsource_id\b\s+IN\s*\(\s*${SOURCE_EQUALITY_VALUE}\s*\)`,
+        "iu",
+      ).test(text)
+    );
+  });
+};
+
+const fullSourceCount = (text: string): boolean =>
+  sqlWithoutLiterals(text.replace(SQL_STRING, "__SQL_EXPR_0__"))
+    .split(";")
+    .some(
+      (statement) =>
+        FULL_COUNT.test(statement) &&
+        sourceFilteredSql(sqlTableName(statement.replaceAll('"', ""))) &&
+        CORPUS_COUNT_TABLE.test(sqlTableName(statement.replaceAll('"', ""))),
+    );
+
+const isSourceRestrictionColumn = (
+  column: ts.PropertyAccessExpression,
+  { bindings, file }: SubqueryOperandContext,
+): boolean => {
+  const owner = resolve(column.expression, bindings).getText(file);
+  if (column.name.text === "sourceId") {
+    return (
+      isCorpusColumn(column.getText(file), bindings) ||
+      isCorpusColumn(`${owner}.sourceId`, bindings)
+    );
+  }
+  return (
+    (column.name.text === "adapterKey" || column.name.text === "id") &&
+    SOURCE_RELATION.test(owner)
+  );
+};
+
+const singletonSourceValue = (
+  value: ts.Expression | undefined,
+  bindings: ConstBindings,
+): ts.Expression | undefined => {
+  if (
+    value === undefined ||
+    !ts.isArrayLiteralExpression(value) ||
+    value.elements.length !== 1
+  ) {
+    return undefined;
+  }
+  const element = value.elements.at(0);
+  if (element === undefined || ts.isSpreadElement(element)) {
+    return undefined;
+  }
+  const resolved = resolve(element, bindings);
+  if (
+    ts.isPropertyAccessExpression(resolved) &&
+    resolved.name.text === "sourceId"
+  ) {
+    return undefined;
+  }
+  return resolved;
+};
+
+const drizzleSourceCount = (
+  node: ts.CallExpression,
+  context: SubqueryOperandContext,
+): boolean => {
+  const { imports, bindings, file } = context;
+  if (
+    !ts.isPropertyAccessExpression(node.expression) ||
+    ![
+      "where",
+      "groupBy",
+      "innerJoin",
+      "leftJoin",
+      "rightJoin",
+      "fullJoin",
+      "$count",
+    ].includes(node.expression.name.text)
+  ) {
+    return false;
+  }
+  const dollarCount = node.expression.name.text === "$count";
+  const countTable = dollarCount ? node.arguments.at(0) : undefined;
+  const state = {
+    corpus:
+      countTable !== undefined &&
+      (isCorpusColumn(`${countTable.getText(file)}.sourceId`, bindings) ||
+        isCorpusColumn(
+          `${resolve(countTable, bindings).getText(file)}.sourceId`,
+          bindings,
+        )),
+    count: dollarCount,
+    source: false,
+  };
+  // Resolving bindings turns the syntax tree into a graph (recursive closures
+  // and aliases can revisit their own initializer).
+  const inspected = new Set<ts.Node>();
+  const inspectedSources = new Set<ts.Node>();
+  const inspect = (child: ts.Node) => {
+    if (inspected.has(child)) {
+      return;
+    }
+    inspected.add(child);
+    if (ts.isExpression(child)) {
+      const value = resolve(child, bindings);
+      if (value !== child) {
+        if (inspected.has(value)) {
+          return;
+        }
+        inspected.add(value);
+      }
+      if (ts.isCallExpression(value)) {
+        const name = drizzleCallName(value, imports);
+        if (name === "count") {
+          state.count = true;
+        }
+        const argument = value.arguments.at(0);
+        const operand =
+          argument === undefined ? undefined : resolve(argument, bindings);
+        if (name === "sum" && operand !== undefined) {
+          state.count ||=
+            (ts.isNumericLiteral(operand) && operand.text === "1") ||
+            (ts.isTaggedTemplateExpression(operand) &&
+              isSqlTag(operand) &&
+              /^\+?1(?:\.0+)?$/u.test(
+                sqlParts(file, operand.template).sql.trim(),
+              ));
+        }
+        if (
+          ts.isPropertyAccessExpression(value.expression) &&
+          value.expression.name.text === "from"
+        ) {
+          const table = value.arguments.at(0);
+          if (table !== undefined) {
+            state.corpus ||=
+              isCorpusColumn(`${table.getText(file)}.sourceId`, bindings) ||
+              isCorpusColumn(
+                `${resolve(table, bindings).getText(file)}.sourceId`,
+                bindings,
+              );
+          }
+        }
+      }
+      if (ts.isTaggedTemplateExpression(value) && isSqlTag(value)) {
+        state.count ||= FULL_COUNT.test(
+          sqlWithoutLiterals(
+            expandedSql({ ...sqlParts(file, value.template), bindings, file }),
+          ),
+        );
+      }
+      if (value !== child) {
+        ts.forEachChild(value, inspect);
+        return;
+      }
+    }
+    ts.forEachChild(child, inspect);
+  };
+  const inspectSource = (child: ts.Node) => {
+    if (inspectedSources.has(child)) {
+      return;
+    }
+    inspectedSources.add(child);
+    if (ts.isExpression(child)) {
+      const value = resolve(child, bindings);
+      if (value !== child) {
+        if (inspectedSources.has(value)) {
+          return;
+        }
+        inspectedSources.add(value);
+      }
+      if (
+        ts.isTaggedTemplateExpression(value) &&
+        (isSqlTag(value) ||
+          (ts.isIdentifier(value.tag) &&
+            imports.names.get(value.tag.text) === "sql"))
+      ) {
+        const predicate = sqlWithoutLiterals(
+          expandedSql({
+            ...sqlParts(file, value.template),
+            bindings,
+            file,
+          }).replace(SQL_STRING, "__SQL_EXPR_0__"),
+        );
+        state.source ||= sourceFilteredSql(
+          `WHERE ${sqlTableName(predicate.replaceAll('"', ""))}`,
+        );
+      }
+      if (
+        ts.isCallExpression(value) &&
+        ["eq", "inArray"].includes(drizzleCallName(value, imports) ?? "")
+      ) {
+        const singletonMembership =
+          drizzleCallName(value, imports) === "inArray";
+        for (const [index, argument] of value.arguments.entries()) {
+          if (singletonMembership && index !== 0) {
+            continue;
+          }
+          const column = resolve(argument, bindings);
+          const other = value.arguments.at(index === 0 ? 1 : 0);
+          let otherValue =
+            other === undefined ? undefined : resolve(other, bindings);
+          if (singletonMembership) {
+            otherValue = singletonSourceValue(otherValue, bindings);
+          }
+          if (
+            ts.isPropertyAccessExpression(column) &&
+            (column.name.text === "sourceId" ||
+              column.name.text === "adapterKey" ||
+              column.name.text === "id") &&
+            otherValue !== undefined &&
+            (!ts.isPropertyAccessExpression(otherValue) ||
+              (!isSourceRestrictionColumn(otherValue, context) &&
+                !isCorpusColumn(otherValue.getText(file), bindings)))
+          ) {
+            state.source ||= isSourceRestrictionColumn(column, context);
+          }
+        }
+      }
+      if (value !== child) {
+        ts.forEachChild(value, inspectSource);
+        return;
+      }
+    }
+    ts.forEachChild(child, inspectSource);
+  };
+  for (const argument of node.arguments) {
+    inspectSource(argument);
+  }
+  inspect(node);
+  return state.corpus && state.count && state.source;
+};
+
 const comparisonColumn = (
   expression: ts.Expression,
   imports: DrizzleImports,
@@ -1009,21 +1352,56 @@ export const analyzeMigrationSqlPerf = (source: string) => {
 const plainSqlText = (node: ts.Node, file: ts.SourceFile) => {
   if (ts.isStringLiteral(node)) {
     const start = node.getStart(file) + 1;
-    return { sql: node.text, offsetAt: (index: number) => start + index };
+    return {
+      sql: node.text,
+      expressions: [],
+      offsetAt: (index: number) => start + index,
+    };
   }
   if (
     (ts.isNoSubstitutionTemplateLiteral(node) ||
       ts.isTemplateExpression(node)) &&
     !ts.isTaggedTemplateExpression(node.parent)
   ) {
-    const { sql, offsets } = sqlParts(file, node);
+    const { sql, offsets, expressions } = sqlParts(file, node);
     return {
       sql,
+      expressions,
       offsetAt: (index: number) => offsets[index] ?? node.getStart(file),
     };
   }
   return undefined;
 };
+
+type ExpandedSqlOptions = {
+  sql: string;
+  expressions: ts.Expression[];
+  bindings: ConstBindings;
+  file: ts.SourceFile;
+};
+
+const expandedSql = ({
+  sql,
+  expressions,
+  bindings,
+  file,
+}: ExpandedSqlOptions) =>
+  sql.replace(/__SQL_EXPR_(\d+)__/gu, (marker, index: string) => {
+    const expression = expressions.at(Number(index));
+    if (expression === undefined) {
+      return marker;
+    }
+    const value = resolve(expression, bindings);
+    const text = value.getText(file);
+    return ts.isTaggedTemplateExpression(value) ||
+      (ts.isPropertyAccessExpression(value) &&
+        (SOURCE_COLUMN.test(text) || value.name.text === "adapterKey")) ||
+      (ts.isNumericLiteral(value) && value.text === "1") ||
+      CORPUS_COUNT_TABLE.test(sqlTableName(text)) ||
+      SOURCE_RELATION.test(text)
+      ? text
+      : marker;
+  });
 
 export const analyzeSqlPerf = (source: string, filename: string) => {
   const file = ts.createSourceFile(
@@ -1061,6 +1439,9 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
       return;
     }
     const { sql, offsets, expressions } = sqlParts(file, node.template);
+    if (fullSourceCount(expandedSql({ sql, expressions, bindings, file }))) {
+      add("per-source-full-count", node.getStart(file), node);
+    }
     for (const index of optionalKeysetOffsets(sql, expressions, file)) {
       add("optional-keyset", offsets[index] ?? node.getStart(file), node);
     }
@@ -1141,11 +1522,18 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
     }
     const plain = plainSqlText(node, file);
     if (plain !== undefined) {
+      const { sql, expressions } = plain;
+      if (fullSourceCount(expandedSql({ sql, expressions, bindings, file }))) {
+        add("per-source-full-count", node.getStart(file), node);
+      }
       for (const index of optionalKeysetOffsets(plain.sql, [], file)) {
         add("optional-keyset", plain.offsetAt(index), node);
       }
     }
     if (ts.isCallExpression(node)) {
+      if (drizzleSourceCount(node, subqueryOperandContext)) {
+        add("per-source-full-count", node.getStart(file), node);
+      }
       if (
         drizzleCallName(node, imports) === "or" &&
         node.arguments.some((argument) =>
