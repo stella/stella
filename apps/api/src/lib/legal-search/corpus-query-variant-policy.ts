@@ -1,4 +1,4 @@
-// parser-output-unchanged: Search query variant flag and policy; ingestion parsers never read them.
+// parser-output-unchanged: Core stem query variants change search allocation only, not ingestion parser output.
 import { createHash } from "node:crypto";
 
 export const CORPUS_INDEX_QUERY_VARIANTS = [
