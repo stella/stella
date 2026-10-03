@@ -7,16 +7,25 @@ import {
 } from "./statute-gazette";
 import { parseStatuteQuery } from "./statute-query-intent";
 
-const spellings = Object.entries(STATUTE_GAZETTES).flatMap(
-  ([country, collections]) =>
-    Object.entries(collections).flatMap(([eliCollection, byYear]) =>
-      byYear.map(({ fromYear, abbreviation }) => ({
-        country,
-        eliCollection,
-        year: Math.max(fromYear, 1950),
-        abbreviation,
-      })),
-    ),
+/** Read through one shape: the per-country literals do not unify for `Object.entries`. */
+const GAZETTES: Readonly<
+  Record<
+    string,
+    Readonly<
+      Record<string, readonly { fromYear: number; abbreviation: string }[]>
+    >
+  >
+> = STATUTE_GAZETTES;
+
+const spellings = Object.entries(GAZETTES).flatMap(([country, collections]) =>
+  Object.entries(collections).flatMap(([eliCollection, byYear]) =>
+    byYear.map(({ fromYear, abbreviation }) => ({
+      country,
+      eliCollection,
+      year: Math.max(fromYear, 1950),
+      abbreviation,
+    })),
+  ),
 );
 
 describe("a gazette's printed abbreviation and its ELI segment", () => {
