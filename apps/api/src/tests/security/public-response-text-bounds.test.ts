@@ -161,7 +161,7 @@ const publicRouteUnboundedFields = (
   return [...new Set(fields)].toSorted();
 };
 
-const wholeDocumentReason =
+const WHOLE_DOCUMENT_TEXT_REASON =
   "Whole official document text by design; bounded per source at ingestion, not at the response; a windowed reader contract is a separate change.";
 
 // Only the complete text on existing reader routes can refine a coarse exception.
@@ -187,7 +187,9 @@ const isWholeReaderRefinement = ({
   }
   const coarse = `${route} response-schema`;
   return (
-    reason === wholeDocumentReason && coarse in prior && !(coarse in current)
+    reason === WHOLE_DOCUMENT_TEXT_REASON &&
+    coarse in prior &&
+    !(coarse in current)
   );
 };
 
@@ -207,7 +209,7 @@ describe("anonymous response text bounds", () => {
   test("reader refinements replace an existing same-route coarse exception", () => {
     const field = "GET /v1/law/statutes/:documentId 200.fulltext";
     const coarse = "GET /v1/law/statutes/:documentId response-schema";
-    const reason = wholeDocumentReason;
+    const reason = WHOLE_DOCUMENT_TEXT_REASON;
     const refinement = {
       field,
       reason,
@@ -233,7 +235,7 @@ describe("anonymous response text bounds", () => {
 
   test("reader refinements require whole-document fields and their exact reason", () => {
     const coarse = "GET /v1/law/statutes/:documentId response-schema";
-    const reason = wholeDocumentReason;
+    const reason = WHOLE_DOCUMENT_TEXT_REASON;
     const refinement = {
       field: "GET /v1/law/statutes/:documentId 200.documentAst",
       reason,
@@ -274,9 +276,9 @@ describe("anonymous response text bounds", () => {
     ).toBe(false);
   });
 
-  test("case-law refinements use the shared whole-document reason", () => {
+  test("case-law refinements use the same exact whole-document reason", () => {
     const route = "GET /v1/case/decisions/:decisionId";
-    const reason = wholeDocumentReason;
+    const reason = WHOLE_DOCUMENT_TEXT_REASON;
     for (const path of ["fulltext", "documentAst", "sections[].text"]) {
       expect(
         isWholeReaderRefinement({
