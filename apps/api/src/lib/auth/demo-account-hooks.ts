@@ -53,6 +53,7 @@ export const createDemoAuthSessionGuard = (config: DemoAccountConfig) =>
       ctx.path.startsWith("/two-factor/") ||
       ctx.path === "/link-social" ||
       ctx.path === "/delete-user" ||
+      ctx.path === "/update-user" ||
       ctx.path === "/change-email" ||
       ctx.path.startsWith("/email-otp/request-email-change") ||
       ctx.path === "/email-otp/change-email"
@@ -94,7 +95,7 @@ export const createDemoSessionPolicy =
       throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
     }
     const { email } = account;
-    if (email.trim().toLowerCase() !== config.email.toLowerCase()) {
+    if (email.trim().toLowerCase() !== config.email.trim().toLowerCase()) {
       return undefined;
     }
     const organizationId = config.organizationId;
