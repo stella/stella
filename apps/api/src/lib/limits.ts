@@ -821,9 +821,6 @@ export const API_RATE_LIMITS = {
   /** REST API: 1000 req/min per IP. Covers normal navigation
    *  (5-10 requests per page load × frequent workspace switching). */
   api: { duration: 60_000, max: 1000 },
-  /** Public statute full-text search: 30 req/min per IP, separate from
-   *  navigation so an unauthenticated search loop has a bounded budget. */
-  publicStatuteSearch: { duration: 60_000, max: 30 },
   /** Skill URL discovery/import: 10 req/min per IP. Each request performs
    *  bounded outbound source fetches, so this separate cap prevents the
    *  general API budget from amplifying third-party traffic. */
@@ -881,6 +878,7 @@ export type PublicCorpusLimitsConfiguration = Pick<
   | "PUBLIC_CORPUS_SEARCH_P95_SECONDS"
   | "PUBLIC_CORPUS_AGGREGATE_P95_SECONDS"
   | "PUBLIC_CORPUS_SITEMAP_P95_SECONDS"
+  | "PUBLIC_CORPUS_SEARCH_ADDRESS_MAX"
   | "PUBLIC_CORPUS_SEARCH_GLOBAL_MAX"
   | "PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX"
   | "PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX"
@@ -917,6 +915,13 @@ export const getPublicCorpusLimits = (
     classes: {
       search: {
         concurrency: searchConcurrency,
+        // One address gets 30 requests/minute across both corpora: at the
+        // default 1s p95 this is 0.5 concurrent searches on average, one eighth
+        // of the default process search capacity. Operators may tune the cap.
+        address: {
+          duration: 60_000,
+          max: configuration.PUBLIC_CORPUS_SEARCH_ADDRESS_MAX ?? 30,
+        },
         global: globalBudget({
           permits: searchConcurrency,
           p95Seconds: configuration.PUBLIC_CORPUS_SEARCH_P95_SECONDS,

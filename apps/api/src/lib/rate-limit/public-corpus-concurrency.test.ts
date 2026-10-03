@@ -30,7 +30,11 @@ const createCapacityApp = () => {
     >
   >[0][] = [];
   const pending: { finish: () => void; fail: (error: unknown) => void }[] = [];
-  const work = async ({ request }: { request: Request }) => {
+  const work = ({
+    request,
+  }: {
+    request: Request;
+  }): string | Promise<string> => {
     if (request.headers.has("x-capacity-probe")) {
       return "probe-started";
     }
@@ -47,8 +51,7 @@ const createCapacityApp = () => {
     },
   });
   const app = new Elysia()
-    .use(middleware.shared)
-    .use(middleware.statute)
+    .use(middleware)
     .get("/v1/law/statutes/search", work)
     .get("/v1/case/decisions", () => "browse")
     .post("/v1/case/decisions/search", work)
@@ -82,9 +85,13 @@ describe("public corpus active request capacity", () => {
     const completion = Promise.withResolvers<string>();
     const middleware = publicCorpusConcurrencyLimit();
     const app = new Elysia()
-      .use(middleware.shared)
-      .post("/v1/case/decisions/search", async ({ request: incoming }) =>
-        incoming.headers.has("x-capacity-probe") ? "probe" : completion.promise,
+      .use(middleware)
+      .post(
+        "/v1/case/decisions/search",
+        ({ request: incoming }): string | Promise<string> =>
+          incoming.headers.has("x-capacity-probe")
+            ? "probe"
+            : completion.promise,
       )
       .get("/v1/law/statutes", () => "browse");
     const route = { method: "POST", path: "/v1/case/decisions/search" };

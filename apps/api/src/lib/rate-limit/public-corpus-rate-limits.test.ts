@@ -5,11 +5,11 @@ import { Elysia } from "elysia";
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import { env } from "@/api/env";
-import { createPublicStatuteSearchRateLimitComposition } from "@/api/handlers/legislation/public-search-rate-limit-composition";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import { createPublicCorpusRateLimitComposition } from "@/api/lib/rate-limit/public-corpus-rate-limit-composition";
 
 import {
   createPublicCorpusAddressRateLimitOptions,
@@ -88,14 +88,13 @@ type PeerRequestOptions = {
 };
 
 const createApp = (binding: typeof createRedisRateLimit) => {
-  const composition = createPublicStatuteSearchRateLimitComposition({
-    routes: new Elysia().get("/law/statutes/search", () => "search"),
+  const composition = createPublicCorpusRateLimitComposition({
     createRedisBinding: binding,
   });
   return new Elysia().group(STELLA_API_VERSION_PREFIX, (app) =>
     app
-      .use(composition.shared)
-      .use(composition.publicLegislation)
+      .use(composition)
+      .get("/law/statutes/search", () => "search")
       .post("/case/decisions/search", () => "search")
       .get("/law/statutes/facets", () => "aggregate")
       .get("/case/decisions/facets", () => "aggregate")
@@ -128,6 +127,57 @@ const admissionCount = ({
   }).length;
 
 describe("public corpus fleet request budgets", () => {
+  for (const refusedRoute of [
+    { path: "/law/statutes/search/", method: "HEAD" },
+    { path: "/case/decisions/search/", method: "POST" },
+  ]) {
+    test(`alternating corpora share one address budget, refusing ${refusedRoute.method} ${refusedRoute.path}`, async () => {
+      const bindings = createBindings();
+      const app = createApp(bindings.binding);
+      try {
+        for (let index = 0; index < 30; index += 1) {
+          const incoming =
+            index % 2 === 0
+              ? request(
+                  `/law/statutes/search${index % 4 === 0 ? "/" : ""}`,
+                  index % 4 === 0 ? "HEAD" : "GET",
+                )
+              : request(
+                  `/case/decisions/search${index % 4 === 1 ? "/" : ""}`,
+                  "POST",
+                );
+          expect(
+            (await bindings.send({ app, incoming, address: "192.0.2.1" }))
+              .status,
+          ).toBe(200);
+        }
+        const refused = await bindings.send({
+          app,
+          incoming: request(refusedRoute.path, refusedRoute.method),
+          address: "192.0.2.1",
+        });
+        expect(refused.status).toBe(429);
+        expect(refused.headers.get("RateLimit-Limit")).toBe("30");
+        expect(refused.headers.get("Retry-After")).toMatch(/^\d+$/u);
+        expect(bindings.increments.get("public-corpus-search")).toBe(31);
+        expect(bindings.increments.get("public-corpus-global-search")).toBe(30);
+        expect(bindings.increments.has("api")).toBe(false);
+        for (const incoming of [
+          request("/law/statutes/search"),
+          request("/case/decisions/search", "POST"),
+        ]) {
+          expect(
+            (await bindings.send({ app, incoming, address: "192.0.2.2" }))
+              .status,
+          ).toBe(200);
+        }
+        expect(bindings.increments.get("public-corpus-global-search")).toBe(32);
+      } finally {
+        bindings.kill();
+      }
+    });
+  }
+
   test("distinct client addresses share the global budget across law and case routes", async () => {
     const previous = {
       search: env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX,

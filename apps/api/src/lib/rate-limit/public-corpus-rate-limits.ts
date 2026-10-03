@@ -10,7 +10,7 @@ import type { RateLimitOptions } from "./rate-limit";
 import { createRedisRateLimit } from "./redis-context";
 
 export const createPublicCorpusAddressRateLimitOptions = (
-  routeClass: "aggregate" | "sitemap",
+  routeClass: Exclude<PublicCorpusClass, "browse">,
   createRedisBinding = createRedisRateLimit,
 ) =>
   ({

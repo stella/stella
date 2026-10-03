@@ -19,6 +19,8 @@ const configurationSchema = v.object({
     envBaseServerSchema.PUBLIC_CORPUS_AGGREGATE_P95_SECONDS,
   PUBLIC_CORPUS_SITEMAP_P95_SECONDS:
     envBaseServerSchema.PUBLIC_CORPUS_SITEMAP_P95_SECONDS,
+  PUBLIC_CORPUS_SEARCH_ADDRESS_MAX:
+    envBaseServerSchema.PUBLIC_CORPUS_SEARCH_ADDRESS_MAX,
   PUBLIC_CORPUS_SEARCH_GLOBAL_MAX:
     envBaseServerSchema.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX,
   PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX:
@@ -30,6 +32,7 @@ const configurationSchema = v.object({
 const defaults = () =>
   ({
     ...v.parse(configurationSchema, {}),
+    PUBLIC_CORPUS_SEARCH_ADDRESS_MAX: undefined,
     PUBLIC_CORPUS_SEARCH_GLOBAL_MAX: undefined,
     PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX: undefined,
     PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX: undefined,
@@ -50,6 +53,7 @@ describe("public corpus capacity configuration", () => {
       classes: {
         search: {
           concurrency: 4,
+          address: { duration: 60_000, max: 30 },
           global: { duration: 60_000, max: 480, localMax: 240 },
         },
         aggregate: {
@@ -63,10 +67,6 @@ describe("public corpus capacity configuration", () => {
         },
         browse: { address: API_RATE_LIMITS.api },
       },
-    });
-    expect(API_RATE_LIMITS.publicStatuteSearch).toEqual({
-      duration: 60_000,
-      max: 30,
     });
   });
 
@@ -82,6 +82,7 @@ describe("public corpus capacity configuration", () => {
     expect(limits.totalConcurrency).toBe(15);
     expect(limits.classes.search).toEqual({
       concurrency: 10,
+      address: { duration: 60_000, max: 30 },
       global: { duration: 60_000, max: 450, localMax: 150 },
     });
     expect(limits.classes.aggregate.global).toEqual({
@@ -100,9 +101,14 @@ describe("public corpus capacity configuration", () => {
     const limits = getPublicCorpusLimits({
       ...defaults(),
       PUBLIC_CORPUS_ASSUMED_REPLICAS: 4,
+      PUBLIC_CORPUS_SEARCH_ADDRESS_MAX: 17,
       PUBLIC_CORPUS_SEARCH_GLOBAL_MAX: 31,
       PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX: 7,
       PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX: 3,
+    });
+    expect(limits.classes.search.address).toEqual({
+      duration: 60_000,
+      max: 17,
     });
     expect(limits.classes.search.global).toEqual({
       duration: 60_000,

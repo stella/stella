@@ -142,6 +142,7 @@ export const envBaseServerSchema = {
     positiveIntegerValueSchema,
     "30",
   ),
+  PUBLIC_CORPUS_SEARCH_ADDRESS_MAX: v.optional(positiveIntegerValueSchema),
   PUBLIC_CORPUS_SEARCH_GLOBAL_MAX: v.optional(positiveIntegerValueSchema),
   PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX: v.optional(positiveIntegerValueSchema),
   PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX: v.optional(positiveIntegerValueSchema),
