@@ -28,7 +28,8 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./office-metadata": "./src/office-metadata.ts"
   },
   "publishConfig": {
     "access": "public"

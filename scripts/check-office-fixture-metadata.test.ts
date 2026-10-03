@@ -8,6 +8,7 @@ import path from "node:path";
 import {
   inspectOfficeFixture,
   listOfficeFixtures,
+  OFFICE_FIXTURE_EXTENSIONS,
   OfficeFixtureMetadataError,
 } from "./check-office-fixture-metadata";
 
@@ -40,7 +41,105 @@ const fields = (result: Awaited<ReturnType<typeof inspect>>) => {
   return result.value.map(({ field }) => field);
 };
 
+const WORD_NAMESPACE =
+  "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const SPREADSHEET_NAMESPACE =
+  "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+const wordPart = (contents: string) =>
+  `<w:document xmlns:w="${WORD_NAMESPACE}"><w:body>${contents}</w:body></w:document>`;
+
+const identityCases = [
+  ...["ins", "del", "moveFrom", "moveTo"].map((element) => ({
+    label: `Word ${element} author`,
+    part: "word/document.xml",
+    xml: (identity: string) =>
+      wordPart(
+        `<w:${element} w:id="1" w:author="${identity}"><w:r><w:t>Body text</w:t></w:r></w:${element}>`,
+      ),
+  })),
+  ...["author", "initials"].map((attribute) => ({
+    label: `Word comment ${attribute}`,
+    part: "word/comments.xml",
+    xml: (identity: string) =>
+      `<w:comments xmlns:w="${WORD_NAMESPACE}"><w:comment w:id="1" w:${attribute}="${identity}"><w:p/></w:comment></w:comments>`,
+  })),
+  ...[
+    { part: "header1", element: "hdr" },
+    { part: "footer1", element: "ftr" },
+  ].map(({ part, element }) => ({
+    label: `Word ${part} tracked author`,
+    part: `word/${part}.xml`,
+    xml: (identity: string) =>
+      `<w:${element} xmlns:w="${WORD_NAMESPACE}"><w:p><w:ins w:id="1" w:author="${identity}"><w:r><w:t>Body text</w:t></w:r></w:ins></w:p></w:${element}>`,
+  })),
+  ...["author", "userId", "providerId"].map((attribute) => ({
+    label: `Word people ${attribute}`,
+    part: "word/people.xml",
+    xml: (identity: string) =>
+      `<w15:people xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"><w15:person w15:author="${attribute === "author" ? identity : "stella"}"><w15:presenceInfo w15:${attribute === "author" ? "userId" : attribute}="${attribute === "author" ? "stella" : identity}"/></w15:person></w15:people>`,
+  })),
+  {
+    label: "custom document property value",
+    part: "docProps/custom.xml",
+    xml: (identity: string) =>
+      `<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="stella"><vt:lpwstr>${identity}</vt:lpwstr></property></Properties>`,
+  },
+  {
+    label: "custom document property name",
+    part: "docProps/custom.xml",
+    xml: (identity: string) =>
+      `<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="${identity}"><vt:lpwstr>stella</vt:lpwstr></property></Properties>`,
+  },
+  {
+    label: "spreadsheet legacy comment author",
+    part: "xl/comments1.xml",
+    xml: (identity: string) =>
+      `<comments xmlns="${SPREADSHEET_NAMESPACE}"><authors><author>${identity}</author></authors><commentList><comment ref="A1" authorId="0"><text><t>Body text</t></text></comment></commentList></comments>`,
+  },
+  {
+    label: "spreadsheet threaded mention display name",
+    part: "xl/threadedComments/threadedComment1.xml",
+    xml: (identity: string) =>
+      `<ThreadedComments xmlns="http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments"><threadedComment ref="A1" personId="{11111111-1111-4111-8111-111111111111}" id="{22222222-2222-4222-8222-222222222222}"><text>Body text</text><mentions><mention personId="{11111111-1111-4111-8111-111111111111}" displayName="${identity}" startIndex="0" length="1"/></mentions></threadedComment></ThreadedComments>`,
+  },
+  ...["displayName", "userId", "providerId"].map((attribute) => ({
+    label: `spreadsheet person ${attribute}`,
+    part: "xl/persons/person.xml",
+    xml: (identity: string) =>
+      `<personList xmlns="http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments"><person id="{11111111-1111-4111-8111-111111111111}" ${attribute}="${identity}"/></personList>`,
+  })),
+  ...["name", "initials"].map((attribute) => ({
+    label: `presentation legacy author ${attribute}`,
+    part: "ppt/commentAuthors.xml",
+    xml: (identity: string) =>
+      `<p:cmAuthorLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cmAuthor id="0" ${attribute}="${identity}" lastIdx="1" clrIdx="0"/></p:cmAuthorLst>`,
+  })),
+  ...["name", "userId", "providerId"].map((attribute) => ({
+    label: `presentation modern author ${attribute}`,
+    part: "ppt/authors.xml",
+    xml: (identity: string) =>
+      `<p188:authorLst xmlns:p188="http://schemas.microsoft.com/office/powerpoint/2018/8/main"><p188:author id="{11111111-1111-4111-8111-111111111111}" ${attribute}="${identity}"/></p188:authorLst>`,
+  })),
+  {
+    label: "ODF annotation creator in content",
+    part: "content.xml",
+    xml: (identity: string) =>
+      `<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:dc="http://purl.org/dc/elements/1.1/"><office:body><office:annotation><dc:creator>${identity}</dc:creator></office:annotation></office:body></office:document-content>`,
+  },
+];
+
 describe("office fixture metadata", () => {
+  test.each(identityCases)(
+    "rejects generated identity metadata in $label and admits a neutral identity",
+    async ({ part, xml }) => {
+      const identity = `Generated-${Bun.randomUUIDv7()}@example.test`;
+      const rejected = await inspect({ [part]: xml(identity) });
+      expect(fields(rejected).length).toBeGreaterThan(0);
+      expect(JSON.stringify(rejected)).not.toContain(identity);
+      expect(fields(await inspect({ [part]: xml("stella") }))).toEqual([]);
+    },
+  );
+
   test("admits neutral properties and ignores document content", async () => {
     expect(
       fields(
@@ -199,16 +298,10 @@ describe("office fixture metadata", () => {
       expect(result.exitCode).toBe(0);
     };
     runGit(["init", "--quiet"]);
-    const files = [
-      "a.docx",
-      "b.xlsx",
-      "c.pptx",
-      "d.odt",
-      "e.ods",
-      "f.odp",
-      "g.dotx",
-      "h.DOCX",
-    ];
+    const files = OFFICE_FIXTURE_EXTENSIONS.flatMap((extension, index) => [
+      `fixture-${index}${extension}`,
+      `uppercase-${index}${extension.toUpperCase()}`,
+    ]);
     for (const file of [...files, "ignored.txt", "untracked.docx"]) {
       await Bun.write(path.join(rootDir, file), "fixture");
     }

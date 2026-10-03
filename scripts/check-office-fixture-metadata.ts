@@ -5,34 +5,17 @@ import JSZip from "jszip";
 import path from "node:path";
 import { parseXmlDocument } from "slimdom";
 
+import {
+  isOfficeIdentityPart,
+  officeIdentityFields,
+  OFFICE_ARCHIVE_FORMATS,
+} from "../packages/docx-utils/src/office-metadata";
 import allowedValues from "./office-fixture-metadata-allowlist.json";
 
-const OFFICE_EXTENSIONS = new Set([
-  ".docx",
-  ".xlsx",
-  ".pptx",
-  ".odt",
-  ".ods",
-  ".odp",
-  ".dotx",
-]);
-const METADATA_PARTS = ["docProps/core.xml", "docProps/app.xml", "meta.xml"];
-const METADATA_FIELDS = new Set([
-  "creator",
-  "lastmodifiedby",
-  "company",
-  "manager",
-  "template",
-  "title",
-  "subject",
-  "keywords",
-  "keyword",
-  "description",
-  "initial-creator",
-  "printed-by",
-  "user-defined",
-]);
-const METADATA_ATTRIBUTES = new Set(["href", "name", "title"]);
+export const OFFICE_FIXTURE_EXTENSIONS = Object.keys(
+  OFFICE_ARCHIVE_FORMATS,
+).map((extension) => `.${extension}`);
+const OFFICE_EXTENSIONS = new Set(OFFICE_FIXTURE_EXTENSIONS);
 const ALLOWED_VALUES = new Set(allowedValues);
 
 export class OfficeFixtureMetadataError extends TaggedError(
@@ -77,8 +60,11 @@ export const inspectOfficeFixture = async ({
   if (Result.isError(loaded)) {
     return loaded;
   }
-  const findings: OfficeFixtureMetadataError[] = [];
-  for (const part of [...METADATA_PARTS, "META-INF/manifest.xml"]) {
+  const findings = new Map<string, OfficeFixtureMetadataError>();
+  for (const part of Object.keys(loaded.value.files).filter(
+    (candidate) =>
+      isOfficeIdentityPart(candidate) || candidate === "META-INF/manifest.xml",
+  )) {
     const entry = loaded.value.file(part);
     if (entry === null) {
       continue;
@@ -96,42 +82,32 @@ export const inspectOfficeFixture = async ({
     if (Result.isError(parsed)) {
       return parsed;
     }
-    for (const element of parsed.value.getElementsByTagNameNS("*", "*")) {
-      const field = element.localName.toLowerCase();
-      if (field === "encryption-data") {
+    if (part === "META-INF/manifest.xml") {
+      if (
+        [...parsed.value.getElementsByTagNameNS("*", "*")].some(
+          (element) => element.localName === "encryption-data",
+        )
+      ) {
         return Result.err(
           failure({ filePath, field: part, reason: "encrypted" }),
         );
       }
-      if (part === "META-INF/manifest.xml" || !METADATA_FIELDS.has(field)) {
+      continue;
+    }
+    for (const identity of officeIdentityFields(parsed.value, part)) {
+      const value =
+        identity.type === "text"
+          ? (identity.node.textContent ?? "")
+          : identity.node.value;
+      if (ALLOWED_VALUES.has(value)) {
         continue;
       }
-      if (!ALLOWED_VALUES.has(element.textContent ?? "")) {
-        findings.push(
-          failure({
-            filePath,
-            field: `${part}:${element.localName}`,
-            reason: "not-allowed",
-          }),
-        );
-      }
-      for (const attribute of element.attributes) {
-        if (!METADATA_ATTRIBUTES.has(attribute.localName)) {
-          continue;
-        }
-        if (!ALLOWED_VALUES.has(attribute.value)) {
-          findings.push(
-            failure({
-              filePath,
-              field: `${part}:${element.localName}@${attribute.localName}`,
-              reason: "not-allowed",
-            }),
-          );
-        }
-      }
+      const field = `${part}:${identity.field}`;
+      findings.set(field, failure({ filePath, field, reason: "not-allowed" }));
     }
   }
-  return Result.ok(findings);
+
+  return Result.ok([...findings.values()]);
 };
 
 export const listOfficeFixtures = (
