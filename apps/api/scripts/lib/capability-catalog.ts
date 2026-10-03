@@ -1196,7 +1196,16 @@ export const scanFileResponseReturns = ({
  * config. This detects capability endpoints mounted under such a hook so each is
  * either fixed (gate moved into the handler) or explicitly waived.
  */
-const ROUTE_HOOK_PATTERN = /\.(?:onBeforeHandle|beforeHandle)\s*\(/u;
+// Request-time gates on an Elysia instance: lifecycle hooks, a `guard` with a
+// `beforeHandle`, and the deployment-feature and rate-limit plugins. Auth,
+// permission and workspace macros are excluded: the invoke path re-derives
+// those itself.
+const ROUTE_HOOK_PATTERN =
+  /\.(?:onBeforeHandle|beforeHandle|onRequest)\s*\(|\bbeforeHandle\s*:|\.use\(\s*(?:deploymentFeatureGate|rateLimit)\b/u;
+// A child route mounted under a hook inherits it, but its handlers live in
+// another file this per-file scan cannot attribute.
+const ROUTE_CHILD_MOUNT_PATTERN =
+  /\.use\(\s*(?<local>[A-Za-z_$][\w$]*(?:Route|Routes|Router))\s*\)/gu;
 const ROUTE_HANDLER_MOUNT_PATTERN =
   /\b(?<local>[A-Za-z_$][\w$]*)\.(?:default\.)?handler\b/gu;
 const ROUTE_IMPORT_STATEMENT =
@@ -1263,21 +1272,30 @@ const importToCapabilityId = ({
   return deriveCapabilityId({ file, exportName });
 };
 
-/** Capability ids mounted under a hooked Elysia instance in one route file. */
-const hookGuardedIdsInFile = ({
+type HookGuardedMounts = { ids: Set<string>; childRoutes: string[] };
+
+/** Capability ids and child routes mounted under a hooked Elysia instance in one route file. */
+const hookGuardedMountsInFile = ({
   source,
   capabilityIds,
 }: {
   source: string;
   capabilityIds: ReadonlySet<string>;
-}): Set<string> => {
+}): HookGuardedMounts => {
   const imports = parseHandlerImports(source);
   const guarded = new Set<string>();
+  const childRoutes: string[] = [];
   // Each `const x = new Elysia(...)...` chain is one block; a hook applies to
   // routes chained on the same instance, so scan per block.
   for (const block of source.split(/(?=new Elysia\s*\()/u)) {
     if (!ROUTE_HOOK_PATTERN.test(block)) {
       continue;
+    }
+    for (const child of block.matchAll(ROUTE_CHILD_MOUNT_PATTERN)) {
+      const local = child.groups?.["local"];
+      if (local !== undefined) {
+        childRoutes.push(local);
+      }
     }
     for (const mount of block.matchAll(ROUTE_HANDLER_MOUNT_PATTERN)) {
       const local = mount.groups?.["local"];
@@ -1289,7 +1307,7 @@ const hookGuardedIdsInFile = ({
       }
     }
   }
-  return guarded;
+  return { ids: guarded, childRoutes };
 };
 
 export type RouteHookGuardViolation = { routeFile: string; id: string };
@@ -1297,14 +1315,17 @@ export type RouteHookGuardViolation = { routeFile: string; id: string };
 export type RouteHookGuardScan = {
   /** Hook-guarded capability endpoints that are not waived. */
   violations: RouteHookGuardViolation[];
+  /** Child routes mounted under a hook: their handlers cannot be attributed. */
+  childRouteMounts: { routeFile: string; route: string }[];
   /** Waiver ids no longer mounted under any route hook (remove them). */
   staleWaivers: string[];
 };
 
 /**
- * Scan route files for capability endpoints wrapped in a route-level
- * `onBeforeHandle`/`beforeHandle` hook that the generic invoke path would
- * bypass. Each hit must be waived (id -> justification, the gate lives in the
+ * Scan route files for capability endpoints wrapped in a route-level hook
+ * (`onBeforeHandle`/`beforeHandle`/`onRequest`, a `guard` with `beforeHandle`,
+ * the deployment-feature or rate-limit plugin) that the generic invoke path
+ * would bypass. Each hit must be waived (id -> justification, the gate lives in the
  * handler config) or the export fails; a waiver no longer matched is stale.
  */
 export const scanRouteHookGuards = ({
@@ -1317,9 +1338,14 @@ export const scanRouteHookGuards = ({
   waivedIds: ReadonlySet<string>;
 }): RouteHookGuardScan => {
   const violations: RouteHookGuardViolation[] = [];
+  const childRouteMounts: { routeFile: string; route: string }[] = [];
   const detected = new Set<string>();
   for (const { id: routeFile, source } of routeFiles) {
-    for (const id of hookGuardedIdsInFile({ source, capabilityIds })) {
+    const mounts = hookGuardedMountsInFile({ source, capabilityIds });
+    for (const route of mounts.childRoutes) {
+      childRouteMounts.push({ routeFile, route });
+    }
+    for (const id of mounts.ids) {
       detected.add(id);
       if (!waivedIds.has(id)) {
         violations.push({ routeFile, id });
@@ -1333,7 +1359,7 @@ export const scanRouteHookGuards = ({
     (a, b) =>
       a.id.localeCompare(b.id) || a.routeFile.localeCompare(b.routeFile),
   );
-  return { violations, staleWaivers };
+  return { violations, childRouteMounts, staleWaivers };
 };
 
 export type ScopeComparison =

@@ -1493,6 +1493,59 @@ const openRoute = new Elysia({ prefix: "/case" })
     expect(scan.staleWaivers).toEqual([]);
   });
 
+  test("every route-level gate form is a hook; auth and permission macros are not", () => {
+    const mount = (setup: string) => `
+import getStatus from "@/api/handlers/case-law/ingestion/get";
+const r = new Elysia()
+  ${setup}
+  .get("/s", getStatus.handler, {});
+`;
+    const scan = (setup: string) =>
+      scanRouteHookGuards({
+        routeFiles: [{ id: "x/routes.ts", source: mount(setup) }],
+        capabilityIds: new Set(["case-law.ingestion.get"]),
+        waivedIds: new Set(),
+      }).violations.length;
+    for (const hook of [
+      ".onBeforeHandle(() => undefined)",
+      ".onRequest(() => undefined)",
+      ".guard({ beforeHandle: () => undefined }, (app) => app)",
+      ".use(deploymentFeatureGate(env.FEATURE_USAGE))",
+      ".use(rateLimit({ max: 10 }))",
+    ]) {
+      expect(scan(hook), hook).toBe(1);
+    }
+    for (const macro of [
+      ".use(authMacro)",
+      ".use(permissionMacro)",
+      '.guard({ auth: true, permission: { entity: ["read"] } })',
+      ".resolve(() => ({}))",
+    ]) {
+      expect(scan(macro), macro).toBe(0);
+    }
+  });
+
+  test("a child route mounted under a hook fails closed", () => {
+    const scan = scanRouteHookGuards({
+      routeFiles: [
+        {
+          id: "case-law/routes.ts",
+          source: `
+const app = new Elysia()
+  .onBeforeHandle(() => undefined)
+  .use(caseLawAdminRoute);
+const open = new Elysia().use(caseLawResearchRoute);
+`,
+        },
+      ],
+      capabilityIds: new Set(),
+      waivedIds: new Set(),
+    });
+    expect(scan.childRouteMounts).toEqual([
+      { routeFile: "case-law/routes.ts", route: "caseLawAdminRoute" },
+    ]);
+  });
+
   test("a waived hook-guarded capability is not a violation", () => {
     const scan = scanRouteHookGuards({
       routeFiles: [{ id: "case-law/routes.ts", source: hookedRoute }],

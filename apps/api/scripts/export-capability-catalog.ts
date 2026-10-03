@@ -1099,7 +1099,12 @@ const collectClassGuardErrors = ({
   });
   for (const { routeFile, id } of routeHooks.violations) {
     errors.push(
-      `route-hook: capability "${id}" is mounted under a route-level onBeforeHandle/beforeHandle hook in ${routeFile} that invoke_capability bypasses. Move the gate into the handler config (like case-law.ingestion.get), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
+      `route-hook: capability "${id}" is mounted under a route-level hook (onBeforeHandle, beforeHandle, onRequest, deploymentFeatureGate or rateLimit) in ${routeFile} that invoke_capability bypasses. Move the gate into the handler config (like case-law.ingestion.get), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
+    );
+  }
+  for (const { routeFile, route } of routeHooks.childRouteMounts) {
+    errors.push(
+      `route-hook: ${routeFile} mounts child route ${route} under a route-level hook, so the hook covers handlers this guard cannot attribute. Apply the hook inside ${route}, or mount it outside the hooked instance`,
     );
   }
   for (const id of routeHooks.staleWaivers) {
@@ -1167,7 +1172,8 @@ const collectClassGuardErrors = ({
 };
 
 const buildCatalog = async (): Promise<BuildResult> => {
-  const { endpoints, files, importErrors } = await discoverSafeHandlers();
+  const { endpoints, files, routeFiles, importErrors } =
+    await discoverSafeHandlers();
   const errors: string[] = [];
 
   for (const { id, message } of importErrors) {
@@ -1624,7 +1630,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
   for (const message of collectClassGuardErrors({
     entries,
     entrySources,
-    routeFiles: files.filter((file) => file.id.endsWith("routes.ts")),
+    routeFiles,
     toolFeatureByName,
   })) {
     errors.push(message);
