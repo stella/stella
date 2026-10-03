@@ -29,7 +29,7 @@ import {
   agentRegistration,
   agentTrustedIssuer,
 } from "@/api/db/agent-auth-schema";
-import { oauthClient, user } from "@/api/db/auth-schema";
+import { oauthClient, organization, user } from "@/api/db/auth-schema";
 import { registrationDailyBudget } from "@/api/db/registration-budget-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
@@ -433,7 +433,18 @@ describe("agent-auth ID-JAG new identity (auto-provision)", () => {
       .limit(1);
     expect(delegations.length).toBe(1);
     expect(delegations.at(0)?.userId).toBe(String(users.at(0)?.id));
-    expect(typeof delegations.at(0)?.organizationId).toBe("string");
+    const delegation = delegations.at(0);
+    if (!delegation) {panic("Expected the created delegation");}
+    const createdOrganization = (
+      await rootDb
+        .select({ slug: organization.slug })
+        .from(organization)
+        .where(eq(organization.id, delegation.organizationId))
+        .limit(1)
+    ).at(0);
+    expect(createdOrganization?.slug).toMatch(
+      /^agent-[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+    );
   });
 });
 

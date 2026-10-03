@@ -161,7 +161,7 @@ const autoProvision = async (
           body: {
             name:
               localPart.length > 0 ? `${localPart}'s workspace` : "Workspace",
-            slug: `agent-${Bun.randomUUIDv7().slice(0, 12)}`,
+            slug: `agent-${Bun.randomUUIDv7()}`,
             userId: createdUser.id,
             keepCurrentActiveOrganization: true,
           },
