@@ -13,6 +13,8 @@ import {
   type CorpusFreeTextOptions,
 } from "./corpus-query";
 import type { CorpusIndexQueryVariant } from "./corpus-query-variant-policy";
+import { stemSlovakUpstream } from "./morphology/slovak";
+import { stemCorpusText } from "./morphology/stem-text";
 
 const legacyFields = ["text_stem", "headnote_stem"] as const;
 const slovakOptions = {
@@ -37,51 +39,37 @@ const leavesIn = (text: string): string[] =>
     ([leaf]) => leaf,
   );
 
-test("corpus-query-faithful-reserve/exact Slovak queries retain only evidenced faithful leaves", () => {
+test("corpus-query-core-stems-first/exact Slovak queries retain primary and faithful core leaves", () => {
   const cases = [
     {
       text: "vydržanie vlastníckeho práva k pozemku dobromyseľnosť",
       faithful: 'text_stem:"vydržani"',
-      shouldAdd: true,
     },
     {
       // This spelling has identical faithful and extended stems.
       text: "§ 63 ods. 1 pism. b) zakonnika prace vypoved pre nadbytocnost",
       faithful: 'text_stem:"nadbytocnost"',
-      shouldAdd: false,
     },
     {
-      // The faithful form differs from the indexed obohateniu inflection, so
-      // this checks reservation behavior without claiming that it closes that gap.
+      // Stale projections containing obohateniu need re-projection; this query
+      // reserves its same-token obohateni stem without inferring inflections.
       text: "§ 451 Občianskeho zákonníka bezdôvodné obohatenie",
       faithful: 'text_stem:"obohateni"',
-      shouldAdd: true,
     },
   ] as const;
 
-  for (const { text, faithful, shouldAdd } of cases) {
-    const saturatingAlternatives = {
-      expand: (term: string) => [`${term}alt`],
-      legalAlternatives: (term: string) => [`${term}legal`],
-    };
-    const baseline = clause(text, "off", saturatingAlternatives);
-    const candidate = clause(
-      text,
-      "sk-faithful-reserve",
-      saturatingAlternatives,
-    );
+  for (const { text, faithful } of cases) {
+    const baseline = clause(text, "off");
+    const candidate = clause(text, "sk-core-stems-first");
     expect(baseline).not.toBeNull();
     expect(candidate).not.toBeNull();
-    if (shouldAdd) {
-      expect(baseline).not.toContain(faithful);
-      expect(candidate).toContain(faithful);
-    } else {
-      expect(candidate).toBe(baseline);
-    }
+    expect(baseline).not.toContain(faithful);
+    expect(candidate).toContain(faithful);
+    expect(clause(text, "off")).toBe(baseline);
   }
 
   const single =
-    clause("vydržanie", "sk-faithful-reserve", {
+    clause("vydržanie", "sk-core-stems-first", {
       expand: (term) => [`${term}alt`],
       legalAlternatives: (term) => [`${term}legal`],
     }) ?? "";
@@ -91,10 +79,10 @@ test("corpus-query-faithful-reserve/exact Slovak queries retain only evidenced f
 });
 
 test(
-  "corpus-query-faithful-reserve/budget-and-typed-surface-preserved",
+  "corpus-query-core-stems-first/budget-and-typed-surface-preserved",
   () => {
     assertProperty(
-      "corpus-query-faithful-reserve/budget-and-typed-surface-preserved",
+      "corpus-query-core-stems-first/budget-and-typed-surface-preserved",
       fc.property(
         fc.array(
           fc.constantFrom(
@@ -110,8 +98,8 @@ test(
         fc.constantFrom("all", "any"),
         fc.integer({ min: 0, max: 5 }),
         fc.constantFrom(
-          "sk-faithful-reserve",
-          "provision-refs-sk-faithful-reserve",
+          "sk-core-stems-first",
+          "provision-refs-sk-core-stems-first",
         ),
         (terms, match, expansionCount, queryVariant) => {
           const text = terms.join(" ");
@@ -140,6 +128,18 @@ test(
             match === "any" ? CORPUS_QUERY_LEAF_BUDGET : required.length,
           )) {
             expect(candidate).toContain(quoteCorpusValue(token.value));
+            if (required.length <= CORPUS_QUERY_LEAF_BUDGET / 2) {
+              expect(candidate).toContain(
+                `text_stem:${quoteCorpusValue(stemCorpusText(token.value, "sk"))}`,
+              );
+            }
+            if (required.length <= CORPUS_QUERY_LEAF_BUDGET / 3) {
+              const normalized = token.value.normalize("NFC").toLowerCase();
+              const faithful = stemSlovakUpstream(normalized) || normalized;
+              expect(candidate).toContain(
+                `text_stem:${quoteCorpusValue(faithful)}`,
+              );
+            }
           }
         },
       ),
@@ -149,10 +149,10 @@ test(
 );
 
 test(
-  "corpus-query-faithful-reserve/off non-Slovak and missing-legacy-fields stay byte-identical",
+  "corpus-query-core-stems-first/off non-Slovak and missing-legacy-fields stay byte-identical",
   () => {
     assertProperty(
-      "corpus-query-faithful-reserve/off non-Slovak and missing-legacy-fields stay byte-identical",
+      "corpus-query-core-stems-first/off non-Slovak and missing-legacy-fields stay byte-identical",
       fc.property(
         fc.array(
           fc.constantFrom("vydržanie", "pozemku", "obohatenie", "náhrada"),
@@ -172,7 +172,7 @@ test(
               }),
               jurisdiction: "CZE",
               slovakLegacyStemFields: legacyFields,
-              queryVariant: "sk-faithful-reserve",
+              queryVariant: "sk-core-stems-first",
             }),
           ).toBe(
             corpusFreeTextClause(text, {
@@ -190,7 +190,7 @@ test(
             corpusFreeTextClause(text, {
               ...slovakOptions,
               slovakLegacyStemFields: [],
-              queryVariant: "sk-faithful-reserve",
+              queryVariant: "sk-core-stems-first",
             }),
           ).toBe(
             corpusFreeTextClause(text, {
@@ -206,7 +206,7 @@ test(
   propertyTestTimeout(5000),
 );
 
-test("corpus-query-faithful-reserve/provision behavior composes explicitly", () => {
+test("corpus-query-core-stems-first/provision behavior composes explicitly", () => {
   const text = "§ 106 ods. 1 zákona OZ premlčanie";
   const options = slovakOptions;
   const provision = corpusFreeTextClause(text, {
@@ -215,7 +215,7 @@ test("corpus-query-faithful-reserve/provision behavior composes explicitly", () 
   });
   const combined = corpusFreeTextClause(text, {
     ...options,
-    queryVariant: "provision-refs-sk-faithful-reserve",
+    queryVariant: "provision-refs-sk-core-stems-first",
   });
 
   expect(provision).not.toBeNull();
@@ -228,12 +228,12 @@ test("corpus-query-faithful-reserve/provision behavior composes explicitly", () 
   expect(combined).toContain('text_stem:"premlčani"');
 });
 
-test("corpus-query-faithful-reserve/phrases and exhausted budgets do not gain reserved leaves", () => {
+test("corpus-query-core-stems-first/phrases and exhausted budgets do not gain reserved leaves", () => {
   const phrase = '"vydržanie vlastníckeho"';
-  expect(clause(phrase, "sk-faithful-reserve")).toBe(clause(phrase, "off"));
+  expect(clause(phrase, "sk-core-stems-first")).toBe(clause(phrase, "off"));
 
   for (const count of [24, 25, 30]) {
     const text = Array.from({ length: count }, () => "vydržanie").join(" ");
-    expect(clause(text, "sk-faithful-reserve")).toBe(clause(text, "off"));
+    expect(clause(text, "sk-core-stems-first")).toBe(clause(text, "off"));
   }
 });

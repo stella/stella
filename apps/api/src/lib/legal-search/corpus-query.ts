@@ -496,6 +496,11 @@ type TokenLeaves = {
   typed: string;
 };
 
+type CoreStemLeaves = {
+  primary: string[];
+  faithful: string[];
+};
+
 type BudgetedToken = {
   granted: Record<LeafGroup, readonly string[]>;
   token: TokenLeaves;
@@ -536,6 +541,72 @@ const spendLeafBudget = (
   }
 
   return budgeted;
+};
+
+type ReserveCoreStemLeavesOptions = {
+  tokens: readonly CorpusQueryToken[];
+  leavesForTokens: TokenLeaves[];
+  reserved: number;
+  queryVariant: CorpusIndexQueryVariant;
+  stemming: CorpusStemming | null;
+  slovakLegacyStemFields: readonly string[];
+};
+
+/** Reserve passage stems across all tokens before optional fields spend headroom. */
+const reserveCoreStemLeaves = ({
+  tokens,
+  leavesForTokens,
+  reserved,
+  queryVariant,
+  stemming,
+  slovakLegacyStemFields,
+}: ReserveCoreStemLeavesOptions) => {
+  const coreReserved: CoreStemLeaves[] = tokens.map(() => ({
+    primary: [],
+    faithful: [],
+  }));
+  let coreCount = 0;
+  if (
+    CORPUS_QUERY_VARIANT_POLICY[queryVariant].slovakCoreStemsFirst &&
+    stemming?.language === "sk" &&
+    slovakLegacyStemFields.length > 0
+  ) {
+    // Give every token its primary stem before spending on faithful variants.
+    // Typed leaves remain mandatory even for all-token queries above the ceiling.
+    for (const kind of ["primary", "faithful"] as const) {
+      for (const [index, token] of tokens.entries()) {
+        const leaves = leavesForTokens.at(index);
+        const core = coreReserved.at(index);
+        if (leaves === undefined || core === undefined) {
+          return panic("Required corpus token has no core reservation");
+        }
+        const leaf =
+          kind === "primary"
+            ? leaves.alternatives.stem.at(0)
+            : slovakLegacyStemLeaves(token, slovakLegacyStemFields).at(0);
+        if (
+          leaf === undefined ||
+          core.primary.includes(leaf) ||
+          core.faithful.includes(leaf) ||
+          tokens.length + reserved + coreCount >= CORPUS_QUERY_LEAF_BUDGET
+        ) {
+          continue;
+        }
+        core[kind].push(leaf);
+        coreCount += 1;
+      }
+    }
+    for (const [index, leaves] of leavesForTokens.entries()) {
+      const core = coreReserved.at(index);
+      if (core === undefined) {
+        return panic("Corpus token has no core reservation");
+      }
+      leaves.alternatives.stem = leaves.alternatives.stem.filter(
+        (leaf) => !core.primary.includes(leaf) && !core.faithful.includes(leaf),
+      );
+    }
+  }
+  return { coreReserved, coreCount };
 };
 
 const SLOVAK_LEGACY_STEM_FIELDS = new Set(["text_stem", "headnote_stem"]);
@@ -834,39 +905,20 @@ export const corpusFreeTextClause = (
       : null;
   const required = provisionGroups?.required ?? partitionRequired;
   const reserved = provisionGroups?.reserved ?? 0;
-  // One passage compatibility leaf per token, before optional passes can starve it.
-  // Typed leaves remain mandatory even for all-token queries above the ceiling.
-  let faithfulHeadroom = Math.max(
-    0,
-    CORPUS_QUERY_LEAF_BUDGET - required.length - reserved,
-  );
-  const faithfulReserved = required.map((token) => {
-    if (
-      !CORPUS_QUERY_VARIANT_POLICY[queryVariant].slovakFaithfulReserve ||
-      stemming?.language !== "sk" ||
-      faithfulHeadroom === 0
-    ) {
-      return [];
-    }
-    const leaf = slovakLegacyStemLeaves(token, slovakLegacyStemFields).at(0);
-    if (leaf === undefined) {
-      return [];
-    }
-    faithfulHeadroom -= 1;
-    return [leaf];
+  const tokenLeaves = required.map(leavesForToken);
+  const { coreReserved, coreCount } = reserveCoreStemLeaves({
+    tokens: required,
+    leavesForTokens: tokenLeaves,
+    reserved,
+    queryVariant,
+    stemming,
+    slovakLegacyStemFields,
   });
-  const faithfulCount = faithfulReserved.reduce(
-    (count, leaves) => count + leaves.length,
-    0,
-  );
-  const budgeted = spendLeafBudget(
-    required.map(leavesForToken),
-    reserved + faithfulCount,
-  );
+  const budgeted = spendLeafBudget(tokenLeaves, reserved + coreCount);
 
   let used =
     reserved +
-    faithfulCount +
+    coreCount +
     budgeted.length +
     budgeted.reduce(
       (total, { granted }) =>
@@ -878,12 +930,14 @@ export const corpusFreeTextClause = (
       0,
     );
   const clauses = budgeted.map(({ granted, token }, index) => {
-    const extras = LEAF_EMIT_ORDER.flatMap((group) => granted[group]);
-    const compatibility = faithfulReserved.at(index);
-    if (compatibility === undefined) {
-      return panic("Budgeted corpus token has no compatibility reservation");
+    const core = coreReserved.at(index);
+    if (core === undefined) {
+      return panic("Budgeted corpus token has no core reservation");
     }
-    extras.push(...compatibility);
+    const extras = LEAF_EMIT_ORDER.flatMap((group) =>
+      group === "stem" ? core.primary.concat(granted[group]) : granted[group],
+    );
+    extras.push(...core.faithful);
     // Additional compatibility fields spend only what the ordinary passes left.
     if (
       stemming?.language === "sk" &&
