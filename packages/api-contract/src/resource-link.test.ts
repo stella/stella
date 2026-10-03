@@ -49,11 +49,27 @@ describe("chat resource links", () => {
           id: toSafeId<"caseLawDecision">("decision-1"),
         }),
       },
+      {
+        type: RESOURCE_TYPE.USER,
+        resource: resourceRef({
+          type: RESOURCE_TYPE.USER,
+          id: toSafeId<"user">("user-1"),
+        }),
+      },
     ] as const;
 
     for (const target of targets) {
       expect(parseChatResourceHref(toChatResourceHref(target))).toEqual(target);
     }
+  });
+
+  test("finds a person link in prose like any other canonical link", () => {
+    const [match] = findCanonicalChatResourceHrefs(
+      "Assigned to [Jan](#stella-user=user-1).",
+    );
+
+    expect(match?.href).toBe("#stella-user=user-1");
+    expect(match?.target.type).toBe(RESOURCE_TYPE.USER);
   });
 
   test("marks legacy relative entity links as render-context dependent", () => {

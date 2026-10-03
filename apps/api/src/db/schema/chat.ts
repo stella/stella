@@ -1226,6 +1226,7 @@ export type McpConnectorAuthType = (typeof MCP_CONNECTOR_AUTH_TYPES)[number];
 export const MCP_CONNECTION_STATUSES = [
   "connected",
   "needs_reauth",
+  "needs_approval",
   "revoked",
 ] as const;
 export type McpConnectionStatus = (typeof MCP_CONNECTION_STATUSES)[number];

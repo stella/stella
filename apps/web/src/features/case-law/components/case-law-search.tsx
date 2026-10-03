@@ -1,8 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/toast";
-
 import { PublicLawSearch } from "@/components/public-law-search";
 import {
   caseLawCountryRegion,
@@ -12,6 +10,7 @@ import { refineCaseLawQuery } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 type CaseLawSearchProps = {
   /** The jurisdiction the page is scoped to, as a country param. */
@@ -68,7 +67,7 @@ export const CaseLawSearch = ({
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
+      notifyUserError(error, t("common.somethingWentWrong"));
     },
   });
 

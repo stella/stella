@@ -129,15 +129,15 @@ describe("SAOS publisher document roles", () => {
       const listing = publisherRow(value);
       const built = buildDocument(listing);
       expect(built.documentRole).toBe(role);
-      expect(built.decisionType).toBe(type);
-      expect(built.metadata["decisionType"]).toBe(type);
+      expect(built.decisionType === type).toBe(true);
+      expect(built.metadata["decisionType"] === type).toBe(true);
 
       for (const envelope of [false, true]) {
         const input = storedInput({ listing, detail: null, envelope });
         const parsed = await reparsedDocument(input);
         expect(parsed.documentRole).toBe(role);
-        expect(parsed.decisionType).toBe(type);
-        expect(parsed.metadata["decisionType"]).toBe(type);
+        expect(parsed.decisionType === type).toBe(true);
+        expect(parsed.metadata["decisionType"] === type).toBe(true);
         expect(await reparsedDocument(input)).toEqual(parsed);
         if (parsed.sourceRaw === undefined) {
           panic("SAOS replay did not preserve its raw envelope");
@@ -160,15 +160,15 @@ describe("SAOS publisher document roles", () => {
         storedInput({ listing, detail: publisherRow("REASONS"), envelope }),
       );
       expect(reasons.documentRole).toBe(DECISION_DOCUMENT_ROLE.REASONS);
-      expect(reasons.decisionType).toBe(
-        PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
-      );
+      expect(
+        reasons.decisionType === PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
+      ).toBe(true);
 
       const ruling = await reparsedDocument(
         storedInput({ listing, detail: publisherRow(null), envelope }),
       );
       expect(ruling.documentRole).toBe(DECISION_DOCUMENT_ROLE.RULING);
-      expect(ruling.decisionType).toBe("wyrok");
+      expect(ruling.decisionType === "wyrok").toBe(true);
     }
   });
 

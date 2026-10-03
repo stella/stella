@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "The membership invariant module owns shared constraint identifiers and typed driver-error mapping for authentication hooks and adapter writes."
+}

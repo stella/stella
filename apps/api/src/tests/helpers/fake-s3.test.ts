@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { envBase } from "@/api/env-base";
 import {
   deleteS3ObjectWithSignal,
@@ -224,8 +226,10 @@ describe("fake S3 carries the real s3 helpers", () => {
 
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
     expect(
-      writeS3ObjectWithRetry({ key: "retry/denied", data: "payload" }),
-    ).rejects.toThrow(/AccessDenied/u);
+      await rejectionOf(
+        writeS3ObjectWithRetry({ key: "retry/denied", data: "payload" }),
+      ),
+    ).toHaveProperty("message", expect.stringMatching(/AccessDenied/u));
     expect(fake.objects.has(`${bucket}/retry/denied`)).toBe(false);
   });
 });

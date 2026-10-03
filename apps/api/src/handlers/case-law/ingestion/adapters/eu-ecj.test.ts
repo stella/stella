@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
+import { encodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildListingQuery,
   celexToCaseNumber,
@@ -10,6 +11,7 @@ import {
   ECJ_TOTAL_COUNT_QUERY,
   ecjListingIdentity,
   euEcjAdapter as ecjAdapter,
+  fetchDecisionsByCelex,
   SPARQL_LIMIT,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
@@ -173,6 +175,66 @@ describe("euEcjAdapter.fetchPage", () => {
     Bun.sleep = originalSleep;
   });
 
+  test.each([400, 401, 403, 408, 429, 500])(
+    "a branch notice HTTP %s holds the page only when retryable",
+    async (status) => {
+      let noticeRequests = 0;
+      globalThis.fetch = asFetchMock(
+        async (input: string | URL | Request, init?: RequestInit) => {
+          const url = input instanceof Request ? input.url : String(input);
+          if (url.includes("sparql")) {
+            return Response.json({ results: { bindings: [enBinding] } });
+          }
+          if (
+            new Headers(init?.headers).get("Accept") ===
+            "application/xml; notice=branch"
+          ) {
+            noticeRequests += 1;
+            return new Response("refused", { status });
+          }
+          expect(url).toContain("publications.europa.eu/resource/cellar/");
+          return new Response(fulltextHtml, {
+            headers: { "Content-Type": "text/html" },
+          });
+        },
+      );
+
+      const result = await ecjAdapter.fetchPage("2024-01-18", {});
+      expect(noticeRequests).toBeGreaterThanOrEqual(1);
+      if ([400, 401, 403].includes(status)) {
+        expect(result.isOk()).toBe(true);
+        if (!result.isOk()) {
+          throw new TypeError("Expected a completed page after notice refusal");
+        }
+        expect(result.value.decisions).toHaveLength(1);
+        expect(result.value.nextCursor).toBe("2024-01-19");
+        expect(result.value.decisions.at(0)?.judges).toBeUndefined();
+        return;
+      }
+      if (status === 429) {
+        expect(result.isErr()).toBe(true);
+        if (!result.isErr()) {
+          throw new TypeError("Expected the existing notice rate-limit stop");
+        }
+        expect(result.error).toBeInstanceOf(PublisherRateLimitRefusalError);
+        expect(result.error).toMatchObject({
+          cursor: "2024-01-18",
+          httpStatus: 429,
+        });
+        return;
+      }
+      expect(result.isErr()).toBe(true);
+      if (!result.isErr()) {
+        throw new TypeError("Expected a notice read failure");
+      }
+      expect(result.error).toBeInstanceOf(AdapterFetchError);
+      expect(result.error).toMatchObject({
+        cursor: null,
+        httpStatus: status,
+      });
+    },
+  );
+
   test(
     "parses SPARQL + HTML into multi-lang decisions",
     async () => {
@@ -258,12 +320,12 @@ describe("euEcjAdapter.fetchPage", () => {
       if (!first) {
         throw new Error("No decisions");
       }
-      expect(first.caseNumber).toBe("C-128/21");
-      expect(first.ecli).toBe("ECLI:EU:C:2024:49");
-      expect(first.court).toBe("Court of Justice");
+      expect(first.caseNumber === "C-128/21").toBe(true);
+      expect(first.ecli === "ECLI:EU:C:2024:49").toBe(true);
+      expect(first.court === "Court of Justice").toBe(true);
       expect(first.language).toBe("en");
       expect(first.decisionDate).toBe("2024-01-18");
-      expect(first.decisionType).toBe("judgment");
+      expect(first.decisionType === "judgment").toBe(true);
       expect(first.documentUrl).toBe(
         `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
       );
@@ -282,7 +344,7 @@ describe("euEcjAdapter.fetchPage", () => {
       });
       expect(first.fulltext?.length).toBeGreaterThan(100);
       expect(first.rawHash).toHaveLength(64);
-      expect(page.decisions[2]?.decisionType).toBe("order");
+      expect(page.decisions[2]?.decisionType === "order").toBe(true);
 
       // Every response fetched for the variant is kept under its own name, so
       // a parser change can be replayed without re-crawling and a reader of
@@ -651,6 +713,123 @@ const installSparqlMock = ({
   );
   return { queries, documentFetches, noticeRequests };
 };
+
+const variantDecisions = async (walk: "crawl" | "celex" | "reconciliation") => {
+  switch (walk) {
+    case "crawl":
+      return (await ecjAdapter.fetchPage("2024-01-18", {})).unwrap().decisions;
+    case "celex":
+      return await fetchDecisionsByCelex({
+        celexNumbers: [enBinding.celex.value],
+        signal: new AbortController().signal,
+      });
+    case "reconciliation":
+      break;
+    default:
+      walk satisfies never;
+  }
+  const outcome = await reconciliation.buildDecision({
+    celex: enBinding.celex.value,
+    language: "EN",
+  });
+  if (outcome.type !== "built") {
+    throw new TypeError(`Expected built, got ${outcome.type}`);
+  }
+  return [outcome.decision];
+};
+
+describe("language variant completion", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test.each(["crawl", "celex", "reconciliation"] as const)(
+    "%s returns only the accepted manifestation after a rejection",
+    async (walk) => {
+      const rejectedId = "5f978357-b5e4-11ee-b164-01aa75ed71a1.0005.05";
+      const duplicateId = "5f978357-b5e4-11ee-b164-01aa75ed71a1.0006.05";
+      const rejectedBinding = withManifestation(
+        {
+          ...firstFixtureBinding,
+          ecli: {
+            ...firstFixtureBinding.ecli,
+            value: String.raw`\rtf1 ECLI:EU:C:2024:49`,
+          },
+        },
+        { cellarLanguage: "ENG", manifestationId: rejectedId },
+      );
+      const duplicateBinding = withManifestation(firstFixtureBinding, {
+        cellarLanguage: "ENG",
+        manifestationId: duplicateId,
+      });
+      const { documentFetches } = installSparqlMock({
+        bindings: [rejectedBinding, enBinding, duplicateBinding],
+        served: [EN_MANIFESTATION_ID, duplicateId],
+      });
+      const servedFetch = globalThis.fetch;
+      globalThis.fetch = asFetchMock((input, init) => {
+        const url = requestUrl(input);
+        if (url.endsWith(rejectedId)) {
+          documentFetches.push(url);
+          return Promise.resolve(
+            new Response(shortDocumentHtml, {
+              headers: { "Content-Type": "text/html" },
+            }),
+          );
+        }
+        return servedFetch(input, init);
+      });
+      const decisions = await variantDecisions(walk);
+      expect(
+        decisions.map(({ plainTextOutcome }) => plainTextOutcome.type),
+      ).toEqual(["accepted"]);
+      expect(decisions.map(({ sourceDocumentId }) => sourceDocumentId)).toEqual(
+        [`${enBinding.celex.value}:en`],
+      );
+      expect(decisions.at(0)?.documentUrl).toContain(EN_MANIFESTATION_ID);
+      expect(documentFetches).toEqual([
+        `https://publications.europa.eu/resource/cellar/${rejectedId}`,
+        `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
+      ]);
+    },
+  );
+  test.each(["crawl", "celex", "reconciliation"] as const)(
+    "%s returns only the last typed failure when every manifestation is rejected",
+    async (walk) => {
+      const lastId = "5f978357-b5e4-11ee-b164-01aa75ed71a1.0006.05";
+      const rejectedBinding = {
+        ...enBinding,
+        ecli: {
+          ...enBinding.ecli,
+          value: String.raw`\rtf1 ECLI:EU:C:2024:49`,
+        },
+      };
+      const lastBinding = withManifestation(rejectedBinding, {
+        cellarLanguage: "ENG",
+        manifestationId: lastId,
+      });
+      const { documentFetches } = installSparqlMock({
+        bindings: [rejectedBinding, lastBinding],
+        served: [EN_MANIFESTATION_ID, lastId],
+      });
+      const decisions = await variantDecisions(walk);
+      expect(decisions).toHaveLength(1);
+      expect(decisions.at(0)?.plainTextOutcome).toMatchObject({
+        type: "item_build_failed",
+        error: expect.any(Error),
+      });
+      expect(decisions.at(0)?.sourceDocumentId).toBe(
+        `${enBinding.celex.value}:en`,
+      );
+      expect(decisions.at(0)?.documentUrl).toContain(lastId);
+      expect(documentFetches).toEqual([
+        `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
+        `https://publications.europa.eu/resource/cellar/${lastId}`,
+      ]);
+    },
+  );
+});
 
 /**
  * Serve one listed variant whose document response carries the given body and
@@ -1097,7 +1276,7 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
     if (outcome.type !== "built") {
       throw new TypeError(`Expected built, got ${outcome.type}`);
     }
-    expect(outcome.decision.caseNumber).toBe("C-128/21");
+    expect(outcome.decision.caseNumber === "C-128/21").toBe(true);
     expect(outcome.decision.language).toBe("fr");
     expect(outcome.decision.documentUrl).toContain(FR_MANIFESTATION_ID);
   });
@@ -1599,6 +1778,141 @@ describe("euEcjAdapter.reparseStoredRaw", () => {
       rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
       detail: "no fulltext parsed from the stored payload for 62013TO0488",
     });
+  });
+
+  test("reparse recomputes diagnostics when a stored URL is now valid", async () => {
+    const outcome = await reparse({
+      ...storedPayload(fulltextHtml),
+      metadata: {
+        celex: "62013TO0488",
+        manifestationUri:
+          "https://publications.europa.eu/resource/item?a=1&amp;amp;b=2",
+        metadataUrlDiagnostics: {
+          entries: [{ address: "manifestationUri", reason: "invalid-url" }],
+          overflowCount: 0,
+        },
+      },
+    });
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type === "parsed") {
+      expect(outcome.result.metadata).toHaveProperty(
+        "manifestationUri",
+        "https://publications.europa.eu/resource/item?a=1&amp;amp;b=2",
+      );
+      expect(outcome.result.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+    }
+  });
+
+  for (const current of [
+    "ftp://example.org/new-type",
+    "https://example.org/new-type?a=1&amp;amp;b=2",
+  ]) {
+    test(`historical four-variable listing replaces older stored root URL and diagnostic: ${current}`, async () => {
+      const envelope = encodeSourceRawEnvelope({
+        listing: JSON.stringify({
+          ...firstFixtureBinding,
+          type: { type: "uri", value: current },
+        }),
+        document: fulltextHtml,
+      });
+      const outcome = await reparse({
+        ...storedPayload(fulltextHtml),
+        raw: new TextEncoder().encode(envelope),
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        metadata: {
+          celex: "62013TO0488",
+          cdmType: "https://example.org/old-type",
+          manifestationUri: "https://example.org/stored-item?a=1&amp;amp;b=2",
+          languageUri: "https://example.org/stored-language",
+          metadataUrlDiagnostics: {
+            entries: [{ address: "cdmType", reason: "invalid-url" }],
+            overflowCount: 0,
+          },
+        },
+      });
+      expect(outcome.type).toBe("parsed");
+      if (outcome.type === "parsed") {
+        expect(outcome.result.metadata).toHaveProperty(
+          "manifestationUri",
+          "https://example.org/stored-item?a=1&amp;amp;b=2",
+        );
+        expect(outcome.result.metadata).toHaveProperty(
+          "languageUri",
+          "https://example.org/stored-language",
+        );
+        if (current.startsWith("ftp:")) {
+          expect(outcome.result.metadata).not.toHaveProperty("cdmType");
+          expect(outcome.result.metadata).toHaveProperty(
+            "metadataUrlDiagnostics",
+            {
+              entries: [{ address: "cdmType", reason: "unsafe-protocol" }],
+              overflowCount: 0,
+            },
+          );
+        } else {
+          expect(outcome.result.metadata).toHaveProperty("cdmType", current);
+          expect(
+            outcome.result.metadata["metadataUrlDiagnostics"],
+          ).toBeUndefined();
+        }
+      }
+    });
+  }
+
+  test("a current six-variable listing replaces every owned stored URL with its stated spelling", async () => {
+    const manifestationUri = "https://example.org/new-item?a=1&amp;amp;b=2";
+    const languageUri = "https://example.org/new-language?a=1&amp;b=2";
+    const cdmType = "https://example.org/new-type?a=1&amp;amp;b=2";
+    const envelope = encodeSourceRawEnvelope({
+      listing: JSON.stringify({
+        ...enBinding,
+        manifestation: { type: "uri", value: manifestationUri },
+        language: { type: "uri", value: languageUri },
+        type: { type: "uri", value: cdmType },
+      }),
+      document: fulltextHtml,
+    });
+    const outcome = await reparse({
+      ...storedPayload(fulltextHtml),
+      raw: new TextEncoder().encode(envelope),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      metadata: {
+        celex: "62013TO0488",
+        manifestationUri: "https://example.org/old-item",
+        languageUri: "https://example.org/old-language",
+        cdmType: "https://example.org/old-type",
+      },
+    });
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type === "parsed") {
+      expect(outcome.result.metadata).toMatchObject({
+        manifestationUri,
+        languageUri,
+        cdmType,
+      });
+      expect(outcome.result.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+    }
+  });
+
+  test("malformed stored URL shapes produce exact defects without rejecting replay", async () => {
+    const outcome = await reparse({
+      ...storedPayload(fulltextHtml),
+      metadata: {
+        celex: "62013TO0488",
+        manifestationUri: "ftp://example.org/item",
+        manifestations: "not an array",
+      },
+    });
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type === "parsed") {
+      expect(outcome.result.metadata).toHaveProperty("metadataUrlDiagnostics", {
+        entries: [
+          { address: "manifestationUri", reason: "unsafe-protocol" },
+          { address: "manifestations", reason: "unsupported-url-value" },
+        ],
+        overflowCount: 0,
+      });
+    }
   });
 
   test("re-parses a stored manifestation", async () => {

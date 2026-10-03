@@ -117,8 +117,11 @@ export const createSecurityCanaryAlertDeduplicator = ({
   commandTimeoutMs = REDIS_COMMAND_TIMEOUT_MS,
   createRedis = () =>
     createRedisClient({
-      connectionTimeout: commandTimeoutMs,
-      enableOfflineQueue: false,
+      storeClass: "cache",
+      overrides: {
+        connectionTimeout: commandTimeoutMs,
+        enableOfflineQueue: false,
+      },
     }),
   now = () => Temporal.Now.instant().epochMilliseconds,
 }: SecurityCanaryAlertDeduplicatorOptions = {}) => {

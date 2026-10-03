@@ -44,6 +44,7 @@ import {
 } from "@/api/lib/chat/ref-token";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { recordChatThreadNamesOnTx } from "@/api/lib/chat/thread-names";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createChatStreamMock } from "@/api/tests/helpers/chat-stream-mock";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -410,7 +411,7 @@ const createContext = ({
     ],
     getActiveWorkspaceIds: async () => [ids.wsA1, ids.wsA2],
     getWorkspaceAccess: async () => null,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu" as const,

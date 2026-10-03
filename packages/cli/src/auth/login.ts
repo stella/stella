@@ -13,6 +13,7 @@ import {
   registeredClientSupportsScopes,
   setRegisteredClient,
 } from "./cli-config.js";
+import { cliClientMetadataUrl } from "./client-metadata-document.js";
 import {
   CLI_IDENTITY_SCOPES,
   getMcpResourceUrl,
@@ -120,13 +121,25 @@ const buildAuthorizeUrl = (input: {
   return url.toString();
 };
 
-/** Gets the cached loopback client id for `serverUrl`, registering one if none exists yet. */
-const getOrRegisterClient = async (
+/**
+ * The CLI's client id for this server: its published client metadata
+ * document when the server accepts those, otherwise the cached loopback
+ * registration for `serverUrl`, registering one if none exists yet.
+ */
+const resolveClientId = async (
   configDir: string,
   serverUrl: string,
   metadata: AuthorizationServerMetadata,
   registrationScopes: readonly string[],
 ): Promise<Result<string, CliAuthError>> => {
+  const documentClientId =
+    metadata.client_id_metadata_document_supported === true
+      ? cliClientMetadataUrl(metadata.issuer)
+      : undefined;
+  if (documentClientId) {
+    return Result.ok(documentClientId);
+  }
+
   const cached = await getRegisteredClient(configDir, serverUrl);
   if (cached && registeredClientSupportsScopes(cached, registrationScopes)) {
     return Result.ok(cached.clientId);
@@ -280,7 +293,7 @@ export const login = async (
       requiredScopes: options.requiredScopes,
     });
     const clientId = yield* Result.await(
-      getOrRegisterClient(
+      resolveClientId(
         options.configDir,
         serverUrl,
         metadata,

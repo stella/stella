@@ -27,6 +27,7 @@ const optionalCapped = (maxLength: number) =>
   t.Optional(t.String({ maxLength }));
 
 const config = {
+  accountAccess: "standard",
   description:
     "File a feedback report from the signed-in web app. The content is " +
     "sanitized server-side, stored, and delivered to every channel the " +

@@ -345,7 +345,9 @@ describe("chat thread messages", () => {
     expect(html.match(/aria-label="Copy"/gu)?.length).toBe(1);
   });
 
-  test("shows provider-reported reasoning tokens without a thinking part", () => {
+  // Providers that hide their reasoning report only a token count; a
+  // "Reasoning trace" label with nothing to open would read as broken.
+  test("omits the reasoning label when the provider sent no trace", () => {
     const chatMessages: ChatUIMessage[] = [
       {
         id: "message-A",
@@ -375,7 +377,8 @@ describe("chat thread messages", () => {
       />,
     );
 
-    expect(html).toContain("8 reasoning tokens");
+    expect(html).not.toContain("Reasoning trace");
+    expect(html).not.toContain("reasoning tokens");
     expect(html).toContain("The answer is ready.");
   });
 

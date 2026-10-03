@@ -145,11 +145,7 @@ import {
   readThreadValidationState,
 } from "@/api/handlers/chat/send-message-thread";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
-import {
-  ChatTurnFailureResponse,
-  hydrateMessages,
-  streamChat,
-} from "@/api/handlers/chat/stream-chat";
+import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
 import type { StoredHistory } from "@/api/handlers/chat/stream-message-identity";
 import {
@@ -234,6 +230,7 @@ import {
   hasPersistedGeneratedDocumentActiveDraftContext,
 } from "@/api/lib/chat/active-draft-context";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { registeredChatTool } from "@/api/lib/chat/chat-tool-types";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -1511,7 +1508,7 @@ type PrepareValidatedIncomingMessageOptions = {
   };
   authorization: {
     accessibleWorkspaceIds: SafeId<"workspace">[];
-    memberRole: { role: ChatToolsInput["memberRole"] };
+    memberRole: ChatToolsInput["memberRole"];
     pinServerValidatedWorkspaceId: ChatToolsInput["pinServerValidatedWorkspaceId"];
     requestedContextMatterIds: SafeId<"workspace">[];
     workspaceStatusById: NonNullable<ChatToolsInput["workspaceStatusById"]>;
@@ -1653,7 +1650,7 @@ const prepareValidatedIncomingMessage = async ({
     // explicit user or administrator opt-in.
     const validationTools = getChatValidationTools({
       organizationId,
-      memberRole: memberRole.role,
+      memberRole,
       orgAIConfig,
       managedAIResidency,
       pinServerValidatedWorkspaceId,
@@ -2597,7 +2594,7 @@ export const createSendMessage = (
           activeFile: activeFileForTools,
           editApplyMode,
           hasActiveDocxEditClient,
-          memberRole: memberRole.role,
+          memberRole,
           recordAuditEventAvailable: true,
           requestWorkspaceId: workspaceId,
           toolWorkspaceIds,
@@ -2628,7 +2625,7 @@ export const createSendMessage = (
         const chatToolContext = {
           createAIAbortSignal: createMeteredAIAbortSignal,
           organizationId: session.activeOrganizationId,
-          memberRole: memberRole.role,
+          memberRole,
           orgAIConfig,
           managedAIResidency,
           promptCachingEnabled,
@@ -2722,9 +2719,7 @@ export const createSendMessage = (
           sendMode: body.sendMode,
           toolAvailability: {
             docxEditMode: registeredDocxEditMode,
-            templateAuthoring: areTemplateAuthoringToolsRegistered(
-              memberRole.role,
-            ),
+            templateAuthoring: areTemplateAuthoringToolsRegistered(memberRole),
             webResearch: areWebResearchToolsRegistered({
               webSearchEnabled: thread.data.webSearchEnabled,
               webSearchProviders,
@@ -2874,7 +2869,7 @@ export const createSendMessage = (
         yield* Result.await(lifecycle.checkAdmission());
 
         const isServerTool = (toolName: string) =>
-          streamingTools[toolName]?.execute !== undefined;
+          registeredChatTool(streamingTools, toolName)?.execute !== undefined;
 
         // A completed, non-anonymized turn marks compaction due and titles a
         // new thread; neither affects whether the turn itself settled.
@@ -3080,7 +3075,7 @@ export const createSendMessage = (
                   });
                 };
 
-                const chatResponse = await dependencies.streamResponse({
+                const outcome = await dependencies.streamResponse({
                   runId: body.runId,
                   ...(parentRunId === undefined ? {} : { parentRunId }),
                   ...(resume === undefined ? {} : { resume }),
@@ -3144,19 +3139,22 @@ export const createSendMessage = (
                 // refusal). No terminal middleware hook runs in that branch,
                 // so settle the claimed turn here instead of leaving it
                 // indefinitely running.
-                if (!isChatStreamResponse(chatResponse)) {
-                  if (!(chatResponse instanceof ChatTurnFailureResponse)) {
-                    panic(
-                      "A pre-stream refusal must carry its turn failure code",
+                switch (outcome.type) {
+                  case "refused":
+                    await run.fail(
+                      outcome.response.failureCode,
+                      outcome.response.retryable,
+                    );
+                    return outcome.response;
+                  case "streaming":
+                    return outcome.response;
+                  default: {
+                    outcome satisfies never;
+                    return panic(
+                      `Unhandled chat stream outcome: ${String(outcome)}`,
                     );
                   }
-                  await run.fail(
-                    chatResponse.failureCode,
-                    chatResponse.retryable,
-                  );
                 }
-
-                return chatResponse;
               } catch (error) {
                 await run.fail("internal", true);
                 throw error;
@@ -3216,11 +3214,6 @@ const applyAssistantPersistencePlan = ({
       return panic(`Unhandled persistence plan: ${String(persistencePlan)}`);
     }
   }
-};
-
-const isChatStreamResponse = (response: Response): boolean => {
-  const contentType = response.headers.get("content-type");
-  return contentType?.includes("text/event-stream") === true;
 };
 
 const messageNeedsExternalMcpValidation = (

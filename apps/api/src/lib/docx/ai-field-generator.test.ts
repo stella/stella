@@ -161,13 +161,13 @@ const modelWith = (script: RunScript) =>
     provider: "openai",
   }) as ResolvedTanStackTextModel;
 
-const resolveTextModel = () => modelWith(COMPLETE_RUN);
+const resolveTextModel = async () => modelWith(COMPLETE_RUN);
 
 /** Model resolution that hands every call of one generator the same scripted
  *  adapter, so a retry sees the next scripted run rather than a fresh script. */
 const resolveScriptedModel = (script: RunScript) => {
   const model = modelWith(script);
-  return () => model;
+  return async () => model;
 };
 
 beforeEach(() => {

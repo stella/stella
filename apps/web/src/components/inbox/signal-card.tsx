@@ -56,7 +56,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { snoozeUntil } from "@/lib/inbox/inbox.logic";
 import { inboxKeys } from "@/lib/inbox/queries";
 import type { InboxSignal } from "@/lib/inbox/queries";
@@ -102,9 +102,7 @@ export const SignalCard = ({
     if (Result.isError(result)) {
       setBusy(false);
       analytics.captureError(result.error);
-      stellaToast.error(
-        userErrorFromThrown(result.error, t("common.unexpectedError")),
-      );
+      notifyUserError(result.error, t("common.unexpectedError"));
       return false;
     }
     if (successMessage !== null) {

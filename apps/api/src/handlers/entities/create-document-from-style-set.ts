@@ -14,6 +14,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  access: "write",
   permissions: { entity: ["create"], styleSet: ["use"] },
   mcp: { type: "internal", reason: "compound_consent" },
   body: bodySchema,

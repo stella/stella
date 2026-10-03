@@ -20,6 +20,7 @@ import type { DocumentSource } from "@/api/lib/document-source";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { compareScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -295,7 +296,7 @@ const createHarness = ({
     workspaceId,
     user: { id: userId },
     recordAuditEvent: asTestRaw<AuditRecorder>(auditRecorder),
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     getActiveWorkspaceIds: async () => [workspaceId],
     getAccessibleWorkspaces: async () => [],
     getWorkspaceAccess: async () => null,

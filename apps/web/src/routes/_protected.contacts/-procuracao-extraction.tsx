@@ -17,7 +17,7 @@ import { isDocxFile } from "@/lib/consts";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { sha256Hex } from "@/lib/files/sha256";
 import { customFieldId } from "@/routes/_protected.contacts/-import-candidate";
 import type {
@@ -147,17 +147,14 @@ export const useProcuracaoExtraction = (): ProcuracaoExtractionState => {
 
   const extractFile = async (file: File) => {
     if (!isDocxFile(file)) {
-      stellaToast.add({
-        title: t("contacts.extractProcuracao.invalidFileType"),
-        type: "error",
-      });
+      notifyUserError(
+        undefined,
+        t("contacts.extractProcuracao.invalidFileType"),
+      );
       return;
     }
     if (file.size > EXTRACTION_SOURCE_MAX_BYTES) {
-      stellaToast.add({
-        title: t("contacts.extractProcuracao.fileTooLarge"),
-        type: "error",
-      });
+      notifyUserError(undefined, t("contacts.extractProcuracao.fileTooLarge"));
       return;
     }
 
@@ -205,13 +202,10 @@ export const useProcuracaoExtraction = (): ProcuracaoExtractionState => {
 
     if (Result.isError(extraction)) {
       getAnalytics().captureError(extraction.error);
-      stellaToast.add({
-        title: userErrorFromThrown(
-          extraction.error,
-          t("contacts.extractProcuracao.parseErrorGeneric"),
-        ),
-        type: "error",
-      });
+      notifyUserError(
+        extraction.error,
+        t("contacts.extractProcuracao.parseErrorGeneric"),
+      );
       return;
     }
 

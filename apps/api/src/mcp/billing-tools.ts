@@ -49,7 +49,10 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 import type { McpRequestContext } from "@/api/mcp/context";
-import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  hasEffectiveAuthority,
+  mcpMemberAuthority,
+} from "@/api/mcp/effective-authority";
 import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
@@ -963,7 +966,7 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
         organizationId: context.organizationId,
         workspaceId,
         userId: context.userId,
-        memberRole: { role: context.memberRole },
+        memberRole: mcpMemberAuthority(context),
         recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
         body: {
           ...(input.entity_id === undefined
@@ -1022,7 +1025,7 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
       workspaceId,
       actor: {
         userId: context.userId,
-        memberRole: { role: context.memberRole },
+        memberRole: mcpMemberAuthority(context),
       },
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
       body: {
@@ -1118,7 +1121,7 @@ const handleDeleteTimeEntryTool: TypedMcpToolHandler<
       workspaceId,
       actor: {
         userId: context.userId,
-        memberRole: { role: context.memberRole },
+        memberRole: mcpMemberAuthority(context),
       },
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
       body: { id: timeEntryId },

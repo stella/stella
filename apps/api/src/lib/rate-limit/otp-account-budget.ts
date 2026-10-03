@@ -18,6 +18,10 @@ export const OTP_ACCOUNT_BUDGET = {
   max: 10,
   durationMs: 15 * 60 * 1000,
 } as const;
+export const DEMO_OTP_ACCOUNT_BUDGET = {
+  max: 5,
+  durationMs: OTP_ACCOUNT_BUDGET.durationMs,
+} as const;
 const OTP_VERIFICATION_TYPES = {
   "/sign-in/email-otp": "sign-in",
   "/email-otp/check-verification-otp": "body",
@@ -34,20 +38,25 @@ const isOtpVerificationPath = (
 
 export const createOtpAccountBudget = (
   context: Pick<RateLimitContext, "increment" | "decrement">,
+  demoAccountEmail: string | undefined,
 ) => ({
   reserve: async (email: string) => {
-    const account = createHash("sha256")
-      .update(email.trim().toLowerCase())
-      .digest("hex");
+    const normalizedEmail = email.trim().toLowerCase();
+    const isDemoAccount =
+      normalizedEmail === demoAccountEmail?.trim().toLowerCase();
+    const accountBudget = isDemoAccount
+      ? DEMO_OTP_ACCOUNT_BUDGET
+      : OTP_ACCOUNT_BUDGET;
+    const account = createHash("sha256").update(normalizedEmail).digest("hex");
     const key = createRedisRateLimitRequestKey({
       counterKey: `otp-account:${account}`,
       requestId: Bun.randomUUIDv7(),
     });
     const { count, nextReset } = await context.increment(
       key,
-      OTP_ACCOUNT_BUDGET.durationMs,
+      accountBudget.durationMs,
     );
-    if (count > OTP_ACCOUNT_BUDGET.max) {
+    if (count > accountBudget.max) {
       return Result.err(
         new APIError(
           "TOO_MANY_REQUESTS",
@@ -79,13 +88,15 @@ export const createOtpAccountBudget = (
 type OtpAccountLimitPluginOptions = {
   enabled: boolean;
   context: Pick<RateLimitContext, "increment" | "decrement">;
+  demoAccountEmail: string | undefined;
 };
 
 export const createOtpAccountLimitPlugin = ({
   enabled,
   context,
+  demoAccountEmail,
 }: OtpAccountLimitPluginOptions) => {
-  const budget = createOtpAccountBudget(context);
+  const budget = createOtpAccountBudget(context, demoAccountEmail);
   return {
     id: "otp-account-budget",
     hooks: {

@@ -1,6 +1,11 @@
 import { expect } from "@playwright/test";
 import type { Page, Request, Response } from "@playwright/test";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  appendFileSync,
+} from "node:fs";
 import path from "node:path";
 
 // Matches apps/web/e2e/playwright.config.ts and helpers/api.ts: the API origin
@@ -30,11 +35,10 @@ const BASELINE_PATH = path.resolve(
   import.meta.dirname,
   "../network-baseline.json",
 );
-// Spelled out for error messages so a failing CI run points at the file to edit
-// regardless of the cwd the suite ran from.
+// Spelled out for diagnostics regardless of the suite working directory.
 const BASELINE_RELATIVE = "apps/web/e2e/network-baseline.json";
 const WRITE_HINT =
-  "run the route-smoke suite with E2E_NETWORK_BASELINE=write and commit the baseline";
+  "declare an intentional increase in apps/web/e2e/network-budgets/<change>.json; main records the shared baseline";
 
 // --- collector -------------------------------------------------------------
 
@@ -575,6 +579,7 @@ export type NetworkBaselineDiff = {
 };
 
 type DiffNetworkBaselineOptions = {
+  changedRoutes?: readonly string[];
   requireAllRoutes?: boolean;
 };
 
@@ -820,7 +825,10 @@ const requestCountBudget = (
 export const diffNetworkBaseline = (
   baseline: NetworkBaseline | null,
   results: Map<string, RouteNetworkMetrics>,
-  { requireAllRoutes = true }: DiffNetworkBaselineOptions = {},
+  {
+    requireAllRoutes = true,
+    changedRoutes = [],
+  }: DiffNetworkBaselineOptions = {},
 ): NetworkBaselineDiff => {
   const problems: string[] = [];
   const notices: string[] = [];
@@ -836,6 +844,10 @@ export const diffNetworkBaseline = (
   for (const [route, metrics] of results) {
     const entry = baseline[route];
     if (entry === undefined) {
+      if (changedRoutes.includes(route)) {
+        notices.push(`New scoped route ${route}: ${JSON.stringify(metrics)}`);
+        continue;
+      }
       problems.push(
         `New route not in the network baseline: ${route}\n` +
           `  A newly smoked route has no budget yet — ${WRITE_HINT}.`,
@@ -843,6 +855,9 @@ export const diffNetworkBaseline = (
       continue;
     }
 
+    if (changedRoutes.includes(route)) {
+      notices.push(`Changed scoped route ${route}: ${JSON.stringify(metrics)}`);
+    }
     pushNewRequestProblems({ route, entry, metrics, problems });
     pushWaterfallDepthProblems({ route, entry, metrics, problems });
     pushRequestCountProblems({ route, entry, metrics, problems });
@@ -859,7 +874,7 @@ export const diffNetworkBaseline = (
 
   if (requireAllRoutes) {
     for (const route of Object.keys(baseline)) {
-      if (!results.has(route)) {
+      if (!results.has(route) && !changedRoutes.includes(route)) {
         problems.push(
           `Stale network baseline entry (route not visited this run): ${route}\n` +
             `  The smoke route set is deterministic, so a baseline route that never\n` +
@@ -1050,6 +1065,28 @@ const writeNetworkBaseline = (baseline: NetworkBaseline) => {
   writeFileSync(BASELINE_PATH, `${JSON.stringify(baseline, null, 2)}\n`);
 };
 
+const readChangedRoutes = (): string[] => {
+  const file = path.join(
+    import.meta.dirname,
+    "..",
+    ".network-baseline-context.json",
+  );
+  if (!existsSync(file)) {
+    return [];
+  }
+  const parsed: unknown = JSON.parse(readFileSync(file, "utf-8"));
+  if (
+    !Array.isArray(parsed) ||
+    !parsed.every(
+      (route: unknown): route is string =>
+        typeof route === "string" && route.startsWith("/"),
+    )
+  ) {
+    throw new Error("Invalid network baseline comparison context");
+  }
+  return parsed;
+};
+
 export const assertNetworkBaseline = (
   results: Map<string, RouteNetworkMetrics>,
   options: DiffNetworkBaselineOptions = {},
@@ -1076,9 +1113,18 @@ export const assertNetworkBaseline = (
   const { problems, notices } = diffNetworkBaseline(
     readNetworkBaseline(),
     results,
-    options,
+    { ...options, changedRoutes: readChangedRoutes() },
   );
 
+  const summary = process.env["GITHUB_STEP_SUMMARY"];
+  if (summary) {
+    // Measurements contain route/request keys. Render inert fenced JSON so
+    // route names cannot inject markdown or mentions into the summary.
+    appendFileSync(
+      summary,
+      `\n### Network comparison\n\n\`\`\`json\n${JSON.stringify({ problems, notices }).replaceAll("`", "\\u0060")}\n\`\`\`\n`,
+    );
+  }
   for (const notice of notices) {
     console.log(`[network-baseline] ${notice}`);
   }
@@ -1093,8 +1139,13 @@ export const assertNetworkBaseline = (
 
 export const assertNetworkBaselineCoverage = (expectedRoutes: string[]) => {
   const baseline = readNetworkBaseline();
+  const changed = new Set(readChangedRoutes());
   expect(
-    baseline === null ? [] : Object.keys(baseline).toSorted(),
+    baseline === null
+      ? []
+      : Object.keys(baseline)
+          .filter((route) => !changed.has(route))
+          .toSorted(),
     `network baseline route keys in ${BASELINE_RELATIVE}`,
-  ).toEqual(expectedRoutes.toSorted());
+  ).toEqual(expectedRoutes.filter((route) => !changed.has(route)).toSorted());
 };

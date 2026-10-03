@@ -293,6 +293,53 @@ describe("a configured policy drives the crawl", () => {
     expect(result.value.nextCursor).toBe("y-1986:0");
   });
 
+  test("a rejected label keeps its listing quarantine and advances past good items", async () => {
+    const rows = [
+      {
+        id: 1,
+        courtType: "COMMON",
+        courtCases: [{ caseNumber: "I C 1/24" }],
+        textContent: "Good decision",
+      },
+      {
+        id: 2,
+        courtType: "COMMON",
+        courtCases: [{ caseNumber: "\\par broken" }],
+        textContent: "Rejected label",
+      },
+    ];
+    const originalFetch = globalThis.fetch;
+    restore = () => {
+      globalThis.fetch = originalFetch;
+    };
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      return new Response(
+        JSON.stringify(url.includes("/judgments/") ? {} : { items: rows }),
+        {
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    });
+    const page = (await plCourtsAdapter.fetchPage("offset:0", {})).unwrap();
+    expect(page.decisions).toHaveLength(2);
+    expect(page.nextCursor).toBe("offset:2");
+    const rejected = page.decisions.find(
+      ({ sourceDocumentId }) => sourceDocumentId === "2",
+    );
+    expect(rejected).toMatchObject({
+      isListingOnly: true,
+      metadata: {
+        listedOnlyReason: "item_build_failed",
+        plainTextFailureReason: "rtf-syntax",
+      },
+    });
+    expect(
+      page.decisions.find(({ sourceDocumentId }) => sourceDocumentId === "1")
+        ?.caseNumber === "I C 1/24",
+    ).toBe(true);
+  });
+
   test("a source that configures no walks is crawled the plain way", async () => {
     restore = answerWith({ items: [] });
 

@@ -38,6 +38,7 @@ const downloadFileName = (resultS3Key: string): string =>
 // at export-view.ts, so a caller with nothing to poll could never have
 // reached one.
 const config = {
+  accountAccess: "standard",
   description:
     "Read a report export's status. Completed downloads include a short-lived URL; workspace exports include the created document ID.",
   permissions: { workspace: ["read"] },

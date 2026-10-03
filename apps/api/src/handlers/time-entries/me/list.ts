@@ -110,6 +110,7 @@ const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
   "activityCode",
   // Invoice and split identifiers are internal billing links.
   "invoiceId",
+  "invoiceAttachment",
   "splitGroupId",
   // Timer stop and audit timestamps are not used by the day view.
   "timerStoppedAt",
