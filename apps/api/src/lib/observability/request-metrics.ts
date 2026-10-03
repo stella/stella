@@ -123,6 +123,51 @@ export const emitRequestDurationMetric = (
   );
 };
 
+export type OpenRouterTokenExchangeOutcome =
+  | "ok"
+  | "sts_error"
+  | "exchange_4xx"
+  | "exchange_429"
+  | "exchange_5xx"
+  | "timeout";
+
+export const emitOpenRouterTokenExchange = (
+  outcome: OpenRouterTokenExchangeOutcome,
+  policyId: string,
+): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["outcome"]],
+          Metrics: [{ Name: "OpenRouterTokenExchange", Unit: "Count" }],
+        },
+      ],
+    },
+    outcome,
+    federation_policy_id: policyId,
+    OpenRouterTokenExchange: 1,
+  });
+};
+
+export const emitManagedCredentialUnavailable = (): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [[]],
+          Metrics: [{ Name: "ManagedCredentialUnavailable", Unit: "Count" }],
+        },
+      ],
+    },
+    ManagedCredentialUnavailable: 1,
+  });
+};
+
 type FailureMetricInput = {
   /** A sink handle's label: a closed set, never a frame or an id. */
   sink: string;
