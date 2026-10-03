@@ -2434,6 +2434,24 @@ describe("stored decision identifier projection", () => {
     expect(citationKeyOf("347 U.S. 483")).not.toBeNull();
   });
 
+  test("gives a decision no key its citation_key column cannot hold", () => {
+    const caseNumber = `ABC123/${"x".repeat(140)}.pdf`;
+    expect(citationKeyOf(caseNumber)?.length).toBeGreaterThan(128);
+    expect(
+      decisionCitationKeyOf({
+        caseNumber,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      }),
+    ).toBeNull();
+    const fits = `ABC123/${"x".repeat(100)}`;
+    expect(
+      decisionCitationKeyOf({
+        caseNumber: fits,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      }),
+    ).toBe(citationKeyOf(fits));
+  });
+
   test("recovers publisher case-number aliases from stored metadata", () => {
     expect(
       decisionIdentifiersFromStoredMetadata({
