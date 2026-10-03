@@ -18,7 +18,7 @@ import { authClient } from "@/lib/auth-client";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   organizationKeys,
   organizationOptions,
@@ -63,13 +63,10 @@ export const OrganizationProfileCard = () => {
 
     if (result.error) {
       analytics.captureError(toAuthClientError(result.error));
-      stellaToast.add({
-        title: userErrorFromThrown(
-          toAuthClientError(result.error),
-          t("errors.actionFailed"),
-        ),
-        type: "error",
-      });
+      notifyUserError(
+        toAuthClientError(result.error),
+        t("errors.actionFailed"),
+      );
       throw toAuthClientError(result.error);
     }
 

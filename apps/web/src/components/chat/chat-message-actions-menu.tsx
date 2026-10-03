@@ -21,7 +21,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@stll/ui/menu";
-import { stellaToast } from "@stll/ui/toast";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
@@ -43,6 +42,7 @@ import {
   toChatThreadId,
 } from "@/lib/chat-thread-ref";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { formatContextualTimestamp } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -142,7 +142,7 @@ export const ChatMessageActionsMenu = ({
     onError: (error) => {
       sidePanelChat.fail();
       getAnalytics().captureError(error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 

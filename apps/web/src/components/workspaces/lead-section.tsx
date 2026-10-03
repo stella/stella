@@ -10,12 +10,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { UserIdentity } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
@@ -52,11 +52,8 @@ export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
         update: { type: "leadUserId", value },
       },
       {
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
