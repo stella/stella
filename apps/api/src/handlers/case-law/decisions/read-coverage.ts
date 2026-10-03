@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 
 import { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import { createSafeBoundedPublicHandler } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { preventPublicCaching } from "@/api/lib/security-headers";
@@ -15,7 +15,7 @@ const config = {
 } satisfies PublicHandlerConfig;
 
 /** The corpus's own coverage, every country in one answer. */
-const readCaseLawCoverage = createSafePublicHandler(
+const readCaseLawCoverage = createSafeBoundedPublicHandler(
   config,
   async function* ({ set }) {
     const response = yield* Result.await(

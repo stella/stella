@@ -9,7 +9,7 @@ import {
 } from "@/api/handlers/legislation/reader-response";
 import {
   safePublicHandlerResponseSchemasWithStatusText,
-  createSafePublicHandler,
+  createSafeBoundedPublicHandler,
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -114,7 +114,7 @@ export const readProvisionPreviewHandler = async ({
   return projectProvisionPreview(preview);
 };
 
-const readProvisionPreview = createSafePublicHandler(
+const readProvisionPreview = createSafeBoundedPublicHandler(
   config,
   async function* ({ params: { documentId, anchor }, query }) {
     const response = yield* Result.await(

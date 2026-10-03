@@ -60,7 +60,7 @@ import {
   attachDecisionProvisionPreviews,
   readDecisionDate,
 } from "@/api/handlers/case-law/provisions/previews-for-decision";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import { createSafeBoundedPublicHandler } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
@@ -70,7 +70,7 @@ import {
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
-const listDecisions = createSafePublicHandler(
+const listDecisions = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -87,7 +87,7 @@ const listDecisions = createSafePublicHandler(
   },
 );
 
-export const readStatuteCitationCounts = createSafePublicHandler(
+export const readStatuteCitationCounts = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -104,7 +104,7 @@ export const readStatuteCitationCounts = createSafePublicHandler(
   },
 );
 
-const listDecisionFacets = createSafePublicHandler(
+const listDecisionFacets = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -119,7 +119,7 @@ const listDecisionFacets = createSafePublicHandler(
   },
 );
 
-const listLatestDecisions = createSafePublicHandler(
+const listLatestDecisions = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -137,7 +137,7 @@ const listLatestDecisions = createSafePublicHandler(
   },
 );
 
-const readCaseLawCorpusStatus = createSafePublicHandler(
+const readCaseLawCorpusStatus = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -241,7 +241,7 @@ const listDecisionProvisions = createSafePublicSubjectFollowUpHandler({
 });
 
 /** Decisions citing a provision. */
-const listCitingDecisions = createSafePublicHandler(
+const listCitingDecisions = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -259,7 +259,7 @@ const listCitingDecisions = createSafePublicHandler(
   },
 );
 
-const searchDecisions = createSafePublicHandler(
+const searchDecisions = createSafeBoundedPublicHandler(
   {
     mcp: { type: "tool", name: "search_case_law" },
     cache: { kind: "none" },
@@ -278,7 +278,7 @@ const searchDecisions = createSafePublicHandler(
   },
 );
 
-const listSitemapShardDecisions = createSafePublicHandler(
+const listSitemapShardDecisions = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },
@@ -296,7 +296,7 @@ const listSitemapShardDecisions = createSafePublicHandler(
   },
 );
 
-const listSitemapShards = createSafePublicHandler(
+const listSitemapShards = createSafeBoundedPublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
     cache: { kind: "none" },

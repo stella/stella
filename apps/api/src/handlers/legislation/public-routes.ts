@@ -60,7 +60,7 @@ import {
   listStatuteVersionsQuerySchema,
 } from "@/api/handlers/legislation/versions";
 import {
-  createSafePublicHandler,
+  createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -68,7 +68,7 @@ import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { safePublicHandlerErrorOrStatusTextResponseSchema } from "@/api/lib/search/public-error-response";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
-const listStatutes = createSafePublicHandler(
+const listStatutes = createSafeBoundedPublicHandler(
   {
     response: safePublicHandlerResponseSchemasWithStatusText(
       listStatutesSuccessResponseSchema,
@@ -88,7 +88,7 @@ const listStatutes = createSafePublicHandler(
   },
 );
 
-const readLegislationShelf = createSafePublicHandler(
+const readLegislationShelf = createSafeBoundedPublicHandler(
   {
     response: safePublicHandlerResponseSchemasWithStatusText(
       legislationShelfSuccessResponseSchema,
@@ -109,7 +109,7 @@ const readLegislationShelf = createSafePublicHandler(
   },
 );
 
-const readLegislationFacets = createSafePublicHandler(
+const readLegislationFacets = createSafeBoundedPublicHandler(
   {
     response: safePublicHandlerResponseSchemasWithStatusText(
       legislationFacetsSuccessResponseSchema,
@@ -130,7 +130,7 @@ const readLegislationFacets = createSafePublicHandler(
   },
 );
 
-const readStatuteByEli = createSafePublicHandler(
+const readStatuteByEli = createSafeBoundedPublicHandler(
   {
     response: {
       ...safePublicHandlerResponseSchemasWithStatusText(
@@ -157,7 +157,7 @@ const readStatuteByEli = createSafePublicHandler(
   },
 );
 
-const resolveStatutes = createSafePublicHandler(
+const resolveStatutes = createSafeBoundedPublicHandler(
   {
     response: safePublicHandlerResponseSchemasWithStatusText(
       resolveStatutesSuccessResponseSchema,
@@ -179,7 +179,7 @@ const resolveStatutes = createSafePublicHandler(
   },
 );
 
-const readStatuteBySlug = createSafePublicHandler(
+const readStatuteBySlug = createSafeBoundedPublicHandler(
   {
     response: {
       ...safePublicHandlerResponseSchemasWithStatusText(
@@ -211,7 +211,7 @@ const readStatuteBySlug = createSafePublicHandler(
   },
 );
 
-const readStatute = createSafePublicHandler(
+const readStatute = createSafeBoundedPublicHandler(
   {
     response: safePublicHandlerResponseSchemasWithStatusText(
       statuteReaderSuccessResponseSchema,
@@ -235,7 +235,7 @@ const readStatute = createSafePublicHandler(
   },
 );
 
-const listStatuteVersions = createSafePublicHandler(
+const listStatuteVersions = createSafeBoundedPublicHandler(
   {
     response: safePublicHandlerResponseSchemasWithStatusText(
       statuteVersionsSuccessResponseSchema,
@@ -261,7 +261,7 @@ const listStatuteVersions = createSafePublicHandler(
   },
 );
 
-const readProvisionHistory = createSafePublicHandler(
+const readProvisionHistory = createSafeBoundedPublicHandler(
   {
     response: safePublicHandlerResponseSchemasWithStatusText(
       provisionHistorySuccessResponseSchema,
@@ -288,7 +288,7 @@ const readProvisionHistory = createSafePublicHandler(
   },
 );
 
-const listStatuteSitemapShards = createSafePublicHandler(
+const listStatuteSitemapShards = createSafeBoundedPublicHandler(
   {
     response: safePublicHandlerResponseSchemasWithStatusText(
       statuteSitemapShardsSuccessResponseSchema,
@@ -308,7 +308,7 @@ const listStatuteSitemapShards = createSafePublicHandler(
   },
 );
 
-const listStatuteSitemapStatutes = createSafePublicHandler(
+const listStatuteSitemapStatutes = createSafeBoundedPublicHandler(
   {
     response: safePublicHandlerResponseSchemasWithStatusText(
       statuteSitemapStatutesSuccessResponseSchema,
