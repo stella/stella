@@ -90,13 +90,11 @@ test("preserves committed deletion success when delivery telemetry fails", async
     await Promise.reject(new Error("redis unavailable"));
   });
 
-  expect(
-    handoffCommittedEntityDeletionCleanupBatch({
-      captureDeliveryError,
-      enqueueCleanup,
-      requestIds: [requestId],
-    }),
-  ).resolves.toBeUndefined();
+  await handoffCommittedEntityDeletionCleanupBatch({
+    captureDeliveryError,
+    enqueueCleanup,
+    requestIds: [requestId],
+  });
 
   expect(captureDeliveryError).toHaveBeenCalledTimes(1);
 });

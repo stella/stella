@@ -339,6 +339,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-focused-tests",
     "bun-test-hygiene/no-disabled-tests",
     "bun-test-hygiene/no-identical-title",
+    "bun-test-hygiene/no-promise-matchers",
     "bun-test-hygiene/no-unmanaged-database-client",
   ]),
   fixtureRuleOverride("no-untyped-updates.fixture.ts", [
@@ -1421,6 +1422,7 @@ export default defineConfig({
         "bun-test-hygiene/no-focused-tests": "error",
         "bun-test-hygiene/no-disabled-tests": "error",
         "bun-test-hygiene/no-identical-title": "error",
+        "bun-test-hygiene/no-promise-matchers": "error",
       },
     },
     {
