@@ -1,0 +1,48 @@
+import { expect, test } from "bun:test";
+
+import {
+  enumerateInterleavings,
+  withInterleaving,
+} from "./transaction-interleaving";
+
+test("enumeration contains every shuffle once and preserves both participant orders", () => {
+  const schedules = enumerateInterleavings(
+    ["read", "write", "commit"],
+    ["read", "write", "commit"],
+  );
+  expect(schedules).toHaveLength(20);
+  expect(new Set(schedules.map((schedule) => schedule.join(","))).size).toBe(
+    20,
+  );
+  for (const schedule of schedules) {
+    for (const actor of ["a", "b"] as const) {
+      expect(schedule.filter((token) => token.startsWith(`${actor}.`))).toEqual(
+        [`${actor}.read`, `${actor}.write`, `${actor}.commit`],
+      );
+    }
+  }
+  expect(enumerateInterleavings([], ["commit"])).toEqual([["b.commit"]]);
+});
+
+test("invalid and empty schedule selections fail before opening a database", async () => {
+  const options = {
+    databaseUrl: "postgres://invalid.test/unused",
+    a: { steps: [] },
+    b: { steps: [] },
+    reset: async () => {},
+    readState: async () => null,
+    invariant: () => {},
+  };
+  await expect(withInterleaving({ ...options, schedules: [] })).rejects.toThrow(
+    "Interleaving requires at least one schedule",
+  );
+  await expect(
+    withInterleaving({
+      ...options,
+      schedules: [["b.commit", "a.commit", "a.extra"]],
+    }),
+  ).rejects.toThrow("Schedule contains unexpected steps");
+  await expect(
+    withInterleaving({ ...options, schedules: [["a.commit", "a.commit"]] }),
+  ).rejects.toThrow("Schedule must contain every step");
+});
