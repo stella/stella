@@ -70,6 +70,7 @@ import {
 
 import {
   inlinesToPlainText,
+  visibleHtmlText,
   stripFurniturePrefix,
   stripInlinePrefix,
 } from "./shared-inlines";
@@ -242,6 +243,14 @@ const RTF_SKIPPED_DESTINATIONS = new Set([
   "colortbl",
   "datastore",
   "fonttbl",
+  "header",
+  "headerf",
+  "headerl",
+  "headerr",
+  "footer",
+  "footerf",
+  "footerl",
+  "footerr",
   "info",
   "latentstyles",
   "listoverridetable",
@@ -667,7 +676,7 @@ const extractLinesFromDocContent = ($: cheerio.CheerioAPI): ParsedLine[] => {
   const docContent = $(".DocContent");
   const container = docContent.length > 0 ? docContent : $("body");
 
-  const fullText = container.text().trim();
+  const fullText = visibleHtmlText(container).trim();
   if (!fullText) {
     return [];
   }
