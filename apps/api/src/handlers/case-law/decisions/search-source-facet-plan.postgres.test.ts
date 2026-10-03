@@ -156,7 +156,9 @@ describe.skipIf(!enabled)("bounded source facet plan (postgres)", () => {
           body: {
             country: "CZE",
             query: "facetword",
-            sourceId: sourceIds.at(0),
+            sourceId:
+              sourceIds.at(0) ??
+              panic("The source facet fixture has no source"),
           },
           configs: [
             {

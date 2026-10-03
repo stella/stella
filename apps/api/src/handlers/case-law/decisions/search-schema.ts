@@ -154,7 +154,9 @@ const sourceFacetBucketsSchema = t.Array(
       value: t.String(),
       label: nullableStringSchema,
       count: t.Integer({ minimum: 0 }),
-      countType: t.UnionEnum(Object.values(FACET_COUNT_TYPE)),
+      countType: t.Union(
+        Object.values(FACET_COUNT_TYPE).map((value) => t.Literal(value)),
+      ),
     },
     { additionalProperties: false },
   ),

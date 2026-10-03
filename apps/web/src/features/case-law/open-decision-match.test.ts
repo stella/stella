@@ -56,12 +56,18 @@ describe("decisionMatchToOpen", () => {
 });
 
 test("the selected source narrows both browse and ranked decision requests", () => {
+  const sourceId = "0194d94a-1122-7000-8000-123456789abc";
   for (const q of [undefined, "nájem"]) {
     expect(
       createDecisionFiltersFromSearch(
-        { country: "cz", sourceId: "cz-nss", q },
+        { country: "cz", sourceId, q },
         { excerpt: DEFAULT_SEARCH_EXCERPT },
       ),
-    ).toMatchObject({ country: "cz", sourceId: "cz-nss" });
+    ).toEqual({
+      country: "CZ",
+      sourceId,
+      excerpt: DEFAULT_SEARCH_EXCERPT,
+      ...(q === undefined ? {} : { search: q, sort: "relevance" }),
+    });
   }
 });
