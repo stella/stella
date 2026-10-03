@@ -450,3 +450,16 @@ describe("inline multi-paragraph injection splits the host paragraph", () => {
     }
   });
 });
+
+test("empty standalone rich values repair the sole table-cell paragraph", () => {
+  const xml = WRAP(
+    '<w:tbl><w:tr><w:tc><w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>{{clause}}</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
+  );
+  const result = patchXmlPart(xml, { clause: { paragraphs: [] } });
+  const doc = slimdom.parseXmlDocument(result.xml);
+  const cell = doc.getElementsByTagNameNS(W_NS, "tc").at(0);
+  expect(cell).toBeDefined();
+  expect(cell?.getElementsByTagNameNS(W_NS, "p").length).toBe(1);
+  expect(cell?.getElementsByTagNameNS(W_NS, "numPr").length).toBe(0);
+  expect(cell?.getElementsByTagNameNS(W_NS, "t").length).toBe(0);
+});

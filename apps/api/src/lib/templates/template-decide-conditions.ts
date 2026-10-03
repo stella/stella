@@ -17,6 +17,7 @@
 
 import { panic, Result } from "better-result";
 import type { Result as ResultType } from "better-result";
+import * as v from "valibot";
 
 import { evaluateCondition, resolvePath } from "@stll/template-conditions";
 
@@ -24,19 +25,23 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  clauseDirectiveContainer,
+  validateClauseBodyDirectives,
+} from "@/api/lib/clauses/clause-directives";
+import {
   CONDITION_DECISION_ID,
   conditionQuestion,
   conditionsState,
 } from "@/api/lib/docx/ai-condition-question";
 import { omitSourceBoundValues } from "@/api/lib/docx/ai-visible-values";
+import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
+import { discoverContainerFields } from "@/api/lib/docx/discover-template";
 import { isAiConditionField } from "@/api/lib/docx/resolve-ai-conditions";
-import type { FieldMeta } from "@/api/lib/docx/types";
+import { resolveClauseSlotSources } from "@/api/lib/docx/resolve-clause-slots";
+import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  discoverTemplateSource,
-  loadStoredTemplateSource,
-} from "@/api/lib/templates/template-fill-service";
+import { loadStoredTemplateSource } from "@/api/lib/templates/template-fill-service";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
 import type {
   Decision,
@@ -51,6 +56,11 @@ import type {
 
 /** The form asks between keystrokes; a slower answer is stale when it lands. */
 const DECIDE_CONDITIONS_TIMEOUT_MS = 10_000;
+const MAX_PREVIEW_CLAUSE_TEXT_LENGTH = 250_000;
+const MAX_PREVIEW_MANIFEST_CACHE_ENTRIES = 100;
+// Older rows have no cached targets. Cache their immutable template version,
+// never clause bodies: clause publications and link syncs remain visible.
+const previewManifestCache = new Map<string, TemplateManifest>();
 
 type TemplateConditionDecision =
   | {
@@ -75,8 +85,14 @@ export type TemplateConditionAnswer = {
   decision: TemplateConditionDecision;
 };
 
+export const templateConditionPreviewSchema = v.strictObject({
+  state: v.literal("incomplete"),
+  reason: v.picklist(["clause-limit", "text-limit"]),
+});
+
 export type TemplateConditionDecisions = {
   conditions: TemplateConditionAnswer[];
+  preview?: v.InferOutput<typeof templateConditionPreviewSchema> | undefined;
   /** The versioned model that answered; null when nothing was asked or could be. */
   model: string | null;
 };
@@ -223,20 +239,25 @@ export type TemplateDecideConditionsProps = {
 type DerivedManifestFieldsOptions = Pick<
   TemplateDecideConditionsProps,
   "templateId" | "organizationId" | "scopedDb"
->;
+> & { cacheKey: string };
 
 /**
  * The fields the document declares, read out of its file: what a row stored
  * before the manifest cache was written carries instead of a manifest. Fails
  * as the stored template's load does (gone, or its file refused by the scan).
  */
-const derivedManifestFields = async ({
+const derivedPreviewManifest = async ({
   templateId,
   organizationId,
   scopedDb,
+  cacheKey,
 }: DerivedManifestFieldsOptions): Promise<
-  ResultType<FieldMeta[], HandlerError<404 | 422 | 500 | 503>>
+  ResultType<TemplateManifest, HandlerError<404 | 422 | 500 | 503>>
 > => {
+  const cached = previewManifestCache.get(cacheKey);
+  if (cached !== undefined) {
+    return Result.ok(cached);
+  }
   const source = await loadStoredTemplateSource({
     templateId,
     organizationId,
@@ -245,12 +266,15 @@ const derivedManifestFields = async ({
   if (Result.isError(source)) {
     return Result.err(source.error);
   }
-  const { manifest } = await discoverTemplateSource({
-    source: source.value,
-    scopedDb,
-    organizationId,
-  });
-  return Result.ok(manifest.fields);
+  const manifest = await deriveManifestFromDocx(source.value.file);
+  if (previewManifestCache.size >= MAX_PREVIEW_MANIFEST_CACHE_ENTRIES) {
+    const oldest = previewManifestCache.keys().next().value;
+    if (oldest !== undefined) {
+      previewManifestCache.delete(oldest);
+    }
+  }
+  previewManifestCache.set(cacheKey, manifest);
+  return Result.ok(manifest);
 };
 
 /**
@@ -260,8 +284,9 @@ const derivedManifestFields = async ({
  *
  * The manifest column is the cache of reading the document that exists for
  * exactly this kind of read (see `derived-manifest.ts`), and the form asks on
- * every typing pause. The cache is reused when linked clauses contribute no
- * markers. Conditions from per-fill clause edits are not previewed: this
+ * every typing pause. Cached slots select only their resolved clause bodies;
+ * marker-free bodies require no DOCX or clause-container parse. Conditions
+ * from per-fill clause edits are not previewed: this
  * endpoint describes the stored template and its links only.
  */
 export const templateDecideConditionsLogic = async ({
@@ -285,35 +310,7 @@ export const templateDecideConditionsLogic = async ({
         id: { eq: templateId },
         organizationId: { eq: organizationId },
       },
-      columns: { manifest: true },
-      with: {
-        templateClauses: {
-          columns: { id: true },
-          with: {
-            clause: {
-              columns: { body: true },
-              where: { organizationId: { eq: organizationId } },
-              with: {
-                versions: {
-                  columns: { body: true },
-                  where: { organizationId: { eq: organizationId } },
-                  limit: LIMITS.clauseVersionsPerClause,
-                },
-              },
-            },
-            clauseVariant: {
-              columns: { body: true },
-              where: { organizationId: { eq: organizationId } },
-            },
-            clauseVersion: {
-              columns: { body: true },
-              where: { organizationId: { eq: organizationId } },
-            },
-          },
-          where: { organizationId: { eq: organizationId } },
-          limit: LIMITS.templateClausesPerTemplate,
-        },
-      },
+      columns: { manifest: true, currentVersion: true, s3Key: true },
     }),
   );
   if (!template) {
@@ -322,38 +319,73 @@ export const templateDecideConditionsLogic = async ({
     );
   }
 
-  let fields = template.manifest?.fields;
-  const clauseDeclarations = template.templateClauses.some((link) => {
-    const bodies = [
-      link.clause?.body,
-      link.clauseVariant?.body,
-      link.clauseVersion?.body,
-    ];
-    if (link.clause) {
-      for (const { body } of link.clause.versions) {
-        bodies.push(body);
-      }
-    }
-    return bodies.some((body) =>
-      body?.some((paragraph) => {
-        const text =
-          paragraph.runs?.map(({ text: runText }) => runText).join("") ??
-          paragraph.text;
-        return text.includes("{{") || text.includes("{%");
-      }),
-    );
-  });
-  if (fields === undefined || clauseDeclarations) {
-    const derived = await derivedManifestFields({
+  let manifest = template.manifest;
+  if (manifest === null || manifest.clauseSlots === undefined) {
+    const derived = await derivedPreviewManifest({
       templateId,
       organizationId,
       scopedDb,
+      cacheKey: `${organizationId}:${templateId}:${template.currentVersion}:${template.s3Key}`,
     });
     if (Result.isError(derived)) {
       return Result.err(derived.error);
     }
-    fields = derived.value;
+    manifest = derived.value;
   }
+  let fields = manifest.fields;
+  const slots =
+    manifest.clauseSlots ??
+    panic("Derived preview manifest is missing clause slots");
+  if (slots.length > LIMITS.templateClausesPerTemplate) {
+    return Result.ok({
+      conditions: [],
+      model: null,
+      preview: { state: "incomplete", reason: "clause-limit" },
+    });
+  }
+  const resolved = await resolveClauseSlotSources(
+    templateId,
+    slots,
+    scopedDb,
+    organizationId,
+  );
+  const clauseFields = new Map<string, FieldMeta>();
+  let textLength = 0;
+  for (const { body } of resolved.values()) {
+    for (const paragraph of body) {
+      textLength +=
+        paragraph.runs?.reduce((total, run) => total + run.text.length, 0) ??
+        paragraph.text.length;
+    }
+    if (textLength > MAX_PREVIEW_CLAUSE_TEXT_LENGTH) {
+      return Result.ok({
+        conditions: [],
+        model: null,
+        preview: { state: "incomplete", reason: "text-limit" },
+      });
+    }
+    if (
+      !body.some((paragraph) => {
+        const text =
+          paragraph.runs?.map(({ text: runText }) => runText).join("") ??
+          paragraph.text;
+        return text.includes("{{") || text.includes("{%");
+      }) ||
+      Result.isError(validateClauseBodyDirectives(body))
+    ) {
+      continue;
+    }
+    for (const field of discoverContainerFields(
+      clauseDirectiveContainer(body),
+    )) {
+      clauseFields.set(field.path, field);
+    }
+  }
+  // Clause declarations use the fill owner's precedence: template fields win.
+  for (const field of fields) {
+    clauseFields.set(field.path, field);
+  }
+  fields = [...clauseFields.values()];
 
   // A template with no AI-decided condition asks nothing, so it neither reads
   // the org's AI config nor reaches a model.

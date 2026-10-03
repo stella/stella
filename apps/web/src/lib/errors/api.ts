@@ -183,12 +183,13 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
         "name" in clause && typeof clause.name === "string"
           ? clause.name
           : clause.slotKey;
-      const clauseId =
-        "id" in clause && typeof clause.id === "string" ? clause.id : "";
-      return getTranslator()("errors.apiCodes.clauseDirectivesInvalidDetails", {
+      const key =
+        "resolution" in clause && clause.resolution === "override"
+          ? "errors.apiCodes.clauseDirectivesOverrideInvalidDetails"
+          : "errors.apiCodes.clauseDirectivesInvalidDetails";
+      return getTranslator()(key, {
         slotName: clause.slotKey,
         clauseName,
-        clauseId,
       });
     }
   }

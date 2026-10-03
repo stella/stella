@@ -1,5 +1,5 @@
-// Clause bodies must be checked before persistence; transport schemas only
-// validate their shape. Keep body writers at the operations that own this check.
+// Clause publication validates directives; draft and legacy writes retain their
+// owning operations so their explicit persistence policy cannot drift.
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
@@ -28,6 +28,11 @@ const UNOWNED_FIXTURE =
   ".oxlint-plugins/__fixtures__/no-unvalidated-clause-write.fixture.unowned.ts";
 const VALIDATOR_MODULE = "@/api/lib/clauses/clause-directives";
 const VALIDATOR_NAMES = new Set(["validateClauseBodyDirectives"]);
+const LEGACY_INSPECTOR_NAMES = new Set(["inspectLegacyClauseDirectives"]);
+const LEGACY_OWNER_PATHS = [
+  "apps/api/src/handlers/clauses/import.ts",
+  "apps/api/src/handlers/clauses/versions/restore.ts",
+] as const;
 const TABLE_NAMES = new Set(["clauses", "clauseVariants", "clauseVersions"]);
 const isSchemaModule = (specifier: string): boolean =>
   specifier === "@/api/db/schema" ||
@@ -81,9 +86,9 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           directWrite:
-            "Write clause bodies and snapshots through the clause create/update, variant, import, or version restore operations, which validate directives before saving.",
+            "Write clause bodies and snapshots through their owning clause operations, which enforce publication validation or legacy inspection.",
           missingValidation:
-            "Propagate validateClauseBodyDirectives with yield* in this owning operation before persisting a clause body or snapshot.",
+            "Propagate validateClauseBodyDirectives with yield* before publication, or inspect legacy directives in the import/restore owner before persistence.",
         },
         schema: [],
       },
@@ -180,11 +185,20 @@ export default eslintCompatPlugin({
           "ArrowFunctionExpression:exit": popScope,
           CallExpression(node) {
             const callee = unwrapExpression(node.callee);
-            if (isValidator(callee)) {
+            const isLegacyInspector =
+              LEGACY_OWNER_PATHS.some((owner) =>
+                filenameForContext(context).endsWith(owner),
+              ) &&
+              matchesImport({
+                identifier: callee,
+                specifierMatches: (specifier) => specifier === VALIDATOR_MODULE,
+                names: LEGACY_INSPECTOR_NAMES,
+              });
+            if (isValidator(callee) || isLegacyInspector) {
               const parent = unwrapExpression(node.parent);
               if (
-                parent?.type !== "YieldExpression" ||
-                parent.delegate !== true
+                !isLegacyInspector &&
+                (parent?.type !== "YieldExpression" || parent.delegate !== true)
               ) {
                 return;
               }

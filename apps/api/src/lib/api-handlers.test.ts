@@ -644,7 +644,7 @@ describe("a mapped status survives the transport wrapper", () => {
           retryable: false,
           message:
             "Clause Terms (cls_1) in slot @clause:Terms has invalid directives.",
-          hint: "Open the clause editor or call get_clause then save_clause.",
+          hint: "Use list_clauses with clause_id, then save_clause with snapshot_version=true.",
           clause,
           issues: [{ path: "body.2", message: "Paragraph 3: unclosed if" }],
         }),
@@ -656,7 +656,7 @@ describe("a mapped status survives the transport wrapper", () => {
         code: "clause_directives_invalid",
         retryable: false,
         clause,
-        hint: "Open the clause editor or call get_clause then save_clause.",
+        hint: "Use list_clauses with clause_id, then save_clause with snapshot_version=true.",
         issues: [{ path: "body.2", message: "Paragraph 3: unclosed if" }],
       },
     });

@@ -389,7 +389,7 @@ describe("templateDecideConditionsLogic access", () => {
         templates: {
           findFirst: async () =>
             await Promise.resolve({
-              manifest: { fields },
+              manifest: { fields, clauseSlots: [] },
               templateClauses: [],
             }),
         },
@@ -453,7 +453,7 @@ test("linked clauses without markers reuse the cached condition manifest", async
             );
           }
           return {
-            manifest: { fields },
+            manifest: { fields, clauseSlots: [] },
             templateClauses: [
               {
                 id: "link",
@@ -481,4 +481,131 @@ test("linked clauses without markers reuse the cached condition manifest", async
     { state: "decided", decidedBy: "user", value: false },
   ]);
   expect(reads).toBe(1);
+});
+
+for (const resolution of [
+  "pinned",
+  "latest",
+  "explicit",
+  "variant",
+  "text-limit",
+] as const) {
+  test(`condition preview reads the ${resolution} slot body without loading template bytes`, async () => {
+    const clauseId = toSafeId<"clause">("cls_preview");
+    const versionId = toSafeId<"clauseVersion">("clsv_preview");
+    const variantId = toSafeId<"clauseVariant">("clsvr_preview");
+    const slot = {
+      name: "Terms",
+      patchKey: "@clause:Terms",
+      versionModifier: {
+        pinned: undefined,
+        latest: "latest",
+        explicit: "v2",
+        variant: undefined,
+        "text-limit": undefined,
+      }[resolution],
+    };
+    const body = [
+      { text: '{% if applicable | checkbox | ai("Does this apply?") %}' },
+      { text: resolution === "text-limit" ? "Terms".repeat(50_001) : "Terms" },
+      { text: "{% endif %}" },
+    ];
+    let templateReads = 0;
+    let versionReads = 0;
+    const { scopedDb } = createScopedDbMock({
+      query: {
+        templates: {
+          findFirst: async () => {
+            templateReads++;
+            return { manifest: { fields: [], clauseSlots: [slot] } };
+          },
+        },
+        templateClauses: {
+          findMany: async () => [
+            {
+              slotName: "Terms",
+              clauseId,
+              clauseVariantId: resolution === "variant" ? variantId : null,
+              clauseVariantLabel:
+                resolution === "variant" ? "Alternative" : null,
+              clauseVersionId: versionId,
+              clause: { id: clauseId, title: "Terms" },
+            },
+          ],
+        },
+        clauses: {
+          findMany: async () => [{ id: clauseId, currentVersion: 2 }],
+        },
+        clauseVariants: { findMany: async () => [{ id: variantId, body }] },
+      },
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => {
+              versionReads++;
+              return [{ id: versionId, clauseId, version: 2, body }];
+            },
+          }),
+        }),
+      }),
+    });
+    const result = await templateDecideConditionsLogic({
+      scopedDb,
+      templateId: toSafeId<"template">("tmpl_preview"),
+      organizationId: toSafeId<"organization">("org_preview"),
+      body: { values: { applicable: true } },
+      orgAIConfig: null,
+      client: null,
+      abortSignal: new AbortController().signal,
+    });
+    if (resolution === "text-limit") {
+      expect(result.unwrap()).toEqual({
+        conditions: [],
+        model: null,
+        preview: { state: "incomplete", reason: "text-limit" },
+      });
+    } else {
+      expect(result.unwrap().conditions).toEqual([
+        {
+          path: "applicable",
+          label: "applicable",
+          decision: { state: "decided", decidedBy: "user", value: true },
+        },
+      ]);
+    }
+    expect(templateReads).toBe(1);
+    expect(versionReads).toBe(resolution === "variant" ? 0 : 1);
+  });
+}
+
+test("condition preview reports an incomplete state before reading an excessive slot set", async () => {
+  const { scopedDb } = createScopedDbMock({
+    query: {
+      templates: {
+        findFirst: async () => ({
+          manifest: {
+            fields: [],
+            clauseSlots: Array.from({ length: 51 }, (_, i) => ({
+              name: `Slot${i}`,
+              patchKey: `@clause:Slot${i}`,
+            })),
+          },
+        }),
+      },
+    },
+  });
+  const result = await templateDecideConditionsLogic({
+    scopedDb,
+    templateId: toSafeId<"template">("tmpl_preview"),
+    organizationId: toSafeId<"organization">("org_preview"),
+    body: { values: {} },
+    orgAIConfig: null,
+    client: null,
+    abortSignal: new AbortController().signal,
+  });
+  expect(result.unwrap()).toEqual({
+    conditions: [],
+    model: null,
+    preview: { state: "incomplete", reason: "clause-limit" },
+  });
 });

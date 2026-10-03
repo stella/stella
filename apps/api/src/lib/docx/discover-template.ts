@@ -31,6 +31,8 @@ import { isLookupFormatKey } from "@/api/lib/docx/types";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
+import { collectClauseSlots } from "./discover-clause-slots";
+import type { ClauseSlot } from "./discover-clause-slots";
 import { scanPlaceholders } from "./discover-placeholders";
 import {
   arrayFieldFromFilters,
@@ -998,6 +1000,7 @@ const mergeAnalysis = (
  */
 const analyzeHeadersAndFooters = async (
   zip: JSZip,
+  slots: Map<string, ClauseSlot>,
 ): Promise<AnalysisResult> => {
   const result: AnalysisResult = {
     fields: new Map(),
@@ -1038,6 +1041,7 @@ const analyzeHeadersAndFooters = async (
       continue;
     }
 
+    collectClauseSlots(container, slots);
     const source = hdr ? "header" : "footer";
     const offset = source === "header" ? headerParaCount : footerParaCount;
     // Count before analysis: normalizing a row-form marker adds a paragraph of
@@ -1075,6 +1079,7 @@ export const discoverTemplate = async (
 ): Promise<DiscoveredTemplate> => {
   const zip = await loadDocx(file.bytes);
   const emptyResult: DiscoveredTemplate = {
+    clauseSlots: [],
     placeholders: [],
     fields: [],
     structureErrors: [],
@@ -1097,6 +1102,8 @@ export const discoverTemplate = async (
     return emptyResult;
   }
 
+  const slots = new Map<string, ClauseSlot>();
+  collectClauseSlots(body, slots);
   const primary = analyzeContainer(body);
 
   // Tag body errors with their source
@@ -1127,7 +1134,7 @@ export const discoverTemplate = async (
   }
 
   // Scan headers and footers for additional fields
-  const hfAnalysis = await analyzeHeadersAndFooters(zip);
+  const hfAnalysis = await analyzeHeadersAndFooters(zip, slots);
   mergeAnalysis(primary, hfAnalysis);
 
   const { fields, errors, placeholderCounts, fieldConditions } = primary;
@@ -1187,6 +1194,7 @@ export const discoverTemplate = async (
   discoveredFields.sort((a, b) => compareCodeUnit(a.path, b.path));
 
   return {
+    clauseSlots: [...slots.values()],
     clauseFieldPaths: [...clauseFieldPaths],
     placeholders,
     fields: discoveredFields,
@@ -1304,4 +1312,29 @@ const documentLayerFields = ({
     }
   }
   return foldItemCountConstraints(fields, arrayPaths).fields;
+};
+
+/** Read clause declarations using the same discovery engine as a full fill. */
+export const discoverContainerFields = (
+  container: slimdom.Element,
+): FieldMeta[] => {
+  const analysis = analyzeContainer(container);
+  const fields = documentLayerFields({
+    arrayPaths: new Set(
+      [...analysis.fields]
+        .filter(([, field]) => field.kind === "array")
+        .map(([path]) => path),
+    ),
+    declarations: analysis.documentFilters,
+    errors: analysis.errors,
+  });
+  for (const field of fields) {
+    if (
+      analysis.fields.get(field.path)?.kind === "boolean" &&
+      field.inputType === undefined
+    ) {
+      field.inputType = "boolean";
+    }
+  }
+  return fields;
 };

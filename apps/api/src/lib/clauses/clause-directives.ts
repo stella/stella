@@ -1,5 +1,6 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as slimdom from "slimdom";
+import * as v from "valibot";
 
 import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
 import {
@@ -58,6 +59,7 @@ export const clauseDirectiveContainer = (body: ClauseBody): slimdom.Element => {
 /** Validate the complete authored tree before evaluating any branch or loop. */
 export const validateClauseBodyDirectives = (
   body: ClauseBody,
+  context?: { name: string } | undefined,
 ): Result<void, HandlerError<422>> => {
   const container = clauseDirectiveContainer(body);
   const directives = scanBlockDirectives(container);
@@ -134,7 +136,7 @@ export const validateClauseBodyDirectives = (
       status: 422,
       code: CLAUSE_DIRECTIVES_INVALID_CODE,
       retryable: false,
-      message: `Clause paragraph ${(issues.at(0)?.paragraphIndex ?? 0) + 1} has invalid directives.`,
+      message: `${context === undefined ? "" : `${context.name}: `}Clause paragraph ${(issues.at(0)?.paragraphIndex ?? 0) + 1} has invalid directives.`,
       hint: "Correct the named paragraphs in the clause editor or call save_clause with balanced literal {% ... %} tags. Put num(), ref(), nested clause(), and ai(adapt=true) markers in the template body.",
       issues: issues.map(({ paragraphIndex, message }) => ({
         path: `body.${paragraphIndex}`,
@@ -142,4 +144,43 @@ export const validateClauseBodyDirectives = (
       })),
     }),
   );
+};
+
+export const clauseDirectiveWarningSchema = v.strictObject({
+  code: v.literal("CLAUSE_LEGACY_DIRECTIVES"),
+  clauseName: v.string(),
+  version: v.nullable(v.pipe(v.number(), v.integer())),
+  clauseId: v.optional(v.string()),
+  slotKey: v.optional(v.string()),
+  hint: v.optional(v.string()),
+  message: v.string(),
+  issues: v.array(v.strictObject({ path: v.string(), message: v.string() })),
+});
+
+export type ClauseDirectiveWarning = v.InferOutput<
+  typeof clauseDirectiveWarningSchema
+>;
+
+type LegacyClauseIdentity = Pick<
+  ClauseDirectiveWarning,
+  "clauseName" | "version" | "clauseId" | "slotKey" | "hint"
+>;
+
+/** Historical content remains readable; only new publication is refused. */
+export const inspectLegacyClauseDirectives = (
+  body: ClauseBody,
+  identity: LegacyClauseIdentity,
+): ClauseDirectiveWarning | undefined => {
+  const validation = validateClauseBodyDirectives(body);
+  if (Result.isOk(validation)) {
+    return undefined;
+  }
+  return {
+    code: "CLAUSE_LEGACY_DIRECTIVES",
+    ...identity,
+    message: `Clause ${identity.clauseName}${identity.version === null ? "" : ` version ${identity.version}`} retains literal legacy directive markers.`,
+    issues:
+      validation.error.issues ??
+      panic("Clause directive validation omitted issues"),
+  };
 };

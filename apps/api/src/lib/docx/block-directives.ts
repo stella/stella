@@ -74,6 +74,7 @@ import {
   numPattern,
   refPattern,
   resolvePath,
+  markerPattern,
 } from "@stll/template-conditions";
 import type { LoopProperty, NamedCondition } from "@stll/template-conditions";
 import { escapeRegExp } from "@stll/text-normalize";
@@ -1614,6 +1615,40 @@ type RewriteEachPlaceholdersOptions = {
   shadowedAliases?: ReadonlySet<string>;
 };
 
+/** Inline loop aliases bind after the opener and end at their own closer. */
+const inlineLoopScopes = (text: string) => {
+  const aliases: (string | null)[] = [];
+  const scopes: { offset: number; aliases: ReadonlySet<string> }[] = [];
+  for (const span of text.matchAll(markerPattern())) {
+    const statement = span.groups?.["statement"];
+    if (statement === undefined) {
+      continue;
+    }
+    const inner = statement.trim();
+    const marker = classifyMarker(inner, "statement");
+    if (marker?.kind === "for" || /^for(?:\s|$)/u.test(inner)) {
+      aliases.push(marker?.kind === "for" ? marker.alias : null);
+    } else if (marker?.kind === "endfor") {
+      aliases.pop();
+    } else {
+      continue;
+    }
+    scopes.push({
+      offset: span.index + span[0].length,
+      aliases: new Set(aliases.filter((alias) => alias !== null)),
+    });
+  }
+  return scopes;
+};
+
+const isInlineAliasBound = (
+  scopes: ReturnType<typeof inlineLoopScopes>,
+  offset: number,
+  alias: string,
+) =>
+  scopes.findLast((scope) => scope.offset <= offset)?.aliases.has(alias) ??
+  false;
+
 const eachPlaceholderRanges = (
   text: string,
   {
@@ -1635,17 +1670,25 @@ const eachPlaceholderRanges = (
     `\\{\\{\\s*(?:${heads})\\.(?<field>[.\\p{L}\\p{N}_-]+)\\s*(?:\\|${MARKER_OUTPUT_BODY})?\\}\\}`,
     "gu",
   );
-  return [...text.matchAll(re)].map((match) => {
-    const field = match.groups?.["field"];
-    if (field === undefined) {
-      return panic("Loop placeholder matched without a field");
-    }
-    return {
-      start: match.index,
-      end: match.index + match[0].length,
-      value: `{{${eachKey(loopIdentity, index, field)}}}`,
-    };
-  });
+  const scopes = inlineLoopScopes(text);
+  return [...text.matchAll(re)]
+    .filter((match) => {
+      const head = match[0].slice(2).trimStart().split(".").at(0);
+      return (
+        head !== undefined && !isInlineAliasBound(scopes, match.index, head)
+      );
+    })
+    .map((match) => {
+      const field = match.groups?.["field"];
+      if (field === undefined) {
+        return panic("Loop placeholder matched without a field");
+      }
+      return {
+        start: match.index,
+        end: match.index + match[0].length,
+        value: `{{${eachKey(loopIdentity, index, field)}}}`,
+      };
+    });
 };
 
 const rewriteEachPlaceholdersWithIdentity = (
@@ -1669,7 +1712,7 @@ const visitNestedLoopScopes = (
     nestedAliases: ReadonlySet<string>,
   ) => void,
 ): void => {
-  const nestedAliases: string[] = [];
+  const nestedAliases: (string | null)[] = [];
   for (const paragraph of paragraphs) {
     const directive = DIRECTIVE_RE.exec(paragraphSpanText(paragraph));
     const tag = directive?.groups?.["tag"];
@@ -1679,13 +1722,47 @@ const visitNestedLoopScopes = (
         ? null
         : classifyMarker(`${tag} ${expression}`, "statement");
     // A loop's source belongs to its enclosing scope, before its alias binds.
-    visit(paragraph, new Set(nestedAliases));
-    if (marker?.kind === "for") {
-      nestedAliases.push(marker.alias);
+    visit(paragraph, new Set(nestedAliases.filter((alias) => alias !== null)));
+    if (marker?.kind === "for" || tag === "for") {
+      nestedAliases.push(marker?.kind === "for" ? marker.alias : null);
     }
     if (marker?.kind === "endfor") {
       nestedAliases.pop();
     }
+  }
+};
+
+/** Keep authored runs intact when a scoped replacement fits in one text node. */
+const replaceScopedParagraphRanges = (
+  paragraph: slimdom.Element,
+  ranges: readonly { start: number; end: number; value: string }[],
+): void => {
+  let offset = 0;
+  const spans = [...paragraph.getElementsByTagNameNS(W_NS, "t")].map((node) => {
+    const text = node.textContent ?? "";
+    const start = offset;
+    offset += text.length;
+    return { node, text, start, end: offset };
+  });
+  if (
+    !ranges.every((range) =>
+      spans.some((span) => range.start >= span.start && range.end <= span.end),
+    )
+  ) {
+    replaceParagraphTextRanges(paragraph, ranges);
+    return;
+  }
+  for (const span of spans) {
+    let text = "";
+    let cursor = 0;
+    for (const range of ranges) {
+      if (range.start < span.start || range.end > span.end) {
+        continue;
+      }
+      text += span.text.slice(cursor, range.start - span.start) + range.value;
+      cursor = range.end - span.start;
+    }
+    span.node.textContent = text + span.text.slice(cursor);
   }
 };
 
@@ -1701,27 +1778,7 @@ const rewriteEachPlaceholders = (
       shadowedAliases: nestedAliases,
     };
     const ranges = eachPlaceholderRanges(text, scopedOptions);
-    let offset = 0;
-    const spans = [...paragraph.getElementsByTagNameNS(W_NS, "t")].map(
-      (node) => {
-        const start = offset;
-        offset += (node.textContent ?? "").length;
-        return { start, end: offset };
-      },
-    );
-    if (
-      ranges.every((range) =>
-        spans.some(
-          (span) => range.start >= span.start && range.end <= span.end,
-        ),
-      )
-    ) {
-      rewriteTextNodes(paragraph, (part) =>
-        rewriteEachPlaceholdersWithIdentity(part, scopedOptions),
-      );
-    } else {
-      replaceParagraphTextRanges(paragraph, ranges);
-    }
+    replaceScopedParagraphRanges(paragraph, ranges);
   });
 };
 
@@ -1751,41 +1808,28 @@ const rewriteNestedEachExpr = (
       `(\\{%(?:tr|p)?\\s*for\\s+[\\p{L}_][\\p{L}\\p{N}_-]*\\s+in\\s+)(?:${heads})\\.([.\\p{L}\\p{N}_-]+)((?:\\s*\\|${MARKER_STATEMENT_BODY})?\\s*%\\})`,
       "gu",
     );
-    const ranges = [...paragraphSpanText(paragraph).matchAll(re)].map(
-      (match) => ({
+    const text = paragraphSpanText(paragraph);
+    const scopes = inlineLoopScopes(text);
+    const ranges = [...text.matchAll(re)]
+      .filter((match) => {
+        const sourceHead = match[0]
+          .slice((match[1] ?? "").length)
+          .split(".")
+          .at(0);
+        return (
+          sourceHead !== undefined &&
+          !isInlineAliasBound(scopes, match.index, sourceHead)
+        );
+      })
+      .map((match) => ({
         start: match.index,
         end: match.index + match[0].length,
         value: `${match[1] ?? panic("Nested loop source matched without an opener")}${eachKey(loopIdentity, index, match[2] ?? panic("Nested loop source matched without a path"))}${match[3] ?? panic("Nested loop source matched without a closer")}`,
-      }),
-    );
+      }));
     if (ranges.length === 0) {
       return;
     }
-    let offset = 0;
-    const spans = [...paragraph.getElementsByTagNameNS(W_NS, "t")].map(
-      (node) => {
-        const start = offset;
-        offset += (node.textContent ?? "").length;
-        return { start, end: offset };
-      },
-    );
-    if (
-      ranges.every((range) =>
-        spans.some(
-          (span) => range.start >= span.start && range.end <= span.end,
-        ),
-      )
-    ) {
-      rewriteTextNodes(paragraph, (text) =>
-        text.replace(
-          re,
-          (_match, prefix: string, field: string, suffix: string) =>
-            `${prefix}${eachKey(loopIdentity, index, field)}${suffix}`,
-        ),
-      );
-      return;
-    }
-    replaceParagraphTextRanges(paragraph, ranges);
+    replaceScopedParagraphRanges(paragraph, ranges);
   });
 };
 
@@ -1798,8 +1842,8 @@ const rewriteIterationTokens = (
   index: number,
   count: number,
 ): void => {
-  rewriteTextNodes(paragraph, (text) =>
-    rewriteIterationTokensInText(text, index, count),
+  rewriteTextNodes(paragraph, (partText) =>
+    rewriteIterationTokensInText(partText, index, count),
   );
 };
 
@@ -1959,8 +2003,8 @@ const scopeNumberingMarkers = (
   paragraph: slimdom.Element,
   options: ScopeNumberingOptions,
 ): void => {
-  rewriteTextNodes(paragraph, (text) =>
-    scopeIterationNumberingInText(text, options),
+  rewriteTextNodes(paragraph, (partText) =>
+    scopeIterationNumberingInText(partText, options),
   );
 };
 

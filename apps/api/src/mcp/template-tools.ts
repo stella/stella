@@ -24,6 +24,7 @@ import {
   LIST_TEMPLATES_PROJECTION,
   type TEMPLATE_DESCRIBE_PROJECTION,
 } from "@/api/lib/chat/projections";
+import { clauseDirectiveWarningSchema } from "@/api/lib/clauses/clause-directives";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -68,7 +69,10 @@ import {
 } from "@/api/lib/templates/record-use";
 import { renameStoredTemplate } from "@/api/lib/templates/rename-template";
 import { containsNull } from "@/api/lib/templates/template-data";
-import { templateDecideConditionsLogic } from "@/api/lib/templates/template-decide-conditions";
+import {
+  templateConditionPreviewSchema,
+  templateDecideConditionsLogic,
+} from "@/api/lib/templates/template-decide-conditions";
 import type { TemplateFillCompletionMode } from "@/api/lib/templates/template-fill-completion";
 import {
   decideTemplateFillCompletion,
@@ -1089,6 +1093,7 @@ const FILL_TEMPLATE_OUTPUT_SCHEMA = v.union([
     docxBase64: v.string(),
     unmatchedPlaceholders: v.array(v.string()),
     unusedValues: v.array(v.string()),
+    clauseWarnings: v.array(clauseDirectiveWarningSchema),
     structureErrors: v.array(TEMPLATE_STRUCTURE_ERROR_OUTPUT_SCHEMA),
     aiFieldErrors: v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA),
     decisions: v.array(TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA),
@@ -1102,6 +1107,7 @@ const FILL_TEMPLATE_OUTPUT_SCHEMA = v.union([
     truncated: v.boolean(),
     unmatchedPlaceholders: v.array(v.string()),
     unusedValues: v.array(v.string()),
+    clauseWarnings: v.array(clauseDirectiveWarningSchema),
     structureErrors: v.array(TEMPLATE_STRUCTURE_ERROR_OUTPUT_SCHEMA),
     aiFieldErrors: v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA),
     decisions: v.array(TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA),
@@ -1112,6 +1118,7 @@ const FILL_TEMPLATE_OUTPUT_SCHEMA = v.union([
  *  condition, in the shape `fill_template` reports its own decisions in, plus
  *  the versioned model that answered (null when none could). */
 const PREVIEW_TEMPLATE_CONDITIONS_OUTPUT_SCHEMA = v.strictObject({
+  preview: v.optional(templateConditionPreviewSchema),
   conditions: v.array(TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA),
   model: v.nullable(v.string()),
 });
@@ -1124,6 +1131,7 @@ const SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA = v.variant("action", [
     fileName: v.string(),
     unmatchedPlaceholders: v.array(v.string()),
     unusedValues: v.array(v.string()),
+    clauseWarnings: v.optional(v.array(clauseDirectiveWarningSchema)),
     aiFieldErrors: v.optional(v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA)),
   }),
   v.strictObject({
@@ -1133,6 +1141,7 @@ const SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA = v.variant("action", [
     fileName: v.string(),
     unmatchedPlaceholders: v.array(v.string()),
     unusedValues: v.array(v.string()),
+    clauseWarnings: v.optional(v.array(clauseDirectiveWarningSchema)),
     aiFieldErrors: v.optional(v.array(TEMPLATE_AI_FIELD_ERROR_OUTPUT_SCHEMA)),
     versionNumber: v.pipe(v.number(), v.integer()),
   }),
@@ -1439,6 +1448,7 @@ const handleFillTemplateTool: McpToolHandler<
       docxBase64: Buffer.from(filled.file.bytes).toString("base64"),
       unmatchedPlaceholders: filled.unmatchedPlaceholders,
       unusedValues: filled.unusedValues,
+      clauseWarnings: filled.clauseWarnings,
       structureErrors: filled.structureErrors,
       aiFieldErrors: filled.aiFieldErrors.map((error) => ({
         field: error.valuePath,
@@ -1481,6 +1491,7 @@ const handleFillTemplateTool: McpToolHandler<
     truncated,
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
     unusedValues: filled.unusedValues,
+    clauseWarnings: filled.clauseWarnings,
     structureErrors: filled.structureErrors,
     // Fields whose AI draft failed: they are unfilled in the document above,
     // so an agent must supply them itself rather than treat the fill as done.
@@ -1943,6 +1954,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
               fileName: persisted.fileName,
               unmatchedPlaceholders: filled.unmatchedPlaceholders,
               unusedValues: filled.unusedValues,
+              clauseWarnings: filled.clauseWarnings,
               ...(aiFieldErrors.length === 0 ? {} : { aiFieldErrors }),
             };
             await recordPersistedFill(tx, result);
@@ -1984,6 +1996,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
             fileName,
             unmatchedPlaceholders: filled.unmatchedPlaceholders,
             unusedValues: filled.unusedValues,
+            clauseWarnings: filled.clauseWarnings,
             ...(aiFieldErrors.length === 0 ? {} : { aiFieldErrors }),
             versionNumber: persisted.versionNumber,
           };
@@ -2922,6 +2935,7 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
   const payload = {
     conditions: decided.value.conditions.map(toPreviewConditionDecision),
     model: decided.value.model,
+    preview: decided.value.preview,
   };
   const textFields = runTextFieldSpecs(
     buildPreviewConditionsTextFieldSpecs(context.organizationId),

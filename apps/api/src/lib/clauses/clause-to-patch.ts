@@ -145,24 +145,27 @@ export const discoverTemplateWithClauses = async ({
 }: DiscoverTemplateWithClausesOptions) =>
   discoverTemplate(
     file,
-    Object.entries(bodies).map(([slotKey, body]) => ({
-      container: clauseDirectiveContainer(body),
-      clause:
-        clauses[slotKey] ?? panic(`Missing clause provenance for ${slotKey}`),
-    })),
+    Object.entries(bodies)
+      .filter(([, body]) => Result.isOk(validateClauseBodyDirectives(body)))
+      .map(([slotKey, body]) => ({
+        container: clauseDirectiveContainer(body),
+        clause:
+          clauses[slotKey] ?? panic(`Missing clause provenance for ${slotKey}`),
+      })),
   );
 
 export type ClauseFillContext = {
   values: TemplateData;
   slotKey: string;
   namedConditions?: NamedCondition[] | undefined;
+  source?: "stored" | "authored" | undefined;
 };
 
 /** Resolve the stored body with the template engine before list labels or rich
  * patches are constructed. Synthetic loop keys stay local to this clause. */
 export const clauseBodyToRichPatch = (
   body: ClauseBody,
-  { values, slotKey, namedConditions }: ClauseFillContext,
+  { values, slotKey, namedConditions, source }: ClauseFillContext,
 ): Result<RichPatchValue, HandlerError<422>> => {
   const structureError = (
     errors: { message: string; paragraphIndex: number; directive: string }[],
@@ -182,7 +185,9 @@ export const clauseBodyToRichPatch = (
 
   const validation = validateClauseBodyDirectives(body);
   if (Result.isError(validation)) {
-    return Result.err(validation.error);
+    return source === "stored"
+      ? Result.ok(resolvedBodyToRichPatch(body))
+      : Result.err(validation.error);
   }
   if (
     !body.some((paragraph) => {

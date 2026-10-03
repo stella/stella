@@ -25,6 +25,7 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
   describeStoredTemplate,
@@ -32,6 +33,7 @@ import {
   fillTemplateDocx,
   fillTemplateDocxStrict,
   discoverTemplateSource,
+  clauseDirectiveRecoveryHint,
 } from "./template-fill-service";
 
 // ── DOCX fixture helpers (mirrors patch-template.test.ts / templates.test.ts:
@@ -1181,6 +1183,9 @@ describe("clause and template directive parity", () => {
     }
     const actualZip = await JSZip.loadAsync(result.file.bytes);
     const expectedZip = await JSZip.loadAsync(direct.file.bytes);
+    expect(Object.keys(actualZip.files).toSorted()).toEqual(
+      Object.keys(expectedZip.files).toSorted(),
+    );
     for (const path of Object.keys(expectedZip.files).filter((partName) =>
       partName.endsWith(".xml"),
     )) {
@@ -1203,36 +1208,37 @@ describe("clause and template directive parity", () => {
     { body: [clauseDirective("{% if x %}"), clauseDirective("{% endfor %}")] },
     { body: [clauseDirective("invalid")] },
   ])(
-    "rejects malformed stored and adjusted clauses without producing a file: %j",
+    "retains malformed stored clauses literally and refuses malformed per-fill overrides: %j",
     async ({ body }) => {
-      for (const result of [
-        await fillLinkedClause([...body], {}),
-        await fillLinkedClause(
-          [{ text: "Stored" }],
-          {},
-          { override: [...body] },
-        ),
-      ]) {
-        expect(result).not.toHaveProperty("file");
-        if (!("error" in result)) {
-          panic("expected clause rejection");
-        }
-        expect(result.storedTemplateError).toBeInstanceOf(HandlerError);
-        expect(result.storedTemplateError?.status).toBe(422);
-        expect(result.storedTemplateError?.code).toBe(
-          "clause_directives_invalid",
-        );
-        expect(result.storedTemplateError?.retryable).toBe(false);
-        expect(result.error).toContain("@clause:Terms");
-        expect(result.error).toContain("cls_1");
-        expect(result.storedTemplateError?.clause).toEqual({
-          slotKey: "@clause:Terms",
-          id: "cls_1",
-          name: "Terms",
-        });
-        expect(result.storedTemplateError?.hint).toContain("save_clause");
-        expect(result.storedTemplateError?.hint).toContain("cls_1");
+      const stored = await fillLinkedClause([...body], {});
+      expect(await filledTexts(stored)).toEqual(body.map(({ text }) => text));
+      if (!("file" in stored)) {
+        panic("expected legacy fill");
       }
+      expect(stored.clauseWarnings).toMatchObject([
+        {
+          code: "CLAUSE_LEGACY_DIRECTIVES",
+          clauseName: "Terms",
+          version: 1,
+          slotKey: "@clause:Terms",
+        },
+      ]);
+      const result = await fillLinkedClause(
+        [{ text: "Stored" }],
+        {},
+        { override: [...body] },
+      );
+      expect(result).not.toHaveProperty("file");
+      if (!("error" in result)) {
+        panic("expected clause rejection");
+      }
+      expect(result.storedTemplateError).toBeInstanceOf(HandlerError);
+      expect(result.storedTemplateError?.status).toBe(422);
+      expect(result.storedTemplateError?.code).toBe(
+        "clause_directives_invalid",
+      );
+      expect(result.storedTemplateError?.retryable).toBe(false);
+      expect(result.storedTemplateError?.hint).toContain("override");
     },
   );
 });
@@ -1536,35 +1542,64 @@ test("template discovery and condition preview include clause-only declarations"
   expect(overrideDiscovery.discovered.conditionPaths).toEqual(["replacement"]);
   const { templateDecideConditionsLogic } =
     await import("./template-decide-conditions");
-  const fakeS3 = startFakeS3();
-  try {
-    fakeS3.put(
-      "stella",
-      "clause-condition-preview",
-      new Uint8Array(file.bytes),
-    );
-    const preview = await templateDecideConditionsLogic({
-      scopedDb: stubScopedDb(body, "clause-condition-preview"),
-      organizationId,
-      templateId: source.templateId,
-      body: { values: { included: false } },
-      orgAIConfig: null,
-      client: null,
-      abortSignal: new AbortController().signal,
-    });
-    expect(preview.unwrap().conditions).toEqual([
-      {
-        path: "included",
-        label: "included",
-        decision: { state: "decided", decidedBy: "user", value: false },
+  const previewDb = createScopedDbMock({
+    query: {
+      templates: {
+        findFirst: async () => ({
+          manifest: {
+            version: 1,
+            fields: [],
+            clauseSlots: [{ name: "Terms", patchKey: "@clause:Terms" }],
+          },
+        }),
       },
-    ]);
-    expect(
-      await filledTexts(await fillLinkedClause(body, { included: false })),
-    ).toEqual(["Excluded"]);
-  } finally {
-    fakeS3.stop();
-  }
+      templateClauses: {
+        findMany: async () => [
+          {
+            slotName: "Terms",
+            clauseId: toSafeId<"clause">("cls_preview"),
+            clauseVersionId: toSafeId<"clauseVersion">("clsv_preview"),
+            clauseVariantId: null,
+            clauseVariantLabel: null,
+            clause: { id: toSafeId<"clause">("cls_preview"), title: "Terms" },
+          },
+        ],
+      },
+    },
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => [
+            {
+              id: toSafeId<"clauseVersion">("clsv_preview"),
+              clauseId: toSafeId<"clause">("cls_preview"),
+              version: 1,
+              body,
+            },
+          ],
+        }),
+      }),
+    }),
+  });
+  const preview = await templateDecideConditionsLogic({
+    scopedDb: previewDb.scopedDb,
+    organizationId,
+    templateId: source.templateId,
+    body: { values: { included: false } },
+    orgAIConfig: null,
+    client: null,
+    abortSignal: new AbortController().signal,
+  });
+  expect(preview.unwrap().conditions).toEqual([
+    {
+      path: "included",
+      label: "included",
+      decision: { state: "decided", decidedBy: "user", value: false },
+    },
+  ]);
+  expect(
+    await filledTexts(await fillLinkedClause(body, { included: false })),
+  ).toEqual(["Excluded"]);
 });
 
 test("placeholder-only clauses use finalized fill values", async () => {
@@ -1682,7 +1717,10 @@ test("stored web discovery, description and effective fill declarations agree fo
     expect(response.status).toBe(200);
     const web =
       await readTestJson<
-        Exclude<Awaited<ReturnType<typeof discoverHandler>>, Response>
+        Extract<
+          Awaited<ReturnType<typeof discoverHandler>>,
+          { status: "ok" }
+        >["value"]
       >(response);
     const description = await describeStoredTemplate({
       templateId,
@@ -1728,11 +1766,8 @@ test("stored web discovery, description and effective fill declarations agree fo
   }
 });
 
-test("clause structure and filter errors identify their slot and clause-relative paragraph", async () => {
-  const clauseBody = [
-    clauseDirective("{% endif %}"),
-    { text: "{{ party | date() }}" },
-  ];
+test("clause filter errors identify their slot and clause-relative paragraph", async () => {
+  const clauseBody = [{ text: "{{ party | date() }}" }];
   const file = await makeDocx(
     WRAP(P("Template paragraph") + P('{{ clause("Terms") }}')),
   );
@@ -1746,10 +1781,10 @@ test("clause structure and filter errors identify their slot and clause-relative
     scopedDb: stubScopedDb(clauseBody),
     organizationId,
   });
-  expect(result.discovered.structureErrors.length).toBeGreaterThanOrEqual(2);
+  expect(result.discovered.structureErrors.length).toBeGreaterThanOrEqual(1);
   for (const error of result.discovered.structureErrors) {
     expect(error.source).toBe("clause");
-    expect(error.clause).toEqual({
+    expect(error.clause).toMatchObject({
       slotKey: "@clause:Terms",
       id: "cls_1",
       name: "Terms",
@@ -1760,7 +1795,11 @@ test("clause structure and filter errors identify their slot and clause-relative
 
 test("clause AI declarations run usage admission and include linked content in grounding", async () => {
   const body = [
+    clauseDirective("{% if active %}"),
     { text: "Payment is due within thirty days." },
+    clauseDirective("{% else %}"),
+    { text: "Inactive payment requires immediate settlement." },
+    clauseDirective("{% endif %}"),
     { text: '{{ summary | ai("Summarize", sees_document=true) }}' },
   ];
   const file = await makeDocx(WRAP(P('{{ clause("Terms") }}')));
@@ -1772,7 +1811,7 @@ test("clause AI declarations run usage admission and include linked content in g
       file,
       templateId: toSafeId<"template">("tmpl_1"),
     },
-    values: {},
+    values: { active: true },
     organizationId,
     scopedDb: stubScopedDb(body),
     requiredFields: "enforce",
@@ -1784,6 +1823,9 @@ test("clause AI declarations run usage admission and include linked content in g
     aiCollaborators: async () => ({
       generateAiValue: async ({ documentText, values }) => {
         expect(documentText).toContain("Payment is due within thirty days.");
+        expect(documentText).not.toContain("Inactive payment");
+        expect(documentText).not.toContain("{% if");
+        expect(documentText).not.toContain("{{ summary");
         expect(values["@clause:Terms"]).toContain(
           "Payment is due within thirty days.",
         );
@@ -1800,3 +1842,28 @@ test("clause AI declarations run usage admission and include linked content in g
     "Thirty days",
   ]);
 });
+
+test.each(["latest", "pinned", "explicit"] as const)(
+  "legacy recovery describes the resolved %s version",
+  (resolution) => {
+    const hint = clauseDirectiveRecoveryHint({
+      slotKey: "Terms",
+      name: "Terms",
+      resolution,
+      version: 2,
+    });
+    expect(hint).toContain("list_clauses");
+    expect(hint).toContain("save_clause");
+    expect(hint).toContain("snapshot_version=true");
+    expect(hint).not.toContain("get_clause");
+    if (resolution === "pinned") {
+      expect(hint).toContain("Sync the pinned template clause link");
+    }
+    if (resolution === "explicit") {
+      expect(hint).toContain(":vN");
+    }
+    if (resolution === "latest") {
+      expect(hint).toContain("working copy alone does not publish");
+    }
+  },
+);

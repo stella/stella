@@ -26,6 +26,44 @@ describe("clauseBodyToRichPatch", () => {
     });
   });
 
+  test("directive resolution preserves explicit false run formatting", () => {
+    const body: ClauseBody = [
+      { text: "{% if enabled %}" },
+      {
+        text: "{{ name }}",
+        runs: [{ text: "{{ name }}", bold: false, italic: false }],
+      },
+      { text: "{% endif %}" },
+    ];
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { enabled: true, name: "Plain" },
+        slotKey: "Terms",
+      }).unwrap(),
+    ).toEqual({
+      paragraphs: [{ runs: [{ text: "Plain", bold: false, italic: false }] }],
+    });
+  });
+
+  test("stored legacy clauses retain literal markers without evaluating their branches", () => {
+    const body: ClauseBody = [
+      { text: "{% if enabled %}" },
+      { text: '{{ num("section") }}' },
+    ];
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: {},
+        slotKey: "Terms",
+        source: "stored",
+      }).unwrap(),
+    ).toEqual({
+      paragraphs: [
+        { runs: [{ text: "{% if enabled %}" }] },
+        { runs: [{ text: '{{ num("section") }}' }] },
+      ],
+    });
+  });
+
   test("falls back to a single text run when a paragraph has no runs", () => {
     const body: ClauseBody = [{ text: "Plain" }];
 

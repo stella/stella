@@ -12,7 +12,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { clauseExpectedBodySchema } from "@/api/lib/clauses/body-schema";
-import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
+import { inspectLegacyClauseDirectives } from "@/api/lib/clauses/clause-directives";
 import { normalizeClauseBody } from "@/api/lib/clauses/types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -118,7 +118,11 @@ const restoreClauseVersion = createSafeRootHandler(
     }
 
     const restoredBody = version.body;
-    yield* validateClauseBodyDirectives(restoredBody);
+    const warning = inspectLegacyClauseDirectives(restoredBody, {
+      clauseName: clause.title,
+      version: version.version,
+      clauseId,
+    });
 
     const updated = yield* Result.await(
       safeDb(async (tx) => {
@@ -257,7 +261,10 @@ const restoreClauseVersion = createSafeRootHandler(
       captureError(searchVectorResult.error, { clauseId });
     }
 
-    return Result.ok(updated.row);
+    return Result.ok({
+      ...updated.row,
+      clauseWarnings: warning === undefined ? [] : [warning],
+    });
   },
 );
 

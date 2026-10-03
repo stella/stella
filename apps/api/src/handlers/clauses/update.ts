@@ -85,7 +85,7 @@ export const updateClauseHandler = async function* ({
   body,
   recordAuditEvent,
 }: UpdateClauseProps) {
-  if (body.body !== undefined) {
+  if (body.body !== undefined && body.snapshotVersion === true) {
     yield* validateClauseBodyDirectives(body.body);
   }
 

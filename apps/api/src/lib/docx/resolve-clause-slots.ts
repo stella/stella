@@ -331,6 +331,7 @@ export const resolveClauseSlotSources = async (
       versionPredicates.push(inArray(clauseVersions.id, [...pinnedVersionIds]));
     }
 
+    const versionById = new Map<SafeId<"clauseVersion">, number>();
     const bodyByVersionId = new Map<SafeId<"clauseVersion">, ClauseBody>();
     const bodyByClauseVersion = new Map<string, ClauseBody>();
     if (versionPredicates.length > 0) {
@@ -351,6 +352,7 @@ export const resolveClauseSlotSources = async (
         .limit(versionPairs.size + pinnedVersionIds.size);
 
       for (const row of versionRows) {
+        versionById.set(row.id, row.version);
         bodyByVersionId.set(row.id, row.body);
         bodyByClauseVersion.set(
           clauseVersionKey(row.clauseId, row.version),
@@ -392,12 +394,37 @@ export const resolveClauseSlotSources = async (
       });
       if (body) {
         const link = linkBySlotName.get(slot.name);
+        let source: Pick<ClauseProvenance, "resolution" | "version">;
+        switch (target.type) {
+          case "pinnedVersion":
+            source = {
+              resolution: "pinned",
+              version: versionById.get(target.versionId),
+            };
+            break;
+          case "clauseVersion":
+            source = { resolution: "explicit", version: target.version };
+            break;
+          case "variant":
+            source = { resolution: "variant", version: undefined };
+            break;
+          case "currentVersion":
+            source = {
+              resolution: "latest",
+              version: currentVersionByClauseId.get(target.clauseId),
+            };
+            break;
+          default:
+            target satisfies never;
+            return panic("Unhandled clause slot target");
+        }
         bodies.set(slot.patchKey, {
           body,
           clause: {
             slotKey: slot.patchKey,
             id: link?.clause?.id,
             name: link?.clause?.title,
+            ...source,
           },
         });
       }

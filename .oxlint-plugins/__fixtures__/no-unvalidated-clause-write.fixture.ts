@@ -1,5 +1,8 @@
 import { clauses, clauseVersions } from "@/api/db/schema";
-import { validateClauseBodyDirectives as validate } from "@/api/lib/clauses/clause-directives";
+import {
+  inspectLegacyClauseDirectives,
+  validateClauseBodyDirectives as validate,
+} from "@/api/lib/clauses/clause-directives";
 
 declare const tx: {
   insert: (table: unknown) => unknown;
@@ -37,6 +40,12 @@ const _discardedCheck = () => {
   return tx.insert(clauses);
 };
 
+const _legacyInspectionCannotPublish = () => {
+  inspectLegacyClauseDirectives(body, { clauseName: "Stored", version: 1 });
+  // oxlint-disable-next-line no-unvalidated-clause-write/no-unvalidated-clause-write -- fixture: legacy inspection does not authorize publishing new content
+  return tx.insert(clauseVersions);
+};
+
 export const __noUnvalidatedClauseWriteFixture = {
   _uncheckedOwner,
   _checkedOwner,
@@ -44,4 +53,5 @@ export const __noUnvalidatedClauseWriteFixture = {
   _lateCheck,
   _siblingCheck,
   _discardedCheck,
+  _legacyInspectionCannotPublish,
 };

@@ -164,6 +164,12 @@ export const fillByIdLogic = async function* ({
   const baseName = result.fileName;
 
   const additionalHeaders = new Headers();
+  if (result.clauseWarnings.length > 0) {
+    additionalHeaders.set(
+      "X-Clause-Warnings",
+      encodeURIComponent(JSON.stringify(result.clauseWarnings)),
+    );
+  }
   if (result.aiFieldErrors.length > 0) {
     additionalHeaders.set(
       "X-Ai-Field-Errors",

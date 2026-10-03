@@ -16,7 +16,11 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
+import {
+  inspectLegacyClauseDirectives,
+  validateClauseBodyDirectives,
+} from "@/api/lib/clauses/clause-directives";
+import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
 import type { ClauseParagraph } from "@/api/lib/clauses/types";
 import { CSV_PARSE_STATUS, parseCSV } from "@/api/lib/csv";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -49,6 +53,7 @@ export const importHandler = async function* ({
   recordAuditEvent,
 }: ImportProps) {
   const text = await file.text();
+  const clauseWarnings: ClauseDirectiveWarning[] = [];
 
   // Try parsing as JSON first
   const parseJsonResult = Result.try((): unknown => JSON.parse(text));
@@ -77,12 +82,24 @@ export const importHandler = async function* ({
     }
 
     for (const item of parsed.clauses) {
-      yield* validateClauseBodyDirectives(item.body);
+      const warning = inspectLegacyClauseDirectives(item.body, {
+        clauseName: item.title,
+        version: 1,
+      });
+      if (warning !== undefined) {
+        clauseWarnings.push(warning);
+      }
       if (item.variants === undefined) {
         continue;
       }
       for (const variant of item.variants) {
-        yield* validateClauseBodyDirectives(variant.body);
+        const variantWarning = inspectLegacyClauseDirectives(variant.body, {
+          clauseName: `${item.title} (${variant.label})`,
+          version: null,
+        });
+        if (variantWarning !== undefined) {
+          clauseWarnings.push(variantWarning);
+        }
       }
     }
 
@@ -247,7 +264,12 @@ export const importHandler = async function* ({
       }),
     );
 
-    return Result.ok({ created: result.count, skipped, errors });
+    return Result.ok({
+      created: result.count,
+      skipped,
+      errors,
+      clauseWarnings,
+    });
   }
 
   const csvResult = parseCSV(text);
@@ -352,6 +374,7 @@ export const importHandler = async function* ({
 
     yield* validateClauseBodyDirectives(
       bodyVal.split(/\r?\n/u).map((line) => ({ text: line })),
+      { name: `Row ${index + 2} (${titleVal})` },
     );
 
     if (slugVal.length > CLAUSE_CSV_TEXT_LIMIT) {

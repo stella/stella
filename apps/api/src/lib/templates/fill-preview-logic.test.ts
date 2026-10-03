@@ -8,7 +8,6 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
@@ -188,7 +187,7 @@ describe("fillPreviewLogic required fields (allow-partial)", () => {
   });
 });
 
-test("live preview preserves the typed clause refusal", async () => {
+test("live preview preserves legacy markers with a typed warning", async () => {
   const docx = await makeDocx(WRAP(P('{{ clause("Terms") }}')));
   const fakeS3 = startFakeS3();
   try {
@@ -204,15 +203,20 @@ test("live preview preserves the typed clause refusal", async () => {
       templateId,
       body: { values: {} },
     });
-    expect(Result.isError(result)).toBe(true);
-    if (!Result.isError(result)) {
-      throw new TypeError("expected typed clause refusal");
+    expect(Result.isOk(result)).toBe(true);
+    if (!Result.isOk(result)) {
+      throw new TypeError("expected legacy clause preview");
     }
-    expect(result.error).toBeInstanceOf(HandlerError);
-    expect(result.error.status).toBe(422);
-    expect(result.error.code).toBe("clause_directives_invalid");
-    expect(result.error.retryable).toBe(false);
-    expect(result.error.message).toContain("@clause:Terms");
+    expect(result.value.paragraphs.map(({ text }) => text)).toContain(
+      "{% else %}",
+    );
+    expect(result.value.clauseWarnings).toMatchObject([
+      {
+        code: "CLAUSE_LEGACY_DIRECTIVES",
+        clauseName: "Terms",
+        version: 1,
+      },
+    ]);
   } finally {
     fakeS3.stop();
   }

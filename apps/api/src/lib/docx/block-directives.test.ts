@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 import * as slimdom from "slimdom";
 
+import { assertProperty } from "@stll/property-testing";
 import { numPattern, refPattern } from "@stll/template-conditions";
 
 import {
   collectValidNumIds,
+  createDirectiveProcessingContext,
   evaluateCondition,
   flattenTemplateData,
   parseBlockTree,
@@ -14,6 +17,7 @@ import {
   resolvePath,
   scanBlockDirectives,
 } from "./block-directives";
+import { processInlineConditions } from "./inline-conditions";
 import { applyManifestFillSteps } from "./manifest-fill-steps";
 import { paragraphText, W_NS } from "./ooxml";
 import { patchParagraphPlaceholders } from "./rich-patch";
@@ -1636,4 +1640,98 @@ test("nested loop sources resolve before their declared alias shadows the parent
     patchParagraphPlaceholders(paragraph, patchValues);
   }
   expect(bodyTexts(body)).toEqual(["Leaf"]);
+});
+
+test.each(["single run", "separate runs"])(
+  "inline aliases shadow their enclosing loop and restore it afterwards (%s)",
+  (layout) => {
+    const body = parseBody(
+      WRAP(
+        [
+          P("{% for item in roots %}"),
+          layout === "single run"
+            ? P(
+                "Before {{ item.name }}: {% for item in item.children %}{{ item.name }}; {% endfor %}After {{ item.name }}",
+              )
+            : "<w:p><w:r><w:t>Before {{ item.name }}: {% for item in item.children %}</w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>{{ item.name }}; </w:t></w:r><w:r><w:t>{% endfor %}After {{ item.name }}</w:t></w:r></w:p>",
+          P("{% endfor %}"),
+        ].join(""),
+      ),
+    );
+    const values = {
+      roots: [
+        {
+          name: "Parent A",
+          children: [{ name: "Child A" }, { name: "Child B" }],
+        },
+        { name: "Parent B", children: [{ name: "Child C" }] },
+      ],
+    };
+    const processingContext = createDirectiveProcessingContext();
+    const { patchValues, errors } = processBlockDirectives(body, values, {
+      processingContext,
+    });
+    expect(
+      processInlineConditions(body, values, undefined, { processingContext }),
+    ).toEqual([]);
+    expect(errors).toEqual([]);
+    for (const paragraph of body.getElementsByTagNameNS(W_NS, "p")) {
+      patchParagraphPlaceholders(paragraph, patchValues);
+    }
+    expect(bodyTexts(body)).toEqual([
+      "Before Parent A: Child A; Child B; After Parent A",
+      "Before Parent B: Child C; After Parent B",
+    ]);
+  },
+);
+
+test("inline loop scope restores outer aliases across generated rows", () => {
+  assertProperty(
+    "inline loop scope restores outer aliases across generated rows",
+    fc.property(
+      fc.array(
+        fc.record({
+          name: fc.stringMatching(/^[a-z]{1,8}$/u),
+          children: fc.array(
+            fc.record({ name: fc.stringMatching(/^[a-z]{1,8}$/u) }),
+            { maxLength: 4 },
+          ),
+        }),
+        { maxLength: 4 },
+      ),
+      (roots) => {
+        const body = parseBody(
+          WRAP(
+            [
+              P("{% for item in roots %}"),
+              P(
+                "{{ item.name }}:{% for item in item.children %}{{ item.name }};{% endfor %}:{{ item.name }}",
+              ),
+              P("{% endfor %}"),
+            ].join(""),
+          ),
+        );
+        const values = { roots };
+        const processingContext = createDirectiveProcessingContext();
+        const { patchValues, errors } = processBlockDirectives(body, values, {
+          processingContext,
+        });
+        expect(errors).toEqual([]);
+        expect(
+          processInlineConditions(body, values, undefined, {
+            processingContext,
+          }),
+        ).toEqual([]);
+        for (const paragraph of body.getElementsByTagNameNS(W_NS, "p")) {
+          patchParagraphPlaceholders(paragraph, patchValues);
+        }
+        expect(bodyTexts(body)).toEqual(
+          roots.map(
+            ({ name, children }) =>
+              `${name}:${children.map(({ name: child }) => `${child};`).join("")}:${name}`,
+          ),
+        );
+      },
+    ),
+  );
 });

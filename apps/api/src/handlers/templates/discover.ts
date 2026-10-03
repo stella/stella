@@ -12,10 +12,7 @@ import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
 import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
-import {
-  scanTemplateUpload,
-  templateUploadRejectionResponse,
-} from "@/api/lib/templates/scan-template-upload";
+import { scanTemplateUpload } from "@/api/lib/templates/scan-template-upload";
 import {
   discoverTemplateSource,
   loadStoredTemplateSource,
@@ -23,13 +20,16 @@ import {
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const discoverBodySchema = t.Object({
-  file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
+  file: t.Optional(t.File({ maxSize: FILE_SIZE_LIMITS.document })),
   templateId: t.Optional(tSafeId("template")),
 });
 
 type DiscoverProps = {
   organizationId: SafeId<"organization">;
-  body: { file: File; templateId?: SafeId<"template"> | undefined };
+  body: {
+    file?: File | undefined;
+    templateId?: SafeId<"template"> | undefined;
+  };
   scopedDb?: ScopedDb | undefined;
 };
 
@@ -48,44 +48,49 @@ export const discoverHandler = async ({
       scopedDb,
     });
     if (Result.isError(loaded)) {
-      return new Response(JSON.stringify({ error: loaded.error.message }), {
-        status: loaded.error.status,
-        headers: { "Content-Type": "application/json" },
-      });
+      return Result.err(loaded.error);
     }
     const { discovered, manifest } = await discoverTemplateSource({
       source: loaded.value,
       organizationId,
       scopedDb,
     });
-    return {
+    return Result.ok({
       fields: mergeManifestWithDiscovery(manifest, discovered),
       conditions: manifestNamedConditions(manifest),
       structureErrors: discovered.structureErrors,
-    };
+    });
+  }
+  if (file === undefined) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "A file or templateId is required",
+      }),
+    );
   }
   if (file.type !== DOCX_MIME_TYPE) {
-    return new Response(
-      JSON.stringify({
-        error: "Invalid file type. Expected a DOCX file.",
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Invalid file type. Expected a DOCX file.",
       }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
     );
   }
 
   const scanned = await scanTemplateUpload(file);
   if (Result.isError(scanned)) {
-    return templateUploadRejectionResponse(scanned.error);
+    return Result.err(scanned.error);
   }
 
   const discovered = await discoverTemplate(scanned.value);
   const manifest = deriveManifest(discovered);
 
-  return {
+  return Result.ok({
     fields: mergeManifestWithDiscovery(manifest, discovered),
     conditions: manifestNamedConditions(manifest),
     structureErrors: discovered.structureErrors,
-  };
+  });
 };
 
 const config = {
@@ -105,7 +110,7 @@ const config = {
   access: "read",
   transport: {
     type: "file-input",
-    input: { field: "file", required: true, mediaTypes: [DOCX_MIME_TYPE] },
+    input: { field: "file", required: false, mediaTypes: [DOCX_MIME_TYPE] },
     alternative: {
       type: "partial",
       via: ["templates.get"],
@@ -128,14 +133,16 @@ const discoverTemplateHandler = createSafeRootHandler(
             scopedDb,
           }),
         catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Internal server error",
-            cause,
-          }),
+          cause instanceof HandlerError
+            ? cause
+            : new HandlerError({
+                status: 500,
+                message: "Internal server error",
+                cause,
+              }),
       }),
     );
-    return Result.ok(result);
+    return result;
   },
 );
 

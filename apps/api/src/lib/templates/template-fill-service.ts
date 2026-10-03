@@ -12,6 +12,7 @@ import { panic, Result } from "better-result";
  */
 
 import { compareCodeUnit } from "@stll/collation";
+import { replaceOutputMarkers } from "@stll/template-conditions";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -20,10 +21,11 @@ import {
   getOrganizationRegistryAvailability,
   getOrganizationRegistryDispatch,
 } from "@/api/lib/business-registries/credentials";
+import { inspectLegacyClauseDirectives } from "@/api/lib/clauses/clause-directives";
+import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
 import {
   discoverTemplateWithClauses,
   clauseBodyToRichPatch,
-  clauseBodyToPlainText,
 } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import {
@@ -597,7 +599,10 @@ export const discoverTemplateSource = async ({
     const override = clauseOverrides?.[slot.patchKey];
     if (override !== undefined) {
       bodies[slot.patchKey] = override;
-      clauses[slot.patchKey] ??= { slotKey: slot.patchKey };
+      clauses[slot.patchKey] = {
+        slotKey: slot.patchKey,
+        resolution: "override",
+      };
     }
   }
   const discovered = await discoverTemplateWithClauses({
@@ -631,6 +636,7 @@ type FilledDocx = {
    *  the rendered text, which a caller cannot tell from a block the template
    *  never carried. */
   conditionDecisions: ResolvedAiCondition[];
+  clauseWarnings: ClauseDirectiveWarning[];
 };
 
 type FillDocxOptions<TRejection = never> = Omit<
@@ -653,27 +659,67 @@ type ApplyClausePatchesOptions = Pick<
   namedConditions: ReturnType<typeof manifestNamedConditions>;
 };
 
+export const clauseDirectiveRecoveryHint = (
+  clause: ClauseProvenance,
+): string => {
+  const readSave =
+    "Use list_clauses with clause_id to read the clause, then save_clause with snapshot_version=true to publish corrected paragraphs.";
+  switch (clause.resolution) {
+    case "override":
+      return "Correct the clause override in this fill before filling again.";
+    case "pinned":
+      return `${readSave} Sync the pinned template clause link before filling again.`;
+    case "explicit":
+      return `${readSave} Update the template's :vN clause marker to the corrected published version before filling again.`;
+    case "variant":
+      return "Correct the linked clause variant, then fill again. Use list_clauses with clause_id to read the owning clause.";
+    case "latest":
+    case undefined:
+      return `${readSave} The slot reads the latest saved version; autosaving the working copy alone does not publish it.`;
+    default:
+      return panic("Unhandled clause resolution");
+  }
+};
+
 const applyClausePatches = ({
   slots,
   bodies,
   clauses,
   record,
   namedConditions,
-}: ApplyClausePatchesOptions): Result<void, HandlerError<422>> => {
+}: ApplyClausePatchesOptions): Result<
+  ClauseDirectiveWarning[],
+  HandlerError<422>
+> => {
+  const clauseWarnings: ClauseDirectiveWarning[] = [];
   for (const slot of slots) {
     const body = bodies[slot.patchKey];
     if (body === undefined) {
       continue;
     }
+    const clause =
+      clauses[slot.patchKey] ??
+      panic(`Missing clause provenance for ${slot.patchKey}`);
+    const hint = clauseDirectiveRecoveryHint(clause);
+    if (clause.resolution !== "override") {
+      const warning = inspectLegacyClauseDirectives(body, {
+        clauseName: clause.name ?? slot.name,
+        clauseId: clause.id,
+        version: clause.version ?? null,
+        slotKey: slot.patchKey,
+        hint,
+      });
+      if (warning !== undefined) {
+        clauseWarnings.push(warning);
+      }
+    }
     const patch = clauseBodyToRichPatch(body, {
+      source: clause.resolution === "override" ? "authored" : "stored",
       values: record,
       slotKey: slot.patchKey,
       namedConditions,
     });
     if (Result.isError(patch)) {
-      const clause =
-        clauses[slot.patchKey] ??
-        panic(`Missing clause provenance for ${slot.patchKey}`);
       const identity = `${clause.name ?? slot.name}${clause.id === undefined ? "" : ` (${clause.id})`}`;
       const error = new HandlerError({
         status: 422,
@@ -681,7 +727,7 @@ const applyClausePatches = ({
         retryable: false,
         clause,
         message: `Clause ${identity} in slot ${slot.patchKey} has invalid directives: ${patch.error.message}`,
-        hint: `Open clause ${identity} in the clause editor, or call get_clause then save_clause, correct the named paragraphs, and fill slot ${slot.patchKey} again.`,
+        hint,
         issues: patch.error.issues,
       });
       return Result.err(error);
@@ -689,18 +735,112 @@ const applyClausePatches = ({
     record[slot.patchKey] = patch.value;
   }
 
-  return Result.ok(undefined);
+  return Result.ok(clauseWarnings);
 };
 
-const clauseGroundingTexts = (
-  bodies: Record<string, ClauseBody>,
-  record: FillValues,
-): string[] =>
-  Object.entries(bodies).map(([key, body]) => {
-    const text = clauseBodyToPlainText(body);
-    record[key] = text;
-    return text;
+const clauseGroundingTexts = ({
+  bodies,
+  record,
+  namedConditions,
+}: Pick<
+  ApplyClausePatchesOptions,
+  "bodies" | "record" | "namedConditions"
+>): Result<string[], HandlerError<422>> => {
+  const texts: string[] = [];
+  for (const [slotKey, body] of Object.entries(bodies)) {
+    const patch = clauseBodyToRichPatch(body, {
+      source: "stored",
+      values: record,
+      slotKey,
+      namedConditions,
+    });
+    if (Result.isError(patch)) {
+      return Result.err(patch.error);
+    }
+    const text =
+      typeof patch.value === "string"
+        ? patch.value
+        : patch.value.paragraphs
+            .map(({ runs }) =>
+              runs.map(({ text: runText }) => runText).join(""),
+            )
+            .join("\n");
+    // AI fields still awaiting drafts are absent from the grounding text.
+    const resolved = replaceOutputMarkers(text, () => "");
+    record[slotKey] = resolved;
+    texts.push(resolved);
+  }
+  return Result.ok(texts);
+};
+
+type DocumentGroundingOptions = {
+  file: ScannedFile;
+  manifest: TemplateManifest;
+  bodies: Record<string, ClauseBody>;
+  record: FillValues;
+};
+
+const documentGrounding = async ({
+  file,
+  manifest,
+  bodies,
+  record,
+}: DocumentGroundingOptions): Promise<
+  Result<string | undefined, HandlerError<422>>
+> => {
+  if (!isTemplateData(record)) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message:
+          "Values must be strings, numbers, booleans, arrays, or nested objects.",
+      }),
+    );
+  }
+  const templateText = await documentTextForAiFields(file, manifest.fields);
+  const clauseTexts = clauseGroundingTexts({
+    bodies,
+    record,
+    namedConditions: manifestNamedConditions(manifest),
   });
+  if (Result.isError(clauseTexts)) {
+    return Result.err(clauseTexts.error);
+  }
+  return Result.ok(
+    templateText === undefined
+      ? undefined
+      : [templateText, ...clauseTexts.value].join("\n"),
+  );
+};
+
+type UnusedFilledValuesOptions = {
+  unusedValues: string[];
+  slots: ApplyClausePatchesOptions["slots"];
+  bodies: ApplyClausePatchesOptions["bodies"];
+  adaptedPaths: string[];
+  defaultedPaths: string[];
+  clauseFieldPaths: DiscoveredTemplate["clauseFieldPaths"];
+};
+
+const unusedFilledValues = ({
+  unusedValues,
+  slots,
+  bodies,
+  adaptedPaths,
+  defaultedPaths,
+  clauseFieldPaths,
+}: UnusedFilledValuesOptions): string[] =>
+  unusedValues.filter(
+    (name) =>
+      !slots.some(
+        (slot) => slot.patchKey === name && bodies[name] !== undefined,
+      ) &&
+      !adaptedPaths.includes(name) &&
+      !defaultedPaths.includes(name) &&
+      !clauseFieldPaths?.some(
+        (path) => path === name || name.startsWith(`${path}.`),
+      ),
+  );
 
 /**
  * Shared fill recipe over an already-loaded DOCX: discover linked content,
@@ -842,19 +982,22 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     return { error: stepError };
   }
 
-  const templateText = await documentTextForAiFields(
-    loaded.file,
-    manifest.fields,
-  );
-  const clauseTexts = clauseGroundingTexts(bodies, record);
-  const documentText =
-    templateText === undefined
-      ? undefined
-      : [templateText, ...clauseTexts].join("\n");
+  const grounding = await documentGrounding({
+    file: loaded.file,
+    manifest,
+    bodies,
+    record,
+  });
+  if (Result.isError(grounding)) {
+    return {
+      error: grounding.error.message,
+      storedTemplateError: grounding.error,
+    };
+  }
   const drafted = await resolveAiFields({
     values: record,
     fields: manifest.fields,
-    documentText,
+    documentText: grounding.value,
     generate: generateAiValue,
   });
   record = drafted.values;
@@ -926,20 +1069,18 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     unmatchedPlaceholders: result.unmatchedPlaceholders,
     // Adapted stubs no longer match a marker (each occurrence was already
     // substituted), so they are not "unused" in any user-meaningful sense.
-    unusedValues: result.unusedValues.filter(
-      (name) =>
-        !slots.some(
-          (slot) => slot.patchKey === name && bodies[name] !== undefined,
-        ) &&
-        !adaptedPaths.includes(name) &&
-        !optionalDefaults.defaultedPaths.includes(name) &&
-        !discovered.clauseFieldPaths?.some(
-          (path) => path === name || name.startsWith(`${path}.`),
-        ),
-    ),
+    unusedValues: unusedFilledValues({
+      unusedValues: result.unusedValues,
+      slots,
+      bodies,
+      adaptedPaths,
+      defaultedPaths: optionalDefaults.defaultedPaths,
+      clauseFieldPaths: discovered.clauseFieldPaths,
+    }),
     structureErrors: result.structureErrors,
     aiFieldErrors,
     conditionDecisions: decidedConditions.conditions,
+    clauseWarnings: patchedClauses.value,
   };
 };
 
@@ -1004,6 +1145,7 @@ export type FillTemplateResult =
       aiFieldErrors: AiFieldError[];
       /** What each AI-decided condition was settled on, and by whom. */
       conditionDecisions: ResolvedAiCondition[];
+      clauseWarnings: ClauseDirectiveWarning[];
     }
   | TemplateServiceError
   | { requiredFieldsRejection: MissingRequiredField[] };
@@ -1025,6 +1167,7 @@ export type FillTemplateWithDocxResult =
       aiFieldErrors: AiFieldError[];
       /** What each AI-decided condition was settled on, and by whom. */
       conditionDecisions: ResolvedAiCondition[];
+      clauseWarnings: ClauseDirectiveWarning[];
     }
   | TemplateServiceError;
 
@@ -1050,6 +1193,7 @@ const withExtractedText = async (
     structureErrors: filled.structureErrors,
     aiFieldErrors: filled.aiFieldErrors,
     conditionDecisions: filled.conditionDecisions,
+    clauseWarnings: filled.clauseWarnings,
   };
 };
 
@@ -1133,5 +1277,6 @@ export const fillStoredTemplate = async (
     unusedValues: filled.unusedValues,
     aiFieldErrors: filled.aiFieldErrors,
     conditionDecisions: filled.conditionDecisions,
+    clauseWarnings: filled.clauseWarnings,
   };
 };

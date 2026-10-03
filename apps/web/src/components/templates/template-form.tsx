@@ -79,6 +79,7 @@ import type { LookupRegistry } from "@/components/templates/template-field-manif
 import {
   groupFieldsByPrefix,
   readAiFieldErrorPaths,
+  readClauseWarnings,
   runLeadingSingleFlight,
 } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
@@ -1939,6 +1940,24 @@ export const TemplateForm = ({
         });
       }
 
+      const clauseWarnings = readClauseWarnings(response.response.headers);
+      if (clauseWarnings.isErr()) {
+        getAnalytics().captureError(clauseWarnings.error);
+        stellaToast.add({
+          type: "warning",
+          title: t("common.unexpectedError"),
+        });
+      } else {
+        for (const warning of clauseWarnings.value) {
+          stellaToast.add({
+            type: "warning",
+            title: t("clauses.legacyDirectiveWarning", {
+              clauseName: warning.clauseName,
+              version: warning.version ?? "none",
+            }),
+          });
+        }
+      }
       onDone(filename);
     },
     [
@@ -2036,6 +2055,15 @@ export const TemplateForm = ({
       }
 
       const created = response.data;
+      for (const warning of created.clauseWarnings) {
+        stellaToast.add({
+          type: "warning",
+          title: t("clauses.legacyDirectiveWarning", {
+            clauseName: warning.clauseName,
+            version: warning.version ?? "none",
+          }),
+        });
+      }
       stellaToast.add({
         type: "success",
         title: t("success.documentCreated"),

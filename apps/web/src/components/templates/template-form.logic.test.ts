@@ -5,6 +5,7 @@ import type { ResolvedField } from "./template-discover-types";
 import {
   groupFieldsByPrefix,
   readAiFieldErrorPaths,
+  readClauseWarnings,
   runLeadingSingleFlight,
 } from "./template-form.logic";
 
@@ -142,5 +143,32 @@ describe("fill-form grouping", () => {
     expect(groupFieldsByPrefix([field("a"), field("b")])).toEqual([
       { kind: "ungrouped", fields: [field("a"), field("b")] },
     ]);
+  });
+});
+
+describe("download clause diagnostics", () => {
+  test("decodes clause identity and version without trusting the header", () => {
+    const warnings = [
+      { code: "CLAUSE_LEGACY_DIRECTIVES", clauseName: "Závazek", version: 3 },
+      { code: "CLAUSE_LEGACY_DIRECTIVES", clauseName: "التزام", version: null },
+    ];
+    const result = readClauseWarnings(
+      new Headers({
+        "X-Clause-Warnings": encodeURIComponent(JSON.stringify(warnings)),
+      }),
+    );
+    expect(result.isOk() && result.value).toEqual(warnings);
+    const empty = readClauseWarnings(new Headers());
+    expect(empty.isOk() && empty.value).toEqual([]);
+  });
+  test.each([
+    "%",
+    "null",
+    '[{"code":"unknown","clauseName":"Terms","version":1}]',
+    '[{"code":"CLAUSE_LEGACY_DIRECTIVES","clauseName":"Terms","version":0}]',
+  ])("rejects malformed clause diagnostics %s", (encoded) => {
+    expect(
+      readClauseWarnings(new Headers({ "X-Clause-Warnings": encoded })).isErr(),
+    ).toBe(true);
   });
 });

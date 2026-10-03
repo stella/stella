@@ -392,7 +392,7 @@ describe("MCP knowledge tools", () => {
   });
 
   test.each(["create", "update"])(
-    "save_clause refuses unbalanced markers in %s mode",
+    "save_clause refuses publishing unbalanced markers in %s mode",
     async (mode) => {
       const { scopedDb, insertedBodies } = createClauseWriteScopedDb();
       const result = await handleMcpToolCall({
@@ -400,6 +400,7 @@ describe("MCP knowledge tools", () => {
           ...(mode === "update"
             ? { clause_id: CLAUSE_ID }
             : { title: "Terms" }),
+          snapshot_version: true,
           body: [
             {
               text: "{% if enabled %}",

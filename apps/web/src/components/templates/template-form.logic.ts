@@ -118,3 +118,20 @@ export const groupFieldsByPrefix = (
         },
   );
 };
+
+const clauseWarningsSchema = v.array(
+  v.object({
+    code: v.literal("CLAUSE_LEGACY_DIRECTIVES"),
+    clauseName: v.string(),
+    version: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  }),
+);
+export const readClauseWarnings = (headers: Headers) =>
+  Result.try(() => {
+    const encoded = headers.get("X-Clause-Warnings");
+    if (encoded === null) {
+      return [];
+    }
+    const decoded: unknown = JSON.parse(decodeURIComponent(encoded));
+    return v.parse(clauseWarningsSchema, decoded);
+  });
