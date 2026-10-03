@@ -247,7 +247,9 @@ const parseSearchSort = (value: string): SearchSort | null =>
  * query expansion the dictionary identity alone is a 64-character sha256, so
  * the emitted length is not a round number anyone should guess.
  */
-const SCORE_MAX_CHARS = 24;
+// Fixed notation just above 1e-6 can be longer than scientific notation:
+// -0.0000012345678901234567 occupies 25 characters.
+const SCORE_MAX_CHARS = 25;
 const WINDOW_RANK_MAX_CHARS = 10;
 const DICTIONARY_IDENTITY_MAX_CHARS = 64;
 const DECISION_ID_MAX_CHARS = 36;
