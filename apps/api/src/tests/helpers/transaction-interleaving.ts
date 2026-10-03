@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { withTimeout } from "@stll/concurrency/with-timeout";
 
 import type { Transaction } from "@/api/db/root";
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
@@ -139,7 +140,7 @@ export const withInterleaving = async <State>({
         const completed = new Set<InterleavingToken>();
         const executed: InterleavingToken[] = [];
         const blocked: InterleavingToken[] = [];
-        const outcomes: Partial<Record<Actor, TransactionOutcome>> = {};
+        const outcomes = new Map<Actor, TransactionOutcome>();
         const controller = new AbortController();
         const activePids = new Set<number>();
         const stepTasks: Promise<unknown>[] = [];
@@ -151,7 +152,7 @@ export const withInterleaving = async <State>({
           controller.abort(error);
           timeout.reject(error);
         }, timeoutMs);
-        const bounded = <T>(work: PromiseLike<T>) =>
+        const bounded = async <T>(work: PromiseLike<T>) =>
           Promise.race([work, timeout.promise]);
         let stopped = false;
         for (const token of schedule) {
@@ -165,9 +166,7 @@ export const withInterleaving = async <State>({
           const outcome = await Result.tryPromise(
             async () =>
               await transaction(async (tx) => {
-                await tx.execute(
-                  sql`SELECT set_config('statement_timeout', ${String(timeoutMs)}, true)`,
-                );
+                await setSharedStatementTimeout(tx, timeoutMs);
                 const identity = await tx
                   .select({
                     pid: sql<number>`pg_backend_pid()`,
@@ -203,20 +202,21 @@ export const withInterleaving = async <State>({
               }),
           );
           if (outcome.isOk()) {
-            outcomes[actor] = { status: "committed" };
+            outcomes.set(actor, { status: "committed" });
           } else {
-            switch (getPgErrorCode(outcome.error)) {
-              case PG_ERROR.DEADLOCK_DETECTED:
-                outcomes[actor] = { status: "deadlock", error: outcome.error };
-                break;
-              case PG_ERROR.SERIALIZATION_FAILURE:
-                outcomes[actor] = {
-                  status: "serialization-error",
-                  error: outcome.error,
-                };
-                break;
-              default:
-                outcomes[actor] = { status: "app-error", error: outcome.error };
+            const errorCode = getPgErrorCode(outcome.error);
+            if (errorCode === PG_ERROR.DEADLOCK_DETECTED) {
+              outcomes.set(actor, { status: "deadlock", error: outcome.error });
+            } else if (errorCode === PG_ERROR.SERIALIZATION_FAILURE) {
+              outcomes.set(actor, {
+                status: "serialization-error",
+                error: outcome.error,
+              });
+            } else {
+              outcomes.set(actor, {
+                status: "app-error",
+                error: outcome.error,
+              });
             }
             ready[actor].reject(outcome.error);
           }
@@ -241,7 +241,7 @@ export const withInterleaving = async <State>({
           while (remaining.length > 0 || pending.size > 0) {
             checkDeadline();
             for (const [actor, token] of pending) {
-              if (completed.has(token) || outcomes[actor]) {
+              if (completed.has(token) || outcomes.get(actor)) {
                 pending.delete(actor);
               }
             }
@@ -256,13 +256,13 @@ export const withInterleaving = async <State>({
               remaining.splice(next, 1).at(0) ??
               panic("Schedule token missing");
             const actor = token.startsWith("a.") ? "a" : "b";
-            if (outcomes[actor]) {
+            if (outcomes.get(actor)) {
               continue;
             }
             executed.push(token);
             (gates.get(token) ?? panic("Step gate missing")).resolve(undefined);
             pending.set(actor, token);
-            while (!completed.has(token) && !outcomes[actor]) {
+            while (!completed.has(token) && !outcomes.get(actor)) {
               checkDeadline();
               const rows = await bounded(
                 observer.sql<
@@ -278,9 +278,9 @@ export const withInterleaving = async <State>({
           }
           await bounded(Promise.all(tasks));
           const first =
-            outcomes.a ?? panic("First transaction outcome missing");
+            outcomes.get("a") ?? panic("First transaction outcome missing");
           const second =
-            outcomes.b ?? panic("Second transaction outcome missing");
+            outcomes.get("b") ?? panic("Second transaction outcome missing");
           return {
             schedule,
             executed,
@@ -291,7 +291,7 @@ export const withInterleaving = async <State>({
           };
         } finally {
           stopped = true;
-          if (!outcomes.a || !outcomes.b) {
+          if (!outcomes.get("a") || !outcomes.get("b")) {
             controller.abort(
               new InterleavingTimeout({
                 message: "Interleaving exceeded its deadline",
@@ -304,7 +304,7 @@ export const withInterleaving = async <State>({
           try {
             await withTimeout(
               async () => {
-                if (!outcomes.a || !outcomes.b) {
+                if (!outcomes.get("a") || !outcomes.get("b")) {
                   for (const pid of activePids) {
                     await observer.sql`SELECT pg_cancel_backend(${pid})`;
                   }

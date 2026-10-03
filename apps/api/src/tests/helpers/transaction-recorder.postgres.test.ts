@@ -25,7 +25,11 @@ const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const table = pgTable("recorder_rows", { id: integer().primaryKey() });
 
-if (runPostgresTests && databaseUrl) {
+if (!databaseUrl || !runPostgresTests) {
+  describe.skip("real transaction recording", () => {
+    test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {});
+  });
+} else {
   describe("real transaction recording", () => {
     test("records alias UPDATE writes against the real table", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
@@ -404,7 +408,7 @@ if (runPostgresTests && databaseUrl) {
                 name: "write",
                 run: async (tx: Transaction) => {
                   const read = tx.query.workspaces.findFirst({
-                    where: { id: workspaceId },
+                    where: { id: { eq: workspaceId } },
                     columns: { id: true },
                   });
                   // The installed relational builder has no locking method.
@@ -420,7 +424,7 @@ if (runPostgresTests && databaseUrl) {
                   );
                   const visible = await tx
                     .select({ workspaceId: sql<string>`workspace_id` })
-                    .from(rows);
+                    .from(sql`${rows}`);
                   expect(visible).toEqual([{ workspaceId }]);
                   await tx.execute(
                     sql`WITH locked AS (SELECT * FROM ${rows} FOR UPDATE) SELECT * FROM locked`,
@@ -450,7 +454,7 @@ if (runPostgresTests && databaseUrl) {
                   workspaceId: sql<string>`workspace_id`,
                   value: sql<number>`value`,
                 })
-                .from(rows),
+                .from(sql`${rows}`),
             invariant: ({ state, outcomes, blocked }) => {
               invariantCalls += 1;
               expect(outcomes).toEqual({
@@ -617,9 +621,5 @@ if (runPostgresTests && databaseUrl) {
         });
       },
     );
-  });
-} else {
-  describe.skip("real transaction recording", () => {
-    test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {});
   });
 }
