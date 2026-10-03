@@ -253,12 +253,11 @@ const extensionsWithScopePolicy = (
     };
   });
 
-export const createStellaOAuthProvider = <
-  O extends OAuthOptions<Scope[]> &
-    Required<Pick<OAuthOptions<Scope[]>, "scopes" | "extensions">>,
->(
-  // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- keeps the caller's option types on the returned plugin
-  options: O,
+type StellaOAuthProviderOptions = OAuthOptions<Scope[]> &
+  Required<Pick<OAuthOptions<Scope[]>, "scopes" | "extensions">>;
+
+export const createStellaOAuthProvider = (
+  options: StellaOAuthProviderOptions,
   { verifiedOrigins }: { verifiedOrigins: readonly string[] },
 ) => {
   if (options.requestUriResolver) {
@@ -271,7 +270,7 @@ export const createStellaOAuthProvider = <
     providerScopes: options.scopes,
   };
   const extensions = extensionsWithScopePolicy(options.extensions, policy);
-  const policyOptions: O = { ...options, extensions };
+  const policyOptions = { ...options, extensions };
   const provider = oauthProvider(policyOptions);
   // Registration has its own capability policy; discovery retains the
   // provider's policy. Both endpoints use the provider's persistence path.

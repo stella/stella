@@ -1,5 +1,0 @@
-{
-  "metric": "lint-suppression-directives",
-  "delta": 1,
-  "reason": "apps/api/src/lib/auth/oauth-registration-policy.ts: createStellaOAuthProvider stays generic over its options so oauthProvider infers the caller's plugin type; the rule sees the type parameter only once in the signature."
-}
