@@ -1273,7 +1273,9 @@ describe("czUsAdapter.fetchPage", () => {
       expect(second).toBeDefined();
       expect(first?.sourceRaw).not.toBe(second?.sourceRaw);
       expect(first?.rawHash).not.toBe(second?.rawHash);
-      if (second === undefined || second.sourceRaw === undefined) return;
+      if (second === undefined || second.sourceRaw === undefined) {
+        return;
+      }
       const replay = await czUsAdapter.reparseStoredRaw?.({
         raw: new TextEncoder().encode(second.sourceRaw),
         contentType: second.sourceRawContentType ?? null,
@@ -1289,7 +1291,9 @@ describe("czUsAdapter.fetchPage", () => {
         metadata: second.metadata,
       });
       expect(replay?.type).toBe("parsed");
-      if (replay?.type !== "parsed") return;
+      if (replay?.type !== "parsed") {
+        return;
+      }
       expect(replay.result.rawHash).toBe(second.rawHash);
     });
   }
