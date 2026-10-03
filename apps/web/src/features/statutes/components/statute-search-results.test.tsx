@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
+import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
 
 import {
@@ -25,16 +26,6 @@ const hit = {
   headline: "náhrada <mark>škody</mark>",
   score: 1,
 } satisfies StatuteSearchHit;
-
-// React escapes `<` and `>` inside text, so in its markup every `<` opens a
-// tag and each part's text follows that tag's closing `>`.
-const textContent = (markup: string): string =>
-  markup
-    .split("<")
-    .map((part, index) =>
-      index === 0 ? part : part.slice(part.indexOf(">") + 1),
-    )
-    .join("");
 
 const render = ({
   hits = [],
@@ -75,9 +66,12 @@ describe("public statute section results", () => {
         const markup = renderToStaticMarkup(
           <StatuteSearchSnippet headline={headline} />,
         );
-        // React's own text serialization is the oracle; the decoder must consume
-        // exactly one entity layer and keep publisher angle brackets inert.
-        expect(textContent(markup)).toBe(renderToStaticMarkup(decoded));
+        // A real HTML parser is the oracle; the decoder must consume exactly one
+        // entity layer and keep publisher angle brackets inert.
+        const container = new Window().document.createElement("div");
+        // safe-html: markup is React's renderToStaticMarkup output for this test's own component, parsed in a detached happy-dom document.
+        container.innerHTML = markup;
+        expect(container.textContent).toBe(decoded);
         expect(markup.match(/<mark(?:\s|>)/gu)?.length ?? 0).toBe(
           highlighted ? 1 : 0,
         );
