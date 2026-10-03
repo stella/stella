@@ -1,7 +1,7 @@
 import { ElysiaCustomStatusResponse } from "elysia";
 
 import { truncateTextBytes } from "@/api/lib/search/response-text-bounds";
-import { isRecord } from "@/api/lib/type-guards";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 const matchesBranch = (
   value: unknown,
@@ -39,7 +39,7 @@ const project = (value: unknown, schema: unknown): unknown => {
     return value;
   }
   const branches = schema["anyOf"];
-  if (Array.isArray(branches)) {
+  if (isUnknownArray(branches)) {
     const branch = branches.find(
       (candidate) => isRecord(candidate) && matchesBranch(value, candidate),
     );
@@ -95,5 +95,6 @@ export const projectResponseText = <T>(
   // SAFETY: a status response or Response passes through and DeepMutable maps
   // its type to itself; every other value is a fresh structuredClone deep copy
   // owned by this call, so dropping readonly cannot alias the caller's data.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- reviewed: fresh deep copy, see SAFETY
   return projected as DeepMutable<T>;
 };
