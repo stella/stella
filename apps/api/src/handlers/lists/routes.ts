@@ -2,6 +2,7 @@ import Elysia from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
+import { env } from "@/api/env";
 import createColumn from "@/api/handlers/lists/columns/create";
 import createList from "@/api/handlers/lists/create";
 import acceptGenerationCandidate from "@/api/handlers/lists/generation-candidates/acceptance/create";
@@ -31,18 +32,20 @@ import readLatestVerifications from "@/api/handlers/lists/verifications/latest/l
 import readVerifications from "@/api/handlers/lists/verifications/list";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
-import { legalListsDeployed } from "@/api/lib/lists/deployment";
 import {
   resourceRealtime,
   workspaceResourceSetUpdates,
 } from "@/api/lib/resource-realtime-macro";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const legalListRealtimeUpdates = workspaceResourceSetUpdates(
   RESOURCE_TYPE.LEGAL_LIST,
 );
 
 export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
-  .use(deploymentFeatureGate(legalListsDeployed()))
+  // The flag stays visible here: the capability catalog binds this gate to the
+  // lists feature tag (see legalListsDeployed in @/api/lib/lists/deployment).
+  .use(deploymentFeatureGate(isLocalDevOpen() || env.FEATURE_LEGAL_LISTS))
   .use(workspaceAccessMacro)
   .use(resourceRealtime)
   .use(permissionMacro)

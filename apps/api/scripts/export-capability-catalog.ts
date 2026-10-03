@@ -1095,11 +1095,14 @@ const collectClassGuardErrors = ({
   const routeHooks = scanRouteHookGuards({
     routeFiles,
     capabilityIds: capabilityIdSet,
+    capabilityFeatures: new Map(
+      entries.map((entry) => [entry.id, entry.feature]),
+    ),
     waivedIds: new Set(Object.keys(ROUTE_HOOK_WAIVERS)),
   });
   for (const { routeFile, id } of routeHooks.violations) {
     errors.push(
-      `route-hook: capability "${id}" is mounted under a route-level hook (onBeforeHandle, beforeHandle, onRequest, deploymentFeatureGate or rateLimit) in ${routeFile} that invoke_capability bypasses. Move the gate into the handler config (like case-law.ingestion.get), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
+      `route-hook: capability "${id}" is mounted under a route-level hook (onBeforeHandle, beforeHandle, onRequest or deploymentFeatureGate) in ${routeFile} that invoke_capability bypasses (a hook that only checks a FEATURE_ flag passes when the catalog entry carries that feature tag). Move the gate into the handler config (like case-law.ingestion.get), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
     );
   }
   for (const { routeFile, route } of routeHooks.childRouteMounts) {

@@ -1510,12 +1510,12 @@ const r = new Elysia()
       ".onBeforeHandle(() => undefined)",
       ".onRequest(() => undefined)",
       ".guard({ beforeHandle: () => undefined }, (app) => app)",
-      ".use(deploymentFeatureGate(env.FEATURE_USAGE))",
-      ".use(rateLimit({ max: 10 }))",
+      ".use(deploymentFeatureGate(isLocalDevOpen()))",
     ]) {
       expect(scan(hook), hook).toBe(1);
     }
     for (const macro of [
+      ".use(rateLimit({ max: 10 }))",
       ".use(authMacro)",
       ".use(permissionMacro)",
       '.guard({ auth: true, permission: { entity: ["read"] } })',
@@ -1523,6 +1523,36 @@ const r = new Elysia()
     ]) {
       expect(scan(macro), macro).toBe(0);
     }
+  });
+
+  test("a hook that only checks a feature flag is reproduced by the same catalog tag", () => {
+    const source = (hooks: string) => `
+import getStatus from "@/api/handlers/case-law/ingestion/get";
+const r = new Elysia()
+  ${hooks}
+  .get("/s", getStatus.handler, {});
+`;
+    const violations = (hooks: string, feature: string | undefined) =>
+      scanRouteHookGuards({
+        routeFiles: [{ id: "x/routes.ts", source: source(hooks) }],
+        capabilityIds: new Set(["case-law.ingestion.get"]),
+        capabilityFeatures: new Map([["case-law.ingestion.get", feature]]),
+        waivedIds: new Set(),
+      }).violations.length;
+    const gate = ".use(deploymentFeatureGate(env.FEATURE_TEMPLATE_PACKS))";
+    const hook =
+      ".onBeforeHandle(({ set }) => { if (env.FEATURE_TEMPLATE_PACKS) return undefined; set.status = 404; })";
+    expect(violations(gate, "FEATURE_TEMPLATE_PACKS")).toBe(0);
+    expect(violations(hook, "FEATURE_TEMPLATE_PACKS")).toBe(0);
+    // Untagged, tagged with another flag, or a second hook beside the gate.
+    expect(violations(gate, undefined)).toBe(1);
+    expect(violations(gate, "FEATURE_USAGE")).toBe(1);
+    expect(
+      violations(
+        `${gate}\n  .onBeforeHandle(() => undefined)`,
+        "FEATURE_TEMPLATE_PACKS",
+      ),
+    ).toBe(1);
   });
 
   test("a child route mounted under a hook fails closed", () => {
