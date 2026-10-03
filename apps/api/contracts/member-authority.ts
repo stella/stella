@@ -19,5 +19,5 @@ hasMemberPermission(memberRole, { entity: ["update"] });
 hasManagementPermission(memberRole, { workspace: ["update"] });
 roleForDisplay(memberRole) satisfies string;
 
-// @ts-expect-error spreading an authority cannot construct its private state
-({ ...memberRole }) satisfies AuthorizedMemberRole;
+// @ts-expect-error copying an authority's own fields cannot construct its private state
+Object.fromEntries(Object.entries(memberRole)) satisfies AuthorizedMemberRole;
