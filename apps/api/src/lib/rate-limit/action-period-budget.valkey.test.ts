@@ -31,7 +31,7 @@ const withStore = async (
     organizationId: ReturnType<typeof newOrganizationId>;
   }) => Promise<void>,
 ) => {
-  const client = createRedisClient();
+  const client = createRedisClient({ storeClass: "cache" });
   const organizationId = newOrganizationId();
   await client.connect();
   try {

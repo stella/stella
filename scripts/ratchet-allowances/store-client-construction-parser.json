@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The Redis configuration package's construction guard uses the existing catalog TypeScript version as a test-only parser to inspect aliases, dynamic imports, and declared factory arguments; no runtime dependency or new package version is introduced."
+}

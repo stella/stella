@@ -32,7 +32,7 @@ describe("BullMQ Redis connection", () => {
   test("lets BullMQ own connection startup", () => {
     createBunRedisClientCalls.length = 0;
 
-    createBullMqConnection();
+    createBullMqConnection({ storeClass: "durable-coordination" });
 
     expect(createBunRedisClientCalls).toHaveLength(1);
     expect(createBunRedisClientCalls[0]).toMatchObject([
@@ -88,7 +88,7 @@ describe("the reconnect policy", () => {
   });
 
   test("assigning onclose reaches Bun's setter", () => {
-    const client = createRedisClient();
+    const client = createRedisClient({ storeClass: "cache" });
 
     // Through `[[Set]]`, the way BullMQ's adapter registers its own callback.
     Reflect.set(client, "onclose", () => undefined);

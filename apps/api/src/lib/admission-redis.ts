@@ -20,8 +20,11 @@ type AdmissionRedisConnection = Parameters<
 export const createAdmissionRedis = (
   connection: AdmissionRedisConnection = createLazyRedisClient(() =>
     createRedisClient({
-      connectionTimeout: ADMISSION_STORE_CONNECTION_TIMEOUT_MS,
-      enableOfflineQueue: false,
+      storeClass: "durable-coordination",
+      overrides: {
+        connectionTimeout: ADMISSION_STORE_CONNECTION_TIMEOUT_MS,
+        enableOfflineQueue: false,
+      },
     }),
   ),
 ) =>

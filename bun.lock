@@ -943,12 +943,14 @@
       "name": "@stll/redis-config",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/time": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "typescript": "catalog:",
       },
     },
     "packages/runtime-mode": {

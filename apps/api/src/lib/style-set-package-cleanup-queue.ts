@@ -328,7 +328,9 @@ export const deleteUnreferencedStyleSetPackage = async (
 export const initStyleSetPackageCleanupWorker = ({
   db,
 }: BullMqWorkerContext) => {
-  const workerConnection = createBullMqConnection();
+  const workerConnection = createBullMqConnection({
+    storeClass: "durable-coordination",
+  });
   const worker = new Worker<StyleSetPackageCleanupJobData>(
     QUEUE_NAME,
     async (job) => {

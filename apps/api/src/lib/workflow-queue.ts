@@ -171,7 +171,9 @@ const queues = new Map<WorkflowQueueClass, WorkflowEntityQueue>();
 let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
 
 const getQueueConnection = () => {
-  queueConnection ??= createBullMqConnection();
+  queueConnection ??= createBullMqConnection({
+    storeClass: "durable-coordination",
+  });
   return queueConnection;
 };
 
@@ -1170,7 +1172,9 @@ const createWorkflowWorker = (
       await processWorkflowJob(job, extractionRuns);
     },
     {
-      connection: createBullMqConnection(),
+      connection: createBullMqConnection({
+        storeClass: "durable-coordination",
+      }),
       concurrency,
       lockDuration: LOCK_DURATION_MS,
       stalledInterval: STALLED_INTERVAL_MS,

@@ -504,7 +504,9 @@ describe("reconciliation fault isolation", () => {
     expect(queueSource).toContain(
       "connectionTimeout: REPAIR_SCAN_CURSOR_COMMAND_TIMEOUT_MS",
     );
-    expect(queueSource).toContain("connection: createBullMqConnection(),");
+    expect(queueSource).toContain(
+      'connection: createBullMqConnection({ storeClass: "durable-coordination" }),',
+    );
   });
 });
 

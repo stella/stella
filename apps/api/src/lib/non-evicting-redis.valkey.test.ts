@@ -12,7 +12,7 @@ const runValkeyTests = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
 
 describe.skipIf(!runValkeyTests)("admission policy over Valkey", () => {
   test("real INFO permits leases and refresh refuses both admission facades while raw reads work", async () => {
-    const raw = createRedisClient();
+    const raw = createRedisClient({ storeClass: "cache" });
     await raw.connect();
     let override: string | undefined;
     let refresh = () => {};

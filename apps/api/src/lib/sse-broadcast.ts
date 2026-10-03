@@ -215,7 +215,7 @@ type PublisherClient = Pick<ReturnType<typeof createRedisClient>, "publish">;
 type CreatePublisherClient = (options: RedisOptions) => PublisherClient;
 
 export const createSseBroadcastPublisher = ({
-  createClient = createRedisClient,
+  createClient = () => createRedisClient({ storeClass: "cache" }),
 }: { createClient?: CreatePublisherClient | undefined } = {}) => {
   let publisher: PublisherClient | null = null;
   const getPublisher = (): PublisherClient => {

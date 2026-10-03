@@ -93,7 +93,9 @@ export const toExportErrorMessage = (cause: unknown): string => {
 };
 
 export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
-  const workerConnection = createBullMqConnection();
+  const workerConnection = createBullMqConnection({
+    storeClass: "durable-coordination",
+  });
 
   const worker = new Worker<ReportExportJobData>(
     REPORT_EXPORT_QUEUE_NAME,
