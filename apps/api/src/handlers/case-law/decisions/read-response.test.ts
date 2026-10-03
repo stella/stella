@@ -170,9 +170,13 @@ test("decision readers bound every non-document Unicode field and retain officia
         );
         expect(response.fulltext).toBe(text);
         expect(response.documentAst).toBe(original.documentAst);
-        const { documentAst, fulltext, ...nonDocument } = response;
+        const { documentAst, fulltext, sections, ...nonDocument } = response;
         expect(documentAst).toBe(original.documentAst);
         expect(fulltext).toBe(text);
+        const coordinates = (
+          list: readonly { index: number; text: string }[] | null,
+        ) => list?.map((section) => [section.index, section.text]);
+        expect(coordinates(sections)).toEqual(coordinates(original.sections));
         expect(
           Buffer.byteLength(JSON.stringify(nonDocument)),
         ).toBeLessThanOrEqual(DECISION_READER_NON_DOCUMENT_MAX_BYTES);
@@ -180,4 +184,22 @@ test("decision readers bound every non-document Unicode field and retain officia
     ),
     { numRuns: 12 },
   );
+});
+
+test("decision readers keep every section whole so citation section indices resolve", () => {
+  const sections = Array.from({ length: 300 }, (_, index) => ({
+    index,
+    type: "argumentation" as const,
+    title: null,
+    text: `${index}:${"ř".repeat(70_000)}`,
+  }));
+  const response = projectDecisionReader({
+    ...decisionWithText("text"),
+    sections,
+  });
+
+  expect(response.sections).toEqual(sections);
+  expect([
+    ...Value.Errors(readDecisionSuccessResponseSchema, response),
+  ]).toEqual([]);
 });

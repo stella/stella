@@ -78,7 +78,6 @@ const CURSOR_BYTES = 2048;
 const METADATA_KEY_BYTES = 512;
 const METADATA_DEPTH = 4;
 const METADATA_NODES = 32;
-const SECTIONS_MAX = 128;
 const JUDGES_MAX = 128;
 
 const metadataScalarSchema = t.Union([
@@ -172,23 +171,25 @@ export const readDecisionSuccessResponseSchema = t.Object({
   ),
   decisionDate: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionDate),
   decisionType: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionType),
-  // Whole official decision text is intentional. These are the only fields
-  // exempted by the public-response ledger; a windowed reader is separate.
+  // Whole official decision text is intentional. These and `sections[].text`
+  // are the only fields exempted by the public-response ledger; a windowed
+  // reader is separate.
   documentAst: t.Unknown(),
   fulltext: t.Nullable(t.String()),
   projectionDigest: nullableBoundedString(
     DECISION_READER_TEXT_BYTES.projectionDigest,
   ),
   documentAstSource: t.Union([t.Literal("store"), t.Literal("row"), t.Null()]),
+  // Sections split the whole official text and citations address them by
+  // index, so neither the list nor a section's text is cut.
   sections: t.Nullable(
     t.Array(
       t.Object({
         index: t.Number(),
         type: t.UnionEnum([...DECISION_SECTION_TYPES]),
         title: nullableBoundedString(LABEL_BYTES),
-        text: boundedString(PROSE_BYTES),
+        text: t.String(),
       }),
-      { maxItems: SECTIONS_MAX },
     ),
   ),
   sourceUrl: nullableBoundedString(DECISION_READER_TEXT_BYTES.sourceUrl),
@@ -257,7 +258,11 @@ export const readDecisionResponseSchema =
 
 // Whole-document fields have their own intentional ingestion boundary.
 export const DECISION_READER_NON_DOCUMENT_MAX_BYTES = responseByteBound(
-  t.Omit(readDecisionSuccessResponseSchema, ["documentAst", "fulltext"]),
+  t.Omit(readDecisionSuccessResponseSchema, [
+    "documentAst",
+    "fulltext",
+    "sections",
+  ]),
 );
 
 const projectTextField = (field: TextField): TextField => {
@@ -385,11 +390,11 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
       text.projectionDigest,
     ),
     sections:
-      decision.sections?.slice(0, SECTIONS_MAX).map((section) => ({
+      decision.sections?.map((section) => ({
         index: section.index,
         type: section.type,
         title: nullableText(section.title, LABEL_BYTES),
-        text: truncateTextBytes(section.text, PROSE_BYTES),
+        text: section.text,
       })) ?? null,
     sourceUrl: nullableText(decision.sourceUrl, text.sourceUrl),
     sourceAttributionUrl: nullableText(
