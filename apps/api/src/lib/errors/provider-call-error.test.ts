@@ -57,7 +57,10 @@ describe("provider call error structural contract", () => {
         const analytics = installRecordingAnalytics();
         const logs = installRecordingLogger();
         try {
-          const sink = failureSink({ event: "provider_call.failure" });
+          const sink = failureSink({
+            event: "provider_call.failure",
+            expected: [],
+          });
           observeFailure(aiHandlerError(error, fallback), { sink });
           expect(logs.records.length).toBeGreaterThan(0);
           expect(
@@ -71,8 +74,8 @@ describe("provider call error structural contract", () => {
           JSON.stringify(error),
           JSON.stringify(error.toJSON()),
           JSON.stringify(structuredClone(error)),
-          JSON.stringify({ ...error }),
-          String(error),
+          JSON.stringify(Object.fromEntries(Object.entries(error))),
+          Error.prototype.toString.call(error),
           error.stack ?? "",
           JSON.stringify(readEvidence(error)),
         ]) {

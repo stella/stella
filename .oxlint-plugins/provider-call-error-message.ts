@@ -6,17 +6,22 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  type AstNode,
   getPropertyName,
+  isAstNode,
   isIdentifier,
   isIdentifierReference,
   isImportedFrom,
   repoRelativeFilename,
   resolveVariable,
   stableInitializer,
+  staticStringValue,
   unwrapExpression,
 } from "./utils.ts";
 
 const SOURCE_FILE = "apps/api/src/lib/tanstack-ai-generate.ts";
+const PROVIDER_CALL_ERROR_MODULE =
+  "apps/api/src/lib/errors/provider-call-error";
 const FIXTURE_FILE =
   ".oxlint-plugins/__fixtures__/provider-call-error-message.fixture.ts";
 
@@ -25,11 +30,8 @@ const isConstantMessage = (context, value, seen = new Set()) => {
   if (node === null) {
     return false;
   }
-  if (node.type === "Literal") {
-    return typeof node.value === "string";
-  }
-  if (node.type === "TemplateLiteral") {
-    return (node.expressions ?? []).length === 0;
+  if (staticStringValue(node) !== null) {
+    return true;
   }
   if (!isIdentifierReference(node) || seen.has(node)) {
     return false;
@@ -39,29 +41,36 @@ const isConstantMessage = (context, value, seen = new Set()) => {
     isImportedFrom({
       context,
       node,
-      modules: ["apps/api/src/lib/provider-call-error"],
+      modules: [PROVIDER_CALL_ERROR_MODULE],
       names: new Set(["PROVIDER_CALL_ERROR_MESSAGE"]),
     })
   ) {
     return true;
   }
   const variable = resolveVariable(context, node);
-  if (variable === null || variable.defs.length !== 1) {
+  if (variable?.defs.length !== 1) {
     return false;
   }
   const initializer = stableInitializer(variable);
-  return initializer !== null && isConstantMessage(context, initializer, seen);
+  return isConstantMessage(context, initializer, seen);
 };
 
-const providerMessageProperties = (context, value, seen = new Set()) => {
+const providerMessageProperties = (
+  context,
+  value,
+  seen = new Set(),
+): AstNode[] => {
   const node = unwrapExpression(value);
   if (node === null || seen.has(node)) {
     return [];
   }
   seen.add(node);
-  if (node.type === "ObjectExpression") {
-    const found = [];
-    for (const property of node.properties ?? []) {
+  if (node.type === "ObjectExpression" && Array.isArray(node.properties)) {
+    const found: AstNode[] = [];
+    for (const property of node.properties) {
+      if (!isAstNode(property)) {
+        continue;
+      }
       if (property.type === "SpreadElement") {
         for (const messageProperty of providerMessageProperties(
           context,
@@ -124,7 +133,7 @@ export default eslintCompatPlugin({
               isImportedFrom({
                 context,
                 node: callee,
-                modules: ["apps/api/src/lib/provider-call-error"],
+                modules: [PROVIDER_CALL_ERROR_MODULE],
                 names: new Set(["ProviderCallError"]),
               });
             const isHandlerError =
@@ -133,7 +142,7 @@ export default eslintCompatPlugin({
               return;
             }
 
-            const options = node.arguments?.at(0);
+            const options = node.arguments.at(0);
             if (isProviderCallError) {
               for (const property of providerMessageProperties(
                 context,
@@ -147,11 +156,15 @@ export default eslintCompatPlugin({
               return;
             }
             const object = unwrapExpression(options);
-            if (object?.type !== "ObjectExpression") {
+            if (
+              object?.type !== "ObjectExpression" ||
+              !Array.isArray(object.properties)
+            ) {
               return;
             }
-            for (const property of object.properties ?? []) {
+            for (const property of object.properties) {
               if (
+                isAstNode(property) &&
                 property.type === "Property" &&
                 getPropertyName(property.key) === "message" &&
                 !isConstantMessage(context, property.value)

@@ -1,3 +1,5 @@
+import { chat, EventType, StreamProcessor } from "@tanstack/ai";
+import type { StreamChunk } from "@tanstack/ai";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
@@ -6,7 +8,13 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
-import type { ChatPart } from "@/api/handlers/chat/types";
+import {
+  processServerChatStream,
+  toChatMessage,
+} from "@/api/handlers/chat/stream-chat";
+import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
+import { createChatMessageIdMapper } from "@/api/handlers/chat/stream-message-identity";
+import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -16,6 +24,7 @@ import {
 } from "@/api/tests/helpers/chat-approval-harness";
 import { createPromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
 import {
+  instanceWireErrorModel,
   providerCallErrorCassettes,
   providerCallErrorSentinel,
 } from "@/api/tests/helpers/provider-call-error-wire";
@@ -251,6 +260,105 @@ describe("a replayed provider through the chat pipeline", () => {
         analytics.restore();
         client.dispose();
         await harness.close();
+      }
+    },
+    RETRY_TIMEOUT_MS,
+  );
+
+  test.each(["rich", "spec"] as const)(
+    "preserves %s usage attached to a replayed provider run error without provider text",
+    async (shape) => {
+      const cassette = providerCallErrorCassettes().at(0);
+      if (cassette === undefined) {
+        panic("The provider error corpus is non-empty");
+      }
+      const sentinel = providerCallErrorSentinel(cassette);
+      const counts = { promptTokens: 24, completionTokens: 2, totalTokens: 26 };
+      const details = {
+        completionTokensDetails: { reasoningTokens: 1 },
+        providerUsageDetails: { message: sentinel },
+      };
+      const events: StreamChatFinishEvent[] = [];
+      const output: StreamChunk[] = [];
+      let responseMessage: ChatMessage | null = null;
+      const processor = new StreamProcessor({
+        events: {
+          onStreamEnd: (message) => {
+            responseMessage = toChatMessage(message);
+          },
+        },
+      });
+      const logs = installRecordingLogger();
+      const analytics = installRecordingAnalytics();
+      try {
+        replay.serve(cassette);
+        // This adapter omits usage on errors. Attach the two documented SDK
+        // shapes to its real wire error to exercise the persistence boundary.
+        const source = async function* (): AsyncIterable<StreamChunk> {
+          for await (const chunk of chat({
+            adapter: instanceWireErrorModel(cassette.model).adapter,
+            messages: [{ role: "user", content: "Draft a memo" }],
+          })) {
+            if (chunk.type !== EventType.RUN_ERROR) {
+              yield chunk;
+              continue;
+            }
+            expect(JSON.stringify(chunk)).toContain(sentinel);
+            yield shape === "rich"
+              ? { ...chunk, usage: { ...counts, ...details } }
+              : {
+                  ...chunk,
+                  usage: [
+                    {
+                      inputTokens: 24,
+                      outputTokens: 2,
+                      totalTokens: 26,
+                      provider: sentinel,
+                    },
+                  ],
+                  metadata: { tanstack: { usage: details }, message: sentinel },
+                };
+          }
+        };
+        for await (const chunk of processServerChatStream({
+          abortSignal: new AbortController().signal,
+          deadlineSignal: new AbortController().signal,
+          getResponseMessage: () => responseMessage,
+          initialMessages: [],
+          mapMessageId: createChatMessageIdMapper(() =>
+            toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+          ),
+          onFinish: (event) => {
+            events.push(event);
+          },
+          processor,
+          source: source(),
+        })) {
+          output.push(chunk);
+        }
+        expect(events).toHaveLength(1);
+        expect(events.at(0)?.responseMessage.metadata).toMatchObject({
+          usage: { ...counts, completionTokensDetails: { reasoningTokens: 1 } },
+        });
+        expect(events.at(0)?.outcome).toMatchObject({ type: "failed" });
+        expect(
+          output.find((chunk) => chunk.type === EventType.RUN_ERROR)?.usage,
+        ).toMatchObject(counts);
+        expect(
+          JSON.stringify({
+            events,
+            output,
+            logs: logs.records,
+            analytics: analytics.events,
+          }),
+        ).not.toContain(sentinel);
+        expect(replay.takeFindings()).toMatchObject({
+          unconsumed: [],
+          unexpected: [],
+        });
+      } finally {
+        logs.restore();
+        analytics.restore();
       }
     },
     RETRY_TIMEOUT_MS,

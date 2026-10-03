@@ -204,7 +204,10 @@ import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import { modelAcceptsStreamingToolUse } from "@/api/lib/tanstack-ai-models";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
-import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
+import {
+  safeTokenUsageFromTerminalChunk,
+  tokenUsageFromTerminalChunk,
+} from "@/api/lib/tanstack-ai-usage";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const MAX_TOOL_STEPS = 100;
@@ -1750,11 +1753,13 @@ const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
   const error = errorForRunErrorChunk(chunk);
   const kind = classifyRunErrorChunk(chunk);
   reportStreamFailure(error, kind);
+  const usage = safeTokenUsageFromTerminalChunk(chunk);
   return {
     type: EventType.RUN_ERROR,
-    timestamp: chunk.timestamp,
+    ...(chunk.timestamp === undefined ? {} : { timestamp: chunk.timestamp }),
     message: kind,
     code: kind,
+    ...(usage === undefined ? {} : { usage }),
   };
 };
 
@@ -2365,13 +2370,19 @@ export const processServerChatStream = async function* ({
       }
       const { chunk, lifecycle } = processed;
       if (lifecycle === "failed") {
-        if (chunk.type !== EventType.RUN_ERROR) {
+        if (
+          chunk.type !== EventType.RUN_ERROR ||
+          sourceChunk.type !== EventType.RUN_ERROR
+        ) {
           panic("Unhandled TanStack failed stream event");
         }
         usage = tokenUsageFromTerminalChunk(chunk) ?? usage;
         await terminalize({
           flushProcessor: true,
-          outcome: { type: "failed", error: classifyRunErrorChunk(chunk) },
+          outcome: {
+            type: "failed",
+            error: classifyRunErrorChunk(sourceChunk),
+          },
         });
         yield* announceBeforeFailure();
         yield chunk;

@@ -18,27 +18,28 @@ const lintProviderError = async (lines: readonly string[]) =>
   );
 
 describe("provider-call-error-message", () => {
-  test("allows a literal and the imported owner constant, but rejects provider text", async () => {
+  test("allows a literal and an aliased imported owner constant, but rejects provider text", async () => {
     expect(
       await lintHandler([
-        'import { PROVIDER_CALL_ERROR_MESSAGE } from "@/api/lib/errors/provider-call-error";',
+        'import { PROVIDER_CALL_ERROR_MESSAGE as safeMessage } from "@/api/lib/errors/provider-call-error";',
         "declare const chunk: { message: string };",
         'new HandlerError({ message: "Provider request failed" });',
-        "new HandlerError({ message: PROVIDER_CALL_ERROR_MESSAGE });",
+        "new HandlerError({ message: safeMessage });",
         "new HandlerError({ message: chunk.message });",
       ]),
     ).toEqual([5]);
   });
 
-  test("follows object references and spreads for ProviderCallError options", async () => {
+  test("rejects dynamic messages on aliased constructors directly and through references and spreads", async () => {
     expect(
       await lintProviderError([
         'import { ProviderCallError as ProviderFailure } from "@/api/lib/errors/provider-call-error";',
         "declare const providerText: string;",
         "const options = { message: providerText };",
         'new ProviderFailure({ provider: "openrouter", ...options });',
+        'new ProviderFailure({ provider: "openrouter", message: providerText });',
       ]),
-    ).toEqual([3]);
+    ).toEqual([3, 5]);
   });
 
   test("does not constrain HandlerError messages outside the owning source", async () => {
