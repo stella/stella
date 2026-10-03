@@ -1249,6 +1249,7 @@ const RAW_PART = {
   NOTICE_STATE: "notice-state",
   DOCUMENT: "document",
   FORMEX: "formex",
+  FORMEX_STATE: "formex-state",
 } as const;
 
 /** Cellar's addressing for a work's notice, negotiated per language. */
@@ -1610,6 +1611,10 @@ const ecjDecisionFromParts = ({
           noticeXml === undefined
             ? (parts[RAW_PART.NOTICE_STATE] ?? "notice:not-published")
             : hashContent(noticeXml)
+        }|${
+          formexXml === undefined
+            ? (parts[RAW_PART.FORMEX_STATE] ?? "formex:not-located")
+            : hashContent(formexXml)
         }`,
       ),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
@@ -1776,6 +1781,7 @@ type EcjFormexRefreshOutcome =
   | { type: "notice-missing" }
   | { type: "formex-not-located" }
   | { type: "formex-gone" }
+  | { type: "formex-refused"; status: number }
   | { type: "retryable-exhausted" }
   | ({ type: "rate-limited" } & Pick<
       PublisherRateLimitRefusalError,
@@ -1834,6 +1840,9 @@ export const refreshEcjStoredFormex = async ({
   if (Result.isError(fetchedResult)) {
     const { error } = fetchedResult;
     if (!(error instanceof PublisherRateLimitRefusalError)) {
+      if (error instanceof AdapterFetchError) {
+        return { type: "retryable-exhausted" };
+      }
       throw error;
     }
     return {
@@ -1850,8 +1859,8 @@ export const refreshEcjStoredFormex = async ({
   if (fetched.type === "gone") {
     return { type: "formex-gone" };
   }
-  if (fetched.type === "retryable-exhausted") {
-    return { type: "retryable-exhausted" };
+  if (fetched.type === "refused") {
+    return { type: "formex-refused", status: fetched.status };
   }
 
   const nextRaw = encodeSourceRawEnvelope({
@@ -1971,7 +1980,7 @@ const fetchFormex = async (
 ): Promise<
   | { type: "fetched"; formex: string }
   | { type: "gone" }
-  | { type: "retryable-exhausted" }
+  | { type: "refused"; status: number }
   | { type: "not-located" }
 > => {
   const manifestation = manifestations.find(
@@ -2013,7 +2022,15 @@ const fetchFormex = async (
       httpStatus: response.status,
       url: contentUrl.value,
     });
-    return { type: "retryable-exhausted" };
+    if (isRetryableStatus(response.status)) {
+      throw new AdapterFetchError({
+        message: `Cellar Formex HTTP ${response.status}`,
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        cursor: null,
+        httpStatus: response.status,
+      });
+    }
+    return { type: "refused", status: response.status };
   }
   if (
     mediaTypeOf(response.headers.get("content-type") ?? "") !== ZIP_MEDIA_TYPE
@@ -2108,6 +2125,12 @@ export const buildDecision = async (
   const parts = ecjRawParts({ binding, html: served.html, notice, formex });
   if (noticeRead.type === "refused") {
     parts[RAW_PART.NOTICE_STATE] = `notice:refused:${noticeRead.status}`;
+  }
+  if (formexResult !== undefined && formexResult.type !== "fetched") {
+    parts[RAW_PART.FORMEX_STATE] =
+      formexResult.type === "refused"
+        ? `formex:refused:${formexResult.status}`
+        : `formex:${formexResult.type}`;
   }
 
   return ecjDecisionFromParts({

@@ -225,8 +225,99 @@ describe("notice publication outcomes", () => {
     },
   );
 
+  test.each([400, 401, 403, 404, 410, 408, 429, 500, 503])(
+    "a Formex HTTP %s permits only terminal reads and later content changes the hash",
+    async (status) => {
+      let formexStatus = status;
+      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/resource/celex/")) {
+          return new Response(noticeEn, {
+            headers: { "Content-Type": "application/xml" },
+          });
+        }
+        if (url.endsWith("/DOC_1")) {
+          return new Response(formexStatus === 200 ? formexEn : null, {
+            status: formexStatus,
+            headers: { "Content-Type": "application/xml" },
+          });
+        }
+        return new Response(documentEn, {
+          headers: { "Content-Type": "application/xhtml+xml" },
+        });
+      });
+      const initial = buildDecision(binding, AbortSignal.timeout(5000));
+      if ([408, 429, 500, 503].includes(status)) {
+        await expect(initial).rejects.toThrow(
+          status === 429 ? PublisherRateLimitRefusalError : AdapterFetchError,
+        );
+      } else {
+        const incomplete = await initial;
+        expect(incomplete?.metadata.formexCelex).toBeUndefined();
+        const incompleteParts = decodeSourceRawEnvelope(
+          incomplete?.sourceRaw ?? "",
+        );
+        expect(incompleteParts?.["formex-state"]).toBe(
+          [404, 410].includes(status)
+            ? "formex:gone"
+            : `formex:refused:${status}`,
+        );
+        formexStatus = 200;
+        const complete = await buildDecision(
+          binding,
+          AbortSignal.timeout(5000),
+        );
+        expect(complete?.fulltext).toBe(incomplete?.fulltext);
+        expect(complete?.metadata.formexCelex).toBeDefined();
+        expect(complete?.rawHash).not.toBe(incomplete?.rawHash);
+        const replayed = await reparse(storedFrom(incomplete?.sourceRaw ?? ""));
+        expect(replayed.type).toBe("parsed");
+        if (replayed.type === "parsed") {
+          expect(replayed.result.rawHash).toBe(incomplete?.rawHash);
+        }
+        const repeated = await buildDecision(
+          binding,
+          AbortSignal.timeout(5000),
+        );
+        expect(repeated?.rawHash).toBe(complete?.rawHash);
+        formexStatus = 404;
+        const gone = await buildDecision(binding, AbortSignal.timeout(5000));
+        if (![404, 410].includes(status)) {
+          expect(gone?.rawHash).not.toBe(incomplete?.rawHash);
+        }
+      }
+    },
+  );
+
   test("a published notice retains its bytes", async () => {
     expect(await readNotice(200)).toEqual({ type: "present", xml: noticeEn });
+  });
+
+  test("Formex publication and content changes alter the source hash without changing fulltext", async () => {
+    const decisions = [];
+    for (const formex of [undefined, formexEn, `${formexEn}\n`, formexEn]) {
+      const outcome = await reparse(
+        storedFrom(
+          encodeSourceRawEnvelope(
+            ecjRawParts({
+              binding,
+              html: documentEn,
+              notice: noticeEn,
+              formex,
+            }),
+          ),
+        ),
+      );
+      if (outcome.type !== "parsed") {
+        throw new TypeError(`Expected parsed, got ${outcome.type}`);
+      }
+      decisions.push(outcome.result);
+    }
+    expect(new Set(decisions.map((decision) => decision.fulltext)).size).toBe(
+      1,
+    );
+    expect(new Set(decisions.map((decision) => decision.rawHash)).size).toBe(3);
+    expect(decisions.at(1)?.rawHash).toBe(decisions.at(3)?.rawHash);
   });
 
   test("notice publication and content changes alter the source hash", async () => {
@@ -494,7 +585,7 @@ describe("stored Formex refresh", () => {
     for (const [status, expected] of [
       [404, "formex-gone"],
       [410, "formex-gone"],
-      [403, "retryable-exhausted"],
+      [403, "formex-refused"],
       [408, "retryable-exhausted"],
       [429, "retryable-exhausted"],
       [503, "retryable-exhausted"],
@@ -511,7 +602,11 @@ describe("stored Formex refresh", () => {
         signal,
         fetchFormex: async () => response("", status),
       });
-      expect(outcome).toEqual({ type: expected });
+      expect(outcome).toEqual(
+        expected === "formex-refused"
+          ? { type: expected, status }
+          : { type: expected },
+      );
     }
 
     const refusal = new PublisherRateLimitRefusalError({
