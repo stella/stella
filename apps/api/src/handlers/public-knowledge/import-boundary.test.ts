@@ -133,7 +133,7 @@ const isConstantsOnly = (
         const clause = statement.importClause;
         const bindings = clause?.namedBindings;
         const typeOnly =
-          clause?.isTypeOnly === true ||
+          clause?.phaseModifier === ts.SyntaxKind.TypeKeyword ||
           (clause?.name === undefined &&
             bindings !== undefined &&
             ts.isNamedImports(bindings) &&
