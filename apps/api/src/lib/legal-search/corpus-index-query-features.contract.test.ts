@@ -528,7 +528,9 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
     const standalone = [];
     for (const [position, input] of requests.entries()) {
       const result = await search(input);
-      expect(keys(result)).toEqual(expectedKeys.at(position));
+      expect(keys(result)).toEqual(
+        expectedKeys.at(position) ?? panic("missing expected keys"),
+      );
       standalone.push(result);
     }
     // Reverse and duplicate inputs so index grouping or result compaction
@@ -644,7 +646,9 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
     for (const [position, input] of requests.entries()) {
       const result = v.parse(SearchSchema, batch.at(position));
       const single = await search(input);
-      expect(keys(result)).toEqual(expected.at(position));
+      expect(keys(result)).toEqual(
+        expected.at(position) ?? panic("missing expected keys"),
+      );
       expect(result.hits).toEqual(single.hits);
       expect(result.timed_out).toBe(false);
       expect(result._shards.failed).toBe(0);
