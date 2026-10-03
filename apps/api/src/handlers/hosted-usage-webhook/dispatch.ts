@@ -29,7 +29,9 @@ import type { UsageEntitlementStatus, UsagePolicyKind } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { DispatchOutcome } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import type {
+  HostedUsageWebhookEvent,
   HostedUsageAllocationPayload,
   HostedUsageEntitlementPayload,
 } from "@/api/lib/hosted-usage-provider/event-schemas";
@@ -50,10 +52,7 @@ import type { ConfiguredAccessEvent } from "@/api/lib/usage/configured-access";
 import { applyConfiguredAccessEvent } from "@/api/lib/usage/configured-access-store";
 import { allocateUsage } from "@/api/lib/usage/usage-ledger";
 
-export type DispatchOutcome =
-  | { kind: "applied"; entitlementId: SafeId<"usageEntitlement"> }
-  | { kind: "duplicate_allocation" }
-  | { kind: "ignored"; reason: string };
+export type DispatchMode = "live" | "replay_apply" | "replay_dry_run";
 
 type PolicyLookup = {
   id: SafeId<"usagePolicy">;
@@ -154,12 +153,14 @@ const TERMINAL_PROVIDER_STATUSES = new Set([
 ]);
 
 type StaleProviderEventParams = {
+  mode: DispatchMode;
   existing: ExistingEntitlement;
   payload: HostedUsageEntitlementPayload;
   occurredAt: Date | null;
 };
 
 const isStaleProviderEvent = ({
+  mode,
   existing,
   payload,
   occurredAt,
@@ -185,19 +186,21 @@ const isStaleProviderEvent = ({
     ) {
       return occurredAt < existing.hostedLastEventAt;
     }
-    observeFailure(
-      new HostedEventOrderingConflict({
-        message:
-          "Hosted event generation is ambiguous; operator reconciliation required",
-      }),
-      {
-        sink: orderingConflict,
-        ctx: {
-          source: "usage_provider.webhook.ordering",
-          entityId: existing.id,
+    if (mode !== "replay_dry_run") {
+      observeFailure(
+        new HostedEventOrderingConflict({
+          message:
+            "Hosted event generation is ambiguous; operator reconciliation required",
+        }),
+        {
+          sink: orderingConflict,
+          ctx: {
+            source: "usage_provider.webhook.ordering",
+            entityId: existing.id,
+          },
         },
-      },
-    );
+      );
+    }
     // An unversioned incoming generation cannot displace a known one.
     // Existing unversioned rows retain their event-clock fallback only when
     // that clock distinguishes the events.
@@ -243,7 +246,7 @@ const cancellationFlagAtVersion = ({
   existing,
   payload,
   occurredAt,
-}: StaleProviderEventParams) =>
+}: Omit<StaleProviderEventParams, "mode">) =>
   (payload.cancel_at_period_end ?? false) ||
   (env.FEATURE_CONFIGURED_ACCESS &&
     existing.cancelAtPeriodEnd &&
@@ -365,7 +368,10 @@ const unknownProviderStatus = failureSink({
   expected: [],
 });
 
-const mapHostedProviderStatus = (providerStatus: string) => {
+const mapHostedProviderStatus = (
+  providerStatus: string,
+  mode: DispatchMode,
+) => {
   const parsed = v.safeParse(polarEntitlementStatusSchema, providerStatus);
   if (parsed.success) {
     return {
@@ -373,18 +379,20 @@ const mapHostedProviderStatus = (providerStatus: string) => {
       status: HOSTED_PROVIDER_STATUS_MAP[parsed.output],
     };
   }
-  observeFailure(
-    new HostedProviderUnknownStatus({
-      message: "Unrecognized provider status",
-    }),
-    {
-      sink: unknownProviderStatus,
-      ctx: {
-        source: "usage_provider.webhook",
-        step: "mapHostedProviderStatus",
+  if (mode !== "replay_dry_run") {
+    observeFailure(
+      new HostedProviderUnknownStatus({
+        message: "Unrecognized provider status",
+      }),
+      {
+        sink: unknownProviderStatus,
+        ctx: {
+          source: "usage_provider.webhook",
+          step: "mapHostedProviderStatus",
+        },
       },
-    },
-  );
+    );
+  }
   return null;
 };
 
@@ -536,6 +544,7 @@ const providerAccessEvent = ({
 };
 
 type HostedEntitlementUpsertParams = {
+  mode?: DispatchMode;
   tx: Transaction;
   payload: HostedUsageEntitlementPayload;
   eventId: string;
@@ -543,12 +552,13 @@ type HostedEntitlementUpsertParams = {
 };
 
 export const handleHostedEntitlementUpsert = async ({
+  mode = "live",
   tx,
   payload,
   eventId,
   accessEvent,
 }: HostedEntitlementUpsertParams): Promise<DispatchOutcome> => {
-  const mapped = mapHostedProviderStatus(payload.status);
+  const mapped = mapHostedProviderStatus(payload.status, mode);
   if (mapped === null) {
     return await handleHostedEntitlementReconciliation({
       tx,
@@ -568,7 +578,7 @@ export const handleHostedEntitlementUpsert = async ({
   // mapped, the local row owns the org id, so a renewal/update that arrives
   // without metadata must still apply — requiring it up front would silently
   // drop the new period and skip the periodic allocation.
-  if (payload.created_at === undefined) {
+  if (payload.created_at === undefined && mode !== "replay_dry_run") {
     logger.warn("usage_provider.webhook.missing_generation", { eventId });
   }
   const metadataOrganizationId = payload.metadata?.organization_id ?? null;
@@ -614,6 +624,7 @@ export const handleHostedEntitlementUpsert = async ({
     }
     if (
       isStaleProviderEvent({
+        mode,
         existing: existingByProvider,
         payload,
         occurredAt,
@@ -715,10 +726,12 @@ export const handleHostedEntitlementUpsert = async ({
         replacesExternalId &&
         TERMINAL_PROVIDER_STATUSES.has(payload.status)
       ) {
-        logger.info("usage_provider.webhook.superseded", {
-          entityId: existingByAccountRef.id,
-          eventId,
-        });
+        if (mode !== "replay_dry_run") {
+          logger.info("usage_provider.webhook.superseded", {
+            entityId: existingByAccountRef.id,
+            eventId,
+          });
+        }
         return {
           kind: "ignored",
           reason: "terminal event for a superseded external entitlement",
@@ -726,6 +739,7 @@ export const handleHostedEntitlementUpsert = async ({
       }
       if (
         isStaleProviderEvent({
+          mode,
           existing: existingByAccountRef,
           payload,
           occurredAt,
@@ -992,6 +1006,7 @@ export const handleHostedEntitlementUpsert = async ({
 };
 
 type UsageEntitlementStatusUpdateParams = {
+  mode?: DispatchMode;
   tx: Transaction;
   payload: HostedUsageEntitlementPayload;
   eventId: string;
@@ -1009,13 +1024,14 @@ type UsageEntitlementStatusUpdateParams = {
 };
 
 export const handleUsageEntitlementStatusChange = async ({
+  mode = "live",
   tx,
   payload,
   eventId,
   eventKind,
 }: UsageEntitlementStatusUpdateParams): Promise<DispatchOutcome> => {
   // Revocation denies access independently of the reported snapshot status.
-  const mapped = mapHostedProviderStatus(payload.status);
+  const mapped = mapHostedProviderStatus(payload.status, mode);
   const mappedStatus =
     eventKind === "revoked" ? "cancelled" : (mapped?.status ?? null);
   if (mappedStatus === null) {
@@ -1053,10 +1069,12 @@ export const handleUsageEntitlementStatusChange = async ({
       payload.account_ref,
     );
     if (current && current.hostedEntitlementExternalId !== payload.id) {
-      logger.info("usage_provider.webhook.superseded", {
-        entityId: current.id,
-        eventId,
-      });
+      if (mode !== "replay_dry_run") {
+        logger.info("usage_provider.webhook.superseded", {
+          entityId: current.id,
+          eventId,
+        });
+      }
       return {
         kind: "ignored",
         reason: "terminal event for a superseded external entitlement",
@@ -1064,6 +1082,7 @@ export const handleUsageEntitlementStatusChange = async ({
     }
     if (!current) {
       return await handleHostedEntitlementUpsert({
+        mode,
         tx,
         eventId,
         accessEvent:
@@ -1085,7 +1104,7 @@ export const handleUsageEntitlementStatusChange = async ({
     }
     existing = current;
   }
-  if (payload.created_at === undefined) {
+  if (payload.created_at === undefined && mode !== "replay_dry_run") {
     logger.warn("usage_provider.webhook.missing_generation", { eventId });
   }
   if (existing.source !== "hosted") {
@@ -1101,7 +1120,12 @@ export const handleUsageEntitlementStatusChange = async ({
     cancel_at_period_end: eventKind === "canceled",
   };
   if (
-    isStaleProviderEvent({ existing, payload: orderingPayload, occurredAt })
+    isStaleProviderEvent({
+      mode,
+      existing,
+      payload: orderingPayload,
+      occurredAt,
+    })
   ) {
     return {
       kind: "ignored",
@@ -1297,4 +1321,76 @@ export const handleHostedAllocation = async ({
   });
 
   return { kind: "applied", entitlementId: existing.id };
+};
+
+type DispatchEventOptions = {
+  mode: DispatchMode;
+  tx: Transaction;
+  event: HostedUsageWebhookEvent;
+  eventId: string;
+};
+
+export const dispatchEvent = async ({
+  mode,
+  tx,
+  event,
+  eventId,
+}: DispatchEventOptions): Promise<DispatchOutcome> => {
+  switch (event.type) {
+    case "entitlement.created":
+    case "entitlement.updated":
+    case "entitlement.active":
+      return await handleHostedEntitlementUpsert({
+        mode,
+        tx,
+        payload: event.data,
+        eventId,
+      });
+    case "entitlement.reconciliation":
+      return await handleHostedEntitlementReconciliation({
+        tx,
+        payload: event.data,
+        eventId,
+        reason: "provider_migration",
+      });
+    case "entitlement.paused":
+      // A pause can introduce a replacement generation before its creation
+      // arrives; the upsert's generation clock must retain that denial.
+      return await handleHostedEntitlementUpsert({
+        mode,
+        tx,
+        payload: {
+          ...event.data,
+          status: "paused",
+          cancel_at_period_end: false,
+        },
+        eventId,
+      });
+    case "entitlement.canceled":
+      return await handleUsageEntitlementStatusChange({
+        mode,
+        tx,
+        payload: event.data,
+        eventId,
+        eventKind: "canceled",
+      });
+    case "entitlement.revoked":
+      return await handleUsageEntitlementStatusChange({
+        mode,
+        tx,
+        payload: event.data,
+        eventId,
+        eventKind: "revoked",
+      });
+    case "allocation.created":
+      return await handleHostedAllocation({
+        tx,
+        payload: event.data,
+        eventId,
+      });
+    default: {
+      event satisfies never;
+      return panic(`Unhandled event: ${String(event)}`);
+    }
+  }
 };

@@ -1,6 +1,6 @@
 import {
-  ELI_COLLECTION_BY_STATUTE_ACT_COLLECTION,
   STATUTE_ACTS,
+  statuteActEliCollection,
   type StatuteAct,
 } from "./statute-acts";
 
@@ -19,7 +19,7 @@ const target = ({
   work: { collection, number, year },
   label,
 }: StatuteAct): StatuteAliasTarget => ({
-  collection: ELI_COLLECTION_BY_STATUTE_ACT_COLLECTION[collection],
+  collection: statuteActEliCollection(collection),
   label,
   number: String(number),
   year: String(year),

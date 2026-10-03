@@ -342,7 +342,10 @@ export const OWNERSHIP = [
   {
     id: "provider-event-records",
     capability: "Minimal verified provider event persistence",
-    owner: ["apps/api/src/lib/hosted-usage-provider/webhook-store.ts"],
+    owner: [
+      "apps/api/src/lib/hosted-usage-provider/webhook-store.ts",
+      "apps/api/src/handlers/hosted-usage-webhook/replay.ts",
+    ],
     summary:
       "The store projects authenticated deliveries through the dispatch schema before persistence. Retention redacts completed details while preserving deduplication identifiers and unresolved records.",
     enforcement: {
@@ -417,6 +420,11 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/handlers/hosted-usage-webhook/contract.postgres.test.ts",
           reason: "Asserts dispatch and receipt outcomes in PostgreSQL.",
+        },
+        {
+          path: "apps/api/src/lib/hosted-usage-provider/replay.postgres.test.ts",
+          reason:
+            "Asserts selected receipt replay and durable audit outcomes in PostgreSQL.",
         },
         {
           path: "apps/api/src/lib/hosted-usage-provider/webhook-retention.postgres.test.ts",

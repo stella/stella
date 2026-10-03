@@ -15,7 +15,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { oauthCallbackFailureReason } from "@/api/lib/errors/oauth-callback-failure";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
-import { recordMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
+import {
+  recordMcpAuthorizationReview,
+  resolveMcpIssuerBinding,
+} from "@/api/lib/mcp-upstream/authorization-review";
 import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
 import {
   decryptMcpSecret,
@@ -31,6 +34,7 @@ import {
   tokenExpiresAt,
 } from "@/api/lib/mcp-upstream/oauth";
 import type {
+  ApprovedMcpIssuerBinding,
   BoundOAuthMetadata,
   TokenResponse,
 } from "@/api/lib/mcp-upstream/oauth";
@@ -85,8 +89,7 @@ type ValidatePendingOAuthMetadataOptions = {
   connectorUrl: string;
   resourceUrl: string;
   authorizationServerUrl: string;
-  approvedIssuer: string | null;
-  confirmedEndpointOrigins: readonly string[];
+  issuerBinding: ApprovedMcpIssuerBinding;
   discoverMetadata: typeof discoverOAuthMetadataForApproval;
   requestReview: (
     observedIssuer: string,
@@ -103,8 +106,7 @@ const validatePendingOAuthMetadata = async ({
   connectorUrl,
   resourceUrl,
   authorizationServerUrl,
-  approvedIssuer,
-  confirmedEndpointOrigins,
+  issuerBinding,
   discoverMetadata,
   requestReview,
 }: ValidatePendingOAuthMetadataOptions): Promise<PendingOAuthMetadataResult> => {
@@ -140,7 +142,7 @@ const validatePendingOAuthMetadata = async ({
       }),
     );
   }
-  const approval = validateApprovedOAuthIssuer(metadata.value, approvedIssuer);
+  const approval = validateApprovedOAuthIssuer(metadata.value, issuerBinding);
   if (Result.isError(approval)) {
     const review = await requestReview(
       metadata.value.authorizationServer.issuer,
@@ -162,7 +164,7 @@ const validatePendingOAuthMetadata = async ({
   const boundMetadata = bindDiscoveredMetadata({
     connectorUrl,
     ...metadata.value,
-    confirmedEndpointOrigins,
+    confirmedEndpointOrigins: issuerBinding.endpointOrigins,
   });
   if (Result.isError(boundMetadata)) {
     const review = await requestReview(
@@ -202,6 +204,34 @@ type PendingAuthorization =
   | { type: "bound"; metadata: BoundOAuthMetadata }
   | { type: "approval_required" }
   | { type: "failed"; error: HandlerError<400 | 409 | 502> | SafeDbError };
+
+type RequestUnconfiguredIssuerReviewOptions = {
+  connectorUrl: string;
+  discoverMetadata: typeof discoverOAuthMetadataForApproval;
+  requestReview: ValidatePendingOAuthMetadataOptions["requestReview"];
+};
+
+/**
+ * A connector without an approved issuer completes no authorization: the
+ * issuer it uses now is recorded for an administrator to review.
+ */
+const requestUnconfiguredIssuerReview = async ({
+  connectorUrl,
+  discoverMetadata,
+  requestReview,
+}: RequestUnconfiguredIssuerReviewOptions): Promise<PendingAuthorization> => {
+  const observed = await discoverMetadata(connectorUrl);
+  if (Result.isError(observed)) {
+    return { type: "failed", error: observed.error };
+  }
+  const review = await requestReview(
+    observed.value.authorizationServer.issuer,
+    getOAuthEndpointOrigins(observed.value),
+  );
+  return Result.isError(review)
+    ? { type: "failed", error: review.error }
+    : { type: "approval_required" };
+};
 
 const authorizePendingConnection = async ({
   safeDb,
@@ -248,17 +278,34 @@ const authorizePendingConnection = async ({
         : { observedEndpointOrigins }),
     });
 
+  const issuerBinding = resolveMcpIssuerBinding({
+    curatedApproval: getCuratedMcpOAuthApproval(connector.url),
+    connectorIssuer: connector.oauthIssuer,
+    connectorConfirmedEndpointOrigins: connector.oauthConfirmedEndpointOrigins,
+    reviewApprovedIssuer: authorizationReview.value?.approvedIssuer ?? null,
+    reviewApprovedEndpointOrigins:
+      authorizationReview.value?.approvedEndpointOrigins ?? null,
+  });
+  switch (issuerBinding.type) {
+    case "unconfigured":
+      return await requestUnconfiguredIssuerReview({
+        connectorUrl: connector.url,
+        discoverMetadata,
+        requestReview,
+      });
+    case "approved":
+      break;
+    default: {
+      issuerBinding satisfies never;
+      return panic("Unhandled MCP issuer binding");
+    }
+  }
+
   const boundMetadata = await validatePendingOAuthMetadata({
     connectorUrl: connector.url,
     resourceUrl: pending.resourceUrl,
     authorizationServerUrl: pending.authorizationServerUrl,
-    approvedIssuer:
-      authorizationReview.value?.approvedIssuer ?? connector.oauthIssuer,
-    confirmedEndpointOrigins:
-      authorizationReview.value?.approvedEndpointOrigins ??
-      connector.oauthConfirmedEndpointOrigins ??
-      getCuratedMcpOAuthApproval(connector.url)?.endpointOrigins ??
-      [],
+    issuerBinding,
     discoverMetadata,
     requestReview,
   });

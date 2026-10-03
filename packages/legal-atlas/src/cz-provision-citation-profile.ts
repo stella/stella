@@ -572,6 +572,16 @@ export const CZ_PROFILE = {
       citedFrom: "2014-01-01",
     },
     {
+      spellings: [
+        "živnostenský zákon",
+        "živnostenského zákona",
+        "živnostenském zákoně",
+        "živnostenskému zákonu",
+        "živnostenským zákonem",
+      ],
+      identifier: CZE.trades.work,
+    },
+    {
       spellings: actTitleForms("o veřejných zakázkách"),
       identifier: sb(40, 2004),
       citedFrom: PUBLIC_PROCUREMENT_2004,

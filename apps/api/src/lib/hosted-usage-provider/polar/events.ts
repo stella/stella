@@ -102,6 +102,7 @@ const handledAllocation = (
   candidate: {
     type: "allocation.created",
     data: {
+      occurred_at: occurredAtOf(data),
       id: data["id"],
       account_ref: data["customer_id"],
       policy_ref: data["product_id"],

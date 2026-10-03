@@ -27,6 +27,7 @@ const entitlement = {
 } satisfies Required<HostedUsageEntitlementPayload>;
 
 const allocation = {
+  occurred_at: "2026-10-02T00:00:00Z",
   id: "order-1",
   account_ref: "account-1",
   policy_ref: "product-1",
