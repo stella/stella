@@ -168,7 +168,9 @@ const redisTestUrl = process.env["STELLA_COLLAB_TEST_REDIS_URL"];
 test.skipIf(redisTestUrl === undefined)(
   "real collaboration clients decode and enforce policy observations",
   async () => {
-    if (redisTestUrl === undefined) {return panic("Redis test URL is required");}
+    if (redisTestUrl === undefined) {
+      return panic("Redis test URL is required");
+    }
     const statuses: string[] = [];
     const errors: unknown[] = [];
     const client = createCollabRedisClient({
@@ -182,12 +184,14 @@ test.skipIf(redisTestUrl === undefined)(
     const send = spyOn(RedisClient.prototype, "sendCommand").mockImplementation(
       function (this: RedisClient, command, ...args) {
         const reply: unknown = original.call(this, command, ...args);
-        if (command.name !== "info" || !command.args.includes("memory"))
-          {return reply;}
+        if (command.name !== "info" || !command.args.includes("memory")) {
+          return reply;
+        }
         return Promise.resolve(reply).then((value: unknown) => {
           expect(typeof value).toBe("string");
-          if (typeof value !== "string")
-            {return panic("INFO memory should be decoded");}
+          if (typeof value !== "string") {
+            return panic("INFO memory should be decoded");
+          }
           expect(value).toContain("maxmemory_policy:");
           return value.replace(
             /^maxmemory_policy:[^\r\n]+/mu,

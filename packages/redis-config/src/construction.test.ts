@@ -52,7 +52,9 @@ const inspectConstruction = (source: string, file: string) => {
     while (ts.isIdentifier(resolved) && !seen.has(resolved.text)) {
       seen.add(resolved.text);
       const initializer = variables.get(resolved.text);
-      if (initializer === undefined) {return resolved;}
+      if (initializer === undefined) {
+        return resolved;
+      }
       resolved = initializer;
     }
     return resolved;
