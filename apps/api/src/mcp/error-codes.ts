@@ -116,6 +116,15 @@ type McpRefusalOptions = {
   retryable?: boolean | undefined;
 };
 
+/** A refusal ready for the structured envelope; absent fields are omitted. */
+export type McpRefusal = {
+  code: McpErrorCode;
+  message: string;
+  issues: McpValidationIssue[];
+  hint?: string;
+  retryable?: boolean;
+};
+
 /** Transport classifications stay closed; handler domain codes identify issues. */
 export const projectMcpRefusal = ({
   status,
@@ -124,7 +133,7 @@ export const projectMcpRefusal = ({
   issues,
   hint,
   retryable,
-}: McpRefusalOptions) => {
+}: McpRefusalOptions): McpRefusal => {
   const detailedIssues = isUnknownArray(issues)
     ? issues.flatMap((issue) => {
         if (
@@ -152,7 +161,7 @@ export const projectMcpRefusal = ({
       code !== undefined && !isMcpErrorCode(code)
         ? [{ path: "", code, message }, ...detailedIssues]
         : detailedIssues,
-    hint,
-    retryable,
+    ...(hint === undefined ? {} : { hint }),
+    ...(retryable === undefined ? {} : { retryable }),
   };
 };
