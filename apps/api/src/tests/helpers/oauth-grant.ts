@@ -23,6 +23,7 @@ export type RegisteredOAuthClient = {
 export type OAuthGrant = {
   accessToken: string;
   refreshToken: string;
+  scope: string;
 };
 
 const registrationSchema = v.looseObject({
@@ -32,6 +33,7 @@ const registrationSchema = v.looseObject({
 const redirectSchema = v.looseObject({ url: v.string() });
 
 const tokenSchema = v.looseObject({
+  scope: v.string(),
   access_token: v.pipe(v.string(), v.minLength(1)),
   refresh_token: v.pipe(v.string(), v.minLength(1)),
 });
@@ -212,6 +214,7 @@ export const consentAndExchange = async ({
   return {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
+    scope: tokens.scope,
   };
 };
 

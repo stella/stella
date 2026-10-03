@@ -2,7 +2,6 @@ import { apiKey } from "@better-auth/api-key";
 import { createCimdClientDiscovery } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
-import { oauthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -129,7 +128,9 @@ import {
   mapMembershipInvariantError,
   ownerRequiredError,
 } from "@/api/lib/membership-role-invariants";
+import { createOAuthConsentInfoPlugin } from "@/api/lib/oauth-consent-info";
 import { resolveLoopbackClientRegistrationOverride } from "@/api/lib/oauth-loopback-registration";
+import { createStellaOAuthProvider } from "@/api/lib/oauth-registration-policy";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -1644,7 +1645,8 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           });
         },
       }),
-      oauthProvider({
+      createOAuthConsentInfoPlugin([env.FRONTEND_URL, getAuthIssuerUrl()]),
+      createStellaOAuthProvider({
         loginPage: OAUTH_UI_LOGIN_PATH,
         consentPage: OAUTH_UI_CONSENT_PATH,
         scopes: [...MCP_OAUTH_SCOPES],

@@ -1846,12 +1846,14 @@
   },
   "consent": {
     "allow": "Leisti",
+    "appIdentity": "Programėlės tapatybė",
     "completeSetup": "Užbaigti sąranką",
     "defaultClientName": "Programa",
     "description": "{clientName} nori pasiekti jūsų stella darbo sritį",
     "error": "Įvyko klaida. Bandykite dar kartą.",
     "missingJurisdictions": "Jūsų stella organizacija dar nenustatė savo praktikos jurisdikcijų. Kol neužbaigsite sąrankos, kai kurie jurisdikciją vertinantys įrankiai bus nepasiekiami.",
     "permissions": "Tai leis programai:",
+    "redirectDestination": "Peradresavimo paskirties vieta",
     "scopeAdminRead": "Skaityti jūsų organizacijos audito žurnalą",
     "scopeAdminWrite": "Tvarkyti organizacijos narius ir nustatymus",
     "scopeBillingWrite": "Kurti, redaguoti ir ištrinti jūsų laiko įrašus",
@@ -1872,7 +1874,8 @@
     "scopeSkills": "Naudoti jūsų išsaugotus stella įgūdžius",
     "scopeTemplates": "Dokumentų šablonų sąrašas, pildymas ir kūrimas",
     "scopeTemplatesAnonymized": "Peržiūrėti, pildyti ir kurti anonimizuotas jūsų dokumentų šablonų versijas",
-    "title": "Suteikti prieigą"
+    "title": "Suteikti prieigą",
+    "unverifiedApp": "Nepatvirtinta programėlė"
   },
   "contacts": {
     "alsoPartyIn": "Taip pat dalyvauja kaip šalis {count, plural, one {# kitoje byloje} few {# kitose bylose} other {# kitų bylų}}",

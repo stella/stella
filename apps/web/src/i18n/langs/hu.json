@@ -1846,12 +1846,14 @@
   },
   "consent": {
     "allow": "Engedélyezés",
+    "appIdentity": "Alkalmazás azonosítása",
     "completeSetup": "Beállítás befejezése",
     "defaultClientName": "Egy alkalmazás",
     "description": "A(z) {clientName} hozzá szeretne férni a stella munkaterületéhez",
     "error": "Hiba történt. Kérjük, próbálja újra.",
     "missingJurisdictions": "A stella-szervezete még nem állította be a praxis joghatóságait. Egyes joghatóságfüggő eszközök addig nem lesznek elérhetők, amíg be nem fejezi a beállítást.",
     "permissions": "Ez lehetővé teszi az alkalmazás számára, hogy:",
+    "redirectDestination": "Átirányítás célja",
     "scopeAdminRead": "A szervezet auditnaplójának olvasása",
     "scopeAdminWrite": "A szervezet tagjainak és beállításainak kezelése",
     "scopeBillingWrite": "Időbejegyzések létrehozása, szerkesztése és törlése",
@@ -1872,7 +1874,8 @@
     "scopeSkills": "A mentett stella-készségek használata",
     "scopeTemplates": "Dokumentumsablonok listázása, kitöltése és létrehozása",
     "scopeTemplatesAnonymized": "A dokumentumsablonok anonimizált változatainak listázása, kitöltése és létrehozása",
-    "title": "Hozzáférés engedélyezése"
+    "title": "Hozzáférés engedélyezése",
+    "unverifiedApp": "Nem ellenőrzött alkalmazás"
   },
   "contacts": {
     "alsoPartyIn": "Félként is megjelenik {count, plural, one {# másik ügyben} other {# másik ügyben}}",

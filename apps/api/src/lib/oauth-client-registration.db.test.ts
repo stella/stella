@@ -1,8 +1,21 @@
+import type { SchemaClient } from "@better-auth/oauth-provider";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
+
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
+import {
+  OPEN_REGISTRATION_SCOPES,
+  OAUTH_REGISTRATION_SCOPE_POLICY,
+} from "@/api/lib/oauth-registration-policy";
+import {
+  CACHE_CONTROL_HEADER,
+  PRIVATE_CACHE_CONTROL,
+} from "@/api/lib/security-headers";
+import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
+import { signInHuman } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
@@ -11,6 +24,12 @@ import {
   OAUTH_CLIENT_REGISTRATION_FIXTURES,
   OAUTH_CLIENT_REGISTRATION_REJECTION_FIXTURES,
 } from "@/api/tests/helpers/oauth-client-registration-fixtures";
+import {
+  authorizeOAuthClient,
+  consentAndExchange,
+  readSignedQuery,
+  registerOAuthClient,
+} from "@/api/tests/helpers/oauth-grant";
 
 beforeAll(async () => {
   await initAgentAuthTestDb();
@@ -74,6 +93,76 @@ const acceptanceCases = Object.values(OAUTH_CLIENT_REGISTRATION_FIXTURES).map(
 );
 
 describe("OAuth dynamic client registration", () => {
+  test("requires a session for consent details", async () => {
+    const response = await getAuth().handler(
+      new Request(
+        `${getAuthEndpointUrl("oauth2/consent-info")}?client_id=example-client`,
+      ),
+    );
+    expect(response.status).toBe(401);
+  });
+
+  test.each(
+    Object.entries(OAUTH_REGISTRATION_SCOPE_POLICY)
+      .filter(([, policy]) => policy === "elevated")
+      .map(([scope]) => scope),
+  )("registers the configured capability subset for %s", async (scope) => {
+    const response = await registerClient({
+      redirect_uris: ["https://connector.example/callback"],
+      scope,
+    });
+    expect(response.status).toBe(201);
+    const registered = v.parse(
+      v.looseObject({ scope: v.string() }),
+      await response.json(),
+    );
+    expect(registered.scope.split(" ").toSorted()).toEqual(
+      OPEN_REGISTRATION_SCOPES.toSorted(),
+    );
+  });
+
+  test("persists open registration capabilities and supplies consent details", async () => {
+    const response = await registerClient({
+      client_name: "Example connector",
+      redirect_uris: ["https://connector.example/callback"],
+    });
+    expect(response.status).toBe(201);
+    const registered = v.parse(
+      v.looseObject({ client_id: v.string(), scope: v.string() }),
+      await response.json(),
+    );
+    expect(registered.scope.split(" ").toSorted()).toEqual(
+      OPEN_REGISTRATION_SCOPES.toSorted(),
+    );
+    const context = await getAuth().$context;
+    const stored = await context.adapter.findOne<
+      SchemaClient<readonly string[]>
+    >({
+      model: "oauthClient",
+      where: [{ field: "clientId", value: registered.client_id }],
+    });
+    expect(stored?.scopes?.toSorted()).toEqual(
+      OPEN_REGISTRATION_SCOPES.toSorted(),
+    );
+    const browser = await signInHuman("consent-details@example.test");
+    const details = await getAuth().handler(
+      new Request(
+        `${getAuthEndpointUrl("oauth2/consent-info")}?client_id=${registered.client_id}`,
+        { headers: browser.headers() },
+      ),
+    );
+    expect(details.status).toBe(200);
+    expect(details.headers.get(CACHE_CONTROL_HEADER)).toBe(
+      PRIVATE_CACHE_CONTROL,
+    );
+    expect(await details.json()).toEqual({
+      client_name: "Example connector",
+      redirectHosts: ["connector.example"],
+      clientIdHost: null,
+      unverified: true,
+    });
+  });
+
   test.each(acceptanceCases)("registers %s", async (_label, fixture) => {
     const response = await registerClient(fixture.body);
 
@@ -98,6 +187,112 @@ describe("OAuth dynamic client registration", () => {
         sent,
       );
     }
+  });
+
+  test.each(
+    Object.values(OAUTH_CLIENT_REGISTRATION_FIXTURES)
+      .filter((fixture) => fixture.origin === "captured")
+      .flatMap((fixture) =>
+        ["GET", "POST"].map(
+          (method) => [fixture.client, method, fixture] as const,
+        ),
+      ),
+  )(
+    "registers and authorizes %s using %s",
+    async (_client, method, fixture) => {
+      const response = await registerClient(fixture.body);
+      expect(response.status).toBe(201);
+      const registered = v.parse(
+        registrationResponseSchema,
+        await response.json(),
+      );
+      const redirectUris = v.parse(
+        v.array(v.string()),
+        fixture.body["redirect_uris"],
+      );
+      const redirectUri = v.parse(v.string(), redirectUris.at(0));
+      const browser = await signInHuman(
+        `consent-${String(registrationsIssued)}@example.test`,
+      );
+      const organization = await getAuth().api.createOrganization({
+        body: { name: "Consent flow", slug: `consent-${Bun.randomUUIDv7()}` },
+        headers: browser.headers(),
+      });
+      await browser.setActiveOrganization(organization.id);
+      const requestedScope = fixture.body["scope"];
+      const query = new URLSearchParams({
+        client_id: registered.client_id,
+        code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+        code_challenge_method: "S256",
+        redirect_uri: redirectUri,
+        response_type: "code",
+        scope:
+          typeof requestedScope === "string"
+            ? requestedScope
+            : MCP_OAUTH_SCOPES.join(" "),
+      });
+      registrationsIssued += 1;
+      const authorizeUrl = getAuthEndpointUrl("oauth2/authorize");
+      const authorized = await getAuth().handler(
+        new Request(
+          method === "GET" ? `${authorizeUrl}?${query}` : authorizeUrl,
+          {
+            method,
+            headers: {
+              "content-type": "application/x-www-form-urlencoded",
+              cookie: browser.cookieHeader(),
+              "x-forwarded-for": `198.51.100.${String(registrationsIssued)}`,
+            },
+            ...(method === "POST" ? { body: query.toString() } : {}),
+          },
+        ),
+      );
+      expect(authorized.status).toBe(302);
+      const location = v.parse(v.string(), authorized.headers.get("location"));
+      expect(new URL(location).pathname).toBe("/consent");
+      expect(location).toContain("oauth_query=");
+      const signed = readSignedQuery(new URL(location));
+      const consentScope = new URLSearchParams(signed).get("scope");
+      const expected = query
+        .get("scope")
+        ?.split(" ")
+        .filter((scope) => OPEN_REGISTRATION_SCOPES.includes(scope));
+      expect(consentScope?.split(" ")).toEqual(expected);
+    },
+  );
+
+  test("shows and grants the registered capability subset", async () => {
+    const browser = await signInHuman("consent-flow@example.test");
+    const organization = await getAuth().api.createOrganization({
+      body: { name: "Consent flow", slug: `consent-${Bun.randomUUIDv7()}` },
+      headers: browser.headers(),
+    });
+    await browser.setActiveOrganization(organization.id);
+    const client = await registerOAuthClient();
+    const { codeVerifier, redirect: consentPage } = await authorizeOAuthClient(
+      browser,
+      client,
+    );
+    expect(consentPage.pathname).toBe("/consent");
+    const expectedResourceScopes = MCP_DEFAULT_RESOURCE_SCOPES.filter(
+      (scope) => OAUTH_REGISTRATION_SCOPE_POLICY[scope] === "open",
+    ).toSorted();
+    const expectedConsentScopes = [
+      ...expectedResourceScopes,
+      "offline_access",
+    ].toSorted();
+    const shownScope = v.parse(
+      v.string(),
+      new URLSearchParams(readSignedQuery(consentPage)).get("scope"),
+    );
+    expect(shownScope.split(" ").toSorted()).toEqual(expectedConsentScopes);
+    const grant = await consentAndExchange({
+      browser,
+      client,
+      codeVerifier,
+      consentPage,
+    });
+    expect(grant.scope.split(" ").toSorted()).toEqual(expectedResourceScopes);
   });
 
   test("treats an empty contacts array as absent", async () => {

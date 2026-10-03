@@ -1,3 +1,4 @@
+import type { SchemaClient } from "@better-auth/oauth-provider";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import * as v from "valibot";
 
@@ -111,6 +112,58 @@ const refusalFrom = async (response: Response): Promise<string> => {
 };
 
 describe("OAuth client ID metadata documents", () => {
+  test("retains configured capabilities for discovered apps", async () => {
+    const clientId = "https://capabilities.example.com/oauth/client.json";
+    documentsByUrl.set(
+      clientId,
+      metadataDocument({
+        client_id: clientId,
+        scope: "stella:admin_read stella:admin_write stella:external_mcps",
+      }),
+    );
+    const response = await authorize(clientId, REDIRECT_URI);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toContain("oauth_query=");
+    const context = await getAuth().$context;
+    const client = await context.adapter.findOne<
+      SchemaClient<readonly string[]>
+    >({
+      model: "oauthClient",
+      where: [{ field: "clientId", value: clientId }],
+    });
+    expect(client?.clientDiscoveryId).toBe("cimd");
+    expect(client?.scopes).toEqual(
+      expect.arrayContaining([
+        "stella:admin_read",
+        "stella:admin_write",
+        "stella:external_mcps",
+      ]),
+    );
+    const requestedScope =
+      "stella:admin_read stella:admin_write stella:external_mcps";
+    const parameters = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: REDIRECT_URI,
+      response_type: "code",
+      code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+      code_challenge_method: "S256",
+      scope: requestedScope,
+    });
+    requestsIssued += 1;
+    const authorized = await getAuth().handler(
+      new Request(`${getAuthEndpointUrl("oauth2/authorize")}?${parameters}`, {
+        headers: { "x-forwarded-for": `198.51.100.${String(requestsIssued)}` },
+      }),
+    );
+    expect(authorized.status).toBe(302);
+    const location = v.parse(v.string(), authorized.headers.get("location"));
+    const signed = v.parse(
+      v.string(),
+      new URLSearchParams(new URL(location).hash.slice(1)).get("oauth_query"),
+    );
+    expect(new URLSearchParams(signed).get("scope")).toBe(requestedScope);
+  });
+
   test("accepts a document whose redirect_uris cover the request", async () => {
     documentsByUrl.set(DOCUMENT_URL, metadataDocument());
     requestedUrls.length = 0;

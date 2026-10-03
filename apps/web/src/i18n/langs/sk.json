@@ -1846,12 +1846,14 @@
   },
   "consent": {
     "allow": "Povoliť",
+    "appIdentity": "Identita aplikácie",
     "completeSetup": "Dokončiť nastavenie",
     "defaultClientName": "Aplikácia",
     "description": "{clientName} chce získať prístup k vášmu pracovnému priestoru stella",
     "error": "Niečo sa pokazilo. Skúste to znova.",
     "missingJurisdictions": "Vaša organizácia v stelle si zatiaľ nenastavila jurisdikcie svojej praxe. Niektoré nástroje závislé od jurisdikcie nebudú dostupné, kým nastavenie nedokončíte.",
     "permissions": "Toto umožní aplikácii:",
+    "redirectDestination": "Cieľ presmerovania",
     "scopeAdminRead": "Čítať protokol auditu vašej organizácie",
     "scopeAdminWrite": "Spravovať členov a nastavenia organizácie",
     "scopeBillingWrite": "Vytvoriť, upraviť a vymazať vaše časové záznamy",
@@ -1872,7 +1874,8 @@
     "scopeSkills": "Použitie vašich uložených zručností stella",
     "scopeTemplates": "Zobrazenie, vypĺňanie a vytváranie vašich vzorov dokumentov",
     "scopeTemplatesAnonymized": "Zobraziť, vyplniť a vytvoriť anonymizované verzie vašich vzorov dokumentov",
-    "title": "Autorizácia prístupu"
+    "title": "Autorizácia prístupu",
+    "unverifiedApp": "Neoverená aplikácia"
   },
   "contacts": {
     "alsoPartyIn": "Vystupuje tiež ako strana v {count, plural, one {# ďalšom spise} few {# ďalších spisoch} other {# ďalších spisoch}}",
