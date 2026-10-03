@@ -26,12 +26,15 @@ const hit = {
   score: 1,
 } satisfies StatuteSearchHit;
 
-// Strips tags to a fixed point, so no tag can survive by being split across
-// a removed one.
-const textContent = (markup: string): string => {
-  const stripped = markup.replaceAll(/<[^>]*>/gu, "");
-  return stripped === markup ? markup : textContent(stripped);
-};
+// React escapes `<` and `>` inside text, so in its markup every `<` opens a
+// tag and each part's text follows that tag's closing `>`.
+const textContent = (markup: string): string =>
+  markup
+    .split("<")
+    .map((part, index) =>
+      index === 0 ? part : part.slice(part.indexOf(">") + 1),
+    )
+    .join("");
 
 const render = ({
   hits = [],
