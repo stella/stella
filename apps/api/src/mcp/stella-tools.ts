@@ -637,7 +637,7 @@ const SET_PRACTICE_JURISDICTIONS_TOOL = "set_practice_jurisdictions";
  * The envelope adds three JSON characters per entry, two for the brackets,
  * and four base64 characters per three bytes.
  */
-const CASE_LAW_SEARCH_CURSOR_MAX_LENGTH = Math.ceil(
+export const CASE_LAW_SEARCH_CURSOR_MAX_LENGTH = Math.ceil(
   (((CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH + 3) *
     LIMITS.caseLawSearchQueriesMax +
     2) *

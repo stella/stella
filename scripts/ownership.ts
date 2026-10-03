@@ -782,7 +782,10 @@ export const OWNERSHIP = [
   {
     id: "member-authorization",
     capability: "Deciding what a request's member role and credential may do",
-    owner: ["apps/api/src/lib/permission-authorization.ts"],
+    owner: [
+      "apps/api/src/lib/permission-authorization.ts",
+      "apps/web/src/lib/organization/role-assignment.logic.ts",
+    ],
     summary:
       "Every permission decision reads the request's `AuthorizedMemberRole`: " +
       "the member role together with the credential behind the request. A " +
@@ -791,7 +794,9 @@ export const OWNERSHIP = [
       "`hasManagementPermission` are the reads, and every handler context " +
       "builder sets the credential once, so no handler-level check can fall " +
       "back to the role's full authority. Reading the role table directly " +
-      "skips the credential.",
+      "skips the credential. The web organization role-policy owner derives " +
+      "session UI visibility and assignable roles from the shared role policy; " +
+      "API decisions still enforce the request credential.",
     enforcement: {
       kind: "import",
       specifiers: ["@stll/permissions"],

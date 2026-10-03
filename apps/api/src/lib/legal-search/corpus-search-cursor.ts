@@ -30,22 +30,29 @@ import { panic, Result } from "better-result";
  * A cursor without a target was built against groups under their manifests'
  * contracts only, so it cannot continue a read whose target has one.
  *
- * A continuation that moved past a capped scan window of a ranker that folds
- * hits into groups also carries the groups earlier windows showed
- * (`SearchCursor.excludedGroups`), as one segment right before the id: `x`
- * followed by fixed-width group tokens, none when there are none:
+ * Three more optional segments may follow the target, always in this order
+ * and each at most once:
  *
- *     base64("<score>:<windowStart>:<dictionary>:<sort>[:<target>]:x<tokens>:<id>")
+ *     base64("<score>:<windowStart>:<dictionary>:<sort>[:<target>][:x<tokens>][:p<phase>][:r-<mode>]:<id>")
  *
- * The `x` cannot open a target (lowercase hex), so the two optional segments
- * never read as each other. A replica that predates the segment refuses such a
- * cursor as malformed rather than misreading it.
+ *   - `x<tokens>`: a continuation that moved past a capped scan window of a
+ *     ranker that folds hits into groups carries the groups earlier windows
+ *     showed (`SearchCursor.excludedGroups`) as fixed-width group tokens;
+ *     absent when there are none.
+ *   - `p<phase>`: legislation carries base64url JSON for its strict or relaxed
+ *     phase, query fingerprint, serving generation and, for relaxed results,
+ *     the strict Works already returned. It is unauthenticated like the
+ *     enclosing cursor; continuation validation compares its phase identity
+ *     with the current request before using it.
+ *   - `r-<mode>`: an experimental session carries `r-off` or `r-bm25-ratio`.
+ *     The effective mode survives fallback and every continuation; existing
+ *     position cursors omit it and remain position cursors.
  *
- * Legislation can append a `p` segment after these optional segments, carrying
- * base64url JSON for its strict or relaxed phase, query fingerprint, serving
- * generation and, for relaxed results, the strict Works already returned.
- * It is unauthenticated like the enclosing cursor; continuation validation
- * compares its phase identity with the current request before using it.
+ * Each optional segment is identified by its opening characters: a target is
+ * lowercase hex, and `x`, `p` and `r` are not hex digits nor prefixes of each
+ * other, so no segment reads as another. A repeated or out-of-order segment
+ * is malformed. A replica that predates a segment refuses such a cursor as
+ * malformed rather than misreading it.
  *
  * `windowStart` is a decimal rank, `dictionary` is a payload's sha256 hex or
  * `none`, `sort` is one of `SEARCH_SORTS`, and `id` is one segment — the
@@ -74,6 +81,10 @@ import { createHash } from "node:crypto";
 import * as v from "valibot";
 
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  CORPUS_INDEX_RANKING_MODES,
+  type CorpusIndexRankingMode,
+} from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
   DEFAULT_SEARCH_SORT,
   SEARCH_SORTS,
@@ -140,6 +151,10 @@ const GROUP_TOKEN_PATTERN = new RegExp(
   "u",
 );
 const GROUPS_SEGMENT_PREFIX = "x";
+const RANKING_MODE_PREFIX = "r-";
+const RANKING_MODE_MAX_CHARS =
+  RANKING_MODE_PREFIX.length +
+  Math.max(...CORPUS_INDEX_RANKING_MODES.map((mode) => mode.length));
 const PHASE_SEGMENT_PREFIX = "p";
 const PHASE_FINGERPRINT_PATTERN = /^[0-9a-f]{64}$/u;
 
@@ -272,18 +287,32 @@ const parsePhase = (segment: string): CorpusSearchPhase | null => {
   return Result.isError(parsed) ? null : readPhase(parsed.value);
 };
 
-export const CORPUS_SEARCH_CURSOR_MAX_LENGTH = base64Length(
+const GROUPS_SEGMENT_MAX_CHARS =
+  GROUPS_SEGMENT_PREFIX.length +
+  LIMITS.corpusIndexSearchMaxExcludedGroups * CORPUS_CURSOR_GROUP_TOKEN_CHARS;
+
+/**
+ * The longest framed payload without groups or a phase: every fixed segment,
+ * a read target and a ranking mode, each at its bound and followed by its
+ * separator.
+ */
+const BASE_PAYLOAD_MAX_CHARS =
   SCORE_MAX_CHARS +
-    1 +
-    WINDOW_RANK_MAX_CHARS +
-    1 +
-    DICTIONARY_IDENTITY_MAX_CHARS +
-    1 +
-    SORT_MAX_CHARS +
-    1 +
-    CORPUS_READ_TARGET_IDENTITY_LENGTH +
-    1 +
-    DECISION_ID_MAX_CHARS,
+  1 +
+  WINDOW_RANK_MAX_CHARS +
+  1 +
+  DICTIONARY_IDENTITY_MAX_CHARS +
+  1 +
+  SORT_MAX_CHARS +
+  1 +
+  CORPUS_READ_TARGET_IDENTITY_LENGTH +
+  1 +
+  RANKING_MODE_MAX_CHARS +
+  1 +
+  DECISION_ID_MAX_CHARS;
+
+export const CORPUS_SEARCH_CURSOR_MAX_LENGTH = base64Length(
+  BASE_PAYLOAD_MAX_CHARS,
 );
 
 /**
@@ -292,28 +321,16 @@ export const CORPUS_SEARCH_CURSOR_MAX_LENGTH = base64Length(
  * groups can issue one, so only such a search's cursor input declares it.
  */
 export const CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH = base64Length(
-  SCORE_MAX_CHARS +
-    1 +
-    WINDOW_RANK_MAX_CHARS +
-    1 +
-    DICTIONARY_IDENTITY_MAX_CHARS +
-    1 +
-    SORT_MAX_CHARS +
-    1 +
-    CORPUS_READ_TARGET_IDENTITY_LENGTH +
-    1 +
-    GROUPS_SEGMENT_PREFIX.length +
-    LIMITS.corpusIndexSearchMaxExcludedGroups *
-      CORPUS_CURSOR_GROUP_TOKEN_CHARS +
-    1 +
-    DECISION_ID_MAX_CHARS,
+  BASE_PAYLOAD_MAX_CHARS + GROUPS_SEGMENT_MAX_CHARS + 1,
 );
 
-/** Legislation's phase plus the existing cursor's maximum framed payload. */
+/** Legislation's cursor: the groups form plus the phase segment at its bound. */
 export const CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH = base64Length(
-  (CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH / 4) * 3 +
+  BASE_PAYLOAD_MAX_CHARS +
+    GROUPS_SEGMENT_MAX_CHARS +
     1 +
-    PHASE_SEGMENT_MAX_CHARS,
+    PHASE_SEGMENT_MAX_CHARS +
+    1,
 );
 
 export const encodeCorpusSearchCursor = ({
@@ -325,21 +342,22 @@ export const encodeCorpusSearchCursor = ({
   target,
   windowStart,
   phase,
+  rankingMode,
 }: CorpusSearchCursor): string => {
   const groups = serializeExcludedGroups(excludedGroups);
   return encodeCursor(
     score,
-    `${windowStart}:${serializeExpansionDictionaryIdentity(dictionary)}:${sort}:${target === null ? "" : `${target}:`}${groups === null ? "" : `${groups}:`}${phase === undefined ? "" : `${serializePhase(phase)}:`}${id}`,
+    `${windowStart}:${serializeExpansionDictionaryIdentity(dictionary)}:${sort}:${target === null ? "" : `${target}:`}${groups === null ? "" : `${groups}:`}${phase === undefined ? "" : `${serializePhase(phase)}:`}${rankingMode === undefined ? "" : `${RANKING_MODE_PREFIX}${rankingMode}:`}${id}`,
   );
 };
 
 /** What the segments before the id say about the ranking a page came from. */
-type CursorRanking = {
+type CursorRanking = Pick<
+  SearchCursor,
+  "windowStart" | "sort" | "rankingMode" | "excludedGroups"
+> & {
   dictionary: ExpansionDictionaryIdentity;
-  windowStart: number;
-  sort: SearchSort;
   target?: string | null;
-  excludedGroups?: readonly string[];
   phase?: CorpusSearchPhase | undefined;
 };
 
@@ -347,43 +365,102 @@ type OptionalSegments = {
   target: string | null;
   excludedGroups: readonly string[];
   phase?: CorpusSearchPhase | undefined;
+  rankingMode?: CorpusIndexRankingMode | undefined;
 };
 
 /**
- * The optional segments after the sort, in order: a read target, the groups
- * segment, both, or neither, optionally followed by a phase. Null otherwise.
+ * The optional segments in the only order the encoder writes them. Each kind
+ * is told apart by its first characters (lowercase hex, `x`, `p`, `r-`), none
+ * of which opens another, so a segment's kind never depends on its position.
+ */
+const OPTIONAL_SEGMENT_KINDS = [
+  "target",
+  "groups",
+  "phase",
+  "rankingMode",
+] as const;
+type OptionalSegmentKind = (typeof OPTIONAL_SEGMENT_KINDS)[number];
+
+const optionalSegmentKind = (segment: string): OptionalSegmentKind | null => {
+  if (READ_TARGET_PATTERN.test(segment)) {
+    return "target";
+  }
+  if (segment.startsWith(GROUPS_SEGMENT_PREFIX)) {
+    return "groups";
+  }
+  if (segment.startsWith(PHASE_SEGMENT_PREFIX)) {
+    return "phase";
+  }
+  if (segment.startsWith(RANKING_MODE_PREFIX)) {
+    return "rankingMode";
+  }
+  return null;
+};
+
+const parseRankingMode = (segment: string): CorpusIndexRankingMode | null =>
+  CORPUS_INDEX_RANKING_MODES.find(
+    (mode) => `${RANKING_MODE_PREFIX}${mode}` === segment,
+  ) ?? null;
+
+/**
+ * The optional segments after the sort: any subset of target, groups, phase
+ * and ranking mode, each at most once and in that order. Null otherwise, so a
+ * repeated or reordered segment is malformed rather than silently resolved.
  */
 const parseOptionalSegments = (
   segments: readonly string[],
 ): OptionalSegments | null => {
-  const last = segments.at(-1);
-  if (last?.startsWith(PHASE_SEGMENT_PREFIX)) {
-    const phase = parsePhase(last);
-    const preceding = parseOptionalSegments(segments.slice(0, -1));
-    if (phase === null || preceding === null || preceding.phase !== undefined) {
+  const parsed: OptionalSegments = { target: null, excludedGroups: [] };
+  let previousRank = -1;
+  for (const segment of segments) {
+    const kind = optionalSegmentKind(segment);
+    if (kind === null) {
       return null;
     }
-    return { ...preceding, phase };
+    const rank = OPTIONAL_SEGMENT_KINDS.indexOf(kind);
+    if (rank <= previousRank) {
+      return null;
+    }
+    previousRank = rank;
+    switch (kind) {
+      case "target": {
+        parsed.target = segment;
+        break;
+      }
+      case "groups": {
+        const excludedGroups = parseExcludedGroups(segment);
+        if (excludedGroups === null) {
+          return null;
+        }
+        parsed.excludedGroups = excludedGroups;
+        break;
+      }
+      case "phase": {
+        const phase = parsePhase(segment);
+        if (phase === null) {
+          return null;
+        }
+        parsed.phase = phase;
+        break;
+      }
+      case "rankingMode": {
+        const rankingMode = parseRankingMode(segment);
+        if (rankingMode === null) {
+          return null;
+        }
+        parsed.rankingMode = rankingMode;
+        break;
+      }
+      default: {
+        kind satisfies never;
+        return panic("Unhandled corpus cursor segment kind");
+      }
+    }
   }
-  const [first, second, ...rest] = segments;
-  if (first === undefined) {
-    return { target: null, excludedGroups: [] };
-  }
-  if (rest.length > 0) {
-    return null;
-  }
-  const target = READ_TARGET_PATTERN.test(first) ? first : null;
-  if (target !== null && second === undefined) {
-    return { target, excludedGroups: [] };
-  }
-  if (target === null && second !== undefined) {
-    return null;
-  }
-  const excludedGroups = parseExcludedGroups(second ?? first);
-  return excludedGroups === null ? null : { target, excludedGroups };
+  return parsed;
 };
 
-/** `<windowStart>:<dictionary>:<sort>[:<target>][:x<groups>]`. */
+/** `<windowStart>:<dictionary>:<sort>[:<target>][:x<groups>][:p<phase>][:r-<mode>]`. */
 const parseCurrentForm = (
   segments: readonly string[],
 ): CursorRanking | null => {
@@ -399,7 +476,15 @@ const parseCurrentForm = (
   ) {
     return null;
   }
-  return { dictionary, windowStart, sort, ...optional };
+  const { phase, rankingMode, ...rest } = optional;
+  return {
+    dictionary,
+    windowStart,
+    sort,
+    ...rest,
+    ...(phase === undefined ? {} : { phase }),
+    ...(rankingMode === undefined ? {} : { rankingMode }),
+  };
 };
 
 export const decodeCorpusSearchCursor = (
@@ -455,11 +540,12 @@ export const decodeCorpusSearchCursor = (
       }
       return cursorOf({ dictionary, windowStart, sort: DEFAULT_SEARCH_SORT });
     }
-    // The current form, with a read target, a groups segment, both or neither.
+    // The current form, with any ordered subset of the four optional segments.
     case 4:
     case 5:
     case 6:
-    case 7: {
+    case 7:
+    case 8: {
       const ranking = parseCurrentForm(segments.slice(0, -1));
       return ranking === null ? null : cursorOf(ranking);
     }

@@ -19,6 +19,7 @@ import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json";
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json";
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
+import { extractPlanSelector } from "./ci-plan-selector";
 import queueOnlyReasons from "./ci-queue-only-jobs.json";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
@@ -28,16 +29,8 @@ const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
   "utf-8",
 );
-const selectorStart = workflow.indexOf(
-  "          # Path scopes for the build/smoke jobs",
-);
-const selectorEnd = workflow.indexOf(
-  "          printf 'Changed files:",
-  selectorStart,
-);
-expect(selectorStart).toBeGreaterThan(-1);
-expect(selectorEnd).toBeGreaterThan(selectorStart);
-const selector = workflow.slice(selectorStart, selectorEnd);
+const selector = extractPlanSelector(workflow);
+const selectorStart = workflow.indexOf(selector);
 
 type BashCase = {
   flags: readonly string[];

@@ -1,12 +1,18 @@
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import fc from "fast-check";
+import { Buffer } from "node:buffer";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { assertProperty } from "@stll/property-testing";
 
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated-decisions";
 import {
   type CorpusIndexHit,
+  CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -23,8 +29,17 @@ import { buildCaseLawProjectionDocuments } from "@/api/lib/legal-search/corpus-i
 import type { CaseLawProjectionInput } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
-import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
+import {
+  CORPUS_BM25_PASSAGE_LIMIT,
+  type CorpusIndexRankingMode,
+} from "@/api/lib/legal-search/corpus-ranking-policy";
+import {
+  corpusSearchGroupToken,
+  decodeCorpusSearchCursor,
+  encodeCorpusSearchCursor,
+} from "@/api/lib/legal-search/corpus-search-cursor";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
+import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import {
   blendStableCitationAuthority,
   DEFAULT_AUTHORITY_WEIGHT,
@@ -49,10 +64,12 @@ const runEngineTests = process.env["STELLA_RUN_CORPUS_ENGINE_TESTS"] === "true";
 
 const MANIFEST = CORPUS_INDEX_MANIFESTS.case_law_v7;
 const INDEX_ID = `case_law_v7_contract_${Date.now().toString(36)}`;
+const TIED_INDEX_ID = `${INDEX_ID}_tied`;
 const REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000001",
 );
 const SOURCE_ID = "0198e331-e578-7000-8000-000000000002";
+const SMALL_TIED_SOURCE_ID = "0198e331-e578-7000-8000-000000000003";
 const ENGINE_TIMEOUT_MS = 120_000;
 
 /**
@@ -64,6 +81,10 @@ const ENGINE_TIMEOUT_MS = 120_000;
 const BATCHES = 8;
 const DECISIONS_PER_BATCH = 48;
 const PASSAGES_PER_DECISION = 3;
+const TIED_DOCUMENT_COUNT = CORPUS_BM25_PASSAGE_LIMIT + 104;
+const SMALL_TIED_DOCUMENT_COUNT = 60;
+const tiedDocumentId = (serial: number): string =>
+  `0298e331-e578-7000-8000-${String(serial).padStart(12, "0")}`;
 
 /** A block long enough that the chunker gives it a passage of its own. */
 const PASSAGE_MIN_CHARS = 1100;
@@ -155,6 +176,37 @@ const decisionDocuments = (batch: number, slot: number) => {
   });
 };
 
+const tiedDocuments = (serial: number) => {
+  const input = {
+    family: "case_law",
+    documentId: tiedDocumentId(serial),
+    sourceId:
+      serial < SMALL_TIED_DOCUMENT_COUNT ? SMALL_TIED_SOURCE_ID : SOURCE_ID,
+    jurisdiction: "CZE",
+    language: "cs",
+    documentType: null,
+    contentHash: null,
+    redistributionEligible: true,
+    redacted: false,
+    listingOnly: false,
+    caseNumber: "",
+    identifiers: [],
+    court: "",
+    courtId: null,
+    decisionDate: null,
+    ecli: null,
+    metadata: null,
+  } satisfies CaseLawProjectionInput;
+  const documents = buildCaseLawProjectionDocuments({
+    manifest: MANIFEST,
+    input,
+    payload: { text: "tie", ast: null },
+    revision: REVISION,
+  });
+  expect(documents).toHaveLength(1);
+  return documents;
+};
+
 /** The engine query the search handler builds for an entry, relevance order. */
 const handlerQuery = (text: string): string => {
   const fields = caseLawCorpusQueryFields({
@@ -210,11 +262,23 @@ const readNative = async (query: string, from: number, size: number) => {
   return result.value;
 };
 
+type ReadScoredOptions = {
+  query: string;
+  from: number;
+  size: number;
+  indexId?: string;
+};
+
 /** The same page through the scored endpoint, with the scan's projection. */
-const readScored = async (query: string, from: number, size: number) => {
+const readScored = async ({
+  query,
+  from,
+  size,
+  indexId = INDEX_ID,
+}: ReadScoredOptions) => {
   const result = await client.scoredSearch({
     observer: "unobserved",
-    indexId: INDEX_ID,
+    indexId,
     query,
     from,
     size,
@@ -227,20 +291,33 @@ const readScored = async (query: string, from: number, size: number) => {
   return result.value;
 };
 
-const readScanPage = async (
-  query: string,
-  parsedCursor: SearchCursor | null,
-  scanTransport: CorpusIndexScanTransport,
-) =>
+type ReadScanPageOptions = {
+  query: string;
+  parsedCursor: SearchCursor | null;
+  scanTransport: CorpusIndexScanTransport;
+  rankingMode?: CorpusIndexRankingMode;
+  limit?: number;
+  indexId?: string;
+};
+
+const readScanPage = async ({
+  query,
+  parsedCursor,
+  scanTransport,
+  rankingMode = "off",
+  limit = 20,
+  indexId = INDEX_ID,
+}: ReadScanPageOptions) =>
   await readCorpusIndexSearchPage({
     observer: "unobserved",
     cluster: "q09",
-    indexId: INDEX_ID,
+    indexId,
     query,
-    limit: 20,
+    limit,
     order: RELEVANCE_ORDER,
     parsedCursor,
     scanTransport,
+    rankingMode,
     snippetFields: ["text"],
     extractId: (hit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
@@ -303,11 +380,203 @@ describe.skipIf(!runEngineTests)(
           throw new Error(`ingest ${String(response.status)}`);
         }
       }
+      const tiedCreated = await client.createIndex(
+        corpusIndexConfigFromManifest(MANIFEST, TIED_INDEX_ID),
+        "unobserved",
+      );
+      if (tiedCreated.isErr()) {
+        throw tiedCreated.error;
+      }
+      // One isolated split gives every identical passage the same BM25 term
+      // statistics; the ordinary multi-split fixtures must not affect them.
+      const documents = Array.from(
+        { length: TIED_DOCUMENT_COUNT },
+        (_, serial) => tiedDocuments(serial),
+      ).flat();
+      expect(documents).toHaveLength(TIED_DOCUMENT_COUNT);
+      const tiedNdjson = `${documents.map((document) => JSON.stringify(document)).join("\n")}\n`;
+      expect(Buffer.byteLength(tiedNdjson, "utf-8")).toBeLessThanOrEqual(
+        CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
+      );
+      const tiedResponse = await fetch(
+        `${String(mutationBase)}/api/v1/${TIED_INDEX_ID}/ingest?commit=force`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/x-ndjson" },
+          body: tiedNdjson,
+        },
+      );
+      if (!tiedResponse.ok) {
+        throw new Error(`ingest ${String(tiedResponse.status)}`);
+      }
     }, ENGINE_TIMEOUT_MS);
 
     afterAll(async () => {
-      await client.deleteIndex(INDEX_ID, "unobserved");
+      for (const indexId of [INDEX_ID, TIED_INDEX_ID]) {
+        const deleted = await client.deleteIndex(indexId, "unobserved");
+        if (deleted.isErr()) {
+          throw deleted.error;
+        }
+      }
     }, ENGINE_TIMEOUT_MS);
+
+    test(
+      "all-tied scores past the cutoff fall back and visit every document once",
+      async () => {
+        const query = "jurisdiction:CZE AND text:tie";
+        const universe = await readScored({
+          query,
+          from: 0,
+          size: CORPUS_BM25_PASSAGE_LIMIT + 1,
+          indexId: TIED_INDEX_ID,
+        });
+        expect(universe.numHits).toBe(TIED_DOCUMENT_COUNT);
+        expect(universe.hits).toHaveLength(CORPUS_BM25_PASSAGE_LIMIT + 1);
+        expect(new Set(universe.hits.map(({ score }) => score)).size).toBe(1);
+        expect(universe.hits.at(0)?.score).toBeGreaterThan(0);
+        await assertProperty(
+          "all-tied scores past the cutoff fall back and visit every document once",
+          fc.asyncProperty(
+            fc.integer({ min: 200, max: 500 }),
+            async (limit) => {
+              let cursor: SearchCursor | null = null;
+              const seen: string[] = [];
+              for (
+                let page = 0;
+                page < TIED_DOCUMENT_COUNT / limit + 20;
+                page += 1
+              ) {
+                const read = await readScanPage({
+                  query,
+                  indexId: TIED_INDEX_ID,
+                  limit,
+                  parsedCursor: cursor,
+                  rankingMode: "bm25-ratio",
+                  scanTransport: { type: "scored", fields: ["document_id"] },
+                });
+                seen.push(...read.pageRanked.map(({ id }) => id));
+                if (read.nextCursor === null) {
+                  cursor = null;
+                  break;
+                }
+                expect(read.nextCursor.rankingMode).toBe("off");
+                const decoded = decodeCorpusSearchCursor(
+                  encodeCorpusSearchCursor({
+                    ...read.nextCursor,
+                    target: null,
+                    dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+                  }),
+                );
+                if (decoded === null) {
+                  panic("Expected an encoded mode cursor");
+                }
+                cursor = decoded;
+              }
+              expect(cursor).toBeNull();
+              expect(new Set(seen)).toEqual(
+                new Set(
+                  Array.from({ length: TIED_DOCUMENT_COUNT }, (_, serial) =>
+                    tiedDocumentId(serial),
+                  ),
+                ),
+              );
+              expect(seen).toHaveLength(TIED_DOCUMENT_COUNT);
+            },
+          ),
+          { numRuns: 3 },
+        );
+      },
+      ENGINE_TIMEOUT_MS,
+    );
+
+    test(
+      "ties below the cutoff preserve every document and the cursor mode",
+      async () => {
+        const query = `jurisdiction:CZE AND text:tie AND source:${SMALL_TIED_SOURCE_ID}`;
+        const universe = await readScored({
+          query,
+          from: 0,
+          size: CORPUS_BM25_PASSAGE_LIMIT + 1,
+          indexId: TIED_INDEX_ID,
+        });
+        expect(universe.numHits).toBe(SMALL_TIED_DOCUMENT_COUNT);
+        expect(new Set(universe.hits.map(({ score }) => score)).size).toBe(1);
+        expect(universe.hits.at(0)?.score).toBeGreaterThan(0);
+        await assertProperty(
+          "ties below the cutoff preserve every document and the cursor mode",
+          fc.asyncProperty(fc.integer({ min: 7, max: 25 }), async (limit) => {
+            let cursor: SearchCursor | null = null;
+            const seen: string[] = [];
+            for (
+              let page = 0;
+              page < Math.ceil(SMALL_TIED_DOCUMENT_COUNT / limit);
+              page += 1
+            ) {
+              const read = await readScanPage({
+                query,
+                indexId: TIED_INDEX_ID,
+                limit,
+                parsedCursor: cursor,
+                rankingMode: "bm25-ratio",
+                scanTransport: { type: "scored", fields: ["document_id"] },
+              });
+              seen.push(...read.pageRanked.map(({ id }) => id));
+              if (read.nextCursor === null) {
+                cursor = null;
+                break;
+              }
+              expect(read.nextCursor.rankingMode).toBe("bm25-ratio");
+              const decoded = decodeCorpusSearchCursor(
+                encodeCorpusSearchCursor({
+                  ...read.nextCursor,
+                  target: null,
+                  dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+                }),
+              );
+              if (decoded === null) {
+                panic("Expected an encoded mode cursor");
+              }
+              cursor = decoded;
+              if (page === 0) {
+                const rejected = await Result.tryPromise(
+                  async () =>
+                    await readScanPage({
+                      query,
+                      indexId: TIED_INDEX_ID,
+                      limit,
+                      parsedCursor: decoded,
+                      rankingMode: "off",
+                      scanTransport: {
+                        type: "scored",
+                        fields: ["document_id"],
+                      },
+                    }),
+                );
+                expect(rejected.isErr()).toBe(true);
+                if (rejected.isErr()) {
+                  expect(rejected.error.cause).toBeInstanceOf(HandlerError);
+                  expect(rejected.error.cause).toMatchObject({
+                    status: 400,
+                    message: "Invalid cursor",
+                  });
+                }
+              }
+            }
+            expect(cursor).toBeNull();
+            expect(new Set(seen)).toEqual(
+              new Set(
+                Array.from({ length: SMALL_TIED_DOCUMENT_COUNT }, (_, serial) =>
+                  tiedDocumentId(serial),
+                ),
+              ),
+            );
+            expect(seen).toHaveLength(SMALL_TIED_DOCUMENT_COUNT);
+          }),
+          { numRuns: 3 },
+        );
+      },
+      ENGINE_TIMEOUT_MS,
+    );
 
     test("the corpus spans several splits", async () => {
       const response = await fetch(
@@ -333,7 +602,7 @@ describe.skipIf(!runEngineTests)(
         for (let from = 0; from < total; from += PAGE_SIZE) {
           const [nativePage, scoredPage] = await Promise.all([
             readNative(query, from, PAGE_SIZE),
-            readScored(query, from, PAGE_SIZE),
+            readScored({ query, from, size: PAGE_SIZE }),
           ]);
           expect(scoredPage.numHits).toBe(nativePage.numHits);
           total = nativePage.numHits;
@@ -355,6 +624,64 @@ describe.skipIf(!runEngineTests)(
     );
 
     test.each(ENTRIES)(
+      "a %s entry replays BM25 pages from the real scored universe",
+      async (_kind, entry) => {
+        const query = handlerQuery(entry);
+        const universe = await readScored({
+          query,
+          from: 0,
+          size: CORPUS_BM25_PASSAGE_LIMIT,
+        });
+        expect(universe.hits.length).toBeGreaterThan(20);
+        const top = universe.hits.at(0)?.score;
+        if (top === undefined || top <= 0) {
+          panic("Expected a positive scored universe");
+        }
+        const best = new Map<string, number>();
+        for (const { fields, score } of universe.hits) {
+          const id = fields["document_id"];
+          if (typeof id !== "string" || best.has(id)) {
+            continue;
+          }
+          best.set(id, score);
+        }
+        const expected = blendStableCitationAuthority({
+          candidates: [...best].map(([id, score]) => ({
+            id,
+            score: (score / top) ** 0.25,
+          })),
+          authorityById: new Map(),
+        });
+        const seen: string[] = [];
+        let cursor: SearchCursor | null = null;
+        for (let page = 0; page < Math.ceil(expected.length / 20); page += 1) {
+          const read = await readScanPage({
+            query,
+            parsedCursor: cursor,
+            scanTransport: { type: "scored", fields: ["document_id"] },
+            rankingMode: "bm25-ratio",
+          });
+          expect(read.pageRanked).toEqual(
+            expected.slice(page * 20, (page + 1) * 20),
+          );
+          expect(read.lexicalScores?.bestScoreById).toEqual(best);
+          expect(read.scan.rounds).toBe(1);
+          expect(read.scan.highlightRounds).toBe(1);
+          expect(read.snippetById.size).toBeGreaterThan(0);
+          seen.push(...read.pageRanked.map(({ id }) => id));
+          cursor = read.nextCursor;
+          if (cursor !== null) {
+            expect(cursor.windowStart).toBe(0);
+          }
+        }
+        expect(cursor).toBeNull();
+        expect(seen).toEqual(expected.map(({ id }) => id));
+        expect(new Set(seen).size).toBe(seen.length);
+      },
+      ENGINE_TIMEOUT_MS,
+    );
+
+    test.each(ENTRIES)(
       "a %s entry scans to the same pages through both transports",
       async (_kind, entry) => {
         const query = handlerQuery(entry);
@@ -362,7 +689,11 @@ describe.skipIf(!runEngineTests)(
           const out: unknown[] = [];
           let cursor: SearchCursor | null = null;
           for (let page = 0; page < 3; page += 1) {
-            const read = await readScanPage(query, cursor, transport);
+            const read = await readScanPage({
+              query,
+              parsedCursor: cursor,
+              scanTransport: transport,
+            });
             const { indexMs: _indexMs, ...scan } = read.scan;
             out.push({
               pageRanked: read.pageRanked,
