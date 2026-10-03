@@ -59,7 +59,7 @@ export const clauseDirectiveContainer = (body: ClauseBody): slimdom.Element => {
 /** Validate the complete authored tree before evaluating any branch or loop. */
 export const validateClauseBodyDirectives = (
   body: ClauseBody,
-  context?: { name: string } | undefined,
+  context?: { name: string },
 ): Result<void, HandlerError<422>> => {
   const container = clauseDirectiveContainer(body);
   const directives = scanBlockDirectives(container);

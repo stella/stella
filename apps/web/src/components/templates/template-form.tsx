@@ -2055,7 +2055,8 @@ export const TemplateForm = ({
           type: "warning",
           title: t("clauses.legacyDirectiveWarning", {
             clauseName: warning.clauseName,
-            version: warning.version ?? "none",
+            version:
+              warning.version === null ? "none" : String(warning.version),
           }),
         });
       }

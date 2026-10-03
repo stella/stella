@@ -4,7 +4,7 @@ import { Elysia } from "elysia";
 
 import { CLAUSE_WARNINGS_HEADER } from "@stll/api-contract/template-fill-headers";
 
-import { CORS_EXPOSED_HEADERS } from "./cors-exposed-headers";
+import { CORS_EXPOSED_HEADERS } from "./security-headers";
 
 test("cross-origin downloads expose bounded clause warning counts", async () => {
   const api = new Elysia()

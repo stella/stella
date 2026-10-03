@@ -1021,11 +1021,11 @@ export const mcpConnectionsOptions = (organizationId: string, userId: string) =>
   });
 
 /** Clause publications and link edits refresh both schema discovery and slot previews. */
-export const invalidateTemplateClauseSources = (
+export const invalidateTemplateClauseSources = async (
   queryClient: QueryClient,
   organizationId: string,
 ) =>
-  queryClient.invalidateQueries({
+  await queryClient.invalidateQueries({
     queryKey: knowledgeKeys.templates.all(organizationId),
   });
 

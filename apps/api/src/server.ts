@@ -135,7 +135,6 @@ import {
   resolveSignupRateLimitClientIp,
   stampClientAddressHeader,
 } from "@/api/lib/client-ip";
-import { CORS_EXPOSED_HEADERS } from "@/api/lib/cors-exposed-headers";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
@@ -186,6 +185,7 @@ import {
   finalizeResponseCachePolicy,
   API_SECURITY_HEADERS,
   setSecurityHeaders,
+  CORS_EXPOSED_HEADERS,
 } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";

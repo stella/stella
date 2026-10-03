@@ -621,8 +621,8 @@ describe("clause body preconditions", () => {
 test("an incomplete working copy persists and reloads while publication refuses it", async () => {
   const clauseId = await seedClause();
   const body: ClauseBody = [{ text: "{% if %}" }];
-  const save = (snapshotVersion: boolean) =>
-    Result.gen(() =>
+  const save = async (snapshotVersion: boolean) =>
+    await Result.gen(() =>
       updateClauseHandler({
         safeDb,
         organizationId: ids.orgA,
@@ -719,7 +719,7 @@ test("JSON imports inspect every legacy clause and variant without refusing the 
     "Imported valid",
     "Imported legacy second",
     "Imported variant third",
-  ];
+  ] as const;
   const malformed: ClauseBody = [{ text: "{% if enabled %}" }];
   const result = await Result.gen(() =>
     importHandler({
@@ -761,14 +761,14 @@ test("JSON imports inspect every legacy clause and variant without refusing the 
         },
         {
           code: "CLAUSE_LEGACY_DIRECTIVES",
-          clauseName: `${titles.at(2)} (Legacy)`,
+          clauseName: `${titles[2]} (Legacy)`,
           version: null,
         },
       ],
     });
   }
   const imported = await testDb.query.clauses.findMany({
-    where: { organizationId: { eq: ids.orgA }, title: { in: titles } },
+    where: { organizationId: { eq: ids.orgA }, title: { in: [...titles] } },
     limit: 3,
   });
   clauseIds.push(...imported.map(({ id }) => id));
@@ -918,7 +918,8 @@ test("clause resolution scopes relation reads even without the RLS backstop", as
     select: testDb.select.bind(testDb),
   };
   const unrestricted = asTestRaw<ScopedDb>(
-    <T>(fn: (tx: typeof observedDb) => Promise<T>) => fn(observedDb),
+    async <T>(fn: (tx: typeof observedDb) => Promise<T>) =>
+      await fn(observedDb),
   );
   const resolved = await resolveClauseSlotSources(
     templateId,

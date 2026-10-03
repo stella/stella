@@ -320,7 +320,7 @@ export const templateDecideConditionsLogic = async ({
   }
 
   let manifest = template.manifest;
-  if (manifest === null || manifest.clauseSlots === undefined) {
+  if (manifest?.clauseSlots === undefined) {
     const derived = await derivedPreviewManifest({
       templateId,
       organizationId,
