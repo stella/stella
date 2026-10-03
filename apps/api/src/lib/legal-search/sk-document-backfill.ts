@@ -37,6 +37,11 @@ import {
   sql,
 } from "drizzle-orm";
 
+import {
+  DOCUMENT_FETCH_OUTCOME,
+  type DocumentFetchOutcome,
+  type DocumentStageObserver,
+} from "@stll/legal-atlas/document-fetch-diagnostics";
 import { skDocumentErrorDiagnostics } from "@stll/legal-atlas/sk-document-fetch-diagnostics";
 
 import type { Transaction } from "@/api/db/root";
@@ -80,13 +85,16 @@ import type {
 import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
-  EMPTY_CORPUS_CONTENT_HASHES,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
 } from "@/api/lib/legal-search/corpus-storage";
 import type {
   CorpusPayloadColumns,
   WriteCorpusResult,
 } from "@/api/lib/legal-search/corpus-storage";
+import {
+  withDocumentStageObserver,
+  recordDocumentStageError,
+} from "@/api/lib/legal-search/document-stage-observation";
 import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
@@ -103,6 +111,10 @@ import {
   documentFetchParked,
   MAX_DOCUMENT_FETCH_ATTEMPTS,
 } from "@/api/lib/legal-search/sk-document-parking-sql";
+import {
+  pendingDeferredDocumentSql,
+  storesNoCorpusDocumentSql,
+} from "@/api/lib/legal-search/sk-document-pending-sql";
 import type { PendingDocumentTierLoaders } from "@/api/lib/legal-search/sk-document-queue";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
@@ -248,6 +260,7 @@ export const fetchPdfBytes = async ({
     if (Result.isOk(body)) {
       return { type: "document", bytes: new Uint8Array(body.value) };
     }
+    await recordDocumentStageError(ADAPTER_KEYS.SK_COURTS, body.error);
     const detail = brokenBodyDetail(body.error);
     if (detail === undefined) {
       throw body.error;
@@ -425,18 +438,11 @@ const belowParkingThreshold = lt(
  * surviving AST artifact marks the corpus object as a verbatim copy of a
  * payload that carries no document.
  */
-export const storesNoCorpusDocument = or(
-  isNull(caseLawDecisions.contentHash),
-  inArray(caseLawDecisions.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES]),
-  isNotNull(caseLawDecisions.documentAst),
-);
+export const storesNoCorpusDocument =
+  storesNoCorpusDocumentSql(caseLawDecisions);
 
-export const pendingDocumentPredicate = and(
-  isNull(caseLawDecisions.redactedAt),
-  isNull(caseLawDecisions.fulltext),
-  isNotNull(caseLawDecisions.documentUrl),
-  storesNoCorpusDocument,
-);
+export const pendingDocumentPredicate =
+  pendingDeferredDocumentSql(caseLawDecisions);
 
 /** Pending, asked for by a reader, and still within its retry budget. */
 export const requestedDocumentPredicate = and(
@@ -633,6 +639,50 @@ export const loadRemainingDocuments = async ({
       after ? remainingCursorPredicate(after) : undefined,
     ),
   });
+
+/**
+ * Whether any document remains outstanding, including work that is cooling
+ * down or parked. Its exact partial index excludes corpus-served rows;
+ * LIMIT 1 stops at the first outstanding row instead of counting or walking
+ * the ready queue tiers, which intentionally omit work not ready now.
+ */
+export const pendingDocumentPresenceQuery = ({
+  sourceId,
+  tx,
+}: {
+  sourceId: SafeId<"caseLawSource">;
+  tx: Transaction;
+}) =>
+  tx
+    .select({ id: caseLawDecisions.id })
+    .from(caseLawDecisions)
+    .where(
+      and(eq(caseLawDecisions.sourceId, sourceId), pendingDocumentPredicate),
+    )
+    .limit(1);
+
+/** Bounded existence probe over one source's outstanding deferred documents. */
+export const hasPendingDeferredDocumentsForSource = async ({
+  scopedDb,
+  sourceId,
+}: {
+  scopedDb: ScopedDb;
+  sourceId: SafeId<"caseLawSource">;
+}): Promise<boolean> =>
+  await scopedDb(
+    async (tx) =>
+      (await pendingDocumentPresenceQuery({ sourceId, tx })).length > 0,
+  );
+
+/** Bounded existence probe for the registered deferred-document source. */
+export const hasPendingDeferredDocuments = async (
+  scopedDb: ScopedDb,
+): Promise<boolean> => {
+  const sourceId = await loadDeferredDocumentSourceId(scopedDb);
+  return sourceId === undefined
+    ? false
+    : await hasPendingDeferredDocumentsForSource({ scopedDb, sourceId });
+};
 
 /**
  * Bind both tiers to a database handle.
@@ -1199,8 +1249,8 @@ export const parkDocumentFetch = async ({
 /**
  * The source's parked decisions.
  *
- * Parked rows are few and the pending backlog they sit in is most of the
- * source, so both parked reads below must come from
+ * The pending backlog may greatly exceed the parked set, so both parked
+ * reads below must come from
  * `case_law_decisions_document_parked_idx` (source, id) rather than from the
  * pending index; `parkedDocumentPredicate` is written so the planner can
  * match it. Exported as statement builders so the query-plan test explains
@@ -1209,11 +1259,12 @@ export const parkDocumentFetch = async ({
 const parkedDocumentsOf = (sourceId: SafeId<"caseLawSource">) =>
   and(eq(caseLawDecisions.sourceId, sourceId), parkedDocumentPredicate);
 
-/** Count of the source's parked decisions, one bounded index scan. */
+/** Exact parked count for the manual requeue report. */
 export const parkedDocumentCountQuery = (
   tx: Transaction,
   sourceId: SafeId<"caseLawSource">,
 ) =>
+  // sql-perf-allow: index case_law_decisions_document_parked_idx; exact parked count runs once per manual requeue-sk-documents invocation.
   tx
     .select({ parked: sql<number>`count(*)::int` })
     .from(caseLawDecisions)
@@ -1329,6 +1380,7 @@ export type DecisionDocumentOutcome =
 export const DOCUMENT_FETCH_BUDGET_MS = 60_000;
 
 export type FetchDecisionDocumentOptions = {
+  onDocumentObservation?: DocumentStageObserver | undefined;
   decision: PendingDocument;
   /** The publisher's gate, supplied by the caller. See `SkDocumentFetch`. */
   fetchDocument: SkDocumentFetch;
@@ -1486,7 +1538,38 @@ const runDecisionDocumentFetch = async ({
 export const fetchDecisionDocument = async (
   options: FetchDecisionDocumentOptions,
 ): Promise<DecisionDocumentOutcome> =>
-  await withTimeout(async () => await runDecisionDocumentFetch(options), {
-    label: "caseLaw.fetchDecisionDocument",
-    timeoutMs: DOCUMENT_FETCH_BUDGET_MS,
+  await withDocumentStageObserver({
+    source: ADAPTER_KEYS.SK_COURTS,
+    observe: options.onDocumentObservation,
+    execute: async () =>
+      await withTimeout(async () => await runDecisionDocumentFetch(options), {
+        label: "caseLaw.fetchDecisionDocument",
+        timeoutMs: DOCUMENT_FETCH_BUDGET_MS,
+      }),
+    outcome: (result) => {
+      switch (result.status) {
+        case "filled":
+        case "unavailable":
+        case "claimed":
+        case "superseded":
+          return DOCUMENT_FETCH_OUTCOME.ok;
+        case "deferred":
+        case "parked": {
+          const outcomes = {
+            [DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS]:
+              DOCUMENT_FETCH_OUTCOME.http4xx,
+            [DOCUMENT_FETCH_FAILURE.NETWORK]: DOCUMENT_FETCH_OUTCOME.connection,
+            [DOCUMENT_FETCH_FAILURE.UNPARSEABLE]:
+              DOCUMENT_FETCH_OUTCOME.bodyShape,
+          } as const satisfies Record<
+            DocumentFetchFailure,
+            DocumentFetchOutcome
+          >;
+          return outcomes[result.failure];
+        }
+        default:
+          result satisfies never;
+          return panic(`Unhandled document outcome: ${String(result)}`);
+      }
+    },
   });

@@ -5,7 +5,7 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 
 import { isEntityKind } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
-import { ExternalLinkIcon, LandmarkIcon } from "@stll/ui/icons";
+import { ExternalLinkIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
@@ -26,7 +26,7 @@ import {
   dedupeExternalSources,
 } from "@/components/chat/source-chips.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
+import { ReferenceIcon } from "@/components/references/reference-chip";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
@@ -188,22 +188,27 @@ const collectSourceChipEntries = ({
 
 const cls = "size-3 shrink-0";
 
+// The tray keeps its own shell, but draws each source's glyph by the shared
+// reference rule, so a document here looks like the same document in the
+// answer above it (kind glyph, matter colour).
 const SourceIcon = ({
-  kind,
-  mimeType,
+  sourceDocument,
+  workspaceId,
 }: {
-  kind: string;
-  mimeType: string | null;
+  sourceDocument: ChatSourceDocument;
+  workspaceId: string | undefined;
 }) => (
-  // `EntityIcon` mutes the unresolved placeholder itself, which is what the
-  // previous fallback glyph did here.
-  <EntityIcon
-    className={cls}
-    source={
-      isEntityKind(kind)
-        ? { type: "resolved", kind, mimeType }
-        : { type: "unknown" }
-    }
+  <ReferenceIcon
+    reference={{
+      type: "entity",
+      entityId: sourceDocument.entityId,
+      matterId: workspaceId ?? null,
+      label: sourceDocument.title,
+      entityKind: isEntityKind(sourceDocument.kind)
+        ? sourceDocument.kind
+        : null,
+      mimeType: sourceDocument.mimeType,
+    }}
   />
 );
 
@@ -228,7 +233,14 @@ const CaseLawDecisionSourceChip = ({
       }
       type="button"
     >
-      <LandmarkIcon className={cls} />
+      <ReferenceIcon
+        reference={{
+          type: "decision",
+          locator: { type: "ref", ref: decision.decisionId },
+          anchorId: null,
+          label: decision.caseNumber,
+        }}
+      />
       <BidiText as="span" className="max-w-[20ch] truncate">
         {decision.caseNumber}
       </BidiText>
@@ -419,8 +431,8 @@ const SourceChip = ({
       type="button"
     >
       <SourceIcon
-        kind={sourceDocument.kind}
-        mimeType={sourceDocument.mimeType}
+        sourceDocument={sourceDocument}
+        workspaceId={resolvedWorkspaceId}
       />
       <BidiText as="span" className="max-w-[20ch] truncate">
         {sourceDocument.title}

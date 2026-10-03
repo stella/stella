@@ -1,6 +1,11 @@
 import { Result, panic } from "better-result";
 import { isNotNull } from "drizzle-orm";
 
+import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+} from "@stll/legal-atlas/ingestion-cycle";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawIngestionFailures } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -33,6 +38,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   ConcurrentModificationError,
+  ingestionStopKindOf,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
@@ -219,7 +225,12 @@ export type DecisionBatchHalt =
   | { type: "retryable"; reason: ProcessRetryReason }
   | { type: "timeout"; error: TimeoutError }
   | { type: "insert-limit" }
-  | { type: "failure-streak"; tag: string; message: string }
+  | {
+      type: "failure-streak";
+      tag: string;
+      message: string;
+      stopKind: IngestionStopKind;
+    }
   | { type: "aborted" };
 
 /**
@@ -381,7 +392,12 @@ const rejectDecision = ({
   });
 
   return tally.failureStreak >= MAX_CONSECUTIVE_FAILURES
-    ? { type: "failure-streak", tag, message }
+    ? {
+        type: "failure-streak",
+        tag,
+        message,
+        stopKind: ingestionStopKindOf(error),
+      }
     : null;
 };
 
@@ -416,7 +432,12 @@ const rejectSourceRecord = ({
     reason: CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
   });
   return tally.failureStreak >= MAX_CONSECUTIVE_FAILURES
-    ? { type: "failure-streak", tag: record.reason, message: record.message }
+    ? {
+        type: "failure-streak",
+        tag: record.reason,
+        message: record.message,
+        stopKind: INGESTION_STOP_KIND.ADAPTER_ERROR,
+      }
     : null;
 };
 

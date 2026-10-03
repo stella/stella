@@ -1,14 +1,17 @@
 import { panic } from "better-result";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 
-import catalog from "@stll/cli/capability-catalog.json";
+import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 
 import type {
   HandlerConfig,
   WorkspaceHandlerConfig,
   McpExposure,
 } from "@/api/lib/api-handlers";
-import { resolveCapabilityReadClass } from "@/api/mcp/capability-tools";
+import {
+  parseCatalog,
+  resolveCapabilityReadClass,
+} from "@/api/mcp/capability-tools";
 import { encodeCompatId } from "@/api/mcp/compat-ids";
 import { resolveCompatFetchReadClass } from "@/api/mcp/compat-tools";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
@@ -16,6 +19,8 @@ import {
   resolveMcpReadClass,
   type McpToolAccessBranch,
 } from "@/api/mcp/tool-types";
+
+const catalog = parseCatalog(readCapabilityCatalog());
 
 describe("MCP reads retain their canonical source classification", () => {
   test("a native read cannot omit its classification", () => {
@@ -43,9 +48,11 @@ describe("MCP reads retain their canonical source classification", () => {
     >().not.toExtend<WorkspaceHandlerConfig>();
   });
 
-  test("every generated read target carries its declared classification", () => {
+  test("every generated read target carries its declared classification", async () => {
     for (const entry of catalog) {
-      const resolved = resolveCapabilityReadClass({ capability: entry.id });
+      const resolved = await resolveCapabilityReadClass({
+        capability: entry.id,
+      });
       expect(entry.access === "read" ? entry.readClass : undefined).toBe(
         resolved,
       );
@@ -57,7 +64,7 @@ describe("MCP reads retain their canonical source classification", () => {
       }
     }
     expect(
-      resolveCapabilityReadClass({ capability: "unknown.capability" }),
+      await resolveCapabilityReadClass({ capability: "unknown.capability" }),
     ).toBeUndefined();
   });
 
@@ -90,19 +97,18 @@ describe("MCP reads retain their canonical source classification", () => {
         continue;
       }
       const name = entry.mcp.type === "tool" ? entry.mcp.name : entry.mcp.by;
-      if (name === undefined) {
-        panic("Missing canonical tool name");
-      }
       const definition = native.get(name);
       if (definition?.access !== "read") {
         continue;
       }
-      expect(resolveCapabilityReadClass({ capability: entry.id })).toBe(
+      expect(await resolveCapabilityReadClass({ capability: entry.id })).toBe(
         await resolveMcpReadClass(definition, {}),
       );
     }
     expect(
-      resolveCapabilityReadClass({ capability: "case-law.matter-links.list" }),
+      await resolveCapabilityReadClass({
+        capability: "case-law.matter-links.list",
+      }),
     ).toBe("both");
   });
 

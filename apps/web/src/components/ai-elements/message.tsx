@@ -6,11 +6,10 @@ import type { HTMLAttributes, ReactNode } from "react";
 import type { UIMessage } from "@tanstack/ai-client";
 
 import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
-import { SkillIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { MessageResponseProps } from "@/components/ai-elements/message-response";
-import { InlinePill } from "@/components/inline-pill";
+import { ReferenceChip } from "@/components/references/reference-chip";
 
 type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"] | "system";
@@ -69,12 +68,11 @@ const LazyMessageResponse = lazy(async () => {
 });
 
 // Skill chip markdown link: `[label](#stella-skill-ref=slug)`. We
-// inline-render these as placeholder `<InlinePill>`s during the
+// inline-render these as the shared `<ReferenceChip>` during the
 // Streamdown lazy-chunk load, so the raw `[...](#stella-skill-ref=...)`
 // source never paints between the composer chip leaving and the
-// transcript `SkillRefChip` arriving. The placeholder's visual
-// shape matches the real chip, so no second flash when Streamdown
-// finishes parsing. The prefix comes from its @stll/api-contract owner,
+// transcript's chip arriving. It is the same component the parsed
+// markdown renders, so no second flash when Streamdown finishes parsing. The prefix comes from its @stll/api-contract owner,
 // so this matcher cannot drift from the chip writer and the API reader.
 const SKILL_LINK_RE = new RegExp(
   `\\[([^\\]]+)\\]\\(${SKILL_REF_HREF_PREFIX.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}([^)]+)\\)`,
@@ -96,14 +94,13 @@ const renderFallbackChildren = (children: ReactNode): ReactNode => {
       nodes.push(children.slice(cursor, match.index));
     }
     const label = match[1] ?? "";
+    const slug = match[2] ?? "";
     nodes.push(
-      <InlinePill
-        key={`${match.index}-${match[2] ?? ""}`}
-        leadingIcon={<SkillIcon className="size-3 shrink-0" />}
-        truncate
-      >
-        {label}
-      </InlinePill>,
+      <ReferenceChip
+        interactive={false}
+        key={`${match.index}-${slug}`}
+        reference={{ type: "skill", slug, label }}
+      />,
     );
     cursor = match.index + match[0].length;
     match = SKILL_LINK_RE.exec(children);

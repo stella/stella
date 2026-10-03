@@ -189,19 +189,19 @@ describe("membership role database invariants", () => {
     const firstMigration = readFileSync(
       nodePath.join(
         import.meta.dir,
-        "../../drizzle/20261003123500_membership_role_invariants/migration.sql",
+        "../../drizzle/20261003123700_membership_role_invariants/migration.sql",
       ),
       "utf-8",
     );
     const validationMigration = readFileSync(
       nodePath.join(
         import.meta.dir,
-        "../../drizzle/20261003123600_validate_membership_role_invariants/migration.sql",
+        "../../drizzle/20261003123800_validate_membership_role_invariants/migration.sql",
       ),
       "utf-8",
     );
     expect(validationMigration).toContain(
-      "-- requires: 20261003123500_membership_role_invariants",
+      "-- requires: 20261003123700_membership_role_invariants",
     );
     const readConstraints = async () => {
       const { rows } = await database.query<{
@@ -252,7 +252,7 @@ describe("membership role database invariants", () => {
     const migration = readFileSync(
       nodePath.join(
         import.meta.dir,
-        "../../drizzle/20261003123500_membership_role_invariants/migration.sql",
+        "../../drizzle/20261003123700_membership_role_invariants/migration.sql",
       ),
       "utf-8",
     );

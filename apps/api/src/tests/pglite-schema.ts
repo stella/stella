@@ -586,7 +586,7 @@ export const installPgliteOrganizationMemberCapacity = async (
     ...readMigrationStatements(
       nodePath.join(
         DRIZZLE_DIR,
-        "20261003123500_membership_role_invariants",
+        "20261003123700_membership_role_invariants",
         "migration.sql",
       ),
     ),

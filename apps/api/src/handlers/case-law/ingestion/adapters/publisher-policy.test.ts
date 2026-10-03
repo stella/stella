@@ -166,28 +166,112 @@ describe("a publisher's rate-limit refusal", () => {
     Bun.sleep = originalSleep;
   });
 
-  test("costs one request and is handed back, never retried", async () => {
-    let requests = 0;
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        requests += 1;
-        return new Response("", { status: 429 });
-      }),
-    );
+  test.each([401, 403, 429])(
+    "%s costs one request and stops with a typed refusal, never retried",
+    async (httpStatus) => {
+      let requests = 0;
+      globalThis.fetch = asFetchMock(
+        mock(async () => {
+          requests += 1;
+          return new Response("", { status: httpStatus });
+        }),
+      );
 
-    const response = await fetchWithRetry(
-      "https://ris.bka.gv.at/x",
-      undefined,
-      {
-        adapterKey: ADAPTER_KEYS.AT_COURTS,
-        maxRetries: 2,
+      const error = await rejectionOf(
+        fetchWithRetry("https://ris.bka.gv.at/x", undefined, {
+          fetchStage: "listing",
+          adapterKey: ADAPTER_KEYS.AT_COURTS,
+          maxRetries: 2,
+          refusalMode: "stop-refusal",
+        }),
+      );
+
+      // Rule 19a: no retry clears the refusal, and the budget a retry would
+      // spend is the budget the halt protects. The caller holds its cursor.
+      expect(error).toMatchObject({
+        httpStatus,
+        stopKind: "publisher_refusal",
+      });
+      expect(requests).toBe(1);
+    },
+  );
+
+  test.each([401, 403, 429])(
+    "an existing document workflow receives %s without retries",
+    async (status) => {
+      let requests = 0;
+      globalThis.fetch = asFetchMock(
+        mock(async () => {
+          requests++;
+          return new Response("refused document", { status });
+        }),
+      );
+      const response = await fetchWithRetry(
+        "https://ris.bka.gv.at/x",
+        undefined,
+        {
+          fetchStage: "listing",
+          adapterKey: ADAPTER_KEYS.AT_COURTS,
+        },
+      );
+      expect(response.status).toBe(status);
+      expect(await response.text()).toBe("refused document");
+      expect(requests).toBe(1);
+    },
+  );
+
+  for (const refusalMode of [
+    undefined,
+    "return-response",
+    "stop-refusal",
+  ] as const) {
+    test.each([401, 403])(
+      `the real publisher-backoff path preserves status in mode ${refusalMode ?? "default"}`,
+      async (status) => {
+        let requests = 0;
+        globalThis.fetch = asFetchMock(
+          mock(async () => {
+            requests++;
+            return new Response("refused document", { status });
+          }),
+        );
+        const pending = fetchPublisher("https://ris.bka.gv.at/x", {
+          fetchStage: "listing",
+          adapterKey: ADAPTER_KEYS.AT_COURTS,
+          retryPolicy: "publisher-backoff",
+          timeoutMs: 1000,
+          refusalMode,
+        });
+        if (refusalMode === "stop-refusal") {
+          expect(await rejectionOf(pending)).toMatchObject({
+            httpStatus: status,
+            stopKind: "publisher_refusal",
+          });
+        } else {
+          const response = await pending;
+          expect(response.status).toBe(status);
+          expect(await response.text()).toBe("refused document");
+        }
+        expect(requests).toBe(1);
       },
     );
+  }
 
-    // Rule 19a: no retry clears the refusal, and the budget a retry would
-    // spend is the budget the halt protects. The caller holds its cursor.
-    expect(response.status).toBe(429);
-    expect(requests).toBe(1);
+  test("legacy fetch timeouts keep their original identity", async () => {
+    const failure = new DOMException("Request timed out", "TimeoutError");
+    globalThis.fetch = asFetchMock(
+      mock(async () => {
+        throw failure;
+      }),
+    );
+    const caught = await rejectionOf(
+      fetchWithRetry("https://ris.bka.gv.at/x", undefined, {
+        fetchStage: "listing",
+        adapterKey: ADAPTER_KEYS.AT_COURTS,
+        maxRetries: 0,
+      }),
+    );
+    expect(caught).toBe(failure);
   });
 
   test("still retries a 5xx, which is the publisher failing to answer", async () => {
@@ -204,6 +288,7 @@ describe("a publisher's rate-limit refusal", () => {
       "https://ris.bka.gv.at/x",
       undefined,
       {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.AT_COURTS,
         maxRetries: 2,
       },
@@ -275,18 +360,22 @@ describe("a run-scoped publisher rate limit", () => {
       operation: async () => {
         const publisher = "https://publications.europa.eu";
         const listing = await fetchPublisher(`${publisher}/listing`, {
+          fetchStage: "listing",
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           timeoutMs: ADAPTER_TIMEOUT.REQUEST,
         });
         const notice = await fetchPublisher(`${publisher}/notice`, {
+          fetchStage: "document",
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           timeoutMs: ADAPTER_TIMEOUT.REQUEST,
         });
         const html = await fetchPublisher(`${publisher}/html`, {
+          fetchStage: "document",
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           timeoutMs: ADAPTER_TIMEOUT.REQUEST,
         });
         const formex = await fetchWithRetry(`${publisher}/formex`, undefined, {
+          fetchStage: "document",
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           maxRetries: 1,
           baseDelayMs: 0,
@@ -348,6 +437,7 @@ describe("a run-scoped publisher rate limit", () => {
         const first = await fetchPublisher(
           "https://publications.europa.eu/formex",
           {
+            fetchStage: "document",
             adapterKey: ADAPTER_KEYS.EU_ECJ,
             timeoutMs: ADAPTER_TIMEOUT.REQUEST,
           },
@@ -355,6 +445,7 @@ describe("a run-scoped publisher rate limit", () => {
         const second = await fetchPublisher(
           "https://publications.europa.eu/formex",
           {
+            fetchStage: "document",
             adapterKey: ADAPTER_KEYS.EU_ECJ,
             timeoutMs: ADAPTER_TIMEOUT.REQUEST,
           },

@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import { invoices } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
+import { lockBillingArrangement } from "@/api/lib/billing/arrangements";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type LockInvoiceOptions = {
@@ -33,6 +34,7 @@ export const lockInvoiceInStatus = async (
   tx: Transaction,
   { invoiceId, workspaceId, status }: LockInvoiceOptions,
 ) => {
+  await lockBillingArrangement(tx, workspaceId);
   const statusFilter =
     typeof status === "string"
       ? eq(invoices.status, status)
@@ -43,6 +45,8 @@ export const lockInvoiceInStatus = async (
       id: invoices.id,
       status: invoices.status,
       documentType: invoices.documentType,
+      billingMode: invoices.billingMode,
+      flatFeeAmount: invoices.flatFeeAmount,
       originalInvoiceId: invoices.originalInvoiceId,
       finalizedAt: invoices.finalizedAt,
       currency: invoices.currency,

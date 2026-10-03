@@ -172,7 +172,7 @@ describe("changed-file result boundary lint", () => {
           "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
           "apps/api/src/lib/document-processing-queue.ts",
           "apps/api/src/lib/document-processing-queue.test.ts",
-          "apps/api/src/mcp/generated/capability-dispatch.ts",
+          "apps/api/src/mcp/generated/capability-dispatch/matters.list.ts",
           "packages/start-runtime/src/runtime.ts",
           "packages/ssr-testkit/src/assert-document.ts",
           // apps/landing is outside RESULT_CONVENTION_SOURCE_GLOBS and carries
@@ -530,7 +530,7 @@ describe("changed lint path selection", () => {
   test.each([
     "README.md",
     "apps/web/src/routeTree.gen.ts",
-    "apps/api/src/mcp/generated/capability-dispatch.ts",
+    "apps/api/src/mcp/generated/capability-dispatch/matters.list.ts",
     "apps/api/src/not-real.mtsx",
     "packages/ui/node_modules/library/index.js",
   ])("excludes non-source or generated path %s", (changedPath) => {
