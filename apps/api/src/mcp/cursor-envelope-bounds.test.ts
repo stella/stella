@@ -161,8 +161,8 @@ const outputCursorPaths = (schema: unknown, prefix = ""): string[] => {
     return [];
   }
   const paths: string[] = [];
-  if (isRecord(schema.properties)) {
-    for (const [name, child] of Object.entries(schema.properties)) {
+  if (isRecord(schema["properties"])) {
+    for (const [name, child] of Object.entries(schema["properties"])) {
       const path = prefix === "" ? name : `${prefix}.${name}`;
       if (/cursor$/iu.test(name)) {
         paths.push(path);
@@ -170,10 +170,14 @@ const outputCursorPaths = (schema: unknown, prefix = ""): string[] => {
       paths.push(...outputCursorPaths(child, path));
     }
   }
-  if (schema.items !== undefined) {
-    paths.push(...outputCursorPaths(schema.items, `${prefix}[]`));
+  if (schema["items"] !== undefined) {
+    paths.push(...outputCursorPaths(schema["items"], `${prefix}[]`));
   }
-  for (const composition of [schema.anyOf, schema.oneOf, schema.allOf]) {
+  for (const composition of [
+    schema["anyOf"],
+    schema["oneOf"],
+    schema["allOf"],
+  ]) {
     if (Array.isArray(composition)) {
       for (const branch of composition) {
         paths.push(...outputCursorPaths(branch, prefix));

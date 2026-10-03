@@ -14,19 +14,21 @@ const LEGISLATION_FAMILY = "legislation" satisfies CorpusFamily;
 /** A Work can recur through another passage or another stored version. */
 export const legislationCorpusWorkCanRecur = (generation: string) =>
   sql<boolean>`CASE WHEN coalesce((
-    SELECT ${corpusIndexProjectionIntents.expectedDocumentCount}
-    FROM ${corpusIndexProjectionStates}
-    INNER JOIN ${corpusIndexProjectionIntents}
-      ON ${corpusIndexProjectionIntents.id} = ${corpusIndexProjectionStates.appliedRevision}
-    WHERE ${corpusIndexProjectionStates.family} = ${LEGISLATION_FAMILY}
-      AND ${corpusIndexProjectionStates.generation} = ${generation}
-      AND ${corpusIndexProjectionStates.entityId} = ${legislationDocuments.id}
+    SELECT intent.expected_document_count
+    FROM ${corpusIndexProjectionIntents} intent
+    WHERE intent.id = (
+      SELECT projection_state.applied_revision
+      FROM ${corpusIndexProjectionStates} projection_state
+      WHERE projection_state.family = ${LEGISLATION_FAMILY}
+        AND projection_state.generation = ${generation}
+        AND projection_state.entity_id = ${legislationDocuments}.${sql.identifier(legislationDocuments.id.name)}
+    )
   ), 0) <> 1 THEN true ELSE EXISTS (
     SELECT 1 FROM ${legislationDocuments} sibling
-    WHERE sibling.source_id = ${legislationDocuments.sourceId}
-      AND sibling.eli = ${legislationDocuments.eli}
-      AND sibling.language = ${legislationDocuments.language}
-      AND sibling.id <> ${legislationDocuments.id}
+    WHERE sibling.source_id = ${legislationDocuments}.${sql.identifier(legislationDocuments.sourceId.name)}
+      AND sibling.eli = ${legislationDocuments}.${sql.identifier(legislationDocuments.eli.name)}
+      AND sibling.language = ${legislationDocuments}.${sql.identifier(legislationDocuments.language.name)}
+      AND sibling.id <> ${legislationDocuments}.${sql.identifier(legislationDocuments.id.name)}
   ) END`;
 
 /**

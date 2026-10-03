@@ -29,6 +29,7 @@ import {
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
+import type { SearchPaginationOutcome } from "@stll/api-contract/search";
 import {
   CZ_INSOLVENCY_SOURCE,
   CZ_VAT_RELIABILITY_SOURCE,
@@ -2992,6 +2993,7 @@ describe("OpenAI-compatible MCP tools", () => {
       searches: {
         query: string;
         queryUsed: string;
+        paginationOutcome: SearchPaginationOutcome;
         warnings: readonly unknown[];
       }[];
     }>(

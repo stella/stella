@@ -1,6 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
@@ -320,6 +320,24 @@ test.each(
       document_id: id,
       chunk_id: `passage-${index}`,
     }));
+    // The applied census must describe the physical passages this engine emits.
+    const passageCounts = new Map<string, number>();
+    for (const id of ids) {
+      passageCounts.set(id, (passageCounts.get(id) ?? 0) + 1);
+    }
+    await drizzle({ client }).execute(sql`
+      UPDATE ${corpusIndexProjectionIntents} intent
+      SET expected_document_count = census.passage_count
+      FROM (VALUES ${sql.join(
+        [...passageCounts].map(
+          ([id, count]) => sql`(${id}::uuid, ${count}::int)`,
+        ),
+        sql`, `,
+      )}) AS census(entity_id, passage_count)
+      WHERE intent.family = 'case_law'
+        AND intent.generation = ${GENERATION}
+        AND intent.entity_id = census.entity_id
+    `);
     const stub = async (
       _input: Parameters<typeof fetch>[0],
       init?: Parameters<typeof fetch>[1],
