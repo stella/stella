@@ -1,4 +1,5 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, TaggedError, panic } from "better-result";
 import * as cheerio from "cheerio";
 
@@ -2958,6 +2959,20 @@ export const czUsAdapter = defineSourceAdapter({
    * is held. This loop is the only writer of coverage for this source.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            caseNumber: payload["caseNumber"],
+            sourceDocumentId: payload["sourceDocumentId"],
+            nalusRecordId: payload["nalusRecordId"],
+            sourceUrl: payload["sourceUrl"],
+            sz: payload["sz"],
+            ecli: payload["ecli"],
+            counter: payload["counter"],
+            listingDocketMissing: payload["listingDocketMissing"],
+          }
+        : null,
     firstSlice: CZ_US_FIRST_SLICE,
     sliceOf: czUsSliceOf,
     nextSlice: czUsNextSlice,

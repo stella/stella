@@ -336,6 +336,18 @@ const MODEL_REQUEST_NAMES = [
 
 export const OWNERSHIP = [
   {
+    id: "api-test-memory-planner",
+    capability: "Measured API test memory and batch composition",
+    owner: ["apps/api/scripts/test-batch-plan.ts"],
+    summary:
+      "The planner owns measured peak RSS, conservative unknown weights and automatic process isolation. Batch plans must fit their execution-class memory caps before a test starts.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["apps/api/scripts/test-peak-rss.json"],
+      allowed: [],
+    },
+  },
+  {
     id: "model-request-send-mode",
     capability: "Sending a request to an AI model",
     owner: [

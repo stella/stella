@@ -60,6 +60,7 @@ import {
   runReconciliationWorkUnit,
 } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
+  createSourceStoredTotalMaintenanceRuntime,
   readSourceReportedTotals,
   setSourceReportedTotal,
 } from "@/api/handlers/case-law/ingestion/source-totals";
@@ -118,7 +119,10 @@ import {
   stepCadence,
   stepStallAlert,
 } from "./cycle-progress";
-import { ingestionHealthRecord } from "./ingestion-health";
+import {
+  createIngestionHealthRefresh,
+  ingestionHealthRecord,
+} from "./ingestion-health";
 import { formatLogDetail } from "./log-detail";
 import {
   RECOMPUTE_OUTCOME,
@@ -401,6 +405,15 @@ const MAX_CONCURRENT_DB_WRITES = Math.max(
   LEGAL_ATLAS_RUNNER_ENV.maxConcurrentDbWrites,
 );
 const dbWriteSemaphore = createSemaphore("DB slot", MAX_CONCURRENT_DB_WRITES);
+
+let storedTotalMaintenance:
+  | ReturnType<typeof createSourceStoredTotalMaintenanceRuntime>
+  | undefined;
+const getStoredTotalMaintenance = () => {
+  storedTotalMaintenance ??=
+    createSourceStoredTotalMaintenanceRuntime(ingestionDb);
+  return storedTotalMaintenance;
+};
 
 /**
  * Max adapter cycles running concurrently. Unlike the DB-write slot, this
@@ -693,6 +706,7 @@ const runOneCycle = async (
       source,
       sourceLease,
       scopedDb: ingestionDb,
+      acquireStoredTotalAdmission: getStoredTotalMaintenance().acquireAdmission,
       dbSlot: dbWriteSemaphore,
       cycle: {
         budgetMs: adapter?.maxCycleMs ?? MAX_CYCLE_MS,
@@ -1047,6 +1061,20 @@ export const runCaseLawIngest = async (
   }
 
   // Health loop: heartbeat + S3 credential refresh.
+  const refreshHealth = createIngestionHealthRefresh({
+    clock: () => Temporal.Now.instant().epochMilliseconds,
+    emitStoredTotalHeartbeat: getStoredTotalMaintenance().emitHoldHeartbeat,
+    observeHeartbeatFailure:
+      getStoredTotalMaintenance().observeHeartbeatFailure,
+    refreshCredentials: async () => {
+      if (isS3Stale()) {
+        await refreshS3();
+      }
+      if (isCorpusS3Stale()) {
+        await refreshCorpusS3();
+      }
+    },
+  });
   const healthLoop = (async () => {
     while (true) {
       if (isDraining()) {
@@ -1059,14 +1087,9 @@ export const runCaseLawIngest = async (
       writeHeartbeat();
       logHeartbeat();
       try {
-        if (isS3Stale()) {
-          await refreshS3();
-        }
-        if (isCorpusS3Stale()) {
-          await refreshCorpusS3();
-        }
+        await refreshHealth();
       } catch (error) {
-        logError("S3 credential refresh failed:", error);
+        logError("Health refresh failed:", error);
       }
     }
   })();

@@ -366,22 +366,21 @@ export const caseLawSources = p.pgTable(
       .varchar("reported_total_origin", { length: 16 })
       .$type<SourceTotalOrigin>(),
     /**
-     * How many decisions the corpus holds for this source, and when it was
-     * counted.
-     *
-     * Persisted rather than computed on demand because the count is a walk of
-     * the source's whole range of
-     * `case_law_decisions_source_generation_cursor_idx`: on a corpus this size
-     * that is seconds, and the public reader that would have to run it holds a
-     * two-connection pool shared with every other public page. The ingestion
-     * side counts it on its own connection instead
-     * (`ingestion/source-totals.ts`), so a public request reads an integer.
+     * Persisted exact count and when it was observed. One gated daily
+     * snapshot refreshes it; public requests read this pair.
      *
      * Zero is a real answer here, unlike `reported_total`: a source can be
      * registered and hold nothing yet. The pair is one fact and moves together.
      */
     storedTotal: p.integer("stored_total"),
     storedTotalAsOf: timestamptz("stored_total_as_of"),
+    /** Claims and failed refreshes share the same durable interval. */
+    storedTotalAttemptedAt: timestamptz("stored_total_attempted_at"),
+    /** Durable source phase; overdue refreshes remain queued. */
+    storedTotalNextRefreshAt: timestamptz("stored_total_next_refresh_at"),
+    /** Unavailable indicators preserve the first hold and its warning slot. */
+    storedTotalHeldSince: timestamptz("stored_total_held_since"),
+    storedTotalWarnedSlot: timestamptz("stored_total_warned_slot"),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
@@ -1638,6 +1637,8 @@ export const RECONCILIATION_ITEM_STATUS = {
 export type ReconciliationItemStatus =
   (typeof RECONCILIATION_ITEM_STATUS)[keyof typeof RECONCILIATION_ITEM_STATUS];
 
+export const RECONCILIATION_MAX_REVIVALS = 2;
+
 export const caseLawReconciliationItems = p.pgTable(
   "case_law_reconciliation_items",
   {
@@ -1651,6 +1652,10 @@ export const caseLawReconciliationItems = p.pgTable(
     identityKey: p.varchar("identity_key", { length: 320 }).notNull(),
     /** The listing item verbatim, so a retry needs no second listing walk. */
     payload: jsonb().$type<unknown>().notNull(),
+    /** Lazy listing revision fingerprint; null is a row written before revision tracking. */
+    payloadHash: p.varchar("payload_hash", { length: 64 }),
+    /** Lifetime terminal revivals; failed revived attempts preserve the retry budget. */
+    revivalCount: p.integer("revival_count").default(0).notNull(),
     status: p
       .varchar({ length: 16, enum: RECONCILIATION_ITEM_STATUSES })
       .default(RECONCILIATION_ITEM_STATUS.PARKED)
@@ -1686,6 +1691,10 @@ export const caseLawReconciliationItems = p.pgTable(
         Object.values(RECONCILIATION_ITEM_STATUS).map((value) => sql`${value}`),
         sql`, `,
       )})`,
+    ),
+    p.check(
+      "case_law_reconciliation_items_revival_count_bounded",
+      sql`${t.revivalCount} >= 0 AND ${t.revivalCount} <= ${RECONCILIATION_MAX_REVIVALS}`,
     ),
     p.check(
       "case_law_reconciliation_items_attempts_nonnegative",

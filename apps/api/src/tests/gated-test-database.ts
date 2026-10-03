@@ -9,8 +9,10 @@
  * `bun-test-hygiene/no-unmanaged-database-client` keeps test files from
  * constructing a client anywhere else.
  */
+import { panic } from "better-result";
 import { SQL } from "bun";
 import { afterAll } from "bun:test";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
@@ -126,6 +128,102 @@ export const withGatedTestClients = async <T>(
             closeTimeout === undefined ? undefined : { timeout: closeTimeout },
           ),
       ),
+    );
+  }
+};
+
+type CopyIngestionTablePrivilegesOptions = {
+  sourceDb: GatedTestDb;
+  targetDb: GatedTestDb;
+  targetSchema: string;
+  tableNames: readonly string[];
+};
+
+/** Preserve migrated ingestion grants when canonical tables are recreated for a fixture. */
+export const copyIngestionTablePrivileges = async ({
+  sourceDb,
+  targetDb,
+  targetSchema,
+  tableNames,
+}: CopyIngestionTablePrivilegesOptions) => {
+  const tables = sql.join(
+    tableNames.map((name) => sql`${name}`),
+    sql`, `,
+  );
+  const tableGrants = await sourceDb.execute(sql`
+    SELECT table_name, privilege_type FROM information_schema.table_privileges
+    WHERE table_schema = 'public' AND grantee = 'stella_ingestion'
+      AND table_name IN (${tables}) ORDER BY table_name, privilege_type`);
+  const columnGrants = await sourceDb.execute(sql`
+    SELECT table_name, column_name, privilege_type FROM information_schema.column_privileges
+    WHERE table_schema = 'public' AND grantee = 'stella_ingestion'
+      AND table_name IN (${tables}) ORDER BY table_name, privilege_type, column_name`);
+  await targetDb.execute(
+    sql`GRANT USAGE ON SCHEMA ${sql.identifier(targetSchema)} TO stella_ingestion`,
+  );
+  const tablePrivileges = new Set<string>();
+  for (const grant of tableGrants) {
+    const table = grant["table_name"];
+    const privilege = grant["privilege_type"];
+    if (
+      typeof table !== "string" ||
+      !tableNames.includes(table) ||
+      typeof privilege !== "string" ||
+      ![
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "TRUNCATE",
+        "REFERENCES",
+        "TRIGGER",
+        "MAINTAIN",
+      ].includes(privilege)
+    ) {
+      panic("Unexpected migrated ingestion table privilege");
+    }
+    tablePrivileges.add(`${table}.${privilege}`);
+    // db-await-in-loop: reproduce the finite migrated privilege catalog in the isolated fixture.
+    await targetDb.execute(
+      sql`GRANT ${sql.raw(privilege)} ON ${sql.identifier(targetSchema)}.${sql.identifier(table)} TO stella_ingestion`,
+    );
+  }
+  const groups = new Map<
+    string,
+    { table: string; privilege: string; columns: string[] }
+  >();
+  for (const grant of columnGrants) {
+    const table = grant["table_name"];
+    const column = grant["column_name"];
+    const privilege = grant["privilege_type"];
+    if (
+      typeof table !== "string" ||
+      !tableNames.includes(table) ||
+      typeof column !== "string" ||
+      typeof privilege !== "string" ||
+      !["SELECT", "INSERT", "UPDATE", "REFERENCES"].includes(privilege)
+    ) {
+      panic("Unexpected migrated ingestion column privilege");
+    }
+    const key = `${table}.${privilege}`;
+    // information_schema also emits column rows for whole-table privileges.
+    if (tablePrivileges.has(key)) {
+      continue;
+    }
+    const group = groups.get(key);
+    if (group === undefined) {
+      groups.set(key, { table, privilege, columns: [column] });
+    } else {
+      group.columns.push(column);
+    }
+  }
+  for (const { table, privilege, columns } of groups.values()) {
+    // db-await-in-loop: reproduce each fixed column-level grant from the migrated catalog.
+    await targetDb.execute(
+      sql`GRANT ${sql.raw(privilege)} (${sql.join(
+        columns.map((column) => sql.identifier(column)),
+        sql`, `,
+      )}) ON ${sql.identifier(targetSchema)}.${sql.identifier(table)} TO stella_ingestion`,
     );
   }
 };

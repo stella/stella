@@ -317,6 +317,7 @@ const crawlCaller: Caller = {
     const run = await Result.tryPromise({
       try: async () =>
         await runIngestionPipeline({
+          acquireStoredTotalAdmission: async () => "held",
           source: sourceLease.source,
           sourceLease,
           scopedDb,
