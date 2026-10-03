@@ -136,13 +136,6 @@ export const AGENT_AUTH_ID_JAG_ALLOWED_ALGS = [
  */
 export const AGENT_AUTH_ID_JAG_MAX_AUTH_AGE_SECONDS = 3600;
 
-/**
- * Tolerance, in seconds, for a future-dated `iat`/`auth_time` to absorb
- * clock skew between the issuer and us before treating the claim as
- * unreasonably in the future.
- */
-export const AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS = 60;
-
 /** Lifetime of the service-issued intermediate identity_assertion. */
 export const AGENT_AUTH_ASSERTION_TTL_SECONDS = 5 * 60;
 

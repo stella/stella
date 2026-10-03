@@ -8,7 +8,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
   preflightAttachedTemplateUpload,
@@ -98,14 +98,10 @@ export const useUploadVersion = () => {
           return;
         }
         analytics.captureError(result.error);
-        stellaToast.add({
-          title: t("workspaces.files.versionUploadFailed"),
-          description: userErrorFromThrown(
-            result.error,
-            t("errors.actionFailed"),
-          ),
-          type: "error",
-        });
+        notifyUserError(
+          result.error,
+          t("workspaces.files.versionUploadFailed"),
+        );
         return;
       }
 

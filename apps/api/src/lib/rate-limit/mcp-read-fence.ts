@@ -3,15 +3,18 @@ import { Result } from "better-result";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
+import {
+  createAdmissionRedis,
+  resolveAdmissionRedisClient,
+  sendAdmissionRedisCommand,
+  type AdmissionRedisClient,
+} from "@/api/lib/admission-redis";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
-import {
-  createLazyRedisClient,
-  createRedisClient,
-} from "@/api/lib/redis-client";
 import { coordinationKey } from "@/api/lib/redis-keys";
 import type { McpReadClass } from "@/api/mcp/tool-types";
 
@@ -27,20 +30,23 @@ const COMMAND_TIMEOUT_MS = 500;
 // server deadline prevents delayed commands from charging a refused output.
 const CHARGE_DEADLINE_MS = 400;
 const CANCELLATION_MARGIN_MS = 500;
-const fenceRedis = createLazyRedisClient(() =>
-  createRedisClient({
-    connectionTimeout: COMMAND_TIMEOUT_MS,
-    enableOfflineQueue: false,
-  }),
-);
+const fenceRedis = createAdmissionRedis();
 export const closeMcpReadFenceRedis = () => fenceRedis.close();
+export const startMcpReadFenceRedis = async () => {
+  const connection = await fenceRedis.ready();
+  if (Result.isError(connection)) {
+    await Promise.reject(connection.error);
+  }
+};
 
 const unavailable = (cause?: unknown) =>
-  new ActionAdmissionError({
-    message: "Read coordination is unavailable",
-    reason: "unavailable",
-    cause,
-  });
+  ActionAdmissionError.is(cause)
+    ? cause
+    : new ActionAdmissionError({
+        message: "Read coordination is unavailable",
+        reason: "unavailable",
+        cause,
+      });
 
 export const resolveMcpReadFencePolicy = (): Result<
   McpReadFencePolicy,
@@ -135,7 +141,7 @@ type ChargeMcpReadBytesOptions = {
   bytes: number;
   enabled?: boolean;
   policy?: McpReadFencePolicy;
-  redis?: { send: (command: string, args: string[]) => Promise<unknown> };
+  redis?: AdmissionRedisClient;
 };
 
 export const chargeMcpReadBytes = async ({
@@ -143,7 +149,7 @@ export const chargeMcpReadBytes = async ({
   userId,
   readClass,
   bytes,
-  enabled = env.FEATURE_MCP_READ_FENCE,
+  enabled = isDeploymentFeatureEnabled("FEATURE_MCP_READ_FENCE"),
   policy,
   redis,
 }: ChargeMcpReadBytesOptions): Promise<Result<void, ActionAdmissionError>> => {
@@ -203,13 +209,18 @@ export const chargeMcpReadBytes = async ({
     }),
   ];
   const client =
-    redis === undefined ? fenceRedis.ready() : Promise.resolve(redis);
-  const charged = await Result.tryPromise({
+    redis === undefined
+      ? resolveAdmissionRedisClient(fenceRedis.ready)
+      : Promise.resolve(Result.ok(redis));
+  const chargeAttempt = await Result.tryPromise({
     try: async () =>
       await withCommandTimeout({
         command: (async () => {
           const connection = await client;
-          const reply: unknown = await connection.send("EVAL", [
+          if (Result.isError(connection)) {
+            return connection;
+          }
+          const reply = await sendAdmissionRedisCommand(connection.value, [
             CHARGE_SCRIPT,
             String(keys.length),
             ...keys,
@@ -227,16 +238,22 @@ export const chargeMcpReadBytes = async ({
       }),
     catch: (cause) => unavailable(cause),
   });
+  const charged = Result.isError(chargeAttempt)
+    ? chargeAttempt
+    : chargeAttempt.value.mapError(unavailable);
   if (Result.isError(charged)) {
     if (!(charged.error.cause instanceof TimeoutError)) {
       return charged;
     }
-    const cancelled = await Result.tryPromise({
+    const cancelAttempt = await Result.tryPromise({
       try: async () =>
         await withCommandTimeout({
           command: (async () => {
             const connection = await client;
-            const reply: unknown = await connection.send("EVAL", [
+            if (Result.isError(connection)) {
+              return connection;
+            }
+            const reply = await sendAdmissionRedisCommand(connection.value, [
               CANCEL_SCRIPT,
               String(keys.length),
               ...keys,
@@ -251,6 +268,9 @@ export const chargeMcpReadBytes = async ({
         }),
       catch: (cause) => unavailable(cause),
     });
+    const cancelled = Result.isError(cancelAttempt)
+      ? cancelAttempt
+      : cancelAttempt.value.mapError(unavailable);
     // Disconnected clients can reject cancellation. Keep the conservative
     // overcount, refuse delivery, and propagate through the existing
     // read-fence unavailable telemetry at the MCP boundary.

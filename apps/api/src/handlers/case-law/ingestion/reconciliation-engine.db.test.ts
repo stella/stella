@@ -9,6 +9,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { DAY_IN_MS } from "@stll/time";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -2191,11 +2192,11 @@ test("pipeline metadata classification follows the persisted source adapter", as
   }
 });
 
-test("metadata classification rejects a missing persisted source", () => {
+test("metadata classification rejects a missing persisted source", async () => {
   const absentSourceId = createSafeId<"caseLawSource">();
   expect(
-    resolveSourceMetadataUrlSchema(absentSourceId, scopedDb),
-  ).rejects.toThrow("is absent");
+    await rejectionOf(resolveSourceMetadataUrlSchema(absentSourceId, scopedDb)),
+  ).toHaveProperty("message", expect.stringContaining("is absent"));
 });
 
 test("reconciliation persists registered root and nested URLs without caller schema overrides", async () => {

@@ -1,3 +1,4 @@
+// parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks.
 /**
  * Block machinery shared by the CourtListener text formats: a builder that
  * numbers blocks under one opinion row's prefix and groups them into
@@ -32,6 +33,7 @@ import {
 } from "@/api/handlers/case-law/document-ast";
 import {
   appendTextInline,
+  isExcludedHtmlTag,
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
@@ -484,8 +486,6 @@ export type BodyVocabulary = {
 const nameOf = (element: Element): string =>
   (element.name.split(":").at(-1) ?? element.name).toLowerCase();
 
-const IGNORED = new Set(["script", "style"]);
-
 /** The parts of a table below the table itself. */
 const TABLE_PARTS = new Set([
   "caption",
@@ -614,7 +614,7 @@ export const sourceTextOf = (
       current += textOf(node);
       return;
     }
-    if (!isTag(node) || IGNORED.has(nameOf(node))) {
+    if (!isTag(node) || isExcludedHtmlTag(nameOf(node))) {
       return;
     }
     const anchor = vocabulary.pageAnchor(node);
@@ -735,7 +735,7 @@ const createTableWalker = ({
         run.push(child);
         continue;
       }
-      if (!isTag(child) || IGNORED.has(nameOf(child))) {
+      if (!isTag(child) || isExcludedHtmlTag(nameOf(child))) {
         continue;
       }
       if (vocabulary.pageAnchor(child) !== undefined || !isBlock(child)) {
@@ -768,7 +768,7 @@ const createTableWalker = ({
         ? null
         : { inlines, plainText: projectPlainText(inlines) };
     }
-    if (!isTag(cell) || IGNORED.has(nameOf(cell))) {
+    if (!isTag(cell) || isExcludedHtmlTag(nameOf(cell))) {
       return null;
     }
     const inlines = flowInlines(cell);
@@ -805,7 +805,7 @@ const createTableWalker = ({
           }
           continue;
         }
-        if (!isTag(child) || IGNORED.has(nameOf(child))) {
+        if (!isTag(child) || isExcludedHtmlTag(nameOf(child))) {
           continue;
         }
         const name = nameOf(child);
@@ -975,7 +975,7 @@ export const walkBody = ({
         run.push(child);
         continue;
       }
-      if (!isTag(child) || IGNORED.has(nameOf(child)) || skip(child)) {
+      if (!isTag(child) || isExcludedHtmlTag(nameOf(child)) || skip(child)) {
         continue;
       }
       if (vocabulary.pageAnchor(child) !== undefined || !isBlock(child)) {

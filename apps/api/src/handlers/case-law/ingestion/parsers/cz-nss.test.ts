@@ -1147,3 +1147,19 @@ test("retains nested table text once and excludes non-content cell tags", () => 
   expect(parsed.fulltext).not.toContain("scriptqzexcluded");
   expect(parsed.fulltext).not.toContain("styleqzexcluded");
 });
+
+for (const tag of ["script", "style"]) {
+  test(`ignores ${tag} text when measuring bold instruction headings`, () => {
+    const clean = `<html><body><p>Odůvodnění:</p>
+      <p><span style="font-weight:bold">Poučení:</span> Proti tomuto rozhodnutí nejsou opravné prostředky přípustné.</p>
+    </body></html>`;
+    const injected = clean.replace(
+      "Poučení:</span>",
+      () => `Poučení:<${tag}>${"qzHidden".repeat(20)}</${tag}></span>`,
+    );
+    expect(injected).not.toBe(clean);
+    expect(parseNssDecisionHtml(baseInput(injected))).toEqual(
+      parseNssDecisionHtml(baseInput(clean)),
+    );
+  });
+}

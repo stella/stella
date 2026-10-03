@@ -4,8 +4,6 @@ import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/toast";
-
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import {
@@ -16,7 +14,9 @@ import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-sta
 import { PlaybooksPageSkeleton } from "@/features/knowledge/views/playbooks/playbooks-page-view";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 import { PlaybookEditor } from "@/routes/knowledge/-components/playbook-editor";
 import { PlaybookList } from "@/routes/knowledge/-components/playbook-list";
@@ -108,9 +108,7 @@ export function MemberPlaybooksPage({
     // told the same way as one the server refused.
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error);
-      stellaToast.add({
-        type: "error",
-        title: t("knowledge.playbooks.loadFailed"),
+      notifyUserError(result.error, t("knowledge.playbooks.loadFailed"), {
         description: userErrorFromThrown(
           result.error,
           t("common.unexpectedError"),
@@ -121,14 +119,16 @@ export function MemberPlaybooksPage({
 
     const response = result.value;
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("knowledge.playbooks.loadFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
+      notifyUserError(
+        toAPIError(response.error),
+        t("knowledge.playbooks.loadFailed"),
+        {
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        },
+      );
       return;
     }
 

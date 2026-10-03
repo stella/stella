@@ -38,7 +38,7 @@ const KEEP_TERMINAL: JobsOptions = { removeOnComplete: 100, removeOnFail: 500 };
 const createHarness = (processor: ProbeProcessor, attempts = 1): Harness => {
   const queueName = `requeue-test-${Bun.randomUUIDv7()}`;
   const queue = new Queue<ProbeData>(queueName, {
-    connection: createBullMqConnection(),
+    connection: createBullMqConnection({ storeClass: "durable-coordination" }),
     defaultJobOptions: { ...KEEP_TERMINAL, attempts },
   });
   const runs: ProbeData[] = [];
@@ -79,7 +79,11 @@ const createHarness = (processor: ProbeProcessor, attempts = 1): Harness => {
           runs.push(job.data);
           await processor(job);
         },
-        { connection: createBullMqConnection() },
+        {
+          connection: createBullMqConnection({
+            storeClass: "durable-coordination",
+          }),
+        },
       );
       worker.on("completed", onSettled);
       worker.on("failed", onSettled);

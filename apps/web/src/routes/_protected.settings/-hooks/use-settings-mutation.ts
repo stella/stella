@@ -5,6 +5,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 type SuccessToast = { title: string; description?: string };
 
@@ -84,8 +85,7 @@ export const useSettingsMutation = <TVariables = void, TData = unknown>(
     onError: (error, variables) => {
       analytics.captureError(error);
       if (options.errorToast) {
-        stellaToast.add({
-          title: options.errorToast.title,
+        notifyUserError(error, options.errorToast.title, {
           ...(options.errorToast.description
             ? {
                 description: userErrorFromThrown(
@@ -94,7 +94,6 @@ export const useSettingsMutation = <TVariables = void, TData = unknown>(
                 ),
               }
             : {}),
-          type: "error",
         });
       }
       options.onError?.(error, variables);

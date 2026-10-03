@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -62,7 +62,7 @@ type StartChatExecutionAdmissionOptions = {
 export const startChatExecutionAdmission = async ({
   organizationId,
   userId,
-  enabled = env.FEATURE_ACTION_ADMISSION,
+  enabled = isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION"),
   admit = withActionAdmission,
   mode,
   actionKind,

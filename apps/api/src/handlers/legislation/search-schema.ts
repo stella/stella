@@ -4,10 +4,7 @@ import type { Static } from "elysia";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { LEGISLATION_SEARCH_MATCH_TYPES } from "@stll/api-contract/search";
 
-import {
-  safeHandlerErrorResponseSchema,
-  safeHandlerResponseSchemasWithStatusText,
-} from "@/api/lib/api-handlers";
+import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
 import {
   tPaginationCursor,
   tPaginationLimit,
@@ -17,6 +14,11 @@ import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-sear
 import { tPublicCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { searchPaginationOutcomeSchema } from "@/api/lib/search/pagination-outcome-schema";
+import { safePublicHandlerErrorOrStatusTextResponseSchema } from "@/api/lib/search/public-error-response";
+import {
+  boundedString,
+  nullableBoundedString,
+} from "@/api/lib/search/response-text-bounds";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
 export const PUBLIC_JURISDICTIONS_DESCRIPTION =
@@ -47,7 +49,7 @@ export const searchLegislationBodySchema = t.Object({
 
 export type SearchLegislationBody = Static<typeof searchLegislationBodySchema>;
 
-const nullableStringSchema = t.Union([t.String(), t.Null()]);
+const textBytes = LIMITS.legislationSearchTextBytes;
 
 export const searchLegislationSuccessResponseSchema = t.Object(
   {
@@ -60,23 +62,25 @@ export const searchLegislationSuccessResponseSchema = t.Object(
             },
             { additionalProperties: false },
           ),
-          documentId: t.String(),
-          eli: t.String(),
-          slug: nullableStringSchema,
-          title: t.String(),
-          country: t.String(),
-          language: t.String(),
-          documentType: nullableStringSchema,
-          status: t.String(),
-          effectiveDate: nullableStringSchema,
-          sourceUrl: nullableStringSchema,
-          headline: nullableStringSchema,
+          documentId: boundedString(textBytes.documentId),
+          eli: boundedString(textBytes.eli),
+          slug: nullableBoundedString(textBytes.slug),
+          title: boundedString(textBytes.title),
+          country: boundedString(textBytes.country),
+          language: boundedString(textBytes.language),
+          documentType: nullableBoundedString(textBytes.documentType),
+          status: boundedString(textBytes.status),
+          effectiveDate: nullableBoundedString(textBytes.effectiveDate),
+          sourceUrl: nullableBoundedString(textBytes.sourceUrl),
+          headline: nullableBoundedString(textBytes.headline),
           score: t.Number(),
         },
         { additionalProperties: false },
       ),
     ),
-    nextCursor: nullableStringSchema,
+    nextCursor: nullableBoundedString(
+      CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
+    ),
     paginationOutcome: searchPaginationOutcomeSchema,
     total: searchTotalSchema,
   },
@@ -84,8 +88,11 @@ export const searchLegislationSuccessResponseSchema = t.Object(
 );
 
 export const searchLegislationResponseSchema = {
-  ...safeHandlerResponseSchemasWithStatusText(
+  ...safePublicHandlerResponseSchemasWithStatusText(
     searchLegislationSuccessResponseSchema,
   ),
-  503: t.Union([safeHandlerErrorResponseSchema, tPublicCountryUnavailable]),
+  503: t.Union([
+    safePublicHandlerErrorOrStatusTextResponseSchema,
+    tPublicCountryUnavailable,
+  ]),
 };

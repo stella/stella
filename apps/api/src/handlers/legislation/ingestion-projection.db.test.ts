@@ -450,3 +450,102 @@ test("a withdrawn version erases, a replay of its stored payload keeps it withdr
   });
   expect(relistedAgain).toMatchObject({ id: first.id, skipped: true });
 });
+
+test("refresh sequences keep database metadata and corpus text on one revision", async () => {
+  const eli = "revision-sequence-matrix";
+  const base = { ...input("current"), eli, metadata: { revision: "initial" } };
+  const first = await processLegislationDocument(base, scopedDb, { corpus });
+  if (first.type !== "stored") {
+    throw new Error(`expected stored legislation, got ${first.type}`);
+  }
+  const objects = new Map<string, string | null>();
+  const initial = await bodyState(first.id);
+  if (initial?.textS3Key) {
+    objects.set(initial.textS3Key, base.fulltext ?? null);
+  }
+  const steps = [
+    { input: base, failure: false },
+    {
+      input: {
+        ...base,
+        title: "Second",
+        fulltext: "Second text",
+        metadata: { revision: "second" },
+        rawHash: "second",
+      },
+      failure: false,
+    },
+    {
+      input: {
+        ...base,
+        title: "Third",
+        fulltext: "Third text",
+        metadata: { revision: "third" },
+        rawHash: "third",
+      },
+      failure: true,
+    },
+    {
+      input: {
+        ...base,
+        title: "Third",
+        fulltext: "Third text",
+        metadata: { revision: "third" },
+        rawHash: "third",
+      },
+      failure: false,
+    },
+    {
+      input: {
+        ...base,
+        title: "Corrected third title",
+        fulltext: "Third text",
+        metadata: { revision: "third-correction" },
+        rawHash: "third-correction",
+      },
+      failure: false,
+    },
+  ];
+  for (const step of steps) {
+    const result = await processLegislationDocument(step.input, scopedDb, {
+      corpus: {
+        ...corpus,
+        write: async (writeInput) => {
+          const inFlight = await bodyState(first.id);
+          expect(inFlight?.title).toBe(step.input.title);
+          expect(inFlight?.fulltext).toBe(step.input.fulltext);
+          if (inFlight?.textS3Key) {
+            expect(objects.get(inFlight.textS3Key)).toBe(step.input.fulltext);
+          }
+          if (step.failure) {
+            throw new Error("sequence corpus write failed");
+          }
+          const outcome = await corpusWrite(writeInput);
+          if (outcome.written) {
+            objects.set(outcome.written.textKey, writeInput.text);
+          }
+          return outcome;
+        },
+      },
+    });
+    expect(result).toMatchObject({
+      type: "stored",
+      corpusWriteFailed: step.failure,
+    });
+    const settled = await bodyState(first.id);
+    expect(settled?.title).toBe(step.input.title);
+    expect(settled?.fulltext).toBe(step.input.fulltext);
+    if (settled?.textS3Key) {
+      expect(objects.get(settled.textS3Key)).toBe(step.input.fulltext);
+    } else {
+      expect(step.failure).toBe(true);
+    }
+    const row = (
+      await db
+        .select({ metadata: legislationDocuments.metadata })
+        .from(legislationDocuments)
+        .where(eq(legislationDocuments.id, first.id))
+    ).at(0);
+    expect(row?.metadata).toEqual(step.input.metadata);
+  }
+});

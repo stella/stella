@@ -66,7 +66,6 @@ import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legalReaderRoute } from "@/api/handlers/legal-reader/routes";
 import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
-import { createPublicStatuteSearchRateLimitComposition } from "@/api/handlers/legislation/public-search-rate-limit-composition";
 import { legislationRoute } from "@/api/handlers/legislation/routes";
 import { listsRoute } from "@/api/handlers/lists/routes";
 import { handleMcpAppSandboxRequest } from "@/api/handlers/mcp-app-sandbox/routes";
@@ -137,10 +136,12 @@ import { startManagedProviderChecks } from "@/api/lib/chat/managed-provider-chec
 import {
   resolveClientAddress,
   resolveSignupRateLimitClientIp,
+  sealEdgeHeaders,
   stampClientAddressHeader,
 } from "@/api/lib/client-ip";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -165,8 +166,15 @@ import {
   withFinalResponseCompletion,
 } from "@/api/lib/observability/request-lifecycle";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
-import { closeActionAdmissionRedis } from "@/api/lib/rate-limit/action-admission";
-import { closeMcpReadFenceRedis } from "@/api/lib/rate-limit/mcp-read-fence";
+import {
+  closeActionAdmissionRedis,
+  startActionAdmissionRedis,
+} from "@/api/lib/rate-limit/action-admission";
+import {
+  closeMcpReadFenceRedis,
+  startMcpReadFenceRedis,
+} from "@/api/lib/rate-limit/mcp-read-fence";
+import { createPublicCorpusRateLimitComposition } from "@/api/lib/rate-limit/public-corpus-rate-limit-composition";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
@@ -273,24 +281,22 @@ if (isLocalDevOpen()) {
 
 const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
 
-const publicStatuteSearchRateLimits =
-  createPublicStatuteSearchRateLimitComposition({
-    routes: publicLegislationRoute,
-    skipShared: (request) => {
-      // The dev-only e2e walk measures navigation, not abuse budgets.
-      if (env.E2E_DISABLE_AUTH_RATE_LIMIT) {
-        return true;
-      }
-      // Other dedicated budgets also exclude their traffic from the shared bucket.
-      const { pathname } = new URL(request.url);
-      return (
-        isUploadRateLimitedPath(pathname) ||
-        isFolioCollabRateLimitedPath(pathname) ||
-        isSkillSourceRateLimitedRequest(request) ||
-        isStyleSetUploadRateLimitedRequest(request)
-      );
-    },
-  });
+const publicCorpusRateLimits = createPublicCorpusRateLimitComposition({
+  skipShared: (request) => {
+    // The dev-only e2e walk measures navigation, not abuse budgets.
+    if (env.E2E_DISABLE_AUTH_RATE_LIMIT) {
+      return true;
+    }
+    // Other dedicated budgets also exclude their traffic from the shared bucket.
+    const { pathname } = new URL(request.url);
+    return (
+      isUploadRateLimitedPath(pathname) ||
+      isFolioCollabRateLimitedPath(pathname) ||
+      isSkillSourceRateLimitedRequest(request) ||
+      isStyleSetUploadRateLimitedRequest(request)
+    );
+  },
+});
 
 const api = new Elysia()
   .use(createAuthResponseCookiesPlugin())
@@ -326,6 +332,7 @@ const api = new Elysia()
         context.server ?? null,
       ),
     });
+    sealEdgeHeaders(request, clientAddress);
 
     // Stamp the receipt on every response from the central header point, next
     // to the security headers, so REST callers always get an `x-request-id`
@@ -450,7 +457,7 @@ const api = new Elysia()
   .group(STELLA_API_VERSION_PREFIX, (app) =>
     app
 
-      .use(publicStatuteSearchRateLimits.shared)
+      .use(publicCorpusRateLimits)
       .use(authCapabilitiesRoute)
       .use(workspaceEventsRoute)
       .use(workspacesRoute)
@@ -522,7 +529,7 @@ const api = new Elysia()
       .use(contactsRoute)
       .use(legislationRoute)
       .use(legislationCorpusRoute)
-      .use(publicStatuteSearchRateLimits.publicLegislation)
+      .use(publicLegislationRoute)
       .use(publicKnowledgeRoute)
       .use(searchRoute)
       .use(savedSearchesRoute)
@@ -616,7 +623,7 @@ const scopeRequestAsyncStores = (): void => {
   api.wrap(
     (handleRequest) => async (request: Request) =>
       runWithRequestScope(async () => {
-        if (!env.FEATURE_ACTION_ADMISSION) {
+        if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
           return handleRequest(request);
         }
         return withFinalResponseCompletion(request, async () =>
@@ -676,6 +683,12 @@ const startServer = async (): Promise<void> => {
       rejectUnauthorized: envBase.REDIS_TLS_REJECT_UNAUTHORIZED,
     }).unwrap("Redis connection configuration must be valid.");
     logger.info("redis.connection.mode", { mode });
+    if (isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
+      detached(startActionAdmissionRedis(), "admission-store.start");
+    }
+    if (isDeploymentFeatureEnabled("FEATURE_MCP_READ_FENCE")) {
+      detached(startMcpReadFenceRedis(), "read-fence-store.start");
+    }
   }
 
   startMemoryPressureHandler();

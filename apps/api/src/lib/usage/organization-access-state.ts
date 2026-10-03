@@ -19,6 +19,7 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   CONFIGURED_ACCESS_STATE,
   configuredAccessDeadline,
@@ -66,7 +67,7 @@ export const mayUseInstanceModels = async (
   db: Pick<Transaction, "select">,
   organizationId: SafeId<"organization">,
 ): Promise<boolean> => {
-  if (!env.FEATURE_ORG_ACCESS_STATE) {
+  if (!isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE")) {
     return true;
   }
   const row = await readOrganizationAccessSnapshot(db, organizationId);
@@ -88,7 +89,7 @@ export const recordNewOrganizationAccessState = async (
   db: Pick<Transaction, "insert">,
   { organizationId, now }: OrganizationAccessStateChange,
 ): Promise<void> => {
-  const values = env.FEATURE_ORG_ACCESS_STATE
+  const values = isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE")
     ? {
         organizationId,
         state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
@@ -167,7 +168,7 @@ export const recordMissingOrganizationAccessStates = async (
 export const recordMissingOrganizationAccessStatesWhileUnenforced = async (
   db: Pick<Transaction, "execute">,
 ): Promise<void> => {
-  if (env.FEATURE_ORG_ACCESS_STATE) {
+  if (isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE")) {
     return;
   }
   await recordMissingOrganizationAccessStates(db);

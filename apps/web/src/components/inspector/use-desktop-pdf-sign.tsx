@@ -23,6 +23,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 const START_ERROR_KEYS = {
   entity_read_only: "workspaces.files.pdfSigning.readOnlyDescription",
@@ -108,11 +109,11 @@ export const useDesktopPdfSign = (target: PdfSignableFile) => {
     if (Result.isError(started)) {
       setIsSigning(false);
       getAnalytics().captureError(started.error.cause);
-      stellaToast.add({
-        description: describeStartFailure(started.error.cause),
-        title: t("workspaces.files.pdfSigning.startFailedTitle"),
-        type: "error",
-      });
+      notifyUserError(
+        started.error,
+        t("workspaces.files.pdfSigning.startFailedTitle"),
+        { description: describeStartFailure(started.error.cause) },
+      );
       return;
     }
 
@@ -135,13 +136,16 @@ export const useDesktopPdfSign = (target: PdfSignableFile) => {
 
     if (Result.isError(watched)) {
       getAnalytics().captureError(watched.error.cause);
-      stellaToast.update(toastId, {
-        description: t(
-          "workspaces.files.pdfSigning.statusUnavailableDescription",
-        ),
-        title: t("workspaces.files.pdfSigning.statusUnavailableTitle"),
-        type: "error",
-      });
+      notifyUserError(
+        watched.error,
+        t("workspaces.files.pdfSigning.statusUnavailableTitle"),
+        {
+          toastId,
+          description: t(
+            "workspaces.files.pdfSigning.statusUnavailableDescription",
+          ),
+        },
+      );
       return;
     }
 
@@ -160,11 +164,14 @@ export const useDesktopPdfSign = (target: PdfSignableFile) => {
         return;
       }
       case "expired": {
-        stellaToast.update(toastId, {
-          description: t("workspaces.files.pdfSigning.expiredDescription"),
-          title: t("workspaces.files.pdfSigning.expiredTitle"),
-          type: "error",
-        });
+        notifyUserError(
+          undefined,
+          t("workspaces.files.pdfSigning.expiredTitle"),
+          {
+            toastId,
+            description: t("workspaces.files.pdfSigning.expiredDescription"),
+          },
+        );
         return;
       }
       case "finalized": {

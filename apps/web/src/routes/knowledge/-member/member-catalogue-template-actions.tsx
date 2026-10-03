@@ -19,7 +19,9 @@ import { stellaToast } from "@stll/ui/toast";
 import { memberKnowledgeActions } from "@/features/knowledge/member/member-knowledge";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { TemplateIntent } from "@/lib/knowledge/catalogue-intent";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { organizationListOptions } from "@/lib/organization/queries";
@@ -84,14 +86,16 @@ export const MemberCatalogueTemplateActions = ({
       templateSlug,
     );
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("knowledge.catalogue.installFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
+      notifyUserError(
+        toAPIError(response.error),
+        t("knowledge.catalogue.installFailed"),
+        {
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        },
+      );
       return null;
     }
     // A deployment without bundled packs answers its gate's marker instead.
@@ -100,10 +104,7 @@ export const MemberCatalogueTemplateActions = ({
         ? response.data.items.find(({ slug }) => slug === templateSlug)
         : undefined;
     if (installed === undefined) {
-      stellaToast.add({
-        type: "error",
-        title: t("knowledge.catalogue.installFailed"),
-      });
+      notifyUserError(undefined, t("knowledge.catalogue.installFailed"));
       return null;
     }
     templateActions.invalidateTemplates();
@@ -131,10 +132,7 @@ export const MemberCatalogueTemplateActions = ({
       case "download": {
         const sourceUrl = await templateActions.readSourceUrl(templateId);
         if (sourceUrl === null) {
-          stellaToast.add({
-            type: "error",
-            title: t("common.unexpectedError"),
-          });
+          notifyUserError(undefined, t("common.unexpectedError"));
           return;
         }
         openIsolatedWindow(sourceUrl);
