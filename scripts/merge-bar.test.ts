@@ -33,6 +33,7 @@ import {
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
   parseMergeQueueRemovals,
+  RatchetRecheckError,
   readFastRequiredJobs,
   readMergeHandoff,
   requiredChecksSucceeded,
@@ -1631,6 +1632,9 @@ describe("green result freshness", () => {
       expect(branch).toBe("main");
       return ratchetDefinitionPaths;
     },
+    recheckRatchet: () => {
+      throw new Error("unexpected ratchet recheck");
+    },
   });
 
   test("unchanged base and up to twenty unrelated commits retain green results", () => {
@@ -1896,17 +1900,53 @@ describe("green result freshness", () => {
     ).toEqual([]);
   });
 
-  test("a ratchet change on main refuses green results computed under the old rules", () => {
+  test("a ratchet change on main re-measures the ratchet on main merged with the head", () => {
     for (const filename of ratchetDefinitionPaths) {
-      const result = checkGreenResultFreshness(
-        readers({ status: "ahead", ahead_by: 1, files: [{ filename }] }),
-      );
-      expect(result.isErr(), filename).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.message).toContain(
-          `main changed the ratchet since the green run: ${filename}`,
+      const rechecks: unknown[] = [];
+      const base = readers({
+        status: "ahead",
+        ahead_by: 1,
+        files: [{ filename }],
+      });
+      const passing = checkGreenResultFreshness({
+        ...base,
+        recheckRatchet: (input) => {
+          rechecks.push(input);
+          return Result.ok();
+        },
+      });
+      expect(passing.isOk(), filename).toBe(true);
+      expect(rechecks).toEqual([{ headSha: HEAD_SHA, baseRefName: "main" }]);
+
+      const failing = checkGreenResultFreshness({
+        ...base,
+        recheckRatchet: () =>
+          Result.err(
+            new RatchetRecheckError({ message: "ratchet --check failed: +1" }),
+          ),
+      });
+      expect(failing.isErr(), filename).toBe(true);
+      if (failing.isErr()) {
+        expect(failing.error.message).toContain(
+          `main changed the ratchet since the green run (${filename})`,
         );
+        expect(failing.error.message).toContain("ratchet --check failed: +1");
       }
+    }
+  });
+
+  test("a passing ratchet recheck still applies the overlap gate", () => {
+    const filename = "scripts/ratchet.ts";
+    const result = checkGreenResultFreshness({
+      ...readers({ status: "ahead", ahead_by: 1, files: [{ filename }] }),
+      readPullFiles: () => [filename],
+      recheckRatchet: () => Result.ok(),
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toContain(
+        "main changed files also touched by this PR",
+      );
     }
   });
 
@@ -2015,6 +2055,7 @@ describe("green result freshness", () => {
       readBaseComparison: noRead,
       readPullFiles: noRead,
       readRatchetDefinitionPaths: noRead,
+      recheckRatchet: noRead,
       readBaseWorkflow: noRead,
       runSelector: noRead,
       readRunJobs: noRead,
