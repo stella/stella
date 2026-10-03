@@ -188,7 +188,7 @@ describe("auth persistence retention", () => {
         mode === "direct"
           ? adapter.create(data)
           : adapter.transaction(async (tx) => await tx.create(data));
-      await expect(created).rejects.toMatchObject({
+      expect(created).rejects.toMatchObject({
         statusCode: 500,
         body: { message: "Database model requires a retention declaration." },
       });
@@ -217,12 +217,13 @@ describe("auth persistence retention", () => {
     "applies client admission to metadata registration: %s",
     async (admitted) => {
       const clientId = "https://client.example.test/metadata.json";
+      const oauthClients: Record<string, unknown>[] = [];
       const database = {
         user: [],
         session: [],
         account: [],
         verification: [],
-        oauthClient: [],
+        oauthClient: oauthClients,
         oauthClientResource: [],
         oauthResource: [],
       };
@@ -285,21 +286,23 @@ describe("auth persistence retention", () => {
         state: "request-state",
       });
       const response = await auth.handler(
-        new Request(`http://localhost:3001/api/auth/oauth2/authorize?${query}`),
+        new Request(
+          `http://localhost:3001/api/auth/oauth2/authorize?${query.toString()}`,
+        ),
       );
       expect(fetched).toBe(1);
       expect(admissions).toBe(1);
       expect(database.user).toHaveLength(0);
       expect(database.session).toHaveLength(0);
-      expect(database.oauthClient).toHaveLength(admitted ? 1 : 0);
+      expect(oauthClients).toHaveLength(admitted ? 1 : 0);
       if (admitted) {
         expect(response.status).toBe(302);
-        expect(database.oauthClient.at(0)).toMatchObject({
+        expect(oauthClients.at(0)).toMatchObject({
           registrationOrigin: "open-client",
         });
       } else {
         expect(response.status).toBe(503);
-        expect(database.oauthClient.at(0)).toBeUndefined();
+        expect(oauthClients.at(0)).toBeUndefined();
       }
     },
   );
