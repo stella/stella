@@ -6,6 +6,8 @@ import { QUERY_EXPANSION_MODES } from "../apps/api/src/lib/legal-search/query-ex
 import { SECRET_EXAMPLES } from "../packages/runtime-mode/src/secret-examples.generated";
 import {
   ENV_CATALOG,
+  ENV_CREDENTIAL_CLASSIFICATION,
+  ENV_CREDENTIAL_KIND,
   ENV_EXPOSURE,
   ENV_OWNER,
   ENV_REQUIREMENT,
@@ -42,13 +44,31 @@ describe("tracked env files", () => {
 });
 
 describe("generated environment examples", () => {
+  test("every catalog entry declares a credential classification", () => {
+    const classifications = new Map(
+      Object.entries(ENV_CREDENTIAL_CLASSIFICATION),
+    );
+    expect(ENV_CATALOG.length).toBeGreaterThan(0);
+    expect(
+      [...new Set(ENV_CATALOG.map(({ name }) => name))].toSorted(),
+    ).toEqual([...classifications.keys()].toSorted());
+    for (const entry of ENV_CATALOG) {
+      expect(Object.values(ENV_CREDENTIAL_KIND)).toContain(
+        entry.credentialKind,
+      );
+      expect(entry.credentialKind).toBe(classifications.get(entry.name));
+    }
+  });
+
   test("every runtime example has an explicit credential classification", () => {
     for (const [name, example] of Object.entries(SECRET_EXAMPLES)) {
       const entries = ENV_CATALOG.filter((entry) => entry.name === name);
       expect(entries.length).toBeGreaterThan(0);
       expect(
         entries.every(
-          (entry) => entry.credentialExample && entry.example === example,
+          (entry) =>
+            entry.credentialKind === ENV_CREDENTIAL_KIND.credential &&
+            entry.example === example,
         ),
       ).toBe(true);
       expect(example).not.toBe("");

@@ -38,6 +38,7 @@ import {
   COLLAB_ENV_SCHEMA,
   DEPLOYMENT_ENV_KEYS,
   ENV_CATALOG,
+  ENV_CREDENTIAL_KIND,
   ENV_EXPOSURE,
   ENV_OWNER,
   type EnvCatalogEntry,
@@ -63,8 +64,10 @@ const SECRET_EXAMPLES_PATH = path.join(
 
 export const renderSecretExamples = () => {
   const examples = Object.fromEntries(
-    ENV_CATALOG.flatMap(({ name, credentialExample, example }) =>
-      credentialExample && example !== undefined && example !== ""
+    ENV_CATALOG.flatMap(({ name, credentialKind, example }) =>
+      credentialKind === ENV_CREDENTIAL_KIND.credential &&
+      example !== undefined &&
+      example !== ""
         ? [[name, example]]
         : [],
     ),
