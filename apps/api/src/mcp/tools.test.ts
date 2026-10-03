@@ -65,6 +65,7 @@ import {
   CORPUS_SEARCH_CURSOR_MAX_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
+  corpusSearchGroupToken,
   encodeCorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
@@ -2965,11 +2966,26 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("search_case_law accepts back the longest cursor its engine can emit", async () => {
-    // Under query expansion an engine cursor carries a 64-character dictionary
-    // identity. Five of them at the codec's own maximum is the largest
-    // envelope this tool can hand out, and the input schema has to take it
-    // back: a cap guessed below the emitted length refuses the second page.
-    const longestEngineCursor = "c".repeat(CORPUS_SEARCH_CURSOR_MAX_LENGTH);
+    // Maximum group exclusions and dictionary identity must survive the
+    // merged envelope and validate when the client sends it back.
+    const longestEngineCursor = encodeCorpusSearchCursor({
+      dictionary: { type: "dictionary", contentHash: "a".repeat(64) },
+      excludedGroups: Array.from(
+        { length: LIMITS.corpusIndexSearchMaxExcludedGroups },
+        (_, index) => corpusSearchGroupToken(`judgment-${index}`),
+      ),
+      id: "00000000-0000-4000-8000-000000000001",
+      score: Number.MAX_VALUE,
+      sort: "relevance",
+      target: "a".repeat(32),
+      windowStart: 9_999_999_999,
+    });
+    expect(longestEngineCursor.length).toBeGreaterThan(
+      CORPUS_SEARCH_CURSOR_MAX_LENGTH,
+    );
+    expect(longestEngineCursor.length).toBeLessThanOrEqual(
+      CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+    );
     searchDecisionsHandlerMock.mockImplementation(
       async ({ query }: { query: string }) => ({
         facets: null,
@@ -3612,7 +3628,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("search_legislation accepts a relaxed cursor at the codec bounds and maximum page size", async () => {
     const tokens = Array.from(
       { length: LIMITS.corpusIndexSearchMaxExcludedGroups },
-      (_, index) => index.toString(36).padStart(6, "0"),
+      (_, index) => corpusSearchGroupToken(`work-${index}`),
     );
     const cursor = encodeCorpusSearchCursor({
       dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
@@ -3634,6 +3650,16 @@ describe("OpenAI-compatible MCP tools", () => {
     );
     expect(cursor.length).toBeLessThanOrEqual(
       CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
+    );
+    const advertised = asTestRaw<{
+      properties: { cursor: { maxLength: number } };
+    }>(
+      (await listMcpTools(createContext())).find(
+        (tool) => tool.name === "search_legislation",
+      )?.inputSchema,
+    );
+    expect(cursor.length).toBeLessThanOrEqual(
+      advertised.properties.cursor.maxLength,
     );
     searchLegislationHandlerMock.mockResolvedValue({
       items: [],
