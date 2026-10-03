@@ -1454,7 +1454,7 @@ for (const candidate of [
   "/ipo/dok?dok=F\u200b1.pdf",
   "",
   "   ",
-  `java${"script"}:alert(1)`,
+  ["javascript", "alert(1)"].join(":"),
 ]) {
   test(`all tribunal metadata URL paths use parser-decoded addresses: ${candidate}`, async () => {
     const $ = cheerio.load(await caseFixture("pl-tk-case-k-2-26.html.gz"));

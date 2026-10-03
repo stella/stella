@@ -164,8 +164,11 @@ test("stated nulls stay null and empty URL strings are absent without a defect",
   expect({
     value: toPlainTextMetadataObject(approved, schema).unwrap(),
   }).toHaveProperty("value", approved);
-  expect(toMetadataUrl(undefined, "transport-json")).toBeUndefined();
-  expect(toMetadataUrl("  ", "constructed")).toBeUndefined();
+  for (const raw of [undefined, "  "]) {
+    for (const encoding of ["transport-json", "constructed"] as const) {
+      expect(toMetadataUrl(raw, encoding)).toBeUndefined();
+    }
+  }
 });
 
 test("all production transports preserve entities and dangerous URL characters produce exact defects", () => {

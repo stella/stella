@@ -1219,7 +1219,7 @@ test("registered replay and its pipeline write preserve URLs and cloned diagnost
     sourceId: fixture.sourceId,
   });
   if (sourceLease === null) {
-    return panic("Expected free replay source lease");
+    panic("Expected free replay source lease");
   }
   const replay = async () =>
     await replayCaseLawSource({
@@ -1235,7 +1235,7 @@ test("registered replay and its pipeline write preserve URLs and cloned diagnost
   try {
     const first = await replay();
     if (first.type !== "ran") {
-      return panic("Expected registered replay to run");
+      panic("Expected registered replay to run");
     }
     expect(first.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
     const row = (
@@ -1256,7 +1256,7 @@ test("registered replay and its pipeline write preserve URLs and cloned diagnost
     expect(row?.metadata).not.toHaveProperty("languageUri");
     const second = await replay();
     if (second.type !== "ran") {
-      return panic("Expected repeated replay to run");
+      panic("Expected repeated replay to run");
     }
     expect(second.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
   } finally {

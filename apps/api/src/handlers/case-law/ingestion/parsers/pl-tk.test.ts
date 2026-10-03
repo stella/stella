@@ -423,7 +423,7 @@ for (const href of [
   "/ipo/dok?dok=F:1.pdf",
   "",
   "   ",
-  `java${"script"}:alert(1)`,
+  ["javascript", "alert(1)"].join(":"),
 ]) {
   test(`portal document links retain known-base resolution or whole-entry omission: ${href}`, async () => {
     const $ = cheerio.load(await casePage("pl-tk-case-k-2-26.html.gz"));

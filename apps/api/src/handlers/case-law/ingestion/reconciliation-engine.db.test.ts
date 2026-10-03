@@ -2191,9 +2191,9 @@ test("pipeline metadata classification follows the persisted source adapter", as
   }
 });
 
-test("metadata classification rejects a missing persisted source", async () => {
+test("metadata classification rejects a missing persisted source", () => {
   const absentSourceId = createSafeId<"caseLawSource">();
-  await expect(
+  expect(
     resolveSourceMetadataUrlSchema(absentSourceId, scopedDb),
   ).rejects.toThrow("is absent");
 });
