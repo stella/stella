@@ -1900,7 +1900,7 @@ export const OWNERSHIP = [
     enforcement: {
       kind: "import",
       specifiers: ["@/api/lib/api-handlers"],
-      names: ["createUncheckedBoundedPublicHandler"],
+      names: ["createSafeUncheckedBoundedPublicHandler"],
       allowed: [
         {
           path: "apps/api/src/handlers/case-law/decisions/public-subject.ts",

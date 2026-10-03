@@ -1689,7 +1689,7 @@ export type ExactSuccessSchemaGuard<TConfig, TResult> = TConfig extends {
  * whose result type is still generic where it calls this one; that factory
  * applies `ExactSuccessSchemaGuard` on its own entry points instead.
  */
-export const createUncheckedBoundedPublicHandler = <
+export const createSafeUncheckedBoundedPublicHandler = <
   TConfig extends PublicHandlerConfig,
   TResult extends SafeHandlerPayload,
 >(
@@ -1742,7 +1742,7 @@ export const createSafeBoundedPublicHandler = <
   config: TConfig,
   handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult> &
     NoInfer<ExactSuccessSchemaGuard<TConfig, TResult>>,
-) => createUncheckedBoundedPublicHandler(config, handler);
+) => createSafeUncheckedBoundedPublicHandler(config, handler);
 
 /**
  * Whether a failure also reaches the exception reporter.
