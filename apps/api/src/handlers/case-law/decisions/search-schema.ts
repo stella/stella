@@ -154,9 +154,12 @@ const sourceFacetBucketsSchema = t.Array(
       value: t.String(),
       label: nullableStringSchema,
       count: t.Integer({ minimum: 0 }),
-      countType: t.Union(
-        Object.values(FACET_COUNT_TYPE).map((value) => t.Literal(value)),
-      ),
+      // Elysia's TypeBox module inference needs a tuple; a mapped array becomes never.
+      countType: t.Union([
+        t.Literal(FACET_COUNT_TYPE.EXACT),
+        t.Literal(FACET_COUNT_TYPE.AT_LEAST),
+        t.Literal(FACET_COUNT_TYPE.ESTIMATE),
+      ]),
     },
     { additionalProperties: false },
   ),

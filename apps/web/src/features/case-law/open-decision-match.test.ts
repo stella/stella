@@ -7,6 +7,7 @@ import {
   createDecisionFiltersFromSearch,
   decisionMatchToOpen,
 } from "@/features/case-law/open-decision-match";
+import { toSafeId } from "@/lib/safe-id";
 
 type Hit = { readonly id: string };
 
@@ -56,7 +57,9 @@ describe("decisionMatchToOpen", () => {
 });
 
 test("the selected source narrows both browse and ranked decision requests", () => {
-  const sourceId = "0194d94a-1122-7000-8000-123456789abc";
+  const sourceId = toSafeId<"caseLawSource">(
+    "0194d94a-1122-7000-8000-123456789abc",
+  );
   for (const q of [undefined, "nájem"]) {
     expect(
       createDecisionFiltersFromSearch(

@@ -1,6 +1,6 @@
 import { Value } from "@sinclair/typebox/value";
 import { describe, expect, expectTypeOf, test } from "bun:test";
-import type { Static } from "elysia";
+import type { Static, UnwrapSchema } from "elysia";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
@@ -34,7 +34,7 @@ type SearchDecisionsSuccess = Extract<
 >;
 
 type HandlerResponseFitsSchema =
-  SearchDecisionsSuccess extends Static<
+  SearchDecisionsSuccess extends UnwrapSchema<
     typeof searchDecisionsSuccessResponseSchema
   >
     ? true
