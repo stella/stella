@@ -12,6 +12,11 @@
  * package manager's lockfile fails outright. `ALLOWLIST` exempts a lockfile
  * that must stay as it is, with the reason why.
  *
+ * Every tracked bunfig.toml must also set `[install] auto = "disable"`. Bun
+ * reads only the bunfig.toml of the directory a process starts in, and
+ * without that setting it installs a missing import at run time instead of
+ * failing.
+ *
  * Needs no dependency install: node builtins and Bun APIs only.
  *
  * Run: `bun scripts/check-standalone-lockfiles.ts`
@@ -28,6 +33,8 @@ import {
 const SCRIPT_PATH = "scripts/check-standalone-lockfiles.ts";
 const ROOT_LOCKFILE = "bun.lock";
 const BUNFIG = "bunfig.toml";
+/** The `[install] auto` value that makes a missing import fail. */
+export const AUTO_INSTALL_DISABLED = "disable";
 const DEPENDABOT = ".github/dependabot.yml";
 const TEXT_BUN_LOCKFILE = "bun.lock";
 /** Binary: its packages cannot be read, so the excludes net cannot be checked. */
@@ -476,6 +483,20 @@ export const checkStandaloneLockfiles = ({
     if (!tracked.has(entry.path)) {
       errors.push(
         `${SCRIPT_PATH} ALLOWLIST names ${entry.path}, which is not a tracked file. Remove the entry.`,
+      );
+    }
+  }
+
+  for (const file of files) {
+    if (path.posix.basename(file) !== BUNFIG) {
+      continue;
+    }
+    const { autoInstall } = readInstallPolicy(
+      readFileSync(path.join(root, file), "utf-8"),
+    );
+    if (autoInstall !== AUTO_INSTALL_DISABLED) {
+      errors.push(
+        `${file} must set [install] auto = "${AUTO_INSTALL_DISABLED}": Bun reads it for every process started in ${path.posix.dirname(file) === "." ? "the repository root" : path.posix.dirname(file)}, and otherwise installs a missing import at run time instead of failing.`,
       );
     }
   }

@@ -6,6 +6,7 @@ import uploadSkill from "@/api/handlers/skills/upload";
 import fillTemplate from "@/api/handlers/templates/fill";
 import prepareTemplate from "@/api/handlers/templates/prepare";
 import { DocxArchiveError, validateDocxArchive } from "@/api/lib/docx-archive";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -52,7 +53,7 @@ test("archive entry validation returns a client response before parsing", async 
     createTestHandlerContext<Parameters<typeof uploadSkill.handler>[0]>({
       safeDb,
       scopedDb,
-      memberRole: { role: "member" },
+      memberRole: sessionMemberRole("member"),
       body: {
         scope: "private",
         file: new File([bytes], "input.zip", { type: "application/zip" }),

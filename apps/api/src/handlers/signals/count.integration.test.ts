@@ -22,6 +22,7 @@ import countInbox from "@/api/handlers/signals/count";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -104,7 +105,7 @@ const countFor = async (workspaceIds: SafeId<"workspace">[]) => {
   const result = await countInbox.handler(
     asTestRaw<CountContext>({
       getActiveWorkspaceIds: async () => workspaceIds,
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       request: new Request("https://example.test/signals/count"),
       route: "/test/signals/count",
       safeDb: createSafeDb(testDb, workspaceIds, ids.orgA, ids.userA1),

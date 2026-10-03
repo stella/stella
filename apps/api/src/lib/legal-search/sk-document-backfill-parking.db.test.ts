@@ -16,11 +16,18 @@ import { Panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import {
+  DOCUMENT_FETCH_EVENT,
+  type DocumentStageObserver,
+  type DocumentStageObservation,
+} from "@stll/legal-atlas/document-fetch-diagnostics";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import { isUnreadablePdfError } from "@/api/lib/legal-search/parsers/sk-courts";
 import {
   countParkedDocuments,
@@ -272,11 +279,13 @@ const fetchState = async (label: string) =>
 type FetchSeededOptions = {
   label: string;
   answer: () => Promise<Response>;
+  observe?: DocumentStageObserver;
 };
 
 /** One pass of the unit the walk runs, over a seeded decision. */
-const fetchSeeded = async ({ answer, label }: FetchSeededOptions) =>
+const fetchSeeded = async ({ answer, label, observe }: FetchSeededOptions) =>
   await fetchDecisionDocument({
+    onDocumentObservation: observe,
     decision: {
       id: idFor(label),
       caseNumber: `parking-${suffix}-${label}`,
@@ -287,7 +296,11 @@ const fetchSeeded = async ({ answer, label }: FetchSeededOptions) =>
       decisionType: null,
       documentUrl: PUBLISHER_URL,
     },
-    fetchDocument: answer,
+    fetchDocument: async () =>
+      await observePublisherDocumentFetch({
+        source: ADAPTER_KEYS.SK_COURTS,
+        fetch: answer,
+      }),
     scopedDb,
     signal: new AbortController().signal,
   });
@@ -307,6 +320,52 @@ const insertFetchable = async (
 };
 
 describe("a failure that may affect every document", () => {
+  test("post-response body faults retain their typed outcome without an ok event", async () => {
+    const failures = [
+      {
+        error: new DOMException("private", "TimeoutError"),
+        outcome: "timeout",
+      },
+      {
+        error: Object.assign(new TypeError("private"), { code: "ECONNRESET" }),
+        outcome: "connection",
+      },
+    ] as const;
+    for (const { error, outcome } of failures) {
+      const label = `body-${outcome}`;
+      await insertFetchable(label);
+      const observations: DocumentStageObservation[] = [];
+      const result = await fetchSeeded({
+        label,
+        observe: (event) => {
+          observations.push(event);
+        },
+        answer: async () =>
+          new Response(
+            new ReadableStream<Uint8Array>({
+              start: (controller) => {
+                controller.error(error);
+              },
+            }),
+            { headers: { "content-type": "application/pdf" } },
+          ),
+      });
+      expect(result).toMatchObject({ status: "deferred", failure: "network" });
+      expect(await fetchState(label)).toEqual({
+        fulltext: null,
+        documentFetchAttempts: 1,
+      });
+      expect(observations).toEqual([
+        {
+          event: DOCUMENT_FETCH_EVENT.fetchOutcome,
+          source: ADAPTER_KEYS.SK_COURTS,
+          outcome,
+          http_status: 200,
+        },
+      ]);
+    }
+  });
+
   test("a publisher that is down or refusing this client throws and parks nothing", async () => {
     const parkedBefore = await countParkedDocuments(scopedDb, sourceId);
 
@@ -360,18 +419,30 @@ describe("a failure that may affect every document", () => {
 
   test("a body that is not a PDF throws and parks nothing", async () => {
     await insertFetchable("not-a-pdf");
+    const observations: DocumentStageObservation[] = [];
 
     const thrown = await rejectionOf(
       fetchSeeded({
         label: "not-a-pdf",
+        observe: (event) => {
+          observations.push(event);
+        },
         answer: async () =>
-          await Promise.resolve(
-            new Response("<html><body>Údržba</body></html>"),
-          ),
+          new Response("<html><body>Údržba</body></html>", {
+            headers: { "content-type": "application/pdf" },
+          }),
       }),
     );
 
     expect(thrown).toBeInstanceOf(AdapterFetchError);
+    expect(observations).toEqual([
+      {
+        event: DOCUMENT_FETCH_EVENT.fetchOutcome,
+        source: ADAPTER_KEYS.SK_COURTS,
+        outcome: "body_shape",
+        http_status: 200,
+      },
+    ]);
     expect(await fetchState("not-a-pdf")).toEqual({
       fulltext: null,
       documentFetchAttempts: 1,

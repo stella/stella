@@ -46,6 +46,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { EMPTY_CHAT_THREAD_NAMES_READ } from "@/api/lib/chat/thread-names";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 import {
@@ -247,7 +248,7 @@ const stop = async ({
   const set = { headers: {}, status: 200 };
   const answer: unknown = await cancelTurn.handler(
     asTestRaw<CancelCtx>({
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       params: { threadId, turnId },
       request: new Request(
         `http://localhost/v1/chat/threads/${threadId}/turns/${turnId}/cancel`,

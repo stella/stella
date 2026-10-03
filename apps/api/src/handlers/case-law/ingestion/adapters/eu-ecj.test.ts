@@ -173,6 +173,55 @@ describe("euEcjAdapter.fetchPage", () => {
     Bun.sleep = originalSleep;
   });
 
+  test.each([401, 403, 429])(
+    "a branch notice HTTP %s preserves the existing row or rate-limit stop",
+    async (status) => {
+      let noticeRequests = 0;
+      globalThis.fetch = asFetchMock(
+        async (input: string | URL | Request, init?: RequestInit) => {
+          const url = input instanceof Request ? input.url : String(input);
+          if (url.includes("sparql")) {
+            return Response.json({ results: { bindings: [enBinding] } });
+          }
+          if (
+            new Headers(init?.headers).get("Accept") ===
+            "application/xml; notice=branch"
+          ) {
+            noticeRequests += 1;
+            return new Response("refused", { status });
+          }
+          expect(url).toContain("publications.europa.eu/resource/cellar/");
+          return new Response(fulltextHtml, {
+            headers: { "Content-Type": "text/html" },
+          });
+        },
+      );
+
+      const result = await ecjAdapter.fetchPage("2024-01-18", {});
+      expect(noticeRequests).toBe(1);
+      if (status === 429) {
+        expect(result.isErr()).toBe(true);
+        if (!result.isErr()) {
+          throw new TypeError("Expected the existing notice rate-limit stop");
+        }
+        expect(result.error).toBeInstanceOf(PublisherRateLimitRefusalError);
+        expect(result.error).toMatchObject({
+          cursor: "2024-01-18",
+          httpStatus: 429,
+        });
+        return;
+      }
+      const page = result.unwrap();
+      expect(page.decisions).toHaveLength(1);
+      expect(page.nextCursor).toBe("2024-01-19");
+      const decision = page.decisions.at(0);
+      expect(decision?.sourceDocumentId).toBe(`${enBinding.celex.value}:en`);
+      const parts = decodeSourceRawEnvelope(decision?.sourceRaw ?? "");
+      expect(parts?.["document"]).toBe(fulltextHtml);
+      expect(parts?.["notice"]).toBeUndefined();
+    },
+  );
+
   test(
     "parses SPARQL + HTML into multi-lang decisions",
     async () => {
@@ -258,12 +307,12 @@ describe("euEcjAdapter.fetchPage", () => {
       if (!first) {
         throw new Error("No decisions");
       }
-      expect(first.caseNumber).toBe("C-128/21");
-      expect(first.ecli).toBe("ECLI:EU:C:2024:49");
-      expect(first.court).toBe("Court of Justice");
+      expect(first.caseNumber === "C-128/21").toBe(true);
+      expect(first.ecli === "ECLI:EU:C:2024:49").toBe(true);
+      expect(first.court === "Court of Justice").toBe(true);
       expect(first.language).toBe("en");
       expect(first.decisionDate).toBe("2024-01-18");
-      expect(first.decisionType).toBe("judgment");
+      expect(first.decisionType === "judgment").toBe(true);
       expect(first.documentUrl).toBe(
         `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
       );
@@ -282,7 +331,7 @@ describe("euEcjAdapter.fetchPage", () => {
       });
       expect(first.fulltext?.length).toBeGreaterThan(100);
       expect(first.rawHash).toHaveLength(64);
-      expect(page.decisions[2]?.decisionType).toBe("order");
+      expect(page.decisions[2]?.decisionType === "order").toBe(true);
 
       // Every response fetched for the variant is kept under its own name, so
       // a parser change can be replayed without re-crawling and a reader of
@@ -1097,7 +1146,7 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
     if (outcome.type !== "built") {
       throw new TypeError(`Expected built, got ${outcome.type}`);
     }
-    expect(outcome.decision.caseNumber).toBe("C-128/21");
+    expect(outcome.decision.caseNumber === "C-128/21").toBe(true);
     expect(outcome.decision.language).toBe("fr");
     expect(outcome.decision.documentUrl).toContain(FR_MANIFESTATION_ID);
   });

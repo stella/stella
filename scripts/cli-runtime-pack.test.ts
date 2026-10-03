@@ -16,10 +16,11 @@ import path from "node:path";
 import * as v from "valibot";
 
 import {
-  CLI_CONTRACT_SURFACE,
   CLI_CONTRACT_SURFACE_PATHS,
   canonicalJson,
   findSurfaceDrift,
+  readHeadSurface,
+  readPublishedPackageSurface,
   type CliContractSurface,
   type CliContractSurfacePart,
 } from "./check-cli-release-coupling";
@@ -283,16 +284,20 @@ type ReadSurfaceOptions = {
   readonly layout: "source" | "published";
 };
 
-const readSurface = ({ tree, layout }: ReadSurfaceOptions) => {
+const readSurface = ({
+  tree,
+  layout,
+}: ReadSurfaceOptions): CliContractSurface => {
+  const directory = path.join(tree.root, CLI_DIRECTORY);
+  // Both readers assemble the catalog from shards, or a pre-cutover monolith.
+  if (layout === "published") {
+    return readPublishedPackageSurface(directory);
+  }
+  if (existsSync(path.join(directory, "capabilities"))) {
+    return readHeadSurface(tree.root);
+  }
   const read = (part: CliContractSurfacePart): string =>
-    readFileSync(
-      path.join(
-        tree.root,
-        CLI_DIRECTORY,
-        layout === "source" ? part : CLI_CONTRACT_SURFACE[part].published,
-      ),
-      "utf-8",
-    );
+    readFileSync(path.join(directory, part), "utf-8");
   return {
     "capability-catalog.json": read("capability-catalog.json"),
     "src/generated/registry-snapshot.json": read(
@@ -624,11 +629,15 @@ test(
       // Only a surface file the revisions actually changed may drift, and the
       // runtime must match the base whenever none of its inputs changed: a
       // difference then means an input the generator manifest does not list.
-      const changedSurface = changedBetween(
-        base,
-        head,
-        CLI_CONTRACT_SURFACE_PATHS.map((part) => `${CLI_DIRECTORY}/${part}`),
-      ).map((file) => file.slice(CLI_DIRECTORY.length + 1));
+      // The catalog part is assembled from shards: a changed shard changes it.
+      const changedSurface = changedBetween(base, head, [
+        ...CLI_CONTRACT_SURFACE_PATHS.map((part) => `${CLI_DIRECTORY}/${part}`),
+        `${CLI_DIRECTORY}/capabilities`,
+      ]).map((file) =>
+        file.startsWith(`${CLI_DIRECTORY}/capabilities/`)
+          ? "capability-catalog.json"
+          : file.slice(CLI_DIRECTORY.length + 1),
+      );
       const drift = findSurfaceDrift({
         head: readSurface({ tree: head, layout: "source" }),
         published: readSurface({ tree: base, layout: "source" }),

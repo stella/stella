@@ -18,7 +18,7 @@
 // A budget that any run can raise is not a budget: `--write` refuses to record
 // a higher count unless `--allow-increase` says so deliberately, which turns
 // "the number went up" into a visible line in the diff and a justification in
-// the pull request. The same review rule governs `scripts/ratchet-baseline.json`.
+// the pull request.
 //
 // Modes:
 //   bun scripts/knip-exports-ratchet.ts           report current vs baseline
