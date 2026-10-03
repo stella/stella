@@ -1308,6 +1308,24 @@ describe("contributor signature workflow", () => {
       expect(queued.errors).toHaveLength(1);
       expect(lastOutput(queued).conclusion).toBe("failure");
     }
+    // A head the first snapshot never held (a lagging view or an unbuilt
+    // entry) proves no transition, so it fails even when a re-read misses it.
+    const unseen = fixture({
+      ...options,
+      queuePages: [
+        [
+          {
+            baseCommit: { oid: BASE },
+            headCommit: { oid: predecessor },
+            pullRequest: { number: 18 },
+          },
+        ],
+      ],
+      rebuiltQueuePages: [[]],
+    });
+    await unseen.execute();
+    expect(unseen.errors).toEqual(["CLA_INCOMPLETE_MERGE_GROUP"]);
+    expect(lastOutput(unseen).conclusion).toBe("failure");
     // Only membership changes end neutral: an unsigned author in a rebuilt
     // group still fails.
     const unsigned = fixture({ ...options, signatures: [] });
