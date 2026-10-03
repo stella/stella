@@ -20,7 +20,10 @@ const stepSchema = v.looseObject({
 const workflowSchema = v.looseObject({
   on: v.record(v.string(), v.unknown()),
   permissions: v.record(v.string(), v.string()),
-  jobs: v.record(v.string(), v.looseObject({ steps: v.array(stepSchema) })),
+  jobs: v.record(
+    v.string(),
+    v.looseObject({ if: v.optional(v.string()), steps: v.array(stepSchema) }),
+  ),
 });
 const workflow = v.parse(
   workflowSchema,
@@ -1558,7 +1561,12 @@ describe("contributor signature workflow", () => {
     expect(steps.at(1)?.if).toBe(
       "steps.credentials.outputs.store_required == 'true'",
     );
-    expect(scriptStep?.if).toBe(`\${{ !cancelled() }}`);
+    expect(scriptStep?.if).toBe(
+      `\${{ !cancelled() && steps.credentials.outcome == 'success' }}`,
+    );
+    expect(workflow.jobs["verify-signatures"]?.if).toContain(
+      "(github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login == 'dependabot[bot]'))",
+    );
     expect(workflow.permissions).toEqual({
       contents: "read",
       checks: "write",

@@ -35,7 +35,9 @@ permissions:
 
 jobs:
   verify-signatures:
-    if: (github.event_name != 'pull_request_target' || github.actor != 'dependabot[bot]') && (github.event_name != 'issue_comment' || (github.event.issue.pull_request && (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA')))
+    # Notification runs for other authors complete with the job skipped; only a
+    # successful dependabot notification requests verification.
+    if: (github.event_name != 'pull_request_target' || github.actor != 'dependabot[bot]') && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login == 'dependabot[bot]')) && (github.event_name != 'issue_comment' || (github.event.issue.pull_request && (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA')))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -99,7 +101,7 @@ jobs:
           permission-members: read
 
       - name: Verify contributor signatures
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.credentials.outcome == 'success' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           CLA_STORE_TOKEN: ${{ steps.store-token.outputs.token }}

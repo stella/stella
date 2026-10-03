@@ -56,8 +56,11 @@ const LOCAL_ONLY_GATES = new Set<string>([
 // workflow job exists; the test below rejects entries that no longer declare a
 // gate, so this policy list cannot silently retain stale paths.
 const UNWIRED_TEST_FILES = new Set<string>([
-  // Needs the pinned search engine running locally; no workflow provides it.
+  // Engine suites: ci.yml's corpus-engine step discovers them by grepping for
+  // the gate rather than through a package script, which this guard does not
+  // model.
   "apps/api/src/lib/legal-search/corpus-index-scored-scan.contract.test.ts",
+  "apps/api/src/lib/legal-search/corpus-index-delete-survivor.contract.test.ts",
 ]);
 
 const TEST_FILE_GLOB = "{apps,packages}/**/*.test.{ts,tsx}";

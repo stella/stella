@@ -31,6 +31,7 @@ import {
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/lib/legal-search/ingestion-types";
 import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
+import { isRecord } from "@/api/lib/type-guards";
 
 const CELEX = "62022CJ0128";
 const EXPRESSION = "cc021804-9350-11ee-8aa6-01aa75ed71a1.0011";
@@ -589,3 +590,53 @@ describe("the listing query binds CELEX the way the endpoint answers", () => {
     expect(query).toContain('FILTER(STR(?date) >= "2024-01-01")');
   });
 });
+
+for (const candidate of [
+  " https://example.org/manifestation?a=1&amp;b=2#part ",
+  "https://example.org/%26amp%3B?a=1&b=2",
+  "//example.org/manifestation",
+  "/manifestation",
+  "ftp://example.org/document",
+  "data:text/plain,manifestation",
+  "mailto:publisher@example.org",
+]) {
+  test(`notice manifestation URI provenance: ${candidate}`, async () => {
+    const $ = cheerio.load(noticeEn, { xml: true });
+    const manifestations = $("NOTICE > MANIFESTATION");
+    expect(manifestations.length).toBeGreaterThan(0);
+    manifestations.each((_, element) => {
+      $(element).children("URI").children("VALUE").text(candidate);
+    });
+    const decision = await decisionFrom($.xml());
+    const listed = decision.metadata["manifestations"];
+    expect(Array.isArray(listed) ? listed.length : 0).toBe(
+      manifestations.length,
+    );
+    if (candidate.trim().startsWith("https://")) {
+      expect(
+        Array.isArray(listed)
+          ? listed.map((item: unknown) =>
+              isRecord(item) ? item["uri"] : undefined,
+            )
+          : [],
+      ).toEqual(
+        Array.from({ length: manifestations.length }, () => candidate.trim()),
+      );
+      expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+    } else {
+      expect(
+        Array.isArray(listed) &&
+          listed.every(
+            (item: unknown) => isRecord(item) && !Object.hasOwn(item, "uri"),
+          ),
+      ).toBe(true);
+      expect(decision.metadata).toHaveProperty("metadataUrlDiagnostics", {
+        entries: Array.from({ length: manifestations.length }, (_, index) => ({
+          address: `manifestations[${index}].uri`,
+          reason: candidate.startsWith("/") ? "invalid-url" : "unsafe-protocol",
+        })),
+        overflowCount: 0,
+      });
+    }
+  });
+}
