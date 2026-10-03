@@ -42,7 +42,9 @@
  *     phase, query fingerprint, serving generation and, for relaxed results,
  *     the strict Works already returned. It is unauthenticated like the
  *     enclosing cursor; continuation validation compares its phase identity
- *     with the current request before using it.
+ *     with the current request before using it. Postgres legislation reads
+ *     use the same strict phase with a null generation, so the request stays
+ *     bound without a serving corpus index.
  *   - `r-<mode>`: an experimental session carries `r-off` or `r-bm25-ratio`.
  *     The effective mode survives fallback and every continuation; existing
  *     position cursors omit it and remain position cursors.
@@ -156,7 +158,12 @@ const phaseIdentityFields = {
   generation: v.pipe(v.string(), v.check(isCorpusIndexGeneration)),
 };
 const corpusSearchPhaseSchema = v.variant("type", [
-  v.strictObject({ type: v.literal("strict"), ...phaseIdentityFields }),
+  v.strictObject({
+    type: v.literal("strict"),
+    ...phaseIdentityFields,
+    // Postgres has no serving index generation, but shares request binding.
+    generation: v.nullable(phaseIdentityFields.generation),
+  }),
   v.strictObject({
     type: v.literal("relaxed"),
     ...phaseIdentityFields,
