@@ -679,6 +679,9 @@ const PL_AUTHORITY_FILE_NUMBER_PATTERN = new RegExp(
   "gu",
 );
 
+/** Width of the `citation_key` columns a citation's key is stored in. */
+const CITATION_KEY_MAX_LENGTH = 128;
+
 // National Appeal Chamber (KIO) dockets, joined ones included, from the same
 // source the search grammar reads: "KIO 1234/24", "KIO/UZP 1188/08",
 // "KIO 2845/25, KIO 2846/25". The all-caps mark is distinctive enough to
@@ -1847,6 +1850,9 @@ export const extractCitations = (
   for (const section of sections) {
     for (const pattern of CITATION_PATTERNS) {
       pattern.lastIndex = 0;
+      // End of a joined KIO run too long to key as one citation; the
+      // dockets up to it are read one at a time.
+      let kioRunEnd = -1;
 
       for (
         let match = pattern.exec(section.text);
@@ -1858,8 +1864,22 @@ export const extractCitations = (
         // find this exact string in the source document, including an
         // embedded line-wrap newline. Only the dedup key below is
         // canonicalized.
-        const citationText = match[0].trim();
-        const caseNumber = match.groups?.["caseNumber"]?.trim();
+        let citationText = match[0].trim();
+        let caseNumber = match.groups?.["caseNumber"]?.trim();
+        let matchEnd = match.index + match[0].length;
+        if (
+          pattern === PL_KIO_PATTERN &&
+          (match.index < kioRunEnd ||
+            bareCitationKey(citationText).length > CITATION_KEY_MAX_LENGTH)
+        ) {
+          kioRunEnd = Math.max(kioRunEnd, matchEnd);
+          // A single KIO docket holds no comma.
+          const [first = citationText] = citationText.split(",");
+          citationText = first.trim();
+          caseNumber = citationText;
+          matchEnd = match.index + citationText.length;
+          pattern.lastIndex = matchEnd;
+        }
         // A bare letter run under a court's label is also how a ministry
         // writes a file number, so the docket grammar decides whether this
         // capture is a case number at all.
@@ -1928,10 +1948,7 @@ export const extractCitations = (
         );
         const observed: Record<AgreeingHint, string | null> = {
           citedCourtHint: detectCitationCourtHint(section.text, match.index),
-          citedSheetNumber: detectCitationSheetNumber(
-            section.text,
-            match.index + match[0].length,
-          ),
+          citedSheetNumber: detectCitationSheetNumber(section.text, matchEnd),
           citedDecisionDate: detectCitationDecisionDate(
             section.text,
             match.index,
@@ -1940,7 +1957,7 @@ export const extractCitations = (
         const position: CitationPosition = {
           sectionIndex: section.index,
           start: match.index,
-          end: match.index + match[0].length,
+          end: matchEnd,
         };
 
         const existing = byKey.get(dedupKey);
