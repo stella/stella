@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+
 import {
   INGESTION_HEALTH_MESSAGE,
   createIngestionHealthRefresh,
@@ -13,7 +15,10 @@ describe("ingestion health record", () => {
         uptimeSec: 42,
         pagesSinceStart: 7,
         activeCycles: 2,
-        stalledAdapters: new Set(["pl-courts", "cz-us"]),
+        stalledAdapters: new Map([
+          ["pl-courts", INGESTION_STOP_KIND.PUBLISHER_REFUSAL],
+          ["cz-us", INGESTION_STOP_KIND.ADAPTER_ERROR],
+        ]),
       }),
     ).toEqual({
       message: INGESTION_HEALTH_MESSAGE,
@@ -22,6 +27,15 @@ describe("ingestion health record", () => {
       activeCycles: 2,
       stalledAdapterCount: 2,
       stalledAdapters: "cz-us,pl-courts",
+      stalledAdapterStopKinds: {
+        "pl-courts": INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
+        "cz-us": INGESTION_STOP_KIND.ADAPTER_ERROR,
+      },
+      sourceUnreachableCount: 0,
+      publisherRefusalCount: 1,
+      adapterStuckCount: 1,
+      deadlineCount: 0,
+      internalErrorCount: 0,
     });
   });
 
@@ -31,9 +45,18 @@ describe("ingestion health record", () => {
         uptimeSec: 1,
         pagesSinceStart: 0,
         activeCycles: 0,
-        stalledAdapters: new Set(),
+        stalledAdapters: new Map(),
       }),
-    ).toMatchObject({ stalledAdapterCount: 0, stalledAdapters: "none" });
+    ).toMatchObject({
+      stalledAdapterCount: 0,
+      stalledAdapters: "none",
+      stalledAdapterStopKinds: {},
+      sourceUnreachableCount: 0,
+      publisherRefusalCount: 0,
+      adapterStuckCount: 0,
+      deadlineCount: 0,
+      internalErrorCount: 0,
+    });
   });
 });
 

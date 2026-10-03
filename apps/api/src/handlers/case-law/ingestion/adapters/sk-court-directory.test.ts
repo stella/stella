@@ -323,6 +323,8 @@ describe("court registry enrichment", () => {
 
   test("classifies permanent refusals and malformed JSON separately from transient failures", async () => {
     for (const [body, status, reason] of [
+      ["unauthorized", 401, "http-refusal"],
+      ["forbidden", 403, "http-refusal"],
       ["not found", 404, "http-refusal"],
       ["gone", 410, "http-refusal"],
       ["<html>not JSON</html>", 200, "invalid-json"],
