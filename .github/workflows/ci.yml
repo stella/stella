@@ -2689,6 +2689,25 @@ jobs:
             --retry-all-errors --retry-delay 1 --retry-max-time 60 --max-time 2 \
             http://127.0.0.1:7290/health/readyz
 
+      # The statute recall floor is raise-only against the target branch; the
+      # shallow checkout holds only HEAD, so fetch exactly the base commit.
+      - name: Select statute recall base from the target branch
+        if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
+        env:
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          base="${MERGE_GROUP_BASE_SHA:-${PULL_REQUEST_BASE_SHA:-$PUSH_BEFORE_SHA}}"
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            git fetch --no-tags --depth=1 origin main
+            base="$(git rev-parse FETCH_HEAD)"
+          else
+            git fetch --no-tags --depth=1 origin "$base"
+          fi
+          git cat-file -e "$base^{commit}"
+          echo "STATUTE_RECALL_BASE_REF=$base" >> "$GITHUB_ENV"
+
       - name: Run corpus engine suites
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         working-directory: apps/api

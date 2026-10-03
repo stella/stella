@@ -212,7 +212,11 @@ test("the committed statute recall floor and nonempty coverage only increase", (
     expect(protectedOutcome?.match).toBe("relaxed");
     expect(protectedOutcome?.rank).not.toBeNull();
   }
-  const base = git(["merge-base", "origin/main", "HEAD"]);
+  // CI fetches only the target branch's base commit into its shallow checkout
+  // and names it; a local checkout resolves it from origin/main.
+  const base =
+    process.env["STATUTE_RECALL_BASE_REF"] ??
+    git(["merge-base", "origin/main", "HEAD"]);
   const previousPath = git([
     "ls-tree",
     "--full-tree",
