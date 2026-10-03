@@ -40,7 +40,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
       }) => ReturnType<typeof chargeMcpReadBytes>;
     }) => Promise<void>,
   ) => {
-    const client = createRedisClient();
+    const client = createRedisClient({ storeClass: "cache" });
     const organizationId = organization();
     const userId = user();
     await client.connect();

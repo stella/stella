@@ -545,7 +545,12 @@ export const initListVerificationRunWorker = () => {
     async (job) => {
       await processJob(job.data);
     },
-    { connection: createBullMqConnection(), concurrency: WORKER_CONCURRENCY },
+    {
+      connection: createBullMqConnection({
+        storeClass: "durable-coordination",
+      }),
+      concurrency: WORKER_CONCURRENCY,
+    },
   );
 
   worker.on("failed", (job, error) => {

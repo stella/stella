@@ -347,7 +347,9 @@ export const initDocumentReviewRunWorker = ({ db }: BullMqWorkerContext) => {
       await processDocumentReviewRun(brandActor(job.data));
     },
     {
-      connection: createBullMqConnection(),
+      connection: createBullMqConnection({
+        storeClass: "durable-coordination",
+      }),
       concurrency: WORKER_CONCURRENCY,
     },
   );

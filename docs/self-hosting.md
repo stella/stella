@@ -115,14 +115,15 @@ optional web build arguments are listed in `apps/web/Dockerfile` and mirror
 
 - PostgreSQL 18 or newer.
 - Redis-compatible storage for queues, rate limits, and cross-instance events.
-  Valkey works. Configure `maxmemory-policy noeviction` so admission leases,
-  reservations, budgets, and fences cannot be evicted. The API checks
-  `INFO memory` on connection and every minute; a reported evicting policy
-  refuses admission, publisher reservations, and MCP read fences while caches
-  remain available.
-  Permit `INFO memory` for the API identity when possible. If INFO is denied or
-  omits `maxmemory_policy`, the API warns and allows work because proxies may
-  hide configuration; operators must verify `noeviction` themselves.
+  Valkey works. Configure `maxmemory-policy noeviction` for durable
+  coordination, including queues, locks, claims, counters, admission,
+  publisher reservations, budgets, and MCP read fences. API and collaboration
+  clients inspect `INFO memory` before durable operations and refresh policy
+  after reconnect and at bounded intervals. A reported evicting policy refuses
+  durable commands while caches remain available. Rate limiters retain their
+  configured fallback policies. Permit `INFO memory` for the service identities
+  when possible. If INFO is denied or omits the policy, the services warn and
+  permit operations; operators must verify `noeviction`.
 - RustFS object storage for files.
 - Gotenberg for document conversion. The Compose file runs this next to the API
   on the private Docker Compose network.
