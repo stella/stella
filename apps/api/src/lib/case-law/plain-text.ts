@@ -1,3 +1,4 @@
+// parser-output-unchanged: Rejecting non-finite runtime numbers leaves publisher JSON metadata unchanged.
 import { Result, TaggedError } from "better-result";
 import { decodeHTMLStrict } from "entities";
 import * as v from "valibot";
@@ -95,7 +96,7 @@ export const toPlainTextMetadata = (
     value === null ||
     value === undefined ||
     typeof value === "boolean" ||
-    typeof value === "number"
+    (typeof value === "number" && Number.isFinite(value))
   ) {
     return Result.ok(value);
   }
