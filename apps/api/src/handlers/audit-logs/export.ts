@@ -12,6 +12,7 @@ import {
 } from "@/api/lib/audit-log";
 import { auditDetailsForResource } from "@/api/lib/audit-log-details";
 import { escapeCSV } from "@/api/lib/csv";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -42,23 +43,27 @@ const exportAuditLogs = createSafeRootHandler(
 
     const exportResult = yield* Result.await(
       safeDb(async (tx) => {
-        const rows = await tx
-          .select({
-            createdAt: auditLogs.createdAt,
-            userId: auditLogs.userId,
-            action: auditLogs.action,
-            resourceType: auditLogs.resourceType,
-            resourceId: auditLogs.resourceId,
-            changes: auditLogs.changes,
-          })
-          .from(auditLogs)
-          .where(and(...conditions))
-          .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
-          .limit(LIMITS.exportRowLimit + 1);
+        const bounded = await readBounded(
+          tx
+            .select({
+              createdAt: auditLogs.createdAt,
+              userId: auditLogs.userId,
+              action: auditLogs.action,
+              resourceType: auditLogs.resourceType,
+              resourceId: auditLogs.resourceId,
+              changes: auditLogs.changes,
+            })
+            .from(auditLogs)
+            .where(and(...conditions))
+            .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id)),
+          LIMITS.exportRowLimit,
+        );
 
-        if (rows.length > LIMITS.exportRowLimit) {
+        if (bounded.type === "overflow") {
           return { type: "tooLarge" as const };
         }
+
+        const { rows } = bounded;
 
         const userIds = [...new Set(rows.map((row) => row.userId))];
         const userDetails =
