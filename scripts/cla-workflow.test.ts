@@ -1562,7 +1562,7 @@ describe("contributor signature workflow", () => {
       "steps.credentials.outputs.store_required == 'true'",
     );
     expect(scriptStep?.if).toBe(
-      "${{ !cancelled() && steps.credentials.outcome == 'success' }}",
+      `\${{ !cancelled() && steps.credentials.outcome == 'success' }}`,
     );
     expect(workflow.jobs["verify-signatures"]?.if).toContain(
       "(github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login == 'dependabot[bot]'))",
