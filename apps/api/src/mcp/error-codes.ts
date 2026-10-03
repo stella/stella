@@ -144,13 +144,13 @@ export const projectMcpRefusal = ({
           },
         ];
       })
-    : undefined;
+    : [];
   return {
     code: isMcpErrorCode(code) ? code : statusCodeToErrorCode(status),
     message,
     issues:
       code !== undefined && !isMcpErrorCode(code)
-        ? [{ path: "", code, message }, ...(detailedIssues ?? [])]
+        ? [{ path: "", code, message }, ...detailedIssues]
         : detailedIssues,
     hint,
     retryable,
