@@ -76,6 +76,7 @@ import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
 import * as actionCostContext from "@/api/lib/usage/action-costs/context";
 import type { withTimeout } from "@/api/lib/with-timeout";
+import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
@@ -1129,7 +1130,7 @@ describe("OpenAI-compatible MCP tools", () => {
           description:
             "Opaque cursor from a previous search call to fetch the next page",
           minLength: 1,
-          maxLength: 512,
+          maxLength: COMPAT_SEARCH_CURSOR_MAX_LENGTH,
         },
       },
       required: ["query"],
@@ -1997,6 +1998,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       nextCursor: null,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       results: [
         {
           id: "00000000-0000-4000-8000-0000000e0001",
@@ -6133,6 +6135,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       nextCursor: null,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       results: [
         {
           id: "00000000-0000-4000-8000-0000000e0001",
@@ -6205,6 +6208,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       nextCursor: null,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       results: [
         {
           id: "00000000-0000-4000-8000-0000000e0001",
@@ -6259,6 +6263,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       nextCursor: null,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       results: [
         {
           id: "00000000-0000-4000-8000-0000000e0001",
@@ -6303,6 +6308,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toEqual({
       nextCursor: null,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       results: [
         {
           id: "00000000-0000-4000-8000-0000000e0001",

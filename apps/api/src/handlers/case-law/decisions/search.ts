@@ -14,6 +14,7 @@ import {
   resolveDecisionIdentity,
 } from "@stll/api-contract/decision-query-intent";
 import {
+  FACET_COUNT_TYPE,
   SEARCH_PAGINATION_COMPLETE,
   countedSearchTotal,
   DEFAULT_SEARCH_EXCERPT,
@@ -89,6 +90,7 @@ import type {
   SearchFacetBucket,
 } from "@/api/lib/case-law/decision-search-facets";
 import {
+  cappedSourceFacetBuckets,
   groupCourtsByTier,
   labelSourceBuckets,
   readCaseLawSourceNames,
@@ -629,19 +631,42 @@ export const caseLawSearchPlan = ({
   `;
 
   const sourceFacetQuery = sql`
-    SELECT d.source_id::text AS value, ${judgmentCountSql} AS count
-    ${facetFrom}
-    WHERE ${ftsSearch.predicate}
-      ${datedFilter}
-      ${courtFilter}
-      ${courtListFilter}
-      ${countryFilter}
-      ${dateFromFilter}
-      ${dateToFilter}
-      ${typeFilter}
-      ${languageFilter}
-    GROUP BY d.source_id
-    ORDER BY count DESC
+    WITH source_matches AS NOT MATERIALIZED (
+      SELECT d.id, d.source_id, d.language_group_key
+      ${facetFrom}
+      WHERE ${ftsSearch.predicate}
+        ${datedFilter}
+        ${courtFilter}
+        ${courtListFilter}
+        ${countryFilter}
+        ${dateFromFilter}
+        ${dateToFilter}
+        ${typeFilter}
+        ${languageFilter}
+    )
+    SELECT source.id::text AS value, bucket.count
+    FROM case_law_sources source
+    CROSS JOIN LATERAL (
+      SELECT count(*)::int AS count
+      FROM (
+        SELECT 1
+        FROM source_matches matched
+        WHERE matched.source_id = source.id
+          AND NOT EXISTS (
+            SELECT 1
+            FROM source_matches sibling
+            WHERE sibling.source_id = matched.source_id
+              AND sibling.language_group_key = matched.language_group_key
+              AND sibling.id < matched.id
+            -- Preserve the indexed sibling probe instead of flattening it
+            -- into an anti-join that reads the entire matching set.
+            LIMIT 1 OFFSET 0
+          )
+        LIMIT ${LIMITS.caseLawSourceFacetCountCap + 1}
+      ) capped_judgments
+    ) bucket
+    WHERE bucket.count > 0
+    ORDER BY bucket.count DESC, source.name, source.id
     LIMIT ${LIMITS.caseLawFacetLimit}
   `;
 
@@ -870,7 +895,7 @@ const searchPostgresDecisions = async (
         Number(countResult.at(0)?.["total"]) || 0,
       );
 
-  const sourceBuckets = facetBuckets(sourceResultRaw);
+  const sourceBuckets = cappedSourceFacetBuckets(facetBuckets(sourceResultRaw));
   const facets: DecisionSearchFacets | null = parsedCursor
     ? null
     : {
@@ -1856,7 +1881,15 @@ const readCaseLawSearchFacets = async ({
       }),
       year,
       decisionType,
-      source: labelSourceBuckets(source, registry.value.nameById),
+      source: labelSourceBuckets(
+        source.map(({ value, label, count }) => ({
+          value,
+          label,
+          count,
+          countType: FACET_COUNT_TYPE.ESTIMATE,
+        })),
+        registry.value.nameById,
+      ),
       language,
     },
     total: countedSearchTotal(SEARCH_TOTAL_TYPE.ESTIMATE, read.value.total),

@@ -1,6 +1,6 @@
 import { Value } from "@sinclair/typebox/value";
 import { describe, expect, expectTypeOf, test } from "bun:test";
-import type { Static } from "elysia";
+import type { Static, UnwrapSchema } from "elysia";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
@@ -9,7 +9,9 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
+  FACET_COUNT_TYPE,
   SEARCH_EXCERPTS,
+  SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_NOT_COUNTED,
   type SearchExcerpt,
 } from "@stll/api-contract/search";
@@ -33,7 +35,7 @@ type SearchDecisionsSuccess = Extract<
 >;
 
 type HandlerResponseFitsSchema =
-  SearchDecisionsSuccess extends Static<
+  SearchDecisionsSuccess extends UnwrapSchema<
     typeof searchDecisionsSuccessResponseSchema
   >
     ? true
@@ -77,6 +79,7 @@ const validResponse = {
   facets: null,
   total: SEARCH_TOTAL_NOT_COUNTED,
   nextCursor: null,
+  paginationOutcome: SEARCH_PAGINATION_COMPLETE,
   queryUsed: "nájemné výpověď",
   warnings: [],
 };
@@ -87,13 +90,45 @@ const firstPageFacets = {
   court: [{ tierLabel: "supreme", courts: [bucket("Nejvyšší soud")] }],
   year: [bucket("2024")],
   decisionType: [bucket("rozsudek")],
-  source: [{ value: "source-id", label: "Nejvyšší soud ČR", count: 3 }],
+  source: [
+    {
+      value: "source-id",
+      label: "Nejvyšší soud ČR",
+      count: 3,
+      countType: FACET_COUNT_TYPE.EXACT,
+    },
+  ],
   language: [bucket("cs")],
 };
 
 const validBody = { query: "promlčení", country: "CZE" };
 
 describe("case-law search request schema", () => {
+  test("source filters accept full UUIDs in either hex case and reject malformed URL ids", () => {
+    const uuid = "0194d94a-1122-7000-8000-123456789abc";
+    for (const sourceId of [uuid, uuid.toUpperCase()]) {
+      expect(
+        Value.Check(searchDecisionsBodySchema, { ...validBody, sourceId }),
+      ).toBe(true);
+    }
+    for (const sourceId of [
+      "source-id",
+      "",
+      `${uuid}\n`,
+      ` ${uuid}`,
+      `${uuid} `,
+      uuid.replaceAll("-", ""),
+      uuid.replace("a", "g"),
+      42,
+      null,
+      [uuid],
+    ]) {
+      expect(
+        Value.Check(searchDecisionsBodySchema, { ...validBody, sourceId }),
+      ).toBe(false);
+    }
+  });
+
   test("names every declared sort, spelled out so Eden keeps the union", () => {
     expectTypeOf<Static<typeof searchSortSchema>>().toEqualTypeOf<SearchSort>();
   });
@@ -146,6 +181,35 @@ describe("case-law search request schema", () => {
 });
 
 describe("case-law search response schema", () => {
+  test("source counts carry every declared count type and reject missing or unknown types", () => {
+    const responseWithCountType = (countType: unknown) => ({
+      ...validResponse,
+      facets: {
+        ...firstPageFacets,
+        source: firstPageFacets.source.map((source) => ({
+          ...source,
+          countType,
+        })),
+      },
+    });
+    for (const countType of Object.values(FACET_COUNT_TYPE)) {
+      expect(
+        Value.Check(
+          searchDecisionsSuccessResponseSchema,
+          responseWithCountType(countType),
+        ),
+      ).toBe(true);
+    }
+    for (const countType of [undefined, null, "unknown", 1]) {
+      expect(
+        Value.Check(
+          searchDecisionsSuccessResponseSchema,
+          responseWithCountType(countType),
+        ),
+      ).toBe(false);
+    }
+  });
+
   test("accepts every complete handler success payload", () => {
     expectTypeOf<HandlerResponseFitsSchema>().toEqualTypeOf<true>();
   });
