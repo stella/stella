@@ -388,6 +388,11 @@ run_design_system_backlog_guard() {
   bun scripts/design-lint-baseline.ts --check
 }
 run_step "Design-system lint backlog" run_design_system_backlog_guard
+run_query_data_state_guard() {
+  bun test scripts/query-data-state-baseline.test.ts || return 1
+  bun run check:query-data-state
+}
+run_step "Query data state baseline" run_query_data_state_guard
 run_step "Oxlint override union guard" bun test \
   scripts/oxlint-override-union.test.ts scripts/oxlint-config-liveness.test.ts
 run_step "Oxlint rule decisions" bun scripts/check-oxlint-rule-decisions.ts

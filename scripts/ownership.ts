@@ -341,6 +341,17 @@ const MODEL_REQUEST_NAMES = [
 
 export const OWNERSHIP = [
   {
+    id: "query-view",
+    capability: "Presenting non-suspense query results",
+    owner: [
+      "apps/web/src/lib/query-view.logic.ts",
+      "apps/web/src/lib/use-query-view.ts",
+    ],
+    summary:
+      "useQueryView separates pending reads, initial errors with retry, successful empty results and cached items with refetch errors. The query-data-requires-state lint rule rejects data reads without state handling and hooks that discard query state; its exact-set baseline only shrinks.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "api-test-memory-planner",
     capability: "Measured API test memory and batch composition",
     owner: ["apps/api/scripts/test-batch-plan.ts"],
