@@ -660,7 +660,7 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
         field === "text"
           ? "nahrada skody"
           : stemCorpusText("náhrada škody", "sk");
-      for (const slop of [0, 1, 2]) {
+      for (const [slop, expected] of expectedBySlop.entries()) {
         const result = await search({
           query: {
             query_string: {
@@ -668,7 +668,7 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
             },
           },
         });
-        expect(keys(result)).toEqual(expectedBySlop.at(slop));
+        expect(keys(result)).toEqual(expected);
       }
     }
     const surface = await search({
