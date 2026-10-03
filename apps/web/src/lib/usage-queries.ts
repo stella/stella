@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import { env } from "@/env";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
@@ -33,6 +34,10 @@ const fetchUsageEntitlement = async ({
 }: {
   signal: AbortSignal;
 }): Promise<UsageEntitlementResponse> => {
+  // Imperative loader prefetches ignore `enabled`; enforce the flag here too.
+  if (!env.VITE_FEATURE_USAGE) {
+    return { entitlement: null };
+  }
   const response = await api.usage.entitlement.get({
     fetch: { signal },
   });
@@ -45,6 +50,7 @@ export const usageEntitlementOptions = ({
   queryOptions({
     queryKey: usageEntitlementKeys.byOrganization({ organizationId }),
     queryFn: fetchUsageEntitlement,
+    enabled: env.VITE_FEATURE_USAGE,
   });
 
 type UsageLaneKey = {
@@ -76,6 +82,9 @@ const fetchUsageLane = async ({
 }: {
   signal: AbortSignal;
 }): Promise<UsageLaneResponse> => {
+  if (!env.VITE_FEATURE_USAGE) {
+    return { budgets: null };
+  }
   const response = await api.usage.lane.get({
     fetch: { signal },
   });
@@ -95,5 +104,6 @@ export const usageLaneOptions = ({
   queryOptions({
     queryKey: usageLaneKeys.byOrganization({ organizationId, userId }),
     queryFn: fetchUsageLane,
+    enabled: env.VITE_FEATURE_USAGE,
     staleTime: USAGE_LANE_STALE_TIME_MS,
   });
