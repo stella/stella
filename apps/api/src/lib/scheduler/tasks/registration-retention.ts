@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
+import { AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS } from "@/api/agent-auth/id-jag-policy";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const SWEEP_REGISTRATIONS_TASK = "auth.sweepRegistrations" as const;
@@ -10,7 +11,10 @@ export const REGISTRATION_RETENTION_BATCH_SIZE = 100;
 // sql-perf-allow: index verification_expires_at_idx restricts malformed-value inspection to unexpired verification rows
 const unusedClient = (now: Date) => sql`
   NOT EXISTS (SELECT 1 FROM oauth_consent WHERE client_id = c.client_id)
-  AND NOT EXISTS (SELECT 1 FROM oauth_access_token WHERE client_id = c.client_id)
+  AND NOT EXISTS (
+    SELECT 1 FROM oauth_access_token WHERE client_id = c.client_id
+    AND expires_at > ${now.toISOString()}::timestamptz
+  )
   AND NOT EXISTS (SELECT 1 FROM oauth_refresh_token WHERE client_id = c.client_id)
   AND NOT EXISTS (
     SELECT 1 FROM verification v
@@ -117,9 +121,12 @@ export const sweepRegistrations = async ({
         FOR UPDATE SKIP LOCKED
       ) RETURNING id
     `);
+    const replayCutoff = new Date(
+      now.getTime() - AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS * 1000,
+    ).toISOString();
     const replays = await tx.execute(sql`
       DELETE FROM agent_assertion_replay WHERE jti IN (
-        SELECT jti FROM agent_assertion_replay WHERE expires_at < ${now.toISOString()}::timestamptz
+        SELECT jti FROM agent_assertion_replay WHERE expires_at < ${replayCutoff}::timestamptz
         ORDER BY expires_at, jti LIMIT ${REGISTRATION_RETENTION_BATCH_SIZE}
         FOR UPDATE SKIP LOCKED
       ) RETURNING jti

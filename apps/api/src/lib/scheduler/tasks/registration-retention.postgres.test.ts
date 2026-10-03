@@ -53,7 +53,7 @@ describe.skipIf(!enabled)(
           }
           await db.execute(sql`SET search_path TO ${schema}, public`);
           await db.execute(
-            sql`ALTER TABLE oauth_client ADD COLUMN IF NOT EXISTS registration_origin text NOT NULL DEFAULT 'managed'`,
+            sql`ALTER TABLE oauth_client ADD COLUMN IF NOT EXISTS registration_origin text NOT NULL DEFAULT 'open-client'`,
           );
           const copiedIndexes = await db.execute<{
             name: string;

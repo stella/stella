@@ -9,13 +9,13 @@ import { Temporal } from "@stll/time";
 
 import {
   AGENT_AUTH_ID_JAG_ALLOWED_ALGS,
-  AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS,
   AGENT_AUTH_ID_JAG_JWT_TYP,
   AGENT_AUTH_ID_JAG_MAX_AUTH_AGE_SECONDS,
   AGENT_AUTH_JWKS_CACHE_MAX_MS,
   AGENT_AUTH_JWKS_CACHE_MIN_MS,
   AGENT_AUTH_JWKS_FETCH_TIMEOUT_MS,
 } from "@/api/agent-auth/constants";
+import { AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS } from "@/api/agent-auth/id-jag-policy";
 import {
   agentAssertionReplay,
   agentTrustedIssuer,

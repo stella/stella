@@ -23,7 +23,7 @@ export const REGISTRATION_RETENTION_SCHEMA_PLUGIN = {
           type: "string",
           input: false,
           required: true,
-          defaultValue: "managed",
+          defaultValue: "open-client",
         },
       },
     },

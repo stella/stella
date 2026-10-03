@@ -420,7 +420,7 @@ export const oauthClient = pgTable(
       enum: OAUTH_CLIENT_REGISTRATION_ORIGINS,
     })
       .notNull()
-      .default("managed"),
+      .default("open-client"),
     disabled: boolean("disabled").default(false).notNull(),
     skipConsent: boolean("skip_consent"),
     enableEndSession: boolean("enable_end_session"),

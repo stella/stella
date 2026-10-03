@@ -7,6 +7,7 @@ import * as v from "valibot";
 
 import { DAY_IN_MS } from "@stll/time";
 
+import { AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS } from "@/api/agent-auth/id-jag-policy";
 import {
   agentRegistration,
   agentAssertionReplay,
@@ -185,7 +186,7 @@ test("expires unclaimed registrations and unused clients at a fixed point", asyn
   expect((await db.select().from(registrationDailyBudget)).length).toBe(1);
 });
 
-test("keeps clients with any consent or token and active authorization", async () => {
+test("keeps clients with consent, live access tokens, refresh tokens or active authorization", async () => {
   await db.insert(user).values({
     id: "member",
     name: "Member",
@@ -198,6 +199,8 @@ test("keeps clients with any consent or token and active authorization", async (
     "refresh",
     "authorization",
     "expired-code",
+    "expired-access",
+    "boundary-access",
   ]) {
     await addClient(name);
   }
@@ -210,13 +213,29 @@ test("keeps clients with any consent or token and active authorization", async (
   await db
     .insert(oauthConsent)
     .values({ id: "consent", clientId: "consent", scopes: [] });
-  await db.insert(oauthAccessToken).values({
-    id: "access",
-    token: "access",
-    clientId: "access",
-    scopes: [],
-    expiresAt: OLD,
-  });
+  await db.insert(oauthAccessToken).values([
+    {
+      id: "access",
+      token: "access",
+      clientId: "access",
+      scopes: [],
+      expiresAt: FUTURE,
+    },
+    {
+      id: "expired-access",
+      token: "expired-access",
+      clientId: "expired-access",
+      scopes: [],
+      expiresAt: OLD,
+    },
+    {
+      id: "boundary-access",
+      token: "boundary-access",
+      clientId: "boundary-access",
+      scopes: [],
+      expiresAt: NOW,
+    },
+  ]);
   await db.insert(oauthRefreshToken).values({
     id: "refresh",
     token: "refresh",
@@ -251,7 +270,7 @@ test("keeps clients with any consent or token and active authorization", async (
       expiresAt: FUTURE,
     },
   ]);
-  expect((await sweep()).clientsDeleted).toBe(1);
+  expect((await sweep()).clientsDeleted).toBe(3);
   expect(await remaining()).toEqual([
     "access",
     "authorization",
@@ -393,8 +412,37 @@ test("assigns existing and new client registration origins during migration", as
       ).rows,
     ).toEqual([
       { client_id: "existing", registration_origin: "historical" },
-      { client_id: "new", registration_origin: "managed" },
+      { client_id: "new", registration_origin: "open-client" },
     ]);
     await tx.execute(sql`DROP SCHEMA registration_origin_test CASCADE`);
   });
+});
+
+test("retains assertion identifiers through the accepted clock interval", async () => {
+  const expiry = new Date(
+    NOW.getTime() - (AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS * 1000) / 2,
+  );
+  await db
+    .insert(agentAssertionReplay)
+    .values({ jti: "interval", expiresAt: expiry });
+  expect((await sweep()).replaysDeleted).toBe(0);
+  const repeated = await db
+    .insert(agentAssertionReplay)
+    .values({ jti: "interval", expiresAt: expiry })
+    .onConflictDoNothing()
+    .returning({ jti: agentAssertionReplay.jti });
+  expect(repeated).toEqual([]);
+  expect(await db.select().from(agentAssertionReplay)).toHaveLength(1);
+});
+
+test("expires unused clients created with the database origin default", async () => {
+  await db.insert(oauthClient).values({
+    id: "default-origin",
+    clientId: "default-origin",
+    redirectUris: [],
+    createdAt: OLD,
+    updatedAt: OLD,
+  });
+  expect((await sweep()).clientsDeleted).toBe(1);
+  expect(await remaining()).toEqual([]);
 });

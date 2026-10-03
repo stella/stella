@@ -119,7 +119,16 @@ export const createAgentOAuthClient = async ({
   registrationId: string;
   scopes: readonly string[];
   grantTypes: readonly string[];
-}): Promise<AgentClientCredentials> => {
+}): Promise<Result<AgentClientCredentials, HandlerError>> => {
+  const admission = await reserveRegistration({
+    kind: "agent",
+    limit: env.AGENT_REGISTRATION_DAILY_LIMIT,
+    now: new Date(),
+    execute: async (query) => await rootDb.execute(query),
+  });
+  if (Result.isError(admission)) {
+    return Result.err(admission.error);
+  }
   const clientId = Bun.randomUUIDv7().replaceAll("-", "");
   const clientSecret = generateOpaqueToken();
   const resourceId = getMcpResourceUrl(
@@ -175,7 +184,7 @@ export const createAgentOAuthClient = async ({
     });
   });
 
-  return { clientId, clientSecret };
+  return Result.ok({ clientId, clientSecret });
 };
 
 export type TokenResponseShape = {
@@ -323,24 +332,19 @@ export type AnonymousRegistrationResult = {
 export const startServiceAuthRegistration = async (
   loginHint: string,
 ): Promise<Result<ServiceAuthCeremony, HandlerError>> => {
-  const admission = await reserveRegistration({
-    kind: "agent",
-    limit: env.AGENT_REGISTRATION_DAILY_LIMIT,
-    now: new Date(),
-    execute: async (query) => await rootDb.execute(query),
-  });
-  if (Result.isError(admission)) {
-    return Result.err(admission.error);
-  }
   const registrationId = createSafeId<"mcpOAuthClient">();
   const claimToken = generateOpaqueToken();
   const userCode = generateUserCode();
-  const credentials = await createAgentOAuthClient({
+  const clientResult = await createAgentOAuthClient({
     registrationType: "service_auth",
     registrationId,
     scopes: AGENT_AUTH_SERVICE_SCOPES,
     grantTypes: ["authorization_code"],
   });
+  if (Result.isError(clientResult)) {
+    return Result.err(clientResult.error);
+  }
+  const credentials = clientResult.value;
   const storedCredential = await prepareAgentClientCredential(
     credentials.clientSecret,
   );
@@ -383,23 +387,18 @@ export const startServiceAuthRegistration = async (
 export const startAnonymousRegistration = async (): Promise<
   Result<AnonymousRegistrationResult, AgentTokenError | HandlerError>
 > => {
-  const admission = await reserveRegistration({
-    kind: "agent",
-    limit: env.AGENT_REGISTRATION_DAILY_LIMIT,
-    now: new Date(),
-    execute: async (query) => await rootDb.execute(query),
-  });
-  if (Result.isError(admission)) {
-    return Result.err(admission.error);
-  }
   const registrationId = createSafeId<"mcpOAuthClient">();
   const claimToken = generateOpaqueToken();
-  const credentials = await createAgentOAuthClient({
+  const clientResult = await createAgentOAuthClient({
     registrationType: "anonymous",
     registrationId,
     scopes: AGENT_AUTH_ANONYMOUS_SCOPES,
     grantTypes: ["client_credentials"],
   });
+  if (Result.isError(clientResult)) {
+    return Result.err(clientResult.error);
+  }
+  const credentials = clientResult.value;
 
   const tokenResult = await mintAnonymousToken(credentials);
   if (Result.isError(tokenResult)) {
@@ -911,12 +910,16 @@ export const startAnonymousUpgrade = async ({
   // existing token valid until the user completes the upgrade.
   const newClaimToken = generateOpaqueToken();
   const userCode = generateUserCode();
-  const credentials = await createAgentOAuthClient({
+  const clientResult = await createAgentOAuthClient({
     registrationType: "service_auth",
     registrationId: registration.id,
     scopes: AGENT_AUTH_SERVICE_SCOPES,
     grantTypes: ["authorization_code"],
   });
+  if (Result.isError(clientResult)) {
+    return Result.err(clientResult.error);
+  }
+  const credentials = clientResult.value;
   const storedCredential = await prepareAgentClientCredential(
     credentials.clientSecret,
   );

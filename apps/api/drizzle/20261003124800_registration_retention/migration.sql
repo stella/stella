@@ -1,7 +1,7 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "oauth_client" ADD COLUMN "registration_origin" text NOT NULL DEFAULT 'historical';--> statement-breakpoint
-ALTER TABLE "oauth_client" ALTER COLUMN "registration_origin" SET DEFAULT 'managed';--> statement-breakpoint
+ALTER TABLE "oauth_client" ALTER COLUMN "registration_origin" SET DEFAULT 'open-client';--> statement-breakpoint
 ALTER TABLE "oauth_client" ADD CONSTRAINT "oauth_client_registration_origin_check" CHECK ("registration_origin" IN ('historical', 'managed', 'open-client', 'agent')) NOT VALID;--> statement-breakpoint
 CREATE TABLE "registration_daily_budget" (
   "day" timestamptz NOT NULL,

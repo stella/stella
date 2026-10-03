@@ -8,10 +8,12 @@ import {
   expect,
   test,
 } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import type { CryptoKey, JWK } from "jose";
 import * as v from "valibot";
+
+import { DAY_IN_MS } from "@stll/time";
 
 import {
   AGENT_AUTH_CLAIM_PATH,
@@ -27,7 +29,8 @@ import {
   agentRegistration,
   agentTrustedIssuer,
 } from "@/api/db/agent-auth-schema";
-import { user } from "@/api/db/auth-schema";
+import { oauthClient, user } from "@/api/db/auth-schema";
+import { registrationDailyBudget } from "@/api/db/registration-budget-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
@@ -234,6 +237,90 @@ const createHumanSession = async (email: string) =>
     orgName: "Existing Org",
     orgSlugPrefix: "existing",
   });
+
+describe("agent-auth registration admission", () => {
+  test("applies daily admission to every identity registration path", async () => {
+    enableFeature();
+    await trustIssuer();
+    const existing = {
+      email: `idjag-admission-${Bun.randomUUIDv7()}@external.test`,
+      sub: `sub-admission-${Bun.randomUUIDv7()}`,
+    };
+    expect(
+      (await postIdentity(identityAssertionBody(await mintIdJag(existing))))
+        .status,
+    ).toBe(200);
+    const stepUp = {
+      email: `idjag-admission-${Bun.randomUUIDv7()}@stella.dev`,
+      sub: `sub-admission-${Bun.randomUUIDv7()}`,
+    };
+    await createHumanSession(stepUp.email);
+    const day = new Date(Math.floor(Date.now() / DAY_IN_MS) * DAY_IN_MS);
+    const condition = and(
+      eq(registrationDailyBudget.day, day),
+      eq(registrationDailyBudget.kind, "agent"),
+    );
+    const previous = (
+      await rootDb
+        .select()
+        .from(registrationDailyBudget)
+        .where(condition)
+        .limit(1)
+    ).at(0);
+    await rootDb
+      .insert(registrationDailyBudget)
+      .values({ day, kind: "agent", count: env.AGENT_REGISTRATION_DAILY_LIMIT })
+      .onConflictDoUpdate({
+        target: [registrationDailyBudget.day, registrationDailyBudget.kind],
+        set: { count: env.AGENT_REGISTRATION_DAILY_LIMIT },
+      });
+    const registrationsBefore = await rootDb
+      .select({ count: count() })
+      .from(agentRegistration);
+    const clientsBefore = await rootDb
+      .select({ count: count() })
+      .from(oauthClient);
+    try {
+      for (const identity of [existing, {}, stepUp]) {
+        const response = await postIdentity(
+          identityAssertionBody(await mintIdJag(identity)),
+        );
+        expect(response.status).toBe(503);
+        const body = await readJson(response);
+        expect(body["message"]).toBe(
+          "Registration is temporarily unavailable.",
+        );
+        expect(body["registration_id"]).toBeUndefined();
+        expect(body["identity_assertion"]).toBeUndefined();
+        expect(body["claim_token"]).toBeUndefined();
+      }
+      expect(
+        await rootDb.select({ count: count() }).from(agentRegistration),
+      ).toEqual(registrationsBefore);
+      expect(await rootDb.select({ count: count() }).from(oauthClient)).toEqual(
+        clientsBefore,
+      );
+      expect(
+        (
+          await rootDb
+            .select()
+            .from(registrationDailyBudget)
+            .where(condition)
+            .limit(1)
+        ).at(0)?.count,
+      ).toBe(env.AGENT_REGISTRATION_DAILY_LIMIT);
+    } finally {
+      if (previous) {
+        await rootDb
+          .update(registrationDailyBudget)
+          .set({ count: previous.count })
+          .where(condition);
+      } else {
+        await rootDb.delete(registrationDailyBudget).where(condition);
+      }
+    }
+  });
+});
 
 describe("agent-auth ID-JAG storage configuration", () => {
   test("retains the service error for ready and step-up registrations", async () => {

@@ -267,12 +267,16 @@ const issueRegistrationForPrincipal = async (
   principal: ResolvedPrincipal,
 ): Promise<Result<IdJagRegistrationResult, AgentTokenError | HandlerError>> => {
   const registrationId = createSafeId<"mcpOAuthClient">();
-  const credentials = await createAgentOAuthClient({
+  const clientResult = await createAgentOAuthClient({
     registrationType: "identity_assertion",
     registrationId,
     scopes: AGENT_AUTH_SERVICE_SCOPES,
     grantTypes: ["authorization_code"],
   });
+  if (Result.isError(clientResult)) {
+    return Result.err(clientResult.error);
+  }
+  const credentials = clientResult.value;
 
   const storedCredential = await prepareAgentClientCredential(
     credentials.clientSecret,

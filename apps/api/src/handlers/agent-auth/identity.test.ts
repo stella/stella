@@ -20,6 +20,7 @@ import {
   AGENT_AUTH_TOKEN_PATH,
 } from "@/api/agent-auth/constants";
 import { agentRegistration } from "@/api/db/agent-auth-schema";
+import { oauthClient } from "@/api/db/auth-schema";
 import { registrationDailyBudget } from "@/api/db/registration-budget-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
@@ -128,6 +129,7 @@ const unclaimedHint = () => `nobody-${Bun.randomUUIDv7()}@stella.dev`;
 
 describe("agent registration configuration", () => {
   test("daily registration admission returns a service response before creating rows", async () => {
+    const anonymous = await readJson(await postIdentity({ type: "anonymous" }));
     const day = new Date(Math.floor(Date.now() / DAY_IN_MS) * DAY_IN_MS);
     const condition = and(
       eq(registrationDailyBudget.day, day),
@@ -150,6 +152,9 @@ describe("agent registration configuration", () => {
     const before = await rootDb
       .select({ count: count() })
       .from(agentRegistration);
+    const clientsBefore = await rootDb
+      .select({ count: count() })
+      .from(oauthClient);
     try {
       for (const body of [
         { type: "anonymous" },
@@ -157,9 +162,20 @@ describe("agent registration configuration", () => {
       ]) {
         expect((await postIdentity(body)).status).toBe(503);
       }
+      const upgrade = await postClaim({
+        claim_token: String(anonymous["claim_token"]),
+        email: unclaimedHint(),
+      });
+      expect(upgrade.status).toBe(503);
+      expect((await readJson(upgrade))["message"]).toBe(
+        "Registration is temporarily unavailable.",
+      );
       expect(
         await rootDb.select({ count: count() }).from(agentRegistration),
       ).toEqual(before);
+      expect(await rootDb.select({ count: count() }).from(oauthClient)).toEqual(
+        clientsBefore,
+      );
     } finally {
       if (previous) {
         await rootDb
