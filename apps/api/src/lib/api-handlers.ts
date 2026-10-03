@@ -1555,6 +1555,25 @@ export const getPublicHandlerCachePolicy = (handler: unknown) =>
 export const isSafePublicHandler = (handler: unknown): boolean =>
   typeof handler === "function" && safePublicHandlers.has(handler);
 
+type SafePublicStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
+  TStatusCode extends HandlerErrorStatusCode
+    ? ElysiaCustomStatusResponse<
+        TStatusCode,
+        string | ReturnType<typeof projectPublicErrorBody>
+      >
+    : never;
+
+function toSafePublicStatusResponse<TStatusCode extends HandlerErrorStatusCode>(
+  statusCode: TStatusCode,
+  body: string | ReturnType<typeof projectPublicErrorBody>,
+): SafePublicStatusResponse<TStatusCode>;
+function toSafePublicStatusResponse(
+  statusCode: HandlerErrorStatusCode,
+  body: string | ReturnType<typeof projectPublicErrorBody>,
+) {
+  return status(statusCode, body);
+}
+
 /**
  * For unauthenticated routes that intentionally expose public data.
  * The handler still gets structured error capture and sanitized
@@ -1566,7 +1585,7 @@ export const createSafePublicHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,
-): SafeHandlerDefinition<TConfig, PublicHandlerContext<TConfig>, TResult> => {
+) => {
   // Schema opt-in preserves self-authorizing public endpoints' ceremony fields.
   // Corpus routes declare this bounded contract and share its wire projection.
   const boundsPublicErrors =
@@ -1579,20 +1598,21 @@ export const createSafePublicHandler = <
   const definition = {
     config,
     handler: async (ctx: PublicHandlerContext<TConfig>) => {
-      const response = await runSafeHandler(ctx, handler);
-      if (
+      const originalResponse = await runSafeHandler(ctx, handler);
+      const response =
         boundsPublicErrors &&
-        response instanceof ElysiaCustomStatusResponse &&
-        response.code >= 400
-      ) {
-        response.response =
-          typeof response.response === "string"
-            ? truncateTextBytes(
-                response.response,
-                PUBLIC_ERROR_TEXT_BYTES.statusText,
-              )
-            : projectPublicErrorBody(response.response);
-      }
+        originalResponse instanceof ElysiaCustomStatusResponse &&
+        originalResponse.code >= 400
+          ? toSafePublicStatusResponse(
+              originalResponse.code,
+              typeof originalResponse.response === "string"
+                ? truncateTextBytes(
+                    originalResponse.response,
+                    PUBLIC_ERROR_TEXT_BYTES.statusText,
+                  )
+                : projectPublicErrorBody(originalResponse.response),
+            )
+          : originalResponse;
       applyResponseCachePolicy({
         cache: config.cache,
         response,
