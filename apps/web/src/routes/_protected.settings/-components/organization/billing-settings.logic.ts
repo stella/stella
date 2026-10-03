@@ -1,5 +1,5 @@
 import type { Role } from "@/lib/auth-client";
-import { managementRoles } from "@/lib/organization/consts";
+import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 
 type BillingSettingsAccessOptions = {
   previewEnabled: boolean;
@@ -10,4 +10,4 @@ export const isBillingSettingsAccessible = ({
   previewEnabled,
   role,
 }: BillingSettingsAccessOptions): boolean =>
-  previewEnabled && role !== undefined && managementRoles.includes(role);
+  previewEnabled && hasOrganizationManagementAccess(role);

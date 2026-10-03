@@ -1,8 +1,10 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty, propertyConfig } from "@stll/property-testing";
 
+import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
   CORPUS_CURSOR_GROUP_TOKEN_CHARS,
   CORPUS_READ_TARGET_IDENTITY_LENGTH,
@@ -14,7 +16,10 @@ import {
   type CorpusSearchPhase,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { SEARCH_SORTS } from "@/api/lib/legal-search/corpus-search-order";
-import { isCorpusIndexGeneration } from "@/api/lib/legal-search/index-naming";
+import {
+  CORPUS_INDEX_GENERATION_MAX_LENGTH,
+  isCorpusIndexGeneration,
+} from "@/api/lib/legal-search/index-naming";
 import {
   type ExpansionDictionaryIdentity,
   NO_EXPANSION_DICTIONARY_IDENTITY,
@@ -453,6 +458,34 @@ test.each([
   ).toBeNull();
 });
 
+test("ranking modes survive cursor encoding with targets and excluded groups", () => {
+  assertProperty(
+    "ranking modes survive cursor encoding with targets and excluded groups",
+    fc.property(
+      fc.constantFrom("off", "bm25-ratio"),
+      fc.constantFrom(null, TARGET_A),
+      fc.constantFrom([], ["AbC_1-"]),
+      (rankingMode, target, excludedGroups) => {
+        const cursor = {
+          dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+          id: DECISION_ID,
+          score: 1,
+          sort: "relevance" as const,
+          windowStart: 0,
+          rankingMode,
+          target,
+          ...(excludedGroups.length === 0 ? {} : { excludedGroups }),
+        };
+        const encoded = encodeCorpusSearchCursor(cursor);
+        expect(decodeCorpusSearchCursor(encoded)).toEqual(cursor);
+        expect(encoded.length).toBeLessThanOrEqual(
+          CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+        );
+      },
+    ),
+  );
+});
+
 const phaseCursor = (phase: CorpusSearchPhase) => ({
   dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
   id: DECISION_ID,
@@ -482,7 +515,8 @@ test("legislation phases round-trip independently of existing optional cursor se
       }),
       fc.constantFrom(null, TARGET_A),
       fc.boolean(),
-      (relaxed, tokenNumbers, target, carryGroups) => {
+      fc.constantFrom(undefined, ...CORPUS_INDEX_RANKING_MODES),
+      (relaxed, tokenNumbers, target, carryGroups, rankingMode) => {
         const strictWorkTokens = tokenNumbers.map((value) =>
           String(value).padStart(CORPUS_CURSOR_GROUP_TOKEN_CHARS, "0"),
         );
@@ -498,6 +532,7 @@ test("legislation phases round-trip independently of existing optional cursor se
           ...phaseCursor(phase),
           target,
           ...(carryGroups ? { excludedGroups: ["AbC_1-"] } : {}),
+          ...(rankingMode === undefined ? {} : { rankingMode }),
         };
         const encoded = encodeCorpusSearchCursor(cursor);
         expect(decodeCorpusSearchCursor(encoded)).toEqual(cursor);
@@ -506,6 +541,92 @@ test("legislation phases round-trip independently of existing optional cursor se
         );
       },
     ),
+  );
+});
+
+test("a cursor carrying a phase and a ranking mode round-trips both", () => {
+  const relaxed = {
+    type: "relaxed",
+    fingerprint: HASH_A,
+    generation: "legislation_v2",
+    strictWorkTokens: ["AbC_1-"],
+  } as const satisfies CorpusSearchPhase;
+  for (const rankingMode of CORPUS_INDEX_RANKING_MODES) {
+    for (const phase of [STRICT_PHASE, relaxed]) {
+      const cursor = {
+        ...phaseCursor(phase),
+        excludedGroups: ["zz9900"],
+        rankingMode,
+        target: TARGET_A,
+      };
+      const encoded = encodeCorpusSearchCursor(cursor);
+      expect(encoded).toBe(
+        encodeCursor(
+          0.5,
+          `0:none:relevance:${TARGET_A}:xzz9900:${phaseSegment(phase)}:r-${rankingMode}:${DECISION_ID}`,
+        ),
+      );
+      expect(decodeCorpusSearchCursor(encoded)).toEqual(cursor);
+    }
+  }
+});
+
+test("optional segments are refused when repeated, reordered or unknown", () => {
+  const phase = phaseSegment(STRICT_PHASE);
+  for (const optional of [
+    `r-off:${phase}`,
+    "r-off:xAbC_1-",
+    `r-off:${TARGET_A}`,
+    "xAbC_1-:xAbC_1-",
+    "r-off:r-off",
+    "r-off:r-bm25-ratio",
+    "r-other",
+    "r-",
+    `${phase}:r-off:${phase}`,
+    `xAbC_1-:${TARGET_A}:r-off`,
+    `${TARGET_A}:${TARGET_A}`,
+  ]) {
+    expect(
+      decodeCorpusSearchCursor(
+        encodeCursor(0.5, `0:none:relevance:${optional}:${DECISION_ID}`),
+      ),
+    ).toBeNull();
+  }
+});
+
+test("the longest cursor the encoder can emit fits the legislation cursor cap", () => {
+  const tokens = Array.from(
+    { length: LIMITS.corpusIndexSearchMaxExcludedGroups },
+    (_, index) => String(index).padStart(CORPUS_CURSOR_GROUP_TOKEN_CHARS, "0"),
+  );
+  const longest = <T extends string>(values: readonly T[]): T =>
+    values.toSorted((a, b) => b.length - a.length).at(0) ??
+    panic("no values to choose from");
+  const cursor = {
+    dictionary: DICTIONARY_A,
+    excludedGroups: tokens,
+    id: DECISION_ID,
+    phase: {
+      type: "relaxed",
+      fingerprint: HASH_A,
+      generation: "a".repeat(CORPUS_INDEX_GENERATION_MAX_LENGTH),
+      strictWorkTokens: tokens,
+    },
+    rankingMode: longest(CORPUS_INDEX_RANKING_MODES),
+    score: -2.2250738585072014e-308,
+    sort: longest(SEARCH_SORTS),
+    target: TARGET_A,
+    windowStart: 9_999_999_999,
+  } as const;
+  const encoded = encodeCorpusSearchCursor(cursor);
+  expect(decodeCorpusSearchCursor(encoded)).toEqual(cursor);
+  expect(encoded.length).toBeLessThanOrEqual(
+    CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
+  );
+  // The cap is derived from the parts, so the worst case sits just under it:
+  // a loose cap would hide a segment the derivation forgot.
+  expect(encoded.length).toBeGreaterThan(
+    CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH - 8,
   );
 });
 

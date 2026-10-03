@@ -3,8 +3,15 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { CORPUS_QUERY_LEAF_BUDGET } from "@/api/lib/legal-search/corpus-query";
+import {
+  CORPUS_QUERY_LEAF_BUDGET,
+  corpusFreeTextClause,
+} from "@/api/lib/legal-search/corpus-query";
 import { relaxedLegislationClause } from "@/api/lib/legal-search/legislation-query";
+import {
+  FUNCTION_WORD_LANGUAGES,
+  FUNCTION_WORDS,
+} from "@/api/lib/legal-search/morphology/function-words";
 
 test("relaxed legislation coverage ORs content words and drops Czech function words", () => {
   expect(
@@ -215,6 +222,36 @@ test("a section at the end of a long relaxed query cannot be budgeted away", () 
         expect((clause?.match(/"/gu) ?? []).length / 2).toBeLessThanOrEqual(
           CORPUS_QUERY_LEAF_BUDGET,
         );
+      },
+    ),
+  );
+});
+
+test("relaxed coverage excludes function-word-only queries in every supported language", () => {
+  assertProperty(
+    "relaxed coverage excludes function-word-only queries in every supported language",
+    fc.property(
+      fc.constantFrom(...FUNCTION_WORD_LANGUAGES).chain((language) =>
+        fc.record({
+          language: fc.constant(language),
+          words: fc.array(fc.constantFrom(...FUNCTION_WORDS[language]), {
+            minLength: 1,
+            maxLength: 20,
+          }),
+          normalization: fc.constantFrom("NFC", "NFD"),
+        }),
+      ),
+      ({ language, words, normalization }) => {
+        const query = words.join(" ").normalize(normalization);
+        expect(
+          corpusFreeTextClause(query, {
+            functionWords: FUNCTION_WORDS[language],
+          }),
+        ).not.toBeNull();
+        expect(relaxedLegislationClause({ query, language })).toBeNull();
+        expect(
+          relaxedLegislationClause({ query: `"${query}"`, language }),
+        ).not.toBeNull();
       },
     ),
   );

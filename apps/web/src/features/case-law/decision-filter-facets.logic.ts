@@ -1,7 +1,10 @@
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 
-import type { FacetSourceBucket } from "@/components/public-law-table/public-law-facets.logic";
+import type {
+  CountedSourceFacetBucket,
+  FacetSourceBucket,
+} from "@/components/public-law-table/public-law-facets.logic";
 import type { TranslationKey } from "@/i18n/types";
 
 /**
@@ -40,6 +43,7 @@ export type DecisionFilterFacets = {
   year: readonly FacetSourceBucket[];
   decisionType: readonly FacetSourceBucket[];
   language: readonly FacetSourceBucket[];
+  source: readonly CountedSourceFacetBucket[];
 };
 
 /** Whether a stored tier label is one the UI has a heading and a chip for. */
@@ -110,4 +114,5 @@ export const decisionFilterFacetsFromBrowse = (browse: {
   year: yearsNewestFirst(browse.year),
   decisionType: [],
   language: [],
+  source: [],
 });

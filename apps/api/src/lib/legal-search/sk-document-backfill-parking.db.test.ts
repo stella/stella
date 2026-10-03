@@ -30,6 +30,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import { isUnreadablePdfError } from "@/api/lib/legal-search/parsers/sk-courts";
 import {
+  claimDocumentFetch,
   countParkedDocuments,
   fetchDecisionDocument,
   loadPendingDocuments,
@@ -451,6 +452,96 @@ describe("a failure that may affect every document", () => {
 });
 
 describe("a stale claim", () => {
+  test("buffered decisions fetch only the claimed URL", async () => {
+    const currentUrl = PUBLISHER_URL.replace("3c4f2a8e", "4c4f2a8e");
+    for (const oldStatus of [200, 404]) {
+      const label = `buffered-${oldStatus}`;
+      await insertFetchable(label, "source-v1");
+      const buffered = (
+        await loadPendingDocuments(scopedDb, QUEUE_READ_LIMIT)
+      ).find(({ id }) => id === idFor(label));
+      if (buffered === undefined) {
+        throw new Error("expected buffered decision");
+      }
+      const metadata = {
+        caseNumber: `current-${suffix}-${oldStatus}`,
+        ecli: "ECLI:SK:OSBA1:2026:1234567890.1",
+        court: "Current court",
+        country: "SVK",
+        decisionDate: "2026-06-01",
+        decisionType: "ROZSUDOK",
+      };
+      await testDb
+        .update(caseLawDecisions)
+        .set({
+          ...metadata,
+          documentUrl: currentUrl,
+          sourceHash: "source-v2",
+        })
+        .where(eq(caseLawDecisions.id, buffered.id));
+      expect(buffered.documentUrl).not.toBe(currentUrl);
+      expect(buffered.caseNumber).not.toBe(metadata.caseNumber);
+      const urls: string[] = [];
+      const outcome = await fetchDecisionDocument({
+        decision: buffered,
+        fetchDocument: async (url) => {
+          urls.push(url.href);
+          return url.href === currentUrl
+            ? new Response(
+                new ReadableStream({
+                  start(controller) {
+                    controller.error(
+                      new DOMException("body timeout", "TimeoutError"),
+                    );
+                  },
+                }),
+              )
+            : new Response(oldStatus === 200 ? UNREADABLE_PDF : null, {
+                status: oldStatus,
+              });
+        },
+        scopedDb,
+        signal: new AbortController().signal,
+      });
+      expect(urls).toEqual([currentUrl]);
+      expect(outcome).toEqual({
+        status: "deferred",
+        failure: "network",
+        detail: "TimeoutError",
+      });
+      expect(await fetchState(label)).toEqual({
+        fulltext: null,
+        documentFetchAttempts: 1,
+      });
+    }
+  });
+
+  test("the atomic claim returns every processing field from the current row", async () => {
+    const label = "claim-snapshot";
+    await insertFetchable(label, "source-v1");
+    const current = {
+      caseNumber: `snapshot-${suffix}`,
+      ecli: "ECLI:SK:OSBA1:2026:1234567890.2",
+      court: "Snapshot court",
+      country: "SVK",
+      decisionDate: "2026-07-01",
+      decisionType: "UZNESENIE",
+      documentUrl: PUBLISHER_URL.replace("3c4f2a8e", "5c4f2a8e"),
+      sourceHash: "source-v2",
+    };
+    await testDb
+      .update(caseLawDecisions)
+      .set(current)
+      .where(eq(caseLawDecisions.id, idFor(label)));
+    const claim = await claimDocumentFetch(idFor(label), scopedDb);
+    expect(claim.status).toBe("claimed");
+    if (claim.status !== "claimed") {
+      throw new Error("expected claimed snapshot");
+    }
+    expect(claim.decision).toMatchObject({ id: idFor(label), ...current });
+    expect(claim.attempts).toBe(1);
+  });
+
   const VERSIONS = [null, "source-v1", "source-v2"] as const;
 
   test("a failure write lands only on the source version its fetch claimed", async () => {
