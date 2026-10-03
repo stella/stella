@@ -20,10 +20,12 @@ import {
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assembleCzRegionalDecision,
+  buildCzRegionalDecision,
   czRegionalAdapter,
   czRegionalEnvelopeWithChain,
   czRegionalListingIdentity,
   isCzRegionalApiItem,
+  listCzRegionalDayPage,
   readCzRegionalChain,
   readCzRegionalDocument,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
@@ -672,10 +674,84 @@ describe("the crawl keeps a refused row as its listing", () => {
     });
   }
   test("accepts a small valid empty listing", async () => {
-    globalThis.fetch = asFetchMock(async () => new Response('{"items":[]}'));
+    globalThis.fetch = asFetchMock(
+      async () => new Response('{"items":[],"totalPages":0}'),
+    );
     const result = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
     expect(result.unwrap().decisions).toEqual([]);
   });
+  test("listing pagination requires a stated total page count", async () => {
+    globalThis.fetch = asFetchMock(async () => new Response('{"items":[]}'));
+    const result = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(PublisherPageError);
+    }
+    await expect(
+      czRegionalAdapter.reconciliation.listSlicePage({
+        slice: "2025-06-11",
+        page: 0,
+      }),
+    ).rejects.toBeInstanceOf(PublisherPageError);
+  });
+
+  test.each([
+    { autor: 7 },
+    { autor: { value: "publisher value" } },
+    { autor: [7] },
+  ])(
+    "a mistyped optional listing field keeps its raw identity and payload (%j)",
+    async ({ autor }) => {
+      const item = await itemByDocket(LISTING, DISTRICT_DOCKET);
+      const raw = { ...item, autor };
+      expect(isCzRegionalApiItem(raw)).toBe(false);
+      const listing = JSON.stringify({ items: [raw], totalPages: 1 });
+      globalThis.fetch = asFetchMock(async () => new Response(listing));
+      const identity = {
+        type: "document",
+        sourceDocumentId: "e21716f9-8855-4a85-a7e6-9af23622661b",
+      };
+      expect(czRegionalListingIdentity(raw)).toEqual(identity);
+      const listed = await listCzRegionalDayPage({
+        date: "2025-06-11",
+        page: 0,
+      });
+      expect(listed.items).toEqual([raw]);
+      const repaired = await buildCzRegionalDecision(raw);
+      expect(repaired.type).toBe("detail-unavailable");
+      if (repaired.type === "detail-unavailable") {
+        expect(repaired.decision.isListingOnly).toBe(true);
+        expect(
+          JSON.parse(
+            decodeSourceRawEnvelope(repaired.decision.sourceRaw ?? "")?.[
+              "listing"
+            ] ?? "null",
+          ),
+        ).toEqual(raw);
+      }
+      const slice = await czRegionalAdapter.reconciliation.listSlicePage({
+        slice: "2025-06-11",
+        page: 0,
+      });
+      expect(slice.items).toEqual([{ identity, payload: raw }]);
+      const page = (
+        await czRegionalAdapter.fetchPage("2025-06-11:0", {})
+      ).unwrap();
+      expect(page.decisions).toHaveLength(1);
+      expect(page.decisions.at(0)?.isListingOnly).toBe(true);
+      expect(
+        JSON.parse(
+          decodeSourceRawEnvelope(page.decisions.at(0)?.sourceRaw ?? "")?.[
+            "listing"
+          ] ?? "null",
+        ),
+      ).toEqual(raw);
+      expect(page.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 1,
+      });
+    },
+  );
   test("a malformed listing member does not reject its valid sibling", async () => {
     const item = await itemByDocket(LISTING, DISTRICT_DOCKET);
     const listing = JSON.stringify({
