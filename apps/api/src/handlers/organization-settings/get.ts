@@ -10,10 +10,9 @@ import {
   DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
   DEFAULT_TIME_NARRATIVE_REQUIRED,
 } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {

@@ -1,8 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
   dailyTargetBody,
   setDailyTarget,

@@ -4,8 +4,10 @@ import { t } from "elysia";
 import type { TemplatePackCatalogue } from "@stll/template-packs";
 import type { GeneratedTemplatePack } from "@stll/template-packs/schema";
 
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 import { renderTemplatePreview } from "@/api/lib/docx/render-template-preview";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {

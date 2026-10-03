@@ -15,9 +15,8 @@ import type {
 } from "@/api/handlers/templates/prefill-fields";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { decryptContent } from "@/api/lib/content-encryption";

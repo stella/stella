@@ -1,10 +1,12 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeSessionHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeSessionHandler,
+} from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import {
   ACCOUNT_DELETION_ERROR_CODE,

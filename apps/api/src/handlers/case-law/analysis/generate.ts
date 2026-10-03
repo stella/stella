@@ -19,9 +19,8 @@ import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
 import {

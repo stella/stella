@@ -1,8 +1,10 @@
 import { Result } from "better-result";
 
 import { handleOAuthAuthorizationServerMetadataRequest } from "@/api/handlers/auth/metadata";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 
 const readAuthorizationServerMetadata = createSafePublicHandler(
   {

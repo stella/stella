@@ -16,9 +16,8 @@ import { t } from "elysia";
 
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { readReferencePassageTexts } from "@/api/lib/document-review/reference-passages";
 

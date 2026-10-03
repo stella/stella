@@ -1,9 +1,8 @@
 import { Result } from "better-result";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { WorkspaceStorageTeardownBoundError } from "@/api/lib/organization-storage-teardown";

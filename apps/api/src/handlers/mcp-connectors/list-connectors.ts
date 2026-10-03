@@ -7,9 +7,8 @@ import {
 } from "@/api/db/schema";
 import { mcpConnectorUrlIdentity } from "@/api/handlers/mcp-connectors/url-normalization";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 import { LIMITS } from "@/api/lib/limits";
 import {

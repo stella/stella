@@ -2,8 +2,10 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 
 /**
  * RFC 8935 Security Event Token (SET) receiver. Full SET signature

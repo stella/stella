@@ -7,10 +7,9 @@ import {
   legalListGenerationRuns,
 } from "@/api/db/schema";
 import { commitSettledRun } from "@/api/handlers/lists/generation-candidates/commit-settled-run";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 

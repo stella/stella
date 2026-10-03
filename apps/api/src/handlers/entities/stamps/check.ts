@@ -5,9 +5,8 @@ import type { Static } from "elysia";
 import type { DocumentReferenceMatch } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { extractStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { lookupByVerificationCode } from "@/api/lib/entity-versions/document-reference-lookup";

@@ -17,9 +17,8 @@ import {
   type ChatSkillContext,
 } from "@/api/handlers/chat/skill-availability/offered-tools";
 import { resolvesToBuiltInSkill } from "@/api/lib/agent-skills/skills";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";

@@ -5,14 +5,13 @@ import { Temporal } from "@stll/time";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
-import { createSafeTokenHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import { getAuth } from "@/api/lib/auth";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import {

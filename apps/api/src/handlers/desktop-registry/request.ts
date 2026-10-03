@@ -20,10 +20,12 @@ import {
   searchDesktopRegistry,
   setDesktopRegistryDefaultFormat,
 } from "@/api/handlers/desktop-registry/service";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   authorizeDesktopAccount,
   authorizeDesktopRegistry,

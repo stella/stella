@@ -6,9 +6,8 @@ import { renderMatterReference } from "@stll/api-contract";
 
 import { numberSeriesAllocations, numberSeriesCounters } from "@/api/db/schema";
 import { numberSeriesParams } from "@/api/handlers/number-series/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { toNumberPatternScopeKey } from "@/api/lib/billing/number-pattern";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 

@@ -3,8 +3,7 @@ import { t } from "elysia";
 
 import { probeMcpServer } from "@/api/handlers/mcp-connectors/probe";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const requestBody = t.Object({

@@ -6,9 +6,8 @@ import { prepareReferenceProposal } from "@/api/handlers/document-reviews/prepar
 import { proposeReferencePositions } from "@/api/handlers/document-reviews/reference-positions";
 import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
 import { aiHandlerError } from "@/api/lib/ai-error";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
 
 const TIMEOUT_MS = 120_000;

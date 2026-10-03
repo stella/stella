@@ -12,9 +12,8 @@ import {
   timeEntryExportQuerySchema,
 } from "@/api/handlers/time-entries/export-query";
 import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/export-query";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { LIMITS } from "@/api/lib/limits";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 

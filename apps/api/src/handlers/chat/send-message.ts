@@ -215,13 +215,13 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
+  ACCOUNT_ACCESS,
   assertUsageAvailableForHandler,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
 import { resolveEffectiveChatModelSelection } from "@/api/lib/chat-model-selection";

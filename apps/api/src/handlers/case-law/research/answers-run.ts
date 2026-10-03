@@ -6,10 +6,9 @@ import {
 } from "@/api/handlers/case-law/research/column-access";
 import { runResearchAnswersBodySchema } from "@/api/handlers/case-law/research/schema";
 import { detached } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readPublicDecisionSummaries } from "@/api/lib/case-law/decision-summaries";
 import { queueResearchAnswerCells } from "@/api/lib/case-law/research-answer-queue";

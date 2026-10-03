@@ -6,9 +6,8 @@ import {
   lookupResearchAnswersBodySchema,
   toResearchAnswerResponse,
 } from "@/api/handlers/case-law/research/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {

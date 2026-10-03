@@ -6,9 +6,8 @@ import {
   memberAssignmentRequiredError,
   storedAIConfigUnreadableError,
 } from "@/api/lib/ai-config-response";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tJsonObject, tSafeId } from "@/api/lib/custom-schema";
 import { templateDecideConditionsLogic } from "@/api/lib/templates/template-decide-conditions";
 

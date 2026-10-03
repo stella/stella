@@ -3,10 +3,9 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";

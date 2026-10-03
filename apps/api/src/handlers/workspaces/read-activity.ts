@@ -14,9 +14,8 @@ import {
   WORKSPACE_ACTIVITY_PERMISSIONS,
   WORKSPACE_ACTIVITY_SCOPE,
 } from "@/api/handlers/workspaces/activity-scope";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import {
   parsePgTimestampCursorValue,

@@ -8,8 +8,7 @@ import {
 } from "@stll/boe";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const querySchema = t.Object({

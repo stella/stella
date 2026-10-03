@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import {
+  ACCOUNT_ACCESS,
   createSafeRootHandler,
   createSafeSessionHandler,
 } from "@/api/lib/api-handlers";
@@ -9,10 +10,7 @@ import type {
   HandlerConfig,
   SessionHandlerConfig,
 } from "@/api/lib/api-handlers";
-import {
-  checkDemoAccountAccess,
-  ACCOUNT_ACCESS,
-} from "@/api/lib/auth/demo-account-policy";
+import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 
 const config = {

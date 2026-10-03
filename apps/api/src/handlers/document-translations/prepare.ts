@@ -2,9 +2,8 @@ import { Result } from "better-result";
 
 import { prepareDocumentTranslationBodySchema } from "@/api/handlers/document-translations/schemas";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { inspectDocxComments } from "@/api/lib/document-translation/docx-review";

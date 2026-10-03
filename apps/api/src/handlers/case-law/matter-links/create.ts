@@ -4,10 +4,9 @@ import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { linkDecisionsToMatter } from "@/api/handlers/case-law/matter-links/link-writes";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 

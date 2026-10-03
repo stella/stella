@@ -6,9 +6,8 @@ import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillComments } from "@/api/db/schema";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import type {

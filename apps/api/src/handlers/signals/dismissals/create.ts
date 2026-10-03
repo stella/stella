@@ -10,9 +10,8 @@ import {
   SIGNAL_EVENT_TYPE,
   transitionSignal,
 } from "@/api/handlers/signals/transition";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   canTriageSignals,
   loadVisibleSignal,

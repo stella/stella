@@ -8,12 +8,12 @@ import {
   startFlowRunBodySchema,
 } from "@/api/handlers/flows/schema";
 import {
+  ACCOUNT_ACCESS,
   assertRunSizeConfirmedForHandler,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { estimateFlowRunUnits } from "@/api/lib/flows/flow-run-estimate";
 import {

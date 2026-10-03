@@ -12,8 +12,7 @@ import {
   selectTimekeeperNames,
   timekeeperIdsOf,
 } from "@/api/handlers/time-entries/timekeeper-names";
-import { createSafeHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import type { SafeId } from "@/api/lib/branded-types";
 import {

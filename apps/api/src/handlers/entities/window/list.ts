@@ -1,9 +1,8 @@
 import { panic, Result } from "better-result";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import { entityQueryWindowBodySchema } from "@/api/lib/entities/query-window-schema";
 import {

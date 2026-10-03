@@ -8,11 +8,11 @@ import {
   provisionPreviewSuccessResponseSchema,
 } from "@/api/handlers/legislation/reader-response";
 import {
-  safePublicHandlerResponseSchemasWithStatusText,
+  ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {

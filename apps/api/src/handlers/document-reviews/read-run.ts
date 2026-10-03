@@ -7,9 +7,8 @@
 
 import { Result } from "better-result";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { readDocumentReviewRunDetail } from "@/api/lib/document-review/read-run-detail";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

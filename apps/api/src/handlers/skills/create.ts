@@ -9,10 +9,9 @@ import {
   agentSkills,
 } from "@/api/db/schema";
 import { hashSkillContent } from "@/api/lib/agent-skills/content-hash";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";

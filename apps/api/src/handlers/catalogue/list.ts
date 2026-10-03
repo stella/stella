@@ -23,9 +23,8 @@ import {
 } from "@/api/handlers/catalogue/install-state";
 import { EDITABLE_AGENT_SKILL_ORIGINS } from "@/api/lib/agent-skills/origin";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 import { LIMITS } from "@/api/lib/limits";

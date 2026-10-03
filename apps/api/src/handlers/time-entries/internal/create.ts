@@ -6,8 +6,7 @@ import {
   TIME_ENTRY_SOURCE,
 } from "@stll/api-contract";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { lockTimePolicy } from "@/api/lib/billing-time";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";

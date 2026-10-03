@@ -2,11 +2,11 @@ import { Result } from "better-result";
 
 import { env } from "@/api/env";
 import {
+  ACCOUNT_ACCESS,
   createSafeRootHandler,
   type HandlerConfig,
   type SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   CONFIGURED_ACCESS_STATE,
   configuredPaymentRetry,

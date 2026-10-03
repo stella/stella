@@ -20,11 +20,6 @@ import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
-import { requiresStandardAccount } from "@/api/lib/auth/demo-account-policy";
-import type {
-  ACCOUNT_ACCESS,
-  AccountAccess,
-} from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -405,6 +400,21 @@ export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
  * Factories without an organization-scoped caller run no account check, so
  * their handlers admit the demo account and can only declare `sandbox`.
  */
+/**
+ * Whether the configured demo account may call a handler. Every handler config
+ * declares one: `standard` refuses the demo account, `sandbox` admits it.
+ */
+export const ACCOUNT_ACCESS = {
+  standard: "standard",
+  sandbox: "sandbox",
+} as const;
+
+export type AccountAccess =
+  (typeof ACCOUNT_ACCESS)[keyof typeof ACCOUNT_ACCESS];
+
+export const requiresStandardAccount = (accountAccess: AccountAccess) =>
+  accountAccess === ACCOUNT_ACCESS.standard;
+
 type SandboxAccountAccess = {
   accountAccess: typeof ACCOUNT_ACCESS.sandbox;
 };

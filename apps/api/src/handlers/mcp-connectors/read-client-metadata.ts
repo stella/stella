@@ -3,10 +3,10 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import {
+  ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { buildMcpClientMetadataDocument } from "@/api/lib/mcp-upstream/oauth";
 import type { McpClientMetadataDocument } from "@/api/lib/mcp-upstream/oauth";
 

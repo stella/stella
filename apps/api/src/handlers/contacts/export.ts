@@ -9,14 +9,13 @@ import {
 
 import { contacts } from "@/api/db/schema";
 import { contactToPortableImport } from "@/api/handlers/contacts/contact-import-export";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   CONTACT_DIRECTORY_AUDIT_RESOURCE_ID,
 } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { escapeCSV } from "@/api/lib/csv";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";

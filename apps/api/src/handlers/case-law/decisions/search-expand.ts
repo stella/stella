@@ -18,12 +18,11 @@ import { Temporal } from "@stll/time";
 import { envBase } from "@/api/env-base";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import {

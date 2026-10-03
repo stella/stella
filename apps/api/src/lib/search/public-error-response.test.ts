@@ -7,12 +7,12 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
   createSafePublicHandler,
-  safePublicHandlerResponseSchemasWithStatusText,
   safeHandlerResponseSchemasWithStatusText,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   projectPublicErrorBody,

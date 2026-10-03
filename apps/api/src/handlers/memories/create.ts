@@ -2,9 +2,8 @@ import { Result } from "better-result";
 
 import { createMemoryBodySchema } from "@/api/handlers/memories/create-schema";
 import type { CreateMemoryBody } from "@/api/handlers/memories/create-schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizePersonMemoryContent } from "@/api/lib/memory/memory-content-safety";

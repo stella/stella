@@ -8,8 +8,10 @@ import {
   searchLegislationBodySchema,
   searchLegislationResponseSchema,
 } from "@/api/handlers/legislation/search-schema";
-import { createSafeBoundedPublicHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import {
+  ACCOUNT_ACCESS,
+  createSafeBoundedPublicHandler,
+} from "@/api/lib/api-handlers";
 import { tPaginationLimit } from "@/api/lib/custom-schema";
 import {
   readPublicLawCountry,

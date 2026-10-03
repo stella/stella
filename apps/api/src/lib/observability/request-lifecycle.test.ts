@@ -19,9 +19,11 @@ import {
   resetAnalyticsForTesting,
   setAnalyticsForTesting,
 } from "@/api/lib/analytics/client";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   DatabaseError,
   DatabaseRlsError,

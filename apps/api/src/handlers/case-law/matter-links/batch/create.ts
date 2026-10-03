@@ -2,9 +2,8 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { linkDecisionsToMatter } from "@/api/handlers/case-law/matter-links/link-writes";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 

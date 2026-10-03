@@ -3,9 +3,8 @@ import { and, desc, eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { extractionRuns } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isWorkflowRunning } from "@/api/lib/workflow-queue";
 

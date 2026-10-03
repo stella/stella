@@ -6,8 +6,10 @@ import {
   readJudgePortraitPointer,
 } from "@/api/handlers/case-law/judges/portrait";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeBoundedPublicHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import {
+  ACCOUNT_ACCESS,
+  createSafeBoundedPublicHandler,
+} from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

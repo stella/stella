@@ -2,14 +2,13 @@ import { Result } from "better-result";
 import { status } from "elysia";
 import type { ElysiaCustomStatusResponse } from "elysia/error";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type {
   SafeHandlerGenerator,
   WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { fileFieldQuery } from "@/api/lib/files/read-file";

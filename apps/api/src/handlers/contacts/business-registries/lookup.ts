@@ -6,8 +6,7 @@ import {
   type BusinessRegistryLookupDetail,
 } from "@stll/api-contract";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
   BUSINESS_REGISTRY_SLUGS,
   LOOKUP_DETAIL_DESCRIPTION,

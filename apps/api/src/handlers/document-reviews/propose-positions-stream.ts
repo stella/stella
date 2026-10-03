@@ -19,9 +19,8 @@ import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 import { prepareReferenceProposal } from "@/api/handlers/document-reviews/prepare-proposal";
 import { streamReferenceProposal } from "@/api/handlers/document-reviews/reference-positions";
 import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
 import { sseResponse } from "@/api/lib/sse";
 

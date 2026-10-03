@@ -4,10 +4,10 @@ import { t } from "elysia";
 import nodePath from "node:path";
 
 import {
+  ACCOUNT_ACCESS,
   createSafePublicHandler,
   isSafePublicHandler,
 } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 
 import allowlist from "./public-response-text-bounds.allowlist.json";
 

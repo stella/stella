@@ -9,9 +9,8 @@ import {
   correspondenceAttachments,
   correspondenceFilers,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { readCorrespondenceProvenance } from "@/api/lib/email/correspondence/provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

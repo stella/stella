@@ -15,12 +15,11 @@ import {
   workspaceViews,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tDefaultVarchar,

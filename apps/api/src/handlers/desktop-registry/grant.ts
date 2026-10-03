@@ -1,9 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { issueDesktopAccountGrant } from "@/api/lib/auth";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { DESKTOP_ACCOUNT_PERMISSION } from "@/api/lib/business-registries/desktop/config";
 import {
   CACHE_CONTROL_HEADER,

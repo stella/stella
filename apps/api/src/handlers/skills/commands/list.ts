@@ -2,9 +2,8 @@ import { Result } from "better-result";
 import { and, desc, eq, isNotNull, or } from "drizzle-orm";
 
 import { AGENT_SKILL_SCOPES, agentSkills } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 
 // Returns the subset of skills that carry a slash-command handle,
 // shaped for the chat composer's slash menu. Distinct from the

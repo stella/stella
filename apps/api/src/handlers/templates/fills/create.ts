@@ -5,12 +5,12 @@ import { templateFills } from "@/api/db/schema";
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
+  ACCOUNT_ACCESS,
   assertUsageAvailableForHandler,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import { tJsonObject, tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {

@@ -5,8 +5,7 @@ import type { Static } from "elysia";
 import { isCountryCode } from "@stll/country-codes";
 
 import { nationalityCodesSchema } from "@/api/handlers/contacts/person-details";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import {
   COUNTERPARTY_CHECK_KINDS,

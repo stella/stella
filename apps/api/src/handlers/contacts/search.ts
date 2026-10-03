@@ -6,8 +6,7 @@ import { arabicNormalize } from "@stll/text-normalize";
 
 import { contacts } from "@/api/db/schema";
 import { contactTypeSchema } from "@/api/handlers/contacts/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { escapeLike } from "@/api/lib/escape-like";
 
 const SEARCH_LIMIT = 20;

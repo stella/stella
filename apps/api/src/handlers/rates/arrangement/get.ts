@@ -2,8 +2,7 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { billingArrangements } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { billingArrangementResponse } from "@/api/lib/billing/arrangements";
 import type {
   UnbackedProjectionKeys,

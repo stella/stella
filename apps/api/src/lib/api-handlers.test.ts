@@ -12,6 +12,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
 import {
+  ACCOUNT_ACCESS,
   assertRunSizeConfirmedForHandler,
   createSafeHandler,
   createSafeRootHandler,
@@ -19,7 +20,6 @@ import {
   resolveMeteringContext,
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import {

@@ -2,9 +2,8 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   authorizeSkillInstallScope,
   installSkill,

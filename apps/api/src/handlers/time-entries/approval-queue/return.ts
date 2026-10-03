@@ -5,9 +5,8 @@ import { t } from "elysia";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
 import { BILLING_STATUS, timeEntries, workspaces } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { lockTimePolicy } from "@/api/lib/billing-time";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { timeApprovalRefusal } from "@/api/lib/billing/time-entry-approval";

@@ -17,8 +17,8 @@ import {
 } from "@/api/db/schema";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { createSafePublicSubjectHandler } from "@/api/handlers/case-law/decisions/public-subject";
+import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
