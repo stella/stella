@@ -2,7 +2,16 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
-import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+import {
+  DECISION_DOCKET_GRAMMARS,
+  type DecisionDocketJurisdiction,
+} from "@stll/api-contract/decision-docket-grammar";
+import {
+  DECISION_DOCKET_IDENTITY_FIXTURES,
+  DOCKET_IDENTITY_FIXTURE_NUMBER_MAX,
+  DOCKET_IDENTITY_PART_NUMERAL,
+} from "@stll/api-contract/decision-docket-identity.fixtures";
+import { DECISION_DOCKETS_STORED_WITH_SHEETS } from "@stll/api-contract/decision-docket-reference";
 import {
   type DecisionIdentifierIntent,
   parseDecisionQuery,
@@ -251,17 +260,46 @@ export const docketFamilyIdentifierRows = ({
     ),
   }));
 
-const intentOf = (entry: string): DecisionIdentifierIntent => {
-  const intent = parseDecisionQuery(entry, {
-    grammar: DECISION_DOCKET_GRAMMARS.CZE,
-  });
-  return intent.type === "identifier"
-    ? intent
-    : panic(`Not an identifier: ${entry}`);
-};
-
 const sorted = (...ids: SafeId<"caseLawDecision">[]): string[] =>
   ids.map(String).toSorted();
+
+/**
+ * What the public search's identity branch (`searched`) and the lookup tool
+ * (`lookedUp`) answer an entry with, read under one jurisdiction's grammar.
+ */
+const identityReaders = (
+  caseLawDb: () => CaseLawPublicReadDb,
+  jurisdiction: DecisionDocketJurisdiction,
+) => {
+  const intentOf = (entry: string): DecisionIdentifierIntent => {
+    const intent = parseDecisionQuery(entry, {
+      grammar: DECISION_DOCKET_GRAMMARS[jurisdiction],
+    });
+    return intent.type === "identifier"
+      ? intent
+      : panic(`Not a ${jurisdiction} identifier: ${entry}`);
+  };
+  const searched = async (entry: string): Promise<string[]> =>
+    (
+      await findDecisionIdsByIdentity({
+        caseLawDb: caseLawDb(),
+        country: jurisdiction,
+        identity: intentOf(entry),
+      })
+    )
+      .map(String)
+      .toSorted();
+  const lookedUp = async (entry: string) => {
+    const intent = intentOf(entry);
+    const rows = await lookupDecisionsByIdentity({
+      caseLawDb: caseLawDb(),
+      country: jurisdiction,
+      locator: decisionIdentityLocatorOf(intent),
+    });
+    return resolveDecisionIdentity(intent, rows);
+  };
+  return { searched, lookedUp };
+};
 
 /**
  * Registers the scenario's tests. `context` is read when a test runs, after
@@ -275,28 +313,10 @@ export const describeDocketFamilyIdentity = (
     setFamilyKeyGrant: (mode: "grant" | "revoke") => Promise<void>;
   },
 ): void => {
-  /** What the public search's identity branch answers an entry with. */
-  const searched = async (entry: string): Promise<string[]> =>
-    (
-      await findDecisionIdsByIdentity({
-        caseLawDb: context().caseLawDb,
-        country: "CZE",
-        identity: intentOf(entry),
-      })
-    )
-      .map(String)
-      .toSorted();
-
-  /** What the lookup tool resolves an entry to. */
-  const lookedUp = async (entry: string) => {
-    const intent = intentOf(entry);
-    const rows = await lookupDecisionsByIdentity({
-      caseLawDb: context().caseLawDb,
-      country: "CZE",
-      locator: decisionIdentityLocatorOf(intent),
-    });
-    return resolveDecisionIdentity(intent, rows);
-  };
+  const { lookedUp, searched } = identityReaders(
+    () => context().caseLawDb,
+    "CZE",
+  );
 
   describe("a bare docket names its whole file", () => {
     test("siblings of one day both come back, typed ambiguous", async () => {
@@ -499,6 +519,216 @@ export const describeDocketFamilyIdentity = (
       );
       expect(await searched(`${dockets.legacy}-40`)).toEqual(
         sorted(ids.legacySibling),
+      );
+    });
+  });
+};
+
+/**
+ * The court and language a jurisdiction's rows are stored under; `courtId`
+ * is set exactly where the jurisdiction identifies courts by directory id,
+ * as the table requires.
+ */
+const GRAMMAR_SCENARIO_COURTS = {
+  AUT: { court: "Bundesverwaltungsgericht", courtId: null, language: "de" },
+  CZE: { court: "Nejvyšší správní soud", courtId: null, language: "cs" },
+  EU: { court: "Court of Justice", courtId: null, language: "en" },
+  HUN: { court: "Kúria", courtId: null, language: "hu" },
+  POL: { court: "Sąd Najwyższy", courtId: null, language: "pl" },
+  SVK: {
+    court: "Najvyšší súd Slovenskej republiky",
+    courtId: null,
+    language: "sk",
+  },
+  USA: {
+    court: "Supreme Court of the United States",
+    courtId: "scotus",
+    language: "en",
+  },
+} as const satisfies Record<
+  DecisionDocketJurisdiction,
+  {
+    readonly court: string;
+    readonly courtId: string | null;
+    readonly language: string;
+  }
+>;
+
+/** The day a file's siblings were all issued. */
+const SIBLING_DAY = "2020-08-24";
+
+/**
+ * One case file per declared docket grammar, from its identity fixture: a
+ * plain decision, a sibling of the same day stored with a part numeral, one
+ * stored with its sheet where the grammar has sheets, and a lone decision
+ * under the next number. `number` is the fixtures' own (1 to
+ * `DOCKET_IDENTITY_FIXTURE_NUMBER_MAX`), so a run on a shared database reads
+ * only its own rows.
+ */
+export type DocketGrammarFamilyScenario = ReturnType<
+  typeof docketGrammarFamilyScenario
+>;
+
+export const docketGrammarFamilyScenario = (number: number) => {
+  if (
+    !Number.isInteger(number) ||
+    number < 1 ||
+    number > DOCKET_IDENTITY_FIXTURE_NUMBER_MAX
+  ) {
+    return panic(
+      `Fixture dockets are numbered 1 to ${String(DOCKET_IDENTITY_FIXTURE_NUMBER_MAX)}`,
+    );
+  }
+  const files = Object.values(DECISION_DOCKET_GRAMMARS).map(
+    ({ jurisdiction }) => {
+      const fixture = DECISION_DOCKET_IDENTITY_FIXTURES[jurisdiction];
+      const { sheet } = fixture;
+      const filed = fixture.filed(number);
+      const ids = {
+        plain: createSafeId<"caseLawDecision">(),
+        part: createSafeId<"caseLawDecision">(),
+        sheet:
+          sheet.type === "supported" ? createSafeId<"caseLawDecision">() : null,
+        lone: createSafeId<"caseLawDecision">(),
+      };
+      const decisions = [
+        { id: ids.plain, caseNumber: filed, decisionDate: SIBLING_DAY },
+        {
+          id: ids.part,
+          caseNumber: `${filed} - ${DOCKET_IDENTITY_PART_NUMERAL}.`,
+          decisionDate: SIBLING_DAY,
+        },
+        ...(sheet.type === "supported" && ids.sheet !== null
+          ? [
+              {
+                id: ids.sheet,
+                caseNumber: `${filed} - ${sheet.held}`,
+                decisionDate: SIBLING_DAY,
+              },
+            ]
+          : []),
+        {
+          id: ids.lone,
+          caseNumber: fixture.filed(number + 1),
+          decisionDate: "2021-03-01",
+        },
+      ];
+      return { jurisdiction, fixture, filed, ids, decisions };
+    },
+  );
+  return { number, files };
+};
+
+/** Every file's decision rows, keyed by the row writer's own columns. */
+export const docketGrammarFamilyDecisionRows = (
+  { files }: DocketGrammarFamilyScenario,
+  sourceId: SafeId<"caseLawSource">,
+): (typeof caseLawDecisions.$inferInsert)[] =>
+  files.flatMap(({ decisions, jurisdiction }) => {
+    const { court, courtId, language } = GRAMMAR_SCENARIO_COURTS[jurisdiction];
+    return decisions.map(({ caseNumber, decisionDate, id }) => ({
+      id,
+      sourceId,
+      ...decisionDocketColumns({
+        caseNumber,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        country: jurisdiction,
+      }),
+      court,
+      courtId,
+      country: jurisdiction,
+      decisionDate,
+      ecli: null,
+      sourceDocumentId: `docket-grammar-family-${String(id)}`,
+      language,
+      languageGroupKey: `docket-grammar-family-${String(id)}`,
+      metadata: {},
+    }));
+  });
+
+/**
+ * Registers, for every declared grammar, what a bare docket, a part and a
+ * sheet answer with against its file. `context` is read when a test runs.
+ */
+export const describeDocketGrammarFamilyIdentity = (
+  context: () => {
+    caseLawDb: CaseLawPublicReadDb;
+    scenario: DocketGrammarFamilyScenario;
+  },
+): void => {
+  describe.each(
+    Object.values(DECISION_DOCKET_GRAMMARS).map(
+      ({ jurisdiction }) => jurisdiction,
+    ),
+  )("a %s case file", (jurisdiction) => {
+    const { lookedUp, searched } = identityReaders(
+      () => context().caseLawDb,
+      jurisdiction,
+    );
+    const fileOf = () =>
+      context().scenario.files.find(
+        (file) => file.jurisdiction === jurisdiction,
+      ) ?? panic(`The scenario holds no ${jurisdiction} file`);
+    const siblingIds = ({ ids }: ReturnType<typeof fileOf>) =>
+      sorted(ids.plain, ids.part, ...(ids.sheet === null ? [] : [ids.sheet]));
+
+    test("a bare docket in every reader spelling names the whole file", async () => {
+      const file = fileOf();
+      const { fixture, filed } = file;
+      for (const entry of [
+        filed,
+        ...fixture.readerSpellings(context().scenario.number),
+      ]) {
+        expect(await searched(entry), entry).toEqual(siblingIds(file));
+        expect(await lookedUp(entry), entry).toMatchObject({
+          status: "ambiguous",
+          reason: "several",
+        });
+      }
+    });
+
+    test("the part on a stored docket names exactly its sibling", async () => {
+      const { filed, ids } = fileOf();
+      const entry = `${filed} - ${DOCKET_IDENTITY_PART_NUMERAL}.`;
+      expect(await searched(entry)).toEqual(sorted(ids.part));
+      expect(await lookedUp(entry)).toMatchObject({
+        status: "unique",
+        basis: "selector",
+      });
+    });
+
+    // A grammar with no sheet declares why in its fixture, and the grammar
+    // tests hold it to that.
+    const { sheet } = DECISION_DOCKET_IDENTITY_FIXTURES[jurisdiction];
+    if (sheet.type === "supported") {
+      test("a sheet names exactly its sibling, and an unheld one the whole file", async () => {
+        const file = fileOf();
+        const { filed, ids } = file;
+        const held = `${filed}-${sheet.held}`;
+        expect(await searched(held)).toEqual(
+          sorted(ids.sheet ?? panic("A sheet file without its sibling")),
+        );
+        expect(await lookedUp(held)).toMatchObject({
+          status: "unique",
+          basis: "selector",
+        });
+        const unheld = `${filed}-${sheet.unheld}`;
+        expect(await searched(unheld)).toEqual(siblingIds(file));
+        expect(await lookedUp(unheld)).toMatchObject({
+          status: "ambiguous",
+          reason: "selector_unmatched",
+        });
+      });
+    }
+
+    test("a lone decision is claimed only where no sibling can hide under a sheet", async () => {
+      const { fixture, ids } = fileOf();
+      const entry = fixture.filed(context().scenario.number + 1);
+      expect(await searched(entry)).toEqual(sorted(ids.lone));
+      expect(await lookedUp(entry)).toMatchObject(
+        DECISION_DOCKETS_STORED_WITH_SHEETS[jurisdiction]
+          ? { status: "ambiguous", reason: "file_incomplete" }
+          : { status: "unique", basis: "docket" },
       );
     });
   });
