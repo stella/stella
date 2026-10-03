@@ -1753,6 +1753,7 @@
     "organization": "Szervezet",
     "organizationName": "Szervezet neve",
     "page": "{page}. oldal",
+    "paymentRetryNotice": "Fizetési probléma. A hozzáférés megtartásához frissítse a fizetési módját eddig: {date}.",
     "pin": "Rögzítés",
     "playbooks": "Playbookok",
     "preparing": "Előkészítés…",

@@ -44,7 +44,16 @@ import type {
   GuardedModelMessages,
   GuardedSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
-import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
+import {
+  getManagedOpenRouterConfiguration,
+  getManagedOpenRouterCredentialProvider,
+  type ManagedOpenRouterCredential,
+} from "@/api/lib/chat/openrouter-credential";
+import {
+  MANAGED_PROVIDER_UNAVAILABLE_CODE,
+  checkManagedProviderAvailable,
+  managedProviderUnavailable,
+} from "@/api/lib/chat/provider-data-policy";
 import { readOutputCeilingStopAsLength } from "@/api/lib/chat/provider-stream-contract";
 import {
   finishReasonOf,
@@ -78,7 +87,10 @@ import type { LayeredSystemPrompt } from "@/api/lib/tanstack-ai-caching";
 import {
   getTanStackTextModelById,
   getTanStackTextModelForRole,
+  getTanStackTextModelInfoById,
+  getTanStackTextModelInfoForRole,
   isMockTextAdapter,
+  mockAnswersForOrganization,
 } from "@/api/lib/tanstack-ai-models";
 import type {
   ResolvedTanStackTextModel,
@@ -112,7 +124,11 @@ type GenerateTanStackBaseOptions = {
   maxOutputTokens?: number | undefined;
   modelId?: string | undefined;
   /** External model-resolution boundary; supplied by focused integration tests. */
-  resolveTextModel?: typeof resolveTanStackTextModel | undefined;
+  resolveTextModel?:
+    | ((
+        options: Parameters<typeof resolveTanStackTextModel>[0],
+      ) => ResolvedTanStackTextModel | Promise<ResolvedTanStackTextModel>)
+    | undefined;
   organizationId: SafeId<"organization"> | null;
   orgAIConfig: OrgAIConfig | null | undefined;
   reasoningEffort?: ReasoningEffort | undefined;
@@ -242,7 +258,9 @@ const finishAccepted = (
 export const generateTanStackTextForRole = async (
   options: GenerateTanStackTextForRoleOptions,
 ): Promise<string> => {
-  const model = (options.resolveTextModel ?? resolveTanStackTextModel)(options);
+  const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
+    options,
+  );
   const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
@@ -300,16 +318,18 @@ export const generateTanStackTextForRole = async (
   return output;
 };
 
-export const streamTanStackTextForRole = (
+export const streamTanStackTextForRole = async function* (
   options: TanStackTextForRoleOptions,
-): AsyncIterable<string> => {
-  const model = (options.resolveTextModel ?? resolveTanStackTextModel)(options);
+): AsyncIterable<string> {
+  const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
+    options,
+  );
   const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
 
-  return streamTanStackTextDeltas({
+  yield* streamTanStackTextDeltas({
     abortController,
     analytics: options.analytics,
     caching: options.caching,
@@ -794,7 +814,9 @@ export const generateTanStackObjectForRole = async <
 }: GenerateTanStackObjectForRoleOptions<TSchema>): Promise<
   v.InferOutput<TSchema>
 > => {
-  const model = (options.resolveTextModel ?? resolveTanStackTextModel)(options);
+  const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
+    options,
+  );
   const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
@@ -838,20 +860,24 @@ export const generateTanStackObjectForRole = async <
   return v.parse(outputSchema, output);
 };
 
-export const streamTanStackObjectForRole = <TSchema extends v.GenericSchema>({
+export const streamTanStackObjectForRole = async function* <
+  TSchema extends v.GenericSchema,
+>({
   outputMode: _outputMode,
   outputSchema,
   ...options
 }: GenerateTanStackObjectForRoleOptions<TSchema>): AsyncIterable<
   TanStackStructuredOutputEvent<v.InferOutput<TSchema>>
-> => {
-  const model = (options.resolveTextModel ?? resolveTanStackTextModel)(options);
+> {
+  const model = await (options.resolveTextModel ?? resolveTanStackTextModel)(
+    options,
+  );
   const requestMessages = guardedMessagesFromInput(options);
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
 
-  return streamTanStackStructuredOutput({
+  yield* streamTanStackStructuredOutput({
     abortController,
     analytics: options.analytics,
     caching: options.caching,
@@ -1049,14 +1075,17 @@ const isStructuredOutputPartial = <TOutput>(
 ): value is TanStackStructuredOutputPartial<TOutput> =>
   typeof value === "object" && value !== null;
 
-export const resolveTanStackTextModel = ({
-  modelId,
-  organizationId,
-  orgAIConfig,
-  reasoningEffort,
-  role,
-  ...policy
-}: ResolveTextModelOptions): ResolvedTanStackTextModel => {
+export const resolveTanStackTextModel = async (
+  {
+    modelId,
+    organizationId,
+    orgAIConfig,
+    reasoningEffort,
+    role,
+    ...policy
+  }: ResolveTextModelOptions,
+  credentials = getManagedOpenRouterCredentialProvider(),
+): Promise<ResolvedTanStackTextModel> => {
   // Every inference path (chat, subagents, field generators, workflow
   // batches) resolves its model here, so this is the one seam where a
   // request is classified `ai` for the split latency SLO — a new AI
@@ -1064,15 +1093,57 @@ export const resolveTanStackTextModel = ({
   // scope (background workers).
   markAiRequest();
 
+  let managedOpenRouterCredential: ManagedOpenRouterCredential | undefined;
+  if (!orgAIConfig && !mockAnswersForOrganization(orgAIConfig)) {
+    const info = modelId
+      ? getTanStackTextModelInfoById(
+          modelId,
+          orgAIConfig,
+          role,
+          policy.dataClass,
+        )
+      : getTanStackTextModelInfoForRole(role, orgAIConfig, {
+          organizationId,
+          ...policy,
+        });
+    if (info.provider === "openrouter") {
+      const availability = checkManagedProviderAvailable(
+        info.provider,
+        policy.dataClass,
+      );
+      if (Result.isError(availability)) {
+        throw availability.error;
+      }
+      const configuration = getManagedOpenRouterConfiguration();
+      const credential = await credentials.get();
+      if (Result.isError(credential)) {
+        throw credential.error;
+      }
+      if (configuration.type === "unavailable") {
+        throw managedProviderUnavailable("openrouter");
+      }
+      managedOpenRouterCredential =
+        configuration.type === "static"
+          ? { type: "static", apiKey: credential.value }
+          : {
+              type: "federated",
+              apiKey: credential.value,
+              invalidate: () => credentials.invalidate(credential.value),
+            };
+    }
+  }
+
   return modelId
     ? getTanStackTextModelById(modelId, orgAIConfig, {
         role,
         organizationId,
         reasoningEffort,
+        managedOpenRouterCredential,
         ...policy,
       })
     : getTanStackTextModelForRole(role, orgAIConfig, {
         organizationId,
+        managedOpenRouterCredential,
         ...policy,
       });
 };

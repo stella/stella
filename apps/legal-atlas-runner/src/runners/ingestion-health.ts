@@ -82,7 +82,11 @@ export const createIngestionHealthRefresh = ({
         try: emitStoredTotalHeartbeat,
         catch: (error) => error,
       });
-      if (heartbeat.isErr() && warningStatus === "unreported") {
+      // One observation per failure episode: a success ends the episode, so
+      // a later outage is reported again.
+      if (heartbeat.isOk()) {
+        warningStatus = "unreported";
+      } else if (warningStatus === "unreported") {
         warningStatus = "reported";
         observeHeartbeatFailure(heartbeat.error);
       }
