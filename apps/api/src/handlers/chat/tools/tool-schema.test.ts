@@ -89,6 +89,7 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS,
   providerSafeJsonSchemaOptionsForTanStackProvider,
@@ -106,6 +107,7 @@ import {
   buildCreatedDocumentToolOutput,
   createWorkspaceTools,
 } from "./workspace-tools";
+import type { ChatFieldWriter } from "./workspace-tools";
 
 const organizationId = toSafeId<"organization">(
   "11111111-1111-4111-8111-111111111111",
@@ -130,6 +132,13 @@ const unusedSafeDb: SafeDb = async () => {
 };
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
+
+const activeMatterFieldWriter: ChatFieldWriter = {
+  authority: sessionMemberRole("owner"),
+  recordAuditEvent: noopAuditRecorder,
+  userId,
+  workspaceStatusById: new Map([[workspaceId, "active"]]),
+};
 
 const getChatTools = (
   props: Omit<
@@ -638,6 +647,7 @@ describe("chat tool schemas", () => {
     expect(() =>
       createWorkspaceTools({
         allowedWorkspaceIds: [workspaceId],
+        fieldWriter: activeMatterFieldWriter,
         refRegistry: createChatRefRegistry(),
         scopedDb: unusedScopedDb,
       }),
@@ -656,17 +666,24 @@ describe("chat tool schemas", () => {
     const scopedDb = asTestRaw<ScopedDb>(
       async (run: (tx: unknown) => Promise<unknown>) =>
         await run({
+          select: () => {
+            entityLookups += 1;
+            return {
+              from: () => ({
+                where: () => ({
+                  for: async () => [
+                    {
+                      currentVersionId: "88888888-8888-4888-8888-888888888888",
+                      id: entityId,
+                      kind: "document",
+                      readOnly: true,
+                    },
+                  ],
+                }),
+              }),
+            };
+          },
           query: {
-            entities: {
-              findFirst: async () => {
-                entityLookups += 1;
-                return {
-                  currentVersionId: "88888888-8888-4888-8888-888888888888",
-                  id: entityId,
-                  readOnly: true,
-                };
-              },
-            },
             properties: {
               findFirst: async () => ({
                 content: { type: "date", version: 1 },
@@ -678,6 +695,7 @@ describe("chat tool schemas", () => {
     );
     const tool = createWorkspaceTools({
       allowedWorkspaceIds: [workspaceId],
+      fieldWriter: activeMatterFieldWriter,
       refRegistry,
       scopedDb,
     })["update-entity-fields"];
@@ -756,6 +774,7 @@ describe("chat tool schemas", () => {
     const registry = createChatRefRegistry();
     const tools = createWorkspaceTools({
       allowedWorkspaceIds: [workspaceId],
+      fieldWriter: activeMatterFieldWriter,
       refRegistry: registry,
       scopedDb: unusedScopedDb,
     });
@@ -2249,6 +2268,24 @@ describe("chat tool schemas", () => {
         workspaceStatusById: new Map([[workspaceId, "active"]]),
       });
       expect(tools).not.toHaveProperty(CREATE_MATTER_DOCUMENT_TOOL_NAME);
+    });
+
+    test("offers field updates only to a role that may edit documents", () => {
+      const statuses = new Map([[workspaceId, "active" as const]]);
+      expect(
+        getChatTools({
+          ...baseArgs,
+          memberRole: "owner",
+          workspaceStatusById: statuses,
+        }),
+      ).toHaveProperty("update-entity-fields");
+      expect(
+        getChatTools({
+          ...baseArgs,
+          memberRole: "intern",
+          workspaceStatusById: statuses,
+        }),
+      ).not.toHaveProperty("update-entity-fields");
     });
 
     // `toolWorkspaceIds` includes archived matters (only "deleting" is

@@ -100,6 +100,11 @@ import type {
 } from "@/api/lib/chat/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { FIELD_VALUE_WRITE_PERMISSIONS } from "@/api/lib/fields/write-field";
+import {
+  hasMemberPermission,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 
 const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
@@ -572,6 +577,51 @@ const createAuthorizedWorkspaceDocumentTools = ({
   });
 };
 
+type CreateAuthorizedWorkspaceToolsProps = Pick<
+  GetChatToolsProps,
+  | "memberRole"
+  | "recordAuditEvent"
+  | "refRegistry"
+  | "scopedDb"
+  | "toolWorkspaceIds"
+  | "userId"
+  | "workspaceStatusById"
+> & { forValidation: boolean };
+
+/**
+ * Workspace tools write field values, so they are offered only to a member
+ * whose authority covers that write (the field owner re-checks it on every
+ * call). Validation keeps them so a persisted call still parses. When the
+ * chat is not pinned to any specific matter, `toolWorkspaceIds` is the user's
+ * full accessible set; the matter is resolved per-call by the chat client
+ * (sticky thread-local matter or matter-pick UI). A chat turn runs on the
+ * member's own session, so its authority is the unattenuated role.
+ */
+const createAuthorizedWorkspaceTools = ({
+  forValidation,
+  memberRole,
+  recordAuditEvent,
+  refRegistry,
+  scopedDb,
+  toolWorkspaceIds,
+  userId,
+  workspaceStatusById,
+}: CreateAuthorizedWorkspaceToolsProps): WorkspaceTools => {
+  const authority = sessionMemberRole(memberRole);
+  if (
+    !forValidation &&
+    !hasMemberPermission(authority, FIELD_VALUE_WRITE_PERMISSIONS)
+  ) {
+    return {};
+  }
+  return createWorkspaceTools({
+    allowedWorkspaceIds: toolWorkspaceIds,
+    fieldWriter: { authority, recordAuditEvent, userId, workspaceStatusById },
+    refRegistry,
+    scopedDb,
+  });
+};
+
 type CreateRememberToolsProps = {
   canManageWorkspaceMemory: boolean;
   organizationId: SafeId<"organization">;
@@ -955,14 +1005,15 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     tools: externalTools,
   });
 
-  // Workspace tools are always registered. When the chat is not
-  // pinned to any specific matter, `toolWorkspaceIds` is the user's
-  // full accessible set; the matter is resolved per-call by the
-  // chat client (sticky thread-local matter or matter-pick UI).
-  const workspaceTools = createWorkspaceTools({
-    allowedWorkspaceIds: toolWorkspaceIds,
+  const workspaceTools = createAuthorizedWorkspaceTools({
+    forValidation,
+    memberRole,
+    recordAuditEvent,
     refRegistry,
     scopedDb,
+    toolWorkspaceIds,
+    userId,
+    workspaceStatusById,
   });
 
   // Template library tools: list, describe, and fill templates. Their

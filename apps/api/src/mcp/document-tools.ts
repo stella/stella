@@ -23,8 +23,6 @@ import { loadEntityVersionDocxText } from "@/api/handlers/entities/version-diff-
 import { deleteEntityVersionHandler } from "@/api/handlers/entities/versions/delete";
 import { updateVersionDescriptionHandler } from "@/api/handlers/entities/versions/description/update";
 import { updateVersionLabelHandler } from "@/api/handlers/entities/versions/label/update";
-import type { UpsertFieldContent } from "@/api/handlers/fields/upsert";
-import { upsertFieldHandler } from "@/api/handlers/fields/upsert";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -51,6 +49,11 @@ import {
   entityListCursorCondition,
   entityListTimestampCursorExpr,
 } from "@/api/lib/entities/list-cursor";
+import {
+  FIELD_VALUE_WRITE_PERMISSIONS,
+  writeFieldValue,
+} from "@/api/lib/fields/write-field";
+import type { UpsertFieldContent } from "@/api/lib/fields/write-field";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -87,7 +90,10 @@ import {
   UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA,
   uploadRemoteDocumentVersion,
 } from "@/api/mcp/document-file-upload";
-import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  hasEffectiveAuthority,
+  mcpMemberAuthority,
+} from "@/api/mcp/effective-authority";
 import {
   handlePrepareFileComparisonFromLinksTool,
   PREPARE_FILE_COMPARISON_FROM_LINKS_OUTPUT_CONTRACT,
@@ -2331,9 +2337,10 @@ const toFieldContent = (content: SetFieldValueContent): UpsertFieldContent => {
 const handleSetFieldValueTool: TypedMcpToolHandler<
   v.InferInput<typeof SET_FIELD_VALUE_PROJECTION>
 > = async ({ args, context }) => {
-  const hasPermission = hasEffectiveAuthority(context, {
-    entity: ["create", "update"],
-  });
+  const hasPermission = hasEffectiveAuthority(
+    context,
+    FIELD_VALUE_WRITE_PERMISSIONS,
+  );
   if (!hasPermission) {
     return errorResult("Forbidden");
   }
@@ -2377,16 +2384,15 @@ const handleSetFieldValueTool: TypedMcpToolHandler<
   }
 
   const result = await Result.gen(() =>
-    upsertFieldHandler({
+    writeFieldValue({
       safeDb: context.safeDb,
+      authority: mcpMemberAuthority(context),
       workspaceId,
       userId: context.userId,
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
-      body: {
-        entityId,
-        propertyId: brandPersistedPropertyId(parsed.output.property_id),
-        content: toFieldContent(parsed.output.content),
-      },
+      entityId,
+      propertyId: brandPersistedPropertyId(parsed.output.property_id),
+      content: toFieldContent(parsed.output.content),
     }),
   );
   if (Result.isError(result)) {
@@ -2554,7 +2560,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       "(value: integer, optional currency: 3-letter ISO code). An empty value " +
       "clears the cell.",
     inputSchema: setFieldValueArgsSchema,
-    // Not idempotent: upsertFieldHandler unconditionally deletes/reinserts and
+    // Not idempotent: writeFieldValue unconditionally deletes/reinserts and
     // reindexes the cell and records a fresh audit event + updatedAt bump on
     // every call, so a repeat with identical args has an observable additional
     // effect (a duplicate audit entry) in this compliance context.
