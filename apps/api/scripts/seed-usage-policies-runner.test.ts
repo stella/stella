@@ -233,7 +233,7 @@ test("empty and invalid configurations produce empty files without opening the d
       expect(readFileSync(path, "utf-8")).toBe("");
     }
     let opened = false;
-    await expect(
+    expect(
       runSeedReport({
         input: "[]",
         resultsPath: nodePath.join(dir, "0.jsonl"),
