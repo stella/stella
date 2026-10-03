@@ -49,9 +49,13 @@ import type {
   UsageServiceTier,
   UsageEntitlementStatus,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
 import { currentActionCostIdentity } from "@/api/lib/usage/action-costs/context";
+import { CONFIGURED_ACCESS_STATE } from "@/api/lib/usage/configured-access";
+import { readOrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
+import { allowsInstanceModels } from "@/api/lib/usage/organization-access-state";
 
 /** A stored status this build does not know. */
 const UNRECOGNIZED_STATUS = "unrecognized" as const;
@@ -116,6 +120,30 @@ export const isEntitlementConsumableAt = (
   isConsumableEntitlementStatus(entitlement.status) &&
   entitlement.currentPeriodStart <= asOf &&
   entitlement.currentPeriodEnd > asOf;
+
+type ResolveUsageConsumptionInput = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  originalAccess: boolean;
+  currentPeriodStart: Date;
+  asOf: Date;
+};
+
+export const resolveUsageConsumption = async ({
+  tx,
+  organizationId,
+  originalAccess,
+  currentPeriodStart,
+  asOf,
+}: ResolveUsageConsumptionInput): Promise<boolean> => {
+  if (!env.FEATURE_CONFIGURED_ACCESS) {
+    return originalAccess;
+  }
+  const snapshot = await readOrganizationAccessSnapshot(tx, organizationId);
+  return snapshot?.state === CONFIGURED_ACCESS_STATE
+    ? currentPeriodStart <= asOf && allowsInstanceModels(snapshot, asOf)
+    : originalAccess;
+};
 
 const fetchEntitlement = async (
   tx: Transaction,
@@ -254,7 +282,15 @@ export const assertUsageAvailable = async ({
     };
   }
 
-  if (!isConsumableEntitlementStatus(entitlement.status)) {
+  if (
+    !(await resolveUsageConsumption({
+      tx,
+      organizationId,
+      originalAccess: isConsumableEntitlementStatus(entitlement.status),
+      currentPeriodStart: entitlement.currentPeriodStart,
+      asOf,
+    }))
+  ) {
     return {
       ok: false,
       error: new UsageLimitExceededError({

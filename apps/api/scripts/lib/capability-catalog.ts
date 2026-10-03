@@ -1196,7 +1196,27 @@ export const scanFileResponseReturns = ({
  * config. This detects capability endpoints mounted under such a hook so each is
  * either fixed (gate moved into the handler) or explicitly waived.
  */
-const ROUTE_HOOK_PATTERN = /\.(?:onBeforeHandle|beforeHandle)\s*\(/u;
+// Request-time gates on an Elysia instance: lifecycle hooks, a `guard` with a
+// `beforeHandle`, and the deployment-feature plugin. Auth, permission and
+// workspace macros are excluded (the invoke path re-derives them), and so are
+// rate limiters (every invocation draws on the invoke path's own budgets in
+// `capability-rate-limit.ts`).
+const ROUTE_HOOK_SOURCE = String.raw`\.(?:onBeforeHandle|beforeHandle|onRequest)\s*\(|\bbeforeHandle\s*:|\.use\(\s*deploymentFeatureGate\b`;
+const ROUTE_HOOK_PATTERN = new RegExp(ROUTE_HOOK_SOURCE, "u");
+const ROUTE_HOOK_OCCURRENCES = new RegExp(ROUTE_HOOK_SOURCE, "gu");
+// The one hook the invoke path reproduces: `deploymentFeatureGate(<flag>)` whose
+// argument is exactly a deployment flag (optionally opened in local dev), or a
+// call to an imported helper whose whole body is that expression.
+const FEATURE_GATE_CALL = /\.use\(\s*deploymentFeatureGate\(/u;
+const CANONICAL_FEATURE_EXPRESSION =
+  /^\s*(?:isLocalDevOpen\(\)\s*\|\|\s*)?env\.(?<flag>FEATURE_[A-Z0-9_]+)\s*$/u;
+const HELPER_CALL = /^\s*(?<name>[A-Za-z_$][\w$]*)\(\)\s*$/u;
+// A `.use(x)` of a plain identifier mounts a plugin. One defined in this file
+// with `new Elysia`, or imported from a relative path or the handler tree, is a
+// child route: it inherits the hook, but its handlers are not attributable here.
+const PLUGIN_MOUNT_PATTERN = /\.use\(\s*(?<local>[A-Za-z_$][\w$]*)\s*\)/gu;
+const ANY_IMPORT_STATEMENT =
+  /import\s+(?<clause>[^;\s](?:[^;]*[^;\s])?)\s+from\s+["'](?<path>[^"']+)["']/gu;
 const ROUTE_HANDLER_MOUNT_PATTERN =
   /\b(?<local>[A-Za-z_$][\w$]*)\.(?:default\.)?handler\b/gu;
 const ROUTE_IMPORT_STATEMENT =
@@ -1263,21 +1283,139 @@ const importToCapabilityId = ({
   return deriveCapabilityId({ file, exportName });
 };
 
-/** Capability ids mounted under a hooked Elysia instance in one route file. */
-const hookGuardedIdsInFile = ({
+/** Local name -> module path for every import in a file. */
+const parseImportPaths = (source: string): Map<string, string> => {
+  const paths = new Map<string, string>();
+  for (const match of source.matchAll(ANY_IMPORT_STATEMENT)) {
+    const clause = match.groups?.["clause"]?.trim() ?? "";
+    const path = match.groups?.["path"] ?? "";
+    const defaultName = clause.startsWith("{")
+      ? undefined
+      : IDENTIFIER_HEAD.exec(clause)?.groups?.["name"];
+    if (defaultName !== undefined) {
+      paths.set(defaultName, path);
+    }
+    const body = NAMED_IMPORT_BLOCK.exec(clause)?.groups?.["body"] ?? "";
+    for (const part of body.split(",")) {
+      const trimmed = part.trim();
+      const local =
+        ALIASED_IMPORT.exec(trimmed)?.groups?.["alias"] ??
+        PLAIN_IDENTIFIER.exec(trimmed)?.groups?.["name"];
+      if (local !== undefined) {
+        paths.set(local, path);
+      }
+    }
+  }
+  return paths;
+};
+
+/** The text between the parenthesis opened before `from` and its match. */
+const balancedArgument = (text: string, from: number): string | undefined => {
+  let depth = 1;
+  for (let index = from; index < text.length; index++) {
+    if (text[index] === "(") {
+      depth++;
+    } else if (text[index] === ")") {
+      depth--;
+      if (depth === 0) {
+        return text.slice(from, index);
+      }
+    }
+  }
+  return undefined;
+};
+
+export type RouteModuleReader = (importPath: string) => string | undefined;
+
+/**
+ * The deployment flag a block's hooks reduce to: exactly one hook, and it is a
+ * `deploymentFeatureGate` over a canonical flag expression (directly or through
+ * an imported helper). Anything else (a custom hook, a compound or inverted
+ * condition, several hooks) yields undefined.
+ */
+const reproducedFeatureFlag = ({
+  block,
+  importPaths,
+  readModule,
+}: {
+  block: string;
+  importPaths: ReadonlyMap<string, string>;
+  readModule: RouteModuleReader;
+}): string | undefined => {
+  if ((block.match(ROUTE_HOOK_OCCURRENCES) ?? []).length !== 1) {
+    return undefined;
+  }
+  const gate = FEATURE_GATE_CALL.exec(block);
+  if (gate === null) {
+    return undefined;
+  }
+  const argument = balancedArgument(block, gate.index + gate[0].length);
+  if (argument === undefined) {
+    return undefined;
+  }
+  const direct = CANONICAL_FEATURE_EXPRESSION.exec(argument)?.groups?.["flag"];
+  if (direct !== undefined) {
+    return direct;
+  }
+  const helper = HELPER_CALL.exec(argument)?.groups?.["name"];
+  const helperPath = helper === undefined ? undefined : importPaths.get(helper);
+  const helperSource =
+    helperPath === undefined ? undefined : readModule(helperPath);
+  if (helper === undefined || helperSource === undefined) {
+    return undefined;
+  }
+  const body = new RegExp(
+    String.raw`export const ${helper} = \(\)(?:: boolean)? =>\s*(?<body>[^;{]+);`,
+    "u",
+  ).exec(helperSource)?.groups?.["body"];
+  return body === undefined
+    ? undefined
+    : CANONICAL_FEATURE_EXPRESSION.exec(body)?.groups?.["flag"];
+};
+
+type HookGuardedMounts = {
+  /** Every hooked mount: capability id and the flag its block reduces to. */
+  mounts: { id: string; flag: string | undefined }[];
+  childRoutes: string[];
+};
+
+/** Capability mounts and child routes under hooked Elysia instances in one route file. */
+const hookGuardedMountsInFile = ({
   source,
   capabilityIds,
+  readModule,
 }: {
   source: string;
   capabilityIds: ReadonlySet<string>;
-}): Set<string> => {
+  readModule: RouteModuleReader;
+}): HookGuardedMounts => {
   const imports = parseHandlerImports(source);
-  const guarded = new Set<string>();
+  const importPaths = parseImportPaths(source);
+  const mounts: { id: string; flag: string | undefined }[] = [];
+  const childRoutes: string[] = [];
   // Each `const x = new Elysia(...)...` chain is one block; a hook applies to
   // routes chained on the same instance, so scan per block.
   for (const block of source.split(/(?=new Elysia\s*\()/u)) {
     if (!ROUTE_HOOK_PATTERN.test(block)) {
       continue;
+    }
+    const flag = reproducedFeatureFlag({ block, importPaths, readModule });
+    for (const plugin of block.matchAll(PLUGIN_MOUNT_PATTERN)) {
+      const local = plugin.groups?.["local"];
+      if (local === undefined) {
+        continue;
+      }
+      const path = importPaths.get(local);
+      const childRoute =
+        path === undefined
+          ? new RegExp(String.raw`\b${local}\s*=\s*new Elysia\b`, "u").test(
+              source,
+            )
+          : path.startsWith(".") ||
+            path.startsWith(`${HANDLER_IMPORT_ALIAS_PREFIX}handlers/`);
+      if (childRoute) {
+        childRoutes.push(local);
+      }
     }
     for (const mount of block.matchAll(ROUTE_HANDLER_MOUNT_PATTERN)) {
       const local = mount.groups?.["local"];
@@ -1285,11 +1423,11 @@ const hookGuardedIdsInFile = ({
       const id =
         imported === undefined ? undefined : importToCapabilityId(imported);
       if (id !== undefined && capabilityIds.has(id)) {
-        guarded.add(id);
+        mounts.push({ id, flag });
       }
     }
   }
-  return guarded;
+  return { mounts, childRoutes };
 };
 
 export type RouteHookGuardViolation = { routeFile: string; id: string };
@@ -1297,29 +1435,55 @@ export type RouteHookGuardViolation = { routeFile: string; id: string };
 export type RouteHookGuardScan = {
   /** Hook-guarded capability endpoints that are not waived. */
   violations: RouteHookGuardViolation[];
+  /** Child routes mounted under a hook: their handlers cannot be attributed. */
+  childRouteMounts: { routeFile: string; route: string }[];
   /** Waiver ids no longer mounted under any route hook (remove them). */
   staleWaivers: string[];
 };
 
 /**
- * Scan route files for capability endpoints wrapped in a route-level
- * `onBeforeHandle`/`beforeHandle` hook that the generic invoke path would
- * bypass. Each hit must be waived (id -> justification, the gate lives in the
+ * Scan route files for capability endpoints wrapped in a route-level hook
+ * (`onBeforeHandle`/`beforeHandle`/`onRequest`, a `guard` with `beforeHandle`,
+ * the deployment-feature or rate-limit plugin) that the generic invoke path
+ * would bypass. Each hit must be waived (id -> justification, the gate lives in the
  * handler config) or the export fails; a waiver no longer matched is stale.
  */
 export const scanRouteHookGuards = ({
   routeFiles,
   capabilityIds,
+  capabilityFeatures = new Map(),
+  readModule = () => undefined,
   waivedIds,
 }: {
   routeFiles: readonly { id: string; source: string }[];
   capabilityIds: ReadonlySet<string>;
+  /**
+   * Capability id -> its catalog `feature` tag. A hook that only checks that
+   * same flag is reproduced by the invoke path's feature gate.
+   */
+  capabilityFeatures?: ReadonlyMap<string, string | undefined>;
+  /** Reads an imported module (`@/api/...`), for feature-gate helpers. */
+  readModule?: RouteModuleReader;
   waivedIds: ReadonlySet<string>;
 }): RouteHookGuardScan => {
   const violations: RouteHookGuardViolation[] = [];
+  const childRouteMounts: { routeFile: string; route: string }[] = [];
   const detected = new Set<string>();
   for (const { id: routeFile, source } of routeFiles) {
-    for (const id of hookGuardedIdsInFile({ source, capabilityIds })) {
+    const found = hookGuardedMountsInFile({
+      source,
+      capabilityIds,
+      readModule,
+    });
+    for (const route of found.childRoutes) {
+      childRouteMounts.push({ routeFile, route });
+    }
+    // Every hooked mount of a capability must be reproduced on its own: a
+    // second mount under another hook is a gate of its own.
+    for (const { id, flag } of found.mounts) {
+      if (flag !== undefined && capabilityFeatures.get(id) === flag) {
+        continue;
+      }
       detected.add(id);
       if (!waivedIds.has(id)) {
         violations.push({ routeFile, id });
@@ -1333,7 +1497,7 @@ export const scanRouteHookGuards = ({
     (a, b) =>
       a.id.localeCompare(b.id) || a.routeFile.localeCompare(b.routeFile),
   );
-  return { violations, staleWaivers };
+  return { violations, childRouteMounts, staleWaivers };
 };
 
 export type ScopeComparison =

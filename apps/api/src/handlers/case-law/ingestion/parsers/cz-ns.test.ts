@@ -718,3 +718,18 @@ describe("source table text retention", () => {
     expect(table?.rows.at(0)?.at(0)?.header).toBe(true);
   });
 });
+
+test("retains a nested table inside its outer cell once", () => {
+  const parsed = parseNsDecisionHtml(
+    baseInput(
+      '<table id="box-table-a"></table><table><tr><td>Outer<table><tr><td>qzmarkerInner</td></tr></table></td></tr></table>',
+    ),
+  );
+  const tables = parsed.documentAst.blocks.filter(
+    (block) => block.type === "table",
+  );
+  expect(tables).toHaveLength(1);
+  expect(tables.at(0)?.rows).toHaveLength(1);
+  expect(tables.at(0)?.rows.at(0)?.at(0)?.plainText).toBe("OuterqzmarkerInner");
+  expect(parsed.fulltext.split("qzmarkerInner").length - 1).toBe(1);
+});

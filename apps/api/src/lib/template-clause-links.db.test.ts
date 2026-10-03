@@ -8,6 +8,8 @@ import {
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
+
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -21,7 +23,10 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
-import { syncAllClausesHandler } from "@/api/lib/template-clause-links";
+import {
+  syncAllClausesHandler,
+  syncClauseHandler,
+} from "@/api/lib/template-clause-links";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -239,6 +244,15 @@ beforeEach(async () => {
   ];
   await testDb.transaction(async (tx) => {
     await tx.execute(sql.raw("RESET ROLE"));
+    await tx
+      .update(clauseVersions)
+      .set({ body: clauseBody })
+      .where(
+        inArray(clauseVersions.id, [
+          seeded.alpha.currentVersionId,
+          seeded.beta.currentVersionId,
+        ]),
+      );
     for (const [linkId, clauseVersionId] of stalePins) {
       await tx
         .update(templateClauses)
@@ -276,3 +290,44 @@ test("a sync after a sync finds nothing left to repoint", async () => {
   expect(pinned.get(linkIds.alphaOutdated)).toBe(seeded.alpha.currentVersionId);
   expect(pinned.get(linkIds.betaOutdated)).toBe(seeded.beta.currentVersionId);
 });
+
+test.each(["single", "bulk"] as const)(
+  "%s sync refuses an invalid publication before changing links or recording audits",
+  async (mode) => {
+    const target = mode === "single" ? seeded.alpha : seeded.beta;
+    await testDb
+      .update(clauseVersions)
+      .set({ body: [{ text: "{% if %}", isDirective: true }] })
+      .where(eq(clauseVersions.id, target.currentVersionId));
+    const before = await pinnedVersionByLinkId();
+    let auditCalls = 0;
+    const recordAuditEvent: AuditRecorder = async () => {
+      auditCalls++;
+    };
+    const result =
+      mode === "single"
+        ? await syncClauseHandler({
+            scopedDb,
+            organizationId,
+            templateId,
+            linkId: linkIds.alphaOutdated,
+            recordAuditEvent,
+          })
+        : await syncAllClausesHandler({
+            scopedDb,
+            organizationId,
+            templateId,
+            recordAuditEvent,
+          });
+    expect(result).toMatchObject({
+      code: 422,
+      response: {
+        code: CLAUSE_DIRECTIVES_INVALID_CODE,
+        retryable: false,
+        issues: [{ path: "body.0" }],
+      },
+    });
+    expect(await pinnedVersionByLinkId()).toEqual(before);
+    expect(auditCalls).toBe(0);
+  },
+);

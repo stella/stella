@@ -1,9 +1,23 @@
 import type { Context } from "elysia";
 
 import {
+  CHAT_TURN_ID_HEADER,
+  CLAUSE_WARNINGS_HEADER,
+  REQUEST_ID_HEADER,
+} from "@stll/api-contract";
+
+import {
   normalizeResponseStatus,
   resolveResponseStatus,
 } from "@/api/lib/observability/response-status";
+
+export const CORS_EXPOSED_HEADERS = [
+  "Content-Disposition",
+  "X-Ai-Field-Errors",
+  CLAUSE_WARNINGS_HEADER,
+  REQUEST_ID_HEADER,
+  CHAT_TURN_ID_HEADER,
+];
 
 export const CACHE_CONTROL_HEADER = "Cache-Control";
 export const PRIVATE_CACHE_CONTROL = "private, no-store";
