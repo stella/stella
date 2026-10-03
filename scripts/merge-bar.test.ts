@@ -407,7 +407,7 @@ case "$*" in
     esac;;
   *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' '[]';;
   *enqueuePullRequest*)
-    case "$*" in *'mergeQueueEntry { id position jump state headCommit { oid } }'*) ;; *) exit 97;; esac
+    case "$*" in *'mergeQueueEntry { id position jump state }'*) ;; *) exit 97;; esac
     printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"id":"entry","position":1,"jump":${mutationJump},"state":"QUEUED","headCommit":{"oid":"${HEAD_SHA}"}}}}}';;
   *'mergeQueue(branch'*)
     case "$*" in *'position jump state pullRequest'*) ;; *) exit 98;; esac
@@ -3048,7 +3048,11 @@ type ArmFixtureOptions = {
   enabledAt?: string;
   afterHead?: string;
   afterEnabledAt?: string | null;
-  queued?: boolean;
+  // Which reads see a queue entry: every read, or only the verification read
+  // (auto-merge enqueued the PR in between).
+  queued?: "every-read" | "verification-read";
+  // The entry as GitHub reports it; defaults to an unbuilt entry.
+  queueEntry?: Record<string, unknown>;
   jump?: boolean;
   checksSucceeded?: boolean;
 };
@@ -3061,12 +3065,21 @@ const runArmFixture = (options: ArmFixtureOptions = {}) => {
     state: "QUEUED",
     headCommit: { oid: HEAD_SHA },
   };
-  const state = (timestamp: string | null, head = HEAD_SHA) => ({
+  const queueEntry = options.queueEntry ?? entry;
+  const state = (
+    timestamp: string | null,
+    head = HEAD_SHA,
+    read: "first" | "later" = "later",
+  ) => ({
     id: "PR_fixture",
     headRefOid: head,
     updatedAt: "2026-10-02T09:00:00Z",
     autoMergeRequest: timestamp === null ? null : { enabledAt: timestamp },
-    mergeQueueEntry: options.queued ? entry : null,
+    mergeQueueEntry:
+      options.queued === "every-read" ||
+      (options.queued === "verification-read" && read === "later")
+        ? queueEntry
+        : null,
   });
   const writes: { query: string; variables: { id: string; sha: string } }[] =
     [];
@@ -3079,7 +3092,7 @@ const runArmFixture = (options: ArmFixtureOptions = {}) => {
     readState: () => {
       reads += 1;
       return reads === 1
-        ? state(options.initialEnabledAt ?? null)
+        ? state(options.initialEnabledAt ?? null, HEAD_SHA, "first")
         : state(
             options.afterEnabledAt === undefined
               ? enabledAt
@@ -3189,14 +3202,62 @@ describe("verified merge handoff", () => {
   });
   test("an existing queue entry for this head needs no write", () => {
     const { result, writes } = runArmFixture({
-      queued: true,
+      queued: "every-read",
       initialEnabledAt: "2026-10-02T08:41:00Z",
+    });
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.kind).toBe("already-queued");
+    }
+    expect(writes).toHaveLength(0);
+  });
+  // Recorded from the stella/stella queue (2026-10-03): once the merge group
+  // is built, `headCommit` is the group commit, never the pull request head.
+  const builtGroupEntry = {
+    id: "MQE_recorded",
+    position: 2,
+    jump: false,
+    state: "AWAITING_CHECKS",
+    headCommit: { oid: "307e6cc2807f4c12fec4622174c422ce3fb6101a" },
+  };
+  test("an entry whose merge group is built is already queued, not a head mismatch", () => {
+    const { result, writes } = runArmFixture({
+      queued: "every-read",
+      queueEntry: builtGroupEntry,
+      initialEnabledAt: "2026-10-02T08:41:00Z",
+    });
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toEqual({
+        kind: "already-queued",
+        entry: { position: 2, jump: false, state: "AWAITING_CHECKS" },
+      });
+    }
+    expect(writes).toHaveLength(0);
+  });
+  test("auto-merge enqueuing into a built group during verification is queued", () => {
+    const { result, writes } = runArmFixture({
+      initialEnabledAt: "2026-10-02T10:00:00Z",
+      queued: "verification-read",
+      queueEntry: builtGroupEntry,
     });
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value.kind).toBe("queued");
     }
     expect(writes).toHaveLength(0);
+  });
+  test("a queue entry read with a moved head is still refused", () => {
+    const { result } = runArmFixture({
+      initialEnabledAt: "2026-10-02T10:00:00Z",
+      queued: "verification-read",
+      queueEntry: builtGroupEntry,
+      afterHead: OTHER_SHA,
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toBe("NOT ARMED: HEAD_MOVED_DURING_ARMING");
+    }
   });
   test("a trustworthy existing request is verified without writes", () => {
     const { result, writes, reads } = runArmFixture({
@@ -3344,6 +3405,92 @@ esac
       "enable",
       "arm-read",
     ]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("the real CLI reports ALREADY QUEUED when an earlier arm's entry has a built merge group", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-queued-"));
+  const executable = path.join(directory, "gh");
+  const pull = {
+    id: "PR_fixture",
+    number: 123,
+    title: "fix: verify merge handoff",
+    isCrossRepository: false,
+    state: "OPEN",
+    isDraft: false,
+    mergeable: "MERGEABLE",
+    headRefOid: HEAD_SHA,
+    baseRefName: "main",
+    updatedAt: "2026-10-02T09:00:00Z",
+    autoMergeRequest: null,
+    mergeQueueEntry: null,
+  };
+  // The gate read sees no entry; by the arm read the earlier auto-merge has
+  // enqueued the PR and GitHub has built its group (recorded entry shape).
+  const armed = {
+    ...pull,
+    autoMergeRequest: { enabledAt: "2026-10-02T08:41:00Z" },
+    mergeQueueEntry: {
+      id: "MQE_recorded",
+      position: 2,
+      jump: false,
+      state: "AWAITING_CHECKS",
+      headCommit: { oid: "307e6cc2807f4c12fec4622174c422ce3fb6101a" },
+    },
+  };
+  writeFileSync(
+    executable,
+    `#!/bin/sh
+case "$*" in
+  *PullRequestAutoMerge*|*enqueuePullRequest*) exit 94;;
+esac
+case "$*" in
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
+  *timelineItems*) printf '%s\\n' '[]';;
+  *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
+  *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *check-runs*) printf '1\\tci-result\\tin_progress\\t\\n';;
+  *updatedAt*) printf '%s\\n' "$FIXTURE_ARM_RESPONSE";;
+  *'api graphql'*) printf '%s\\n' "$FIXTURE_PULL_RESPONSE";;
+  *headRefOid*) printf '%s\\n' "$FIXTURE_HEAD_RESPONSE";;
+  *) printf '%s\\n' "Unexpected fixture command: $*" >&2; exit 93;;
+esac
+`,
+  );
+  chmodSync(executable, 0o700);
+  try {
+    const result = Bun.spawnSync({
+      cmd: [
+        process.execPath,
+        fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
+        "123",
+        "--repo",
+        PRIVATE_REPO,
+      ],
+      env: {
+        ...process.env,
+        PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
+        GH_READ_TOKEN: "read-fixture",
+        GH_TOKEN: "write-fixture",
+        STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW: "",
+        FIXTURE_PULL_RESPONSE: JSON.stringify({
+          data: { repository: { pullRequest: pull } },
+        }),
+        FIXTURE_ARM_RESPONSE: JSON.stringify({
+          data: { repository: { pullRequest: armed } },
+        }),
+        FIXTURE_HEAD_RESPONSE: JSON.stringify({ headRefOid: HEAD_SHA }),
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.stderr.toString()).not.toContain("QUEUE_HEAD_MISMATCH");
+    expect(result.stdout.toString()).toContain(
+      `verdict: ALREADY QUEUED at ${HEAD_SHA} (position 2, AWAITING_CHECKS)`,
+    );
+    expect(result.exitCode).toBe(0);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
