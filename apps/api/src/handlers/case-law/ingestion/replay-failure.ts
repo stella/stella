@@ -3,6 +3,8 @@ import { TaggedError } from "better-result";
 import { getPgDriverErrorCode, getPgErrorCode } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 
+export const MAX_REPLAY_ROW_READMISSIONS = 3;
+
 export const REPLAY_PREVIEW_FAILURE = {
   RETRY_EXHAUSTED: "preview-retry-exhausted",
 } as const;

@@ -182,7 +182,10 @@ const hasDailyAllowance = async ({
                 ),
                 sql`${caseLawReplayBatches.id} LIKE ${`${escapeLike(`${source.id}:${source.currentParserVersion}:`)}%${escapeLike(BACKGROUND_REPLAY_PREVIEW_SUFFIX)}`}`,
               )
-            : eq(caseLawReplayBatches.status, "reserved"),
+            : inArray(caseLawReplayBatches.status, [
+                "reserved",
+                "retry-exhausted",
+              ]),
           or(
             isNull(caseLawReplayBatches.retryAt),
             lte(
@@ -286,7 +289,10 @@ const chooseSource = async (
               .where(
                 and(
                   eq(caseLawReplayBatches.sourceId, source.id),
-                  eq(caseLawReplayBatches.status, "reserved"),
+                  inArray(caseLawReplayBatches.status, [
+                    "reserved",
+                    "retry-exhausted",
+                  ]),
                   or(
                     isNull(caseLawReplayBatches.retryAt),
                     lte(
@@ -626,7 +632,7 @@ const pendingInTransaction = async (
       .where(
         and(
           eq(caseLawReplayBatches.sourceId, source.id),
-          eq(caseLawReplayBatches.status, "reserved"),
+          inArray(caseLawReplayBatches.status, ["reserved", "retry-exhausted"]),
           or(
             isNull(caseLawReplayBatches.retryAt),
             lte(
@@ -691,6 +697,35 @@ const pendingInTransaction = async (
   }
   if (!(await admitDailyRow(tx, { source, batchId: row.id, utcDay }))) {
     return { type: "budget-exhausted" } as const;
+  }
+  if (row.status === "retry-exhausted") {
+    // The checkpoint lock serializes readmission and daily budget admission.
+    await tx
+      // audit: skip — public case-law corpus bookkeeping, no workspace data
+      .update(caseLawReplayBatches)
+      .set({
+        status: "reserved",
+        readmissions: row.readmissions + 1,
+        attempts: 0,
+        systemicFailures: 0,
+        systemicProgress: 0,
+        attemptState: "idle",
+        failed: 0,
+        retryAt: null,
+        completedAt: null,
+      })
+      .where(eq(caseLawReplayBatches.id, row.id));
+    await recordReplayMaintenanceAuditEvent(tx, {
+      sourceId: source.id,
+      action: "receipt-reserved",
+      resourceId: row.id,
+      details: {
+        readmissions: row.readmissions + 1,
+        failureCode:
+          row.failureCode ?? panic("Exhausted replay has no failure code"),
+      },
+      createdAt: new Date(now),
+    });
   }
   return { type: "reserved", batch: reservationBatch(source, row) } as const;
 };
@@ -883,10 +918,28 @@ const reserveBatch = async (
       batch: reservationBatch(source, reserved),
     } as const;
   });
+type ExhaustedRetryStateOptions = { readmissions: number; now: number };
+
+const exhaustedRetryState = ({
+  readmissions,
+  now,
+}: ExhaustedRetryStateOptions) =>
+  readmissions >= BACKGROUND_REPLAY_LIMITS.maxRowReadmissions
+    ? ({
+        status: "retry-terminal",
+        retryAt: null,
+        completedAt: new Date(now),
+      } as const)
+    : ({
+        status: "retry-exhausted",
+        retryAt: new Date(now + BACKGROUND_REPLAY_LIMITS.rowReadmissionDelayMs),
+        completedAt: null,
+      } as const);
+
 const pickUpBatch = async (
   { db, now }: ReplayStoreContext,
   batch: BackgroundReplayBatch,
-): Promise<"ready" | "failed" | "waiting"> =>
+): Promise<"ready" | "retry-exhausted" | "retry-terminal" | "waiting"> =>
   await withReplayTransaction(db, async (tx) => {
     await lockCheckpoint(tx, batch.source);
     const receipt =
@@ -917,18 +970,41 @@ const pickUpBatch = async (
       if ((decision?.parserVersion ?? -1) >= batch.targetParserVersion) {
         return "ready";
       }
+      const retryState = exhaustedRetryState({
+        readmissions: receipt.readmissions,
+        now: now(),
+      });
+      const failureCode = receipt.failureCode ?? "unexpected";
       await tx
         // audit: skip — public case-law corpus bookkeeping, no workspace data
         .update(caseLawReplayBatches)
         .set({
-          status: "failed",
+          ...retryState,
+          attemptState: "idle",
+          failureCode,
           failed: 1,
-          retryAt: null,
-          completedAt: new Date(now()),
         })
         .where(eq(caseLawReplayBatches.id, batch.id));
 
-      return "failed";
+      const { status } = retryState;
+      await recordReplayMaintenanceAuditEvent(tx, {
+        sourceId: batch.source.id,
+        action: "receipt-failed",
+        resourceId: batch.id,
+        details: {
+          status,
+          readmissions: receipt.readmissions,
+          failureCode,
+        },
+        createdAt: new Date(now()),
+      });
+      logger.warn("case_law_replay.retry_exhausted", {
+        batchId: batch.id,
+        status,
+        readmissions: receipt.readmissions,
+        failureCode,
+      });
+      return status;
     }
     const attempts = receipt.attempts + 1;
     const delay = Math.min(
@@ -1119,7 +1195,14 @@ const recordFailure = async (
   { db, now, beforeComplete }: ReplayStoreContext,
   batch: BackgroundReplayBatch,
   failure: ReplayFailureOptions,
-): Promise<"retryable" | "failed" | "applied" | "isolated"> => {
+): Promise<
+  | "retryable"
+  | "failed"
+  | "applied"
+  | "isolated"
+  | "retry-exhausted"
+  | "retry-terminal"
+> => {
   await beforeComplete?.();
   return await withReplayTransaction(db, async (tx) => {
     const checkpoint = await lockCheckpoint(tx, batch.source);
@@ -1227,6 +1310,13 @@ const recordFailure = async (
       BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
       BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs * 2 ** Math.max(0, attempts - 1),
     );
+    const retryState = exhausted
+      ? exhaustedRetryState({ readmissions: receipt.readmissions, now: now() })
+      : ({
+          status: "reserved",
+          retryAt: new Date(now() + retryDelay),
+          completedAt: null,
+        } as const);
     // persists bounded owner-only retry state before advancing the sweep
     await tx
       // audit: skip — public case-law corpus bookkeeping, no workspace data
@@ -1237,19 +1327,14 @@ const recordFailure = async (
         systemicProgress,
         attemptState: "idle",
         failed: 1,
-        status: exhausted ? "failed" : "reserved",
-        retryAt: exhausted ? null : new Date(now() + retryDelay),
+        ...retryState,
         failureCode: failure.code,
         failureMessageClass: failure.messageClass,
         outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
         durationMs: Math.ceil(failure.durationMs),
         gateVerdict: failure.verdict,
-        completedAt: exhausted ? new Date(now()) : null,
       })
       .where(eq(caseLawReplayBatches.id, batch.id));
-    if (exhausted) {
-      // poison rows are excluded only for the failed parser version
-    }
     const systemicHoldCount = checkpoint.batch.holdCount + 1;
     const sourceDelay = Math.min(
       BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
@@ -1282,13 +1367,24 @@ const recordFailure = async (
       resourceId: batch.id,
       details: {
         attempts,
-        status: exhausted ? "failed" : "reserved",
+        readmissions: receipt.readmissions,
+        status: retryState.status,
         failureCode: failure.code,
       },
       createdAt: new Date(now()),
     });
     if (exhausted) {
-      return "failed";
+      const { status } = exhaustedRetryState({
+        readmissions: receipt.readmissions,
+        now: now(),
+      });
+      logger.warn("case_law_replay.retry_exhausted", {
+        batchId: batch.id,
+        status,
+        readmissions: receipt.readmissions,
+        failureCode: failure.code,
+      });
+      return status;
     }
     return isolated ? "isolated" : "retryable";
   });
@@ -1420,7 +1516,14 @@ const completeBatch = async (
     healthyEvidence = "none",
   }: CompleteBatchOptions,
 ): Promise<
-  "applied" | "blocked" | "unchanged" | "retryable" | "isolated" | "failed"
+  | "applied"
+  | "blocked"
+  | "unchanged"
+  | "retryable"
+  | "isolated"
+  | "failed"
+  | "retry-exhausted"
+  | "retry-terminal"
 > => {
   const { db, now, beforeCheckpoint, beforeComplete } = context;
   if (report.id !== batch.decisionId) {
@@ -1696,6 +1799,8 @@ export const buildReplayRetirementQuery = (tx: Transaction, limit: number) => {
           "completed",
           "superseded",
           "failed",
+          "retry-exhausted",
+          "retry-terminal",
           "blocked",
         ]),
       ),
@@ -1878,7 +1983,11 @@ const recordTick = async (
       sourceId,
       action: "tick-recorded",
       resourceId: sourceId,
-      details: { ticksWithoutProgress: row.ticksWithoutProgress },
+      details: {
+        ticksWithoutProgress: row.ticksWithoutProgress,
+        retryExhausted: report.retryExhausted,
+        retryTerminal: report.retryTerminal,
+      },
       createdAt: new Date(now()),
     });
     return row;

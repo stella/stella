@@ -1076,6 +1076,13 @@ const replayRow = async ({
     {
       ...(signal === undefined ? {} : { signal }),
       ...(s3Policy === undefined ? {} : { s3Policy }),
+      // The payload travels with the result, always, whatever the adapter put
+      // in it. The pipeline writes the row's raw-payload pointer from the
+      // result it is handed, so a result that carried no payload would clear
+      // the stored key and leave the row unreplayable — it would destroy the
+      // one thing that makes this local. These are the bytes this run read,
+      // and the pipeline keys the object on their own hash, so it recognises
+      // the key the row already holds and skips the re-upload.
       input: {
         ...reparsed.result,
         sourceRawBytes: raw,
@@ -1084,6 +1091,8 @@ const replayRow = async ({
       },
       sourceId,
       scopedDb,
+      // The replay observed the stored payload now. The pipeline records this
+      // as the observation's time, which is what orders it against a crawl.
       observedAt: new Date(),
       observationOrder,
       refresh: DECISION_REFRESH.ALWAYS,

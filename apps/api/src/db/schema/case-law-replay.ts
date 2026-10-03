@@ -4,6 +4,7 @@ import type { BackgroundReplaySource } from "@/api/handlers/case-law/ingestion/b
 import type { ReplayRowOutcome } from "@/api/handlers/case-law/ingestion/replay";
 import {
   REPLAY_FAILURE_CODES,
+  MAX_REPLAY_ROW_READMISSIONS,
   type ReplayFailure,
   type ReplayPreviewFailure,
 } from "@/api/handlers/case-law/ingestion/replay-failure";
@@ -16,6 +17,8 @@ const REPLAY_ATTEMPT_STATES = ["idle", "picked-up"] as const;
 
 export const REPLAY_BATCH_STATUSES = [
   "reserved",
+  "retry-exhausted",
+  "retry-terminal",
   "completed",
   "superseded",
   "failed",
@@ -59,6 +62,7 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
     completedAt: timestamptz("completed_at"),
     supersededAt: timestamptz("superseded_at"),
     attempts: p.integer().default(0).notNull(),
+    readmissions: p.integer().default(0).notNull(),
     systemicFailures: p.integer("systemic_failures").default(0).notNull(),
     systemicProgress: p
       .bigint("systemic_progress", { mode: "number" })
@@ -95,7 +99,7 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
       .index("case_law_replay_batches_retire_idx")
       .on(t.sourceId, t.parserVersionTo, t.id)
       .where(
-        sql`${t.supersededAt} IS NULL AND ${t.status} IN ('completed', 'superseded', 'failed', 'blocked')`,
+        sql`${t.supersededAt} IS NULL AND ${t.status} IN ('completed', 'superseded', 'failed', 'retry-exhausted', 'retry-terminal', 'blocked')`,
       ),
     p.check(
       "case_law_replay_batches_failure_code_check",
@@ -120,7 +124,11 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
     ),
     p.check(
       "case_law_replay_batches_counts_check",
-      sql`${t.systemicFailures} >= 0 AND ${t.systemicProgress} >= 0 AND ${t.attempts} >= 0 AND ${t.attempted} > 0 AND ${t.applied} >= 0 AND ${t.blocked} >= 0 AND ${t.failed} >= 0 AND ${t.applied} + ${t.blocked} + ${t.failed} <= ${t.attempted} AND ${t.durationMs} >= 0`,
+      sql`${t.readmissions} >= 0 AND ${t.readmissions} <= ${MAX_REPLAY_ROW_READMISSIONS} AND ${t.systemicFailures} >= 0 AND ${t.systemicProgress} >= 0 AND ${t.attempts} >= 0 AND ${t.attempted} > 0 AND ${t.applied} >= 0 AND ${t.blocked} >= 0 AND ${t.failed} >= 0 AND ${t.applied} + ${t.blocked} + ${t.failed} <= ${t.attempted} AND ${t.durationMs} >= 0`,
+    ),
+    p.check(
+      "case_law_replay_batches_readmission_check",
+      sql`(${t.status} NOT IN ('retry-exhausted', 'retry-terminal')) OR (${t.failureCode} IS NOT NULL AND ${t.attemptState} = 'idle' AND ((${t.status} = 'retry-exhausted' AND ${t.retryAt} IS NOT NULL AND ${t.readmissions} < ${MAX_REPLAY_ROW_READMISSIONS}) OR (${t.status} = 'retry-terminal' AND ${t.retryAt} IS NULL AND ${t.readmissions} = ${MAX_REPLAY_ROW_READMISSIONS})))`,
     ),
     p.pgPolicy("case_law_replay_batches_owner_access", {
       for: "all",
@@ -267,6 +275,9 @@ export type ReplayMaintenanceAuditDetails = {
   mode?: BackgroundReplaySource["mode"];
   kind?: "reviewed" | "retry-exhausted";
   attempts?: number;
+  readmissions?: number;
+  retryExhausted?: number;
+  retryTerminal?: number;
   failureCode?: ReplayFailure["code"];
   status?: (typeof REPLAY_BATCH_STATUSES)[number];
   parserVersion?: number;

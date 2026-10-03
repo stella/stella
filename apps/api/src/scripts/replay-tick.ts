@@ -186,6 +186,8 @@ const reportReplayTick = (report: BackgroundReplayTickReport) => {
       "case_law.replay.tick.applied": report.applied,
       "case_law.replay.tick.failed": Number(report.status === "failed"),
       "case_law.replay.tick.rows_failed": report.failed,
+      "case_law.replay.tick.retry_exhausted": report.retryExhausted,
+      "case_law.replay.tick.retry_terminal": report.retryTerminal,
       "case_law.replay.tick.hold_too_long": Number(report.heldTooLong),
       "case_law.replay.tick.blocked": report.blocked,
       "case_law.replay.tick.held": Number(
@@ -525,6 +527,8 @@ const runReplayOnSlotSession = async ({
           blocked: observation.report?.blocked ?? 0,
           errors: (observation.report?.errors ?? 0) + 1,
           failed: observation.report?.failed ?? 0,
+          retryExhausted: observation.report?.retryExhausted ?? 0,
+          retryTerminal: observation.report?.retryTerminal ?? 0,
           heldTooLong: preflight.heldTooLong(),
         };
     if (attempted.isErr()) {

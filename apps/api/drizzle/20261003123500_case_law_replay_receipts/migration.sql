@@ -20,6 +20,7 @@ CREATE TABLE "case_law_replay_batches" (
   "completed_at" timestamptz,
   "superseded_at" timestamptz,
   "attempts" integer DEFAULT 0 NOT NULL,
+  "readmissions" integer DEFAULT 0 NOT NULL,
   "systemic_failures" integer DEFAULT 0 NOT NULL,
   "systemic_progress" bigint DEFAULT 0 NOT NULL,
   "attempt_state" text DEFAULT 'idle' NOT NULL,
@@ -29,15 +30,16 @@ CREATE TABLE "case_law_replay_batches" (
   CONSTRAINT "case_law_replay_batches_source_id_case_law_sources_id_fk" FOREIGN KEY ("source_id") REFERENCES "public"."case_law_sources"("id") ON DELETE RESTRICT,
   CONSTRAINT "case_law_replay_batches_attempt_state_check" CHECK ("attempt_state" IN ('idle', 'picked-up')),
   CONSTRAINT "case_law_replay_batches_failure_code_check" CHECK ("failure_code" IS NULL OR "failure_code" IN ('stored-raw-timeout', 'stored-raw-too-large', 'stored-raw-read', 'adapter-exception', 'writer-retryable', 'receipt-write', 'tick-deadline', 'tick-cancelled', 'unexpected')),
-  CONSTRAINT "case_law_replay_batches_status_check" CHECK ("status" IN ('reserved', 'completed', 'superseded', 'failed', 'blocked')),
-  CONSTRAINT "case_law_replay_batches_counts_check" CHECK ("systemic_failures" >= 0 AND "systemic_progress" >= 0 AND "attempts" >= 0 AND "attempted" > 0 AND "applied" >= 0 AND "blocked" >= 0 AND "failed" >= 0 AND "applied" + "blocked" + "failed" <= "attempted" AND "duration_ms" >= 0)
+  CONSTRAINT "case_law_replay_batches_status_check" CHECK ("status" IN ('reserved', 'retry-exhausted', 'retry-terminal', 'completed', 'superseded', 'failed', 'blocked')),
+  CONSTRAINT "case_law_replay_batches_readmission_check" CHECK (("status" NOT IN ('retry-exhausted', 'retry-terminal')) OR ("failure_code" IS NOT NULL AND "attempt_state" = 'idle' AND (("status" = 'retry-exhausted' AND "retry_at" IS NOT NULL AND "readmissions" < 3) OR ("status" = 'retry-terminal' AND "retry_at" IS NULL AND "readmissions" = 3)))),
+  CONSTRAINT "case_law_replay_batches_counts_check" CHECK ("readmissions" >= 0 AND "readmissions" <= 3 AND "systemic_failures" >= 0 AND "systemic_progress" >= 0 AND "attempts" >= 0 AND "attempted" > 0 AND "applied" >= 0 AND "blocked" >= 0 AND "failed" >= 0 AND "applied" + "blocked" + "failed" <= "attempted" AND "duration_ms" >= 0)
 );--> statement-breakpoint
 CREATE INDEX "case_law_replay_batches_source_budget_idx" ON "case_law_replay_batches" ("source_id", "budget_day");--> statement-breakpoint
 CREATE INDEX "case_law_replay_batches_source_status_idx" ON "case_law_replay_batches" ("source_id", "status");--> statement-breakpoint
 CREATE INDEX "case_law_replay_batches_due_idx" ON "case_law_replay_batches" ("source_id", "status", "retry_at");--> statement-breakpoint
 CREATE INDEX "case_law_replay_batches_document_version_idx" ON "case_law_replay_batches" ("source_id", "first_decision_id", "parser_version_to");--> statement-breakpoint
 CREATE INDEX "case_law_replay_batches_retention_idx" ON "case_law_replay_batches" ("superseded_at", "id") WHERE "superseded_at" IS NOT NULL;--> statement-breakpoint
-CREATE INDEX "case_law_replay_batches_retire_idx" ON "case_law_replay_batches" ("source_id", "parser_version_to", "id") WHERE "superseded_at" IS NULL AND "status" IN ('completed', 'superseded', 'failed', 'blocked');--> statement-breakpoint
+CREATE INDEX "case_law_replay_batches_retire_idx" ON "case_law_replay_batches" ("source_id", "parser_version_to", "id") WHERE "superseded_at" IS NULL AND "status" IN ('completed', 'superseded', 'failed', 'retry-exhausted', 'retry-terminal', 'blocked');--> statement-breakpoint
 CREATE TABLE "case_law_replay_blocked" (
   "source_id" uuid NOT NULL,
   "decision_id" uuid NOT NULL,
