@@ -1520,13 +1520,11 @@ const armState = (value: unknown) => {
         : readRecord(raw["mergeQueueEntry"], "mergeQueueEntry"),
   };
 };
-const queueReceipt = (
-  raw: Record<string, unknown>,
-  expectedHeadSha: string,
-) => {
-  if (readOptionalOid(raw["headCommit"], "queue head") !== expectedHeadSha) {
-    return null;
-  }
+// An entry's `headCommit` is the merge-group commit once GitHub builds the
+// group, not the pull request head, so it cannot identify the queued head.
+// The head is pinned instead by `expectedHeadOid` on enqueue and by the
+// `headRefOid` read alongside the entry: a push removes a queued PR.
+const queueReceipt = (raw: Record<string, unknown>) => {
   const position = raw["position"];
   if (
     typeof position !== "number" ||
@@ -1578,10 +1576,10 @@ const verifyArmReceipt = ({
     return refuseArm("HEAD_MOVED_DURING_ARMING");
   }
   if (after.queue !== null) {
-    const entry = queueReceipt(after.queue, expectedHeadSha);
-    return entry === null
-      ? refuseArm("QUEUE_HEAD_MISMATCH")
-      : Result.ok({ kind: "queued", entry } as const);
+    return Result.ok({
+      kind: "queued",
+      entry: queueReceipt(after.queue),
+    } as const);
   }
   const staleReason =
     mode === "existing"
@@ -1626,10 +1624,10 @@ export const armAndVerify = ({
       return refuseArm("HEAD_MOVED_DURING_ARMING");
     }
     if (before.queue !== null) {
-      const entry = queueReceipt(before.queue, expectedHeadSha);
-      return entry === null
-        ? refuseArm("QUEUE_HEAD_MISMATCH")
-        : Result.ok({ kind: "queued", entry } as const);
+      return Result.ok({
+        kind: "already-queued",
+        entry: queueReceipt(before.queue),
+      } as const);
     }
     let lastRemoval = 0;
     for (const removal of readRemovals()) {
@@ -1660,7 +1658,7 @@ export const armAndVerify = ({
         mutate(
           `mutation($id:ID!, $sha:GitObjectID!) {
         enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$sha,jump:${jump ? "true" : "false"}}) {
-          mergeQueueEntry { id position jump state headCommit { oid } }
+          mergeQueueEntry { id position jump state }
         }
       }`,
           { id: pullRequestId, sha: expectedHeadSha },
@@ -1675,18 +1673,10 @@ export const armAndVerify = ({
           )["mergeQueueEntry"],
           "enqueue entry",
         ),
-        expectedHeadSha,
       );
       const after = armState(readState());
       if (after.id !== pullRequestId || after.headSha !== expectedHeadSha) {
         return refuseArm("HEAD_MOVED_DURING_ARMING");
-      }
-      if (
-        receipt === null ||
-        (after.queue !== null &&
-          queueReceipt(after.queue, expectedHeadSha) === null)
-      ) {
-        return refuseArm("QUEUE_HEAD_MISMATCH");
       }
       if (!jump && after.queue === null) {
         return refuseArm("QUEUE_ENTRY_ABSENT_AFTER_ENQUEUE");
@@ -1720,7 +1710,7 @@ export const armAndVerify = ({
       mutate(
         `mutation($id:ID!, $sha:GitObjectID!) {
       enablePullRequestAutoMerge(input:{pullRequestId:$id,expectedHeadOid:$sha,mergeMethod:SQUASH}) {
-        pullRequest { id headRefOid updatedAt autoMergeRequest { enabledAt } mergeQueueEntry { id position jump state headCommit { oid } } }
+        pullRequest { id headRefOid updatedAt autoMergeRequest { enabledAt } mergeQueueEntry { id position jump state } }
       }
     }`,
         { id: pullRequestId, sha: expectedHeadSha },
@@ -2558,7 +2548,7 @@ const createGhGateway = ({
           `query=query($owner:String!, $name:String!, $number:Int!) {
           repository(owner:$owner,name:$name) { pullRequest(number:$number) {
             id headRefOid updatedAt autoMergeRequest { enabledAt }
-            mergeQueueEntry { id position jump state headCommit { oid } }
+            mergeQueueEntry { id position jump state }
           } }
         }`,
           "-f",
@@ -3054,25 +3044,46 @@ if (import.meta.main) {
             console.error(handoff.error.message);
             process.exit(1);
           }
-          if (action.kind === "enqueue-jump") {
-            if (handoff.value.kind !== "queued") {
-              panic("Jump must return a queue receipt");
-            }
-            requireFrontOfQueue(
-              `${snapshot.headShaBeforeMerge} was enqueued after requesting a jump (GitHub reported position ${handoff.value.entry.position})`,
-              handoff.value.entry,
-            );
-            break;
+          const handoffResult = handoff.value;
+          switch (handoffResult.kind) {
+            case "already-queued":
+              // Queued before this run (an earlier arm's auto-merge): the
+              // entry is not an enqueue response, so a jump verifies the
+              // queue itself.
+              if (action.kind === "enqueue-jump") {
+                requireFrontOfQueue(
+                  `${snapshot.headShaBeforeMerge} was already queued (position ${handoffResult.entry.position}); no jump was requested`,
+                );
+                break;
+              }
+              console.log(
+                `\nverdict: ALREADY QUEUED at ${snapshot.headShaBeforeMerge} (position ${handoffResult.entry.position}, ${handoffResult.entry.state}); nothing changed.`,
+              );
+              break;
+            case "queued":
+              if (action.kind === "enqueue-jump") {
+                requireFrontOfQueue(
+                  `${snapshot.headShaBeforeMerge} was enqueued after requesting a jump (GitHub reported position ${handoffResult.entry.position})`,
+                  handoffResult.entry,
+                );
+                break;
+              }
+              console.log(
+                `\nverdict: QUEUED — verified entry for ${snapshot.headShaBeforeMerge}`,
+              );
+              break;
+            case "armed":
+              if (action.kind === "enqueue-jump") {
+                panic("Jump must return a queue receipt");
+              }
+              console.log(
+                `\nverdict: ARMED — verified auto-merge for ${snapshot.headShaBeforeMerge}, enabled at ${handoffResult.enabledAt}`,
+              );
+              break;
+            default:
+              handoffResult satisfies never;
+              panic("Unhandled arm result");
           }
-          if (handoff.value.kind === "queued") {
-            console.log(
-              `\nverdict: QUEUED — verified entry for ${snapshot.headShaBeforeMerge}`,
-            );
-            break;
-          }
-          console.log(
-            `\nverdict: ARMED — verified auto-merge for ${snapshot.headShaBeforeMerge}, enabled at ${handoff.value.enabledAt}`,
-          );
           break;
         }
         default:
