@@ -63,8 +63,8 @@ const SECRET_EXAMPLES_PATH = path.join(
 
 export const renderSecretExamples = () => {
   const examples = Object.fromEntries(
-    ENV_CATALOG.flatMap(({ name, exposure, example }) =>
-      exposure === ENV_EXPOSURE.secret && example !== undefined
+    ENV_CATALOG.flatMap(({ name, credentialExample, example }) =>
+      credentialExample && example !== undefined && example !== ""
         ? [[name, example]]
         : [],
     ),

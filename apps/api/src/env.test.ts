@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 const baseEnv = {
-  DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella-test",
+  DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella",
   S3_ENDPOINT: "http://localhost:9000",
   S3_BUCKET: "stella-test",
   S3_REGION: "us-east-1",
-  REDIS_URL: "redis://localhost:6380",
+  REDIS_URL: "redis://localhost:6379",
   BETTER_AUTH_SECRET: "x".repeat(32),
   BETTER_AUTH_URL: "http://localhost:3001",
   FRONTEND_URL: "http://localhost:3000",

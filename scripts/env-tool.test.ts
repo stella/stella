@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import { QUERY_EXPANSION_MODES } from "../apps/api/src/lib/legal-search/query-expansion-mode";
+import { SECRET_EXAMPLES } from "../packages/runtime-mode/src/secret-examples.generated";
 import {
   ENV_CATALOG,
   ENV_EXPOSURE,
@@ -41,6 +42,19 @@ describe("tracked env files", () => {
 });
 
 describe("generated environment examples", () => {
+  test("every runtime example has an explicit credential classification", () => {
+    for (const [name, example] of Object.entries(SECRET_EXAMPLES)) {
+      const entries = ENV_CATALOG.filter((entry) => entry.name === name);
+      expect(entries.length).toBeGreaterThan(0);
+      expect(
+        entries.every(
+          (entry) => entry.credentialExample && entry.example === example,
+        ),
+      ).toBe(true);
+      expect(example).not.toBe("");
+    }
+  });
+
   test("runtime examples match the catalog", () => {
     expect(
       readFileSync(

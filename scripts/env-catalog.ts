@@ -40,6 +40,7 @@ export const ENV_OWNER = {
 export type EnvOwner = (typeof ENV_OWNER)[keyof typeof ENV_OWNER];
 
 export type EnvCatalogEntry = {
+  credentialExample: boolean;
   description: string;
   documented: boolean;
   example: string | undefined;
@@ -538,6 +539,17 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   TRANSACTIONAL_EMAIL_FROM: "EMAIL_PROVIDER is ses or smtp",
 };
 
+const CREDENTIAL_EXAMPLE_KEYS = [
+  "BETTER_AUTH_SECRET",
+  "GOOGLE_GENERATIVE_AI_API_KEY",
+  "GOTENBERG_PASSWORD",
+  "S3_SECRET_ACCESS_KEY",
+  "STELLA_COLLAB_SERVICE_TOKEN",
+] as const satisfies readonly (
+  | keyof typeof API_ENV_SCHEMA
+  | keyof typeof COLLAB_ENV_SCHEMA
+)[];
+
 const ACTIVE_EXAMPLE_KEYS = new Set([
   "BETTER_AUTH_SECRET",
   "BETTER_AUTH_URL",
@@ -675,6 +687,7 @@ const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
   Object.entries(schema).map(([name, entrySchema]): EnvCatalogEntry => {
     const requirementNote = CONDITIONAL_REQUIREMENT_NOTES[name];
     return {
+      credentialExample: CREDENTIAL_EXAMPLE_KEYS.some((key) => key === name),
       description: DESCRIPTION_OVERRIDES[name] ?? humanizeEnvName(name),
       documented: !HIDDEN_SCHEMA_KEYS.has(name),
       example: EXAMPLE_VALUES[name],
