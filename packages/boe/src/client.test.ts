@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { getConsolidatedLaw, searchConsolidatedLegislation } from "./client.js";
 
 const originalFetch = globalThis.fetch;
@@ -127,7 +129,7 @@ describe("BOE client", () => {
       }),
     );
 
-    expect(searchConsolidatedLegislation({})).rejects.toMatchObject({
+    expect(await rejectionOf(searchConsolidatedLegislation({}))).toMatchObject({
       name: "BoeAPIError",
       message: "BOE returned an unexpected JSON payload shape",
     });
@@ -146,7 +148,7 @@ describe("BOE client", () => {
       }),
     );
 
-    expect(searchConsolidatedLegislation({})).rejects.toMatchObject({
+    expect(await rejectionOf(searchConsolidatedLegislation({}))).toMatchObject({
       name: "BoeAPIError",
       message: "BOE returned an unexpected JSON payload shape",
     });
@@ -161,7 +163,7 @@ describe("BOE client", () => {
         }),
     );
 
-    expect(searchConsolidatedLegislation({})).rejects.toMatchObject({
+    expect(await rejectionOf(searchConsolidatedLegislation({}))).toMatchObject({
       name: "BoeAPIError",
       message: "BOE returned malformed JSON",
     });
