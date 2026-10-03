@@ -263,10 +263,13 @@ describe("notice publication outcomes", () => {
       const present = await buildDecision(binding, AbortSignal.timeout(5000));
       expect(present?.rawHash).not.toBe(refused?.rawHash);
       expect(present?.judges?.length).toBeGreaterThan(0);
-      const replayed = await reparse(storedFrom(refused?.sourceRaw ?? ""));
+      if (!refused) {
+        throw new TypeError("Expected a refused-notice decision");
+      }
+      const replayed = await reparse(storedFrom(refused.sourceRaw ?? ""));
       expect(replayed.type).toBe("parsed");
       if (replayed.type === "parsed") {
-        expect(replayed.result.rawHash).toBe(refused?.rawHash);
+        expect(replayed.result.rawHash).toBe(refused.rawHash);
         expect(replayed.result.observationDetail).toBe("secondary-refused");
       }
     },
@@ -325,10 +328,13 @@ describe("notice publication outcomes", () => {
         expect(complete?.fulltext).toBe(incomplete?.fulltext);
         expect(complete?.metadata["formexCelex"]).toBeDefined();
         expect(complete?.rawHash).not.toBe(incomplete?.rawHash);
-        const replayed = await reparse(storedFrom(incomplete?.sourceRaw ?? ""));
+        if (!incomplete) {
+          throw new TypeError("Expected an incomplete Formex decision");
+        }
+        const replayed = await reparse(storedFrom(incomplete.sourceRaw ?? ""));
         expect(replayed.type).toBe("parsed");
         if (replayed.type === "parsed") {
-          expect(replayed.result.rawHash).toBe(incomplete?.rawHash);
+          expect(replayed.result.rawHash).toBe(incomplete.rawHash);
           expect(replayed.result.observationDetail).toBe(
             [404, 410].includes(status) ? "complete" : "secondary-refused",
           );

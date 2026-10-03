@@ -2129,7 +2129,7 @@ export const buildDecision = async (
         ]),
       });
       if (Result.isError(manifestation)) {
-        return manifestation;
+        return Result.err(manifestation.error);
       }
       const served = manifestation.value;
       if (!served) {
@@ -2141,7 +2141,7 @@ export const buildDecision = async (
         signal,
       });
       if (Result.isError(noticeResult)) {
-        return noticeResult;
+        return Result.err(noticeResult.error);
       }
       const noticeRead = noticeResult.value;
       const notice = noticeRead.type === "present" ? noticeRead.xml : undefined;
@@ -2150,7 +2150,7 @@ export const buildDecision = async (
           ? undefined
           : await fetchFormex(parseEcjNotice(notice).manifestations, signal);
       if (formexRead !== undefined && Result.isError(formexRead)) {
-        return formexRead;
+        return Result.err(formexRead.error);
       }
       return Result.ok({
         served,
