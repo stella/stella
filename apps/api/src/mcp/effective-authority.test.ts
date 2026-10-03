@@ -1,7 +1,12 @@
 import { describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { readAuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import {
+  credentialPermissionsForContext,
+  readAuthorizedMemberRole,
+  roleForDisplay,
+} from "@/api/lib/permission-authorization";
 import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
@@ -10,20 +15,28 @@ import {
 } from "@/api/mcp/effective-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+// Authority state is private, so equality is checked on what it exposes.
+const shape = (authority: AuthorizedMemberRole | null) =>
+  authority === null
+    ? null
+    : {
+        role: roleForDisplay(authority),
+        credentialPermissions: credentialPermissionsForContext(authority),
+      };
+
 describe("MCP member authority", () => {
   test("a credential with its own set becomes an attenuated authority", () => {
     expect(
-      mcpMemberAuthority({
-        memberRole: "owner",
-        credentialPermissions: { view: ["create"] },
-      }),
-    ).toEqual({
-      role: "owner",
-      credential: { type: "attenuated", permissions: { view: ["create"] } },
-    });
-    expect(mcpMemberAuthority({ memberRole: "admin" })).toEqual({
+      shape(
+        mcpMemberAuthority({
+          memberRole: "owner",
+          credentialPermissions: { view: ["create"] },
+        }),
+      ),
+    ).toEqual({ role: "owner", credentialPermissions: { view: ["create"] } });
+    expect(shape(mcpMemberAuthority({ memberRole: "admin" }))).toEqual({
       role: "admin",
-      credential: { type: "session" },
+      credentialPermissions: undefined,
     });
   });
 
@@ -90,18 +103,18 @@ describe("the context a capability handler receives", () => {
   test("carries a narrowed credential's own set", async () => {
     const synthesized = await synthesize({ view: ["create"] });
 
-    expect(readAuthorizedMemberRole(synthesized)).toEqual({
+    expect(shape(readAuthorizedMemberRole(synthesized))).toEqual({
       role: "owner",
-      credential: { type: "attenuated", permissions: { view: ["create"] } },
+      credentialPermissions: { view: ["create"] },
     });
   });
 
   test("carries a session credential when the credential has no set", async () => {
     const synthesized = await synthesize(undefined);
 
-    expect(readAuthorizedMemberRole(synthesized)).toEqual({
+    expect(shape(readAuthorizedMemberRole(synthesized))).toEqual({
       role: "owner",
-      credential: { type: "session" },
+      credentialPermissions: undefined,
     });
   });
 });

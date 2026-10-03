@@ -8,9 +8,11 @@ import {
   resolveRateLimitClientAddress,
   parseEdgeClientAddress,
   parseTrustedProxies,
+  ORIGIN_VERIFY_HEADER,
   resolveClientAddress,
   resolveClientIp,
   resolveSignupRateLimitClientIp,
+  sealEdgeHeaders,
   stampClientAddressHeader,
 } from "@/api/lib/client-ip";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
@@ -275,6 +277,14 @@ describe("edge client address", () => {
     expect(parseEdgeClientAddress("[2001:db8::1]:443")).toBe("2001:db8::1");
   });
 
+  test("reads the bare format as the whole address", () => {
+    expect(parseEdgeClientAddress("203.0.113.7", "bare")).toBe("203.0.113.7");
+    expect(parseEdgeClientAddress(" 2001:db8::1:443 ", "bare")).toBe(
+      "2001:db8::1:443",
+    );
+    expect(parseEdgeClientAddress("203.0.113.7:443", "bare")).toBeNull();
+  });
+
   test("rejects values that are not an address with a port", () => {
     for (const value of [null, "", "203.0.113.7", "host:443", "1.2.3.4:x"]) {
       expect(parseEdgeClientAddress(value)).toBeNull();
@@ -415,5 +425,87 @@ describe("rate limit address normalization", () => {
         },
       }),
     ).toBe("2001:db8:abcd:1234::");
+  });
+});
+
+describe("edge origin verification", () => {
+  const EDGE_HEADER = "x-stella-viewer-address";
+  const CURRENT = "current-origin-value-0123456789abcdef";
+  const NEXT = "next-origin-value-0123456789abcdef0123";
+  const trusted = parseTrustedProxies("10.0.0.0/8");
+  const options = {
+    trusted,
+    edgeHeader: EDGE_HEADER,
+    originSecrets: [CURRENT, NEXT],
+    edgeAddressFormat: "bare" as const,
+  };
+  const request = (headers: Record<string, string>) =>
+    new Request("https://example/test", {
+      headers: { "x-forwarded-for": "198.51.100.1", ...headers },
+    });
+
+  test("reads the edge address when the request carries a configured value", () => {
+    for (const value of [CURRENT, NEXT]) {
+      expect(
+        resolveClientAddress(
+          request({
+            [EDGE_HEADER]: "203.0.113.7",
+            [ORIGIN_VERIFY_HEADER]: value,
+          }),
+          fakeServer("10.0.0.5"),
+          options,
+        ),
+      ).toEqual({
+        address: "203.0.113.7",
+        source: CLIENT_ADDRESS_SOURCE.edgeHeader,
+      });
+    }
+  });
+
+  test("uses the forwarded chain when the value is missing or different", () => {
+    for (const headers of [
+      { [EDGE_HEADER]: "203.0.113.7" },
+      { [EDGE_HEADER]: "203.0.113.7", [ORIGIN_VERIFY_HEADER]: "other" },
+      { [EDGE_HEADER]: "203.0.113.7", [ORIGIN_VERIFY_HEADER]: `${CURRENT}x` },
+    ]) {
+      expect(
+        resolveClientAddress(request(headers), fakeServer("10.0.0.5"), options),
+      ).toEqual({
+        address: "198.51.100.1",
+        source: CLIENT_ADDRESS_SOURCE.forwardedFor,
+      });
+    }
+  });
+
+  test("applies the same rule to the signup bucket", () => {
+    const resolve = (headers: Record<string, string>) =>
+      resolveSignupRateLimitClientIp(request(headers), fakeServer("10.0.0.5"), {
+        source: SIGNUP_RATE_LIMIT_IP_SOURCE.trustedProxy,
+        ...options,
+      });
+    expect(
+      resolve({
+        [EDGE_HEADER]: "203.0.113.7",
+        [ORIGIN_VERIFY_HEADER]: CURRENT,
+      }),
+    ).toBe("203.0.113.7");
+    expect(resolve({ [EDGE_HEADER]: "203.0.113.7" })).toBe("198.51.100.1");
+  });
+
+  test("sealing removes the verification header and keeps the resolved address", () => {
+    const sealed = request({
+      [EDGE_HEADER]: "203.0.113.7",
+      [ORIGIN_VERIFY_HEADER]: CURRENT,
+    });
+    const address = resolveClientAddress(
+      sealed,
+      fakeServer("10.0.0.5"),
+      options,
+    );
+    sealEdgeHeaders(sealed, address);
+    expect(sealed.headers.get(ORIGIN_VERIFY_HEADER)).toBeNull();
+    expect(resolveClientAddress(sealed, fakeServer("10.0.0.5"))).toEqual(
+      address,
+    );
   });
 });

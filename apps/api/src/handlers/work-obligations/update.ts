@@ -22,6 +22,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { reviewGateForTask } from "@/api/lib/flows/review-gate-task";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 
@@ -256,8 +257,7 @@ const updateWorkObligation = createSafeHandler(
 
         if (
           selfAssignsOverAnotherOwner(body, existing, user.id) &&
-          memberRole.role !== "admin" &&
-          memberRole.role !== "owner"
+          !hasManagementPermission(memberRole, { workspace: ["update"] })
         ) {
           return { status: "self_assign_forbidden" as const };
         }

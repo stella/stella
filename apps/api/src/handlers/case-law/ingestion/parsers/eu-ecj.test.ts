@@ -887,3 +887,17 @@ describe("table caption retention", () => {
     ]);
   });
 });
+
+test("excludes script and style from the keyword metadata chain", () => {
+  const { keywords } = parseEcjDecisionHtml({
+    caseNumber: "C-1/00",
+    ecli: undefined,
+    court: "Court of Justice",
+    decisionDate: undefined,
+    decisionType: undefined,
+    sourceUrl: undefined,
+    celex: "62000CJ0001",
+    html: "<body><p class='coj-sum-title-1'>JUDGMENT</p><p class='coj-index'>First<script>bad-keyword</script> — Second<style>bad-style</style></p><p class='coj-normal'>Decision body.</p></body>",
+  });
+  expect(keywords).toEqual(["First", "Second"]);
+});

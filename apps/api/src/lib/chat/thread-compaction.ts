@@ -39,7 +39,6 @@ import {
   chatThreads,
 } from "@/api/db/schema";
 import type { ChatCompactionMemoryEligibility } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -70,6 +69,7 @@ import {
 } from "@/api/lib/chat/thread-stored-content-send-mode";
 import type { ThreadStoredContentSendMode } from "@/api/lib/chat/thread-stored-content-send-mode";
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 /**
@@ -776,7 +776,8 @@ const advanceCheckpointOnTx = async ({
 
   const memoryEligibility = resolveCheckpointMemoryEligibility({
     extractionFeatureEnabled:
-      options.extractionFeatureEnabled ?? env.FEATURE_AI_MEMORY,
+      options.extractionFeatureEnabled ??
+      isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
     previous: observed.checkpoint?.memoryEligibility ?? null,
     segmentMessages: plan.messagesToSummarize,
   });

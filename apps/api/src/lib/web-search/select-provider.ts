@@ -1,4 +1,5 @@
 import { env } from "@/api/env";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { createJinaFetcher } from "@/api/lib/web-search/jina";
 import { createTavilyProvider } from "@/api/lib/web-search/tavily";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
@@ -66,7 +67,7 @@ export const resolveWebSearchProviders = (
 };
 
 export const webSearchDeployConfigFromEnv = (): WebSearchDeployConfig => ({
-  featureEnabled: env.FEATURE_WEB_SEARCH,
+  featureEnabled: isDeploymentFeatureEnabled("FEATURE_WEB_SEARCH"),
   searchProvider: env.WEB_SEARCH_PROVIDER,
   fetchProvider: env.WEB_FETCH_PROVIDER,
   platformSearchApiKey: env.TAVILY_API_KEY,

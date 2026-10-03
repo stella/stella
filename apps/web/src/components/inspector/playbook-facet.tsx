@@ -233,6 +233,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type {
   Negotiation,
   PlaybookListItem,
@@ -387,11 +388,11 @@ export const PlaybookFacet = ({
     if (result.error) {
       analytics.captureError(toAPIError(result.error));
     }
-    stellaToast.add({
-      type: "error",
-      title: t("inspector.review.failed"),
-      description: result.message,
-    });
+    notifyUserError(
+      result.error ? toAPIError(result.error) : undefined,
+      t("inspector.review.failed"),
+      { description: result.message },
+    );
   };
 
   // The document's remembered start mode is what a review runs with, whether
@@ -521,8 +522,11 @@ export const PlaybookFacet = ({
   const reportNote = (outcome: CounterpartyNoteOutcome, blockId: string) => {
     const { applied, tone, title, description } =
       reportCounterpartyNote(outcome);
-    stellaToast.add({
-      type: tone,
+    if (tone === "error") {
+      notifyUserError(undefined, t(title));
+      return applied;
+    }
+    const toast = {
       title: t(title),
       ...(description !== undefined && { description: t(description) }),
       ...(applied && {
@@ -531,7 +535,21 @@ export const PlaybookFacet = ({
           onClick: () => scrollToBlock(blockId),
         },
       }),
-    });
+    };
+    switch (tone) {
+      case "success":
+        stellaToast.add({ ...toast, type: "success" });
+        break;
+      case "warning":
+        stellaToast.add({ ...toast, type: "warning" });
+        break;
+      case "info":
+        stellaToast.add({ ...toast, type: "info" });
+        break;
+      default:
+        tone satisfies never;
+        return panic(`Unhandled counterparty note tone: ${String(tone)}`);
+    }
     return applied;
   };
 
@@ -1182,10 +1200,7 @@ const ReviewRunPanel = ({
     // the thrown error is what gets captured and shown.
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        type: "error",
-        title: t("inspector.review.decisionFailed"),
-      });
+      notifyUserError(error, t("inspector.review.decisionFailed"));
     },
   });
   const restored = runDetail === undefined ? null : restoreReviewRun(runDetail);
@@ -1221,10 +1236,7 @@ const ReviewRunPanel = ({
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        type: "error",
-        title: t("inspector.review.saveAsPlaybookFailed"),
-      });
+      notifyUserError(error, t("inspector.review.saveAsPlaybookFailed"));
     },
   });
 
@@ -2075,10 +2087,7 @@ const ReferenceFilePicker = ({
       return;
     }
     if (reference.fileFieldId === target.fileFieldId) {
-      stellaToast.add({
-        type: "error",
-        title: t("inspector.review.targetAsReference"),
-      });
+      notifyUserError(undefined, t("inspector.review.targetAsReference"));
       return;
     }
     onChange([...references, reference]);

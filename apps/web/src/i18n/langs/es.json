@@ -1566,6 +1566,7 @@
       "socialSecurityNumber": "Número de la seguridad social",
       "taxIdentificationNumber": "NIF / CIF"
     },
+    "approve": "Aprobar",
     "archive": "Archivar",
     "ask": "Preguntar",
     "askAI": "Preguntar a la IA",
@@ -1849,12 +1850,14 @@
   },
   "consent": {
     "allow": "Permitir",
+    "appIdentity": "Identidad de la aplicación",
     "completeSetup": "Completar configuración",
     "defaultClientName": "Una aplicación",
     "description": "{clientName} quiere acceder a su espacio de trabajo de stella",
     "error": "Algo salió mal. Inténtelo de nuevo.",
     "missingJurisdictions": "Su organización de stella todavía no ha configurado sus jurisdicciones de práctica. Algunas herramientas que dependen de la jurisdicción no estarán disponibles hasta que complete la configuración.",
     "permissions": "Esto permitirá a la aplicación:",
+    "redirectDestination": "Destino de redirección",
     "scopeAdminRead": "Leer el registro de auditoría de su organización",
     "scopeAdminWrite": "Gestionar los miembros y la configuración de la organización",
     "scopeBillingWrite": "Crear, editar y eliminar sus registros de tiempo",
@@ -1875,7 +1878,8 @@
     "scopeSkills": "Usar tus habilidades de stella guardadas",
     "scopeTemplates": "Listar, rellenar y crear tus plantillas de documentos",
     "scopeTemplatesAnonymized": "Listar, rellenar y crear versiones anonimizadas de sus plantillas de documentos",
-    "title": "Autorizar acceso"
+    "title": "Autorizar acceso",
+    "unverifiedApp": "Aplicación no verificada"
   },
   "contacts": {
     "alsoPartyIn": "También aparece como parte en {count, plural, one {# asunto más} other {# asuntos más}}",
@@ -2262,6 +2266,7 @@
       "internalServerError": "Algo salió mal. Inténtalo de nuevo.",
       "legalSourceEntityLimitReached": "Este asunto ha alcanzado el límite de elementos, por lo que no se pudo crear el documento.",
       "legalSourceFilePropertyMissing": "A este asunto le falta una propiedad de archivo, por lo que no se pudo crear el documento.",
+      "mcpAuthorizationApprovalRequired": "Un administrador debe aprobar este conector antes de que puedas conectarte.",
       "notOrganizationMember": "No eres miembro de esta organización.",
       "providerKeyRejected": "El proveedor rechazó la clave de API.",
       "providerRateLimited": "Se alcanzó el límite de solicitudes del proveedor. Inténtalo de nuevo en breve.",
@@ -3393,6 +3398,8 @@
         "none": "Sin autenticación",
         "oauth2": "OAuth 2.0"
       },
+      "authorizationReviewDescription": "Revisa el servidor de autorización y los orígenes de los endpoints antes de aprobar.",
+      "authorizationServer": "Servidor de autorización",
       "bearerTokenDescription": "Este servidor usa un token Bearer. Pegue el token del proveedor para terminar la conexión.",
       "connectedToast": "MCP conectado",
       "connectedWithLastUsed": "Conectado · último uso {time}",
@@ -3403,9 +3410,11 @@
       "emptyDescription": "Las integraciones jurídicas seleccionadas aparecerán aquí cuando se habiliten para su espacio de trabajo.",
       "emptyTitle": "Aún no hay integraciones",
       "enable": "Activar",
+      "endpointOrigins": "Orígenes de los endpoints",
       "errorDescription": "No se pudo actualizar la integración.",
       "errorTitle": "MCP falló",
       "mcpExplainer": "Las integraciones conectan servicios externos al chat con los que la IA puede trabajar.",
+      "needsReapproval": "Requiere una nueva aprobación",
       "needsReauth": "Necesita reconexión",
       "off": "Desactivado",
       "on": "Activado",

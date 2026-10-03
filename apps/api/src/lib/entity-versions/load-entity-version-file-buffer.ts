@@ -19,18 +19,18 @@
 
 import { Result } from "better-result";
 
-import type { SafeDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import type { ContentReadDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type ResolveEntityVersionFileOptions = {
-  safeDb: SafeDb;
+  safeDb: ContentReadDb;
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
   fileFieldId: SafeId<"field">;
