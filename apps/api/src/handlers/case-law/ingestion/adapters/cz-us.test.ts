@@ -1170,7 +1170,7 @@ describe("czUsAdapter.fetchPage", () => {
     expect(
       Bun.deepEquals(
         page.decisions[0]?.textFields.abstract,
-        absentDecisionTextFields(TEXT_ABSENCE_REASON.PARSE_FAILED).abstract,
+        absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED).abstract,
       ),
     ).toBe(true);
   });
@@ -2334,6 +2334,35 @@ describe("czUsAdapter.reparseStoredRaw", () => {
   });
 
   const textPage = makeTextPage("Pl.ÚS 9/26", "3. 2. 2026", { counter: 1 });
+
+  for (const [state, reason] of [
+    ["absent", TEXT_ABSENCE_REASON.NOT_PUBLISHED],
+    ["unavailable", TEXT_ABSENCE_REASON.PARSE_FAILED],
+  ] as const) {
+    test(`replays the ${state} abstract answer with its absence reason`, async () => {
+      const stored = storedInput(
+        JSON.stringify({ version: 1, parts: { document: textPage } }),
+        SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      );
+      const outcome = await czUsAdapter.reparseStoredRaw?.({
+        ...stored,
+        metadata: { ...stored.metadata, abstractState: state },
+      });
+      expect(outcome?.type).toBe("parsed");
+      if (outcome?.type !== "parsed") {
+        return;
+      }
+      expect(outcome.result.textFields.abstract).toEqual({
+        type: TEXT_FIELD_TYPE.ABSENT,
+        reason,
+      });
+      expect(outcome.result.textFields.legalSentence).toEqual({
+        type: TEXT_FIELD_TYPE.ABSENT,
+        reason,
+      });
+      expect(outcome.result.metadata["abstractState"]).toBe(state);
+    });
+  }
 
   test("reads the judges back out of an envelope without contacting the court", async () => {
     const stored = storedInput(

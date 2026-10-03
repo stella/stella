@@ -537,6 +537,26 @@ export type NalusAbstractOutcome =
   | { type: typeof CZ_US_ABSTRACT_STATE.ABSENT }
   | { type: typeof CZ_US_ABSTRACT_STATE.UNAVAILABLE };
 
+const abstractTextFields = (outcome: NalusAbstractOutcome) => {
+  switch (outcome.type) {
+    case CZ_US_ABSTRACT_STATE.READ:
+      return extractAbstract(outcome.html);
+    case CZ_US_ABSTRACT_STATE.ABSENT:
+      return {
+        abstract: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        legalSentence: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      };
+    case CZ_US_ABSTRACT_STATE.UNAVAILABLE:
+      return {
+        abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+        legalSentence: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
+      };
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled abstract outcome: ${JSON.stringify(outcome)}`);
+  }
+};
+
 // ── Record card (ResultDetail.aspx) ──────────────────────
 
 /**
@@ -2139,14 +2159,14 @@ export const buildCzUsDecision = ({
     [CZ_US_ABSTRACT_METADATA_KEY]:
       abstractHtml === undefined ? abstractState : CZ_US_ABSTRACT_STATE.READ,
   });
-  decision.textFields =
-    abstractHtml === undefined
-      ? {
-          ...decision.textFields,
-          abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
-          legalSentence: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
-        }
-      : { ...decision.textFields, ...extractAbstract(abstractHtml) };
+  decision.textFields = {
+    ...decision.textFields,
+    ...abstractTextFields(
+      abstractHtml === undefined
+        ? { type: abstractState }
+        : { type: CZ_US_ABSTRACT_STATE.READ, html: abstractHtml },
+    ),
+  };
   // Text-field and record-card changes must pass the pipeline's source-hash
   // gate, which compares this hash and not the stored payload.
   decision.rawHash = hashContent(
@@ -2757,16 +2777,22 @@ const reparseStoredRaw = (
     ...decision.metadata,
   });
   const abstractHtml = parts?.["abstract"];
+  let abstractOutcome: NalusAbstractOutcome;
   if (abstractHtml !== undefined) {
-    decision.textFields = {
-      ...decision.textFields,
-      ...extractAbstract(abstractHtml),
-    };
-    decision.metadata = checkedDecisionMetadata({
-      ...decision.metadata,
-      [CZ_US_ABSTRACT_METADATA_KEY]: CZ_US_ABSTRACT_STATE.READ,
-    });
+    abstractOutcome = { type: CZ_US_ABSTRACT_STATE.READ, html: abstractHtml };
+  } else if (decision.metadata[CZ_US_ABSTRACT_METADATA_KEY] === CZ_US_ABSTRACT_STATE.ABSENT) {
+    abstractOutcome = { type: CZ_US_ABSTRACT_STATE.ABSENT };
+  } else {
+    abstractOutcome = { type: CZ_US_ABSTRACT_STATE.UNAVAILABLE };
   }
+  decision.textFields = {
+    ...decision.textFields,
+    ...abstractTextFields(abstractOutcome),
+  };
+  decision.metadata = checkedDecisionMetadata({
+    ...decision.metadata,
+    [CZ_US_ABSTRACT_METADATA_KEY]: abstractOutcome.type,
+  });
   decision.sourceRaw = raw;
   decision.sourceRawContentType = stored.contentType ?? "text/html";
   return { type: "parsed", result: plainTextIngestionResult(decision) };
