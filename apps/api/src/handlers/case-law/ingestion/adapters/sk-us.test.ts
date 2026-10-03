@@ -1573,6 +1573,23 @@ describe("the sk-us steady-state frontier", () => {
     return result.unwrap();
   };
 
+  test.each(["2025:120", PARKED_CURSOR])(
+    "an unavailable crawl window holds cursor %s for retry",
+    async (cursor) => {
+      const stub = mockFetch({ search: [{ type: "status", status: 204 }] });
+      const result = await skUsAdapter.fetchPage(cursor, {});
+      expect(stub.calls()).toBe(1);
+      expect(stub.downloads()).toBe(0);
+      expect(result.isErr()).toBe(true);
+      if (result.isOk()) {
+        throw new Error("Unavailable crawl window returned a checkpoint");
+      }
+      expect(result.error).toBeInstanceOf(AdapterFetchError);
+      expect(result.error.cursor).toBe(cursor);
+      expect(result.error.message).toContain("search returned no body");
+    },
+  );
+
   test("a cycle the court added nothing to costs one search and no downloads", async () => {
     const starts: number[] = [];
     const stub = mockFetch({

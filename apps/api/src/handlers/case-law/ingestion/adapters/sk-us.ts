@@ -1,3 +1,4 @@
+// parser-output-unchanged: Crawl listing availability controls checkpoints; stored decision parsing is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
@@ -1540,12 +1541,17 @@ type ExecuteSearchOptions = {
   signal?: AbortSignal | undefined;
 };
 
+type SearchRead =
+  | { type: "present"; data: SearchResponse }
+  | { type: "absent"; data: SearchResponse }
+  | { type: "unavailable" };
+
 const executeSearch = async ({
   offset,
   pageSize,
   range,
   signal,
-}: ExecuteSearchOptions): Promise<SearchResponse | null> => {
+}: ExecuteSearchOptions): Promise<SearchRead> => {
   const response = await fetchPublisher(SEARCH_URL, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_US,
@@ -1592,7 +1598,7 @@ const executeSearch = async ({
   }
 
   if (response.status === 204) {
-    return null;
+    return { type: "unavailable" };
   }
 
   const data: unknown = await response.json();
@@ -1601,7 +1607,9 @@ const executeSearch = async ({
     panic(`SK ÚS search returned an invalid payload: ${preview}`);
   }
 
-  return data;
+  return data.documents.length === 0
+    ? { type: "absent", data }
+    : { type: "present", data };
 };
 
 type ExecuteSearchWithRetryOptions = ExecuteSearchOptions & {
@@ -1803,13 +1811,13 @@ const unservedWindowError = (
 
 type SearchWindowOptions = Omit<ListSkUsWindowOptions, "budget">;
 
-/** One search request for a window: its body, or null where it answered 204. */
+/** One typed reading of a publisher search window. */
 const searchWindow = async ({
   offset,
   pageSize,
   signal,
   slice,
-}: SearchWindowOptions): Promise<SearchResponse | null> => {
+}: SearchWindowOptions): Promise<SearchRead> => {
   const searchResult = await executeSearchWithRetry({
     cursor: slice,
     offset,
@@ -1871,8 +1879,8 @@ const listSkUsWindow = async ({
   slice,
 }: ListSkUsWindowOptions): Promise<ListedWindow> => {
   const data = await searchWindow({ offset, pageSize, signal, slice });
-  if (data !== null) {
-    return listedWindow(data);
+  if (data.type !== "unavailable") {
+    return listedWindow(data.data);
   }
 
   if (pageSize <= 1) {
@@ -1882,9 +1890,9 @@ const listSkUsWindow = async ({
       signal,
       slice,
     });
-    return confirmation === null
+    return confirmation.type === "unavailable"
       ? { items: [unservedListingItem(offset)], numFound: null }
-      : listedWindow(confirmation);
+      : listedWindow(confirmation.data);
   }
 
   if (budget.remaining < 2) {
@@ -2597,9 +2605,9 @@ export const skUsAdapter = defineSourceAdapter({
       return { type: "probe-failed", errorTag: errorTag(searched.error) };
     }
     // A 204 carries no count; it is the endpoint declining, not an empty court.
-    return searched.value === null
+    return searched.value.type === "unavailable"
       ? sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD)
-      : sourceTotalRead(searched.value.numFound);
+      : sourceTotalRead(searched.value.data.numFound);
   },
 
   /**
@@ -2696,11 +2704,24 @@ export const skUsAdapter = defineSourceAdapter({
           }
           throw searchResult.error;
         }
-        const data = searchResult.value;
+        const read = searchResult.value;
+        switch (read.type) {
+          case "unavailable":
+            throw new AdapterFetchError({
+              message: "SK ÚS search returned no body for the crawl window",
+              adapterKey: ADAPTER_KEYS.SK_US,
+              cursor,
+            });
+          case "present":
+          case "absent":
+            break;
+          default:
+            read satisfies never;
+            return panic("Unhandled SK ÚS search reading");
+        }
+        const data = read.data;
 
-        // 204 / empty search for this year window.
-        // Advance to next year if available.
-        if (!data || data.documents.length === 0) {
+        if (read.type === "absent") {
           if (year < currentYear) {
             // Move to next year
             return {
