@@ -4,11 +4,11 @@ import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { useTranslations } from "use-intl";
 
 import type { DocxCompatibility } from "@stll/folio-react";
-import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 import {
   editSessionErrorDescriptionKey,
@@ -340,10 +340,8 @@ const useDocxOpenErrorToast = ({
     }
 
     errorToastShownRef.current = true;
-    stellaToast.add({
+    notifyUserError(undefined, t("folio.editOpenFailedTitle"), {
       description: t(editSessionErrorDescriptionKey(state.reason)),
-      title: t("folio.editOpenFailedTitle"),
-      type: "error",
     });
     onClose();
     resetError();

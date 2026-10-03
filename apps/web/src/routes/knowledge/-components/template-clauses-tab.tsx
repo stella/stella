@@ -41,8 +41,9 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   invalidateTemplateClauseSources,
   templateClausesOptions,
@@ -119,9 +120,7 @@ export const TemplateClausesTab = ({ templateId }: TemplateClausesTabProps) => {
     setSyncingAll(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.syncFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.syncFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -249,9 +248,7 @@ const LinkedClauseRow = ({
     setSyncing(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.syncFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.syncFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -515,9 +512,7 @@ export const UnlinkButton = ({
     setUnlinking(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.unlinkFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.unlinkFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),

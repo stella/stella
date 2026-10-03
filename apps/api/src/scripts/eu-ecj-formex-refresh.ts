@@ -312,6 +312,7 @@ const REFRESH_OUTCOMES = {
   "notice-missing": true,
   "formex-not-located": true,
   "formex-gone": true,
+  "formex-refused": true,
   "retryable-exhausted": true,
   "write-rejected": true,
 } as const satisfies Record<TerminalRefreshOutcome, true>;

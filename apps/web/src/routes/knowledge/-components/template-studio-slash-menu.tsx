@@ -31,7 +31,6 @@ import {
   TextQuoteIcon,
 } from "@stll/ui/icons";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
-import { stellaToast } from "@stll/ui/toast";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -39,7 +38,9 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   clausesOptions as clauseLibraryOptions,
   invalidateTemplateClauseSources,
@@ -586,9 +587,7 @@ export const useTemplateStudioSlashMenu = ({
       .templates({ templateId: toSafeId<"template">(templateId) })
       .clauses.put({ clauseId: toSafeId<"clause">(clauseId), slotName });
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.linkFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.linkFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),

@@ -1310,19 +1310,16 @@ type GitHubGateway = {
   readRatchetDefinitionPaths: (baseRefName: string) => unknown;
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
-  // Both writes pin the head every gate was evaluated against, so GitHub
+  // Writes pin the head every gate was evaluated against, so GitHub
   // rejects them server-side if it moved since: the head-stability assertion
   // is enforced by the write itself, not by the gap between the last read and
-  // it. `merge` returns the squash commit; `armMergeWhenReady` returns what
-  // GitHub did: enabled auto-merge, or added the pull request to the queue.
+  // it. Queue handoffs share one mutation-and-verification boundary.
   merge: (input: { expectedHeadSha: string }) => string;
-  armMergeWhenReady: (input: { expectedHeadSha: string }) => string;
-  // Preserve the mutation's jump receipt while the fresh queue listing
-  // catches up. Only `readMergeQueue` can confirm first place.
-  enqueueWithJump: (input: {
-    pullRequestId: string;
-    expectedHeadSha: string;
-  }) => EnqueuedMergeQueueEntry;
+  readArmState: () => unknown;
+  mutateHandoff: (
+    query: string,
+    variables: { id: string; sha: string },
+  ) => unknown;
   readMergeQueue: (branch: string) => readonly MergeQueueEntrySnapshot[];
   readMergeQueueRemovals: () => readonly MergeQueueRemoval[];
   readMergeGroup: (groupSha: string) => MergeGroupRecord;
@@ -1398,7 +1395,6 @@ export type MergeWhenReadyAction =
   // back, which is the opposite of a jump. `armedSince` is set when an
   // auto-merge armed earlier will do exactly that.
   | { kind: "jump-waits-for-checks"; armedSince: string | null }
-  | { kind: "already-armed"; enabledAt: string }
   // `verifyFront`: a jump was wanted, so the place it already holds must be
   // the front of the queue.
   | { kind: "already-queued"; entryId: string; verifyFront: boolean };
@@ -1433,9 +1429,6 @@ export const mergeWhenReadyAction = ({
           armedSince: handoff.status === "armed" ? handoff.enabledAt : null,
         };
   }
-  if (handoff.status === "armed") {
-    return { kind: "already-armed", enabledAt: handoff.enabledAt };
-  }
   return { kind: "arm" };
 };
 
@@ -1450,6 +1443,259 @@ type EnqueuedMergeQueueEntry = Pick<
   MergeQueueEntrySnapshot,
   "position" | "jump" | "state"
 >;
+
+export class ArmVerificationError extends TaggedError("ArmVerificationError")<{
+  message: string;
+}> {}
+
+const armState = (value: unknown) => {
+  const raw = readRecord(value, "arm verification pull request");
+  return {
+    id: readString(raw, "id"),
+    headSha: readString(raw, "headRefOid"),
+    updatedAt: readTimestamp(raw, "updatedAt"),
+    autoMerge:
+      raw["autoMergeRequest"] === null
+        ? null
+        : {
+            enabledAt: readTimestamp(
+              readRecord(raw["autoMergeRequest"], "autoMergeRequest"),
+              "enabledAt",
+            ),
+          },
+    queue:
+      raw["mergeQueueEntry"] === null
+        ? null
+        : readRecord(raw["mergeQueueEntry"], "mergeQueueEntry"),
+  };
+};
+const queueReceipt = (
+  raw: Record<string, unknown>,
+  expectedHeadSha: string,
+) => {
+  if (readOptionalOid(raw["headCommit"], "queue head") !== expectedHeadSha) {
+    return null;
+  }
+  const position = raw["position"];
+  if (
+    typeof position !== "number" ||
+    !Number.isSafeInteger(position) ||
+    position < 1
+  ) {
+    return panic("Expected positive merge queue position");
+  }
+  return {
+    position,
+    jump: readBoolean(raw, "jump"),
+    state: readString(raw, "state"),
+  };
+};
+type ArmAndVerifyOptions = {
+  pullRequestId: string;
+  expectedHeadSha: string;
+  jump: boolean;
+  checksSucceeded: boolean;
+  readState: () => unknown;
+  readRemovals: () => readonly MergeQueueRemoval[];
+  mutate: GitHubGateway["mutateHandoff"];
+};
+
+type VerifyArmReceiptOptions = {
+  receipt: ReturnType<typeof armState>;
+  after: ReturnType<typeof armState>;
+  pullRequestId: string;
+  expectedHeadSha: string;
+  invalidatedAt: number;
+  mode: "existing" | "refreshed";
+};
+const refuseArm = (reason: string) =>
+  Result.err(new ArmVerificationError({ message: `NOT ARMED: ${reason}` }));
+const verifyArmReceipt = ({
+  receipt,
+  after,
+  pullRequestId,
+  expectedHeadSha,
+  invalidatedAt,
+  mode,
+}: VerifyArmReceiptOptions) => {
+  if (
+    receipt.id !== pullRequestId ||
+    receipt.headSha !== expectedHeadSha ||
+    after.id !== pullRequestId ||
+    after.headSha !== expectedHeadSha
+  ) {
+    return refuseArm("HEAD_MOVED_DURING_ARMING");
+  }
+  if (after.queue !== null) {
+    const entry = queueReceipt(after.queue, expectedHeadSha);
+    return entry === null
+      ? refuseArm("QUEUE_HEAD_MISMATCH")
+      : Result.ok({ kind: "queued", entry } as const);
+  }
+  const staleReason =
+    mode === "existing"
+      ? "AUTO_MERGE_STALE_DURING_VERIFICATION"
+      : "AUTO_MERGE_STALE_AFTER_ENABLE";
+  if (receipt.autoMerge === null || after.autoMerge === null) {
+    return refuseArm(
+      mode === "existing" ? staleReason : "AUTO_MERGE_ABSENT_AFTER_ENABLE",
+    );
+  }
+  const enabledAt = Date.parse(after.autoMerge.enabledAt);
+  const stale =
+    mode === "existing"
+      ? enabledAt <= Math.max(invalidatedAt, Date.parse(after.updatedAt))
+      : enabledAt < invalidatedAt;
+  if (after.autoMerge.enabledAt !== receipt.autoMerge.enabledAt || stale) {
+    return refuseArm(staleReason);
+  }
+  return Result.ok({
+    kind: "armed",
+    enabledAt: after.autoMerge.enabledAt,
+  } as const);
+};
+
+// This is the sole owner of auto-merge and enqueue mutations. A pre-existing
+// field predating a head update or queue removal is never evidence of arming.
+// Verify a trusted request or refresh it against one new read. PR updatedAt
+// conservatively bounds the latest head push;
+// commit dates cannot establish when a commit was actually pushed.
+export const armAndVerify = ({
+  pullRequestId,
+  expectedHeadSha,
+  jump,
+  checksSucceeded,
+  readState,
+  readRemovals,
+  mutate,
+}: ArmAndVerifyOptions) =>
+  Result.try(() => {
+    const before = armState(readState());
+    if (before.id !== pullRequestId || before.headSha !== expectedHeadSha) {
+      return refuseArm("HEAD_MOVED_DURING_ARMING");
+    }
+    if (before.queue !== null) {
+      const entry = queueReceipt(before.queue, expectedHeadSha);
+      return entry === null
+        ? refuseArm("QUEUE_HEAD_MISMATCH")
+        : Result.ok({ kind: "queued", entry } as const);
+    }
+    let lastRemoval = 0;
+    for (const removal of readRemovals()) {
+      lastRemoval = Math.max(
+        lastRemoval,
+        Date.parse(
+          readTimestamp({ removedAt: removal.removedAt }, "removedAt"),
+        ),
+      );
+    }
+    const invalidatedAt = Math.max(Date.parse(before.updatedAt), lastRemoval);
+    if (
+      !jump &&
+      before.autoMerge !== null &&
+      Date.parse(before.autoMerge.enabledAt) > invalidatedAt
+    ) {
+      return verifyArmReceipt({
+        receipt: before,
+        after: armState(readState()),
+        pullRequestId,
+        expectedHeadSha,
+        invalidatedAt,
+        mode: "existing",
+      });
+    }
+    if (jump || checksSucceeded) {
+      const result = readRecord(
+        mutate(
+          `mutation($id:ID!, $sha:GitObjectID!) {
+        enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$sha,jump:${jump ? "true" : "false"}}) {
+          mergeQueueEntry { id position jump state headCommit { oid } }
+        }
+      }`,
+          { id: pullRequestId, sha: expectedHeadSha },
+        ),
+        "enqueue response",
+      );
+      const receipt = queueReceipt(
+        readRecord(
+          readRecord(
+            readRecord(result["data"], "data")["enqueuePullRequest"],
+            "enqueue result",
+          )["mergeQueueEntry"],
+          "enqueue entry",
+        ),
+        expectedHeadSha,
+      );
+      const after = armState(readState());
+      if (after.id !== pullRequestId || after.headSha !== expectedHeadSha) {
+        return refuseArm("HEAD_MOVED_DURING_ARMING");
+      }
+      if (
+        receipt === null ||
+        (after.queue !== null &&
+          queueReceipt(after.queue, expectedHeadSha) === null)
+      ) {
+        return refuseArm("QUEUE_HEAD_MISMATCH");
+      }
+      if (!jump && after.queue === null) {
+        return refuseArm("QUEUE_ENTRY_ABSENT_AFTER_ENQUEUE");
+      }
+      return Result.ok({ kind: "queued", entry: receipt } as const);
+    }
+    if (before.autoMerge !== null) {
+      const disabled = readRecord(
+        mutate(
+          `mutation($id:ID!) { disablePullRequestAutoMerge(input:{pullRequestId:$id}) { pullRequest { id headRefOid autoMergeRequest { enabledAt } } } }`,
+          { id: pullRequestId, sha: expectedHeadSha },
+        ),
+        "disable response",
+      );
+      const cleared = readRecord(
+        readRecord(
+          readRecord(disabled["data"], "data")["disablePullRequestAutoMerge"],
+          "disable result",
+        )["pullRequest"],
+        "disabled pull request",
+      );
+      if (
+        cleared["id"] !== pullRequestId ||
+        cleared["headRefOid"] !== expectedHeadSha ||
+        cleared["autoMergeRequest"] !== null
+      ) {
+        return refuseArm("AUTO_MERGE_NOT_CLEARED");
+      }
+    }
+    const result = readRecord(
+      mutate(
+        `mutation($id:ID!, $sha:GitObjectID!) {
+      enablePullRequestAutoMerge(input:{pullRequestId:$id,expectedHeadOid:$sha,mergeMethod:SQUASH}) {
+        pullRequest { id headRefOid updatedAt autoMergeRequest { enabledAt } mergeQueueEntry { id position jump state headCommit { oid } } }
+      }
+    }`,
+        { id: pullRequestId, sha: expectedHeadSha },
+      ),
+      "enable response",
+    );
+    const receipt = armState(
+      readRecord(
+        readRecord(result["data"], "data")["enablePullRequestAutoMerge"],
+        "enable result",
+      )["pullRequest"],
+    );
+    return verifyArmReceipt({
+      receipt,
+      after: armState(readState()),
+      pullRequestId,
+      expectedHeadSha,
+      invalidatedAt,
+      mode: "refreshed",
+    });
+  })
+    .mapError(
+      (error) =>
+        new ArmVerificationError({ message: `NOT ARMED: ${error.message}` }),
+    )
+    .andThen((result) => result);
 
 export type QueuePlacement =
   | { status: "front"; position: number }
@@ -2252,67 +2498,49 @@ const createGhGateway = ({
       );
     },
 
-    // `gh` picks the operation the queue accepts for the pull request's
-    // current state: auto-merge while required checks are still running,
-    // a direct enqueue once they have passed (GitHub refuses auto-merge on
-    // an already-clean pull request). Both carry the head pin.
-    armMergeWhenReady: ({ expectedHeadSha }) =>
-      runGh(
-        [
-          "pr",
-          "merge",
-          ...prArgs,
-          "--squash",
-          "--auto",
-          "--match-head-commit",
-          expectedHeadSha,
-        ],
-        "write",
-      ).trim(),
-
-    enqueueWithJump: ({ pullRequestId, expectedHeadSha }) => {
+    readArmState: () => {
       const response = readRecord(
-        JSON.parse(
-          runGh(
-            [
-              "api",
-              "graphql",
-              "-f",
-              `query=mutation($id:ID!, $sha:GitObjectID!) {
-                enqueuePullRequest(input:{
-                  pullRequestId:$id, expectedHeadOid:$sha, jump:true
-                }) { mergeQueueEntry { id position jump state } }
-              }`,
-              "-f",
-              `id=${pullRequestId}`,
-              "-f",
-              `sha=${expectedHeadSha}`,
-            ],
-            "write",
-          ),
-        ),
-        "enqueue response",
+        runGhJson([
+          "api",
+          "graphql",
+          "-f",
+          `query=query($owner:String!, $name:String!, $number:Int!) {
+          repository(owner:$owner,name:$name) { pullRequest(number:$number) {
+            id headRefOid updatedAt autoMergeRequest { enabledAt }
+            mergeQueueEntry { id position jump state headCommit { oid } }
+          } }
+        }`,
+          "-f",
+          `owner=${owner}`,
+          "-f",
+          `name=${name}`,
+          "-F",
+          `number=${pullNumber}`,
+        ]),
+        "arm state response",
       );
-      const entry = readRecord(
-        readRecord(
-          readRecord(response["data"], "data")["enqueuePullRequest"],
-          "enqueuePullRequest",
-        )["mergeQueueEntry"],
-        "mergeQueueEntry",
-      );
-      const position = entry["position"];
-      if (typeof position !== "number") {
-        return panic("Expected numeric merge queue position");
-      }
-      return {
-        position,
-        jump:
-          entry["jump"] === undefined || entry["jump"] === null
-            ? false
-            : readBoolean(entry, "jump"),
-        state: readString(entry, "state"),
-      };
+      return readRecord(
+        readRecord(response["data"], "data")["repository"],
+        "repository",
+      )["pullRequest"];
     },
+
+    mutateHandoff: (query, { id, sha }) =>
+      JSON.parse(
+        runGh(
+          [
+            "api",
+            "graphql",
+            "-f",
+            `query=${query}`,
+            "-f",
+            `id=${id}`,
+            "-f",
+            `sha=${sha}`,
+          ],
+          "write",
+        ),
+      ),
 
     readMergeQueue: (branch) => {
       const response = readRecord(
@@ -2726,29 +2954,42 @@ if (import.meta.main) {
           }
           console.log(`\nverdict: QUEUED — ${action.entryId}`);
           break;
-        case "already-armed":
-          console.log(
-            `\nverdict: ARMED — merge when ready has been on since ${action.enabledAt}`,
-          );
-          break;
-        case "enqueue-jump": {
-          const reported = gateway.enqueueWithJump({
+        case "enqueue-jump":
+        case "arm": {
+          const handoff = armAndVerify({
             pullRequestId: pullRequest.id,
             expectedHeadSha: snapshot.headShaBeforeMerge,
+            jump: action.kind === "enqueue-jump",
+            checksSucceeded: requiredChecksSucceeded({
+              checkRuns: snapshot.checkRuns,
+              requiredCheckRuns: snapshot.requiredCheckRuns,
+            }),
+            readState: gateway.readArmState,
+            readRemovals: gateway.readMergeQueueRemovals,
+            mutate: gateway.mutateHandoff,
           });
-          requireFrontOfQueue(
-            `${snapshot.headShaBeforeMerge} was enqueued after requesting a jump ` +
-              `(GitHub reported position ${reported.position})`,
-            reported,
-          );
-          break;
-        }
-        case "arm": {
-          const outcome = gateway.armMergeWhenReady({
-            expectedHeadSha: snapshot.headShaBeforeMerge,
-          });
+          if (handoff.isErr()) {
+            console.error(handoff.error.message);
+            process.exit(1);
+          }
+          if (action.kind === "enqueue-jump") {
+            if (handoff.value.kind !== "queued") {
+              panic("Jump must return a queue receipt");
+            }
+            requireFrontOfQueue(
+              `${snapshot.headShaBeforeMerge} was enqueued after requesting a jump (GitHub reported position ${handoff.value.entry.position})`,
+              handoff.value.entry,
+            );
+            break;
+          }
+          if (handoff.value.kind === "queued") {
+            console.log(
+              `\nverdict: QUEUED — verified entry for ${snapshot.headShaBeforeMerge}`,
+            );
+            break;
+          }
           console.log(
-            `\nverdict: ARMED — ${outcome}; the queue merges ${snapshot.headShaBeforeMerge} once its checks pass`,
+            `\nverdict: ARMED — verified auto-merge for ${snapshot.headShaBeforeMerge}, enabled at ${handoff.value.enabledAt}`,
           );
           break;
         }

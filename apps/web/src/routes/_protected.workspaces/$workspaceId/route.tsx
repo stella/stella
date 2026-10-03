@@ -15,7 +15,6 @@ import {
   REALTIME_EVENT_TYPE,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
-import { stellaToast } from "@stll/ui/toast";
 
 import { WorkflowServiceTierPromptProvider } from "@/components/workspaces/workflow-service-tier-prompt";
 import { WorkflowStartConfirmationPromptProvider } from "@/components/workspaces/workflow-start-confirmation-prompt";
@@ -25,6 +24,7 @@ import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { useWorkspaceSSE } from "@/lib/workspace-sse";
@@ -126,10 +126,7 @@ const loadWorkspaceOrRedirect = async (
       // below reaches the route error boundary, which captures already.
       getAnalytics().captureError(error);
       const t = getTranslator();
-      stellaToast.add({
-        title: t("errors.matterNotFound"),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.matterNotFound"));
       throw redirect({ to: "/workspaces", replace: true });
     }
 

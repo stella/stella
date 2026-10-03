@@ -6,10 +6,10 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { PlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import { stellaToast } from "@stll/ui/toast";
 
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { useContactPatch } from "@/routes/_protected.contacts/-components/contact-caches";
 import { getContactMetadata } from "@/routes/_protected.contacts/-components/contact-metadata";
 import type {
@@ -69,10 +69,7 @@ export const ContactCustomFieldsEditor = ({
     const value = patch.value.trim();
 
     if (!label) {
-      stellaToast.add({
-        title: t("contacts.customFields.labelRequired"),
-        type: "error",
-      });
+      notifyUserError(undefined, t("contacts.customFields.labelRequired"));
       return false;
     }
 
