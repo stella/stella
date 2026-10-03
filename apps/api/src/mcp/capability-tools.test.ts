@@ -6,11 +6,13 @@ import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-p
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { isRecord } from "@/api/lib/type-guards";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { MCP_ERROR_CODES, projectMcpRefusal } from "@/api/mcp/error-codes";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { MAX_LIST_LIMIT } from "@/api/mcp/tool-utils";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
@@ -223,6 +225,43 @@ describe("generated capability catalog", () => {
 });
 
 describe("capability handler refusal metadata", () => {
+  test("every refusal projection uses a closed envelope code and preserves domain issues", () => {
+    const domainCodes = Object.values(PLAYBOOK_RUN_FAILURE_CODE);
+    for (const code of domainCodes) {
+      expect(MCP_ERROR_CODES).not.toContain(code);
+    }
+    for (const status of [
+      0, 200, 400, 401, 402, 403, 404, 409, 413, 422, 429, 500, 502, 503, 999,
+    ]) {
+      for (const code of [
+        undefined,
+        ...MCP_ERROR_CODES,
+        ...domainCodes,
+        "handler_specific_code",
+      ]) {
+        const message = "Correct the request";
+        const issue = { path: "input.name", message: "Choose a valid name" };
+        const projected = projectMcpRefusal({
+          status,
+          code,
+          message,
+          issues: [issue],
+          hint: "Correct the request and call again.",
+          retryable: false,
+        });
+        expect(MCP_ERROR_CODES).toContain(projected.code);
+        expect(projected.issues).toContainEqual(issue);
+        expect(projected.hint).toBe("Correct the request and call again.");
+        expect(projected.retryable).toBe(false);
+        if (
+          code !== undefined &&
+          !MCP_ERROR_CODES.some((candidate) => candidate === code)
+        ) {
+          expect(projected.issues).toContainEqual({ path: "", code, message });
+        }
+      }
+    }
+  });
   test("properties.update forwards the file type refusal's corrective action", async () => {
     const matterId = "00000000-0000-4000-8000-0000000a0001";
     const propertyId = "00000000-0000-4000-8000-0000000b0001";
@@ -276,6 +315,13 @@ describe("capability handler refusal metadata", () => {
       retryable: false,
     });
     expect(error.code).not.toBe(FILE_PROPERTY_TYPE_IMMUTABLE_CODE);
+    expect(error.issues).toEqual([
+      {
+        path: "",
+        code: FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
+        message: error.message,
+      },
+    ]);
     expect(writes).toBe(0);
   });
 
@@ -315,12 +361,31 @@ describe("capability handler refusal metadata", () => {
                 message: "A corrective action is required",
                 hint: "Correct the matter and invoke the capability again.",
                 retryable,
+                issues: [
+                  {
+                    path: "input.name",
+                    code: "invalid_name",
+                    message: "Choose a valid name",
+                  },
+                ],
               }),
             }),
           ),
         ).toMatchObject({
           hint: "Correct the matter and invoke the capability again.",
           retryable,
+          issues: [
+            {
+              path: "",
+              code: "handler_specific_code",
+              message: "A corrective action is required",
+            },
+            {
+              path: "input.name",
+              code: "invalid_name",
+              message: "Choose a valid name",
+            },
+          ],
         });
       }
     },
@@ -335,11 +400,13 @@ describe("capability handler refusal metadata", () => {
           message: "Invalid input",
           hint: { raw: "private details" },
           retryable: "false",
+          issues: [{ path: 123, message: "Invalid shape" }],
         }),
       }),
     );
     expect(error).not.toHaveProperty("hint");
     expect(error).not.toHaveProperty("retryable");
+    expect(error).not.toHaveProperty("issues");
   });
 });
 

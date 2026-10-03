@@ -6,9 +6,6 @@ import type { McpErrorCode } from "@/api/mcp/error-codes";
 import type { InternalToolError } from "@/api/mcp/tool-types";
 
 const MCP_CODE_TO_CHAT_KIND = {
-  properties_limit_reached: "limit",
-  playbook_scope_unresolved: "invalid-input",
-  file_property_type_immutable: "invalid-input",
   validation_error: "invalid-input",
   result_too_large: "invalid-input",
   missing_scope: "unavailable",

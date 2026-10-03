@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -420,9 +421,14 @@ describe("MCP knowledge tools", () => {
         error: {
           code: "validation_error",
           hint: expect.stringContaining("save_clause"),
-          issues: [
+          issues: expect.arrayContaining([
+            {
+              path: "",
+              code: CLAUSE_DIRECTIVES_INVALID_CODE,
+              message: expect.stringContaining("invalid directives"),
+            },
             { path: "body.0", message: expect.stringContaining("Unclosed") },
-          ],
+          ]),
         },
       });
       expect(insertedBodies).toEqual([]);
@@ -1048,10 +1054,16 @@ describe("MCP knowledge tools", () => {
         }),
         toolName: "run_playbook",
       });
-      const { ok: _ok, status: _status, ...details } = refusal;
+      const { ok: _ok, status: _status, code, ...details } = refusal;
       expect(materializePlaybookRunMock).toHaveBeenCalledTimes(1);
       expect(result.isError).toBe(true);
-      expect(parseToolPayload(result)).toEqual({ error: details });
+      expect(parseToolPayload(result)).toEqual({
+        error: {
+          code: "validation_error",
+          ...details,
+          issues: [{ path: "", code, message: refusal.message }],
+        },
+      });
       expect(createPlaybookTableRunsMock).not.toHaveBeenCalled();
       expect(startWorkflowMock).not.toHaveBeenCalled();
     },
@@ -1074,11 +1086,19 @@ describe("MCP knowledge tools", () => {
     expect(result.isError).toBe(true);
     expect(parseToolPayload(result)).toEqual({
       error: {
-        code: "playbook_scope_unresolved",
+        code: "validation_error",
         message:
           "This playbook is scoped to a document type, but the workspace has no matching Document Type classifier to gate on.",
         hint: "Configure a matching Document Type classifier or change the playbook document-type scope before running it.",
         retryable: false,
+        issues: [
+          {
+            path: "",
+            code: "playbook_scope_unresolved",
+            message:
+              "This playbook is scoped to a document type, but the workspace has no matching Document Type classifier to gate on.",
+          },
+        ],
       },
     });
     expect(materializePlaybookRunMock).not.toHaveBeenCalled();

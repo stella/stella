@@ -21,6 +21,12 @@ test.each([
   "properties_limit_reached",
   "playbook_scope_unresolved",
   "file_property_type_immutable",
-])("%s remains correctable through the CLI", (code) => {
-  expect(resolveMcpErrorCodeExit(code)).toBe(EXIT_CODES.validation);
-});
+])(
+  "%s is an issue code; its validation envelope remains correctable",
+  (code) => {
+    expect(resolveMcpErrorCodeExit(code)).toBeUndefined();
+    expect(resolveMcpErrorCodeExit("validation_error")).toBe(
+      EXIT_CODES.validation,
+    );
+  },
+);

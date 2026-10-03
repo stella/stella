@@ -8,7 +8,7 @@ import {
 } from "@stll/api-contract/action-admission";
 
 import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
-import type { ChatToolErrorKind } from "@/api/lib/errors/tagged-errors";
+import { projectMcpRefusal } from "@/api/mcp/error-codes";
 import type { InternalToolError } from "@/api/mcp/tool-types";
 
 import {
@@ -49,27 +49,24 @@ describe("registry tool error projection", () => {
       });
     }
   });
-  test("preserves playbook refusal codes and recovery fields through chat", () => {
-    const expectedKinds = {
-      properties_limit_reached: "limit",
-      playbook_scope_unresolved: "invalid-input",
-      file_property_type_immutable: "invalid-input",
-    } as const satisfies Record<
-      (typeof PLAYBOOK_RUN_FAILURE_CODE)[keyof typeof PLAYBOOK_RUN_FAILURE_CODE],
-      ChatToolErrorKind
-    >;
+  test("preserves playbook issue codes and recovery fields through chat", () => {
     for (const code of Object.values(PLAYBOOK_RUN_FAILURE_CODE)) {
-      const details = {
+      const details = projectMcpRefusal({
+        status: 400,
         code,
         message: "The playbook cannot run.",
         hint: "Correct the matter configuration before running it.",
         retryable: false,
-      };
+      });
       const projected = toRegistryChatToolError({
         type: "structured",
         ...details,
       });
-      expect(projected.kind).toBe(expectedKinds[code]);
+      expect(projected.kind).toBe("invalid-input");
+      expect(details.code).toBe("validation_error");
+      expect(details.issues).toEqual([
+        { path: "", code, message: details.message },
+      ]);
       expect(JSON.parse(projected.message)).toEqual({ error: details });
     }
   });

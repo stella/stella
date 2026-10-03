@@ -244,6 +244,13 @@ describe("internalFailureResult preserves expected handler errors", () => {
             message: "The caller must correct the request",
             hint: "Correct the request and call the tool again.",
             retryable,
+            issues: [
+              {
+                path: "",
+                code: "handler_specific_code",
+                message: "The caller must correct the request",
+              },
+            ],
           },
         });
       }

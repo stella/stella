@@ -138,7 +138,12 @@ describe("run playbook handler", () => {
       });
       expect(mcp).toMatchObject({
         status: "error",
-        error: { type: "structured", ...details },
+        error: {
+          type: "structured",
+          ...details,
+          code: "validation_error",
+          issues: [{ path: "", code: refusal.code, message: refusal.message }],
+        },
       });
       expect(startWorkflowMock).not.toHaveBeenCalled();
     },
