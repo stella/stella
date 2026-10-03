@@ -141,11 +141,10 @@ const ADMINISTRATIVE_PROCEDURE_SUCCESSION = {
 
 /**
  * 283/2021 Sb. took effect on 1 January 2024 for reserved structures only;
- * ordinary structures stayed under 183/2006 Sb. until 1 July 2024. In between,
- * a bare `stavební zákon` may mean either, so it opens neither: a citation
- * that names its act (`z roku 2006`, `č. 283/2021 Sb.`) still resolves.
+ * ordinary structures stayed under 183/2006 Sb. until 1 July 2024, so a bare
+ * `stavební zákon` reads as 183/2006 Sb. until then. A citation that names
+ * its act (`č. 283/2021 Sb.`) still resolves to it.
  */
-const BUILDING_ACT_PHASED_IN = "2024-01-01";
 const BUILDING_ACT_FULLY_APPLICABLE = "2024-07-01";
 
 /**
@@ -272,12 +271,20 @@ export const CZ_PROFILE = {
       on: RECODIFICATION,
     }),
     { spellings: ["OZ64"], identifier: sb(40, 1964) },
-    ...priorWindowed({
+    // Courts kept `obč. zák.` for the civil code in force through both
+    // recodifications; a decision's own `dále jen` definition still wins.
+    {
       spellings: ["obč. zák.", "obč.zák.", "obč. zák"],
-      older: sb(141, 1950),
-      olderFrom: CIVIL_CODES_1951,
-      newer: sb(40, 1964),
-      on: CIVIL_CODES_1964,
+      identifier: sb(141, 1950),
+      citedFrom: CIVIL_CODES_1951,
+      citedUntil: CIVIL_CODES_1964,
+    },
+    ...succession({
+      spellings: ["obč. zák.", "obč.zák.", "obč. zák"],
+      older: sb(40, 1964),
+      olderFrom: CIVIL_CODES_1964,
+      newer: sb(89, 2012),
+      on: RECODIFICATION,
     }),
     {
       spellings: ["ObchZ", "obch. zák.", "obch.zák.", "obch. zák"],
@@ -525,7 +532,7 @@ export const CZ_PROFILE = {
       ],
       identifier: sb(183, 2006),
       citedFrom: "2007-01-01",
-      citedUntil: BUILDING_ACT_PHASED_IN,
+      citedUntil: BUILDING_ACT_FULLY_APPLICABLE,
     },
     {
       spellings: [
@@ -537,6 +544,16 @@ export const CZ_PROFILE = {
       ],
       identifier: sb(283, 2021),
       citedFrom: BUILDING_ACT_FULLY_APPLICABLE,
+    },
+    {
+      spellings: [
+        "živnostenský zákon",
+        "živnostenského zákona",
+        "živnostenském zákoně",
+        "živnostenskému zákonu",
+        "živnostenským zákonem",
+      ],
+      identifier: sb(455, 1991),
     },
     {
       spellings: [

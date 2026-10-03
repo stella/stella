@@ -48,33 +48,32 @@ type Divergence = {
   reason: string;
 };
 
-const SEARCH_ONLY =
-  "Search-box shorthand: as a citation alias it would also match ordinary words in decision text.";
-
-const searchOnly = (key: AliasKey): Divergence => ({
+/** A search-box shorthand the citation profile deliberately does not read. */
+const searchOnly = (key: AliasKey, reason: string): Divergence => ({
   key,
   profileReads: "absent",
-  reason: SEARCH_ONLY,
+  reason,
 });
 
+const ORDINARY_WORD =
+  "A prefix of `občanský …`; in decision text it is an ordinary word, not a citation.";
+
+const LITERATURE_SHORTHAND =
+  "Literature shorthand; courts cite the act by the forms the profile reads.";
+
 const KNOWN_DIVERGENCES: readonly Divergence[] = [
-  {
-    key: "cze:obc. zak.",
-    profileReads: "40/1964 sb",
-    reason:
-      "Decisions cite the 1964 code as `obč. zák.`; a search-box query means the code in force.",
-  },
-  searchOnly("cze:obc zak"),
-  searchOnly("cze:obcz"),
-  searchOnly("cze:obcansky"),
-  searchOnly("cze:obcan"),
-  searchOnly("cze:trz"),
-  searchOnly("cze:dph"),
-  {
-    key: "cze:zivnostensky zakon",
-    profileReads: "absent",
-    reason: "The CZ profile has no titles for 455/1991 Sb. yet.",
-  },
+  searchOnly(
+    "cze:obc zak",
+    "Typed without periods; decisions write `obč. zák.`, which the profile reads.",
+  ),
+  searchOnly("cze:obcz", LITERATURE_SHORTHAND),
+  searchOnly("cze:trz", LITERATURE_SHORTHAND),
+  searchOnly("cze:obcansky", ORDINARY_WORD),
+  searchOnly("cze:obcan", ORDINARY_WORD),
+  searchOnly(
+    "cze:dph",
+    "In decision text `DPH` names the tax, not the act; the profile reads `ZDPH`.",
+  ),
 ];
 
 const TODAY = new Date().toISOString().slice(0, 10);
