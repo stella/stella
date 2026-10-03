@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import capabilityCatalog from "../../../packages/cli/capability-catalog.json" with { type: "json" };
+import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
 import ledger from "../capability-description-ledger.json" with { type: "json" };
 import {
   computeLedgerDiff,
@@ -23,7 +23,7 @@ const readEntries = (
     return typeof description === "string" ? { id, description } : { id };
   });
 
-const entries = readEntries(capabilityCatalog);
+const entries = readEntries(readCapabilityCatalog());
 const ledgerIds: string[] = Array.isArray(ledger) ? ledger : [];
 
 /** Every subset of `items`, so a property can be driven over the whole

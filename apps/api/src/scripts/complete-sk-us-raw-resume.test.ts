@@ -55,8 +55,13 @@ const rowAt = <T>(items: readonly T[], index: number): T => {
 
 const journalSchema = v.array(
   v.object({
-    cursor: v.object({ id: v.string() }),
-    outcome: v.string(),
+    version: v.literal(1),
+    sourceId: v.pipe(v.string(), v.uuid()),
+    cursor: v.object({
+      id: v.pipe(v.string(), v.uuid()),
+      createdAt: v.pipe(v.string(), v.isoTimestamp()),
+    }),
+    outcome: v.picklist(SK_US_RAW_OUTCOMES),
     disposition: v.picklist(["terminal", "retryable", "preview"]),
   }),
 );
@@ -417,6 +422,63 @@ test("a torn journal tail is dropped before the next record so every line stays 
   }
 });
 
+test("torn-tail repair preserves every complete byte beyond the journal read window", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "sk-us-journal-window-"));
+  const sourceId = createSafeId<"caseLawSource">();
+  const checkpointPath = path.join(directory, "checkpoint.json");
+  const journalPath = `${checkpointPath}.outcomes.jsonl`;
+  const records = Array.from(
+    { length: 400 },
+    () =>
+      ({
+        version: 1,
+        sourceId,
+        cursor: {
+          id: createSafeId<"caseLawDecision">(),
+          createdAt: "2026-03-01T00:00:00.000001Z",
+        },
+        outcome: "completed",
+        disposition: "terminal",
+      }) as const,
+  );
+  const prefix = records
+    .map((record) => `${JSON.stringify(record)}\n`)
+    .join("");
+  const cursor = {
+    id: createSafeId<"caseLawDecision">(),
+    createdAt: "2026-03-01T00:00:00.000002Z",
+  };
+  const appended = {
+    version: 1,
+    sourceId,
+    cursor,
+    outcome: "retry_later",
+    disposition: "retryable",
+  } as const;
+  // Larger than the 64 KiB tail the repair reads, so it must keep bytes it
+  // never looked at.
+  expect(Buffer.byteLength(prefix)).toBeGreaterThan(64 * 1024);
+  try {
+    for (const fragmentLength of [1, 37, 1024]) {
+      const torn = `${prefix}${"x".repeat(fragmentLength)}`;
+      expect(torn.endsWith("\n")).toBe(false);
+      await writeFile(journalPath, torn);
+      await journalSkUsRawOutcome({
+        checkpointPath,
+        sourceId,
+        cursor,
+        outcome: "retry_later",
+      });
+      expect(await readFile(journalPath, "utf-8")).toBe(
+        `${prefix}${JSON.stringify(appended)}\n`,
+      );
+      expect(await readJournal(checkpointPath)).toEqual([...records, appended]);
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("an oversized unterminated journal tail is refused, never truncated", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "sk-us-journal-tail-"));
   const sourceId = createSafeId<"caseLawSource">();
@@ -475,6 +537,7 @@ test("every retryable row is durably journaled before stopping without advancing
           visited.push(row.id);
           return row.id === failed.id ? retryOutcome : "completed";
         },
+        record: () => {},
         journal: async (cursor, outcome) =>
           await journalSkUsRawOutcome({
             checkpointPath,
@@ -499,12 +562,16 @@ test("every retryable row is durably journaled before stopping without advancing
       );
       expect(await readJournal(checkpointPath)).toEqual([
         {
-          cursor: { id: previous.id },
+          version: 1,
+          sourceId,
+          cursor: previous,
           outcome: "completed",
           disposition: "terminal",
         },
         {
-          cursor: { id: failed.id },
+          version: 1,
+          sourceId,
+          cursor: failed,
           outcome: retryOutcome,
           disposition: "retryable",
         },
@@ -519,6 +586,7 @@ test("every retryable row is durably journaled before stopping without advancing
           resumedVisits.push(row.id);
           return "completed";
         },
+        record: () => {},
         journal: async (cursor, outcome) =>
           await journalSkUsRawOutcome({
             checkpointPath,
@@ -573,6 +641,7 @@ test("journal persistence failure prevents checkpoint advancement and later rows
           visited.push(row.id);
           return "completed";
         },
+        record: () => {},
         journal: async (cursor, outcome) =>
           await journalSkUsRawOutcome({
             checkpointPath,

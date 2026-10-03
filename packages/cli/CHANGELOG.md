@@ -1,5 +1,37 @@
 # @stll/cli
 
+## 3.5.0
+
+### Minor Changes
+
+- [#4514](https://github.com/stella/stella/pull/4514) [`ab4d98e`](https://github.com/stella/stella/commit/ab4d98ed5959581bcda956b4163fb9125a4dbd05) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add matter billing arrangement capabilities and preserve exact minor-unit arithmetic.
+
+- [#4566](https://github.com/stella/stella/pull/4566) [`a41c647`](https://github.com/stella/stella/commit/a41c64773d8740ab7c0d1832f3b9ef2b32037e6e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose optional clause body preconditions when saving clauses.
+
+### Patch Changes
+
+- [#4381](https://github.com/stella/stella/pull/4381) [`108bebb`](https://github.com/stella/stella/commit/108bebb36e4381ff1591ddbde3dfe3a22d57559d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Publish regenerated capability contracts.
+
+- [#4580](https://github.com/stella/stella/pull/4580) [`69b3fd6`](https://github.com/stella/stella/commit/69b3fd64c7427b962f38343710954fcf28f4a8f5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep every key of cached registry schemas and expanded input schemas as an own property, including `__proto__`.
+
+- [#4281](https://github.com/stella/stella/pull/4281) [`4b0c11e`](https://github.com/stella/stella/commit/4b0c11e635c46ab1c51bb7cb7ef1ea5cc2a2c24c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Support the correspondence view layout.
+
+- [#4381](https://github.com/stella/stella/pull/4381) [`108bebb`](https://github.com/stella/stella/commit/108bebb36e4381ff1591ddbde3dfe3a22d57559d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Ship the capability contract as per-capability JSON files.
+
+## 3.4.0
+
+### Minor Changes
+
+- [#4146](https://github.com/stella/stella/pull/4146) [`1a16c0c`](https://github.com/stella/stella/commit/1a16c0cef6bba7a8dc281ad18851b393f8153589) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Screen counterparties against the sanctions lists.
+
+- [#4490](https://github.com/stella/stella/pull/4490) [`032e379`](https://github.com/stella/stella/commit/032e379de50656a9ac259b0225414855630fa8c6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add daily time target controls and remaining minutes to the personal day view.
+
+## 3.3.4
+
+### Patch Changes
+
+- [#4383](https://github.com/stella/stella/pull/4383) [`c3b7126`](https://github.com/stella/stella/commit/c3b7126d592481ebd098379dddafaa9fa96801d5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Generate CLI route maps and tool annotations from committed inputs before building.
+
 ## 3.3.3
 
 ### Patch Changes

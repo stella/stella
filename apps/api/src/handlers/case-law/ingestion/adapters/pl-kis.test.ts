@@ -326,8 +326,8 @@ describe("every ingested category, as the service served it", () => {
       const { decision, row } = await builtFrom(category.slug);
       expect(decision.sourceDocumentId).toBe(plKisDocumentIdOf(row));
       expect(decision.sourceDocumentId).toMatch(/^\d+$/u);
-      expect(decision.decisionType).toBe(category.decisionType);
-      expect(decision.caseNumber).toBe(String(row["SYG"]).trim());
+      expect(decision.decisionType === category.decisionType).toBe(true);
+      expect(decision.caseNumber === String(row["SYG"]).trim()).toBe(true);
       expect(decision.court.length).toBeGreaterThan(0);
       expect(decision.decisionDate).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
       expect(decision.fulltext?.length ?? 0).toBeGreaterThan(100);
@@ -387,14 +387,16 @@ describe("every ingested category, as the service served it", () => {
 
   test("a tax chamber's interpretation names its chamber as the authority", async () => {
     const { decision } = await builtFrom("01-ind-2008");
-    expect(decision.court).toBe("Dyrektor Izby Skarbowej w Bydgoszczy");
-    expect(decision.caseNumber).toBe("ITPB1/415-778/07/MR");
+    expect(decision.court === "Dyrektor Izby Skarbowej w Bydgoszczy").toBe(
+      true,
+    );
+    expect(decision.caseNumber === "ITPB1/415-778/07/MR").toBe(true);
   });
 
   test("a superseded interpretation says so", async () => {
     const { decision } = await builtFrom("01-ind-superseded");
-    expect(decision.metadata["status"]).toBe("superseded");
-    expect(decision.metadata["statusId"]).toBe("29");
+    expect(decision.metadata["status"] === "superseded").toBe(true);
+    expect(decision.metadata["statusId"] === "29").toBe(true);
   });
 
   test("an amendment names the document it amends", async () => {
@@ -439,7 +441,7 @@ describe("every ingested category, as the service served it", () => {
     });
     expect(built.type).toBe("built");
     if (built.type === "built") {
-      expect(built.decision.metadata["documentFrom"]).toBe("pdf");
+      expect(built.decision.metadata["documentFrom"] === "pdf").toBe(true);
       expect(built.decision.fulltext).toContain("waloryzacji");
       expect(built.decision.sourceRawObjects?.["document-pdf"]?.bytes).toEqual(
         pdfBytes,
@@ -514,9 +516,10 @@ describe("every ingested category, as the service served it", () => {
       rawParts: plKisRawPartsOf(row, undefined),
       detailStatus: "detail-gone",
     });
-    expect(built.decision.decisionType).toBe(
-      "postanowienie o odmowie wydania opinii w sprawie opodatkowania wyrównawczego",
-    );
+    expect(
+      built.decision.decisionType ===
+        "postanowienie o odmowie wydania opinii w sprawie opodatkowania wyrównawczego",
+    ).toBe(true);
     expect(built.decision.metadata["category"]).toMatchObject({
       id: 74_593,
       disposition: "included",
@@ -567,7 +570,9 @@ describe("identity", () => {
     });
     expect(built.type).toBe("detail-unavailable");
     if (built.type === "detail-unavailable") {
-      expect(built.decision.metadata["detailStatus"]).toBe("detail-unreadable");
+      expect(
+        built.decision.metadata["detailStatus"] === "detail-unreadable",
+      ).toBe(true);
     }
   });
 
@@ -601,7 +606,7 @@ describe("the issuing authority", () => {
         JSON.stringify(detailFor("700020", "<p>Treść interpretacji.</p>")),
       ),
     });
-    expect(built.decision.court).toBe("");
+    expect(built.decision.court === "").toBe(true);
     expect(built.decision.metadata["authorities"]).toEqual([]);
   });
 });
@@ -673,10 +678,12 @@ describe("the unmapped-field guard", () => {
     });
     expect(built.type).toBe("built");
     if (built.type === "built") {
-      expect(built.decision.metadata["unmappedSourceFields"]).toEqual([
-        "NOWA_KOLUMNA",
-        "informacja/nowyKlucz",
-      ]);
+      expect(
+        Bun.deepEquals(built.decision.metadata["unmappedSourceFields"], [
+          "NOWA_KOLUMNA",
+          "informacja/nowyKlucz",
+        ]),
+      ).toBe(true);
       const parts = decodeSourceRawEnvelope(built.decision.sourceRaw ?? "");
       expect(parts?.["listing"]).toContain("NOWA_KOLUMNA");
     }
@@ -740,8 +747,12 @@ describe("reading fields", () => {
       rawParts: plKisRawPartsOf(row, undefined),
       detailStatus: "detail-gone",
     });
-    expect(fromDetail.decision.metadata["publishedAt"]).toBe("2026-06-19");
-    expect(fromListing.decision.metadata["publishedAt"]).toBe("2026-06-19");
+    expect(fromDetail.decision.metadata["publishedAt"] === "2026-06-19").toBe(
+      true,
+    );
+    expect(fromListing.decision.metadata["publishedAt"] === "2026-06-19").toBe(
+      true,
+    );
   });
 
   test("an instant is the calendar day in Warsaw", () => {
@@ -942,9 +953,9 @@ describe("the crawl", () => {
       expect(decision?.sourceDocumentId).toBe(plKisQuarantineId(withoutId));
       expect(decision?.sourceDocumentId).toStartWith("eureka-quarantine:");
       expect(decision?.isListingOnly).toBe(true);
-      expect(decision?.metadata["detailStatus"]).toBe(
-        "publisher-id-unavailable",
-      );
+      expect(
+        decision?.metadata["detailStatus"] === "publisher-id-unavailable",
+      ).toBe(true);
       // Its verbatim row is what the stored envelope holds.
       expect(
         decodeSourceRawEnvelope(decision?.sourceRaw ?? "")?.["listing"],
@@ -975,6 +986,46 @@ describe("the crawl", () => {
     ]);
   });
 
+  test.each(["<p></p>", String.raw`{\rtf1 poisoned}`])(
+    "a rejected summary %s is quarantined while the rest of the page advances",
+    async (label) => {
+      const poison = { ...rowFor(600_001), TEZA: label };
+      const stub = stubPublisher((call) =>
+        isSearch(call)
+          ? json({
+              results: [rowFor(600_000), poison, rowFor(600_002)],
+              totalHits: 3,
+            })
+          : json({}, 404),
+      );
+      try {
+        const page = (
+          await plKisAdapter.fetchPage("sweep|700000|2010-03|0", {})
+        ).unwrap();
+        expect(
+          page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+        ).toEqual(["600000", "600001", "600002"]);
+        expect(page.itemBuildFailures).toEqual({
+          type: "item_build_failed",
+          count: 1,
+        });
+        expect(page.nextCursor).toBe("sweep|700000|2010-04|0");
+        const rejected = page.decisions.find(
+          ({ sourceDocumentId }) => sourceDocumentId === "600001",
+        );
+        expect(rejected?.isListingOnly).toBe(true);
+        expect(rejected?.metadata["detailStatus"] === "item_build_failed").toBe(
+          true,
+        );
+        expect(
+          decodeSourceRawEnvelope(rejected?.sourceRaw ?? "")?.["listing"],
+        ).toBe(JSON.stringify(poison));
+      } finally {
+        stub.restore();
+      }
+    },
+  );
+
   test("a detail the service no longer serves keeps the row without a document", async () => {
     const stub = stubPublisher((call) =>
       isSearch(call)
@@ -987,7 +1038,7 @@ describe("the crawl", () => {
       const [decision] = Result.isOk(page) ? page.value.decisions : [];
       expect(decision?.sourceDocumentId).toBe("600000");
       expect(decision?.isListingOnly).toBe(true);
-      expect(decision?.metadata["detailStatus"]).toBe("detail-gone");
+      expect(decision?.metadata["detailStatus"] === "detail-gone").toBe(true);
       // A gone detail is permanent; the PDF of it is not asked for.
       expect(
         stub.calls.filter((call) => call.url.endsWith("/eksport/PDF")),

@@ -7,6 +7,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   KanbanIcon,
+  MailIcon,
   TableIcon,
 } from "@stll/ui/icons";
 import { PreviewPane } from "@stll/ui/preview-pane";
@@ -96,6 +97,9 @@ const PreviewCanvas = ({ kind, workspaceId }: PreviewCanvasProps) => {
   }
   if (kind === "avt") {
     return <AvtPreview />;
+  }
+  if (kind === "correspondence") {
+    return <CorrespondencePreview />;
   }
   return <TimelinePreview />;
 };
@@ -349,6 +353,36 @@ const AvtPreview = () => (
     </div>
   </div>
 );
+
+// The matter's address above the messages filed to it.
+const CorrespondencePreview = () => (
+  <div className="flex h-full flex-col justify-center gap-1.5">
+    <div className="bg-card flex items-center gap-1.5 rounded-sm border p-1.5">
+      <MailIcon className="text-muted-foreground size-3.5 shrink-0" />
+      <div className="bg-muted-foreground/30 h-1.5 w-28 rounded-full" />
+    </div>
+    <div className="bg-card flex flex-col rounded-sm border">
+      {CORRESPONDENCE_PREVIEW_ROWS.map((row) => (
+        <div
+          className="flex items-center gap-2 border-b p-1.5 last:border-0"
+          key={row.key}
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className={cn("bg-muted h-1.5 rounded-full", row.subject)} />
+            <div className="bg-muted/60 h-1 w-1/3 rounded-full" />
+          </div>
+          <div className="bg-muted h-1 w-6 rounded-full" />
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+const CORRESPONDENCE_PREVIEW_ROWS = [
+  { key: "c1", subject: "w-3/4" },
+  { key: "c2", subject: "w-1/2" },
+  { key: "c3", subject: "w-2/3" },
+] as const;
 
 // Fixed timestamp: previews are static mock data, and the ambient clock would make
 // the rendered output differ between sessions for no reason.

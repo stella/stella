@@ -7,7 +7,7 @@
   },
   "tools": {
     "check_counterparty": {
-      "default": {"title": 18, "description": 700, "inputSchema": 1943, "outputSchema": 2351, "annotations": 95, "payloadUtf8Bytes": 5213}
+      "default": {"title": 18, "description": 809, "inputSchema": 3772, "outputSchema": 3998, "annotations": 95, "payloadUtf8Bytes": 8798}
     },
     "compare_documents": {
       "default": {"title": 25, "description": 770, "inputSchema": 3326, "outputSchema": 1144, "annotations": 126, "payloadUtf8Bytes": 5493},
@@ -198,7 +198,7 @@
       "default": {"title": 12, "description": 272, "inputSchema": 281, "outputSchema": 130, "annotations": 114, "payloadUtf8Bytes": 906}
     },
     "save_clause": {
-      "default": {"title": 11, "description": 516, "inputSchema": 2534, "outputSchema": 114, "annotations": 113, "payloadUtf8Bytes": 3384}
+      "default": {"title": 11, "description": 516, "inputSchema": 2881, "outputSchema": 114, "annotations": 113, "payloadUtf8Bytes": 3731}
     },
     "save_contact": {
       "default": {"title": 12, "description": 303, "inputSchema": 2245, "outputSchema": 116, "annotations": 114, "payloadUtf8Bytes": 2887}

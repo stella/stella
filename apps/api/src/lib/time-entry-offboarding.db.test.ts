@@ -32,6 +32,7 @@ import { getAuth } from "@/api/lib/auth";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -337,7 +338,7 @@ describe("member removal with an active timer", () => {
     const recordAuditEvent = async () => undefined;
     const context = {
       user: { id: fixture.ownerId },
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       session: { activeOrganizationId: fixture.organizationId },
       workspaceId: fixture.workspaceId,
       safeDb: createSafeDb(

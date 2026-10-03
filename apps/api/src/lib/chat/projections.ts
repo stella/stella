@@ -48,6 +48,10 @@ import {
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
+  SANCTIONS_COMPANY_ID_COUNTRIES,
+  SANCTIONS_COMPANY_REGISTRIES,
+} from "@/api/lib/business-registries/sanctions-check-vocabulary";
+import {
   CITATION_READ_DIRECTIONS,
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
@@ -68,6 +72,16 @@ import {
   PROVISION_ABSENCE_STATUSES,
   PROVISION_STATUS,
 } from "@/api/lib/legal-search/legislation-provision-vocabulary";
+import {
+  SANCTIONS_CLASSIFICATIONS,
+  SANCTIONS_ENTITY_TYPES,
+  SANCTIONS_FIELD_COMPARISONS,
+  SANCTIONS_IDENTITY_FIELDS,
+  SANCTIONS_PENDING_UPDATE_CODES,
+  SANCTIONS_SCREENING_STATUSES,
+  SANCTIONS_SOURCE_IDS,
+  SANCTIONS_UNAVAILABLE_REASONS,
+} from "@/api/lib/lists/sanctions/screening-vocabulary";
 
 import {
   chatEntityRef,
@@ -499,9 +513,10 @@ const documentFieldContentProjection = v.variant("type", [
     v.strictObject({
       version: v.literal(1),
       type: v.literal("person"),
-      // The workspace member handle is machinery chat cannot act on; the name
-      // is what a model reads.
-      userId: strippedField(),
+      // The workspace member handle is the person's reference: the model
+      // links the name with it (`#stella-user=<userId>`, PEOPLE MENTIONS) the
+      // way it links an entity with its `ent_N`. Null for a non-member.
+      userId: v.nullable(passthroughId()),
       name: v.string(),
       image: strippedField(),
     }),
@@ -2268,10 +2283,122 @@ const entityCheckOutcomeEntries = {
   subject: entityCheckSubjectProjection,
 };
 
+const sanctionsDateOfBirthProjection = v.variant("precision", [
+  v.strictObject({ precision: v.literal("year"), year: v.number() }),
+  v.strictObject({
+    precision: v.literal("month"),
+    year: v.number(),
+    month: v.number(),
+  }),
+  v.strictObject({
+    precision: v.literal("day"),
+    year: v.number(),
+    month: v.number(),
+    day: v.number(),
+  }),
+]);
+
+// The subject as screened: the name used, and where it came from.
+const sanctionsCheckedSubjectProjection = v.variant("type", [
+  v.strictObject({
+    type: v.literal("organization"),
+    name: v.string(),
+    identifiers: v.array(v.string()),
+    resolvedFrom: v.nullable(
+      v.strictObject({
+        type: v.literal("company-id"),
+        value: v.string(),
+        country: v.picklist(SANCTIONS_COMPANY_ID_COUNTRIES),
+        registry: v.picklist(SANCTIONS_COMPANY_REGISTRIES),
+      }),
+    ),
+  }),
+  v.strictObject({
+    type: v.literal("person"),
+    name: v.string(),
+    dateOfBirth: v.nullable(sanctionsDateOfBirthProjection),
+    nationalityCodes: v.array(v.string()),
+  }),
+  // A company ID whose name the register could not give; nothing screened.
+  v.strictObject({
+    type: v.literal("company-id"),
+    value: v.string(),
+    country: v.picklist(SANCTIONS_COMPANY_ID_COUNTRIES),
+  }),
+]);
+
+const sanctionsPossibleMatchProjection = v.strictObject({
+  sourceEntryId: passthroughId(),
+  editionId: passthroughId(),
+  score: v.number(),
+  sourceUrl: publicUrl(),
+  name: v.nullable(v.string()),
+  referenceNumber: v.nullable(v.string()),
+  entityType: v.picklist(SANCTIONS_ENTITY_TYPES),
+  programme: v.nullable(v.string()),
+  listedOn: v.nullable(v.string()),
+  evidence: v.strictObject({
+    nameScore: v.number(),
+    matchedName: v.nullable(v.string()),
+    birthDate: v.picklist(SANCTIONS_FIELD_COMPARISONS),
+    nationality: v.picklist(SANCTIONS_FIELD_COMPARISONS),
+    entityType: v.picklist(SANCTIONS_FIELD_COMPARISONS),
+    identifier: v.picklist(SANCTIONS_FIELD_COMPARISONS),
+    conflicts: v.array(v.picklist(SANCTIONS_IDENTITY_FIELDS)),
+  }),
+});
+
+// A newer edition the refresh fetched and held back for review; the list
+// still answers from the edition it had.
+const sanctionsPendingUpdateProjection = v.strictObject({
+  code: v.picklist(SANCTIONS_PENDING_UPDATE_CODES),
+  heldAt: v.string(),
+  previousCount: v.nullable(v.number()),
+  nextCount: v.nullable(v.number()),
+});
+
+// One list's answer. Flattened over its status: a clear or possible-match
+// list names the edition it screened; an unavailable one names its reason
+// and, when one is on file, the edition it did not use.
+const sanctionsListOutcomeProjection = v.strictObject({
+  source: v.picklist(SANCTIONS_SOURCE_IDS),
+  // The issuing country's code, or EU or UN. A plain string keeps the output
+  // schema within its budget; the service types it closed.
+  issuer: v.string(),
+  classification: v.picklist(SANCTIONS_CLASSIFICATIONS),
+  status: v.picklist(SANCTIONS_SCREENING_STATUSES),
+  reason: v.nullable(v.picklist(SANCTIONS_UNAVAILABLE_REASONS)),
+  // The one note the budget keeps: which edition these fields name depends
+  // on the list's status (the screened one when it answered).
+  editionId: v.pipe(
+    v.nullable(passthroughId()),
+    v.description("If unavailable: latest on file, NOT screened"),
+  ),
+  publishedAt: v.nullable(v.string()),
+  verifiedAt: v.nullable(v.string()),
+  // A newer edition held back for review; the list still screens the
+  // edition above.
+  pendingUpdate: v.nullable(sanctionsPendingUpdateProjection),
+  totalMatches: v.number(),
+  truncated: v.boolean(),
+  possibleMatches: v.array(sanctionsPossibleMatchProjection),
+});
+
+const sanctionsCheckProjection = v.strictObject({
+  kind: v.literal("sanctions"),
+  status: v.picklist(SANCTIONS_SCREENING_STATUSES),
+  subject: sanctionsCheckedSubjectProjection,
+  checkedAt: v.string(),
+  cutoff: v.number(),
+  lists: v.array(sanctionsListOutcomeProjection),
+});
+
 /**
- * check_counterparty. Source of truth: `runEntityCheck`'s `EntityCheckResult`
- * union, forwarded verbatim by `handleCheckCounterpartyTool`
- * (`matter-tools.ts`). Public-register data about the screened subject.
+ * check_counterparty. Source of truth: `runEntityCheckShared`'s
+ * `CounterpartyCheckResult` union, forwarded verbatim by
+ * `handleCheckCounterpartyTool` (`matter-tools.ts`): one register outcome, or
+ * the sanctions check's per-list outcomes. Public-register and public-list
+ * data about the screened subject.
  */
 export const CHECK_COUNTERPARTY_PROJECTION = v.variant("status", [
   projectionBranch(
@@ -2321,6 +2448,9 @@ export const CHECK_COUNTERPARTY_PROJECTION = v.variant("status", [
       supportedSubjectTypes: v.array(v.picklist(ENTITY_CHECK_SUBJECT_TYPES)),
     }),
   ),
+  // Shares status values with the register outcomes above; `kind` tells the
+  // two apart, and each strict branch refuses the other's fields.
+  projectionBranch(sanctionsCheckProjection),
 ]);
 
 const TEMPLATE_WARNINGS_PROJECTION = v.array(

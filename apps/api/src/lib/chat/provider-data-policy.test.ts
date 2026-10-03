@@ -13,7 +13,10 @@ import {
 
 import { env } from "@/api/env";
 import { DECISION_MODEL_PROVIDERS } from "@/api/lib/ai-config";
-import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
+import {
+  type AIDataClass,
+  MANAGED_AI_RESIDENCIES,
+} from "@/api/lib/chat/ai-data-policy";
 import {
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   PROVIDER_DATA_POLICY,
@@ -183,6 +186,72 @@ describe("provider request policy", () => {
       expect(isManagedProviderAvailable(provider, "customer")).toBe(
         provider === "openrouter",
       );
+    }
+  });
+
+  test("request factories enforce the provider policy for every data class and check mode", () => {
+    const previous = {
+      USE_MOCK_AI: env.USE_MOCK_AI,
+      FEATURE_MANAGED_PROVIDER_CHECKS: env.FEATURE_MANAGED_PROVIDER_CHECKS,
+      ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
+      BEDROCK_API_KEY: env.BEDROCK_API_KEY,
+      GOOGLE_GENERATIVE_AI_API_KEY: env.GOOGLE_GENERATIVE_AI_API_KEY,
+      MISTRAL_API_KEY: env.MISTRAL_API_KEY,
+      OPENAI_API_KEY: env.OPENAI_API_KEY,
+      OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
+    };
+    const dataClasses = {
+      customer: "customer",
+      public_corpus: "public_corpus",
+    } as const satisfies { [DataClass in AIDataClass]: DataClass };
+    Object.assign(env, {
+      USE_MOCK_AI: false,
+      ANTHROPIC_API_KEY: REQUEST_API_KEY,
+      BEDROCK_API_KEY: REQUEST_API_KEY,
+      GOOGLE_GENERATIVE_AI_API_KEY: REQUEST_API_KEY,
+      MISTRAL_API_KEY: REQUEST_API_KEY,
+      OPENAI_API_KEY: REQUEST_API_KEY,
+      OPENROUTER_API_KEY: REQUEST_API_KEY,
+    });
+    try {
+      for (const enabled of [false, true]) {
+        env.FEATURE_MANAGED_PROVIDER_CHECKS = enabled;
+        for (const provider of AI_PROVIDERS) {
+          for (const dataClass of Object.values(dataClasses)) {
+            for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
+              const policy =
+                dataClass === "customer"
+                  ? { dataClass, managedAIResidency }
+                  : { dataClass };
+              const result = Result.try({
+                try: () =>
+                  createTanStackTextAdapterFactory({ provider, ...policy }),
+                catch: (error) => error,
+              });
+              if (dataClass === "customer" && provider !== "openrouter") {
+                expect(result.isErr()).toBe(true);
+                if (Result.isError(result)) {
+                  expect(result.error).toMatchObject({
+                    status: 503,
+                    code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+                  });
+                }
+                continue;
+              }
+              expect(result.isOk()).toBe(
+                resolveTanStackAIProviderSupport({ provider }).supported,
+              );
+              if (Result.isError(result)) {
+                expect(result.error).not.toMatchObject({
+                  code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+                });
+              }
+            }
+          }
+        }
+      }
+    } finally {
+      Object.assign(env, previous);
     }
   });
 
@@ -473,6 +542,7 @@ describe("provider request policy", () => {
         {
           status: 403,
           message: "No endpoints found supporting your data region.",
+          metadata: { failed_routing_step: "Filter by Data Region" },
           routingRefusal: false,
         },
         { status: 404, message: "Request unavailable", routingRefusal: false },
@@ -484,12 +554,34 @@ describe("provider request policy", () => {
         {
           status: 404,
           message: "No endpoints found supporting your data region.",
+          metadata: {
+            routing_funnel: [{ step: "Initial Endpoints", endpoint_count: 1 }],
+            failed_routing_step: "Filter by Data Region",
+          },
           routingRefusal: true,
         },
         {
           status: 404,
-          message: "No endpoints found matching your data policy.",
+          message: "Region endpoint unavailable.",
+          metadata: { failed_routing_step: "Filter by Data Region" },
           routingRefusal: true,
+        },
+        {
+          status: 404,
+          message: "No endpoints found supporting your data region.",
+          routingRefusal: false,
+        },
+        {
+          status: 404,
+          message: "No endpoints found supporting your data region.",
+          metadata: { failed_routing_step: "Filter by Data Policy" },
+          routingRefusal: false,
+        },
+        {
+          status: 404,
+          message: "No endpoints found matching your data policy.",
+          metadata: { failed_routing_step: "Filter by Data Policy" },
+          routingRefusal: false,
         },
         { status: 429, message: "Request unavailable", routingRefusal: false },
         {
@@ -521,7 +613,13 @@ describe("provider request policy", () => {
               }
               return new Response(
                 JSON.stringify({
-                  error: { code: status, message },
+                  error: {
+                    code: status,
+                    message,
+                    ...("metadata" in response
+                      ? { metadata: response.metadata }
+                      : {}),
+                  },
                 }),
                 { status, headers: { "content-type": "application/json" } },
               );
@@ -648,8 +746,12 @@ describe("provider request policy", () => {
               model: scenario.strict
                 ? "google/gemini-2.5-flash"
                 : `${model}:online`,
-              models: [scenario.strict ? "google/gemini-2.5-flash" : model],
             });
+            if (!("apiKey" in scenario.options)) {
+              expect(requests.at(0)?.body).not.toHaveProperty("models");
+            } else {
+              expect(requests.at(0)?.body).toMatchObject({ models: [model] });
+            }
             if (scenario.strict) {
               expect(requests.at(0)?.body).not.toHaveProperty("plugins");
             } else {

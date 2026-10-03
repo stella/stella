@@ -6,6 +6,7 @@
 import type { ChatClientState, UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
+import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 
@@ -18,6 +19,7 @@ import type {
   ChatUITools,
 } from "@/lib/api-contract";
 import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@/lib/api-contract";
+import { toAPIError } from "@/lib/errors/api";
 
 export type {
   ChatAnonRestoration,
@@ -1045,7 +1047,12 @@ export const getChatAssistantTurnError = (
   const outcome = resolveChatAssistantTurnOutcome(message);
   switch (outcome.type) {
     case "failed":
-      return new Error(outcome.error);
+      return outcome.refusal === undefined
+        ? new Error(outcome.error)
+        : toAPIError({
+            status: ACTION_ADMISSION_REFUSALS[outcome.refusal.code].status,
+            value: outcome.refusal,
+          });
     case "awaiting-user":
     case "cancelled":
     case "completed":

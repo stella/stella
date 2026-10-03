@@ -30,7 +30,6 @@ import {
   CaseLawIcon,
   HistoryIcon,
   LandmarkIcon,
-  SearchIcon,
 } from "@stll/ui/icons";
 import {
   LANDING_ROW_CLASS,
@@ -532,7 +531,6 @@ function LawHome() {
         {history.length > 0 ? (
           history.map((entry) => (
             <LandingButton
-              icon={<SearchIcon className="size-4" />}
               key={entry.query}
               meta={formatRelativeTime(entry.at)}
               onClick={() => rerunSearch(entry.query)}

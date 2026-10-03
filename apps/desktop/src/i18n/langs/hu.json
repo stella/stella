@@ -52,6 +52,11 @@
     "takenOverTitle": "Szerkesztés másik eszközre áthelyezve"
   },
   "dialog": {
+    "accountWindowTitle": "Fiók csatlakoztatása",
+    "accountTitle": "Csatlakoztatja ezt a fiókot?",
+    "accountSubtitle": "Csatlakoztassa a stella desktop alkalmazást ehhez a fiókhoz és szervezethez.",
+    "accountEmail": "Fiók",
+    "organizationName": "Szervezet",
     "allow": "Engedélyezés",
     "apiUrl": "API-cím",
     "cancel": "Mégse",
