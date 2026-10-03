@@ -798,8 +798,9 @@ const runCreateDocumentStep = async ({
     actorUserId,
   });
 
-  let superseded = false;
-  let completion: Awaited<ReturnType<typeof completeStepInTransaction>> = null;
+  const completion: {
+    result: Awaited<ReturnType<typeof completeStepInTransaction>> | undefined;
+  } = { result: undefined };
   const completionArgs = {
     runId: run.id,
     stepIndex,
@@ -832,20 +833,19 @@ const runCreateDocumentStep = async ({
           // The entity creator holds the workspace cap lock before this run lock.
           // Keep the artifact and its owning step in the same commit: cancellation
           // or another worker winning the run lock rolls both back.
-          completion = await completeStepInTransaction(tx, {
+          completion.result = await completeStepInTransaction(tx, {
             ...completionArgs,
             output: { kind: "create-document", entityId: document.entityId },
           });
-          if (completion === null) {
-            superseded = true;
-            return tx.rollback();
+          if (completion.result === null) {
+            tx.rollback();
           }
         },
       }),
     catch: (cause) => cause,
   });
   if (
-    superseded &&
+    completion.result === null &&
     created.isErr() &&
     created.error instanceof TransactionRollbackError
   ) {
@@ -855,10 +855,10 @@ const runCreateDocumentStep = async ({
     Result.flatten(created),
     "The document could not be created for this workspace (entity limit reached or missing file property).",
   );
-  if (completion === null) {
-    return panic("Created flow document without its owning step completion");
+  if (completion.result === null || completion.result === undefined) {
+    panic("Created flow document without its owning step completion");
   }
-  await publishCompletedStep(completionArgs, completion);
+  await publishCompletedStep(completionArgs, completion.result);
 };
 
 // ── Shared transition writers ───────────────────────────

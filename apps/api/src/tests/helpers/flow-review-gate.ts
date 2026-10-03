@@ -162,8 +162,9 @@ export const flowReviewGateFixture = async (
             broadcastUpdate: () => undefined,
             enqueueStep: async ({ stepIndex }) => {
               enqueued.push(stepIndex);
+              await Promise.resolve(undefined);
             },
-            notifyRunCompleted: async () => undefined,
+            notifyRunCompleted: async () => await Promise.resolve(undefined),
           },
         );
   };
@@ -210,8 +211,9 @@ export const waitForBlockedPid = async (
 ) => {
   const deadline = performance.now() + 3000;
   while (performance.now() < deadline) {
-    const rows =
-      await observer`select ${holdingPid} = any(pg_blocking_pids(${waitingPid})) as waiting`;
+    const rows = await observer<
+      { waiting: boolean }[]
+    >`select ${holdingPid} = any(pg_blocking_pids(${waitingPid})) as waiting`;
     if (rows.at(0)?.waiting === true) {
       return;
     }

@@ -30,7 +30,7 @@ import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { inspectDocxPackage } from "@stll/folio-core/server";
 
 import { organization, user } from "@/api/db/auth-schema";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   fields,
   entities,
@@ -345,7 +345,9 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     const recordAuditEvent = async () => undefined;
     const context = createTestHandlerContext({
       safeDb,
-      scopedDb: createScopedDb(testDb, [workspaceId], organizationId, userId),
+      scopedDb: asTestRaw<ScopedDb>(
+        createScopedDb(testDb, [workspaceId], organizationId, userId),
+      ),
       workspaceId,
       user: { id: userId },
       session: { activeOrganizationId: organizationId },

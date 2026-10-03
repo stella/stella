@@ -122,14 +122,14 @@ if (!databaseUrl || !enabled) {
                 catch: (cause) => cause,
               });
               if (written.isErr()) {
-                return await Promise.reject(
-                  winner === "cleanup-failure" ? cleanupFailure : written.error,
-                );
+                throw winner === "cleanup-failure"
+                  ? cleanupFailure
+                  : written.error;
               }
               return Result.ok(result);
             };
-            const start = (connection: typeof worker) =>
-              executeFlowStep(
+            const start = async (connection: typeof worker) =>
+              await executeFlowStep(
                 { runId: f.runId, stepIndex: 1 },
                 new AbortController().signal,
                 {
@@ -168,8 +168,12 @@ if (!databaseUrl || !enabled) {
             }
             release.resolve(undefined);
             if (winner === "cleanup-failure") {
-              await expect(running).rejects.toBeInstanceOf(FlowStepError);
-              await expect(running).rejects.toMatchObject({
+              const failure = await running.then(
+                () => panic("Document cleanup failure unexpectedly succeeded"),
+                (error: unknown) => error,
+              );
+              expect(failure).toBeInstanceOf(FlowStepError);
+              expect(failure).toMatchObject({
                 cause: cleanupFailure,
               });
             } else {
@@ -206,9 +210,13 @@ if (!databaseUrl || !enabled) {
               expect(state.run?.status).toBe("completed");
               expect(state.steps.at(1)?.status).toBe("completed");
               expect(saved).toHaveLength(1);
+              const document = saved.at(0);
+              if (!document) {
+                panic("Completed document step has no saved entity");
+              }
               expect(output).toEqual({
                 kind: "create-document",
-                entityId: saved.at(0)?.id,
+                entityId: document.id,
               });
             }
             await start(worker);

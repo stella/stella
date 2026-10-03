@@ -167,8 +167,12 @@ const readTaskById = createSafeHandler(
     // The task a workflow review gate raised opens onto its run: the gate's
     // instructions and the AI output under review live there, not here.
     const gate = yield* Result.await(
-      safeDb((tx) =>
-        reviewGateForTask(tx, { workspaceId, taskEntityId: params.taskId }),
+      safeDb(
+        async (tx) =>
+          await reviewGateForTask(tx, {
+            workspaceId,
+            taskEntityId: params.taskId,
+          }),
       ),
     );
     const gateRunId = gate?.runId ?? null;

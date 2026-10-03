@@ -916,6 +916,16 @@ export const updateTaskHandler = async function* ({
     }),
   );
   const { status: _decided, ...rest } = props.body;
+  // Settlement already updates the task and records its audit. A status-only
+  // decision has no remaining fields to write; a second update in an outer
+  // transaction would recheck its workspace FK while still holding the run.
+  const hasRemainingChanges = Object.entries(rest).some(
+    ([key, value]) =>
+      key !== "taskId" && key !== "workflowReason" && value !== undefined,
+  );
+  if (!hasRemainingChanges) {
+    return Result.ok({ success: true });
+  }
   const second = yield* applyTaskUpdate({ ...props, body: rest, features });
   if (Result.isError(second)) {
     return second;

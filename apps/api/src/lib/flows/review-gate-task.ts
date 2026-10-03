@@ -144,7 +144,10 @@ export const decideGateForTask = async (
 ): Promise<Result<FlowRunActionResult, HandlerError | SafeDbError>> =>
   await Result.gen(async function* () {
     const gate = yield* Result.await(
-      safeDb((tx) => reviewGateForTask(tx, { workspaceId, taskEntityId })),
+      safeDb(
+        async (tx) =>
+          await reviewGateForTask(tx, { workspaceId, taskEntityId }),
+      ),
     );
     if (gate === undefined) {
       return Result.err(

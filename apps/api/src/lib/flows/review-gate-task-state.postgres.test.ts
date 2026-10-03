@@ -78,7 +78,7 @@ const taskAction = async ({ fixture: f, safeDb, entry }: TaskActionOptions) => {
             body: { action: "cancel" },
           }),
         );
-  if (typeof result === "object" && result !== null && "code" in result) {
+  if (typeof result === "object" && "code" in result) {
     return { type: "error" as const, status: result.code };
   }
   expect(result).toEqual(entry === "Kanban" ? {} : { success: true });

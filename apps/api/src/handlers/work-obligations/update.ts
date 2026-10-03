@@ -190,11 +190,12 @@ const updateWorkObligation = createSafeHandler(
       body.sourceType === undefined
         ? undefined
         : yield* Result.await(
-            safeDb((tx) =>
-              reviewGateForTask(tx, {
-                workspaceId,
-                taskEntityId: params.entityId,
-              }),
+            safeDb(
+              async (tx) =>
+                await reviewGateForTask(tx, {
+                  workspaceId,
+                  taskEntityId: params.entityId,
+                }),
             ),
           );
     if (reviewGate) {
