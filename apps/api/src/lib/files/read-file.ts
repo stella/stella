@@ -10,7 +10,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { isStampableDocx } from "@/api/lib/docx-stamp";
 import { isNativelyRenderableMimeType } from "@/api/lib/files/gotenberg";
 import { createFileKey } from "@/api/lib/files/utils";
-import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
@@ -84,33 +83,54 @@ export const readFileHandler = async ({
     mimeType: content.mimeType,
   });
 
-  if (purpose === "download") {
-    const presignedUrl = await scopedDb(
+  // Every purpose grants the stored bytes through the audited helper; `purpose`
+  // and the delivered object identify what the caller received.
+  const grantUrl = async ({
+    s3Key,
+    fileName,
+    mimeType,
+    sizeBytes,
+  }: {
+    s3Key: string;
+    fileName?: string;
+    mimeType: string;
+    // Known for the stored original only, not for a derived rendition.
+    sizeBytes?: number;
+  }) =>
+    await scopedDb(
       async (tx) =>
         await auditedPresignDownload({
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: row.entityId,
-          s3Key: fileKey,
+          s3Key,
           expiresInSeconds: FILE_READ_URL_EXPIRY_SECONDS,
-          fileName: content.fileName,
+          ...(fileName === undefined ? {} : { fileName }),
           organizationId,
           workspaceId,
           metadata: {
             fieldId,
-            mimeType: content.mimeType,
-            sizeBytes: content.sizeBytes,
+            purpose,
+            mimeType,
+            ...(sizeBytes === undefined ? {} : { sizeBytes }),
           },
         }),
     );
+
+  if (purpose === "download") {
     return {
       fileId: content.id,
       mimeType: content.mimeType,
       originalMimeType: content.mimeType,
       fileName: content.fileName,
       encrypted: content.encrypted,
-      presignedUrl,
+      presignedUrl: await grantUrl({
+        s3Key: fileKey,
+        fileName: content.fileName,
+        mimeType: content.mimeType,
+        sizeBytes: content.sizeBytes,
+      }),
       stampable:
         !!row.versionStamp &&
         !!row.verificationCode &&
@@ -136,9 +156,10 @@ export const readFileHandler = async ({
       originalMimeType: content.mimeType,
       fileName: content.fileName,
       encrypted: content.encrypted,
-      presignedUrl: await presignDownloadUrl(fileKey, {
-        expiresIn: FILE_READ_URL_EXPIRY_SECONDS,
-        scope: { organizationId, workspaceId },
+      presignedUrl: await grantUrl({
+        s3Key: fileKey,
+        mimeType: content.mimeType,
+        sizeBytes: content.sizeBytes,
       }),
       stampable: false,
     };
@@ -160,9 +181,9 @@ export const readFileHandler = async ({
     originalMimeType: content.mimeType,
     fileName: content.fileName,
     encrypted: content.encrypted,
-    presignedUrl: await presignDownloadUrl(displayFileKey, {
-      expiresIn: FILE_READ_URL_EXPIRY_SECONDS,
-      scope: { organizationId, workspaceId },
+    presignedUrl: await grantUrl({
+      s3Key: displayFileKey,
+      mimeType: PDF_MIME_TYPE,
     }),
     stampable: false,
   };

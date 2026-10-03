@@ -17,6 +17,13 @@ import {
   createPendingDocumentQueue,
 } from "@/api/lib/legal-search/sk-document-queue";
 
+const nextRow = async (
+  queue: ReturnType<typeof createPendingDocumentQueue>,
+) => {
+  const result = await queue.next();
+  return result.type === "row" ? result.row : undefined;
+};
+
 const PAGE_SIZE = 5;
 const PROBE_INTERVAL_MS = 5000;
 
@@ -50,7 +57,10 @@ const fakeTiers = () => {
     },
     loadRemaining: async (limit) => {
       queries.remaining += 1;
-      return await Promise.resolve(rows.remaining.slice(0, limit));
+      const page = rows.remaining.slice(0, limit);
+      return page.length > 0
+        ? { type: "rows", rows: page }
+        : { type: "exhausted" };
     },
   };
 
@@ -77,7 +87,7 @@ describe("pending document queue", () => {
       requestedPollIntervalMs: 0,
     });
 
-    const first = await queue.next();
+    const first = await nextRow(queue);
     expect(first?.decision.caseNumber).toBe("bulk-1");
     if (first) {
       tiers.serve(first.decision);
@@ -85,7 +95,7 @@ describe("pending document queue", () => {
 
     tiers.rows.requested = [pending("asked-for")];
 
-    const second = await queue.next();
+    const second = await nextRow(queue);
 
     expect(second?.tier).toBe(DOCUMENT_TIER.REQUESTED);
     expect(second?.decision.caseNumber).toBe("asked-for");
@@ -104,7 +114,7 @@ describe("pending document queue", () => {
 
     const served: string[] = [];
     const take = async (): Promise<void> => {
-      const queued = await queue.next();
+      const queued = await nextRow(queue);
       if (!queued) {
         return;
       }
@@ -134,7 +144,7 @@ describe("pending document queue", () => {
       requestedPollIntervalMs: PROBE_INTERVAL_MS,
     });
 
-    const first = await queue.next();
+    const first = await nextRow(queue);
     expect(tiers.queries.requested).toBe(1);
     if (first) {
       tiers.serve(first.decision);
@@ -142,7 +152,7 @@ describe("pending document queue", () => {
 
     tiers.rows.requested = [pending("asked-for")];
     clock = PROBE_INTERVAL_MS - 1;
-    const withinInterval = await queue.next();
+    const withinInterval = await nextRow(queue);
 
     expect(tiers.queries.requested).toBe(1);
     expect(withinInterval?.tier).toBe(DOCUMENT_TIER.REMAINING);
@@ -151,7 +161,7 @@ describe("pending document queue", () => {
     }
 
     clock = PROBE_INTERVAL_MS;
-    const afterInterval = await queue.next();
+    const afterInterval = await nextRow(queue);
 
     expect(tiers.queries.requested).toBe(2);
     expect(afterInterval?.decision.caseNumber).toBe("asked-for");
@@ -177,7 +187,7 @@ describe("pending document queue", () => {
     });
 
     const take = async (): Promise<void> => {
-      const queued = await queue.next();
+      const queued = await nextRow(queue);
       if (queued) {
         tiers.serve(queued.decision);
       }
@@ -202,6 +212,6 @@ describe("pending document queue", () => {
       requestedPollIntervalMs: 0,
     });
 
-    expect(await queue.next()).toBeUndefined();
+    expect(await queue.next()).toEqual({ type: "exhausted" });
   });
 });

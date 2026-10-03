@@ -231,7 +231,7 @@ test("corpus-query-core-stems-first/non-Slovak indexes reserve their declared co
     });
     const legacyField = legacyStemming.fields.at(0);
     expect(baseline).not.toContain(
-      `${legacyField}:${quoteCorpusValue(legacyStemming.stemTerm("nájemního"))}`,
+      `${String(legacyField)}:${quoteCorpusValue(legacyStemming.stemTerm("nájemního"))}`,
     );
     expect(candidate).not.toBeNull();
     for (const token of tokenizeCorpusFreeText(options.text)) {
@@ -240,7 +240,7 @@ test("corpus-query-core-stems-first/non-Slovak indexes reserve their declared co
         `text_stem:${quoteCorpusValue(stemCorpusText(token.value, "cs"))}`,
       );
       expect(candidate).toContain(
-        `${legacyField}:${quoteCorpusValue(legacyStemming.stemTerm(token.value))}`,
+        `${String(legacyField)}:${quoteCorpusValue(legacyStemming.stemTerm(token.value))}`,
       );
     }
     expect(leavesIn(candidate ?? "").length).toBeLessThanOrEqual(
