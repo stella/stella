@@ -572,7 +572,7 @@ describe("template pack permission decisions", () => {
       if (expected === "denied") {
         expect(Result.isError(result)).toBe(true);
         if (Result.isError(result)) {
-          expect(result.error.status).toBe(403);
+          expect(result.error).toMatchObject({ status: 403 });
         }
         expect(await packTemplateRows()).toEqual([]);
         return;

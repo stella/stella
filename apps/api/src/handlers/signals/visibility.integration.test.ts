@@ -25,6 +25,7 @@ import listSignals from "@/api/handlers/signals/list";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { MemberRole } from "@/api/lib/member-roles";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import {
   authorizedMemberRole,
@@ -134,7 +135,7 @@ const runListAs = async ({
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   workspaceIds: SafeId<"workspace">[];
-  role: ListContext["memberRole"]["role"];
+  role: MemberRole;
   credential?: CredentialAuthority;
   query?: ListContext["query"];
 }) => {

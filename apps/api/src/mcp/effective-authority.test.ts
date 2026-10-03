@@ -16,10 +16,13 @@ import {
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // Authority state is private, so equality is checked on what it exposes.
-const shape = (authority: AuthorizedMemberRole) => ({
-  role: roleForDisplay(authority),
-  credentialPermissions: credentialPermissionsForContext(authority),
-});
+const shape = (authority: AuthorizedMemberRole | null) =>
+  authority === null
+    ? null
+    : {
+        role: roleForDisplay(authority),
+        credentialPermissions: credentialPermissionsForContext(authority),
+      };
 
 describe("MCP member authority", () => {
   test("a credential with its own set becomes an attenuated authority", () => {

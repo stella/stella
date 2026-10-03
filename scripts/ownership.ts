@@ -849,6 +849,11 @@ export const OWNERSHIP = [
           path: "apps/api/src/lib/business-registries/desktop/link-grants.ts",
           reason: "Builds the linked desktop account context.",
         },
+        {
+          path: "apps/api/scripts/ai-provider-canary-chat-toolsets.ts",
+          reason:
+            "Builds an owner session to assemble the full chat tool set for provider schema checks; serves no request.",
+        },
       ],
     },
   },
