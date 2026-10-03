@@ -233,9 +233,13 @@ describe("daily target ownership and audit", () => {
     const audit = auditRecorder();
     await db
       .update(member)
-      .set({ role: "admin" })
-      .where(eq(member.id, ids.memberAdminOrg));
+      .set({ role: "owner" })
+      .where(eq(member.id, ids.memberA1org));
     try {
+      await db
+        .update(member)
+        .set({ role: "admin" })
+        .where(eq(member.id, ids.memberAdminOrg));
       expect(
         await updateMember({
           minutes: 1440,
@@ -253,6 +257,10 @@ describe("daily target ownership and audit", () => {
         .update(member)
         .set({ role: "owner" })
         .where(eq(member.id, ids.memberAdminOrg));
+      await db
+        .update(member)
+        .set({ role: "member" })
+        .where(eq(member.id, ids.memberA1org));
     }
   });
 
