@@ -758,6 +758,8 @@ const searchPostgresDecisions = async (
   // engine that answered it, so both providers must answer it identically.
   const interpretation = interpretDecisionQuery({
     body,
+    // Provision-reference grouping is supported only by the corpus index.
+    configuredVariant: "off",
     intent: parseDecisionQuery(body.query, {
       grammar: decisionDocketGrammarForCountry(body.country),
       reporters: decisionReporterGrammarForJurisdiction(body.country),

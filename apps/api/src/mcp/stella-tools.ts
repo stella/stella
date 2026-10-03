@@ -31,6 +31,7 @@ import type {
   ContactPhone,
   FieldContent,
 } from "@/api/db/schema-validators";
+import { envBase } from "@/api/env-base";
 import {
   DECISION_DOCUMENT_HYDRATION,
   DECISION_DOCUMENT_STATE,
@@ -2184,6 +2185,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       subCursor,
       interpretation: interpretDecisionQuery({
         body,
+        configuredVariant: envBase.CORPUS_INDEX_QUERY_VARIANT,
         intent: parseDecisionQuery(query, { grammar, reporters }),
       }),
     };

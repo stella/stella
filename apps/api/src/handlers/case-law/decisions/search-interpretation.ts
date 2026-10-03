@@ -137,13 +137,13 @@ export type DecisionQueryInterpretation = {
 type InterpretDecisionQueryOptions = {
   body: SearchDecisionsBody;
   intent: DecisionQueryIntent;
-  configuredVariant?: CorpusIndexQueryVariant;
+  configuredVariant: CorpusIndexQueryVariant;
 };
 
 export const interpretDecisionQuery = ({
   body,
   intent,
-  configuredVariant = "off",
+  configuredVariant,
 }: InterpretDecisionQueryOptions): DecisionQueryInterpretation => {
   // An identifier found among other words leaves them a text search, read
   // like any other should the reference name nothing.

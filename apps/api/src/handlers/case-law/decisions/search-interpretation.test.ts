@@ -28,6 +28,7 @@ const request = (
 const interpret = (body: SearchDecisionsBody) =>
   interpretDecisionQuery({
     body,
+    configuredVariant: "off",
     intent: parseDecisionQuery(body.query, {
       grammar: decisionDocketGrammarForCountry(body.country),
     }),
@@ -268,6 +269,9 @@ test.each([
         configuredVariant: "provision-refs",
       }).queryVariant,
     ).toBe(expected);
-    expect(interpretDecisionQuery({ body, intent }).queryVariant).toBe("off");
+    expect(
+      interpretDecisionQuery({ body, intent, configuredVariant: "off" })
+        .queryVariant,
+    ).toBe("off");
   },
 );
