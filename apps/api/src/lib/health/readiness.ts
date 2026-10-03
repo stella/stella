@@ -1,5 +1,9 @@
 import { Result } from "better-result";
 
+import { Temporal } from "@stll/time";
+
+import { env } from "@/api/env";
+import { createDemoAccountOtpRotationProbe } from "@/api/lib/demo-account-otp-rotation";
 import { HealthCheckError } from "@/api/lib/errors/tagged-errors";
 import { probeDatabase } from "@/api/lib/health/probe-database";
 import { probeDocumentConverter } from "@/api/lib/health/probe-document-converter";
@@ -11,9 +15,11 @@ import {
   putTemporaryS3ObjectWithSignal,
 } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
+import { runtimeMode } from "@/api/runtime-mode";
 
 export const READINESS_DEPENDENCY = {
   database: "database",
+  demoCredentials: "demo-credentials",
   documentConverter: "document-converter",
   objectStorage: "object-storage",
   rawSourceErasure: "raw-source-erasure",
@@ -176,6 +182,12 @@ const probeScheduledJobs = async (): Promise<void> => {
 };
 
 const runtimeReadinessProbes = {
+  [READINESS_DEPENDENCY.demoCredentials]: createDemoAccountOtpRotationProbe({
+    demoOtp: env.DEMO_ACCOUNT_OTP,
+    rotatedAt: env.DEMO_ACCOUNT_OTP_ROTATED_AT,
+    runtimeMode: runtimeMode(),
+    now: () => Temporal.Now.instant().epochMilliseconds,
+  }),
   [READINESS_DEPENDENCY.database]: async () => {
     await probeDatabase();
   },

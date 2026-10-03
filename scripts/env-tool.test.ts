@@ -256,6 +256,23 @@ describe("environment file parsing", () => {
 });
 
 describe("environment doctor output", () => {
+  test("reports configured demo rotation requirements", () => {
+    const result = validateDoctorEnvironment({
+      app: "api",
+      mode: "production",
+      input: {
+        ...parseEnvText(renderApiEnvExample(), {}),
+        DEMO_ACCOUNT_OTP: "654321",
+      },
+    });
+    expect(result.status).toBe("invalid");
+    if (result.status === "invalid") {
+      expect(result.issues).toContain(
+        "DEMO_ACCOUNT_OTP requires DEMO_ACCOUNT_OTP_ROTATED_AT in strict runtime mode.",
+      );
+    }
+  });
+
   const validApiInput = () => parseEnvText(renderApiEnvExample(), {});
 
   test("never renders cataloged secret values", () => {

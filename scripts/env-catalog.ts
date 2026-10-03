@@ -117,6 +117,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DB_SSLMODE",
   "DB_USER",
   "DEBUG_UNREDACTED_ERRORS",
+  "DEMO_ACCOUNT_OTP_ROTATED_AT",
   "DEV_PUBLIC_LAW_CONNECT_COMMAND",
   "DOCUMENT_OCR_BATCH_INTERVAL_MINUTES",
   "DOCUMENT_OCR_MODEL_DIR",
@@ -268,6 +269,8 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  DEMO_ACCOUNT_OTP_ROTATED_AT:
+    "ISO date (UTC midnight) or timestamp of the last DEMO_ACCOUNT_OTP rotation. Required with DEMO_ACCOUNT_OTP in strict mode; rotate both values within seven days.",
   AGENT_CLIENT_STORAGE_V1_ENABLED:
     "Enable the shared agent client storage format.",
   ACTION_LIMIT_CONTACT_URL:
@@ -517,6 +520,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
 };
 
 const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
+  DEMO_ACCOUNT_OTP_ROTATED_AT: "DEMO_ACCOUNT_OTP is set in strict runtime mode",
   AGENT_SANDBOX_DOCKER_NETWORK: "AGENT_SANDBOX_RUNS_ENABLED is true",
   AGENT_SANDBOX_HARNESS_API_KEY: "AGENT_SANDBOX_RUNS_ENABLED is true",
   AGENT_SANDBOX_HARNESS_MODEL: "AGENT_SANDBOX_RUNS_ENABLED is true",

@@ -10,6 +10,7 @@ import {
 
 import { featureFlagSchema } from "@/api/env-base-schema";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
+import { demoAccountOtpRotatedAtSchema } from "@/api/lib/demo-account-otp-rotation";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   DEFAULT_POLAR_API_VERSION,
@@ -302,6 +303,7 @@ export const envApiServerSchema = {
     v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
   ),
   DEMO_ACCOUNT_OTP: v.optional(v.pipe(v.string(), v.digits(), v.length(6))),
+  DEMO_ACCOUNT_OTP_ROTATED_AT: v.optional(demoAccountOtpRotatedAtSchema),
   DEMO_ACCOUNT_ORGANIZATION_ID: v.optional(
     v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
   ),

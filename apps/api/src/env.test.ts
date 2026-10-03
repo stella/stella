@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { Temporal } from "@stll/time";
+
 const baseEnv = {
   DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella",
   S3_ENDPOINT: "http://localhost:9000",
@@ -71,6 +73,44 @@ const readDerivedDatabaseUrl = (env: Record<string, string | undefined>) => {
 };
 
 describe("API environment", () => {
+  test("checks demo rotation at startup with typed configuration messages", () => {
+    const now = Temporal.Instant.from("2021-03-12T10:00:00Z").epochMilliseconds;
+    const timeModuleUrl = new URL(
+      "../../../packages/time/src/index.ts",
+      import.meta.url,
+    ).href;
+    const bootScript = `import { Temporal } from ${JSON.stringify(timeModuleUrl)}; Temporal.Now.instant = () => Temporal.Instant.fromEpochMilliseconds(${now}); ${FREEZE_SCRIPT}`;
+    const configured = { ...baseEnv, DEMO_ACCOUNT_OTP: "654321" };
+    for (const rotatedAt of [
+      undefined,
+      "2021-03-04T10:00:00Z",
+      "2021-03-13T10:00:00Z",
+    ]) {
+      const result = spawnApiEnvironment(
+        { ...configured, DEMO_ACCOUNT_OTP_ROTATED_AT: rotatedAt },
+        bootScript,
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr.toString()).toContain(
+        "DemoAccountOtpConfigurationError",
+      );
+      expect(result.stderr.toString()).toContain("DEMO_ACCOUNT_OTP");
+      expect(result.stderr.toString()).not.toContain(
+        configured.DEMO_ACCOUNT_OTP,
+      );
+    }
+    const fresh = spawnApiEnvironment(
+      { ...configured, DEMO_ACCOUNT_OTP_ROTATED_AT: "2021-03-12T10:00:00Z" },
+      bootScript,
+    );
+    expect(fresh.exitCode, fresh.stderr.toString()).toBe(0);
+    const local = spawnApiEnvironment(
+      { ...configured, ...LOCAL_DEV_ENV },
+      bootScript,
+    );
+    expect(local.exitCode, local.stderr.toString()).toBe(0);
+  });
+
   test("preserves structured stdout when loading the environment", () => {
     const result = spawnApiEnvironment(
       baseEnv,

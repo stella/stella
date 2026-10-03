@@ -218,3 +218,24 @@ test("Microsoft claim configuration defaults to disabled", () => {
   expect(v.parse(schema, "true")).toBe(true);
   expect(v.safeParse(schema, "invalid").success).toBe(false);
 });
+
+test("rotation dates use valid ISO calendar values", () => {
+  const schema = envApiServerSchema.DEMO_ACCOUNT_OTP_ROTATED_AT;
+  for (const date of [
+    "2021-03-04",
+    "2021-03-04T10:00:00Z",
+    "2021-03-04T10:00:00+01:00",
+  ]) {
+    expect(v.safeParse(schema, date).success).toBe(true);
+  }
+  for (const date of [
+    "March 4 2021",
+    "2021-02-30",
+    "2021-02-30T10:00:00Z",
+    "2021-13-04",
+    "2021-03-04T25:00:00Z",
+  ]) {
+    expect(v.safeParse(schema, date).success).toBe(false);
+  }
+  expect(v.safeParse(schema, undefined).success).toBe(true);
+});

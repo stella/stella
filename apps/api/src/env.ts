@@ -1,6 +1,8 @@
 import { createEnv } from "@t3-oss/env-core";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { existsSync, statSync } from "node:fs";
+
+import { Temporal } from "@stll/time";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import {
@@ -9,6 +11,7 @@ import {
   resolveEmailProvider,
 } from "@/api/env-schema";
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
+import { validateDemoAccountOtpRotation } from "@/api/lib/demo-account-otp-rotation";
 import {
   isLocalDevOpen,
   runtimeMode,
@@ -33,6 +36,16 @@ const envApi = createEnv({
   emptyStringAsUndefined: true,
   runtimeEnv: apiRuntimeEnv.runtimeEnv,
 });
+
+const demoRotation = validateDemoAccountOtpRotation({
+  demoOtp: envApi.DEMO_ACCOUNT_OTP,
+  rotatedAt: envApi.DEMO_ACCOUNT_OTP_ROTATED_AT,
+  runtimeMode: runtimeMode(),
+  now: Temporal.Now.instant().epochMilliseconds,
+});
+if (Result.isError(demoRotation)) {
+  throw demoRotation.error;
+}
 
 const emailProvider = resolveEmailProvider(envApi);
 const invariantViolation = envApiInvariantViolation({
