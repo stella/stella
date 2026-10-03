@@ -1329,6 +1329,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-contained-handler.ts",
     "./.oxlint-plugins/suppression-hygiene.ts",
     "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
+    "./.oxlint-plugins/no-array-built-typebox-union.ts",
     "./.oxlint-plugins/tagged-error-requires-message.ts",
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
     "./.oxlint-plugins/no-bare-jsonb-cast.ts",
@@ -2304,6 +2305,18 @@ export default defineConfig({
       ],
       rules: {
         "no-known-value-widening/no-known-value-widening": "error",
+      },
+    },
+    {
+      // A union over a computed array has a non-tuple type, so its `Static`
+      // collapses while the runtime schema still validates.
+      files: [
+        "apps/api/src/**/*.ts",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-array-built-typebox-union.fixture.ts",
+      ],
+      rules: {
+        "no-array-built-typebox-union/no-array-built-typebox-union": "error",
       },
     },
     {
