@@ -40,6 +40,11 @@ export type ArchiveInspectionBudget = {
 };
 
 const ARCHIVE_REFUSAL = {
+  nestedTooDeep: {
+    rule: "archive-nesting-limit",
+    severity: "critical",
+    meta: { description: "Archive nesting exceeds the inspection limit" },
+  },
   encrypted: {
     rule: "archive-encrypted",
     severity: "critical",
@@ -312,11 +317,28 @@ const unreadableEntry = (entry: ZipEntry): Refusal | null => {
   return null;
 };
 
+const MAX_NESTED_DEPTH = 2;
+const CFB_MAGIC = Buffer.from([0xd0, 0xcf, 0x11, 0xe0]);
+
+type EntryKind = "xml" | "binary" | "zip" | "cfb";
+const classifyEntry = (bytes: Buffer): EntryKind => {
+  if (hasZipMagic(bytes)) {
+    return "zip";
+  }
+  if (bytes.subarray(0, CFB_MAGIC.length).equals(CFB_MAGIC)) {
+    return "cfb";
+  }
+  return bytes.toString("utf-8", 0, 4).trimStart().startsWith("<")
+    ? "xml"
+    : "binary";
+};
+
 type InspectArchiveOptions = {
   bytes: Uint8Array;
   rules: WindowedRuleSet;
   budget: ArchiveInspectionBudget;
   now: () => number;
+  guard: Scanner;
 };
 
 const inspectArchive = async ({
@@ -324,60 +346,120 @@ const inspectArchive = async ({
   rules,
   budget,
   now,
+  guard,
 }: InspectArchiveOptions): Promise<Result<Match[], Refusal>> => {
-  const zipIndex = readZipIndex(bytes);
-  if (zipIndex.type === "malformed") {
-    return Result.err("corrupt");
-  }
-  const { entries } = zipIndex;
-  // Readers disagree on which of two same-named entries is "the" part, so
-  // such an archive has no single content to vouch for.
-  if (
-    new Set(entries.map(({ name }) => name.toString("latin1"))).size !==
-    entries.length
-  ) {
-    return Result.err("corrupt");
-  }
-  const unreadable = entries.map(unreadableEntry).find((r) => r !== null);
-  if (unreadable !== undefined) {
-    return Result.err(unreadable);
-  }
-
   const deadline = now() + budget.timeBudgetMs;
   const outOfTime = () => now() > deadline;
   const evidence = createEvidence(rules, budget.maxEvidenceBytes);
+  let stream = 0;
 
-  // Entries are read one at a time so memory holds one window at most.
-  const inspectFrom = async (index: number): Promise<Inspection> => {
-    const entry = entries[index];
-    if (entry === undefined) {
-      return INSPECTED;
-    }
-    const name = await scanStream({
-      chunks: [entry.name],
-      stream: 2 * index,
-      declaredBytes: entry.name.length,
+  const scan = async (
+    chunks: AsyncIterable<Uint8Array> | Iterable<Uint8Array>,
+    declaredBytes: number,
+  ) =>
+    await scanStream({
+      chunks,
+      stream: stream++,
+      declaredBytes,
       rules,
       evidence,
       windowBytes: budget.windowBytes,
       outOfTime,
     });
-    if (name.type === "refused") {
-      return name;
+  const inspect = async (
+    archive: Uint8Array,
+    depth: number,
+  ): Promise<Inspection> => {
+    if (outOfTime()) {
+      return refused("budget");
     }
-    const content = await scanStream({
-      chunks: entryContent(entry),
-      stream: 2 * index + 1,
-      declaredBytes: entry.uncompressedSize,
-      rules,
-      evidence,
-      windowBytes: budget.windowBytes,
-      outOfTime,
-    });
-    return content.type === "refused" ? content : await inspectFrom(index + 1);
+    if (depth > 0 && (await guard.scan(archive)).length > 0) {
+      return refused("budget");
+    }
+    const zipIndex = readZipIndex(archive);
+    if (zipIndex.type === "malformed") {
+      return refused("corrupt");
+    }
+    const { entries } = zipIndex;
+    if (
+      new Set(entries.map(({ name }) => name.toString("latin1"))).size !==
+      entries.length
+    ) {
+      return refused("corrupt");
+    }
+    for (const entry of entries) {
+      const unreadable = unreadableEntry(entry);
+      if (unreadable !== null) {
+        return refused(unreadable);
+      }
+      const name = await scan([entry.name], entry.name.length);
+      if (name.type === "refused") {
+        return name;
+      }
+      const chunks = entryContent(entry);
+      const iterator = (async function* () {
+        yield* chunks;
+      })();
+      const prefix: Buffer[] = [];
+      let prefixBytes = 0;
+      while (prefixBytes < 4) {
+        const next = await iterator.next();
+        if (next.done) {
+          break;
+        }
+        prefix.push(Buffer.from(next.value));
+        prefixBytes += next.value.length;
+      }
+      const first = Buffer.concat(prefix);
+      const entryKind = classifyEntry(first);
+      const content = (async function* () {
+        yield first;
+        yield* iterator;
+      })();
+      switch (entryKind) {
+        case "zip": {
+          if (depth >= MAX_NESTED_DEPTH) {
+            await iterator.return();
+            return refused("nestedTooDeep");
+          }
+          const parts: Buffer[] = [];
+          let size = 0;
+          for await (const part of content) {
+            size += part.length;
+            if (size > entry.uncompressedSize) {
+              return refused("corrupt");
+            }
+            if (outOfTime()) {
+              return refused("budget");
+            }
+            parts.push(Buffer.from(part));
+          }
+          if (size !== entry.uncompressedSize) {
+            return refused("corrupt");
+          }
+          const nested = await inspect(Buffer.concat(parts), depth + 1);
+          if (nested.type === "refused") {
+            return nested;
+          }
+          break;
+        }
+        case "xml":
+        case "binary":
+        case "cfb": {
+          const scanned = await scan(content, entry.uncompressedSize);
+          if (scanned.type === "refused") {
+            return scanned;
+          }
+          break;
+        }
+        default:
+          entryKind satisfies never;
+          return panic(`Unhandled entry kind: ${String(entryKind)}`);
+      }
+    }
+    return INSPECTED;
   };
-
-  const inspection = await inspectFrom(0);
+  const inspection = await inspect(bytes, 0);
   return inspection.type === "refused"
     ? Result.err(inspection.refusal)
     : Result.ok(evidence.evaluate());
@@ -415,7 +497,8 @@ export const createArchiveContentScanner = ({
       }
 
       const inspected = await Result.tryPromise({
-        try: async () => await inspectArchive({ bytes, rules, budget, now }),
+        try: async () =>
+          await inspectArchive({ bytes, rules, budget, now, guard }),
         catch: (cause) => cause,
       });
       if (Result.isOk(inspected)) {
