@@ -328,7 +328,7 @@ const calendarTasks = createSafeHandler(
                   .where(
                     and(
                       eq(fields.workspaceId, workspaceId),
-                      sql`${fields.propertyId} = ANY(${fieldPropertyIds}::uuid[])`,
+                      inArray(fields.propertyId, fieldPropertyIds),
                       sql`${fields.content}->>'type' = 'date'`,
                     ),
                   ),
