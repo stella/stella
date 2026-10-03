@@ -7,14 +7,14 @@
       "severity": "high",
       "package": "image-size",
       "title": "image-size: JXL and HEIF parsers allow denial of service through infinite loops",
-      "reason": "No patched image-size release exists. The only dependency path is Metro build tooling; it reads repository-controlled app assets and is not present in the API runtime or upload extraction path. Remove once Metro accepts a patched image-size release."
+      "reason": "Patched image-size releases exist only on the 2.x line, while Metro depends on the 1.x API, so the 1.x copy stays until Metro moves to 2.x. The only dependency path is Metro build tooling; it reads repository-controlled app assets and is not present in the API runtime or upload extraction path. Remove once Metro depends on a patched image-size release."
     },
     {
       "id": "GHSA-w3rx-r6r6-pgpr",
       "severity": "high",
       "package": "image-size",
       "title": "image-size: ICNS parser allows denial of service through an infinite loop",
-      "reason": "No patched image-size release exists. The only dependency path is Metro build tooling; it reads repository-controlled app assets and is not present in the API runtime or upload extraction path. Remove once Metro accepts a patched image-size release."
+      "reason": "Patched image-size releases exist only on the 2.x line, while Metro depends on the 1.x API, so the 1.x copy stays until Metro moves to 2.x. The only dependency path is Metro build tooling; it reads repository-controlled app assets and is not present in the API runtime or upload extraction path. Remove once Metro depends on a patched image-size release."
     },
     {
       "id": "GHSA-86w9-cpqp-85rv",
