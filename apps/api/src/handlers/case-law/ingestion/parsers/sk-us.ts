@@ -1,3 +1,4 @@
+// parser-output-unchanged: the script/style check now calls the shared exclusion helper, which excludes the same two tags.
 /**
  * Slovak Constitutional Court document parser (the markup rendering).
  *

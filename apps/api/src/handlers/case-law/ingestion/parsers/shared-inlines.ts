@@ -1,3 +1,4 @@
+// parser-output-unchanged: for parsers that do not adopt the new row and text helpers, the inline walk excludes the same script/style tags as before.
 /**
  * Shared inline-tree utilities for case-law HTML parsers.
  *

@@ -927,7 +927,7 @@ describe("embedded RTF text destinations", () => {
 
 test("excludes scripts and styles from the HTML fallback", () => {
   for (const container of ["div class='DocContent'", "section"]) {
-    const tag = container.split(" ").at(0);
+    const tag = container.replace(/ .*$/u, "");
     const parsed = parseUsDecisionHtml(
       baseInput(
         `<span id="lblDecisionForm">NÁLEZ</span><${container}>Visible<script>scriptqzexcluded</script><style>styleqzexcluded</style></${tag}>`,
