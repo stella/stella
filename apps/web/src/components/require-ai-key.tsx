@@ -44,10 +44,10 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { invalidateAIConfigurationCaches } from "@/lib/organization/ai-config-cache";
 import {
   aiAvailabilityOptions,
   aiConfigOptions,
-  aiConfigKeys,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
 
@@ -361,18 +361,7 @@ export const AIKeyRequiredDialog = ({
             orgConfigured: true,
           }),
       );
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: aiConfigKeys.byOrganization({
-            organizationId: activeOrganizationId,
-          }),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: aiConfigKeys.availability({
-            organizationId: activeOrganizationId,
-          }),
-        }),
-      ]);
+      await invalidateAIConfigurationCaches(queryClient, activeOrganizationId);
       stellaToast.add({
         title: tSuccess("aiConfigUpdated"),
         type: "success",

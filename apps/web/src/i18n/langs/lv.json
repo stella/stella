@@ -976,7 +976,6 @@
     "packPartial": "{installed} instalēti, {failed} neizdevās",
     "removed": "Šis rīks vairs nav pieejams.",
     "sectionOthers": "Citi",
-    "sectionRecommended": "Ieteiktie",
     "settings": {
       "packTitle": "Ieteicamā paka"
     },
@@ -1183,8 +1182,10 @@
       "label": "Simulēts AI"
     },
     "modelSelector": {
+      "allModels": "Visi modeļi ({count, number})",
       "autoDescription": "Automātiski izvēlas modeli un spriešanas līmeni.",
       "autoLabel": "Automātiski",
+      "belowFrontier": "Zem labākajiem kompromisiem",
       "effortHelpDescription": "Nosaka, cik daudz spriešanas modelis izmanto pirms atbildes. Augstāki līmeņi var palīdzēt sarežģītos uzdevumos, bet parasti aizņem vairāk laika. Punkts apzīmē pakalpojuma sniedzēja noklusējuma līmeni šim modelim.",
       "effortHelpLabel": "Par spriešanas līmeni",
       "effortLabel": "Spriešanas līmenis",
@@ -1198,6 +1199,10 @@
         "providerDefault": "Noklusējuma",
         "xhigh": "Ļoti augsts"
       },
+      "newModel": "Jauns",
+      "premiumCost": "Neparasti augstas izmaksas",
+      "recommendedHelpDescription": "Neviens cits pieejamais modelis nav vienlaikus lētāks un augstāk novērtēts. Modeļi, kas ir pārāk jauni novērtējumam, ir atzīmēti kā jauni. Kvalitāte: <link>LMArena {benchmark}</link> ({licence}); izmaksas: cenrāža cenas.",
+      "recommendedHelpLabel": "Par ieteicamajiem modeļiem",
       "selectionLabel": "{model} | {effort}",
       "title": "Atlasīt tērzēšanas modeli",
       "viaProvider": "izmantojot {provider}"
@@ -1767,6 +1772,7 @@
     "properties": "Rekvizīti",
     "queued": "Rindā",
     "reason": "Iemesls",
+    "recommended": "Ieteiktie",
     "reconnecting": "Atkārtota savienošana…",
     "reference": "Atsauce",
     "refresh": "Atsvaidzināt",

@@ -976,7 +976,6 @@
     "packPartial": "Nainstalováno {installed}, {failed} selhalo",
     "removed": "Tento nástroj již není dostupný.",
     "sectionOthers": "Ostatní",
-    "sectionRecommended": "Doporučené",
     "settings": {
       "packTitle": "Doporučený balík"
     },
@@ -1183,8 +1182,10 @@
       "label": "Simulovaná AI"
     },
     "modelSelector": {
+      "allModels": "Všechny modely ({count, number})",
       "autoDescription": "Automaticky vybere model a úroveň uvažování.",
       "autoLabel": "Automaticky",
+      "belowFrontier": "Pod nejlepšími kompromisy",
       "effortHelpDescription": "Určuje, kolik uvažování model použije před odpovědí. Vyšší úrovně mohou pomoci u složité práce, ale obvykle trvají déle. Tečka označuje výchozí úroveň poskytovatele pro tento model.",
       "effortHelpLabel": "O úrovni uvažování",
       "effortLabel": "Úroveň uvažování",
@@ -1198,6 +1199,10 @@
         "providerDefault": "Výchozí",
         "xhigh": "Velmi vysoká"
       },
+      "newModel": "Nový",
+      "premiumCost": "Neobvykle vysoká cena",
+      "recommendedHelpDescription": "Žádný jiný dostupný model není zároveň levnější a lépe hodnocený. Modely, které jsou na hodnocení příliš nové, jsou označené jako nové. Kvalita: <link>{benchmark} od LMArena</link> ({licence}); cena: ceníkové ceny.",
+      "recommendedHelpLabel": "O doporučených modelech",
       "selectionLabel": "{model} | {effort}",
       "title": "Vybrat model chatu",
       "viaProvider": "přes {provider}"
@@ -1767,6 +1772,7 @@
     "properties": "Vlastnosti",
     "queued": "Ve frontě",
     "reason": "Důvod",
+    "recommended": "Doporučené",
     "reconnecting": "Obnovování spojení…",
     "reference": "Reference",
     "refresh": "Obnovit",

@@ -976,7 +976,6 @@
     "packPartial": "{installed} installés, {failed} en échec",
     "removed": "Cet outil n'est plus disponible.",
     "sectionOthers": "Autres",
-    "sectionRecommended": "Recommandés",
     "settings": {
       "packTitle": "Pack recommandé"
     },
@@ -1183,8 +1182,10 @@
       "label": "IA simulée"
     },
     "modelSelector": {
+      "allModels": "Tous les modèles ({count, number})",
       "autoDescription": "Choisit automatiquement le modèle et le niveau de raisonnement.",
       "autoLabel": "Automatique",
+      "belowFrontier": "En deçà des meilleurs compromis",
       "effortHelpDescription": "Détermine l’effort de raisonnement utilisé par le modèle avant de répondre. Les niveaux élevés peuvent aider pour les tâches complexes, mais prennent généralement plus de temps. Le point indique le niveau par défaut du fournisseur pour ce modèle.",
       "effortHelpLabel": "À propos du niveau de raisonnement",
       "effortLabel": "Niveau de raisonnement",
@@ -1198,6 +1199,10 @@
         "providerDefault": "Par défaut",
         "xhigh": "Très élevé"
       },
+      "newModel": "Nouveau",
+      "premiumCost": "Coût inhabituellement élevé",
+      "recommendedHelpDescription": "Aucun autre modèle disponible n’est à la fois moins cher et mieux noté. Les modèles trop récents pour être notés sont signalés comme nouveaux. Qualité : <link>{benchmark} de LMArena</link> ({licence}) ; coût : prix catalogue.",
+      "recommendedHelpLabel": "À propos des modèles recommandés",
       "selectionLabel": "{model} | {effort}",
       "title": "Sélectionner le modèle de conversation",
       "viaProvider": "par {provider}"
@@ -1767,6 +1772,7 @@
     "properties": "Propriétés",
     "queued": "En file d'attente",
     "reason": "Motif",
+    "recommended": "Recommandés",
     "reconnecting": "Reconnexion…",
     "reference": "Référence",
     "refresh": "Actualiser",

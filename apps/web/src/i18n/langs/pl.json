@@ -976,7 +976,6 @@
     "packPartial": "Zainstalowano {installed}, {failed} nieudane",
     "removed": "To narzędzie nie jest już dostępne.",
     "sectionOthers": "Pozostałe",
-    "sectionRecommended": "Polecane",
     "settings": {
       "packTitle": "Polecany pakiet"
     },
@@ -1183,8 +1182,10 @@
       "label": "Symulowane AI"
     },
     "modelSelector": {
+      "allModels": "Wszystkie modele ({count, number})",
       "autoDescription": "Automatycznie wybiera model i poziom rozumowania.",
       "autoLabel": "Automatycznie",
+      "belowFrontier": "Poniżej najlepszych kompromisów",
       "effortHelpDescription": "Określa, ile rozumowania model wykorzystuje przed udzieleniem odpowiedzi. Wyższe poziomy mogą pomóc w złożonych zadaniach, ale zwykle zajmują więcej czasu. Kropka oznacza domyślny poziom dostawcy dla tego modelu.",
       "effortHelpLabel": "Informacje o poziomie rozumowania",
       "effortLabel": "Poziom rozumowania",
@@ -1198,6 +1199,10 @@
         "providerDefault": "Domyślny",
         "xhigh": "Bardzo wysoki"
       },
+      "newModel": "Nowy",
+      "premiumCost": "Nietypowo wysoki koszt",
+      "recommendedHelpDescription": "Żaden inny dostępny model nie jest jednocześnie tańszy i wyżej oceniany. Modele zbyt nowe, by mieć ocenę, są oznaczone jako nowe. Jakość: <link>{benchmark} od LMArena</link> ({licence}); koszt: ceny katalogowe.",
+      "recommendedHelpLabel": "Informacje o polecanych modelach",
       "selectionLabel": "{model} | {effort}",
       "title": "Wybierz model czatu",
       "viaProvider": "przez {provider}"
@@ -1767,6 +1772,7 @@
     "properties": "Właściwości",
     "queued": "W kolejce",
     "reason": "Powód",
+    "recommended": "Polecane",
     "reconnecting": "Ponowne łączenie…",
     "reference": "Numer referencyjny",
     "refresh": "Odśwież",

@@ -976,7 +976,6 @@
     "packPartial": "Įdiegta {installed}, {failed} nepavyko",
     "removed": "Šis įrankis nebepasiekiamas.",
     "sectionOthers": "Kiti",
-    "sectionRecommended": "Rekomenduojami",
     "settings": {
       "packTitle": "Rekomenduojamas paketas"
     },
@@ -1183,8 +1182,10 @@
       "label": "Imituojamas DI"
     },
     "modelSelector": {
+      "allModels": "Visi modeliai ({count, number})",
       "autoDescription": "Automatiškai parenka modelį ir samprotavimo lygį.",
       "autoLabel": "Automatinis",
+      "belowFrontier": "Žemiau geriausių kompromisų",
       "effortHelpDescription": "Nustato, kiek samprotavimo modelis naudoja prieš atsakydamas. Aukštesni lygiai gali padėti atliekant sudėtingas užduotis, tačiau paprastai užtrunka ilgiau. Taškas žymi šio modelio teikėjo numatytąjį lygį.",
       "effortHelpLabel": "Apie samprotavimo lygį",
       "effortLabel": "Samprotavimo lygis",
@@ -1198,6 +1199,10 @@
         "providerDefault": "Numatytasis",
         "xhigh": "Labai aukštas"
       },
+      "newModel": "Naujas",
+      "premiumCost": "Neįprastai didelė kaina",
+      "recommendedHelpDescription": "Joks kitas prieinamas modelis nėra kartu pigesnis ir geriau įvertintas. Modeliai, kurie per nauji, kad būtų įvertinti, pažymėti kaip nauji. Kokybė: <link>LMArena {benchmark}</link> ({licence}); kaina: kainoraščio kainos.",
+      "recommendedHelpLabel": "Apie rekomenduojamus modelius",
       "selectionLabel": "{model} | {effort}",
       "title": "Pasirinkti pokalbių modelį",
       "viaProvider": "per {provider}"
@@ -1767,6 +1772,7 @@
     "properties": "Savybės",
     "queued": "Eilėje",
     "reason": "Priežastis",
+    "recommended": "Rekomenduojami",
     "reconnecting": "Jungiamasi iš naujo…",
     "reference": "Nuoroda",
     "refresh": "Atnaujinti",

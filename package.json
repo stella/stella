@@ -74,7 +74,7 @@
     "new-package": "bun scripts/new-package.ts",
     "i18n:check": "turbo run i18n:check --",
     "i18n:sync": "turbo run i18n:sync --",
-    "check:model-catalog": "bun packages/scripts/src/model-catalog-upstream.ts && bun packages/scripts/src/model-catalog-capabilities-gen.ts --check",
+    "check:model-catalog": "bun packages/scripts/src/model-catalog-upstream.ts && bun packages/scripts/src/model-catalog-capabilities-gen.ts --check && bun packages/scripts/src/model-catalog-benchmarks-gen.ts --check",
     "check:provider-request-schemas": "bun apps/api/scripts/provider-request-schemas.ts --check",
     "update:provider-request-schemas": "bun apps/api/scripts/provider-request-schemas.ts --write",
     "canary:ai-provider": "bun --cwd apps/api canary:ai-provider",
