@@ -1,5 +1,8 @@
 import Elysia from "elysia";
 
+import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
+
+import { env } from "@/api/env";
 import assignSeat from "@/api/handlers/usage/assign-seat";
 import createHostedManagement from "@/api/handlers/usage/create-hosted-management";
 import createHostedSetup from "@/api/handlers/usage/create-hosted-setup";
@@ -11,6 +14,9 @@ import listSeatAssignments from "@/api/handlers/usage/list-seat-assignments";
 import unassignSeat from "@/api/handlers/usage/unassign-seat";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
+const USAGE_PATH = "/usage";
+const VERSIONED_USAGE_PATH = `${STELLA_API_VERSION_PREFIX}${USAGE_PATH}`;
+
 // Operator-driven admin endpoints (manual entitlement upsert,
 // discretionary usage allocations) are deliberately NOT mounted on this
 // branch. They need a dedicated platform-staff permission gate
@@ -19,7 +25,25 @@ import { authMacro, permissionMacro } from "@/api/lib/auth";
 // `rootDb` so the restrictive RLS deny on
 // `usage_entitlements`/`usage_allocations` does not block them. Both
 // land in a follow-up PR per the original plan.
-export const usageRoute = new Elysia({ prefix: "/usage" })
+export const usageRoute = new Elysia({ prefix: USAGE_PATH })
+  .onRequest(({ request, status }) => {
+    if (env.FEATURE_USAGE) {
+      return undefined;
+    }
+    const path = new URL(request.url).pathname;
+    // Admission precedes body validation and authentication database access.
+    // The root-mounted provider webhook retains its own delivery contract.
+    if (
+      (path === USAGE_PATH ||
+        path.startsWith(`${USAGE_PATH}/`) ||
+        path === VERSIONED_USAGE_PATH ||
+        path.startsWith(`${VERSIONED_USAGE_PATH}/`)) &&
+      path !== "/usage/hosted/webhook"
+    ) {
+      return status(404, { error: "Not Found" });
+    }
+    return undefined;
+  })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
