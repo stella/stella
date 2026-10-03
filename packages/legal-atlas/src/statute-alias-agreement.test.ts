@@ -7,7 +7,10 @@ import {
 } from "@stll/api-contract/statute-aliases";
 import { foldStatuteQuery } from "@stll/api-contract/statute-query-intent";
 
-import type { WorkIdentifier } from "./provision-citation-profile";
+import type {
+  JurisdictionProfile,
+  WorkIdentifier,
+} from "./provision-citation-profile";
 import { PROVISION_CITATION_PROFILES } from "./provision-citation-profiles";
 
 /**
@@ -22,13 +25,18 @@ const KNOWN_DIVERGENCES = [
 const ELI_COLLECTIONS: Record<string, string> =
   ELI_COLLECTION_BY_STATUTE_ACT_COLLECTION;
 
+/** Read through the profile contract, where every entry may carry a window. */
+const PROFILES: readonly JurisdictionProfile[] = Object.values(
+  PROVISION_CITATION_PROFILES,
+);
+
 const describeWork = ({ number, year, collection }: WorkIdentifier) =>
   `${String(number)}/${String(year)} ${collection}`;
 
 describe("statute box aliases and citation-reader profiles", () => {
   test("read every spelling both know as the same act today", () => {
     const divergences: string[] = [];
-    for (const profile of Object.values(PROVISION_CITATION_PROFILES)) {
+    for (const profile of PROFILES) {
       const country = profile.jurisdiction.toLowerCase();
       if (!isStatuteQueryCountry(country)) {
         divergences.push(`${country}: no statute box aliases`);
