@@ -1,3 +1,4 @@
+import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 /**
  * The sk-courts listing reconciliation capability.
  *
@@ -14,8 +15,6 @@
  * record, and the document walk finds its work by that column, so writing the
  * listing half alone makes the identity held and the text unreachable at once.
  */
-
-import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 
 import type { SkApiItem } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import {

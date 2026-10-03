@@ -1,5 +1,9 @@
 import { useRef, useState } from "react";
 
+import { useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { detached } from "@/lib/detached";
+
 /**
  * Inline rename state machine shared by toolbars, sidebars, kanban
  * cards, breadcrumbs, and chat tab headers. The hook owns the
@@ -53,6 +57,8 @@ type UseInlineRenameOptions = {
    * to display inline, or `null` to allow the commit to proceed.
    */
   validate?: (value: string) => string | null;
+  /** Persist an uncancelled draft when its owning editor leaves the page. */
+  commitOnUnmount?: boolean;
 };
 
 type UseInlineRenameReturn = {
@@ -67,6 +73,7 @@ export const useInlineRename = ({
   initial,
   onCommit,
   validate,
+  commitOnUnmount = false,
 }: UseInlineRenameOptions): UseInlineRenameReturn => {
   const [state, setState] = useState<InlineRenameState>({ mode: "view" });
   // `cancelled` lets the caller short-circuit an in-flight blur:
@@ -75,6 +82,7 @@ export const useInlineRename = ({
   // immediately so `commit()` can see the cancel even before
   // React commits the state transition.
   const cancelledRef = useRef(false);
+  const committedRef = useRef(false);
   // `generationRef` invalidates `setError` callbacks from a
   // previous commit cycle. Without it, a stale fire-and-forget
   // `onError` could clobber a fresh edit the user has already
@@ -84,11 +92,13 @@ export const useInlineRename = ({
 
   const startEditing = (override?: string) => {
     cancelledRef.current = false;
+    committedRef.current = false;
     generationRef.current += 1;
     setState({ mode: "edit", draft: override ?? initial });
   };
 
   const setDraft = (draft: string) => {
+    committedRef.current = false;
     // Typing clears any stale error so the user can retry inline
     // without first having to dismiss the previous server message.
     setState((prev) => (prev.mode === "edit" ? { mode: "edit", draft } : prev));
@@ -101,7 +111,7 @@ export const useInlineRename = ({
   };
 
   const commit = async () => {
-    if (state.mode !== "edit" || cancelledRef.current) {
+    if (state.mode !== "edit" || cancelledRef.current || committedRef.current) {
       cancelledRef.current = false;
       return;
     }
@@ -137,6 +147,7 @@ export const useInlineRename = ({
     generationRef.current += 1;
     const generation = generationRef.current;
     setState({ mode: "view" });
+    committedRef.current = true;
     const result = onCommit(trimmed, {
       setError: (message: string) => {
         // Ignore stale callbacks from a previous edit cycle the
@@ -145,6 +156,7 @@ export const useInlineRename = ({
         if (generationRef.current !== generation) {
           return;
         }
+        committedRef.current = false;
         setState({ mode: "edit", draft: trimmed, error: message });
       },
     });
@@ -152,6 +164,13 @@ export const useInlineRename = ({
       await result;
     }
   };
+
+  const flush = useLatestCallback(() => {
+    if (commitOnUnmount) {
+      detached(commit(), "inline-rename.unmount");
+    }
+  });
+  useMountEffect(() => () => flush());
 
   return { state, startEditing, setDraft, commit, cancel };
 };

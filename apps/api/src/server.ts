@@ -6,6 +6,7 @@ import {
   CHAT_TURN_ID_HEADER,
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
+import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { redisConnectionConfig } from "@stll/redis-config";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
@@ -126,6 +127,7 @@ import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { detached } from "@/api/lib/analytics/capture";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
+import { createAuthResponseCookiesPlugin } from "@/api/lib/auth/auth-response-cookies";
 import {
   isAllowedBrowserOrigin,
   shouldRejectBrowserMutation,
@@ -277,6 +279,7 @@ const CORS_EXPOSED_HEADERS = [
 ];
 
 const api = new Elysia()
+  .use(createAuthResponseCookiesPlugin())
   .mapResponse(({ responseValue, set }) =>
     finalizeResponseCachePolicy({ response: responseValue, set }),
   )
@@ -358,6 +361,7 @@ const api = new Elysia()
         "MCP-Protocol-Version",
         FORMATTING_LOCALE_HEADER,
         SESSION_ID_HEADER,
+        AUTH_SESSION_STARTUP_HEADER,
         TANSTACK_RUN_ID_HEADER,
       ],
       exposeHeaders: CORS_EXPOSED_HEADERS,

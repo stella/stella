@@ -9,6 +9,7 @@ import {
   CLAUSE_LIST_KINDS,
   type ClauseListKind,
 } from "@/api/lib/clauses/types";
+import { LIMITS } from "@/api/lib/limits";
 
 type ExactUnion<TLeft, TRight> = [
   Exclude<TLeft, TRight>,
@@ -57,3 +58,11 @@ const clauseParagraphSchema = t.Object({
 export const clauseBodySchema = t.Array(clauseParagraphSchema, {
   minItems: 1,
 });
+
+export const clauseExpectedBodySchema = t.Array(
+  t.Object(
+    { text: t.String({ maxLength: LIMITS.clauseExpectedBodyTextChars }) },
+    { additionalProperties: true },
+  ),
+  { minItems: 1, maxItems: LIMITS.clauseExpectedBodyParagraphs },
+);

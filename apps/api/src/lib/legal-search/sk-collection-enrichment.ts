@@ -1,7 +1,7 @@
 import { TaggedError } from "better-result";
 import type { Result } from "better-result";
 
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 export const SK_COLLECTION_PARSER_VERSION = 3;
 
@@ -71,7 +71,7 @@ export type SkCollectionReadOutcome =
   | { status: "read"; cache: SkCollectionIssueCache };
 
 export type SkCollectionDecision = Pick<
-  IngestionResult,
+  RawIngestionResult,
   "caseNumber" | "court" | "country"
 > & { id: string; ecli: string | null; decisionDate: string | null };
 

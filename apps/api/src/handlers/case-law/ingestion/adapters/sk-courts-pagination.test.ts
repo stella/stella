@@ -119,13 +119,15 @@ describe("sk-courts crawl pagination", () => {
     // first page, and every later offset one page further — never the same
     // page twice, which is what the clamped `page=0` produced.
     expect(endpoint.requestedPages).toEqual([1, 2, 13]);
-    expect(first.decisions.at(0)?.caseNumber).toBe(listItem(0).spisovaZnacka);
-    expect(second.decisions.at(0)?.caseNumber).toBe(
-      listItem(100).spisovaZnacka,
-    );
-    expect(later.decisions.at(0)?.caseNumber).toBe(
-      listItem(1200).spisovaZnacka,
-    );
+    expect(
+      first.decisions.at(0)?.caseNumber === listItem(0).spisovaZnacka,
+    ).toBe(true);
+    expect(
+      second.decisions.at(0)?.caseNumber === listItem(100).spisovaZnacka,
+    ).toBe(true);
+    expect(
+      later.decisions.at(0)?.caseNumber === listItem(1200).spisovaZnacka,
+    ).toBe(true);
   });
 
   test("cursors keep their grammar and their meaning across the walk", async () => {

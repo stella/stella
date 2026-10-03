@@ -75,13 +75,15 @@ import { DocumentReferenceUploadDialog } from "@/components/workspaces/document-
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
 import { GlobalTimer } from "@/features/time-timers/global-timer";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { detached } from "@/lib/detached";
+import { toAuthClientError } from "@/lib/errors/auth";
 import { matterChromeStyle, resolveMatterColor } from "@/lib/matter-colors";
 import type { MatterChromeStyle } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -92,6 +94,11 @@ import {
 } from "@/lib/workspaces/queries";
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
 import { PaymentRetryBanner } from "@/routes/-protected-app/-components/payment-retry-banner";
+import {
+  createSessionActivity,
+  isSessionActivityCancelled,
+  SESSION_ACTIVITY_INTERVAL_MS,
+} from "@/routes/-session-activity";
 
 const LazyInspectorPanel = lazy(
   async () =>
@@ -166,6 +173,31 @@ export const ProtectedAppFrame = ({
   user: AuthenticatedUser;
   children: ReactNode;
 }) => {
+  useMountEffect(() => {
+    const activity = createSessionActivity({
+      page: document,
+      observe: async (signal) => {
+        const { authClient } = await import("@/lib/auth-client");
+        const result = await authClient.getSession({
+          query: { disableCookieCache: true },
+          fetchOptions: { signal },
+        });
+        if (result.error && !isSessionActivityCancelled(result.error, signal)) {
+          await Promise.reject(toAuthClientError(result.error));
+        }
+      },
+    });
+    const tick = () => detached(activity.tick(), "session.activity");
+    const interval = window.setInterval(tick, SESSION_ACTIVITY_INTERVAL_MS);
+    window.addEventListener("focus", tick);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      activity.dispose();
+      window.clearInterval(interval);
+      window.removeEventListener("focus", tick);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  });
   const analyticsUser = user;
   const inspectorBroadcastUserId = user.id;
   const inspectorBroadcastOrganizationId = user.activeOrganizationId;

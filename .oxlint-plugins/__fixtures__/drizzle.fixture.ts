@@ -41,3 +41,11 @@ wrap(db.update(table).set(values)).where(filter);
 db.delete(table).where(filter).returning();
 // expect-clean: drizzle/enforce-update-with-where
 db.update(table).set(values).where(filter).returning();
+
+// Direct parent updates must stay in the move owner.
+declare const entities: unknown;
+declare const parentId: string | null;
+// oxlint-disable-next-line drizzle/no-direct-entity-reparent -- fixture rejects reparenting outside its serialized owner
+tx.update(entities).set({ parentId }).where(filter);
+// expect-clean: drizzle/no-direct-entity-reparent
+tx.update(entities).set({ name: "Folder" }).where(filter);

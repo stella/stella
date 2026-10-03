@@ -1,4 +1,4 @@
-import { lstatSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const MAX_BASELINE_BYTES = 5 * 1024 * 1024;
@@ -184,155 +184,65 @@ const touchedRoutesInTree = (
   return touched;
 };
 
-export const scopeBaseline = ({
+export const prepareComparisonBaseline = ({
   base,
-  recorded,
   changedPaths,
   baseRouteTree,
   routeTree,
-  all = false,
+  declarations,
 }: {
   base: Baseline;
-  recorded: Baseline;
   changedPaths: string[];
   baseRouteTree: string;
   routeTree: string;
-  all?: boolean;
-}): Baseline => {
-  if (all) {
-    return recorded;
-  }
+  declarations: unknown[];
+}) => {
   const changed = new Set(changedPaths.map(normalizeSource));
-  const touchedRoutes = new Set([
-    ...touchedRoutesInTree(baseRouteTree, changed),
-    ...touchedRoutesInTree(routeTree, changed),
-  ]);
-  const scoped: Baseline = {};
-  for (const [route, entry] of Object.entries(recorded)) {
-    if (touchedRoutes.has(route)) {
-      scoped[route] = entry;
-    } else if (base[route] !== undefined) {
-      scoped[route] = base[route];
+  const changedRoutes = [
+    ...new Set([
+      ...touchedRoutesInTree(baseRouteTree, changed),
+      ...touchedRoutesInTree(routeTree, changed),
+    ]),
+  ].toSorted();
+  const baseline = { ...base };
+  const declared = new Set<string>();
+  const notices: string[] = [];
+  for (const declaration of declarations) {
+    if (
+      !isRecord(declaration) ||
+      typeof declaration["route"] !== "string" ||
+      !declaration["route"].startsWith("/") ||
+      typeof declaration["reason"] !== "string" ||
+      declaration["reason"].trim().length === 0 ||
+      !isBaselineEntry(declaration["budget"]) ||
+      Object.keys(declaration).some(
+        (key) => !["route", "reason", "budget"].includes(key),
+      )
+    ) {
+      fail(
+        "Invalid network budget declaration: expected route, nonempty reason and budget",
+      );
     }
-  }
-  for (const [route, entry] of Object.entries(base)) {
-    if (scoped[route] === undefined && !touchedRoutes.has(route)) {
-      scoped[route] = entry;
+    const route = declaration["route"];
+    if (declared.has(route)) {
+      fail(`Duplicate network budget declaration for ${route}`);
     }
+    declared.add(route);
+    baseline[route] = declaration["budget"];
+    notices.push(`- ${code(route)}: ${code(declaration["reason"])}`);
   }
-  return scoped;
+  return { baseline, changedRoutes, notices };
 };
 
-// Route and request keys come from the recording, so they are rendered as
-// inert code spans: no markdown, mentions or line breaks reach the comment.
+// Render declaration text as inert code spans in the job summary.
 const code = (value: string): string =>
   `\`${value.replaceAll(/[`\p{Cc}]/gu, " ")}\``;
 
-const NUMBER_FIELDS = ["requestCounts", "dbQueries", "responseSizes"] as const;
-// GitHub rejects comment bodies over 65536 characters.
-const MAX_SUMMARY_CHARS = 60_000;
-
-const numberChanges = (
-  before: BaselineEntry,
-  after: BaselineEntry,
-): string[] => {
-  const changes: string[] = [];
-  if (before.depth !== after.depth) {
-    changes.push(`depth ${before.depth} → ${after.depth}`);
-  }
-  for (const field of NUMBER_FIELDS) {
-    const previous = before[field] ?? {};
-    const next = after[field] ?? {};
-    const keys = [
-      ...new Set([...Object.keys(previous), ...Object.keys(next)]),
-    ].toSorted();
-    for (const key of keys) {
-      if (previous[key] !== next[key]) {
-        changes.push(
-          `${field} ${code(key)} ${previous[key] ?? "none"} → ${next[key] ?? "none"}`,
-        );
-      }
-    }
-  }
-  const previousRequests = new Set(before.requests);
-  const nextRequests = new Set(after.requests);
-  for (const request of [...nextRequests].toSorted()) {
-    if (!previousRequests.has(request)) {
-      changes.push(`request ${code(request)} added`);
-    }
-  }
-  for (const request of [...previousRequests].toSorted()) {
-    if (!nextRequests.has(request)) {
-      changes.push(`request ${code(request)} removed`);
-    }
-  }
-  return changes;
-};
-
-/**
- * Markdown for the review thread opened on a recorded baseline commit: every
- * budget change against the base branch, per route, before → after.
- */
-export const summarizeBudgetChanges = ({
-  base,
-  recorded,
-}: {
-  base: Baseline;
-  recorded: Baseline;
-}): string => {
-  const lines: string[] = [];
-  const routes = [
-    ...new Set([...Object.keys(base), ...Object.keys(recorded)]),
-  ].toSorted();
-  for (const route of routes) {
-    const before = base[route];
-    const after = recorded[route];
-    if (before === undefined && after !== undefined) {
-      lines.push(
-        `- ${code(route)}: added, depth ${after.depth}, allowed requests ${after.requests.length}`,
-      );
-    } else if (before !== undefined && after === undefined) {
-      lines.push(`- ${code(route)}: removed`);
-    } else if (before !== undefined && after !== undefined) {
-      const changes = numberChanges(before, after);
-      if (changes.length > 0) {
-        lines.push(`- ${code(route)}: ${changes.join("; ")}`);
-      }
-    }
-  }
-  const header = [
-    "This network baseline was recorded by this pull request's own code.",
-    "",
-    lines.length === 0
-      ? "No budget changes against the base branch."
-      : "Budget changes against the base branch:",
-    "",
-  ];
-  const footer = [
-    "",
-    "Review these as budget changes and resolve this thread to accept them.",
-  ];
-  const kept: string[] = [];
-  let length = [...header, ...footer].join("\n").length + 100;
-  for (const [index, line] of lines.entries()) {
-    if (length + line.length + 1 > MAX_SUMMARY_CHARS) {
-      kept.push(
-        `- ${lines.length - index} more routes changed; see the file diff.`,
-      );
-      break;
-    }
-    kept.push(line);
-    length += line.length + 1;
-  }
-  return [...header, ...kept, ...footer].join("\n");
-};
-
 const usage = `Usage:
-  bun scripts/network-baseline-scope.ts scope --base FILE --recorded FILE --changed FILE --base-route-tree FILE --route-tree FILE [--all]
+  bun scripts/network-baseline-scope.ts prepare --base FILE --changed FILE --base-route-tree FILE --route-tree FILE --output FILE --context FILE
   bun scripts/network-baseline-scope.ts validate FILE
-  bun scripts/network-baseline-scope.ts summary --base FILE --recorded FILE
 
---changed is a newline-separated list of changed route source paths. scope validates both baselines and limits the recorded file to entries of new or changed routes, restoring every other entry from --base. It limits which entries change; it does not check the recorded values. validate checks the artifact schema and size. summary prints the budget changes as markdown for review.`;
+prepare loads a merge-base budget, scopes new/removed routes, and applies only changed, reviewed declaration files. validate checks a main recording's schema and size.`;
 
 const option = (args: string[], name: string): string => {
   const index = args.indexOf(name);
@@ -357,34 +267,53 @@ const main = (): void => {
     validateBaselineFile(file);
     return;
   }
-  if (command === "summary") {
+  if (command === "prepare") {
+    const changedPaths = readFileSync(option(args, "--changed"), "utf-8")
+      .split(/\r?\n/u)
+      .filter(Boolean);
+    if (changedPaths.includes("apps/web/e2e/network-baseline.json")) {
+      fail(
+        "PRs must declare network budget changes instead of editing network-baseline.json",
+      );
+    }
+    const declarations = changedPaths
+      .filter((file) =>
+        /^apps\/web\/e2e\/network-budgets\/[^/]+\.json$/u.test(file),
+      )
+      .filter((file) =>
+        // A deleted declaration does not grant a budget.
+        existsSync(file),
+      )
+      .map((file): unknown => {
+        if (
+          lstatSync(file).isSymbolicLink() ||
+          lstatSync(file).size > MAX_BASELINE_BYTES
+        ) {
+          fail(`Invalid network budget declaration file: ${file}`);
+        }
+        return JSON.parse(readFileSync(file, "utf-8"));
+      });
+    const { baseline, changedRoutes, notices } = prepareComparisonBaseline({
+      base: validateBaselineFile(option(args, "--base")),
+      changedPaths,
+      baseRouteTree: readFileSync(option(args, "--base-route-tree"), "utf-8"),
+      routeTree: readFileSync(option(args, "--route-tree"), "utf-8"),
+      declarations,
+    });
+    writeFileSync(
+      option(args, "--output"),
+      `${JSON.stringify(baseline, null, 2)}\n`,
+    );
+    writeFileSync(
+      option(args, "--context"),
+      `${JSON.stringify(changedRoutes)}\n`,
+    );
     process.stdout.write(
-      `${summarizeBudgetChanges({
-        base: validateBaselineFile(option(args, "--base")),
-        recorded: validateBaselineFile(option(args, "--recorded")),
-      })}\n`,
+      `### Declared network budget changes\n${notices.join("\n") || "None."}\n`,
     );
     return;
   }
-  if (command !== "scope") {
-    fail(`unknown command: ${command}\n${usage}`);
-  }
-  const recordedPath = option(args, "--recorded");
-  const base = validateBaselineFile(option(args, "--base"));
-  const recorded = validateBaselineFile(recordedPath);
-  const changedPaths = readFileSync(option(args, "--changed"), "utf-8")
-    .split(/\r?\n/u)
-    .filter(Boolean);
-  const routeTree = readFileSync(option(args, "--route-tree"), "utf-8");
-  const result = scopeBaseline({
-    base,
-    recorded,
-    changedPaths,
-    baseRouteTree: readFileSync(option(args, "--base-route-tree"), "utf-8"),
-    routeTree,
-    all: args.includes("--all"),
-  });
-  writeFileSync(recordedPath, `${JSON.stringify(result, null, 2)}\n`);
+  fail(`unknown command: ${command}\n${usage}`);
 };
 
 if (import.meta.main) {

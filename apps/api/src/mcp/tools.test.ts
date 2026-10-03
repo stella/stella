@@ -23,6 +23,7 @@ import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-re
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
   countedSearchTotal,
+  LEGISLATION_SEARCH_MATCH_TYPES,
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
@@ -60,7 +61,13 @@ import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
-import { CORPUS_SEARCH_CURSOR_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
+import {
+  CORPUS_SEARCH_CURSOR_MAX_LENGTH,
+  CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+  CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
+  encodeCorpusSearchCursor,
+} from "@/api/lib/legal-search/corpus-search-cursor";
+import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { LIMITS } from "@/api/lib/limits";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
@@ -3539,61 +3546,113 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(schema?.["additionalProperties"]).toBe(false);
   });
 
-  test("search_legislation passes the admitted jurisdiction and projects each hit", async () => {
+  test.each(LEGISLATION_SEARCH_MATCH_TYPES)(
+    "search_legislation passes the admitted jurisdiction and projects each %s hit",
+    async (matchType) => {
+      searchLegislationHandlerMock.mockResolvedValue({
+        items: [
+          {
+            documentId: STATUTE_ID,
+            effectiveDate: "2014-01-01",
+            eli: STATUTE_ELI,
+            country: "CZE",
+            documentType: "act",
+            headline: "nahrada <mark>skody</mark>",
+            language: "cs",
+            match: { type: matchType },
+            score: 1.5,
+            slug: "89-2012-sb-obcansky-zakonik",
+            sourceUrl: "https://example.test/89-2012",
+            status: "in_force",
+            title: STATUTE_TITLE,
+          },
+        ],
+        nextCursor: "legislation_cursor_2",
+        total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
+      });
+
+      const result = await handleMcpToolCall({
+        // Lower case on the wire: the country is folded by the contract, so a
+        // model writing `cze` reaches the same jurisdiction.
+        args: { country: "cze", query: "nahrada skody" },
+        context: createContext(),
+        toolName: "search_legislation",
+      });
+
+      expect(searchLegislationHandlerMock.mock.calls.at(0)?.at(0)).toEqual({
+        jurisdiction: "CZE",
+        limit: 10,
+        query: "nahrada skody",
+      });
+      expect(parseToolPayload(result)).toEqual({
+        nextCursor: "legislation_cursor_2",
+        results: [
+          {
+            appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik`,
+            country: "CZE",
+            documentId: STATUTE_ID,
+            documentType: "act",
+            effectiveDate: "2014-01-01",
+            eli: STATUTE_ELI,
+            language: "cs",
+            match: { type: matchType },
+            resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
+            score: 1.5,
+            snippet: "nahrada skody",
+            sourceUrl: "https://example.test/89-2012",
+            status: "in_force",
+            title: STATUTE_TITLE,
+          },
+        ],
+        total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
+      });
+    },
+  );
+
+  test("search_legislation accepts a relaxed cursor at the codec bounds and maximum page size", async () => {
+    const tokens = Array.from(
+      { length: LIMITS.corpusIndexSearchMaxExcludedGroups },
+      (_, index) => index.toString(36).padStart(6, "0"),
+    );
+    const cursor = encodeCorpusSearchCursor({
+      dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+      excludedGroups: tokens.map((token) => `x${token.slice(1)}`),
+      id: STATUTE_ID,
+      score: 1.5,
+      sort: "relevance",
+      target: null,
+      windowStart: 0,
+      phase: {
+        type: "relaxed",
+        fingerprint: "a".repeat(64),
+        generation: "A.b-".repeat(8),
+        strictWorkTokens: tokens,
+      },
+    });
+    expect(cursor.length).toBeGreaterThan(
+      CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+    );
+    expect(cursor.length).toBeLessThanOrEqual(
+      CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
+    );
     searchLegislationHandlerMock.mockResolvedValue({
-      items: [
-        {
-          documentId: STATUTE_ID,
-          effectiveDate: "2014-01-01",
-          eli: STATUTE_ELI,
-          country: "CZE",
-          documentType: "act",
-          headline: "nahrada <mark>skody</mark>",
-          language: "cs",
-          score: 1.5,
-          slug: "89-2012-sb-obcansky-zakonik",
-          sourceUrl: "https://example.test/89-2012",
-          status: "in_force",
-          title: STATUTE_TITLE,
-        },
-      ],
-      nextCursor: "legislation_cursor_2",
+      items: [],
+      nextCursor: null,
       total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
     });
 
     const result = await handleMcpToolCall({
-      // Lower case on the wire: the country is folded by the contract, so a
-      // model writing `cze` reaches the same jurisdiction.
-      args: { country: "cze", query: "nahrada skody" },
+      args: { country: "cze", cursor, limit: 100, query: "nahrada skody" },
       context: createContext(),
       toolName: "search_legislation",
     });
 
+    expect(result.isError).toBeUndefined();
     expect(searchLegislationHandlerMock.mock.calls.at(0)?.at(0)).toEqual({
+      cursor,
       jurisdiction: "CZE",
-      limit: 10,
+      limit: 100,
       query: "nahrada skody",
-    });
-    expect(parseToolPayload(result)).toEqual({
-      nextCursor: "legislation_cursor_2",
-      results: [
-        {
-          appUrl: `${APP_BASE_URL}/law/cze/statutes/89-2012-sb-obcansky-zakonik`,
-          country: "CZE",
-          documentId: STATUTE_ID,
-          documentType: "act",
-          effectiveDate: "2014-01-01",
-          eli: STATUTE_ELI,
-          language: "cs",
-          resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
-          score: 1.5,
-          snippet: "nahrada skody",
-          sourceUrl: "https://example.test/89-2012",
-          status: "in_force",
-          title: STATUTE_TITLE,
-        },
-      ],
-      total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
     });
   });
 

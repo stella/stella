@@ -85,23 +85,41 @@ const mapSchemaChildren = (
     }),
   );
 
-type CompactNodeOptions = { depth: number; describedDepth: number };
+type CompactNodeOptions = Required<CompactSchemaOptions> & {
+  depth: number;
+};
 
 const compactNode = (
   node: unknown,
-  { depth, describedDepth }: CompactNodeOptions,
+  {
+    depth,
+    describedDepth,
+    omitMaxSafeInteger,
+    schemaDialect,
+  }: CompactNodeOptions,
 ): unknown => {
   if (!isRecord(node)) {
     return node;
   }
   const compacted = mapSchemaChildren(node, (schema, child) =>
-    compactNode(schema, { depth: depth + child.depth, describedDepth }),
+    compactNode(schema, {
+      depth: depth + child.depth,
+      describedDepth,
+      omitMaxSafeInteger,
+      schemaDialect,
+    }),
   );
   return Object.fromEntries(
     Object.entries(compacted).filter(
-      ([key]) =>
-        !ANNOTATION_KEYWORDS.has(key) ||
-        (key === "description" && depth > 0 && depth <= describedDepth),
+      ([key, value]) =>
+        !(
+          omitMaxSafeInteger &&
+          key === "maximum" &&
+          value === Number.MAX_SAFE_INTEGER
+        ) &&
+        !(schemaDialect === "omit" && key === "$schema") &&
+        (!ANNOTATION_KEYWORDS.has(key) ||
+          (key === "description" && depth > 0 && depth <= describedDepth)),
     ),
   );
 };
@@ -110,14 +128,27 @@ const compactNode = (
 export type CompactSchemaOptions = {
   /** Keep descriptions this many property levels deep; 0 (the default) keeps none. */
   describedDepth?: number;
+  /** Advertising only: omit a ceiling the host separately enforces; never use for validation. Default: false. */
+  omitMaxSafeInteger?: boolean;
+  /** Omit a dialect only when the transport already fixes it. Default: preserve. */
+  schemaDialect?: "preserve" | "omit";
 };
 
 /** The schema without annotation keywords, descriptions kept only as deep as asked. */
 export const compactSchema = (
   schema: McpJsonSchema,
-  { describedDepth = 0 }: CompactSchemaOptions = {},
+  {
+    describedDepth = 0,
+    omitMaxSafeInteger = false,
+    schemaDialect = "preserve",
+  }: CompactSchemaOptions = {},
 ): McpJsonSchema => {
-  const compacted = compactNode(schema, { depth: 0, describedDepth });
+  const compacted = compactNode(schema, {
+    depth: 0,
+    describedDepth,
+    omitMaxSafeInteger,
+    schemaDialect,
+  });
   return isRecord(compacted) ? compacted : {};
 };
 
@@ -160,7 +191,14 @@ const hasReferenceScope = (node: unknown): boolean => {
  */
 export const hoistRepeatedSchemas = (
   schema: McpJsonSchema,
-  { minBytes = 200 }: { minBytes?: number } = {},
+  {
+    minBytes = 200,
+    definitionNames = "keyword",
+  }: {
+    minBytes?: number;
+    /** Name union/item branches after their nearest property instead of the schema keyword. */
+    definitionNames?: "keyword" | "property";
+  } = {},
 ): McpJsonSchema => {
   if (hasReferenceScope(schema)) {
     return schema;
@@ -177,7 +215,12 @@ export const hoistRepeatedSchemas = (
     } else {
       occurrence.count += 1;
     }
-    mapSchemaChildren(node, (child, info) => countSubschemas(child, info.name));
+    mapSchemaChildren(node, (child, info) =>
+      countSubschemas(
+        child,
+        definitionNames === "property" && info.depth === 0 ? name : info.name,
+      ),
+    );
     return node;
   };
   mapSchemaChildren(schema, (child, info) => countSubschemas(child, info.name));

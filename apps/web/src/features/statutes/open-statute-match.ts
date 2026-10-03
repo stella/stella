@@ -2,16 +2,16 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import {
+  parseStatuteQuery,
+  type StatuteQueryIntent,
+} from "@stll/api-contract/statute-query-intent";
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
 
 import {
   statutesInfiniteOptions,
   type StatuteListFilters,
 } from "@/features/statutes/queries/statutes";
-import {
-  parseStatuteQuery,
-  type StatuteQueryIntent,
-} from "@/features/statutes/statute-query-intent";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { isStatuteCountry, type StatuteCountry } from "@/lib/statute-route";
 

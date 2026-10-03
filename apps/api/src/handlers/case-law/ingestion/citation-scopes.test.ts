@@ -20,6 +20,7 @@ import {
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import { isDocumentAst, plainTextOf } from "@/api/lib/case-law/document-ast";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { sortDeep } from "@/api/lib/sort-deep";
 
 const text = "See 347 U.S. 483. Id. at 495.";
@@ -181,7 +182,7 @@ describe("persisted citation scopes", () => {
 
   test("reads offsets from sanitized inline text", () => {
     const rawText = "\u0000See\u00a0347 U.S. 483. Id. at 495.";
-    const input: IngestionResult = {
+    const input: IngestionResult = plainTextIngestionResult({
       caseNumber: "scope-offset-1",
       sourceDocumentId: "scope-offset-1",
       court: "Supreme Court of the United States",
@@ -193,7 +194,7 @@ describe("persisted citation scopes", () => {
       rawHash: "raw-scope-offset-1",
       documentAst: ast(rawText),
       citationScopes: opinions,
-    };
+    });
     const sanitized = sanitizeResult(input);
     const documentAst = sanitized.documentAst;
     if (!isDocumentAst(documentAst)) {
