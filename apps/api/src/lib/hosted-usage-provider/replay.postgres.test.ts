@@ -22,6 +22,7 @@ import {
   replayProviderEvent,
   replayProviderEventsBatch,
 } from "@/api/handlers/hosted-usage-webhook/replay";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { redactCompletedWebhookEvents } from "@/api/lib/hosted-usage-provider/webhook-retention";
@@ -176,6 +177,68 @@ const runReplay = async ({
     runTransaction,
   });
   return result.unwrap();
+};
+
+const createEntitlementInsertBarrier = () => {
+  const bothReady = Promise.withResolvers<undefined>();
+  let arrivals = 0;
+  const pausedBuilders = new WeakSet<object>();
+  // Returning is the execution boundary: both dispatches have finished their
+  // missing-row lookups, but neither INSERT has reached PostgreSQL yet.
+  const pauseInsert = <Builder extends object>(builder: Builder): Builder => {
+    if (pausedBuilders.has(builder)) {
+      return builder;
+    }
+    const paused = new Proxy(builder, {
+      get(target, property, receiver) {
+        const method = Reflect.get(target, property, receiver);
+        if (typeof method !== "function") {
+          return method;
+        }
+        if (property === "returning") {
+          return new Proxy(method, {
+            async apply(call, thisArg, args) {
+              arrivals += 1;
+              if (arrivals === 2) {
+                bothReady.resolve(undefined);
+              }
+              await bothReady.promise;
+              return await Reflect.apply(call, thisArg, args);
+            },
+          });
+        }
+        if (property === "values" || property === "onConflictDoNothing") {
+          return new Proxy(method, {
+            apply(call, thisArg, args) {
+              return pauseInsert(Reflect.apply(call, thisArg, args));
+            },
+          });
+        }
+        return method;
+      },
+    });
+    pausedBuilders.add(paused);
+    return paused;
+  };
+  return {
+    arrivals: () => arrivals,
+    wrap: (tx: Transaction) =>
+      new Proxy(tx, {
+        get(target, property, receiver) {
+          if (property !== "insert") {
+            return Reflect.get(target, property, receiver);
+          }
+          return new Proxy(target.insert, {
+            apply(call, thisArg, args) {
+              const builder = Reflect.apply(call, thisArg, args);
+              return args.at(0) === usageEntitlements
+                ? pauseInsert(builder)
+                : builder;
+            },
+          });
+        },
+      }),
+  };
 };
 
 describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
@@ -779,7 +842,28 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
     );
   });
 
-  test("a committed dry run preserves state and applied replay racing live delivery keeps the newest event", async () => {
+  test.each([
+    {
+      delivery: "replay",
+      collision: "provider",
+      name: "a committed dry run preserves state and applied replay racing live delivery keeps the newest event",
+    },
+    {
+      delivery: "live",
+      collision: "provider",
+      name: "concurrent live first entitlement events both succeed and keep the newest event",
+    },
+    {
+      delivery: "replay",
+      collision: "organization",
+      name: "applied replay racing a new live generation on the same organization keeps the newest event",
+    },
+    {
+      delivery: "live",
+      collision: "organization",
+      name: "concurrent live first entitlement generations on the same organization both succeed and keep the newest event",
+    },
+  ] as const)("$name", async ({ delivery, collision }) => {
     if (!databaseUrl) {
       panic("DATABASE_URL required");
     }
@@ -811,6 +895,7 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
           metadata: { organization_id: organizationId },
           quantity: 2,
           occurred_at: START,
+          created_at: START,
         };
         try {
           await owner.execute(sql`CREATE SCHEMA ${sql.identifier(schema)}`);
@@ -875,7 +960,10 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
               .where(eq(auditLogs.organizationId, organizationId)),
           });
           const before = await snapshot();
-          const replay = async (mode: "dry_run" | "apply") =>
+          const replay = async (
+            mode: "dry_run" | "apply",
+            runTransaction = runOnOwner,
+          ) =>
             (
               await replayProviderEvent({
                 eventId,
@@ -884,36 +972,94 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
                 performer: { type: "local", username: "fixture" },
                 requestedBy: "operator:fixture",
                 reason: "race fixture replay",
-                runTransaction: runOnOwner,
+                runTransaction,
               })
             ).unwrap();
-          expect((await replay("dry_run")).kind).toBe("applied");
-          expect(await snapshot()).toEqual(before);
+          if (delivery === "replay") {
+            expect((await replay("dry_run")).kind).toBe("applied");
+            expect(await snapshot()).toEqual(before);
+          }
           const newest = "2026-06-03T00:00:00Z";
-          const body = JSON.stringify({
-            type: "entitlement.updated",
-            data: { ...payload, quantity: 3, occurred_at: newest },
-          });
-          const timestamp = `${Math.floor(Date.now() / 1000)}`;
-          const hasher = new Bun.CryptoHasher("sha256", testSecret);
-          hasher.update(`${liveId}.${timestamp}.${body}`);
-          const request = new Request("http://api.test/usage/hosted/webhook", {
-            method: "POST",
-            headers: {
-              [HOSTED_USAGE_WEBHOOK_HEADERS.id]: liveId,
-              [HOSTED_USAGE_WEBHOOK_HEADERS.timestamp]: timestamp,
-              [HOSTED_USAGE_WEBHOOK_HEADERS.signature]: `v1,${hasher.digest("base64")}`,
-            },
-          });
-          const [replayed, received] = await Promise.all([
-            replay("apply"),
-            receiveHostedUsageWebhook({
+          const newerPayload =
+            collision === "organization"
+              ? {
+                  ...payload,
+                  id: `entitlement_${liveId}`,
+                  account_ref: `account_${liveId}`,
+                  created_at: newest,
+                }
+              : payload;
+          const receive = async ({
+            id,
+            eventType,
+            quantity,
+            occurredAt,
+            runTransaction,
+            data = payload,
+          }: {
+            id: string;
+            eventType: "entitlement.created" | "entitlement.updated";
+            quantity: number;
+            occurredAt: string;
+            runTransaction: WebhookTransactionRunner;
+            data?: typeof payload;
+          }) => {
+            const body = JSON.stringify({
+              type: eventType,
+              data: { ...data, quantity, occurred_at: occurredAt },
+            });
+            const timestamp = `${Math.floor(Date.now() / 1000)}`;
+            const hasher = new Bun.CryptoHasher("sha256", testSecret);
+            hasher.update(`${id}.${timestamp}.${body}`);
+            const request = new Request(
+              "http://api.test/usage/hosted/webhook",
+              {
+                method: "POST",
+                headers: {
+                  [HOSTED_USAGE_WEBHOOK_HEADERS.id]: id,
+                  [HOSTED_USAGE_WEBHOOK_HEADERS.timestamp]: timestamp,
+                  [HOSTED_USAGE_WEBHOOK_HEADERS.signature]: `v1,${hasher.digest("base64")}`,
+                },
+              },
+            );
+            return await receiveHostedUsageWebhook({
               request,
               body,
-              runTransaction: runOnWorker,
+              runTransaction,
+            });
+          };
+          const insertBarrier = createEntitlementInsertBarrier();
+          const runRaceOnOwner: WebhookTransactionRunner = async (fn) =>
+            await runOnOwner(async (tx) => await fn(insertBarrier.wrap(tx)));
+          const runRaceOnWorker: WebhookTransactionRunner = async (fn) =>
+            await runOnWorker(async (tx) => await fn(insertBarrier.wrap(tx)));
+          const olderDelivery = async () => {
+            if (delivery === "replay") {
+              const replayed = await replay("apply", runRaceOnOwner);
+              expect(["applied", "ignored"]).toContain(replayed.kind);
+              return;
+            }
+            const received = await receive({
+              id: `live-created-${Bun.randomUUIDv7()}`,
+              eventType: "entitlement.created",
+              quantity: 2,
+              occurredAt: START,
+              runTransaction: runRaceOnOwner,
+            });
+            expect(received.status).toBe(200);
+          };
+          const [, received] = await Promise.all([
+            olderDelivery(),
+            receive({
+              id: liveId,
+              eventType: "entitlement.updated",
+              quantity: 3,
+              occurredAt: newest,
+              runTransaction: runRaceOnWorker,
+              data: newerPayload,
             }),
           ]);
-          expect(["applied", "ignored"]).toContain(replayed.kind);
+          expect(insertBarrier.arrivals()).toBe(2);
           expect(received.status).toBe(200);
           const entitlements = await owner
             .select()
@@ -924,6 +1070,26 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
             new Date(newest),
           );
           expect(entitlements.at(0)?.seats).toBe(3);
+          expect(entitlements.at(0)?.hostedEntitlementExternalId).toBe(
+            newerPayload.id,
+          );
+          expect(entitlements.at(0)?.hostedAccountRef).toBe(
+            newerPayload.account_ref,
+          );
+          expect(entitlements.at(0)?.hostedEntitlementCreatedAt).toEqual(
+            new Date(newerPayload.created_at),
+          );
+          const audits = await owner
+            .select()
+            .from(auditLogs)
+            .where(eq(auditLogs.organizationId, organizationId));
+          expect(
+            audits.filter(
+              ({ action, resourceType }) =>
+                action === AUDIT_ACTION.CREATE &&
+                resourceType === AUDIT_RESOURCE_TYPE.USAGE_ENTITLEMENT,
+            ),
+          ).toHaveLength(1);
         } finally {
           await owner
             .delete(organization)
