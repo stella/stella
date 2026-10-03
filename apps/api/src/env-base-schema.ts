@@ -145,6 +145,10 @@ export const envBaseServerSchema = {
     positiveIntegerValueSchema,
     "30",
   ),
+  PUBLIC_CORPUS_SEARCH_ADDRESS_MAX: v.optional(
+    positiveIntegerValueSchema,
+    "30",
+  ),
   PUBLIC_CORPUS_SEARCH_GLOBAL_MAX: v.optional(
     v.pipe(positiveIntegerValueSchema, v.minValue(2)),
   ),

@@ -23,6 +23,8 @@ const configurationSchema = v.object({
     envBaseServerSchema.PUBLIC_CORPUS_AGGREGATE_P95_SECONDS,
   PUBLIC_CORPUS_SITEMAP_P95_SECONDS:
     envBaseServerSchema.PUBLIC_CORPUS_SITEMAP_P95_SECONDS,
+  PUBLIC_CORPUS_SEARCH_ADDRESS_MAX:
+    envBaseServerSchema.PUBLIC_CORPUS_SEARCH_ADDRESS_MAX,
   PUBLIC_CORPUS_SEARCH_GLOBAL_MAX:
     envBaseServerSchema.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX,
   PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX:
@@ -50,6 +52,7 @@ describe("public corpus capacity configuration", () => {
       PUBLIC_CORPUS_SEARCH_P95_SECONDS: 1,
       PUBLIC_CORPUS_AGGREGATE_P95_SECONDS: 2,
       PUBLIC_CORPUS_SITEMAP_P95_SECONDS: 30,
+      PUBLIC_CORPUS_SEARCH_ADDRESS_MAX: 30,
     });
     expect(getPublicCorpusLimits(configuration)).toEqual({
       totalConcurrency: 6,
@@ -70,10 +73,6 @@ describe("public corpus capacity configuration", () => {
         },
         browse: { address: API_RATE_LIMITS.api },
       },
-    });
-    expect(API_RATE_LIMITS.publicStatuteSearch).toEqual({
-      duration: 60_000,
-      max: 30,
     });
   });
 
@@ -166,6 +165,21 @@ describe("public corpus capacity configuration", () => {
       max: 3,
       localMax: 0,
     });
+  });
+
+  test("the shared search address budget is configurable but never exceeds half the fleet budget", () => {
+    for (const { configured, globalMax, expected } of [
+      { configured: 17, globalMax: undefined, expected: 17 },
+      { configured: 100, globalMax: 31, expected: 15 },
+    ]) {
+      expect(
+        getPublicCorpusLimits({
+          ...defaults(),
+          PUBLIC_CORPUS_SEARCH_ADDRESS_MAX: configured,
+          PUBLIC_CORPUS_SEARCH_GLOBAL_MAX: globalMax,
+        }).classes.search.address,
+      ).toEqual({ duration: 60_000, max: expected });
+    }
   });
 
   test("every budgeted class reserves at least half its fleet budget for other addresses", () => {
