@@ -232,6 +232,8 @@ type MockSearchOptions = {
   rangeFrom?: number;
   reported?: number;
   empty?: boolean;
+  documentText?: string;
+  recordCardSuffix?: string;
   abstract?: string;
   legalSentence?: string;
   abstractStatus?: number;
@@ -287,6 +289,8 @@ const installSearchMock = ({
   rangeFrom = 1,
   reported = rows.length,
   empty = false,
+  documentText = "Lorem ipsum dolor sit amet.",
+  recordCardSuffix = "",
   abstract = "",
   legalSentence = "",
   abstractStatus = 200,
@@ -375,7 +379,7 @@ const installSearchMock = ({
                       row.caseNumber,
                       row.date,
                       counterText === undefined ? {} : { counter: counterText },
-                    ),
+                    ).replace("Lorem ipsum dolor sit amet.", documentText),
                 { status: detailStatus },
               )
             : new Response("missing", { status: 404 }),
@@ -391,7 +395,7 @@ const installSearchMock = ({
                 makeRecordCardPage(row.caseNumber, row.date, {
                   rapporteur,
                   dissenters,
-                }),
+                }) + recordCardSuffix,
               )
             : new Response("no card", {
                 status: recordCardStatus === 200 ? 404 : recordCardStatus,
@@ -1241,6 +1245,54 @@ describe("czUsAdapter.fetchPage", () => {
 
     expect(first?.rawHash).not.toBe(second?.rawHash);
   });
+
+  for (const payload of ["document", "record-card"] as const) {
+    test(`moves the source hash when publisher ${payload} bytes change`, async () => {
+      const rows = [
+        {
+          id: "9101",
+          sz: "raw-hash_1",
+          caseNumber: "Fixture 1",
+          date: "1. 1. 2024",
+        },
+      ];
+      installSearchMock({ rows });
+      const first = unwrap(
+        await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+      ).decisions.at(0);
+      installSearchMock({
+        rows,
+        ...(payload === "document"
+          ? { documentText: "Corrected publisher decision text." }
+          : { recordCardSuffix: "<!-- Publisher card revision -->" }),
+      });
+      const second = unwrap(
+        await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+      ).decisions.at(0);
+      expect(first).toBeDefined();
+      expect(second).toBeDefined();
+      expect(first?.sourceRaw).not.toBe(second?.sourceRaw);
+      expect(first?.rawHash).not.toBe(second?.rawHash);
+      if (second === undefined || second.sourceRaw === undefined) return;
+      const replay = await czUsAdapter.reparseStoredRaw?.({
+        raw: new TextEncoder().encode(second.sourceRaw),
+        contentType: second.sourceRawContentType ?? null,
+        caseNumber: second.caseNumber,
+        sourceDocumentId: second.sourceDocumentId ?? null,
+        language: second.language,
+        court: second.court,
+        ecli: second.ecli ?? null,
+        decisionDate: second.decisionDate ?? null,
+        decisionType: second.decisionType ?? null,
+        sourceUrl: second.sourceUrl,
+        documentUrl: second.documentUrl ?? null,
+        metadata: second.metadata,
+      });
+      expect(replay?.type).toBe("parsed");
+      if (replay?.type !== "parsed") return;
+      expect(replay.result.rawHash).toBe(second.rawHash);
+    });
+  }
 
   test("stores no headnote where the court prints that it has none", async () => {
     // Both cells are always filled: with the text, or with a sentence saying

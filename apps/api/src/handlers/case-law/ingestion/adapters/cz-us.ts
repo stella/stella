@@ -1067,10 +1067,6 @@ const parseDecisionPage = ({
     });
   }
 
-  // Hash on identity fields only (not fulltext) for stability
-  // across parser changes. Matches NSS adapter pattern.
-  const raw = `${sourceDocumentId}|${parsed.caseNumber}|${parsed.decisionDate ?? ""}`;
-
   return plainTextIngestionResult({
     caseNumber: parsed.caseNumber,
     sourceDocumentId,
@@ -1125,7 +1121,7 @@ const parseDecisionPage = ({
       nalusRecordId,
       nalusSz,
     }),
-    rawHash: hashContent(raw),
+    rawHash: hashContent(html),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_US],
     documentAst,
     sourceRaw: html,
@@ -2117,6 +2113,17 @@ const parsedRecordCard = (
     : { state: CZ_US_RECORD_CARD_STATE.READ, fields };
 };
 
+type CzUsSourceHashInput = {
+  document: string;
+  detail: string | undefined;
+  abstract: string | undefined;
+  abstractState: CzUsAbstractState;
+};
+
+// Source bytes keep change detection independent of parser projections.
+const czUsSourceHash = (payloads: CzUsSourceHashInput) =>
+  hashContent(JSON.stringify(payloads));
+
 /**
  * Assemble one decision from the responses the court served for it.
  *
@@ -2167,16 +2174,13 @@ export const buildCzUsDecision = ({
         : { type: CZ_US_ABSTRACT_STATE.READ, html: abstractHtml },
     ),
   };
-  // Text-field and record-card changes must pass the pipeline's source-hash
-  // gate, which compares this hash and not the stored payload.
-  decision.rawHash = hashContent(
-    JSON.stringify({
-      abstract: decision.textFields.abstract,
-      identityHash: decision.rawHash,
-      judges: decision.judges ?? null,
-      legalSentence: decision.textFields.legalSentence,
-    }),
-  );
+  decision.rawHash = czUsSourceHash({
+    document: textHtml,
+    detail: detailHtml,
+    abstract: abstractHtml,
+    abstractState:
+      abstractHtml === undefined ? abstractState : CZ_US_ABSTRACT_STATE.READ,
+  });
   Object.assign(
     decision,
     multiResponseSourceRaw({
@@ -2780,7 +2784,10 @@ const reparseStoredRaw = (
   let abstractOutcome: NalusAbstractOutcome;
   if (abstractHtml !== undefined) {
     abstractOutcome = { type: CZ_US_ABSTRACT_STATE.READ, html: abstractHtml };
-  } else if (decision.metadata[CZ_US_ABSTRACT_METADATA_KEY] === CZ_US_ABSTRACT_STATE.ABSENT) {
+  } else if (
+    decision.metadata[CZ_US_ABSTRACT_METADATA_KEY] ===
+    CZ_US_ABSTRACT_STATE.ABSENT
+  ) {
     abstractOutcome = { type: CZ_US_ABSTRACT_STATE.ABSENT };
   } else {
     abstractOutcome = { type: CZ_US_ABSTRACT_STATE.UNAVAILABLE };
@@ -2792,6 +2799,12 @@ const reparseStoredRaw = (
   decision.metadata = checkedDecisionMetadata({
     ...decision.metadata,
     [CZ_US_ABSTRACT_METADATA_KEY]: abstractOutcome.type,
+  });
+  decision.rawHash = czUsSourceHash({
+    document: documentHtml,
+    detail: detailHtml,
+    abstract: abstractHtml,
+    abstractState: abstractOutcome.type,
   });
   decision.sourceRaw = raw;
   decision.sourceRawContentType = stored.contentType ?? "text/html";
