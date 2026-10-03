@@ -24,6 +24,7 @@ import {
   POLAR_ENTITLEMENT_STATUSES,
   DEFAULT_POLAR_API_VERSION,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import {
   CONFIGURED_ACCESS_STATE,
@@ -553,7 +554,7 @@ describe.skipIf(!runPostgresTests)(
               const context = createTestHandlerContext<
                 Parameters<typeof getAccess.handler>[0]
               >({
-                memberRole: { role: "member" },
+                memberRole: sessionMemberRole("member"),
                 session: { activeOrganizationId: organizationId },
                 safeDb: createSafeDb(
                   markRlsDatabase(nested),
