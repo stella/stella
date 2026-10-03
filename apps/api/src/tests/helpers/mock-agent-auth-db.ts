@@ -64,8 +64,10 @@ const installDatabaseBoundary = (database: TestDatabase) => {
     select: { configurable: true, value: database.select.bind(database) },
     transaction: {
       configurable: true,
-      value: async (callback: Parameters<typeof database.transaction>[0]) => {
-        const run = async (transaction: RootTransaction) =>
+      value: async <T>(
+        callback: (transaction: RootTransaction) => Promise<T>,
+      ): Promise<T> => {
+        const run = async (transaction: RootTransaction): Promise<T> =>
           await openTransaction.run(
             transaction,
             async () =>

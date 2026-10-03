@@ -189,9 +189,7 @@ export const sweepRegistrationRecords: SchedulerTask = async ({
   scheduleContinuation,
   logger,
 }) => {
-  if (signal.aborted) {
-    return;
-  }
+  signal.throwIfAborted();
   const { env } = await import("@/api/env");
   const result = await sweepRegistrations({
     db,

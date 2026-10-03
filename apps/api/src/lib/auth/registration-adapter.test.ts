@@ -19,7 +19,7 @@ describe("auth persistence retention", () => {
   test.each(["open-client", "managed"] as const)(
     "applies the declared lifecycle for %s registration",
     async (origin) => {
-      const database = {
+      const database: Record<string, Record<string, unknown>[]> = {
         user: [],
         session: [],
         account: [],
@@ -95,14 +95,16 @@ describe("auth persistence retention", () => {
       );
       expect(response.status).toBe(origin === "managed" ? 201 : 503);
       expect(admissions).toBe(origin === "managed" ? 0 : 1);
-      expect(database.oauthClient).toHaveLength(origin === "managed" ? 1 : 0);
+      expect(database["oauthClient"]).toHaveLength(
+        origin === "managed" ? 1 : 0,
+      );
       if (origin === "managed") {
-        expect(database.oauthClient.at(0)).toMatchObject({
+        expect(database["oauthClient"]?.at(0)).toMatchObject({
           registrationOrigin: "managed",
         });
       }
       const { adapter } = await auth.$context;
-      await expect(
+      expect(
         adapter.create({
           model: "oauthClient",
           data: { clientId: "unclassified-client" },

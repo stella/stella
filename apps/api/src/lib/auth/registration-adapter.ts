@@ -128,7 +128,7 @@ export const withAuthRetention = ({
       findOne: async <T>(args: Parameters<typeof raw.findOne>[0]) => {
         const row = await raw.findOne<T>(args);
         if (
-          !row ||
+          row === null ||
           !touchClient ||
           modelTables[args.model] !== "oauth_client"
         ) {
