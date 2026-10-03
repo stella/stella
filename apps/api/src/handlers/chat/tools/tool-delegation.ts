@@ -30,7 +30,7 @@ type DelegationWaiver = {
   reason: string;
 };
 
-type ChatToolDelegation =
+export type ChatToolDelegation =
   | CapabilityDelegation
   | DelegationWaiver
   | {

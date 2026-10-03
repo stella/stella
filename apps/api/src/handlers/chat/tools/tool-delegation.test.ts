@@ -5,17 +5,18 @@ import {
   MCP_CHAT_TOOL_POLICY_KINDS,
 } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
-import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import type { GetChatToolsProps } from "@/api/handlers/chat/tools/chat-tools";
 import { NATIVE_CHAT_TOOL_DELEGATIONS } from "@/api/handlers/chat/tools/tool-delegation";
+import type { ChatToolDelegation } from "@/api/handlers/chat/tools/tool-delegation";
 import { canEditActiveSkill } from "@/api/lib/agent-skills/skills";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
+import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { isMemberRole } from "@/api/lib/member-roles";
@@ -114,13 +115,60 @@ const registrationProps = (memberRole: MemberRole) =>
     resolveMemorySourceWorkspaceIds: () => [],
   }) as const satisfies GetChatToolsProps;
 
-const unauthorizedRegistrations = (
-  permissions: PermissionInput,
-  registeredRoles: readonly MemberRole[],
-) =>
-  registeredRoles.filter(
-    (role) => !hasMemberPermission(sessionMemberRole(role), permissions),
-  );
+type InspectDelegatedRegistrationsOptions = {
+  declarations: Readonly<Record<string, ChatToolDelegation>>;
+  registrations: readonly { role: MemberRole; tools: ChatToolMap }[];
+};
+
+const inspectDelegatedRegistrations = async ({
+  declarations,
+  registrations,
+}: InspectDelegatedRegistrationsOptions) => {
+  const violations: {
+    toolName: string;
+    capability: string;
+    role: MemberRole;
+  }[] = [];
+  for (const [toolName, delegation] of Object.entries(declarations)) {
+    if (delegation.type === "waiver") {
+      continue;
+    }
+    const capability =
+      delegation.type === "execution-mode" ? delegation.server : delegation;
+    const registeredRoles = registrations
+      .filter(({ tools }) => {
+        const tool = tools[toolName];
+        return (
+          tool !== undefined &&
+          (delegation.type !== "execution-mode" ||
+            ("execute" in tool && typeof tool.execute === "function"))
+        );
+      })
+      .map(({ role }) => role);
+    if (registeredRoles.length === 0) {
+      throw new TypeError(
+        `Delegation ${toolName} has no exercised registration`,
+      );
+    }
+    const endpoint = await loadCapabilityEndpoint(capability.delegatesTo);
+    if (endpoint?.config.permissions === undefined) {
+      throw new TypeError(
+        `Delegation ${toolName} must resolve a handler with permissions`,
+      );
+    }
+    for (const role of registeredRoles) {
+      if (
+        !hasMemberPermission(
+          sessionMemberRole(role),
+          endpoint.config.permissions,
+        )
+      ) {
+        violations.push({ toolName, capability: capability.delegatesTo, role });
+      }
+    }
+  }
+  return violations;
+};
 
 describe("native chat tool delegation", () => {
   test("classifies every native internal and mutation policy", () => {
@@ -138,66 +186,75 @@ describe("native chat tool delegation", () => {
       if (declaration.type === "waiver") {
         expect(declaration.reason.trim().length).toBeGreaterThan(0);
       }
+      if (declaration.type === "execution-mode") {
+        expect(declaration.client.reason.trim().length).toBeGreaterThan(0);
+      }
     }
   });
 
   test("registered roles satisfy each delegated handler's live permissions", async () => {
-    const registrations = memberRoles.flatMap((role) =>
-      (["manual", "auto"] as const).map((editApplyMode) => ({
-        role,
-        tools: getChatTools({ ...registrationProps(role), editApplyMode }),
-      })),
-    );
-    for (const [name, delegation] of Object.entries(
-      NATIVE_CHAT_TOOL_DELEGATIONS,
-    )) {
-      if (delegation.type === "waiver") {
-        continue;
+    const registrations: InspectDelegatedRegistrationsOptions["registrations"][number][] =
+      [];
+    for (const role of memberRoles) {
+      for (const scope of ["matter", "global"] as const) {
+        for (const file of ["present", "absent"] as const) {
+          for (const client of ["present", "absent"] as const) {
+            for (const skill of ["present", "absent"] as const) {
+              for (const editApplyMode of ["manual", "auto"] as const) {
+                const props = registrationProps(role);
+                registrations.push({
+                  role,
+                  tools: getChatTools({
+                    ...props,
+                    editApplyMode,
+                    workspaceId: scope === "matter" ? workspaceId : null,
+                    requestWorkspaceId: scope === "matter" ? workspaceId : null,
+                    activeFile:
+                      file === "present" ? props.activeFile : undefined,
+                    hasActiveDocxEditClient: client === "present",
+                    hasActiveDocxFileClient: client === "present",
+                    activeSkillContext:
+                      skill === "present" ? props.activeSkillContext : null,
+                  }),
+                });
+              }
+            }
+          }
+        }
       }
-      const capability =
-        delegation.type === "execution-mode" ? delegation.server : delegation;
-      const registeredRoles = registrations
-        .filter(({ tools }) => {
-          const tool = tools[name];
-          return (
-            tool !== undefined &&
-            (delegation.type !== "execution-mode" || "execute" in tool)
-          );
-        })
-        .map(({ role }) => role);
-      expect(registeredRoles.length, name).toBeGreaterThan(0);
-      const endpoint = await loadCapabilityEndpoint(capability.delegatesTo);
-      if (endpoint?.config.permissions === undefined) {
-        throw new TypeError(
-          `Delegation ${name} must resolve a handler with permissions`,
-        );
-      }
-      expect(
-        unauthorizedRegistrations(endpoint.config.permissions, registeredRoles),
-        name,
-      ).toEqual([]);
     }
+    expect(
+      await inspectDelegatedRegistrations({
+        declarations: NATIVE_CHAT_TOOL_DELEGATIONS,
+        registrations,
+      }),
+    ).toEqual([]);
   });
 
   test("reports a registration outside the delegated handler's role authority", async () => {
-    const fixture = {
-      name: "sample-writer",
-      delegatesTo:
-        NATIVE_CHAT_TOOL_DELEGATIONS.suggest_changes.server.delegatesTo,
-      registeredRoles: ["intern"],
+    const declarations = {
+      "sample-writer": NATIVE_CHAT_TOOL_DELEGATIONS.suggest_changes.server,
     } as const;
-    const endpoint = await loadCapabilityEndpoint(fixture.delegatesTo);
-    if (endpoint?.config.permissions === undefined) {
-      throw new TypeError("Fixture must resolve a handler with permissions");
-    }
+    const tools = {
+      "sample-writer": { name: "sample-writer" },
+    } satisfies ChatToolMap;
     expect(
-      unauthorizedRegistrations(
-        endpoint.config.permissions,
-        fixture.registeredRoles,
-      ),
-    ).toEqual(["intern"]);
+      await inspectDelegatedRegistrations({
+        declarations,
+        registrations: [{ role: "intern", tools }],
+      }),
+    ).toEqual([
+      {
+        toolName: "sample-writer",
+        capability: declarations["sample-writer"].delegatesTo,
+        role: "intern",
+      },
+    ]);
     expect(
-      unauthorizedRegistrations(endpoint.config.permissions, ["owner"]),
+      await inspectDelegatedRegistrations({
+        declarations,
+        registrations: [{ role: "owner", tools }],
+      }),
     ).toEqual([]);
   });
 });
