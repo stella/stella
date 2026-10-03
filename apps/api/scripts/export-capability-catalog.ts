@@ -35,6 +35,7 @@ import { KindGuard } from "@sinclair/typebox";
 // env at module load), so run under `bun --env-file=apps/api/.env`. Wired into
 // `bun run verify` and CI next to the CLI registry-snapshot drift guard.
 import { panic, Result } from "better-result";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -422,12 +423,35 @@ const ALLOWS_ARCHIVED_WORKSPACE: ReadonlySet<string> = new Set([
  * Waivers for capability endpoints mounted under a route-level
  * `onBeforeHandle`/`beforeHandle` hook the generic invoke path would bypass
  * (see `scanRouteHookGuards`). Each entry is a reviewed decision that the hook's
- * gate is also enforced in the handler config (id -> justification), or the
- * export fails on the hit. Empty: the one prior hit (`case-law.ingestion.get`)
- * moved its admin/owner gate into the handler config (`auditLog: ["read"]`), so
- * no capability endpoint sits under a route hook.
+ * gate is also enforced on the invoke path (id -> justification), or the export
+ * fails on the hit. A `deploymentFeatureGate` over a canonical flag needs no
+ * waiver when the entry carries that feature tag; custom hooks are listed here.
  */
-const ROUTE_HOOK_WAIVERS: Record<string, string> = {};
+const ROUTE_HOOK_WAIVERS: Record<string, string> = {
+  "template-packs.get":
+    "template-packs onBeforeHandle only 404s while FEATURE_TEMPLATE_PACKS is off; the catalog entry carries that feature tag",
+  "template-packs.installs.create":
+    "template-packs onBeforeHandle only 404s while FEATURE_TEMPLATE_PACKS is off; the catalog entry carries that feature tag",
+  "template-packs.list":
+    "template-packs onBeforeHandle only 404s while FEATURE_TEMPLATE_PACKS is off; the catalog entry carries that feature tag",
+  "template-packs.visibility.update":
+    "template-packs onBeforeHandle only 404s while FEATURE_TEMPLATE_PACKS is off; the catalog entry carries that feature tag",
+  "usage.entitlement.get":
+    "usage onRequest only 404s /usage paths while FEATURE_USAGE is off (the provider webhook keeps its own contract); get_usage carries FEATURE_USAGE",
+};
+
+/** Source of an `@/api/...` module, for the route-hook guard's feature-gate helpers. */
+const readApiModule = (importPath: string): string | undefined => {
+  if (!importPath.startsWith("@/api/")) {
+    return undefined;
+  }
+  const file = path.join(
+    import.meta.dir,
+    "../src",
+    `${importPath.slice("@/api/".length)}.ts`,
+  );
+  return existsSync(file) ? readFileSync(file, "utf-8") : undefined;
+};
 
 /**
  * Deployment feature flag per capability domain, mirroring the `feature` field
@@ -1095,11 +1119,20 @@ const collectClassGuardErrors = ({
   const routeHooks = scanRouteHookGuards({
     routeFiles,
     capabilityIds: capabilityIdSet,
+    capabilityFeatures: new Map(
+      entries.map((entry) => [entry.id, entry.feature]),
+    ),
+    readModule: readApiModule,
     waivedIds: new Set(Object.keys(ROUTE_HOOK_WAIVERS)),
   });
   for (const { routeFile, id } of routeHooks.violations) {
     errors.push(
-      `route-hook: capability "${id}" is mounted under a route-level onBeforeHandle/beforeHandle hook in ${routeFile} that invoke_capability bypasses. Move the gate into the handler config (like case-law.ingestion.get), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
+      `route-hook: capability "${id}" is mounted under a route-level hook (onBeforeHandle, beforeHandle, onRequest or deploymentFeatureGate) in ${routeFile} that invoke_capability bypasses (a hook that only checks a FEATURE_ flag passes when the catalog entry carries that feature tag). Move the gate into the handler config (like case-law.ingestion.get), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
+    );
+  }
+  for (const { routeFile, route } of routeHooks.childRouteMounts) {
+    errors.push(
+      `route-hook: ${routeFile} mounts child route ${route} under a route-level hook, so the hook covers handlers this guard cannot attribute. Apply the hook inside ${route}, or mount it outside the hooked instance`,
     );
   }
   for (const id of routeHooks.staleWaivers) {
@@ -1167,7 +1200,8 @@ const collectClassGuardErrors = ({
 };
 
 const buildCatalog = async (): Promise<BuildResult> => {
-  const { endpoints, files, importErrors } = await discoverSafeHandlers();
+  const { endpoints, files, routeFiles, importErrors } =
+    await discoverSafeHandlers();
   const errors: string[] = [];
 
   for (const { id, message } of importErrors) {
@@ -1624,7 +1658,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
   for (const message of collectClassGuardErrors({
     entries,
     entrySources,
-    routeFiles: files.filter((file) => file.id.endsWith("routes.ts")),
+    routeFiles,
     toolFeatureByName,
   })) {
     errors.push(message);
