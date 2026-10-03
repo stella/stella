@@ -12,7 +12,10 @@ import {
   type CorpusProvisionMention,
   readCorpusProvisionMentions,
 } from "@/api/lib/legal-search/corpus-provision-mentions";
-import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
+import {
+  CORPUS_QUERY_VARIANT_POLICY,
+  type CorpusIndexQueryVariant,
+} from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { functionWordKey } from "@/api/lib/legal-search/morphology/function-words";
 import { stemSlovakUpstream } from "@/api/lib/legal-search/morphology/slovak";
@@ -203,7 +206,7 @@ export const partitionCorpusQueryTokens = ({
   jurisdiction,
 }: PartitionCorpusQueryTokensOptions): PartitionCorpusQueryTokensResult => {
   const profile =
-    queryVariant === "provision-refs" &&
+    CORPUS_QUERY_VARIANT_POLICY[queryVariant].provisions &&
     (jurisdiction === "SVK" || jurisdiction === "CZE")
       ? PROVISION_CITATION_PROFILES[jurisdiction]
       : null;
@@ -716,7 +719,7 @@ export type CorpusFreeTextOptions = {
   jurisdiction?: string | undefined;
   /** Whether content tokens are all required or ranked by coverage. */
   match?: "all" | "any" | undefined;
-  /** Case-law SVK compatibility; paid only from baseline allocation headroom. */
+  /** Case-law SVK compatibility; the selected variant controls reservation. */
   slovakLegacyStemFields?: readonly string[] | undefined;
   expand?: CorpusTermExpander | undefined;
   stemming?: CorpusStemming | null | undefined;
@@ -831,10 +834,39 @@ export const corpusFreeTextClause = (
       : null;
   const required = provisionGroups?.required ?? partitionRequired;
   const reserved = provisionGroups?.reserved ?? 0;
-  const budgeted = spendLeafBudget(required.map(leavesForToken), reserved);
+  // One passage compatibility leaf per token, before optional passes can starve it.
+  // Typed leaves remain mandatory even for all-token queries above the ceiling.
+  let faithfulHeadroom = Math.max(
+    0,
+    CORPUS_QUERY_LEAF_BUDGET - required.length - reserved,
+  );
+  const faithfulReserved = required.map((token) => {
+    if (
+      !CORPUS_QUERY_VARIANT_POLICY[queryVariant].slovakFaithfulReserve ||
+      stemming?.language !== "sk" ||
+      faithfulHeadroom === 0
+    ) {
+      return [];
+    }
+    const leaf = slovakLegacyStemLeaves(token, slovakLegacyStemFields).at(0);
+    if (leaf === undefined) {
+      return [];
+    }
+    faithfulHeadroom -= 1;
+    return [leaf];
+  });
+  const faithfulCount = faithfulReserved.reduce(
+    (count, leaves) => count + leaves.length,
+    0,
+  );
+  const budgeted = spendLeafBudget(
+    required.map(leavesForToken),
+    reserved + faithfulCount,
+  );
 
   let used =
     reserved +
+    faithfulCount +
     budgeted.length +
     budgeted.reduce(
       (total, { granted }) =>
@@ -847,7 +879,12 @@ export const corpusFreeTextClause = (
     );
   const clauses = budgeted.map(({ granted, token }, index) => {
     const extras = LEAF_EMIT_ORDER.flatMap((group) => granted[group]);
-    // Baseline grants are immutable: compatibility spends only what all four passes left.
+    const compatibility = faithfulReserved.at(index);
+    if (compatibility === undefined) {
+      return panic("Budgeted corpus token has no compatibility reservation");
+    }
+    extras.push(...compatibility);
+    // Additional compatibility fields spend only what the ordinary passes left.
     if (
       stemming?.language === "sk" &&
       slovakLegacyStemFields.length > 0 &&
