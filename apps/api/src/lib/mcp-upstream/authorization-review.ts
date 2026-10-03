@@ -6,6 +6,8 @@ import {
   mcpConnectorAuthorizationReviews,
   mcpUserConnections,
 } from "@/api/db/schema";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type RecordMcpAuthorizationReviewOptions = {
@@ -16,6 +18,7 @@ type RecordMcpAuthorizationReviewOptions = {
   observedIssuer: string | null;
   observedEndpointOrigins?: string[];
   lease?: { connectionId: SafeId<"mcpUserConnection">; expiresAt: Date };
+  recordAuditEvent: AuditRecorder;
 };
 
 export const recordMcpAuthorizationReview = async ({
@@ -26,9 +29,9 @@ export const recordMcpAuthorizationReview = async ({
   observedIssuer,
   observedEndpointOrigins,
   lease,
+  recordAuditEvent,
 }: RecordMcpAuthorizationReviewOptions): Promise<Result<void, SafeDbError>> =>
   await safeDb(async (tx) => {
-    // audit: skip — derived connector authorization status; credentials and approved configuration remain unchanged
     if (lease) {
       const changed = await tx
         .update(mcpUserConnections)
@@ -82,7 +85,9 @@ export const recordMcpAuthorizationReview = async ({
         organizationId,
         connectorId,
         observedIssuer,
-        observedEndpointOrigins: observedEndpointOrigins ?? [],
+        ...(observedEndpointOrigins === undefined
+          ? {}
+          : { observedEndpointOrigins }),
       })
       .onConflictDoUpdate({
         target: [
@@ -100,4 +105,15 @@ export const recordMcpAuthorizationReview = async ({
           updatedAt: new Date(),
         },
       });
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+      resourceId: organizationId,
+      metadata: {
+        field: "mcpConnectorAuthorization",
+        connectorId,
+        status: "needs_reapproval",
+        observedIssuer,
+      },
+    });
   });

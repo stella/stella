@@ -153,6 +153,7 @@ export const createConnectMcpConnectorHandler = (
           organizationId: session.activeOrganizationId,
           userId: user.id,
           safeDb,
+          recordAuditEvent,
         }),
       );
 
@@ -323,6 +324,7 @@ type LoadApprovedMcpMetadataOptions = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   safeDb: SafeDb;
+  recordAuditEvent: AuditRecorder;
 };
 
 const loadApprovedMcpMetadata = async ({
@@ -332,6 +334,7 @@ const loadApprovedMcpMetadata = async ({
   organizationId,
   userId,
   safeDb,
+  recordAuditEvent,
 }: LoadApprovedMcpMetadataOptions): Promise<
   Result<BoundOAuthMetadata, HandlerError<400 | 409 | 502> | SafeDbError>
 > =>
@@ -345,6 +348,7 @@ const loadApprovedMcpMetadata = async ({
             organizationId,
             userId,
             connectorId: connector.id,
+            recordAuditEvent,
             observedIssuer: connector.oauthIssuer,
           }),
         );
@@ -365,6 +369,7 @@ const loadApprovedMcpMetadata = async ({
           organizationId,
           userId,
           connectorId: connector.id,
+          recordAuditEvent,
           observedIssuer: observed.authorizationServer.issuer,
           observedEndpointOrigins: getOAuthEndpointOrigins(observed),
         }),
@@ -386,6 +391,7 @@ const loadApprovedMcpMetadata = async ({
           organizationId,
           userId,
           connectorId: connector.id,
+          recordAuditEvent,
           observedIssuer: metadata.authorizationServer.issuer,
           observedEndpointOrigins: getOAuthEndpointOrigins(metadata),
         }),

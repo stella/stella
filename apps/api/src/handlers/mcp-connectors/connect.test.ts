@@ -147,6 +147,14 @@ test("requires current connector approval before connecting", async () => {
       ({ table }) => table === mcpConnectorAuthorizationReviews,
     )?.value,
   ).toMatchObject({ observedIssuer: issuer });
+  expect(setupResult.audits).toEqual([
+    expect.objectContaining({
+      metadata: expect.objectContaining({
+        field: "mcpConnectorAuthorization",
+        status: "needs_reapproval",
+      }),
+    }),
+  ]);
 });
 
 test("connects using configured connector metadata", async () => {

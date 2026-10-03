@@ -273,6 +273,7 @@ describe("MCP connector authorization reviews", () => {
         organizationId,
         userId: ownerId,
         connectorId: sharedConnectorId,
+        recordAuditEvent: async () => {},
         observedIssuer: "https://auth.example.test/shared",
         observedEndpointOrigins: ["https://auth.example.test"],
       }),
@@ -444,6 +445,7 @@ describe("MCP connector authorization reviews", () => {
         organizationId,
         userId: ownerId,
         connectorId: sharedConnectorId,
+        recordAuditEvent: async () => {},
         observedIssuer: "https://auth.example.test/updated",
         observedEndpointOrigins: [
           "https://auth.example.test",
@@ -486,6 +488,7 @@ describe("MCP connector authorization reviews", () => {
         organizationId,
         userId: ownerId,
         connectorId: sharedConnectorId,
+        recordAuditEvent: async () => {},
         observedIssuer: "https://auth.example.test/updated",
       }),
     );

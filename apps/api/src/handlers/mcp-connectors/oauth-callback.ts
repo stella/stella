@@ -284,8 +284,11 @@ export const createMcpOAuthCallbackHandler = (
               organizationId: session.activeOrganizationId,
               userId: user.id,
               connectorId: row.connectorId,
+              recordAuditEvent,
               observedIssuer,
-              observedEndpointOrigins,
+              ...(observedEndpointOrigins === undefined
+                ? {}
+                : { observedEndpointOrigins }),
             });
 
           const boundMetadata = await validatePendingOAuthMetadata({
