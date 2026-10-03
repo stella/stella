@@ -20,7 +20,8 @@ const fixture = (
 ) => {
   let time = 7;
   const monitor = createManagedProviderAvailability({
-    getApiKey: async () => Result.ok("fixture-key"),
+    getCredential: async () =>
+      Result.ok({ type: "static", apiKey: "fixture-key" }),
     intervalMs: 53,
     timeoutMs: 11,
     fetchCatalog,

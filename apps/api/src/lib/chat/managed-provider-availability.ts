@@ -7,6 +7,7 @@ import {
   MANAGED_AI_RESIDENCIES,
   type ManagedAIResidency,
 } from "@/api/lib/chat/ai-data-policy";
+import type { ManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import {
   managedProviderUnavailable,
   PROVIDER_DATA_POLICY,
@@ -31,7 +32,9 @@ type RegionalAvailability =
   | { status: "available"; models: ReadonlySet<string>; expiresAt: number };
 
 type ManagedProviderAvailabilityOptions = {
-  getApiKey: () => Promise<Result<string, HandlerError<503>>>;
+  getCredential: () => Promise<
+    Result<ManagedOpenRouterCredential, HandlerError<503>>
+  >;
   intervalMs: number;
   timeoutMs: number;
   signal?: AbortSignal | undefined;
@@ -42,7 +45,7 @@ type ManagedProviderAvailabilityOptions = {
 // This is a per-process safety observation, never an ownership or job lease.
 // Every replica boots unavailable and expires its own observations.
 export const createManagedProviderAvailability = ({
-  getApiKey,
+  getCredential,
   intervalMs,
   timeoutMs,
   signal: parentSignal,
@@ -57,7 +60,7 @@ export const createManagedProviderAvailability = ({
   // Completed observations survive one slow refresh, but never indefinite stalling.
   const maxStalenessMs = 2 * intervalMs + timeoutMs;
   const refresh = async () => {
-    const credential = await getApiKey();
+    const credential = await getCredential();
     if (Result.isError(credential)) {
       return MANAGED_AI_RESIDENCIES.map((residency) => {
         const error = classifyFailure(
@@ -84,10 +87,18 @@ export const createManagedProviderAvailability = ({
                 url.searchParams.set("region", residency);
                 url.searchParams.set("zdr", "true");
                 const response = await fetchCatalog(url.href, {
-                  headers: { Authorization: `Bearer ${credential.value}` },
+                  headers: {
+                    Authorization: `Bearer ${credential.value.apiKey}`,
+                  },
                   signal,
                   redirect: "error",
                 });
+                if (
+                  response.status === 401 &&
+                  credential.value.type === "federated"
+                ) {
+                  credential.value.invalidate();
+                }
                 if (!response.ok) {
                   return Result.err(
                     new ManagedProviderCheckError({

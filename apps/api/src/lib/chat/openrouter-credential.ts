@@ -21,6 +21,7 @@ const TOKEN_LIFETIME_SECONDS = 900;
 const MINIMUM_REMAINING_MS = 600_000;
 const MAX_ATTEMPTS = 3;
 const MAX_RETRY_DELAY_MS = 5000;
+const MAX_RETRY_COOLDOWN_MS = 60_000;
 const EXCHANGE_URL = "https://openrouter.ai/api/v1/oauth/token";
 
 export type ManagedOpenRouterConfiguration =
@@ -94,7 +95,10 @@ const retryAfterMs = (
     return undefined;
   }
   if (/^\d+$/u.test(value)) {
-    return Number(value) * 1000;
+    const delay = Number(value) * 1000;
+    return Number.isFinite(delay)
+      ? Math.min(delay, MAX_RETRY_COOLDOWN_MS)
+      : undefined;
   }
   const match =
     /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), (\d{2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT$/u.exec(
@@ -132,7 +136,10 @@ const retryAfterMs = (
     ),
   );
   return Result.isOk(parsed)
-    ? Math.max(0, parsed.value.epochMilliseconds - now)
+    ? Math.min(
+        MAX_RETRY_COOLDOWN_MS,
+        Math.max(0, parsed.value.epochMilliseconds - now),
+      )
     : undefined;
 };
 
@@ -496,5 +503,18 @@ export const getManagedOpenRouterCredentialProvider = () =>
   }));
 
 export const getManagedOpenRouterCredential = async (): Promise<
-  Result<string, HandlerError<503>>
-> => await getManagedOpenRouterCredentialProvider().get();
+  Result<ManagedOpenRouterCredential, HandlerError<503>>
+> => {
+  const credentialProvider = getManagedOpenRouterCredentialProvider();
+  const configuration = getManagedOpenRouterConfiguration();
+  const result = await credentialProvider.get();
+  return result.map((apiKey) =>
+    configuration.type === "federated"
+      ? {
+          type: "federated" as const,
+          apiKey,
+          invalidate: () => credentialProvider.invalidate(apiKey),
+        }
+      : { type: "static" as const, apiKey },
+  );
+};

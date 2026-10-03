@@ -49,7 +49,7 @@ export const startManagedProviderChecks = async (
   }
   const controller = new AbortController();
   const monitor = createManagedProviderAvailability({
-    getApiKey: getManagedOpenRouterCredential,
+    getCredential: getManagedOpenRouterCredential,
     intervalMs,
     timeoutMs,
     signal: controller.signal,

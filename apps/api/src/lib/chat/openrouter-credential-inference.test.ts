@@ -8,6 +8,7 @@ import * as v from "valibot";
 
 import { env } from "@/api/env";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { createManagedProviderAvailability } from "@/api/lib/chat/managed-provider-availability";
 import { createManagedOpenRouterCredentialProvider } from "@/api/lib/chat/openrouter-credential";
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import { readProviderStatus } from "@/api/lib/observability/failure-evidence";
@@ -121,6 +122,49 @@ const createCredentialProvider = () => {
     },
   };
 };
+
+test("catalog 401 invalidates the matching federated token and refreshes with a new token", async () => {
+  installRecordingLogger();
+  setMetricLineSinkForTesting(() => undefined);
+  const harness = createCredentialProvider();
+  const tokens: string[] = [];
+  const monitor = createManagedProviderAvailability({
+    getCredential: async () =>
+      (await harness.provider.get()).map((apiKey) => ({
+        type: "federated" as const,
+        apiKey,
+        invalidate: () => harness.provider.invalidate(apiKey),
+      })),
+    intervalMs: 1000,
+    timeoutMs: 5000,
+    now: () => START,
+    fetchCatalog: async (_url, init) => {
+      const authorization = new Headers(init.headers).get("Authorization");
+      if (authorization !== null) {
+        tokens.push(authorization);
+      }
+      return authorization === `Bearer ${FIRST_TOKEN}`
+        ? new Response(null, { status: 401 })
+        : Response.json({ data: [{ id: MODEL }] });
+    },
+  });
+  expect((await monitor.refresh()).every((result) => result.isErr())).toBe(
+    true,
+  );
+  expect(harness.exchangeCalls).toBe(1);
+  expect(monitor.check(MODEL, "eu").isErr()).toBe(true);
+  expect(monitor.check(MODEL, "us").isErr()).toBe(true);
+  expect((await monitor.refresh()).every((result) => result.isOk())).toBe(true);
+  expect(harness.exchangeCalls).toBe(2);
+  expect(tokens).toEqual([
+    `Bearer ${FIRST_TOKEN}`,
+    `Bearer ${FIRST_TOKEN}`,
+    `Bearer ${NEXT_TOKEN}`,
+    `Bearer ${NEXT_TOKEN}`,
+  ]);
+  expect(monitor.check(MODEL, "eu").isOk()).toBe(true);
+  expect(monitor.check(MODEL, "us").isOk()).toBe(true);
+});
 
 const outputSchema = {
   type: "object",

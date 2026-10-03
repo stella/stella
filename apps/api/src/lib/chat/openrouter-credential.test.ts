@@ -379,7 +379,13 @@ describe("managed OpenRouter credentials", () => {
   });
 
   test("exhausts missing and malformed Retry-After with bounded jitter backoff", async () => {
-    for (const retryAfter of [undefined, "not-a-date"]) {
+    for (const retryAfter of [
+      undefined,
+      "not-a-date",
+      "-1",
+      "Infinity",
+      "NaN",
+    ]) {
       const retryResponse = () =>
         new Response(null, {
           status: 429,
@@ -514,6 +520,30 @@ describe("managed OpenRouter credentials", () => {
     expect(await harness.provider.get()).toEqual(Result.ok(ACCESS_TOKEN));
     expect(harness.exchangeCalls).toBe(2);
   });
+
+  test.each([
+    "99999999999999999999",
+    new Date(START + 86_400_000).toUTCString(),
+  ])(
+    "bounds the %s Retry-After cooldown and recovers with a fresh exchange",
+    async (retryAfter) => {
+      const harness = createHarness({
+        exchangeReplies: [
+          new Response(null, {
+            status: 429,
+            headers: { "retry-after": retryAfter },
+          }),
+        ],
+      });
+      managedUnavailable(await harness.provider.get());
+      harness.clock.advance(59_999);
+      managedUnavailable(await harness.provider.get());
+      expect(harness.exchangeCalls).toBe(1);
+      harness.clock.advance(1);
+      expect(await harness.provider.get()).toEqual(Result.ok(ACCESS_TOKEN));
+      expect(harness.exchangeCalls).toBe(2);
+    },
+  );
 
   test("bounds a hanging exchange with the injected timeout", async () => {
     const harness = createHarness({
