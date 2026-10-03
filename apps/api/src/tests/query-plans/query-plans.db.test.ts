@@ -12,7 +12,10 @@ import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
 import { CITATION_SUMMARY_SCAN_LIMIT } from "@/api/handlers/case-law/decisions/citation-graph";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { DOCUMENT_OUTSTANDING_INDEX } from "@/api/lib/legal-search/sk-document-outstanding-index";
+import {
+  DOCUMENT_OUTSTANDING_DATE_INDEX,
+  DOCUMENT_OUTSTANDING_INDEX,
+} from "@/api/lib/legal-search/sk-document-outstanding-index";
 import { pendingDeferredDocumentSql } from "@/api/lib/legal-search/sk-document-pending-sql";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import { isRecord } from "@/api/lib/type-guards";
@@ -203,24 +206,28 @@ test("outstanding-document fixture keeps the exact pending set selective", async
   expect(bytes).toBeGreaterThan(0);
 });
 
-test("outstanding-document schema definition matches its online index repair", async () => {
-  const index = DOCUMENT_OUTSTANDING_INDEX;
-  const row = executedRows(
-    await db.execute(sql`
+test("outstanding-document schema definitions match their online index repairs", async () => {
+  for (const index of [
+    DOCUMENT_OUTSTANDING_INDEX,
+    DOCUMENT_OUTSTANDING_DATE_INDEX,
+  ]) {
+    const row = executedRows(
+      await db.execute(sql`
       SELECT pg_get_indexdef(index_relation.oid) AS definition
       FROM pg_catalog.pg_class AS index_relation
       WHERE index_relation.relname = ${index.name}
     `),
-  ).at(0);
-  const definition =
-    isRecord(row) && typeof row["definition"] === "string"
-      ? row["definition"]
-      : panic("Outstanding-document index definition is missing");
-  const bodyStart = definition.indexOf(" ON ");
-  if (bodyStart === -1) {
-    panic("Outstanding-document index definition has no ON clause");
+    ).at(0);
+    const definition =
+      isRecord(row) && typeof row["definition"] === "string"
+        ? row["definition"]
+        : panic("Outstanding-document index definition is missing");
+    const bodyStart = definition.indexOf(" ON ");
+    if (bodyStart === -1) {
+      panic("Outstanding-document index definition has no ON clause");
+    }
+    expect(definition.slice(bodyStart + 1)).toBe(index.definitionBody);
   }
-  expect(definition.slice(bodyStart + 1)).toBe(index.definitionBody);
 });
 
 for (const entry of QUERY_PLAN_REGISTRY) {

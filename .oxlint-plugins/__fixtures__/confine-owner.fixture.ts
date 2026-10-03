@@ -63,6 +63,36 @@ const loadSerializer = async () =>
   // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a dynamic import of a name-confined entry point reaches every owned binding and is rejected
   await import("@stll/folio-core");
 
+export const destructureOwned = async () => {
+  // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves destructuring an owned binding from a dynamic import is rejected
+  const { createDocx: build } = await import("@stll/folio-core");
+  return build;
+};
+
+export const readOwnedMember = async () =>
+  // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves reading an owned binding off a dynamic import is rejected
+  (await import("@stll/folio-core/server")).createDocx;
+
+export const destructureWithRest = async () => {
+  const { paragraph: _paragraph, ...rest } =
+    // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a rest element reaches every owned binding and is rejected
+    await import("@stll/folio-core/server");
+  return rest;
+};
+
+// Accepted: a sibling export destructured from a dynamic import of the entry
+// point is not an owned binding.
+export const destructureSibling = async () => {
+  // expect-clean: confine-owner/confine-owner
+  const { paragraph: buildParagraph } = await import("@stll/folio-core/server");
+  return buildParagraph;
+};
+
+// Accepted: a sibling export read off a dynamic import.
+export const readSiblingMember = async () =>
+  // expect-clean: confine-owner/confine-owner
+  (await import("@stll/folio-core/server")).heading;
+
 export const copyDirectly = async (text: string) => {
   // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a direct clipboard write is rejected
   await navigator.clipboard.writeText(text);
