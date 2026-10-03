@@ -5,11 +5,11 @@ import JSZip from "jszip";
 import path from "node:path";
 import { parseXmlDocument } from "slimdom";
 
+import { OFFICE_ARCHIVE_FORMATS } from "../src/office-formats";
 import {
   isOfficeIdentityPart,
   officeIdentityFields,
-  OFFICE_ARCHIVE_FORMATS,
-} from "../packages/docx-utils/src/office-metadata";
+} from "../src/office-metadata";
 import allowedValues from "./office-fixture-metadata-allowlist.json";
 
 export const OFFICE_FIXTURE_EXTENSIONS = Object.keys(
@@ -134,7 +134,7 @@ export const listOfficeFixtures = (
 };
 
 const main = async () => {
-  const rootDir = path.resolve(import.meta.dir, "..");
+  const rootDir = path.resolve(import.meta.dir, "../../..");
   const files = listOfficeFixtures(rootDir);
   if (Result.isError(files)) {
     console.error(`${files.error.path}: ${files.error.field}`);

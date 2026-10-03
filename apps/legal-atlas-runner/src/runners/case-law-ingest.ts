@@ -1423,7 +1423,7 @@ export const runCaseLawIngest = async (
           async () =>
             await fetchDecisionDocument({
               onDocumentObservation,
-              decision,
+              decisionId: decision.id,
               fetchDocument: skCourtsDocumentFetch,
               scopedDb: backfillDb,
               signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),

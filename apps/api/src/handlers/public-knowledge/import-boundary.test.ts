@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const apiRoot = path.join(repoRoot, "apps/api/src");
@@ -76,6 +77,8 @@ const allowedExternal = new Set([
   "jszip",
   "node:fs",
   "node:path",
+  "node:stream",
+  "node:zlib",
   "slimdom",
   "valibot",
 ]);
@@ -84,6 +87,52 @@ const importsOf = (file: string): string[] =>
   new Bun.Transpiler({ loader: "ts" })
     .scan(readFileSync(file, "utf-8"))
     .imports.map(({ path: specifier }) => specifier);
+
+const isLiteralData = (node: ts.Expression): boolean => {
+  if (ts.isAsExpression(node)) {
+    return isLiteralData(node.expression);
+  }
+  if (ts.isObjectLiteralExpression(node)) {
+    return node.properties.every(
+      (property) =>
+        ts.isPropertyAssignment(property) &&
+        (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+        isLiteralData(property.initializer),
+    );
+  }
+  if (ts.isArrayLiteralExpression(node)) {
+    return node.elements.every(isLiteralData);
+  }
+  return (
+    ts.isStringLiteral(node) ||
+    ts.isNumericLiteral(node) ||
+    node.kind === ts.SyntaxKind.TrueKeyword ||
+    node.kind === ts.SyntaxKind.FalseKeyword ||
+    node.kind === ts.SyntaxKind.NullKeyword
+  );
+};
+
+const isConstantsOnly = (source: string): boolean => {
+  const parsed = ts.createSourceFile("leaf.ts", source, ts.ScriptTarget.Latest);
+  return (
+    parsed.statements.length > 0 &&
+    parsed.statements.every(
+      (statement) =>
+        ts.isVariableStatement(statement) &&
+        statement.declarationList.getFirstToken(parsed)?.kind ===
+          ts.SyntaxKind.ConstKeyword &&
+        statement.modifiers?.some(
+          (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+        ) === true &&
+        statement.declarationList.declarations.every(
+          (declaration) =>
+            ts.isIdentifier(declaration.name) &&
+            declaration.initializer !== undefined &&
+            isLiteralData(declaration.initializer),
+        ),
+    )
+  );
+};
 
 const resolveApiImport = (from: string, specifier: string) => {
   const base = specifier.startsWith("@/api/")
@@ -116,6 +165,21 @@ test("public Knowledge runtime graph is limited to static readers and parsers", 
       if (specifier.startsWith("@/api/") || specifier.startsWith(".")) {
         visit(resolveApiImport(file, specifier));
       } else if (!allowedExternal.has(specifier)) {
+        // An approved package's literal-data leaf adds no executable dependency
+        // graph. Inspect its source rather than allowlisting another module.
+        const packageName = specifier.split("/").slice(0, 2).join("/");
+        if (
+          specifier.startsWith("@stll/") &&
+          allowedExternal.has(packageName) &&
+          isConstantsOnly(
+            readFileSync(
+              Bun.resolveSync(specifier, path.dirname(file)),
+              "utf-8",
+            ),
+          )
+        ) {
+          continue;
+        }
         unexpectedExternal.add(specifier);
       }
     }
@@ -135,3 +199,36 @@ test("public Knowledge runtime graph is limited to static readers and parsers", 
   ]);
   expect(importsOf(path.join(packageRoot, "packs.gen.ts"))).toEqual([]);
 });
+
+test("constant leaves contain only exported literal data", () => {
+  expect(
+    isConstantsOnly(
+      'export const FORMATS = { docx: { family: "word", mimeType: "example/type" } } as const;',
+    ),
+  ).toBe(true);
+  expect(
+    isConstantsOnly(
+      'export const VALUES = ["example", 1, true, false, null] as const;',
+    ),
+  ).toBe(true);
+});
+
+test.each([
+  'import "example"; export const VALUE = "example";',
+  'export { VALUE } from "example";',
+  'export const VALUE = import("example");',
+  "export const VALUE = readFile();",
+  "export const VALUE = process.env.VALUE;",
+  'export const VALUE = { [readKey()]: "example" };',
+  "export const VALUE = { ...other };",
+  'export const VALUE = { get name() { return "example"; } };',
+  'export const VALUE = "example"; run();',
+  'export let VALUE = "example";',
+  'const VALUE = "example";',
+  "",
+])(
+  "constant leaves reject executable statements and dependencies: %s",
+  (source) => {
+    expect(isConstantsOnly(source)).toBe(false);
+  },
+);

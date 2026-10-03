@@ -6,7 +6,7 @@ import {
   isOpcRelationshipPartPath,
   sanitizeAttachedTemplateRelationships,
 } from "@stll/docx-utils";
-import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-metadata";
+import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import type { Match, Scanner, ScanContext } from "@/api/lib/file-scan/scanner";
 import { hasZipMagic } from "@/api/lib/file-scan/zip";

@@ -214,11 +214,11 @@ type ResolvedFieldChat = {
   abortController: AbortController;
   caching: ReturnType<typeof resolveCaching>;
   messages: GuardedModelMessages<ModelMessage[]>;
-  model: ReturnType<typeof resolveTanStackTextModel>;
+  model: Awaited<ReturnType<typeof resolveTanStackTextModel>>;
   system: GuardedSystemPrompt | undefined;
 };
 
-const resolveFieldChat = ({
+const resolveFieldChat = async ({
   abortSignal,
   orgAIConfig,
   managedAIResidency,
@@ -227,7 +227,7 @@ const resolveFieldChat = ({
   resolveTextModel,
   system,
   tenantWorkspaceIds,
-}: FieldChatInput): ResolvedFieldChat => ({
+}: FieldChatInput): Promise<ResolvedFieldChat> => ({
   abortController: abortControllerFromSignal(abortSignal),
   caching: resolveCaching({
     promptCachingEnabled: false,
@@ -238,7 +238,7 @@ const resolveFieldChat = ({
     messages: [{ role: "user", content: prompt }],
     workspaceIds: tenantWorkspaceIds,
   }),
-  model: resolveTextModel({
+  model: await resolveTextModel({
     dataClass: "customer",
     role: "fast",
     orgAIConfig,
@@ -255,7 +255,7 @@ const generateFieldText = async (
   input: FieldChatInput,
 ): Promise<TanStackTextRun> => {
   const { abortController, caching, messages, model, system } =
-    resolveFieldChat(input);
+    await resolveFieldChat(input);
   return await collectTanStackTextRun({
     adapter: textAdapterWithNormalizedStops(model),
     messages,
@@ -287,7 +287,7 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
   },
 ): Promise<v.InferOutput<TSchema>> => {
   const { abortController, caching, messages, model, system } =
-    resolveFieldChat(input);
+    await resolveFieldChat(input);
   const output = await generateChatObject({
     adapter: model.adapter,
     messages,

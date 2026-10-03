@@ -12,7 +12,7 @@
 import { Result } from "better-result";
 
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
-import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-metadata";
+import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import {

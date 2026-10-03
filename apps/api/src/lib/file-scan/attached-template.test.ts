@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-metadata";
+import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import { attachedTemplateScanner } from "./attached-template";
 

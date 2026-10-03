@@ -1,6 +1,11 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import {
+  CLAUSE_WARNINGS_HEADER,
+  clauseWarningCountHeaderSchema,
+} from "@stll/api-contract/template-fill-headers";
+
 import type { ResolvedField } from "@/components/templates/template-discover-types";
 
 const aiFieldErrorPathsSchema = v.array(
@@ -118,3 +123,11 @@ export const groupFieldsByPrefix = (
         },
   );
 };
+
+export const readClauseWarnings = (headers: Headers) =>
+  Result.try(() =>
+    v.parse(
+      clauseWarningCountHeaderSchema,
+      headers.get(CLAUSE_WARNINGS_HEADER) ?? "0",
+    ),
+  );

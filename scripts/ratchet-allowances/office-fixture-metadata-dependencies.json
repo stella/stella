@@ -1,5 +1,0 @@
-{
-  "metric": "direct-third-party-declarations",
-  "delta": 2,
-  "reason": "The root fixture metadata checker directly reads ZIP entries and XML through JSZip and slimdom; declare its existing-version runtime dependencies."
-}
