@@ -22,12 +22,12 @@ import {
   isReleasePullRequest,
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
-  RATCHET_DEFINITION_PATHS,
   readMergeHandoff,
   requiredChecksSucceeded,
   verifyFrontOfQueue,
   type MergeBarSnapshot,
 } from "./merge-bar";
+import ratchetDefinitionPaths from "./ratchet-definition-paths.json";
 
 const HEAD_SHA = "1f0c3a7d9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d";
 const OTHER_SHA = "9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d6f0e1b3c";
@@ -1557,6 +1557,10 @@ describe("green result freshness", () => {
       return comparison;
     },
     readPullFiles: () => ["scripts/shared.ts"],
+    readRatchetDefinitionPaths: (branch: string) => {
+      expect(branch).toBe("main");
+      return ratchetDefinitionPaths;
+    },
   });
 
   test("unchanged base and up to twenty unrelated commits retain green results", () => {
@@ -1596,7 +1600,7 @@ describe("green result freshness", () => {
   });
 
   test("a ratchet change on main refuses green results computed under the old rules", () => {
-    for (const filename of RATCHET_DEFINITION_PATHS) {
+    for (const filename of ratchetDefinitionPaths) {
       const result = checkGreenResultFreshness(
         readers({ status: "ahead", ahead_by: 1, files: [{ filename }] }),
       );
@@ -1606,6 +1610,20 @@ describe("green result freshness", () => {
           `main changed the ratchet since the green run: ${filename}`,
         );
       }
+    }
+  });
+
+  test("an unreadable ratchet definition list refuses green results", () => {
+    for (const definitions of [undefined, {}, [], [1], ["ok", null]]) {
+      const result = checkGreenResultFreshness({
+        ...readers({
+          status: "ahead",
+          ahead_by: 1,
+          files: [{ filename: "unrelated.ts" }],
+        }),
+        readRatchetDefinitionPaths: () => definitions,
+      });
+      expect(result.isErr(), JSON.stringify(definitions)).toBe(true);
     }
   });
 
@@ -1634,9 +1652,9 @@ describe("green result freshness", () => {
         }
       }
     }
-    expect([...RATCHET_DEFINITION_PATHS].toSorted()).toEqual(
+    expect(
       [...closure].filter((file) => file.endsWith(".ts")).toSorted(),
-    );
+    ).toEqual(ratchetDefinitionPaths.toSorted());
   });
 
   test("more than twenty commits, rewritten history and truncated files refuse stale green", () => {

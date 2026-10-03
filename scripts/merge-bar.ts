@@ -635,24 +635,6 @@ export const evaluateMergeBar = (
 const MAX_GREEN_BASE_DRIFT = 20;
 const COMPARE_FILE_LIMIT = 300;
 
-// The ratchet judges a PR against the base tree with these sources, so a green
-// run from before main changed any of them applied different rules than the
-// merge queue will. The test binds this list to `scripts/ratchet.ts`'s local
-// import closure.
-export const RATCHET_DEFINITION_PATHS = [
-  "packages/api-contract/src/mcp.ts",
-  "packages/scripts/src/tsgo-compiler-options.ts",
-  "packages/scripts/src/typescript-program.ts",
-  "scripts/db-await-in-loop.ts",
-  "scripts/generated-artifacts.ts",
-  "scripts/lint-suppressions.ts",
-  "scripts/ownership.ts",
-  "scripts/ratchet.ts",
-  "scripts/result-boundary-globs.ts",
-  "scripts/root-connection-shapes.ts",
-  "scripts/source-globs.ts",
-] as const;
-
 class StaleGreenResultError extends TaggedError("StaleGreenResultError")<{
   message: string;
 }> {}
@@ -664,6 +646,10 @@ type CheckGreenResultFreshnessOptions = {
   readWorkflowRun: (checkRunId: number) => unknown;
   readBaseComparison: (testedBaseSha: string, baseRefName: string) => unknown;
   readPullFiles: () => readonly string[];
+  // The ratchet judges a PR with these sources, so a green run from before
+  // main changed one applied different rules than the merge queue will. Read
+  // from the base branch: an older checkout's copy may miss a newer helper.
+  readRatchetDefinitionPaths: (baseRefName: string) => unknown;
 };
 
 export const checkGreenResultFreshness = ({
@@ -673,6 +659,7 @@ export const checkGreenResultFreshness = ({
   readWorkflowRun,
   readBaseComparison,
   readPullFiles,
+  readRatchetDefinitionPaths,
 }: CheckGreenResultFreshnessOptions) => {
   if (jump || isReleasePullRequest(pullRequest)) {
     return Result.ok();
@@ -757,7 +744,17 @@ export const checkGreenResultFreshness = ({
       changedPaths.add(file["previous_filename"]);
     }
   }
-  const ratchetChanges = RATCHET_DEFINITION_PATHS.filter((filename) =>
+  const ratchetDefinitions = readRatchetDefinitionPaths(
+    pullRequest.baseRefName,
+  );
+  if (
+    !Array.isArray(ratchetDefinitions) ||
+    ratchetDefinitions.length === 0 ||
+    !ratchetDefinitions.every((entry) => typeof entry === "string")
+  ) {
+    return refuse("cannot read the ratchet definition paths from the base");
+  }
+  const ratchetChanges = ratchetDefinitions.filter((filename) =>
     changedPaths.has(filename),
   );
   if (ratchetChanges.length > 0) {
@@ -787,6 +784,7 @@ type GitHubGateway = {
   readWorkflowRun: (checkRunId: number) => unknown;
   readBaseComparison: (testedBaseSha: string, baseRefName: string) => unknown;
   readPullFiles: () => readonly string[];
+  readRatchetDefinitionPaths: (baseRefName: string) => unknown;
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
   // Both writes pin the head every gate was evaluated against, so GitHub
@@ -1377,6 +1375,14 @@ const createGhGateway = ({
           : [filename];
       }),
 
+    readRatchetDefinitionPaths: (baseRefName) =>
+      runGhJson([
+        "api",
+        "-H",
+        "Accept: application/vnd.github.raw+json",
+        `repos/${repo}/contents/scripts/ratchet-definition-paths.json?ref=${encodeURIComponent(baseRefName)}`,
+      ]),
+
     readReviewThreads: () => {
       const threads: ReviewThreadSnapshot[] = [];
       let cursor: string | null = null;
@@ -1838,6 +1844,7 @@ if (import.meta.main) {
     readWorkflowRun: gateway.readWorkflowRun,
     readBaseComparison: gateway.readBaseComparison,
     readPullFiles: gateway.readPullFiles,
+    readRatchetDefinitionPaths: gateway.readRatchetDefinitionPaths,
   });
   if (freshness.isErr()) {
     console.error(freshness.error.message);
