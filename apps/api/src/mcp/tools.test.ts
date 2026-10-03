@@ -2118,6 +2118,7 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("search_case_law and its handler interpret the enabled query variant identically", async () => {
+    const configuredVariant = "provision-refs";
     const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
     const resolution = corpusIndexReadTarget({
       manifest,
@@ -2163,12 +2164,13 @@ describe("OpenAI-compatible MCP tools", () => {
           body,
           caseLawDb: unreadableDb,
           observer,
-          dependencies: { readServingTarget: async () => Result.ok(target) },
+          dependencies: {
+            configuredVariant,
+            readServingTarget: async () => Result.ok(target),
+          },
         }),
     );
     const capture = spyOn(searchInterpretation, "interpretDecisionQuery");
-    const previousVariant = envBase.CORPUS_INDEX_QUERY_VARIANT;
-    envBase.CORPUS_INDEX_QUERY_VARIANT = "provision-refs";
     try {
       const result = await handleMcpToolCall({
         args: {
@@ -2176,7 +2178,9 @@ describe("OpenAI-compatible MCP tools", () => {
           queries: ["§ 451 občanského zákoníku"],
           cursor,
         },
-        context: createContext(),
+        context: createContext({
+          testDependencies: { corpusIndexQueryVariant: configuredVariant },
+        }),
         toolName: "search_case_law",
       });
       expect(result.isError).toBe(true);
@@ -2196,7 +2200,6 @@ describe("OpenAI-compatible MCP tools", () => {
       });
       expect(handlerInterpretation).toEqual(mcpInterpretation);
     } finally {
-      envBase.CORPUS_INDEX_QUERY_VARIANT = previousVariant;
       capture.mockRestore();
     }
   });
