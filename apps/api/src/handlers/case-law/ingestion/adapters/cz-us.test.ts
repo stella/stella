@@ -2447,7 +2447,7 @@ describe("czUsAdapter.reparseStoredRaw", () => {
         type: TEXT_FIELD_TYPE.ABSENT,
         reason,
       });
-      expect(outcome.result.metadata["abstractState"]).toBe(state);
+      expect(outcome.result.metadata).toMatchObject({ abstractState: state });
     });
   }
 
