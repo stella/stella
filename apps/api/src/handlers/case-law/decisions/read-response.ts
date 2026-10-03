@@ -63,6 +63,7 @@ export const DECISION_READER_TEXT_BYTES = {
         : never;
     }[keyof ReadableDecision],
     | "id"
+    | "caseNumberType"
     | "fulltext"
     | "citationsNextCursor"
     | "courtTier"
@@ -154,7 +155,11 @@ export const readDecisionSuccessResponseSchema = t.Object({
   ecli: nullableBoundedString(DECISION_READER_TEXT_BYTES.ecli),
   identifiers: t.Array(
     t.Object({
-      type: t.UnionEnum(Object.values(DECISION_IDENTIFIER_TYPES)),
+      type: t.Union(
+        Object.values(DECISION_IDENTIFIER_TYPES).map((value) =>
+          t.Literal(value),
+        ),
+      ),
       value: boundedString(DECISION_IDENTIFIER_MAX_LENGTH * 4),
     }),
     { minItems: 1, maxItems: DECISION_IDENTIFIER_MAX_COUNT },
