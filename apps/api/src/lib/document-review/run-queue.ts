@@ -22,7 +22,6 @@ import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import { isAiExtractablePropertyContent } from "@/api/db/schema-validators";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -71,16 +70,9 @@ import {
 import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
-import {
-  createRootMembershipScopedDb,
-  createRootSafeDb,
-  createRootScopedDb,
-} from "@/api/lib/root-scoped-db";
-import {
-  brandPersistedDocumentReviewRunId,
-  brandPersistedUserId,
-  brandValidatedWorkflowActorKey,
-} from "@/api/lib/safe-id-boundaries";
+import { createRootRunActor } from "@/api/lib/root-scoped-db";
+import type { RootRunActor } from "@/api/lib/root-scoped-db";
+import { brandPersistedDocumentReviewRunId } from "@/api/lib/safe-id-boundaries";
 import {
   formatModelRef,
   getTanStackTextModelInfoForRole,
@@ -420,40 +412,11 @@ export const initDocumentReviewRunWorker = ({ db }: BullMqWorkerContext) => {
   };
 };
 
-type RunActor = {
-  scopedDb: ScopedDb;
-  inputDb: ScopedDb;
-  safeDb: SafeDb;
-  organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
-  userId: SafeId<"user">;
-  runId: SafeId<"documentReviewRun">;
-};
+export type DocumentReviewRunActor = RootRunActor<"documentReviewRun">;
+type RunActor = DocumentReviewRunActor;
 
-const brandActor = (data: DocumentReviewRunJobDataV1): RunActor => {
-  const branded = brandValidatedWorkflowActorKey({
-    organizationId: data.organizationId,
-    workspaceId: data.workspaceId,
-  });
-  const userId = brandPersistedUserId(data.userId);
-  const tenant = {
-    organizationId: branded.organizationId,
-    userId,
-    workspaceIds: [branded.workspaceId],
-  };
-  return {
-    organizationId: branded.organizationId,
-    workspaceId: branded.workspaceId,
-    userId,
-    runId: brandPersistedDocumentReviewRunId(data.runId),
-    scopedDb: createRootScopedDb(tenant),
-    inputDb: createRootMembershipScopedDb({
-      organizationId: branded.organizationId,
-      userId,
-    }),
-    safeDb: createRootSafeDb(tenant),
-  };
-};
+const brandActor = (data: DocumentReviewRunJobDataV1): RunActor =>
+  createRootRunActor(data, brandPersistedDocumentReviewRunId);
 
 /** The run fields the worker executes from, read at claim time. */
 type ClaimedRun = {
@@ -470,7 +433,7 @@ type ClaimedRun = {
  * updates zero rows and returns nothing.
  */
 const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
-  const claimed = await actor.scopedDb(async (tx) => {
+  const claimed = await actor.writeDb(async (tx) => {
     // audit: skip — lifecycle bookkeeping on the run row audited at create.
     const rows = await tx
       .update(documentReviewRuns)
@@ -623,7 +586,7 @@ const executeRun = async (
 
   const configResult = await Result.tryPromise({
     try: async () => {
-      const settings = await actor.scopedDb(
+      const settings = await actor.writeDb(
         async (tx) => await loadOrgAISettings(tx, actor),
       );
       if (Result.isError(settings)) {
@@ -655,7 +618,7 @@ const executeRun = async (
     return "ai_unavailable";
   }
 
-  await actor.scopedDb(
+  await actor.writeDb(
     async (tx) =>
       await recordDocumentReviewRunModel({
         tx,
@@ -678,7 +641,7 @@ const executeRun = async (
       // estimates with, so the estimate and the ledger agree.
       actionType: "doc_review",
       organizationId: actor.organizationId,
-      safeDb: actor.safeDb,
+      safeDb: actor.writeSafeDb,
       serviceTier: SERVICE_TIER,
       userId: actor.userId,
       workspaceId: actor.workspaceId,
@@ -695,7 +658,7 @@ const executeRun = async (
     target: preparedTarget,
     targetFile: resolved.files.slice(0, 1),
   });
-  await actor.scopedDb(
+  await actor.writeDb(
     async (tx) =>
       await recountDocumentReviewFindingProgress({
         tx,
@@ -745,7 +708,7 @@ const runGradingPass = async ({
   }
 
   const positions = plan.positions.map((planned) => planned.position);
-  const clauseSnapshots = await actor.scopedDb(
+  const clauseSnapshots = await actor.writeDb(
     async (tx) =>
       await loadClauseSnapshots(tx, actor.organizationId, positions),
   );
@@ -864,7 +827,7 @@ const upsertFindings = async (
   actor: RunActor,
   rows: readonly FindingRow[],
 ): Promise<void> => {
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     await upsertDocumentReviewFindings(tx, rows);
     // audit: skip — progress bookkeeping on the run row audited at create.
     await tx
@@ -895,7 +858,7 @@ const finalizeRun = async (
   run: ClaimedRun,
   plan: ReviewRunPlan,
 ): Promise<DocumentReviewRunErrorCode | null> => {
-  const finalized = await actor.scopedDb(
+  const finalized = await actor.writeDb(
     async (tx) =>
       await finalizeReviewRun({
         tx,
@@ -931,7 +894,7 @@ const setRunFailed = async (
   actor: RunActor,
   errorCode: DocumentReviewRunErrorCode,
 ): Promise<void> => {
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     // audit: skip — failure bookkeeping on the run row audited at create.
     await tx
       .update(documentReviewRuns)
