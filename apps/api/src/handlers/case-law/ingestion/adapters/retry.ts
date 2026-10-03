@@ -1,3 +1,4 @@
+// parser-output-unchanged: excluding the native timeout option only narrows the request type.
 // parser-output-unchanged: refusal stops are opt-in; existing response and retry semantics are unchanged.
 // parser-output-unchanged: retries and fetch-stage observation affect request scheduling and diagnostics only, not parsed output.
 /**
@@ -182,7 +183,7 @@ const isRetryableStatus = (status: number): boolean => status >= 500;
  */
 export const fetchWithRetry = async (
   url: string,
-  init: BunFetchRequestInit | undefined,
+  init: Omit<BunFetchRequestInit, "timeout"> | undefined,
   opts: FetchWithRetryOptions,
 ): Promise<Response> => {
   const {

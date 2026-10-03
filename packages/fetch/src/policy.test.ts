@@ -62,12 +62,14 @@ describe("response timeout policies", () => {
         queueMicrotask(() => controller.abort(reason));
         return response;
       });
-      await expect(
-        request("https://example.com", {
-          signal: controller.signal,
-          timeout: { type, ms: 1000 },
-        }),
-      ).rejects.toBe(reason);
+      const failure = await request("https://example.com", {
+        signal: controller.signal,
+        timeout: { type, ms: 1000 },
+      }).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(failure).toBe(reason);
       expect(cancelledWith).toBe(reason);
     }
   });
@@ -244,7 +246,11 @@ describe("response timeout policies", () => {
             init?.signal?.throwIfAborted();
             init?.signal?.addEventListener(
               "abort",
-              () => reject(init.signal?.reason),
+              () => {
+                if (init.signal?.reason instanceof Error) {
+                  reject(init.signal.reason);
+                }
+              },
               {
                 once: true,
               },

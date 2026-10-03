@@ -1,3 +1,4 @@
+// parser-output-unchanged: transport timeout policies do not change parsed output.
 export { isConnectionFailure } from "./connection-failure";
 
 export type Fetcher = (
@@ -15,7 +16,7 @@ export type FetchWithTimeoutInit = Omit<RequestInit, "signal"> & {
     | { timeout: FetchTimeout; timeoutMs?: never }
     // Existing numeric callers are enumerated by the transfer-window guard.
     | {
-        /** @deprecated Choose a headers or idle timeout. */
+        /** Choose a headers or idle timeout for new callers. */
         timeoutMs: number;
         timeout?: never;
       }
@@ -65,7 +66,7 @@ const executeFetchWithTimeout = async (
   };
   reset();
   const response = await Promise.resolve()
-    .then(() => activeFetcher(input, { ...init, signal: combined }))
+    .then(async () => await activeFetcher(input, { ...init, signal: combined }))
     .finally(clear);
   if (combined.aborted) {
     await response.body?.cancel(combined.reason).catch(() => undefined);

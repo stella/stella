@@ -10,7 +10,11 @@ import {
   sql,
   type SQL,
 } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import {
+  alias,
+  type PgAsyncDatabase,
+  type PgQueryResultHKT,
+} from "drizzle-orm/pg-core";
 
 import { isEntityKind } from "@stll/api-contract";
 import type {
@@ -19,7 +23,8 @@ import type {
   MatterActivityFilters,
 } from "@stll/api-contract/matter-activity";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDbError } from "@/api/db/safe-db";
 import {
   auditActivityActionSql,
   auditLogs,
@@ -491,12 +496,19 @@ export type MatterActivityPage = {
   nextCursor: string | null;
 };
 
+type ActivityReadTransaction = Pick<
+  PgAsyncDatabase<PgQueryResultHKT>,
+  "select" | "selectDistinct"
+> & { query: Pick<Transaction["query"], "workspaces"> };
+
 type ReadOverviewActivityPageOptions = {
   cursor: string | null;
   filters: MatterActivityFilters;
   limit: number;
   organizationId: SafeId<"organization">;
-  safeDb: SafeDb;
+  safeDb: <T>(
+    read: (tx: ActivityReadTransaction) => Promise<T>,
+  ) => Promise<Result<T, SafeDbError>>;
   workspaceId: SafeId<"workspace">;
 };
 
@@ -505,12 +517,15 @@ type ReadOverviewActivityExportOptions = Omit<
   "cursor" | "limit"
 > & { cap: number };
 
-export const readOverviewActivityPage = ({
+export const readOverviewActivityPage = async ({
   cursor,
   limit,
   ...options
 }: ReadOverviewActivityPageOptions) =>
-  readOverviewActivity({ ...options, read: { type: "page", cursor, limit } });
+  await readOverviewActivity({
+    ...options,
+    read: { type: "page", cursor, limit },
+  });
 
 export const readOverviewActivityExport = async ({
   cap,
