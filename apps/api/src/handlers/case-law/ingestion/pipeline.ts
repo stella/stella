@@ -38,6 +38,7 @@ import {
   PROCESS_DECISION_STATUS,
   PROCESS_DECISION_RETRY_REASON,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { createSourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
@@ -233,6 +234,8 @@ export const runIngestionPipeline = async ({
   dbSlot,
   corpus = CASE_LAW_CORPUS_DEPENDENCIES,
 }: PipelineInput): Promise<IngestionPipelineResult> => {
+  const resolveMetadataUrlSchema =
+    createSourceMetadataUrlSchemaResolver(scopedDb);
   const adapter = getAdapter(source.adapterKey);
 
   if (!adapter) {
@@ -478,19 +481,22 @@ export const runIngestionPipeline = async ({
         });
       }
       // db-await-in-loop: one admitted part at a time, each settled before the next, ordered per observation
-      const applied = await applyDecisionBatch({
-        batch,
-        sourceId: source.id,
-        scopedDb,
-        observation,
-        refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-        corpus,
-        polarityRules,
-        context: { adapterKey: adapter.key, cursor },
-        failureStreak: consecutiveFailures,
-        insertLimit:
-          maxDecisions === undefined ? undefined : maxDecisions - inserted,
-      });
+      const applied = await applyDecisionBatch(
+        {
+          batch,
+          sourceId: source.id,
+          scopedDb,
+          observation,
+          refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+          corpus,
+          polarityRules,
+          context: { adapterKey: adapter.key, cursor },
+          failureStreak: consecutiveFailures,
+          insertLimit:
+            maxDecisions === undefined ? undefined : maxDecisions - inserted,
+        },
+        resolveMetadataUrlSchema,
+      );
       inserted += applied.inserted;
       skipped += applied.skipped;
       searchVectorFailures += applied.searchVectorFailures;
@@ -539,17 +545,20 @@ export const runIngestionPipeline = async ({
       const placed = await Result.tryPromise({
         try: async () =>
           // db-await-in-loop: each supplement locks its docket and may rewrite its judgment, ordered per observation
-          await processSupplement({
-            supplement,
-            sourceId: source.id,
-            scopedDb,
-            observedAt: new Date(),
-            nextObservationOrder,
-            reparseStoredRaw,
-            readStoredRaw: readStoredRawFromS3,
-            corpus,
-            polarityRules,
-          }),
+          await processSupplement(
+            {
+              supplement,
+              sourceId: source.id,
+              scopedDb,
+              observedAt: new Date(),
+              nextObservationOrder,
+              reparseStoredRaw,
+              readStoredRaw: readStoredRawFromS3,
+              corpus,
+              polarityRules,
+            },
+            resolveMetadataUrlSchema,
+          ),
         catch: (cause) => cause,
       });
       if (Result.isError(placed)) {

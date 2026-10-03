@@ -37,6 +37,9 @@ export type SearchExcerpt = (typeof SEARCH_EXCERPTS)[number];
 
 export const DEFAULT_SEARCH_EXCERPT = SEARCH_EXCERPTS[0];
 
+/** Match semantics shared by HTTP, MCP and persisted chat projections. */
+export const LEGISLATION_SEARCH_MATCH_TYPES = ["strict", "relaxed"] as const;
+
 export const SEARCH_TOTAL_TYPE = {
   EXACT: "exact",
   ESTIMATE: "estimate",

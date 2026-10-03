@@ -128,6 +128,8 @@ type CorpusIndexSearchPageInput<TContext> = {
   parsedCursor: SearchCursor | null;
   /** Defaults to `native`. */
   scanTransport?: CorpusIndexScanTransport | undefined;
+  /** A coverage fallback spends one scan round; only emitted hits are highlighted. */
+  maxRounds?: number | undefined;
   /**
    * Order the engine returns candidates in, and with it the meaning of the
    * position score below. Required rather than defaulted: the cursor carries
@@ -712,6 +714,7 @@ const readPositionSearchPage = async <TContext>({
   order,
   parsedCursor,
   scanTransport = NATIVE_SCAN_TRANSPORT,
+  maxRounds = LIMITS.corpusIndexSearchMaxRounds,
   snippetFields,
   extractId,
   extractSnippet,
@@ -766,7 +769,7 @@ const readPositionSearchPage = async <TContext>({
     // Every round is one more sequential engine round trip in front of the
     // reader. The budget above bounds how many candidates a scan may reach;
     // this bounds how long it may take to give up trying.
-    if (rounds >= LIMITS.corpusIndexSearchMaxRounds) {
+    if (rounds >= maxRounds) {
       roundCapHit = true;
       break;
     }
