@@ -9,6 +9,7 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  mcpConnectorAuthorizationReviews,
   mcpConnectors,
   mcpOAuthClients,
   mcpUserConnections,
@@ -18,6 +19,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { recordMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
 import {
   decryptMcpSecret,
@@ -27,9 +29,12 @@ import {
   MCP_OAUTH_BINDING_FAILURE_CODE,
   MCP_OAUTH_INVALID_GRANT_CODE,
   discoverOAuthMetadata,
+  discoverOAuthMetadataForApproval,
+  getOAuthEndpointOrigins,
   refreshOAuthToken,
   tokenExpiresAt,
 } from "@/api/lib/mcp-upstream/oauth";
+import type { BoundOAuthMetadata } from "@/api/lib/mcp-upstream/oauth";
 import { mcpResourceMatchesConnector } from "@/api/lib/mcp-upstream/url-safety";
 import {
   safeOutboundFetchStream,
@@ -50,6 +55,8 @@ const MCP_HTTP_RESPONSE_MAX_BYTES = 10_000_000;
 const MCP_CALL_TOOL_METHOD = "tools/call";
 const TOKEN_REFRESH_SKEW_MS = 60_000;
 const MCP_REFRESH_LEASE_MS = 90_000;
+const MCP_REFRESH_WAIT_ATTEMPTS = 4;
+const MCP_REFRESH_WAIT_INTERVAL_MS = 500;
 export const MCP_REFRESH_BACKOFF_MS = 30_000;
 
 type OutboundFetchDependencies = {
@@ -59,17 +66,20 @@ type OutboundFetchDependencies = {
 
 type ConnectionDependencies = {
   now?: () => Date;
+  wait?: (milliseconds: number) => Promise<void>;
   createMCPClient: typeof createMCPClient;
   decryptMcpSecret: typeof decryptMcpSecret;
   encryptMcpSecret: typeof encryptMcpSecret;
   refreshOAuthToken: typeof refreshOAuthToken;
   discoverOAuthMetadata: typeof discoverOAuthMetadata;
+  discoverOAuthMetadataForApproval: typeof discoverOAuthMetadataForApproval;
   tokenExpiresAt: typeof tokenExpiresAt;
 };
 
 const DEFAULT_CONNECTION_DEPENDENCIES: ConnectionDependencies = {
   createMCPClient,
   discoverOAuthMetadata,
+  discoverOAuthMetadataForApproval,
   decryptMcpSecret,
   encryptMcpSecret,
   refreshOAuthToken,
@@ -95,6 +105,8 @@ type RawConnectionRow = {
   oauthClientSecretIv: Buffer | null;
   oauthResourceUrl: string | null;
   oauthAuthorizationServerUrl: string | null;
+  oauthApprovedIssuer: string | null;
+  oauthConfirmedEndpointOrigins: string[] | null;
   refreshTokenEncrypted: Buffer | null;
   refreshTokenIv: Buffer | null;
   slug: string;
@@ -126,6 +138,8 @@ export type LoadedMcpConnection =
       accessTokenIv: Buffer;
       expiresAt: Date | null;
       oauthAuthorizationServerUrl: string;
+      oauthApprovedIssuer: string | null;
+      oauthConfirmedEndpointOrigins: string[];
       oauthClientId: string;
       oauthClientSecretEncrypted: Buffer | null;
       oauthClientSecretIv: Buffer | null;
@@ -183,6 +197,12 @@ const selectConnectionFields = {
   expiresAt: mcpUserConnections.expiresAt,
   oauthResourceUrl: mcpUserConnections.resourceUrl,
   oauthAuthorizationServerUrl: mcpUserConnections.authorizationServerUrl,
+  oauthApprovedIssuer: sql<
+    string | null
+  >`coalesce(${mcpConnectorAuthorizationReviews.approvedIssuer}, ${mcpConnectors.oauthIssuer})`,
+  oauthConfirmedEndpointOrigins: sql<
+    string[] | null
+  >`coalesce(${mcpConnectorAuthorizationReviews.approvedEndpointOrigins}, ${mcpConnectors.oauthConfirmedEndpointOrigins})`,
   oauthClientId: mcpOAuthClients.clientId,
   oauthClientSecretEncrypted: mcpOAuthClients.clientSecretEncrypted,
   oauthClientSecretIv: mcpOAuthClients.clientSecretIv,
@@ -206,6 +226,13 @@ export const loadActiveMcpConnectionsForUser = async ({
         eq(mcpConnectors.id, mcpUserConnections.connectorId),
       )
       .leftJoin(
+        mcpConnectorAuthorizationReviews,
+        and(
+          eq(mcpConnectorAuthorizationReviews.connectorId, mcpConnectors.id),
+          eq(mcpConnectorAuthorizationReviews.organizationId, organizationId),
+        ),
+      )
+      .leftJoin(
         mcpOAuthClients,
         and(
           eq(mcpOAuthClients.connectorId, mcpConnectors.id),
@@ -222,6 +249,10 @@ export const loadActiveMcpConnectionsForUser = async ({
           eq(mcpUserConnections.userId, userId),
           eq(mcpUserConnections.enabled, true),
           eq(mcpUserConnections.status, "connected"),
+          or(
+            isNull(mcpConnectorAuthorizationReviews.status),
+            eq(mcpConnectorAuthorizationReviews.status, "approved"),
+          ),
         ),
       )
       .orderBy(asc(mcpUserConnections.createdAt), asc(mcpUserConnections.id))
@@ -259,6 +290,13 @@ export const loadMcpConnectionById = async ({
         eq(mcpConnectors.id, mcpUserConnections.connectorId),
       )
       .leftJoin(
+        mcpConnectorAuthorizationReviews,
+        and(
+          eq(mcpConnectorAuthorizationReviews.connectorId, mcpConnectors.id),
+          eq(mcpConnectorAuthorizationReviews.organizationId, organizationId),
+        ),
+      )
+      .leftJoin(
         mcpOAuthClients,
         and(
           eq(mcpOAuthClients.connectorId, mcpConnectors.id),
@@ -275,6 +313,10 @@ export const loadMcpConnectionById = async ({
           eq(mcpUserConnections.organizationId, organizationId),
           eq(mcpUserConnections.userId, userId),
           eq(mcpUserConnections.status, "connected"),
+          or(
+            isNull(mcpConnectorAuthorizationReviews.status),
+            eq(mcpConnectorAuthorizationReviews.status, "approved"),
+          ),
         ),
       )
       .limit(1),
@@ -876,6 +918,212 @@ type ResolveOAuthAuthorizationTokenOptions = Omit<
   row: Extract<BoundMcpConnection, { type: "oauth2" }>;
 };
 
+const markUnapprovedStoredMcpIssuer = async ({
+  organizationId,
+  row,
+  safeDb,
+  userId,
+}: Omit<
+  ResolveOAuthAuthorizationTokenOptions,
+  "dependencies"
+>): Promise<boolean> => {
+  if (
+    row.oauthApprovedIssuer !== null &&
+    row.oauthApprovedIssuer === row.oauthAuthorizationServerUrl
+  ) {
+    return false;
+  }
+  const changed = await safeDb((tx) =>
+    // audit: skip — derived authorization status for the caller's existing connection
+    tx
+      .update(mcpUserConnections)
+      .set({
+        status: "needs_approval",
+        refreshLeaseExpiresAt: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(mcpUserConnections.id, row.userConnectionId),
+          eq(mcpUserConnections.organizationId, organizationId),
+          eq(mcpUserConnections.userId, userId),
+          eq(mcpUserConnections.status, "connected"),
+        ),
+      ),
+  );
+  if (Result.isError(changed)) {
+    captureError(changed.error, { source: "mcp-upstream-token-refresh" });
+  }
+  return true;
+};
+
+type ResolveMcpTokenDuringRefreshOptions =
+  ResolveOAuthAuthorizationTokenOptions & {
+    now: Date;
+  };
+
+const resolveMcpTokenDuringRefresh = async ({
+  dependencies,
+  organizationId,
+  row,
+  safeDb,
+  userId,
+  now,
+}: ResolveMcpTokenDuringRefreshOptions): Promise<ResolvedAuthorizationToken> => {
+  if (row.expiresAt && row.expiresAt.getTime() > now.getTime()) {
+    return {
+      type: "ok",
+      value: await dependencies.decryptMcpSecret({
+        ciphertext: row.accessTokenEncrypted,
+        connectorId: row.connectorId,
+        iv: row.accessTokenIv,
+        organizationId,
+        purpose: "mcp_access_token",
+        userId,
+      }),
+    };
+  }
+  for (let attempt = 0; attempt < MCP_REFRESH_WAIT_ATTEMPTS; attempt += 1) {
+    await (dependencies.wait?.(MCP_REFRESH_WAIT_INTERVAL_MS) ??
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, MCP_REFRESH_WAIT_INTERVAL_MS);
+      }));
+    const refreshedRow = await loadMcpConnectionById({
+      connectionId: row.userConnectionId,
+      organizationId,
+      safeDb,
+      userId,
+    });
+    if (!refreshedRow || refreshedRow.type !== "oauth2") {
+      return { type: "skip" };
+    }
+    const currentTime =
+      dependencies.now?.() ??
+      new Date(Temporal.Now.instant().epochMilliseconds);
+    if (
+      refreshedRow.expiresAt &&
+      refreshedRow.expiresAt.getTime() <= currentTime.getTime()
+    ) {
+      continue;
+    }
+    const bound = bindMcpConnection(refreshedRow);
+    if (Result.isError(bound)) {
+      captureError(bound.error, { source: "mcp-upstream-token-refresh" });
+      return { type: "skip" };
+    }
+    if (bound.value.type !== "oauth2") {
+      return panic("Expected an OAuth connection after binding");
+    }
+    if (
+      await markUnapprovedStoredMcpIssuer({
+        organizationId,
+        row: bound.value,
+        safeDb,
+        userId,
+      })
+    ) {
+      return { type: "skip" };
+    }
+    return {
+      type: "ok",
+      value: await dependencies.decryptMcpSecret({
+        ciphertext: refreshedRow.accessTokenEncrypted,
+        connectorId: refreshedRow.connectorId,
+        iv: refreshedRow.accessTokenIv,
+        organizationId,
+        purpose: "mcp_access_token",
+        userId,
+      }),
+    };
+  }
+  return { type: "skip" };
+};
+
+type DiscoverMcpRefreshMetadataOptions =
+  ResolveOAuthAuthorizationTokenOptions & {
+    leaseExpiresAt: Date;
+    deferRefresh: () => Promise<void>;
+  };
+
+const discoverMcpRefreshMetadata = async ({
+  dependencies,
+  organizationId,
+  row,
+  safeDb,
+  userId,
+  leaseExpiresAt,
+  deferRefresh,
+}: DiscoverMcpRefreshMetadataOptions): Promise<BoundOAuthMetadata | null> => {
+  const metadata = await dependencies.discoverOAuthMetadata(
+    row.url,
+    undefined,
+    row.oauthConfirmedEndpointOrigins,
+  );
+  if (Result.isError(metadata)) {
+    captureError(metadata.error, { source: "mcp-upstream-token-refresh" });
+    if (metadata.error.code === "mcp_authorization_approval_required") {
+      const observed = await dependencies.discoverOAuthMetadataForApproval(
+        row.url,
+      );
+      if (Result.isError(observed)) {
+        captureError(observed.error, { source: "mcp-upstream-token-refresh" });
+        await deferRefresh();
+        return null;
+      }
+      const review = await recordMcpAuthorizationReview({
+        safeDb,
+        organizationId,
+        userId,
+        connectorId: row.connectorId,
+        observedIssuer: observed.value.authorizationServer.issuer,
+        observedEndpointOrigins: getOAuthEndpointOrigins(observed.value),
+        lease: {
+          connectionId: row.userConnectionId,
+          expiresAt: leaseExpiresAt,
+        },
+      });
+      if (Result.isError(review)) {
+        captureError(review.error, { source: "mcp-upstream-token-refresh" });
+      }
+    } else if (metadata.error.code === MCP_OAUTH_BINDING_FAILURE_CODE) {
+      const review = await recordMcpAuthorizationReview({
+        safeDb,
+        organizationId,
+        userId,
+        connectorId: row.connectorId,
+        observedIssuer: row.oauthAuthorizationServerUrl,
+        lease: {
+          connectionId: row.userConnectionId,
+          expiresAt: leaseExpiresAt,
+        },
+      });
+      if (Result.isError(review)) {
+        captureError(review.error, { source: "mcp-upstream-token-refresh" });
+      }
+    } else {
+      await deferRefresh();
+    }
+    return null;
+  }
+  if (metadata.value.authorizationServer.issuer !== row.oauthApprovedIssuer) {
+    const review = await recordMcpAuthorizationReview({
+      safeDb,
+      organizationId,
+      userId,
+      connectorId: row.connectorId,
+      observedIssuer: metadata.value.authorizationServer.issuer,
+      observedEndpointOrigins: getOAuthEndpointOrigins(metadata.value),
+      lease: { connectionId: row.userConnectionId, expiresAt: leaseExpiresAt },
+    });
+    if (Result.isError(review)) {
+      captureError(review.error, { source: "mcp-upstream-token-refresh" });
+    }
+    return null;
+  }
+
+  return metadata.value;
+};
+
 const resolveOAuthAuthorizationToken = async ({
   dependencies,
   organizationId,
@@ -883,6 +1131,11 @@ const resolveOAuthAuthorizationToken = async ({
   safeDb,
   userId,
 }: ResolveOAuthAuthorizationTokenOptions): Promise<ResolvedAuthorizationToken> => {
+  if (
+    await markUnapprovedStoredMcpIssuer({ organizationId, row, safeDb, userId })
+  ) {
+    return { type: "skip" };
+  }
   const now =
     dependencies.now?.() ?? new Date(Temporal.Now.instant().epochMilliseconds);
   if (
@@ -919,7 +1172,14 @@ const resolveOAuthAuthorizationToken = async ({
     return { type: "skip" };
   }
   if (lease.value === null) {
-    return { type: "skip" };
+    return await resolveMcpTokenDuringRefresh({
+      dependencies,
+      organizationId,
+      row,
+      safeDb,
+      userId,
+      now,
+    });
   }
   const leaseExpiresAt = lease.value;
   const deferRefresh = async () =>
@@ -931,44 +1191,16 @@ const resolveOAuthAuthorizationToken = async ({
         dependencies.now?.() ??
         new Date(Temporal.Now.instant().epochMilliseconds),
     });
-  const metadata = await dependencies.discoverOAuthMetadata(row.url);
-  if (Result.isError(metadata)) {
-    captureError(metadata.error, { source: "mcp-upstream-token-refresh" });
-    if (metadata.error.code === MCP_OAUTH_BINDING_FAILURE_CODE) {
-      const review = await recordMcpAuthorizationReview({
-        safeDb,
-        organizationId,
-        userId,
-        connectorId: row.connectorId,
-        observedIssuer: row.oauthAuthorizationServerUrl,
-        lease: {
-          connectionId: row.userConnectionId,
-          expiresAt: leaseExpiresAt,
-        },
-      });
-      if (Result.isError(review)) {
-        captureError(review.error, { source: "mcp-upstream-token-refresh" });
-      }
-    } else {
-      await deferRefresh();
-    }
-    return { type: "skip" };
-  }
-  if (
-    metadata.value.authorizationServer.issuer !==
-    row.oauthAuthorizationServerUrl
-  ) {
-    const review = await recordMcpAuthorizationReview({
-      safeDb,
-      organizationId,
-      userId,
-      connectorId: row.connectorId,
-      observedIssuer: metadata.value.authorizationServer.issuer,
-      lease: { connectionId: row.userConnectionId, expiresAt: leaseExpiresAt },
-    });
-    if (Result.isError(review)) {
-      captureError(review.error, { source: "mcp-upstream-token-refresh" });
-    }
+  const metadata = await discoverMcpRefreshMetadata({
+    dependencies,
+    organizationId,
+    row,
+    safeDb,
+    userId,
+    leaseExpiresAt,
+    deferRefresh,
+  });
+  if (!metadata) {
     return { type: "skip" };
   }
 
@@ -991,7 +1223,7 @@ const resolveOAuthAuthorizationToken = async ({
         })
       : null;
   const refreshed = await dependencies.refreshOAuthToken({
-    metadata: metadata.value,
+    metadata,
     clientId: row.oauthClientId,
     clientSecret,
     refreshToken,
@@ -1130,6 +1362,11 @@ const normalizeMcpConnectionRow = (
       accessTokenIv: rawRow.accessTokenIv,
       expiresAt: rawRow.expiresAt,
       oauthAuthorizationServerUrl: rawRow.oauthAuthorizationServerUrl,
+      oauthApprovedIssuer: rawRow.oauthApprovedIssuer,
+      oauthConfirmedEndpointOrigins:
+        rawRow.oauthConfirmedEndpointOrigins ??
+        getCuratedMcpOAuthApproval(rawRow.url)?.endpointOrigins ??
+        [],
       oauthClientId: rawRow.oauthClientId,
       oauthClientSecretEncrypted: rawRow.oauthClientSecretEncrypted,
       oauthClientSecretIv: rawRow.oauthClientSecretIv,

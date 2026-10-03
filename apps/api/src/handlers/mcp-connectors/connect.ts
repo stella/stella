@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
+  mcpConnectorAuthorizationReviews,
   mcpConnectors,
   mcpOAuthClients,
   mcpOAuthState,
@@ -11,7 +12,11 @@ import {
 } from "@/api/db/schema";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { recordMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
 import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
 import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
@@ -22,14 +27,19 @@ import {
   clientRegistrationMode,
   createOAuthState,
   createPkce,
-  discoverOAuthMetadata,
+  discoverOAuthMetadataForApproval,
+  bindDiscoveredMetadata,
+  getOAuthEndpointOrigins,
   getMcpClientMetadataDocumentUrl,
   getMcpOAuthRedirectUri,
   pickRequestedScopes,
   registerOAuthClient,
   validateApprovedOAuthIssuer,
 } from "@/api/lib/mcp-upstream/oauth";
-import type { McpClientRegistrationMode } from "@/api/lib/mcp-upstream/oauth";
+import type {
+  BoundOAuthMetadata,
+  McpClientRegistrationMode,
+} from "@/api/lib/mcp-upstream/oauth";
 import { redactMcpOAuthRegistrationResponse } from "@/api/lib/mcp-upstream/oauth-registration-response";
 
 const routeParams = t.Object({
@@ -48,11 +58,17 @@ type ConnectMcpConnectorResult =
   | { type: "oauth2"; authorizeUrl: string };
 
 export const createConnectMcpConnectorHandler = (
-  discoverMetadata: typeof discoverOAuthMetadata,
+  discoverMetadata: typeof discoverOAuthMetadataForApproval,
 ) =>
   createSafeRootHandler(
     config,
-    async function* ({ params: requestParams, safeDb, session, user }) {
+    async function* ({
+      params: requestParams,
+      safeDb,
+      session,
+      user,
+      recordAuditEvent,
+    }) {
       const connector = yield* Result.await(
         loadConnector({
           safeDb,
@@ -124,37 +140,33 @@ export const createConnectMcpConnectorHandler = (
         });
       }
 
-      const discovery = await discoverMetadata(connector.url);
-      if (Result.isError(discovery)) {
-        if (discovery.error.code === MCP_OAUTH_BINDING_FAILURE_CODE) {
-          yield* Result.await(
-            recordMcpAuthorizationReview({
-              safeDb,
-              organizationId: session.activeOrganizationId,
-              userId: user.id,
-              connectorId: connector.id,
-              observedIssuer: connector.oauthIssuer,
-            }),
-          );
-        }
-        return Result.err(discovery.error);
-      }
-      const metadata = discovery.value;
-      const approval = validateApprovedOAuthIssuer(
-        metadata,
-        connector.oauthIssuer,
+      const confirmedEndpointOrigins =
+        connector.orgApprovedEndpointOrigins ??
+        connector.oauthConfirmedEndpointOrigins ??
+        getCuratedMcpOAuthApproval(connector.url)?.endpointOrigins ??
+        [];
+      const metadata = yield* Result.await(
+        loadApprovedMcpMetadata({
+          connector,
+          discoverMetadata,
+          confirmedEndpointOrigins,
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+          safeDb,
+        }),
       );
-      if (Result.isError(approval)) {
+
+      if ((connector.orgApprovedIssuer ?? connector.oauthIssuer) === null) {
         yield* Result.await(
-          recordMcpAuthorizationReview({
-            safeDb,
+          pinMcpOAuthIssuer({
+            connector,
+            metadata,
+            confirmedEndpointOrigins,
             organizationId: session.activeOrganizationId,
-            userId: user.id,
-            connectorId: connector.id,
-            observedIssuer: metadata.authorizationServer.issuer,
+            safeDb,
+            recordAuditEvent,
           }),
         );
-        return Result.err(approval.error);
       }
 
       // Servers that advertise OAuth but offer no client registration path
@@ -225,7 +237,7 @@ export const createConnectMcpConnectorHandler = (
   );
 
 const connectMcpConnector = createConnectMcpConnectorHandler(
-  discoverOAuthMetadata,
+  discoverOAuthMetadataForApproval,
 );
 
 export default connectMcpConnector;
@@ -236,6 +248,12 @@ type LoadedConnector = {
   authType: "none" | "bearer" | "oauth2";
   oauthRequestedScopes: string[] | null;
   oauthIssuer: string | null;
+  orgApprovedIssuer: string | null;
+  orgApprovedEndpointOrigins: string[] | null;
+  oauthConfirmedEndpointOrigins: string[] | null;
+  authorizationReviewStatus:
+    | typeof mcpConnectorAuthorizationReviews.$inferSelect.status
+    | null;
   url: string;
 };
 
@@ -256,9 +274,22 @@ const loadConnector = async ({
         authType: mcpConnectors.authType,
         oauthRequestedScopes: mcpConnectors.oauthRequestedScopes,
         oauthIssuer: mcpConnectors.oauthIssuer,
+        orgApprovedIssuer: mcpConnectorAuthorizationReviews.approvedIssuer,
+        orgApprovedEndpointOrigins:
+          mcpConnectorAuthorizationReviews.approvedEndpointOrigins,
+        oauthConfirmedEndpointOrigins:
+          mcpConnectors.oauthConfirmedEndpointOrigins,
+        authorizationReviewStatus: mcpConnectorAuthorizationReviews.status,
         url: mcpConnectors.url,
       })
       .from(mcpConnectors)
+      .leftJoin(
+        mcpConnectorAuthorizationReviews,
+        and(
+          eq(mcpConnectorAuthorizationReviews.connectorId, mcpConnectors.id),
+          eq(mcpConnectorAuthorizationReviews.organizationId, organizationId),
+        ),
+      )
       .where(
         and(
           eq(mcpConnectors.slug, slug),
@@ -284,6 +315,171 @@ const loadConnector = async ({
 
   return Result.ok(connector);
 };
+
+type LoadApprovedMcpMetadataOptions = {
+  connector: LoadedConnector;
+  discoverMetadata: typeof discoverOAuthMetadataForApproval;
+  confirmedEndpointOrigins: string[];
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  safeDb: SafeDb;
+};
+
+const loadApprovedMcpMetadata = async ({
+  connector,
+  discoverMetadata,
+  confirmedEndpointOrigins,
+  organizationId,
+  userId,
+  safeDb,
+}: LoadApprovedMcpMetadataOptions): Promise<
+  Result<BoundOAuthMetadata, HandlerError<400 | 409 | 502> | SafeDbError>
+> =>
+  await Result.gen(async function* () {
+    const discovery = await discoverMetadata(connector.url);
+    if (Result.isError(discovery)) {
+      if (discovery.error.code === MCP_OAUTH_BINDING_FAILURE_CODE) {
+        yield* Result.await(
+          recordMcpAuthorizationReview({
+            safeDb,
+            organizationId,
+            userId,
+            connectorId: connector.id,
+            observedIssuer: connector.oauthIssuer,
+          }),
+        );
+      }
+      return Result.err(discovery.error);
+    }
+    const observed = discovery.value;
+    const binding = bindDiscoveredMetadata({
+      connectorUrl: connector.url,
+      protectedResource: observed.protectedResource,
+      authorizationServer: observed.authorizationServer,
+      confirmedEndpointOrigins,
+    });
+    if (Result.isError(binding)) {
+      yield* Result.await(
+        recordMcpAuthorizationReview({
+          safeDb,
+          organizationId,
+          userId,
+          connectorId: connector.id,
+          observedIssuer: observed.authorizationServer.issuer,
+          observedEndpointOrigins: getOAuthEndpointOrigins(observed),
+        }),
+      );
+      return Result.err(binding.error);
+    }
+    const metadata = binding.value;
+    const approval = validateApprovedOAuthIssuer(
+      metadata,
+      connector.orgApprovedIssuer ?? connector.oauthIssuer,
+    );
+    if (
+      Result.isError(approval) ||
+      connector.authorizationReviewStatus === "needs_reapproval"
+    ) {
+      yield* Result.await(
+        recordMcpAuthorizationReview({
+          safeDb,
+          organizationId,
+          userId,
+          connectorId: connector.id,
+          observedIssuer: metadata.authorizationServer.issuer,
+          observedEndpointOrigins: getOAuthEndpointOrigins(metadata),
+        }),
+      );
+      return Result.err(
+        Result.isError(approval)
+          ? approval.error
+          : new HandlerError({
+              status: 409,
+              code: "mcp_authorization_approval_required",
+              message:
+                "An administrator must approve this connector before you can connect.",
+            }),
+      );
+    }
+
+    return Result.ok(metadata);
+  });
+
+type PinMcpOAuthIssuerOptions = {
+  connector: LoadedConnector;
+  metadata: BoundOAuthMetadata;
+  confirmedEndpointOrigins: string[];
+  organizationId: NonNullable<typeof mcpConnectors.$inferSelect.organizationId>;
+  safeDb: SafeDb;
+  recordAuditEvent: AuditRecorder;
+};
+
+const pinMcpOAuthIssuer = async ({
+  connector,
+  metadata,
+  confirmedEndpointOrigins,
+  organizationId,
+  safeDb,
+  recordAuditEvent,
+}: PinMcpOAuthIssuerOptions): Promise<
+  Result<void, SafeDbError | HandlerError<409>>
+> =>
+  await Result.gen(async function* () {
+    const pinned = yield* Result.await(
+      safeDb(async (tx) => {
+        const inserted = await tx
+          .insert(mcpConnectorAuthorizationReviews)
+          .values({
+            organizationId,
+            connectorId: connector.id,
+            observedIssuer: metadata.authorizationServer.issuer,
+            approvedIssuer: metadata.authorizationServer.issuer,
+            observedEndpointOrigins: getOAuthEndpointOrigins(metadata),
+            approvedEndpointOrigins: confirmedEndpointOrigins,
+            status: "approved",
+          })
+          .onConflictDoNothing()
+          .returning({
+            connectorId: mcpConnectorAuthorizationReviews.connectorId,
+          });
+        if (inserted.length > 0) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+            resourceId: organizationId,
+            metadata: {
+              field: "mcpConnectorAuthorization",
+              connectorId: connector.id,
+              slug: connector.slug,
+            },
+          });
+        }
+        return await tx.query.mcpConnectorAuthorizationReviews.findFirst({
+          where: {
+            organizationId: { eq: organizationId },
+            connectorId: { eq: connector.id },
+          },
+          columns: { approvedIssuer: true, status: true },
+        });
+      }),
+    );
+    if (
+      !pinned ||
+      pinned.status !== "approved" ||
+      pinned.approvedIssuer !== metadata.authorizationServer.issuer
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          code: "mcp_authorization_approval_required",
+          message:
+            "An administrator must approve this connector before you can connect.",
+        }),
+      );
+    }
+
+    return Result.ok(undefined);
+  });
 
 type EnsureOAuthClientOptions = {
   metadata: Parameters<typeof registerOAuthClient>[0]["metadata"];

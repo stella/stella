@@ -33,6 +33,12 @@ export type IntegrationConnection = Pick<
 export type IntegrationAuthorizationStatus =
   McpConnectorsResponse["connectors"][number]["authorizationStatus"];
 
+export const canApproveIntegrationAuthorization = (
+  canManageOrganizationSettings: boolean,
+  authorizationStatus: IntegrationAuthorizationStatus | undefined,
+): boolean =>
+  canManageOrganizationSettings && authorizationStatus === "needs_reapproval";
+
 type IntegrationStatus = {
   tone: StatusTone;
   labelKey: TranslationKey;

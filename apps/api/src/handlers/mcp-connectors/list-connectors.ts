@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, exists, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 
 import {
   mcpConnectorAuthorizationReviews,
@@ -40,29 +40,30 @@ const listMcpConnectors = createSafeRootHandler(
             authType: mcpConnectors.authType,
             isCurated: mcpConnectors.isCurated,
             oauthRequestedScopes: mcpConnectors.oauthRequestedScopes,
+            reviewObservedIssuer:
+              mcpConnectorAuthorizationReviews.observedIssuer,
+            reviewEndpointOrigins:
+              mcpConnectorAuthorizationReviews.observedEndpointOrigins,
             allowedTools: mcpConnectors.allowedTools,
             documentationUrl: mcpConnectors.documentationUrl,
             tokenHelpUrl: mcpConnectors.tokenHelpUrl,
             iconUrl: mcpConnectors.iconUrl,
-            authorizationReviewExists: sql<boolean>`${exists(
-              tx
-                .select({ one: sql`1` })
-                .from(mcpConnectorAuthorizationReviews)
-                .where(
-                  and(
-                    eq(
-                      mcpConnectorAuthorizationReviews.organizationId,
-                      session.activeOrganizationId,
-                    ),
-                    eq(
-                      mcpConnectorAuthorizationReviews.connectorId,
-                      mcpConnectors.id,
-                    ),
-                  ),
-                ),
-            )}`,
+            authorizationReviewExists: sql<boolean>`coalesce(${mcpConnectorAuthorizationReviews.status} = 'needs_reapproval', false)`,
           })
           .from(mcpConnectors)
+          .leftJoin(
+            mcpConnectorAuthorizationReviews,
+            and(
+              eq(
+                mcpConnectorAuthorizationReviews.connectorId,
+                mcpConnectors.id,
+              ),
+              eq(
+                mcpConnectorAuthorizationReviews.organizationId,
+                session.activeOrganizationId,
+              ),
+            ),
+          )
           .where(
             or(
               isNull(mcpConnectors.organizationId),
@@ -109,6 +110,12 @@ const listMcpConnectors = createSafeRootHandler(
           tokenHelpUrl: connector.tokenHelpUrl,
           iconUrl: connector.iconUrl,
           authorizationStatus: connectorAuthorizationStatus(connector),
+          authorizationReview: connector.authorizationReviewExists
+            ? {
+                issuer: connector.reviewObservedIssuer,
+                endpointOrigins: connector.reviewEndpointOrigins ?? [],
+              }
+            : null,
           isRecommended: isMcpConnectorRecommendedForPractice({
             connector,
             practiceJurisdictions,

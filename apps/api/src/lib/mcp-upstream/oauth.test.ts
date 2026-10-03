@@ -8,6 +8,10 @@ import {
   bindDiscoveredMetadata,
   buildAuthorizeUrl,
   discoverOAuthMetadata,
+  discoverOAuthMetadataForApproval,
+  getOAuthEndpointOrigins,
+  endpointsRequiringConfirmation,
+  oauthDomainsMatch,
   exchangeAuthorizationCode,
   refreshOAuthToken,
   MCP_OAUTH_INVALID_GRANT_CODE,
@@ -37,6 +41,7 @@ const discoveryTransport = ({
   resource = connectorUrl,
   metadataIssuer = issuer,
   responseIssuerSupported = false,
+  tokenEndpoint = `${issuer}/token`,
 } = {}) => {
   const requests: { url: string; method: string }[] = [];
   const dependencies = {
@@ -60,7 +65,7 @@ const discoveryTransport = ({
         return {
           issuer: metadataIssuer,
           authorization_endpoint: `${issuer}/authorize`,
-          token_endpoint: `${issuer}/token`,
+          token_endpoint: tokenEndpoint,
           authorization_response_iss_parameter_supported:
             responseIssuerSupported,
         };
@@ -77,6 +82,155 @@ const discoveryTransport = ({
 };
 
 describe("upstream metadata binding", () => {
+  test("uses confirmed endpoint origins for metadata binding", async () => {
+    for (const [tokenEndpoint, confirmedEndpointOrigins, accepted] of [
+      ["https://tokens.example.com/token", [], true],
+      ["https://tokens.example.net/token", [], false],
+      [
+        "https://tokens.example.net/token",
+        ["https://tokens.example.net"],
+        true,
+      ],
+      [
+        "https://tokens.example.net/token",
+        ["https://tokens.example.net:8443"],
+        false,
+      ],
+      [
+        "https://tokens.example.net/token",
+        ["https://other.example.net"],
+        false,
+      ],
+      [
+        "https://tokens.example.net/token",
+        ["http://tokens.example.net"],
+        false,
+      ],
+    ] as const) {
+      const transport = discoveryTransport({ tokenEndpoint });
+      const result = await discoverOAuthMetadata(
+        connectorUrl,
+        transport.dependencies,
+        confirmedEndpointOrigins,
+      );
+      expect(Result.isOk(result)).toBe(accepted);
+      if (Result.isError(result)) {
+        expect(result.error.status).toBe(409);
+        expect(result.error.code).toBe("mcp_authorization_approval_required");
+      }
+      const review = await discoverOAuthMetadataForApproval(
+        connectorUrl,
+        transport.dependencies,
+      );
+      expect(Result.isOk(review)).toBe(true);
+      if (Result.isOk(review)) {
+        expect(getOAuthEndpointOrigins(review.value)).toContain(
+          new URL(tokenEndpoint).origin,
+        );
+        expect(endpointsRequiringConfirmation(review.value)).toEqual(
+          tokenEndpoint.includes("example.net")
+            ? ["https://tokens.example.net"]
+            : [],
+        );
+      }
+      expect(transport.requests.every(({ method }) => method === "GET")).toBe(
+        true,
+      );
+    }
+  });
+
+  test("compares OAuth endpoint domains using private suffix boundaries", () => {
+    for (const [first, second, matches] of [
+      ["https://accounts.example.co.uk", "https://tokens.example.co.uk", true],
+      ["https://first.github.io", "https://second.github.io", false],
+      ["https://first.github.io", "https://tokens.first.github.io", true],
+      ["http://localhost:3000", "http://localhost:4000", false],
+    ] as const) {
+      expect(oauthDomainsMatch(first, second)).toBe(matches);
+    }
+  });
+
+  test("mcp-oauth-endpoints.confirmation", () => {
+    assertProperty(
+      "mcp-oauth-endpoints.confirmation",
+      fc.property(
+        fc.record({
+          endpoint: fc.constantFrom(
+            "authorization_endpoint",
+            "token_endpoint",
+            "registration_endpoint",
+          ),
+          domainKind: fc.constantFrom("same", "external"),
+          confirmationKind: fc.constantFrom(
+            "none",
+            "exact",
+            "scheme",
+            "port",
+            "host",
+          ),
+          subdomain: fc.integer({ min: 1, max: 100_000 }),
+        }),
+        ({ endpoint, domainKind, confirmationKind, subdomain }) => {
+          const domain = domainKind === "same" ? "example.com" : "example.net";
+          const origin = `https://endpoint${subdomain}.${domain}`;
+          const confirmations = {
+            none: [],
+            exact: [origin],
+            scheme: [`http://endpoint${subdomain}.${domain}`],
+            port: [`${origin}:8443`],
+            host: [`https://other${subdomain}.${domain}`],
+          };
+          const result = bindDiscoveredMetadata({
+            connectorUrl,
+            protectedResource: {
+              resource: connectorUrl,
+              authorization_servers: [issuer],
+            },
+            authorizationServer: authorizationServer({
+              [endpoint]: `${origin}/endpoint`,
+            }),
+            confirmedEndpointOrigins: confirmations[confirmationKind],
+          });
+          expect(Result.isOk(result)).toBe(
+            domainKind === "same" || confirmationKind === "exact",
+          );
+        },
+      ),
+    );
+  });
+
+  test("mcp-resource-url.syntax", () => {
+    assertProperty(
+      "mcp-resource-url.syntax",
+      fc.property(
+        fc.record({
+          segment: fc.constantFrom(".", "..", "item"),
+          encoded: fc.boolean(),
+          username: fc.boolean(),
+          password: fc.boolean(),
+          separator: fc.constantFrom("/", "\\"),
+        }),
+        ({ segment, encoded, username, password, separator }) => {
+          const rawSegment = encoded ? segment.replaceAll(".", "%2e") : segment;
+          const credentials =
+            username || password
+              ? `${username ? "member" : ""}${password ? ":value" : ""}@`
+              : "";
+          const resourceUrl = `https://${credentials}mcp.example.com/rpc${separator}${rawSegment}`;
+          const normalized = new URL(resourceUrl);
+          const expected =
+            !username &&
+            !password &&
+            !(encoded && segment !== "item") &&
+            (normalized.pathname === "/" || normalized.pathname === "/rpc/");
+          expect(
+            mcpResourceMatchesConnector({ connectorUrl, resourceUrl }),
+          ).toBe(expected);
+        },
+      ),
+    );
+  });
+
   test("uses only metadata issued for the connector", async () => {
     const transport = discoveryTransport({
       resource: "https://mcp.example.com/other",
@@ -145,6 +299,13 @@ describe("upstream metadata binding", () => {
           prefixLength: fc.nat({ max: 5 }),
           pathKind: fc.constantFrom("prefix", "sibling", "partial", "child"),
           originKind: fc.constantFrom("same", "host", "scheme", "port"),
+          queryKind: fc.constantFrom(
+            "absent",
+            "same",
+            "different",
+            "reordered",
+          ),
+          queryVersion: fc.integer({ min: 1, max: 100_000 }),
           slashes: fc.nat({ max: 3 }),
         }),
         ({
@@ -154,6 +315,8 @@ describe("upstream metadata binding", () => {
           prefixLength,
           pathKind,
           originKind,
+          queryKind,
+          queryVersion,
           slashes,
         }) => {
           const parts = segments.map((part) => `rpc${part}segment`);
@@ -171,9 +334,19 @@ describe("upstream metadata binding", () => {
             scheme: `${scheme === "https" ? "http" : "https"}://server${host}.example.com`,
             port: `${scheme}://server${host}.example.com:8443`,
           };
-          const configuredUrl = `${scheme}://server${host}.example.com${connectorPath}`;
-          const resourceUrl = `${resourceOrigins[originKind]}${resourcePaths[pathKind]}${"/".repeat(slashes)}`;
-          const expected = originKind === "same" && pathKind === "prefix";
+          const query = `?version=${queryVersion}&mode=read`;
+          const resourceQueries = {
+            absent: "",
+            same: query,
+            different: `?version=${queryVersion + 1}&mode=read`,
+            reordered: `?mode=read&version=${queryVersion}`,
+          };
+          const configuredUrl = `${scheme}://server${host}.example.com${connectorPath}${query}`;
+          const resourceUrl = `${resourceOrigins[originKind]}${resourcePaths[pathKind]}${"/".repeat(slashes)}${resourceQueries[queryKind]}`;
+          const expected =
+            originKind === "same" &&
+            pathKind === "prefix" &&
+            (queryKind === "absent" || queryKind === "same");
           expect(
             mcpResourceMatchesConnector({
               connectorUrl: configuredUrl,
@@ -361,7 +534,9 @@ describe("authorization response metadata", () => {
           responseIssuer,
           redirectUri: "https://app.example.com/callback",
         });
-        const valid = !supported || responseIssuer === issuer;
+        const valid =
+          responseIssuer === issuer ||
+          (!supported && responseIssuer === undefined);
         expect(Result.isOk(result)).toBe(valid);
         expect(
           transport.requests.filter(({ method }) => method === "POST"),

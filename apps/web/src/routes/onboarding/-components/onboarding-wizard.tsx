@@ -35,6 +35,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { refreshAuthQueries, sessionOptions } from "@/lib/auth-queries";
+import { installCatalogueEntry } from "@/lib/catalogue-install";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
@@ -353,32 +354,7 @@ export const OnboardingWizard = () => {
             if (!entry) {
               return;
             }
-            if (entry.kind === "skill") {
-              const { error } = await api.catalogue["install-skill"].post({
-                slug: entry.slug,
-              });
-              if (error) {
-                throw toAPIError(error);
-              }
-              return;
-            }
-            if (entry.kind === "native-tool") {
-              const { error } = await api.mcp["native-tools"]({
-                slug: entry.backendSlug,
-              }).patch({ enabled: true });
-              if (error) {
-                throw toAPIError(error);
-              }
-              return;
-            }
-            const { error } = await api.mcp.connectors.post({
-              displayName: entry.displayName,
-              description: entry.description,
-              url: entry.url,
-            });
-            if (error) {
-              throw toAPIError(error);
-            }
+            await installCatalogueEntry(entry);
           },
         );
         const optOutTasks = catalogueSetupPlan.nativeToolOptOuts.map(

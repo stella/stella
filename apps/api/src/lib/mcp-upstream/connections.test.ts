@@ -40,6 +40,7 @@ const state = {
   closes: 0,
   now: new Date(),
   dbSets: [] as Record<string, unknown>[],
+  reviews: [] as Record<string, unknown>[],
   decryptCalls: 0,
   encryptCalls: 0,
   refresh: (() =>
@@ -57,6 +58,19 @@ const state = {
 
 const connectionDependenciesTestDouble = {
   now: () => state.now,
+  discoverOAuthMetadataForApproval: async (connectorUrl: string) =>
+    Result.ok({
+      protectedResource: {
+        resource: connectorUrl,
+        authorization_servers: ["https://auth.example.com"],
+      },
+      authorizationServer: {
+        issuer: "https://auth.example.com",
+        authorization_endpoint: "https://auth.example.com/authorize",
+        token_endpoint: "https://auth.example.com/token",
+      },
+    }),
+  wait: async () => {},
   discoverOAuthMetadata: async (connectorUrl: string) =>
     bindDiscoveredMetadata({
       connectorUrl,
@@ -153,6 +167,7 @@ const makeSafeDb = () => {
   let lease: Date | null = null;
   let retryAfter: Date | null = null;
   let status = "connected";
+  const persisted: Record<string, unknown> = {};
   const update = () => {
     let fields: Record<string, unknown> = {};
     const apply = () => {
@@ -165,6 +180,7 @@ const makeSafeDb = () => {
         return false;
       }
       state.dbSets.push(fields);
+      Object.assign(persisted, fields);
       if (
         fields["refreshLeaseExpiresAt"] instanceof Date ||
         fields["refreshLeaseExpiresAt"] === null
@@ -197,11 +213,28 @@ const makeSafeDb = () => {
     };
     return chain;
   };
+  const selectChain = {
+    from: () => selectChain,
+    innerJoin: () => selectChain,
+    leftJoin: () => selectChain,
+    where: () => selectChain,
+    limit: async () => {
+      if (status !== "connected") {
+        return [];
+      }
+      const row = oauthRow();
+      return [{ ...row, authType: row.type, ...persisted }];
+    },
+  };
   const tx = {
+    select: () => selectChain,
     update,
     insert: (table: unknown) => ({
       values: (values: Record<string, unknown>) => ({
         onConflictDoUpdate: async () => {
+          if (table !== mcpUserConnections) {
+            state.reviews.push(values);
+          }
           if (
             table === mcpUserConnections &&
             typeof values["status"] === "string"
@@ -230,6 +263,8 @@ const oauthRow = (
   // Expired by default so the refresh path is exercised.
   expiresAt: new Date(Date.now() - 60_000),
   oauthAuthorizationServerUrl: "https://auth.example.com",
+  oauthApprovedIssuer: "https://auth.example.com",
+  oauthConfirmedEndpointOrigins: [],
   oauthClientId: "client-1",
   oauthClientSecretEncrypted: Buffer.from("secret"),
   oauthClientSecretIv: Buffer.from("iv"),
@@ -256,6 +291,7 @@ beforeEach(() => {
   state.now = new Date();
   state.closes = 0;
   state.dbSets = [];
+  state.reviews = [];
   state.encryptCalls = 0;
   state.decryptCalls = 0;
   state.refreshCalls = 0;
@@ -643,15 +679,145 @@ describe("MCP upstream connection lifecycle", () => {
     expect(state.closes).toBeGreaterThan(0);
   });
 
+  test("uses only the current configured authorization", async () => {
+    for (const oauthApprovedIssuer of [
+      null,
+      "https://auth.example.com/current",
+    ]) {
+      for (const expiresAt of [
+        new Date(state.now.getTime() - 1),
+        new Date(state.now.getTime() + 120_000),
+      ]) {
+        const client = await createMcpClientForConnection({
+          organizationId,
+          row: oauthRow({ oauthApprovedIssuer, expiresAt }),
+          safeDb: makeSafeDb(),
+          userId,
+        });
+        expect(client).toBeNull();
+      }
+    }
+    expect(state.decryptCalls).toBe(0);
+    expect(state.refreshCalls).toBe(0);
+    expect(hasStatusSet("needs_approval")).toBe(true);
+    expect(state.reviews).toEqual([]);
+  });
+
+  test("records authorization discovery that requires confirmation", async () => {
+    const client = await createMcpClientForConnectionImpl({
+      organizationId,
+      row: oauthRow(),
+      safeDb: makeSafeDb(),
+      userId,
+      outboundFetch,
+      dependencies: {
+        ...connectionDependencies,
+        discoverOAuthMetadata: async () =>
+          Result.err(
+            new HandlerError({
+              status: 409,
+              code: "mcp_authorization_approval_required",
+              message: "Authorization confirmation required",
+            }),
+          ),
+      },
+    });
+    expect(client).toBeNull();
+    expect(state.refreshCalls).toBe(0);
+    expect(state.decryptCalls).toBe(0);
+    expect(hasStatusSet("needs_approval")).toBe(true);
+    expect(state.reviews).toEqual([
+      expect.objectContaining({
+        observedIssuer: "https://auth.example.com",
+        observedEndpointOrigins: ["https://auth.example.com"],
+      }),
+    ]);
+  });
+
+  test("refresh discovery uses confirmed endpoint origins", async () => {
+    const confirmedEndpointOrigins = ["https://auth.example.com"];
+    let observedOrigins: readonly string[] | undefined;
+    expect(
+      await createMcpClientForConnectionImpl({
+        organizationId,
+        row: oauthRow({
+          oauthConfirmedEndpointOrigins: confirmedEndpointOrigins,
+        }),
+        safeDb: makeSafeDb(),
+        userId,
+        outboundFetch,
+        dependencies: {
+          ...connectionDependencies,
+          discoverOAuthMetadata: async (url, _dependencies, origins) => {
+            observedOrigins = origins;
+            return await connectionDependenciesTestDouble.discoverOAuthMetadata(
+              url,
+            );
+          },
+        },
+      }),
+    ).not.toBeNull();
+    expect(observedOrigins).toEqual(confirmedEndpointOrigins);
+  });
+
   test("coordinates concurrent attempts for an expired connection", async () => {
     const safeDb = makeSafeDb();
     const row = oauthRow();
-    await Promise.all([
+    const clients = await Promise.all([
       createMcpClientForConnection({ organizationId, row, safeDb, userId }),
       createMcpClientForConnection({ organizationId, row, safeDb, userId }),
       createMcpClientForConnection({ organizationId, row, safeDb, userId }),
     ]);
     expect(state.refreshCalls).toBe(1);
+    expect(clients.every((client) => client !== null)).toBe(true);
+  });
+
+  test("uses the current token during a coordinated refresh interval", async () => {
+    const safeDb = makeSafeDb();
+    const row = oauthRow({ expiresAt: new Date(state.now.getTime() + 30_000) });
+    const clients = await Promise.all([
+      createMcpClientForConnection({ organizationId, row, safeDb, userId }),
+      createMcpClientForConnection({ organizationId, row, safeDb, userId }),
+      createMcpClientForConnection({ organizationId, row, safeDb, userId }),
+    ]);
+    expect(state.refreshCalls).toBe(1);
+    expect(clients.every((client) => client !== null)).toBe(true);
+    expect(
+      state.transports.map((transport) => transport.headers?.["Authorization"]),
+    ).toContain("Bearer decrypted-mcp_access_token");
+  });
+
+  test("bounds the wait for an existing refresh", async () => {
+    const safeDb = makeSafeDb();
+    const row = oauthRow();
+    const { claimMcpRefreshLease } =
+      await import("@/api/lib/mcp-upstream/connections");
+    Result.unwrap(
+      await claimMcpRefreshLease({
+        safeDb,
+        organizationId,
+        userId,
+        connectionId: row.userConnectionId,
+        now: state.now,
+      }),
+    );
+    let waitedMilliseconds = 0;
+    const client = await createMcpClientForConnectionImpl({
+      organizationId,
+      row,
+      safeDb,
+      userId,
+      outboundFetch,
+      dependencies: {
+        ...connectionDependencies,
+        wait: async (milliseconds) => {
+          waitedMilliseconds += milliseconds;
+        },
+      },
+    });
+    expect(client).toBeNull();
+    expect(waitedMilliseconds).toBe(2000);
+    expect(state.refreshCalls).toBe(0);
   });
 
   test("defers retryable refresh outcomes", async () => {
@@ -769,6 +935,8 @@ describe("loading a user's active MCP connections", () => {
     displayName: "Registry",
     expiresAt: null,
     oauthAuthorizationServerUrl: "https://auth.example.com",
+    oauthApprovedIssuer: "https://auth.example.com",
+    oauthConfirmedEndpointOrigins: [],
     oauthClientId: "client-1",
     oauthClientSecretEncrypted: null,
     oauthClientSecretIv: null,

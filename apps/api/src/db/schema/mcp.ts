@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm";
+
 import { MCP_CONNECTION_STATUSES, MCP_CONNECTOR_AUTH_TYPES } from "./chat";
 import type {
   McpConnectionStatus,
@@ -49,6 +51,9 @@ export const mcpConnectors = p.pgTable(
     // oauth2 connectors. Surfaced as the connector's vendor. Server-level
     // and identical for every member, so it lives on the shared row.
     oauthIssuer: p.text("oauth_issuer"),
+    oauthConfirmedEndpointOrigins: jsonb(
+      "oauth_confirmed_endpoint_origins",
+    ).$type<string[]>(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -110,6 +115,11 @@ export const mcpOAuthClients = p.pgTable(
   ],
 );
 
+export const MCP_AUTHORIZATION_REVIEW_STATUSES = [
+  "needs_reapproval",
+  "approved",
+] as const;
+
 export const mcpConnectorAuthorizationReviews = p.pgTable.withRLS(
   "mcp_connector_authorization_reviews",
   {
@@ -120,6 +130,17 @@ export const mcpConnectorAuthorizationReviews = p.pgTable.withRLS(
       .notNull()
       .references(() => mcpConnectors.id, { onDelete: "cascade" }),
     observedIssuer: p.text("observed_issuer"),
+    approvedIssuer: p.text("approved_issuer"),
+    observedEndpointOrigins: jsonb("observed_endpoint_origins").$type<
+      string[]
+    >(),
+    approvedEndpointOrigins: jsonb("approved_endpoint_origins").$type<
+      string[]
+    >(),
+    status: p
+      .text("status", { enum: MCP_AUTHORIZATION_REVIEW_STATUSES })
+      .notNull()
+      .default("needs_reapproval"),
     updatedAt: timestamptz("updated_at")
       .notNull()
       .defaultNow()
@@ -127,6 +148,17 @@ export const mcpConnectorAuthorizationReviews = p.pgTable.withRLS(
   },
   (table) => [
     p.primaryKey({ columns: [table.organizationId, table.connectorId] }),
+    p.check(
+      "mcp_authorization_review_status_check",
+      sql`${table.status} IN (${sql.join(
+        MCP_AUTHORIZATION_REVIEW_STATUSES.map((status) => sql`${status}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "mcp_authorization_review_approval_check",
+      sql`${table.status} <> 'approved' OR ${table.approvedIssuer} IS NOT NULL`,
+    ),
     p
       .index("mcp_connector_authorization_reviews_connector_idx")
       .on(table.connectorId),

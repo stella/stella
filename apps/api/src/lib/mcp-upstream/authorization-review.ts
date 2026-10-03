@@ -14,6 +14,7 @@ type RecordMcpAuthorizationReviewOptions = {
   connectorId: SafeId<"mcpConnector">;
   userId: SafeId<"user">;
   observedIssuer: string | null;
+  observedEndpointOrigins?: string[];
   lease?: { connectionId: SafeId<"mcpUserConnection">; expiresAt: Date };
 };
 
@@ -23,6 +24,7 @@ export const recordMcpAuthorizationReview = async ({
   connectorId,
   userId,
   observedIssuer,
+  observedEndpointOrigins = [],
   lease,
 }: RecordMcpAuthorizationReviewOptions): Promise<Result<void, SafeDbError>> =>
   await safeDb(async (tx) => {
@@ -76,12 +78,21 @@ export const recordMcpAuthorizationReview = async ({
     }
     await tx
       .insert(mcpConnectorAuthorizationReviews)
-      .values({ organizationId, connectorId, observedIssuer })
+      .values({
+        organizationId,
+        connectorId,
+        observedIssuer,
+        observedEndpointOrigins,
+      })
       .onConflictDoUpdate({
         target: [
           mcpConnectorAuthorizationReviews.organizationId,
           mcpConnectorAuthorizationReviews.connectorId,
         ],
-        set: { observedIssuer, updatedAt: new Date() },
+        set: {
+          observedIssuer,
+          status: "needs_reapproval",
+          updatedAt: new Date(),
+        },
       });
   });

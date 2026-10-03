@@ -6,6 +6,12 @@ CREATE TABLE "mcp_connector_authorization_reviews" (
   "organization_id" varchar(128) NOT NULL,
   "connector_id" uuid NOT NULL,
   "observed_issuer" text,
+  "approved_issuer" text,
+  "observed_endpoint_origins" jsonb,
+  "approved_endpoint_origins" jsonb,
+  "status" text DEFAULT 'needs_reapproval' NOT NULL,
+  CONSTRAINT "mcp_authorization_review_status_check" CHECK ("status" IN ('needs_reapproval', 'approved')),
+  CONSTRAINT "mcp_authorization_review_approval_check" CHECK ("status" <> 'approved' OR "approved_issuer" IS NOT NULL),
   "updated_at" timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT "mcp_connector_authorization_reviews_organization_id_connector_id_pk" PRIMARY KEY ("organization_id", "connector_id"),
   CONSTRAINT "mcp_connector_authorization_reviews_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE,
@@ -22,3 +28,6 @@ CREATE POLICY "organization_update" ON "mcp_connector_authorization_reviews" AS 
 CREATE POLICY "organization_delete" ON "mcp_connector_authorization_reviews" AS PERMISSIVE FOR DELETE TO "stella" USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
 ALTER TABLE "mcp_user_connections" ADD COLUMN "refresh_lease_expires_at" timestamptz;--> statement-breakpoint
 ALTER TABLE "mcp_user_connections" ADD COLUMN "refresh_retry_after" timestamptz;
+
+--> statement-breakpoint
+ALTER TABLE "mcp_connectors" ADD COLUMN "oauth_confirmed_endpoint_origins" jsonb;

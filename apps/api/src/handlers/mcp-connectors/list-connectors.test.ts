@@ -66,6 +66,7 @@ test("lists shared authorization status in one connector query", async () => {
   const chain = {
     select: () => chain,
     from: () => chain,
+    leftJoin: () => chain,
     where: () => chain,
     orderBy: () => chain,
     limit: async () => {

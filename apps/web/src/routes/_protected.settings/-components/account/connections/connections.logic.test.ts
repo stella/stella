@@ -1,6 +1,31 @@
 import { describe, expect, test } from "bun:test";
 
-import { integrationStatus, matchesConnectionQuery } from "./connections.logic";
+import {
+  canApproveIntegrationAuthorization,
+  integrationStatus,
+  matchesConnectionQuery,
+  type IntegrationAuthorizationStatus,
+} from "./connections.logic";
+
+describe("integration approval", () => {
+  test("approval requires permission and a pending review", () => {
+    const statuses = [
+      undefined,
+      "not_required",
+      "approved",
+      "needs_reapproval",
+    ] as const satisfies readonly (
+      | IntegrationAuthorizationStatus
+      | undefined
+    )[];
+    for (const status of statuses) {
+      expect(canApproveIntegrationAuthorization(false, status)).toBe(false);
+      expect(canApproveIntegrationAuthorization(true, status)).toBe(
+        status === "needs_reapproval",
+      );
+    }
+  });
+});
 
 describe("connection search", () => {
   test("an empty or blank query matches every row", () => {

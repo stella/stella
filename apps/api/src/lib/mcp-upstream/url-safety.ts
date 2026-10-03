@@ -15,9 +15,21 @@ export const mcpResourceMatchesConnector = ({
   connectorUrl,
   resourceUrl,
 }: McpResourceMatchesConnectorOptions): boolean => {
+  const rawResourcePath = (resourceUrl.split(/[?#]/u).at(0) ?? "").replaceAll(
+    "\\",
+    "/",
+  );
+  if (/(?:^|\/)(?=[^/]*%2e)(?:\.|%2e){1,2}(?:\/|$)/iu.test(rawResourcePath)) {
+    return false;
+  }
   const connector = new URL(canonicalMcpResourceUrl(connectorUrl));
   const resource = new URL(canonicalMcpResourceUrl(resourceUrl));
-  if (connector.origin !== resource.origin) {
+  if (
+    resource.username !== "" ||
+    resource.password !== "" ||
+    connector.origin !== resource.origin ||
+    (resource.search !== "" && resource.search !== connector.search)
+  ) {
     return false;
   }
   return (
