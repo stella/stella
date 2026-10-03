@@ -7,6 +7,7 @@ import { caseLawCorpusQueryFields } from "./corpus-index-read-contract";
 import {
   CORPUS_QUERY_LEAF_BUDGET,
   corpusFreeTextClause,
+  caseLawCorpusQuery,
   quoteCorpusValue,
   partitionCorpusFunctionWords,
   tokenizeCorpusFreeText,
@@ -16,7 +17,6 @@ import type { CorpusIndexQueryVariant } from "./corpus-query-variant-policy";
 import { stemSlovakUpstream } from "./morphology/slovak";
 import { stemCorpusText } from "./morphology/stem-text";
 
-const legacyFields = ["text_stem", "headnote_stem"] as const;
 const slovakOptions = {
   ...caseLawCorpusQueryFields({
     generation: "case_law_v7",
@@ -24,7 +24,6 @@ const slovakOptions = {
     language: undefined,
   }),
   jurisdiction: "SVK",
-  slovakLegacyStemFields: legacyFields,
 } as const;
 
 const clause = (
@@ -60,7 +59,7 @@ test("corpus-query-core-stems-first/exact Slovak queries retain primary and fait
 
   for (const { text, faithful } of cases) {
     const baseline = clause(text, "off");
-    const candidate = clause(text, "sk-core-stems-first");
+    const candidate = clause(text, "core-stems-first");
     expect(baseline).not.toBeNull();
     expect(candidate).not.toBeNull();
     expect(baseline).not.toContain(faithful);
@@ -69,7 +68,7 @@ test("corpus-query-core-stems-first/exact Slovak queries retain primary and fait
   }
 
   const single =
-    clause("vydržanie", "sk-core-stems-first", {
+    clause("vydržanie", "core-stems-first", {
       expand: (term) => [`${term}alt`],
       legalAlternatives: (term) => [`${term}legal`],
     }) ?? "";
@@ -97,10 +96,7 @@ test(
         ),
         fc.constantFrom("all", "any"),
         fc.integer({ min: 0, max: 5 }),
-        fc.constantFrom(
-          "sk-core-stems-first",
-          "provision-refs-sk-core-stems-first",
-        ),
+        fc.constantFrom("core-stems-first", "provision-refs-core-stems-first"),
         (terms, match, expansionCount, queryVariant) => {
           const text = terms.join(" ");
           const candidate = clause(text, queryVariant, {
@@ -149,10 +145,10 @@ test(
 );
 
 test(
-  "corpus-query-core-stems-first/off non-Slovak and missing-legacy-fields stay byte-identical",
+  "corpus-query-core-stems-first/off and missing-legacy-fields stay byte-identical",
   () => {
     assertProperty(
-      "corpus-query-core-stems-first/off non-Slovak and missing-legacy-fields stay byte-identical",
+      "corpus-query-core-stems-first/off and missing-legacy-fields stay byte-identical",
       fc.property(
         fc.array(
           fc.constantFrom("vydržanie", "pozemku", "obohatenie", "náhrada"),
@@ -171,8 +167,7 @@ test(
                 language: undefined,
               }),
               jurisdiction: "CZE",
-              slovakLegacyStemFields: legacyFields,
-              queryVariant: "sk-core-stems-first",
+              queryVariant: "core-stems-first",
             }),
           ).toBe(
             corpusFreeTextClause(text, {
@@ -182,20 +177,19 @@ test(
                 language: undefined,
               }),
               jurisdiction: "CZE",
-              slovakLegacyStemFields: legacyFields,
               queryVariant: "off",
             }),
           );
           expect(
             corpusFreeTextClause(text, {
               ...slovakOptions,
-              slovakLegacyStemFields: [],
-              queryVariant: "sk-core-stems-first",
+              legacyStemming: null,
+              queryVariant: "core-stems-first",
             }),
           ).toBe(
             corpusFreeTextClause(text, {
               ...slovakOptions,
-              slovakLegacyStemFields: [],
+              legacyStemming: null,
               queryVariant: "off",
             }),
           );
@@ -206,6 +200,55 @@ test(
   propertyTestTimeout(5000),
 );
 
+test("corpus-query-core-stems-first/non-Slovak indexes reserve their declared compatibility stems", () => {
+  const fields = caseLawCorpusQueryFields({
+    generation: "case_law_v7",
+    jurisdiction: "CZE",
+    language: undefined,
+  });
+  for (const legacyStemming of [
+    {
+      fields: ["text_stem", "headnote_stem"],
+      stemTerm: (term: string) => `${term}legacy`,
+    },
+    {
+      fields: ["text_legacy_stem"],
+      stemTerm: (term: string) => stemCorpusText(term, "cs"),
+    },
+  ]) {
+    const options = {
+      ...fields,
+      jurisdiction: "CZE",
+      legacyStemming,
+      text: "nájemního smlouvy škodu pozemku náhrada vlastnictví",
+      expand: (term: string) => [`${term}alt`, `${term}extra`],
+      filters: {},
+    };
+    const baseline = caseLawCorpusQuery({ ...options, queryVariant: "off" });
+    const candidate = caseLawCorpusQuery({
+      ...options,
+      queryVariant: "core-stems-first",
+    });
+    const legacyField = legacyStemming.fields.at(0);
+    expect(baseline).not.toContain(
+      `${legacyField}:${quoteCorpusValue(legacyStemming.stemTerm("nájemního"))}`,
+    );
+    expect(candidate).not.toBeNull();
+    for (const token of tokenizeCorpusFreeText(options.text)) {
+      expect(candidate).toContain(quoteCorpusValue(token.value));
+      expect(candidate).toContain(
+        `text_stem:${quoteCorpusValue(stemCorpusText(token.value, "cs"))}`,
+      );
+      expect(candidate).toContain(
+        `${legacyField}:${quoteCorpusValue(legacyStemming.stemTerm(token.value))}`,
+      );
+    }
+    expect(leavesIn(candidate ?? "").length).toBeLessThanOrEqual(
+      CORPUS_QUERY_LEAF_BUDGET,
+    );
+  }
+});
+
 test("corpus-query-core-stems-first/provision behavior composes explicitly", () => {
   const text = "§ 106 ods. 1 zákona OZ premlčanie";
   const options = slovakOptions;
@@ -215,7 +258,7 @@ test("corpus-query-core-stems-first/provision behavior composes explicitly", () 
   });
   const combined = corpusFreeTextClause(text, {
     ...options,
-    queryVariant: "provision-refs-sk-core-stems-first",
+    queryVariant: "provision-refs-core-stems-first",
   });
 
   expect(provision).not.toBeNull();
@@ -230,10 +273,10 @@ test("corpus-query-core-stems-first/provision behavior composes explicitly", () 
 
 test("corpus-query-core-stems-first/phrases and exhausted budgets do not gain reserved leaves", () => {
   const phrase = '"vydržanie vlastníckeho"';
-  expect(clause(phrase, "sk-core-stems-first")).toBe(clause(phrase, "off"));
+  expect(clause(phrase, "core-stems-first")).toBe(clause(phrase, "off"));
 
   for (const count of [24, 25, 30]) {
     const text = Array.from({ length: count }, () => "vydržanie").join(" ");
-    expect(clause(text, "sk-core-stems-first")).toBe(clause(text, "off"));
+    expect(clause(text, "core-stems-first")).toBe(clause(text, "off"));
   }
 });

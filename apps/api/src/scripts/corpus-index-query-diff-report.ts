@@ -125,17 +125,19 @@ export const goldenQueryRequest = ({
   // The diff compares generations, so the query each one gets is the query
   // that generation's schema supports: a clause over a field an index never
   // mapped would compare an invalid query with a valid one.
-  const { surfaceFields, keywordFields, stemming } = caseLawCorpusQueryFields({
-    generation,
-    jurisdiction: query.jurisdiction,
-    language: query.filters?.language,
-  });
+  const { surfaceFields, keywordFields, stemming, legacyStemming } =
+    caseLawCorpusQueryFields({
+      generation,
+      jurisdiction: query.jurisdiction,
+      language: query.filters?.language,
+    });
   const engineQuery = caseLawCorpusQuery({
     jurisdiction: query.jurisdiction,
     text: query.text,
     queryVariant,
     filters: { ...query.filters, jurisdiction: jurisdictionClause },
     stemming,
+    legacyStemming,
     surfaceFields,
     keywordFields,
   });

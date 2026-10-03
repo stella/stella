@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 export const CORPUS_INDEX_QUERY_VARIANTS = [
   "off",
   "provision-refs",
-  "sk-core-stems-first",
-  "provision-refs-sk-core-stems-first",
+  "core-stems-first",
+  "provision-refs-core-stems-first",
 ] as const;
 
 export type CorpusIndexQueryVariant =
@@ -13,16 +13,16 @@ export type CorpusIndexQueryVariant =
 
 // Explicit combined value keeps independent and combined evaluations selectable.
 export const CORPUS_QUERY_VARIANT_POLICY = {
-  off: { provisions: false, slovakCoreStemsFirst: false },
-  "provision-refs": { provisions: true, slovakCoreStemsFirst: false },
-  "sk-core-stems-first": { provisions: false, slovakCoreStemsFirst: true },
-  "provision-refs-sk-core-stems-first": {
+  off: { provisions: false, coreStemsFirst: false },
+  "provision-refs": { provisions: true, coreStemsFirst: false },
+  "core-stems-first": { provisions: false, coreStemsFirst: true },
+  "provision-refs-core-stems-first": {
     provisions: true,
-    slovakCoreStemsFirst: true,
+    coreStemsFirst: true,
   },
 } as const satisfies Record<
   CorpusIndexQueryVariant,
-  { provisions: boolean; slovakCoreStemsFirst: boolean }
+  { provisions: boolean; coreStemsFirst: boolean }
 >;
 
 type CorpusQueryVariantOptions = {

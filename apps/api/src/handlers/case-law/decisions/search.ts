@@ -995,6 +995,7 @@ const buildCorpusIndexQuery = ({
     },
     expand,
     stemming: fields.stemming,
+    legacyStemming: fields.legacyStemming,
     surfaceFields: fields.surfaceFields,
     keywordFields: fields.keywordFields,
   });
