@@ -12,6 +12,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
+import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import {
   tDefaultVarchar,
@@ -64,6 +65,8 @@ export const createClauseHandler = async function* ({
   body,
   recordAuditEvent,
 }: CreateClauseProps) {
+  yield* validateClauseBodyDirectives(body.body);
+
   const existingCount = yield* Result.await(
     safeDb((tx) =>
       tx.$count(clauses, eq(clauses.organizationId, organizationId)),
