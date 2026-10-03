@@ -1,3 +1,7 @@
+import { panic } from "better-result";
+
+import { statuteGazetteEliCollection } from "./statute-gazette";
+
 /**
  * Acts known by a short name, stated once for every reader that names them:
  * the statute box (`statute-aliases`) and the court-citation readers
@@ -12,15 +16,12 @@
  */
 type StatuteActCollection = "Sb." | "Zb." | "Z. z.";
 
-/**
- * The collection segment of the publisher's ELI. Slov-Lex files both Slovak
- * collections under `zz`.
- */
-export const ELI_COLLECTION_BY_STATUTE_ACT_COLLECTION = {
-  "Sb.": "sb",
-  "Zb.": "zz",
-  "Z. z.": "zz",
-} as const satisfies Record<StatuteActCollection, string>;
+/** The collection segment of the publisher's ELI, read from the gazette table. */
+export const statuteActEliCollection = (
+  collection: StatuteActCollection,
+): string =>
+  statuteGazetteEliCollection(collection) ??
+  panic(`No ELI collection prints as ${collection}`);
 
 /** An act's identity in a national collection. */
 type StatuteActWork = {

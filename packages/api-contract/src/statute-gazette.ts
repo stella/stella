@@ -46,6 +46,17 @@ const SPELLINGS_BY_ELI_COLLECTION: ReadonlyMap<
   ),
 );
 
+const ELI_COLLECTION_BY_ABBREVIATION: ReadonlyMap<string, string> = new Map(
+  [...SPELLINGS_BY_ELI_COLLECTION].flatMap(([eliCollection, spellings]) =>
+    spellings.map(({ abbreviation }) => [abbreviation, eliCollection] as const),
+  ),
+);
+
+/** The ELI collection segment of a printed abbreviation (`Zb.` → `zz`). */
+export const statuteGazetteEliCollection = (
+  abbreviation: string,
+): string | null => ELI_COLLECTION_BY_ABBREVIATION.get(abbreviation) ?? null;
+
 /**
  * The abbreviation an act in an ELI collection segment prints for its year
  * (`zz`, 1964 → `Zb.`), or null for a collection without a known one.
