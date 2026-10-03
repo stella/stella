@@ -161,12 +161,8 @@ const publicRouteUnboundedFields = (
   return [...new Set(fields)].toSorted();
 };
 
-const wholeDocumentReasons = {
-  statute:
-    "Whole official statute text by design; bounded per source at ingestion, not at the response; a windowed reader contract is a separate change.",
-  decision:
-    "Whole official decision text by design; bounded per source at ingestion, not at the response; a windowed reader contract is a separate change.",
-} as const;
+const WHOLE_DOCUMENT_TEXT_REASON =
+  "Whole official document text by design; bounded per source at ingestion, not at the response; a windowed reader contract is a separate change.";
 
 // Only the complete text on existing reader routes can refine a coarse exception.
 const isWholeReaderRefinement = ({
@@ -190,11 +186,11 @@ const isWholeReaderRefinement = ({
     return false;
   }
   const coarse = `${route} response-schema`;
-  const requiredReason =
-    family === "law/statutes"
-      ? wholeDocumentReasons.statute
-      : wholeDocumentReasons.decision;
-  return reason === requiredReason && coarse in prior && !(coarse in current);
+  return (
+    reason === WHOLE_DOCUMENT_TEXT_REASON &&
+    coarse in prior &&
+    !(coarse in current)
+  );
 };
 
 const forbiddenLedgerAdditions = (
@@ -213,7 +209,7 @@ describe("anonymous response text bounds", () => {
   test("reader refinements replace an existing same-route coarse exception", () => {
     const field = "GET /v1/law/statutes/:documentId 200.fulltext";
     const coarse = "GET /v1/law/statutes/:documentId response-schema";
-    const reason = wholeDocumentReasons.statute;
+    const reason = WHOLE_DOCUMENT_TEXT_REASON;
     const refinement = {
       field,
       reason,
@@ -239,7 +235,7 @@ describe("anonymous response text bounds", () => {
 
   test("reader refinements require whole-document fields and their exact reason", () => {
     const coarse = "GET /v1/law/statutes/:documentId response-schema";
-    const reason = wholeDocumentReasons.statute;
+    const reason = WHOLE_DOCUMENT_TEXT_REASON;
     const refinement = {
       field: "GET /v1/law/statutes/:documentId 200.documentAst",
       reason,
@@ -280,9 +276,9 @@ describe("anonymous response text bounds", () => {
     ).toBe(false);
   });
 
-  test("case-law refinements use the same rules and their own exact reason", () => {
+  test("case-law refinements use the same exact whole-document reason", () => {
     const route = "GET /v1/case/decisions/:decisionId";
-    const reason = wholeDocumentReasons.decision;
+    const reason = WHOLE_DOCUMENT_TEXT_REASON;
     for (const path of ["fulltext", "documentAst", "sections[].text"]) {
       expect(
         isWholeReaderRefinement({
@@ -296,7 +292,7 @@ describe("anonymous response text bounds", () => {
     expect(
       isWholeReaderRefinement({
         field: `${route} 200.fulltext`,
-        reason: wholeDocumentReasons.statute,
+        reason: "Whole official decision text by design",
         prior: { [`${route} response-schema`]: "existing" },
         current: {},
       }),
