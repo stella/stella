@@ -26,6 +26,13 @@ const hit = {
   score: 1,
 } satisfies StatuteSearchHit;
 
+// Strips tags to a fixed point, so no tag can survive by being split across
+// a removed one.
+const textContent = (markup: string): string => {
+  const stripped = markup.replaceAll(/<[^>]*>/gu, "");
+  return stripped === markup ? markup : textContent(stripped);
+};
+
 const render = ({
   hits = [],
   isLoading = false,
@@ -67,9 +74,7 @@ describe("public statute section results", () => {
         );
         // React's own text serialization is the oracle; the decoder must consume
         // exactly one entity layer and keep publisher angle brackets inert.
-        expect(markup.replaceAll(/<[^>]*>/gu, "")).toBe(
-          renderToStaticMarkup(decoded),
-        );
+        expect(textContent(markup)).toBe(renderToStaticMarkup(decoded));
         expect(markup.match(/<mark(?:\s|>)/gu)?.length ?? 0).toBe(
           highlighted ? 1 : 0,
         );
