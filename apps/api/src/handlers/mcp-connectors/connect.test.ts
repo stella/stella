@@ -8,7 +8,6 @@ import {
 } from "@/api/db/schema";
 import { createConnectMcpConnectorHandler } from "@/api/handlers/mcp-connectors/connect";
 import { toSafeId } from "@/api/lib/branded-types";
-import { bindDiscoveredMetadata } from "@/api/lib/mcp-upstream/oauth";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -16,8 +15,7 @@ const connectorUrl = "https://mcp.example.com/rpc";
 const issuer = "https://as.example.com";
 
 const metadata = (authorizationIssuer = issuer) =>
-  bindDiscoveredMetadata({
-    connectorUrl,
+  Result.ok({
     protectedResource: {
       resource: connectorUrl,
       authorization_servers: [authorizationIssuer],

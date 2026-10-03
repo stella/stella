@@ -52,7 +52,7 @@ const discoveryTransport = ({
       method,
     }: {
       url: string | URL;
-      method?: string;
+      method?: string | undefined;
     }) => {
       const url = new URL(rawUrl);
       requests.push({ url: url.toString(), method: method ?? "GET" });

@@ -5,6 +5,7 @@ import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   mcpConnectorAuthorizationReviews,
   mcpConnectors,
@@ -22,7 +23,6 @@ import {
   loadMcpConnectionById,
   releaseMcpRefreshLease,
 } from "@/api/lib/mcp-upstream/connections";
-import { bindDiscoveredMetadata } from "@/api/lib/mcp-upstream/oauth";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -251,11 +251,8 @@ describe("MCP connector authorization reviews", () => {
       },
     });
     for (const connection of connections) {
-      const safeDb = createSafeDb(
-        measuredDb,
-        [],
-        organizationId,
-        connection.userId,
+      const safeDb = asTestRaw<SafeDb>(
+        createSafeDb(measuredDb, [], organizationId, connection.userId),
       );
       connectionReads = 0;
       expect(
@@ -270,7 +267,9 @@ describe("MCP connector authorization reviews", () => {
     }
     Result.unwrap(
       await recordMcpAuthorizationReview({
-        safeDb: createSafeDb(testDb, [], organizationId, ownerId),
+        safeDb: asTestRaw<SafeDb>(
+          createSafeDb(testDb, [], organizationId, ownerId),
+        ),
         organizationId,
         userId: ownerId,
         connectorId: sharedConnectorId,
@@ -279,11 +278,8 @@ describe("MCP connector authorization reviews", () => {
       }),
     );
     for (const connection of connections) {
-      const safeDb = createSafeDb(
-        measuredDb,
-        [],
-        organizationId,
-        connection.userId,
+      const safeDb = asTestRaw<SafeDb>(
+        createSafeDb(measuredDb, [], organizationId, connection.userId),
       );
       connectionReads = 0;
       expect(
@@ -316,8 +312,7 @@ describe("MCP connector authorization reviews", () => {
     const audits: unknown[] = [];
     const approval = createApproveMcpAuthorizationHandler(
       async (connectorUrl) =>
-        bindDiscoveredMetadata({
-          connectorUrl,
+        Result.ok({
           protectedResource: {
             resource: connectorUrl,
             authorization_servers: ["https://auth.example.test/shared"],
@@ -357,7 +352,9 @@ describe("MCP connector authorization reviews", () => {
         oauthIssuer: "https://auth.example.test/configured",
       })
       .where(eq(mcpConnectors.id, sharedConnectorId));
-    const safeDb = createSafeDb(testDb, [], organizationId, memberId);
+    const safeDb = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [], organizationId, memberId),
+    );
     expect(
       await loadMcpConnectionById({
         connectionId: memberConnectionId,
@@ -441,7 +438,9 @@ describe("MCP connector authorization reviews", () => {
     ]);
     Result.unwrap(
       await recordMcpAuthorizationReview({
-        safeDb: createSafeDb(testDb, [], organizationId, ownerId),
+        safeDb: asTestRaw<SafeDb>(
+          createSafeDb(testDb, [], organizationId, ownerId),
+        ),
         organizationId,
         userId: ownerId,
         connectorId: sharedConnectorId,
@@ -475,13 +474,15 @@ describe("MCP connector authorization reviews", () => {
         "https://auth.example.test",
         "https://token.example.test",
       ],
-      status: "needs_reapproval",
+      status: "needs_reapproval" as const,
     };
     expect(await sharedReview()).toEqual([updatedReview]);
     // A later observation without endpoint origins keeps the stored ones.
     Result.unwrap(
       await recordMcpAuthorizationReview({
-        safeDb: createSafeDb(testDb, [], organizationId, ownerId),
+        safeDb: asTestRaw<SafeDb>(
+          createSafeDb(testDb, [], organizationId, ownerId),
+        ),
         organizationId,
         userId: ownerId,
         connectorId: sharedConnectorId,
@@ -500,7 +501,9 @@ describe("MCP connector authorization reviews", () => {
   });
 
   test("coordinates token refresh with a fenced lease and due retry", async () => {
-    const safeDb = createSafeDb(testDb, [], organizationId, ownerId);
+    const safeDb = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [], organizationId, ownerId),
+    );
     const now = new Date("2026-10-03T12:00:00.000Z");
     const firstLease = Result.unwrap(
       await claimMcpRefreshLease({

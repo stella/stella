@@ -3,7 +3,6 @@ import { expect, test } from "bun:test";
 
 import { createApproveMcpAuthorizationHandler } from "@/api/handlers/mcp-connectors/approve-authorization";
 import { toSafeId } from "@/api/lib/branded-types";
-import { bindDiscoveredMetadata } from "@/api/lib/mcp-upstream/oauth";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -27,8 +26,7 @@ const setup = ({
   const handler = createApproveMcpAuthorizationHandler(async (url) => {
     expect(url).toBe(connectorUrl);
     discovered += 1;
-    return bindDiscoveredMetadata({
-      connectorUrl,
+    return Result.ok({
       protectedResource: {
         resource: connectorUrl,
         authorization_servers: [issuer],
