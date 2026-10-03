@@ -158,7 +158,10 @@ const writeTemplateAttempt = async function* ({
   // On any uncertain upload or transaction failure, leave the durable intent
   // alone. A lost COMMIT acknowledgement must never delete published bytes.
   const writeCandidate = async () =>
-    await writeScannedObject({ file, key: s3Key, write: writeObject });
+    await writeScannedObject(
+      { file, key: s3Key, write: writeObject },
+      { type: "cleanup-intent", intent: intentIds },
+    );
   const { certainty, object: stored } = env.FEATURE_FILE_USAGE_LIMITS
     ? yield* Result.await(
         writeOrganizationFile({

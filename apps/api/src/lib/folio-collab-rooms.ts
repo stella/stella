@@ -874,11 +874,14 @@ export const storeFolioCollabSnapshot = async ({
       try: async () => {
         if (!env.FEATURE_FILE_USAGE_LIMITS) {
           return Result.ok(
-            await writeS3ObjectWithRetry({
-              contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-              data: snapshotBytes,
-              key: nextKey,
-            }),
+            await writeS3ObjectWithRetry(
+              {
+                contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+                data: snapshotBytes,
+                key: nextKey,
+              },
+              { type: "cleanup-intent", intent: nextCleanupIntentId },
+            ),
           );
         }
         return await writeOrganizationFile({
@@ -886,11 +889,14 @@ export const storeFolioCollabSnapshot = async ({
           objectKey: nextKey,
           sizeBytes: snapshotBytes.byteLength,
           write: async () =>
-            await writeS3ObjectWithRetry({
-              contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-              data: snapshotBytes,
-              key: nextKey,
-            }),
+            await writeS3ObjectWithRetry(
+              {
+                contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+                data: snapshotBytes,
+                key: nextKey,
+              },
+              { type: "cleanup-intent", intent: nextCleanupIntentId },
+            ),
         });
       },
       catch: snapshotStoreFailure,
