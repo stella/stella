@@ -4,7 +4,7 @@
  * Each builds its actor with `createRootRunActor` and reads what it works on
  * through the actor's `inputDb`, under the requester's membership at the time
  * the run executes. `scripts/ownership.ts` allows `createRootRunActor` in
- * exactly these modules (plus runs not yet moved onto `inputDb`).
+ * exactly these modules.
  */
 export const MEMBER_RUN_QUEUES = [
   {
@@ -22,6 +22,10 @@ export const MEMBER_RUN_QUEUES = [
   {
     queue: "report-exports",
     module: "apps/api/src/handlers/reports/report-export-queue.ts",
+  },
+  {
+    queue: "legal-list-verification-runs",
+    module: "apps/api/src/lib/lists/verification/run-queue.ts",
   },
 ] as const;
 

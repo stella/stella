@@ -301,13 +301,15 @@ type ResolvedFile = {
   pdfFileId: string | null;
 };
 
-/** The pinned file, or why it can no longer be read as pinned. */
+/** The pinned file, or why it can no longer be read as pinned. Read under
+ *  the requester's current membership: a requester who lost the matter
+ *  resolves nothing, so the run stops before the document is read. */
 const resolvePinnedFile = async (
   actor: RunActor,
   run: ClaimedRun,
 ): Promise<Result<ResolvedFile, VerificationRunErrorCode>> => {
   const row = (
-    await actor.writeDb(
+    await actor.inputDb(
       async (tx) =>
         await tx
           .select({ content: fields.content })
@@ -509,8 +511,9 @@ const executeRun = async (
   return null;
 };
 
-const processJob = async (data: ListVerificationJobData): Promise<void> => {
-  const actor = brandActor(data);
+export const processListVerificationRun = async (
+  actor: RunActor,
+): Promise<void> => {
   const claimed = await claimRun(actor);
   if (claimed === null) {
     return;
@@ -530,6 +533,10 @@ const processJob = async (data: ListVerificationJobData): Promise<void> => {
   if (outcome.value !== null) {
     await setRunFailed(actor, outcome.value);
   }
+};
+
+const processJob = async (data: ListVerificationJobData): Promise<void> => {
+  await processListVerificationRun(brandActor(data));
 };
 
 export const initListVerificationRunWorker = () => {

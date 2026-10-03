@@ -613,14 +613,11 @@ export const OWNERSHIP = [
           "apps/api/src/lib/document-translation/run-queue.ts",
           "apps/api/src/lib/bilingual/run-queue.ts",
           "apps/api/src/handlers/reports/report-export-queue.ts",
+          "apps/api/src/lib/lists/verification/run-queue.ts",
         ].map((modulePath) => ({
           path: modulePath,
           reason: "Member run; reads its inputs through inputDb.",
         })),
-        {
-          path: "apps/api/src/lib/lists/verification/run-queue.ts",
-          reason: "Member run whose inputs still read through writeDb.",
-        },
       ],
     },
   },
