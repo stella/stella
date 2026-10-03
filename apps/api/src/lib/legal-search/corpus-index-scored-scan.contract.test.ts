@@ -23,6 +23,7 @@ import { buildCaseLawProjectionDocuments } from "@/api/lib/legal-search/corpus-i
 import type { CaseLawProjectionInput } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
+import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import {
   blendStableCitationAuthority,
@@ -251,8 +252,16 @@ const readScanPage = async (
       stableBlendUpperBound(next, DEFAULT_AUTHORITY_WEIGHT),
     rankCandidates: async (candidates) => ({
       context: null,
+      groups: candidates.map((candidate) =>
+        corpusSearchGroupToken(candidate.id),
+      ),
       ranked: blendStableCitationAuthority({
-        candidates,
+        candidates: candidates.filter(
+          (candidate) =>
+            !parsedCursor?.excludedGroups?.includes(
+              corpusSearchGroupToken(candidate.id),
+            ),
+        ),
         authorityById: new Map(),
       }),
     }),

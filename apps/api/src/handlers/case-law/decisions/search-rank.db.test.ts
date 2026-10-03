@@ -1,5 +1,5 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
@@ -20,7 +20,18 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  readCorpusIndexSearchPage,
+  type SearchCursor,
+} from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  decodeCorpusSearchCursor,
+  encodeCorpusSearchCursor,
+} from "@/api/lib/legal-search/corpus-search-cursor";
+import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
+import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
+import { LIMITS } from "@/api/lib/limits";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
@@ -37,6 +48,8 @@ const supremeId = createSafeId<"caseLawDecision">();
 const districtId = createSafeId<"caseLawDecision">();
 const groupCsId = createSafeId<"caseLawDecision">();
 const groupEnId = createSafeId<"caseLawDecision">();
+const singletonId = createSafeId<"caseLawDecision">();
+const originalFetch = globalThis.fetch;
 
 let client: PGlite;
 let caseLawDb: CaseLawPublicReadDb;
@@ -112,6 +125,17 @@ beforeAll(
       },
       {
         ...indexed,
+        id: singletonId,
+        sourceId,
+        caseNumber: "SYN 3/2026",
+        citationAuthority: 0,
+        court: "Synthetic court",
+        country: "CZE",
+        language: "cs",
+        languageGroupKey: null,
+      },
+      {
+        ...indexed,
         id: groupEnId,
         sourceId,
         caseNumber: "SYN 2/2026 en",
@@ -183,6 +207,10 @@ afterAll(async () => {
   await client.close();
 });
 
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
 test("a fresh supreme decision outranks an equally matching cited district one", async () => {
   const { ranked } = await rank([
     { id: districtId, score: 0.5 },
@@ -231,3 +259,116 @@ test("ranking one candidate set twice yields the same order", async () => {
     first.ranked.map((hit) => hit.id),
   );
 });
+
+test.each(
+  ["ordinary", "capped"].flatMap((mode) =>
+    [1, 2, 3].map((limit) => ({ mode, limit })),
+  ),
+)(
+  "$mode case-law cursor walk returns every judgment once at limit $limit",
+  async ({ mode, limit }) => {
+    const reachable =
+      LIMITS.corpusIndexSearchMaxRounds *
+      LIMITS.corpusIndexSearchCandidateLimit;
+    // The later English sibling wins a fresh ranking. Both it and the
+    // ungrouped singleton must stay excluded after the window advances.
+    const ids =
+      mode === "capped"
+        ? [
+            groupCsId,
+            singletonId,
+            ...Array.from({ length: reachable - 2 }, () => groupCsId),
+            groupEnId,
+            singletonId,
+            supremeId,
+            districtId,
+          ]
+        : [groupCsId, singletonId, groupEnId, supremeId, districtId];
+    const engineHits = ids.map((id, index) => ({
+      document_id: id,
+      chunk_id: `passage-${index}`,
+    }));
+    const stub = async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const body: Record<string, unknown> =
+        typeof init?.body === "string" ? JSON.parse(init.body) : {};
+      const offset = Number(body["start_offset"] ?? 0);
+      return new Response(
+        JSON.stringify({
+          num_hits: engineHits.length,
+          hits: engineHits.slice(offset, offset + Number(body["max_hits"])),
+          snippets: [],
+        }),
+        { status: 200 },
+      );
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    const seen: string[] = [];
+    let cursor: SearchCursor | null = null;
+    let finished = false;
+    let windowMoved = false;
+    const readPage = async (parsedCursor: SearchCursor | null) =>
+      await readCorpusIndexSearchPage({
+        observer: "unobserved",
+        cluster: "q09",
+        indexId: corpusIndexId(GENERATION, "CZE"),
+        query: "text:rank",
+        limit,
+        parsedCursor,
+        order: RELEVANCE_ORDER,
+        snippetFields: [],
+        extractId: (hit) =>
+          typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+        extractSnippet: () => null,
+        // Force the scan to reach either exhaustion or its round cap.
+        unseenScoreUpperBound: (score) => score + 1,
+        rankCandidates: async (candidates) =>
+          await rehydrateCaseLawCandidates({
+            body: { country: "CZE", query: "search rank" },
+            candidates,
+            caseLawDb,
+            courtWeights: courtWeightMapFromSeed(),
+            generation: GENERATION,
+            excludedGroups: new Set(parsedCursor?.excludedGroups),
+          }),
+      });
+    for (let pageIndex = 0; pageIndex < 10; pageIndex += 1) {
+      const page = await readPage(cursor);
+      expect(page.pageRanked.length).toBeLessThanOrEqual(limit);
+      if (pageIndex === 0) {
+        expect(page.scan.roundCapHit).toBe(mode === "capped");
+      }
+      seen.push(
+        ...page.pageRanked.map((hit) =>
+          hit.id === groupCsId || hit.id === groupEnId ? "rank-group" : hit.id,
+        ),
+      );
+      if (page.nextCursor === null) {
+        finished = true;
+        break;
+      }
+      windowMoved ||= page.nextCursor.windowStart === reachable;
+      const wire = encodeCorpusSearchCursor({
+        ...page.nextCursor,
+        dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+        target: null,
+      });
+      const decoded = decodeCorpusSearchCursor(wire);
+      expect(decoded).not.toBeNull();
+      expect(decoded?.excludedGroups).toEqual(page.nextCursor.excludedGroups);
+      cursor = decoded;
+    }
+
+    expect(finished).toBe(true);
+    expect(windowMoved).toBe(mode === "capped");
+    expect(seen).toHaveLength(new Set(seen).size);
+    expect(seen.toSorted()).toEqual(
+      ["rank-group", singletonId, supremeId, districtId].toSorted(),
+    );
+  },
+);

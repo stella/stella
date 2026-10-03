@@ -23,6 +23,7 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { tLegalAlternatives } from "@/api/lib/legal-search/legal-alternatives";
 import {
   tPublicCountryUnavailable,
@@ -37,7 +38,11 @@ export const searchDecisionsBodySchema = t.Object({
     maxLength: LIMITS.searchQueryMaxLength,
   }),
   limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: t.Optional(
+    tPaginationCursor({
+      maxChars: CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+    }),
+  ),
   court: t.Optional(t.String({ maxLength: 512 })),
   courts: t.Optional(
     t.Array(t.String({ minLength: 1, maxLength: 512 }), {

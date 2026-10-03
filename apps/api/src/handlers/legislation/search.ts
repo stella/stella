@@ -47,6 +47,7 @@ import type {
   CorpusSearchPhase,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import {
+  corpusSearchGroupToken,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
   isStaleCorpusSearchCursor,
@@ -82,7 +83,6 @@ import {
   pinnedLegislationWorks,
   pinnedLegislationWorkScore,
   shownLegislationVersionId,
-  legislationWorkToken,
 } from "@/api/lib/legal-search/legislation-work-collapse";
 import type { LegislationWorkRepresentative } from "@/api/lib/legal-search/legislation-work-collapse";
 import {
@@ -1077,7 +1077,7 @@ const corpusIndexSearch = async ({
         const row = page.context.byId.get(hit.documentId);
         return row === undefined
           ? panic("Strict legislation hit has no Work")
-          : legislationWorkToken(legislationWorkRefKey(row));
+          : corpusSearchGroupToken(legislationWorkRefKey(row));
       }),
     ),
   ];

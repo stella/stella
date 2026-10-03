@@ -31,6 +31,7 @@ import {
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
 import {
+  corpusSearchGroupToken,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
   isStaleCorpusSearchCursor,
@@ -327,9 +328,16 @@ const searchResult = async (
       // surface a hit we cannot render.
       return {
         context: { displayById },
+        groups: candidates
+          .filter((candidate) => displayById.has(candidate.id))
+          .map((candidate) => corpusSearchGroupToken(candidate.id)),
         ranked: blendStableCitationAuthority({
-          candidates: candidates.filter((candidate) =>
-            displayById.has(candidate.id),
+          candidates: candidates.filter(
+            (candidate) =>
+              displayById.has(candidate.id) &&
+              !parsedCursor?.excludedGroups?.includes(
+                corpusSearchGroupToken(candidate.id),
+              ),
           ),
           authorityById,
         }),

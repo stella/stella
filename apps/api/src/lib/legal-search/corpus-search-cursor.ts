@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * The wire format of a corpus-index search cursor: its one owner.
  *
@@ -69,8 +70,7 @@
  *
  * One metadata segment therefore means a window rank and nothing else.
  */
-
-import { panic, Result } from "better-result";
+import { createHash } from "node:crypto";
 import * as v from "valibot";
 
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
@@ -128,6 +128,13 @@ const WINDOW_RANK_PATTERN = /^\d{1,10}$/u;
 
 /** Characters of one excluded-group token: base64url, fixed width. */
 export const CORPUS_CURSOR_GROUP_TOKEN_CHARS = 6;
+/** Fixed-width identity shared by every ranker and the cursor codec. */
+export const corpusSearchGroupToken = (key: string): string =>
+  createHash("sha256")
+    .update(key)
+    .digest("base64url")
+    .slice(0, CORPUS_CURSOR_GROUP_TOKEN_CHARS);
+
 const GROUP_TOKEN_PATTERN = new RegExp(
   `^[A-Za-z0-9_-]{${String(CORPUS_CURSOR_GROUP_TOKEN_CHARS)}}$`,
   "u",

@@ -1330,6 +1330,7 @@ type RehydrateCaseLawCandidatesOptions = {
   /** The request's record of rows read so far; only ids absent from it are read. */
   hydrated?: HydratedDecisionRows | undefined;
   timeDbRead?: TimeDbRead | undefined;
+  excludedGroups?: ReadonlySet<string> | undefined;
 };
 
 /**
@@ -1429,6 +1430,7 @@ export const rehydrateCaseLawCandidates = async ({
   generation,
   hydrated = new Map(),
   timeDbRead = untimedDbRead,
+  excludedGroups = new Set(),
 }: RehydrateCaseLawCandidatesOptions) => {
   const ids = candidates
     .filter((candidate) => !hydrated.has(candidate.id))
@@ -1482,7 +1484,7 @@ export const rehydrateCaseLawCandidates = async ({
     courtTierById,
     sort: body.sort ?? DEFAULT_SEARCH_SORT,
   });
-  const { representatives } = collapseByLanguageGroup(
+  const { representatives, groupTokenById } = collapseByLanguageGroup(
     ranked,
     (hitId) => byId.get(hitId)?.languageGroupKey ?? null,
   );
@@ -1490,7 +1492,17 @@ export const rehydrateCaseLawCandidates = async ({
   // No context travels with the ranking: what a page displays is read once
   // the page is decided, for its ids only, so nothing the blend read has to
   // be carried through the scan.
-  return { context: null, ranked: representatives };
+  return {
+    context: null,
+    ranked: representatives.filter((hit) => {
+      const token = groupTokenById.get(hit.id);
+      if (token === undefined) {
+        return panic("Missing language group token for representative");
+      }
+      return !excludedGroups.has(token);
+    }),
+    groups: [...groupTokenById.values()],
+  };
 };
 
 type DecisionIdentity = Extract<DecisionQueryIntent, { type: "identifier" }>;
@@ -1987,6 +1999,7 @@ export const searchCorpusIndexDecisions = async (
         courtWeights,
         generation,
         hydrated,
+        excludedGroups: new Set(parsedCursor?.excludedGroups),
         timeDbRead: async (run) =>
           await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),
       });
@@ -2143,6 +2156,7 @@ export const searchCorpusIndexDecisions = async (
         courtWeights,
         generation,
         hydrated,
+        excludedGroups: new Set(parsedCursor?.excludedGroups),
         timeDbRead: async (run) =>
           await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),
       }),

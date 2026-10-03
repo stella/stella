@@ -70,8 +70,8 @@ export type SearchCursor = {
    * Groups a ranker folds its hits into (`CorpusIndexRanking.groups`) that
    * earlier windows already showed. A window move hands them on, because a
    * group's deeper member in the next window would otherwise show it again;
-   * the ranker leaves them out. Absent for a ranker that folds nothing and
-   * before any window has moved.
+   * the ranker leaves them out. Singleton documents also have a token.
+   * Absent before any window has moved.
    */
   excludedGroups?: readonly string[] | undefined;
 };
@@ -80,10 +80,11 @@ type CorpusIndexRanking<TContext> = {
   ranked: readonly RankedHit[];
   context: TContext;
   /**
-   * Tokens of the groups the ranked hits stand for, when the ranker folds
-   * several hits into one (`SearchCursor.excludedGroups`).
+   * Tokens of every emitted group, including singleton documents and any
+   * cursor group the ranker omits, for a continuation into the next window.
+   * Rankers must exclude tokens carried in `SearchCursor.excludedGroups`.
    */
-  groups?: readonly string[] | undefined;
+  groups: readonly string[];
 };
 
 /**
@@ -591,7 +592,7 @@ const withGroups = (
  */
 const groupsPastWindow = (
   carried: ReadonlySet<string>,
-  ranking: { groups?: readonly string[] | undefined },
+  ranking: Pick<CorpusIndexRanking<unknown>, "groups">,
 ): string[] | null => {
   const groups = new Set([...carried, ...new Set(ranking.groups)]);
   return groups.size > LIMITS.corpusIndexSearchMaxExcludedGroups
@@ -678,13 +679,8 @@ const resolveCorpusSearchCursor = ({
       score:
         unseenScoreBound +
         Math.max(1, Math.abs(unseenScoreBound)) * Number.EPSILON,
-      // The document the scan stopped inside: the one whose passages can
-      // run across the window edge, and the only one the next window must
-      // drop by name. A document that matched here and again further down
-      // can still repeat on a later page unless its ranker folds it into a
-      // group it reports — the price of moving the window at all, and the
-      // reason the blend bound is proven within a window rather than across
-      // the cap.
+      // This id is a scan boundary, not an emitted hit. Group tokens,
+      // including singleton documents, exclude results from earlier windows.
       id: boundaryId,
       sort,
       windowStart: startOffset,
@@ -804,14 +800,9 @@ export const readCorpusIndexSearchPage = async <TContext>({
         continue;
       }
       lastScannedId = id;
-      // The cursor names a hit the reader already has. Its remaining passages
-      // are a continuation of that hit, not a new one — which is what a window
-      // opening in the middle of a long document's passages returns, and the
-      // score filter below cannot catch, because in a fresh window those
-      // passages score below the cursor rather than above it.
-      if (id === parsedCursor?.id) {
-        continue;
-      }
+      // Keep emitted candidates while replaying the window: their best
+      // member must still represent the group when the ranker folds it.
+      // The cursor comparison runs only after that fold.
 
       // Hits arrive best-first, so the first hit seen for a document is its
       // best-scoring passage: it sets the document's rank, the passage a

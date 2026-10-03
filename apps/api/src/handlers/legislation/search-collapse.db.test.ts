@@ -26,13 +26,13 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { isAfterSearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
+import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
 import {
   inForceToday,
   legislationVersionRef,
 } from "@/api/lib/legal-search/legislation-validity-window";
-import { legislationWorkToken } from "@/api/lib/legal-search/legislation-work-collapse";
 import {
   legislationWorkRefKey,
   readNamedLegislationWorks,
@@ -505,7 +505,7 @@ describe("acts the query names come first", () => {
 
 describe("acts an earlier scan window showed", () => {
   test("stay off the page when the cursor carries them", async () => {
-    const codeToken = legislationWorkToken(
+    const codeToken = corpusSearchGroupToken(
       legislationWorkRefKey({ sourceId, eli: code2014.eli, language: "cs" }),
     );
     const scan = candidates([code2014, 0.9], [old1964, 0.5]);
