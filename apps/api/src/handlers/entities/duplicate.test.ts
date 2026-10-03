@@ -561,7 +561,7 @@ describe("duplicate name collisions", () => {
   });
   test("insertion plans preserve arbitrary display labels and derive both file names", async () => {
     await assertProperty(
-      "sibling insertion pairs preserve display labels and derive sanitized file names",
+      "insertion plans preserve arbitrary display labels and derive both file names",
       fc.asyncProperty(
         fc.string({ minLength: 1, maxLength: 80 }),
         async (label) => {
