@@ -314,8 +314,8 @@ const searchDecisions = async ({
       }
       return {
         country,
-        result: await search(
-          {
+        result: await search({
+          body: {
             query,
             limit,
             country,
@@ -323,9 +323,9 @@ const searchDecisions = async ({
               ? {}
               : { cursor: position.cursor }),
           },
-          caseLawPublicReadDb,
+          caseLawDb: caseLawPublicReadDb,
           observer,
-        ),
+        }),
       } as const;
     },
   });
@@ -415,8 +415,8 @@ const searchStatutes = async ({
       }
       return {
         jurisdiction,
-        result: await search(
-          {
+        result: await search({
+          body: {
             query,
             limit,
             jurisdiction,
@@ -424,9 +424,9 @@ const searchStatutes = async ({
               ? {}
               : { cursor: position.cursor }),
           },
-          legislationPublicReadDb,
+          legislationDb: legislationPublicReadDb,
           observer,
-        ),
+        }),
       } as const;
     },
   });

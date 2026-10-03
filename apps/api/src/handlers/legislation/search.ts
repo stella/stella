@@ -1167,12 +1167,19 @@ const corpusIndexSearch = async ({
   };
 };
 
-export const searchLegislationHandler = async (
-  body: SearchLegislationBody,
-  legislationDb: LegislationReadDb,
-  observer: RegistryRequestObservation,
+type SearchLegislationHandlerOptions = {
+  body: SearchLegislationBody;
+  legislationDb: LegislationReadDb;
+  observer: RegistryRequestObservation;
+  dependencies?: SearchLegislationDependencies;
+};
+
+export const searchLegislationHandler = async ({
+  body,
+  legislationDb,
+  observer,
   dependencies = defaultSearchLegislationDependencies,
-) => {
+}: SearchLegislationHandlerOptions) => {
   const unavailable =
     body.jurisdiction === undefined
       ? null
@@ -1322,11 +1329,11 @@ const searchLegislation = createSafeRootHandler(
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await searchLegislationHandler(
+          await searchLegislationHandler({
             body,
-            legislationPublicReadDb,
-            "unobserved",
-          ),
+            legislationDb: legislationPublicReadDb,
+            observer: "unobserved",
+          }),
       ),
     );
     return Result.ok(response);

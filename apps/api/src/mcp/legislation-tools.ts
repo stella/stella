@@ -562,8 +562,8 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
   const result = await (
     context.testDependencies?.searchLegislationHandler ??
     defaultSearchLegislationHandler
-  )(
-    {
+  )({
+    body: {
       query,
       limit,
       jurisdiction,
@@ -574,9 +574,9 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
       ...(dateFrom === undefined ? {} : { dateFrom }),
       ...(dateTo === undefined ? {} : { dateTo }),
     },
-    legislationPublicReadDb,
+    legislationDb: legislationPublicReadDb,
     observer,
-  );
+  });
   if (!isLegislationSearchSuccess(result)) {
     const failure = handlerStatusOf(result);
     return failure?.message === "Invalid cursor"

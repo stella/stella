@@ -48,15 +48,15 @@ export const createPublicStatuteSearch = (search = searchLegislationHandler) =>
             case "unreadable":
               return status(400, { message: countryRead.message });
             case "read":
-              return await search(
-                {
+              return await search({
+                body: {
                   ...query,
                   jurisdiction: countryRead.country,
                   limit: query.limit ?? LIMITS.publicStatuteSearchPageSizeMax,
                 },
-                legislationPublicReadDb,
-                "unobserved",
-              );
+                legislationDb: legislationPublicReadDb,
+                observer: "unobserved",
+              });
             default:
               countryRead satisfies never;
               return panic("Unhandled public statute country state");

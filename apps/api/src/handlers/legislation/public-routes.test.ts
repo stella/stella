@@ -54,11 +54,12 @@ describe("public statute routes", () => {
       "/law/sitemap/statutes/shard?country=svk",
     ];
     const requests = urls.map((url) => new Request(`http://localhost${url}`));
-    const search = await searchLegislationHandler(
-      { jurisdiction: "SVK", query: "synthetic" },
-      () => panic("Unavailable country must not reach the database"),
-      "unobserved",
-    );
+    const search = await searchLegislationHandler({
+      body: { jurisdiction: "SVK", query: "synthetic" },
+      legislationDb: () =>
+        panic("Unavailable country must not reach the database"),
+      observer: "unobserved",
+    });
     expect(search).toMatchObject({
       code: 503,
       response: {

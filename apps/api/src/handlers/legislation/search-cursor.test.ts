@@ -44,11 +44,11 @@ test.each(["DEU", "cze", "cz", "*"])(
   "jurisdiction %s is refused with the admitted codes before reading",
   async (jurisdiction) => {
     const { db, reads } = unreachableDb();
-    const result = await searchLegislationHandler(
-      { jurisdiction, query: "nájemné" },
-      db,
-      "unobserved",
-    );
+    const result = await searchLegislationHandler({
+      body: { jurisdiction, query: "nájemné" },
+      legislationDb: db,
+      observer: "unobserved",
+    });
 
     expect(result).toMatchObject({
       code: 400,
@@ -70,11 +70,11 @@ test.each(
   "pending jurisdiction %s returns its capability before reading",
   async (jurisdiction) => {
     const { db, reads } = unreachableDb();
-    const result = await searchLegislationHandler(
-      { jurisdiction, query: "nájemné" },
-      db,
-      "unobserved",
-    );
+    const result = await searchLegislationHandler({
+      body: { jurisdiction, query: "nájemné" },
+      legislationDb: db,
+      observer: "unobserved",
+    });
     expect(result).toMatchObject({
       code: 503,
       response: publicCountryUnavailable(jurisdiction),
@@ -93,12 +93,12 @@ test.each(["corpus-index", "pg-fts"] as const)(
   async (provider) => {
     const { db, reads } = unreachableDb();
 
-    const result = await searchLegislationHandler(
-      { cursor: CASE_LAW_CURSOR, query: "nájemné" },
-      db,
-      "unobserved",
-      { provider, loadSearchConfigs: async () => [] },
-    );
+    const result = await searchLegislationHandler({
+      body: { cursor: CASE_LAW_CURSOR, query: "nájemné" },
+      legislationDb: db,
+      observer: "unobserved",
+      dependencies: { provider, loadSearchConfigs: async () => [] },
+    });
 
     expect(result).not.toHaveProperty("items");
     expect(result).toMatchObject({
@@ -138,12 +138,12 @@ test.each(["corpus-index", "pg-fts"] as const)(
     for (const change of changes) {
       const { db, reads } = unreachableDb();
       // db-await-in-loop: each cursor replay independently tests the boundary
-      const result = await searchLegislationHandler(
-        { ...body, ...change, cursor },
-        db,
-        "unobserved",
-        { provider, loadSearchConfigs: async () => [] },
-      );
+      const result = await searchLegislationHandler({
+        body: { ...body, ...change, cursor },
+        legislationDb: db,
+        observer: "unobserved",
+        dependencies: { provider, loadSearchConfigs: async () => [] },
+      });
       expect(result).toMatchObject({
         code: 400,
         response: { message: "Invalid cursor" },

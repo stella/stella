@@ -2171,7 +2171,7 @@ describe("OpenAI-compatible MCP tools", () => {
       caseLawPublicReadDb,
     );
     searchDecisionsHandlerMock.mockImplementation(
-      async (body, _caseLawDb, observer) =>
+      async ({ body, observer }) =>
         await searchCorpusIndexDecisions({
           body,
           caseLawDb: unreadableDb,
@@ -2307,8 +2307,8 @@ describe("OpenAI-compatible MCP tools", () => {
 
     // snake_case in, the body's camelCase out, and `sort` reaches the handler
     // as the closed value the public body declares.
-    expect(searchDecisionsHandlerMock).toHaveBeenCalledWith(
-      {
+    expect(searchDecisionsHandlerMock).toHaveBeenCalledWith({
+      body: {
         country: "CZE",
         court: "Nejvyšší soud",
         dateFrom: "2024-01-01",
@@ -2319,9 +2319,9 @@ describe("OpenAI-compatible MCP tools", () => {
         sort: "newest",
         sourceId: "11111111-1111-4111-8111-111111111111",
       },
-      caseLawPublicReadDb,
+      caseLawDb: caseLawPublicReadDb,
       observer,
-    );
+    });
 
     expect(parseToolPayload(result)).toEqual({
       facets: {
@@ -2932,7 +2932,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("search_case_law merges several phrasings by best rank", async () => {
     searchDecisionsHandlerMock.mockImplementation(
-      async ({ query }: { query: string }) => ({
+      async ({ body: { query } }: { body: { query: string } }) => ({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: {
           court: [],
@@ -3007,14 +3007,14 @@ describe("OpenAI-compatible MCP tools", () => {
     // `limit` bounds the merged page, so each phrasing was asked for half.
     expect(
       searchDecisionsHandlerMock.mock.calls.map(
-        (call) => asTestRaw<{ limit: number }>(call.at(0)).limit,
+        (call) => asTestRaw<{ body: { limit: number } }>(call.at(0)).body.limit,
       ),
     ).toEqual([5, 5]);
   });
 
   test("search_case_law resumes each phrasing from its own sub-cursor", async () => {
     searchDecisionsHandlerMock.mockImplementation(
-      async ({ query }: { query: string }) => ({
+      async ({ body: { query } }: { body: { query: string } }) => ({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: null,
         hits: [createCaseLawHit(`dec-${query}`, query)],
@@ -3052,11 +3052,14 @@ describe("OpenAI-compatible MCP tools", () => {
     // The exhausted phrasing is not re-run, and the other resumes where its
     // own page ended.
     expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(1);
-    expect(searchDecisionsHandlerMock).toHaveBeenCalledWith(
-      expect.objectContaining({ cursor: "engine-first-2", query: "first" }),
-      caseLawPublicReadDb,
+    expect(searchDecisionsHandlerMock).toHaveBeenCalledWith({
+      body: expect.objectContaining({
+        cursor: "engine-first-2",
+        query: "first",
+      }),
+      caseLawDb: caseLawPublicReadDb,
       observer,
-    );
+    });
   });
 
   test("search_case_law reports what an exhausted phrasing required", async () => {
@@ -3065,7 +3068,7 @@ describe("OpenAI-compatible MCP tools", () => {
     // claim every one of its words was required, which is the opposite of
     // what page one did with it.
     searchDecisionsHandlerMock.mockImplementation(
-      async ({ query }: { query: string }) => ({
+      async ({ body: { query } }: { body: { query: string } }) => ({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: null,
         hits: [createCaseLawHit(`dec-${query}`, query)],
@@ -3143,7 +3146,7 @@ describe("OpenAI-compatible MCP tools", () => {
       CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
     );
     searchDecisionsHandlerMock.mockImplementation(
-      async ({ query }: { query: string }) => ({
+      async ({ body: { query } }: { body: { query: string } }) => ({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: null,
         hits: [createCaseLawHit("dec-a", "a")],
@@ -3188,11 +3191,11 @@ describe("OpenAI-compatible MCP tools", () => {
         toolName: "search_case_law",
       });
     expect(continued.isError).toBeUndefined();
-    expect(searchDecisionsHandlerMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ cursor: longestEngineCursor }),
-      caseLawPublicReadDb,
+    expect(searchDecisionsHandlerMock).toHaveBeenLastCalledWith({
+      body: expect.objectContaining({ cursor: longestEngineCursor }),
+      caseLawDb: caseLawPublicReadDb,
       observer,
-    );
+    });
   });
 
   test("search_case_law rejects a cursor issued for another query count", async () => {
@@ -3754,11 +3757,13 @@ describe("OpenAI-compatible MCP tools", () => {
         toolName: "search_legislation",
       });
 
-      expect(searchLegislationHandlerMock.mock.calls.at(0)?.at(0)).toEqual({
-        jurisdiction: "CZE",
-        limit: 10,
-        query: "nahrada skody",
-      });
+      expect(searchLegislationHandlerMock.mock.calls.at(0)?.at(0).body).toEqual(
+        {
+          jurisdiction: "CZE",
+          limit: 10,
+          query: "nahrada skody",
+        },
+      );
       expect(parseToolPayload(result)).toEqual({
         nextCursor: "legislation_cursor_2",
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
@@ -3835,7 +3840,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    expect(searchLegislationHandlerMock.mock.calls.at(0)?.at(0)).toEqual({
+    expect(searchLegislationHandlerMock.mock.calls.at(0)?.at(0).body).toEqual({
       cursor,
       jurisdiction: "CZE",
       limit: 100,
@@ -3860,7 +3865,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    expect(searchLegislationHandlerMock.mock.calls.at(0)?.at(0)).toEqual({
+    expect(searchLegislationHandlerMock.mock.calls.at(0)?.at(0).body).toEqual({
       jurisdiction: "CZE",
       limit: 10,
       query: "nahrada skody",
@@ -4404,11 +4409,11 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "search_case_law",
     });
 
-    expect(searchDecisionsHandlerMock).toHaveBeenCalledWith(
-      expect.objectContaining({ dateFrom: "2026-10-01" }),
-      caseLawPublicReadDb,
+    expect(searchDecisionsHandlerMock).toHaveBeenCalledWith({
+      body: expect.objectContaining({ dateFrom: "2026-10-01" }),
+      caseLawDb: caseLawPublicReadDb,
       observer,
-    );
+    });
   });
 
   test("search_case_law rejects invalid source IDs", async () => {
@@ -4442,7 +4447,7 @@ describe("OpenAI-compatible MCP tools", () => {
    */
   describe("search_case_law reads a full-property client's placeholders", () => {
     const searchedBody = (): Record<string, unknown> => {
-      const body = searchDecisionsHandlerMock.mock.calls.at(0)?.at(0);
+      const body = searchDecisionsHandlerMock.mock.calls.at(0)?.at(0).body;
       if (!isRecord(body)) {
         throw new Error("expected the search to run");
       }

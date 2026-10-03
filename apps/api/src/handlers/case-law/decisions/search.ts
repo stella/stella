@@ -283,11 +283,17 @@ type PostgresSearchBody = Omit<
   hasLegalSentence?: never;
 };
 
-export const searchDecisionsHandler = async (
-  body: SearchDecisionsBody,
-  caseLawDb: CaseLawPublicReadDb,
-  observer: RegistryRequestObservation,
-) => {
+type SearchDecisionsHandlerOptions = {
+  body: SearchDecisionsBody;
+  caseLawDb: CaseLawPublicReadDb;
+  observer: RegistryRequestObservation;
+};
+
+export const searchDecisionsHandler = async ({
+  body,
+  caseLawDb,
+  observer,
+}: SearchDecisionsHandlerOptions) => {
   const countryRead = readPublicLawCountry(body.country, {
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
   });

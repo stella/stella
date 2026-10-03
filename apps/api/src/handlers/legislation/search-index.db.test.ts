@@ -48,7 +48,9 @@ const searchDependencies = {
       languages: [],
     },
   ],
-} satisfies NonNullable<Parameters<typeof searchLegislationHandler>[3]>;
+} satisfies NonNullable<
+  Parameters<typeof searchLegislationHandler>[0]["dependencies"]
+>;
 
 let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let db: ReturnType<typeof drizzle>;
@@ -361,12 +363,12 @@ test("an unreadable corpus row does not block the bounded missing scan", async (
     })
     .where(eq(legislationSearchDocuments.documentId, unavailableCorpusId));
   expect(
-    await searchLegislationHandler(
-      { query: "retry pending sentinel" },
-      searchReadDb,
-      "unobserved",
-      searchDependencies,
-    ),
+    await searchLegislationHandler({
+      body: { query: "retry pending sentinel" },
+      legislationDb: searchReadDb,
+      observer: "unobserved",
+      dependencies: searchDependencies,
+    }),
   ).toMatchObject({ items: [], total: SEARCH_TOTAL_NOT_COUNTED });
 
   await db
@@ -395,12 +397,12 @@ test("an unreadable corpus row does not block the bounded missing scan", async (
   expect(repaired?.searchableText).toContain("repaired corpus sentinel");
   expect(repaired?.retryAfter).toBeNull();
   expect(
-    await searchLegislationHandler(
-      { query: "repaired corpus sentinel" },
-      searchReadDb,
-      "unobserved",
-      searchDependencies,
-    ),
+    await searchLegislationHandler({
+      body: { query: "repaired corpus sentinel" },
+      legislationDb: searchReadDb,
+      observer: "unobserved",
+      dependencies: searchDependencies,
+    }),
   ).toMatchObject({
     items: [{ documentId: unavailableCorpusId }],
     total: SEARCH_TOTAL_NOT_COUNTED,

@@ -33,9 +33,9 @@ const testSearchRoute = (search: typeof searchLegislationHandler) => {
 };
 
 test("signed-out statute search normalizes country and forwards filters through the public read boundary", async () => {
-  const calls: Parameters<typeof searchLegislationHandler>[] = [];
-  const app = testSearchRoute(async (...args) => {
-    calls.push(args);
+  const calls: Parameters<typeof searchLegislationHandler>[0][] = [];
+  const app = testSearchRoute(async (options) => {
+    calls.push(options);
     return result;
   });
   const response = await app.handle(
@@ -46,7 +46,7 @@ test("signed-out statute search normalizes country and forwards filters through 
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual(result);
   expect(calls).toHaveLength(1);
-  expect(calls.at(0)?.at(0)).toEqual({
+  expect(calls.at(0)?.body).toEqual({
     query: "náhrada",
     jurisdiction: "CZE",
     documentType: "act",
@@ -56,14 +56,14 @@ test("signed-out statute search normalizes country and forwards filters through 
     dateTo: "2025-01-01",
     limit: 20,
   });
-  expect(calls.at(0)?.at(1)).toBe(legislationPublicReadDb);
-  expect(calls.at(0)?.at(2)).toBe("unobserved");
+  expect(calls.at(0)?.legislationDb).toBe(legislationPublicReadDb);
+  expect(calls.at(0)?.observer).toBe("unobserved");
 });
 
 test("public page limits are bounded before the shared operation runs", async () => {
-  const calls: Parameters<typeof searchLegislationHandler>[] = [];
-  const app = testSearchRoute(async (...args) => {
-    calls.push(args);
+  const calls: Parameters<typeof searchLegislationHandler>[0][] = [];
+  const app = testSearchRoute(async (options) => {
+    calls.push(options);
     return result;
   });
   for (const limit of [0, 21, 100]) {
@@ -79,7 +79,7 @@ test("public page limits are bounded before the shared operation runs", async ()
     new Request("http://localhost/law/statutes/search?query=text&country=CZE"),
   );
   expect(response.status).toBe(200);
-  expect(calls.at(0)?.at(0)).toMatchObject({
+  expect(calls.at(0)?.body).toMatchObject({
     limit: 20,
   });
 });
@@ -87,9 +87,9 @@ test("public page limits are bounded before the shared operation runs", async ()
 test.each(["Freedonia", "SVK"])(
   "unadmitted public country %s never reaches retrieval",
   async (country) => {
-    const calls: Parameters<typeof searchLegislationHandler>[] = [];
-    const app = testSearchRoute(async (...args) => {
-      calls.push(args);
+    const calls: Parameters<typeof searchLegislationHandler>[0][] = [];
+    const app = testSearchRoute(async (options) => {
+      calls.push(options);
       return result;
     });
     const response = await app.handle(
@@ -119,9 +119,9 @@ test("public pagination preserves the corpus phase cursor in both directions", a
   });
   const decoded = decodeCorpusSearchCursor(cursor);
   expect(decoded?.phase?.type).toBe("relaxed");
-  const calls: Parameters<typeof searchLegislationHandler>[] = [];
-  const app = testSearchRoute(async (...args) => {
-    calls.push(args);
+  const calls: Parameters<typeof searchLegislationHandler>[0][] = [];
+  const app = testSearchRoute(async (options) => {
+    calls.push(options);
     return { ...result, nextCursor: cursor };
   });
   const response = await app.handle(
@@ -132,6 +132,6 @@ test("public pagination preserves the corpus phase cursor in both directions", a
   expect(response.status).toBe(200);
   const body: unknown = await response.json();
   expect(body).toEqual({ ...result, nextCursor: cursor });
-  const forwarded = calls.at(0)?.at(0);
+  const forwarded = calls.at(0)?.body;
   expect(forwarded).toMatchObject({ cursor });
 });

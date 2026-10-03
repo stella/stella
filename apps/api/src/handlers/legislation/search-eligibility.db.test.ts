@@ -39,7 +39,9 @@ const searchDependencies = {
       languages: [],
     },
   ],
-} satisfies NonNullable<Parameters<typeof searchLegislationHandler>[3]>;
+} satisfies NonNullable<
+  Parameters<typeof searchLegislationHandler>[0]["dependencies"]
+>;
 
 let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let db: ReturnType<typeof drizzle>;
@@ -97,12 +99,12 @@ const restore = async (id: SafeId<"legislationDocument">) => {
 };
 
 const search = async (query: string, limit: number, cursor?: string) => {
-  const response = await searchLegislationHandler(
-    { query, limit, ...(cursor === undefined ? {} : { cursor }) },
+  const response = await searchLegislationHandler({
+    body: { query, limit, ...(cursor === undefined ? {} : { cursor }) },
     legislationDb,
-    "unobserved",
-    searchDependencies,
-  );
+    observer: "unobserved",
+    dependencies: searchDependencies,
+  });
   if (!("items" in response)) {
     throw new Error(`search refused: ${JSON.stringify(response)}`);
   }

@@ -346,17 +346,19 @@ describe.skipIf(!runEngineTests)(
 
     const search = async (
       body: SearchLegislationBody,
-      dependencies?: Parameters<typeof searchLegislationHandler>[3],
+      dependencies?: Parameters<
+        typeof searchLegislationHandler
+      >[0]["dependencies"],
     ) => {
-      const result = await searchLegislationHandler(
+      const result = await searchLegislationHandler({
         body,
         legislationDb,
-        "unobserved",
-        dependencies ?? {
+        observer: "unobserved",
+        dependencies: dependencies ?? {
           provider: "corpus-index",
           loadSearchConfigs: async () => [],
         },
-      );
+      });
       return "items" in result
         ? result
         : panic("contract search refused a valid request");
@@ -663,17 +665,20 @@ describe.skipIf(!runEngineTests)(
       const callStart = searchCalls.length;
       for (const invalidCursor of invalid) {
         // db-await-in-loop: each malformed cursor has its own boundary response
-        const response = await searchLegislationHandler(
-          {
+        const response = await searchLegislationHandler({
+          body: {
             query: QUERY,
             jurisdiction: "CZE",
             limit: 3,
             cursor: invalidCursor,
           },
           legislationDb,
-          "unobserved",
-          { provider: "corpus-index", loadSearchConfigs: async () => [] },
-        );
+          observer: "unobserved",
+          dependencies: {
+            provider: "corpus-index",
+            loadSearchConfigs: async () => [],
+          },
+        });
         expect(response).toMatchObject({
           code: 400,
           response: { message: "Invalid cursor" },
@@ -690,7 +695,7 @@ describe.skipIf(!runEngineTests)(
           loadSearchConfigs: async () => [],
           countryAdmission: admittedFixtureCountries,
         } as const satisfies NonNullable<
-          Parameters<typeof searchLegislationHandler>[3]
+          Parameters<typeof searchLegislationHandler>[0]["dependencies"]
         >;
         const variants = [
           {
@@ -733,12 +738,12 @@ describe.skipIf(!runEngineTests)(
           for (const change of changes) {
             const callStart = searchCalls.length;
             // db-await-in-loop: assert each mutation's own typed boundary response
-            const response = await searchLegislationHandler(
-              { ...body, ...change, cursor },
+            const response = await searchLegislationHandler({
+              body: { ...body, ...change, cursor },
               legislationDb,
-              "unobserved",
+              observer: "unobserved",
               dependencies,
-            );
+            });
             expect(response).toMatchObject({
               code: 400,
               response: { message: "Invalid cursor" },
@@ -760,11 +765,11 @@ describe.skipIf(!runEngineTests)(
       expect(control.items.length).toBeGreaterThan(0);
 
       const callStart = searchCalls.length;
-      const response = await searchLegislationHandler(
-        { ...body, cursor },
+      const response = await searchLegislationHandler({
+        body: { ...body, cursor },
         legislationDb,
-        "unobserved",
-        {
+        observer: "unobserved",
+        dependencies: {
           provider: "corpus-index",
           loadSearchConfigs: async () => [],
           readServingGeneration: async (tx, family) => ({
@@ -772,7 +777,7 @@ describe.skipIf(!runEngineTests)(
             generation: CORPUS_INDEX_MANIFESTS.case_law_v7.generation,
           }),
         },
-      );
+      });
       expect(response).toMatchObject({
         code: 400,
         response: { message: "Invalid cursor" },
@@ -789,12 +794,15 @@ describe.skipIf(!runEngineTests)(
       const cursor =
         page.nextCursor ?? panic("fixture issued no strict cursor");
       const callStart = searchCalls.length;
-      const response = await searchLegislationHandler(
-        { query: QUERY, jurisdiction: "SVK", limit: 1, cursor },
+      const response = await searchLegislationHandler({
+        body: { query: QUERY, jurisdiction: "SVK", limit: 1, cursor },
         legislationDb,
-        "unobserved",
-        { provider: "corpus-index", loadSearchConfigs: async () => [] },
-      );
+        observer: "unobserved",
+        dependencies: {
+          provider: "corpus-index",
+          loadSearchConfigs: async () => [],
+        },
+      });
       expect(response).toMatchObject({
         code: 503,
         response: {

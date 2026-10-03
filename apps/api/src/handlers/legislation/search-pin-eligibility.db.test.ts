@@ -279,7 +279,9 @@ const searchDependencies = {
       languages: [],
     },
   ],
-} satisfies NonNullable<Parameters<typeof searchLegislationHandler>[3]>;
+} satisfies NonNullable<
+  Parameters<typeof searchLegislationHandler>[0]["dependencies"]
+>;
 
 describe("unscanned named acts obey current public eligibility", () => {
   test.each(
@@ -324,12 +326,12 @@ describe("unscanned named acts obey current public eligibility", () => {
         expectedIds.toSorted(),
       );
 
-      const response = await searchLegislationHandler(
-        { query, jurisdiction: "CZE", limit: 10 },
+      const response = await searchLegislationHandler({
+        body: { query, jurisdiction: "CZE", limit: 10 },
         legislationDb,
-        "unobserved",
-        searchDependencies,
-      );
+        observer: "unobserved",
+        dependencies: searchDependencies,
+      });
       if (!("items" in response)) {
         panic("pin eligibility search rejected its query");
       }

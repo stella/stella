@@ -447,7 +447,8 @@ describe("the corpus page cap split across countries", () => {
       // asked for in total is the cap and never more.
       const askedFor = (calls: readonly unknown[][]): number =>
         calls.reduce(
-          (total, call) => total + asTestRaw<{ limit: number }>(call[0]).limit,
+          (total, call) =>
+            total + asTestRaw<{ body: { limit: number } }>(call[0]).body.limit,
           0,
         );
 
@@ -596,13 +597,15 @@ describe("compat search reaching the public corpus", () => {
         ]);
         expect(
           searchDecisionsHandlerMock.mock.calls.map(
-            ([input]) => asTestRaw<{ country: string }>(input).country,
+            ([input]) =>
+              asTestRaw<{ body: { country: string } }>(input).body.country,
           ),
         ).toEqual([...PUBLIC_CASE_LAW_COUNTRIES]);
         expect(
           searchLegislationHandlerMock.mock.calls.map(
             ([input]) =>
-              asTestRaw<{ jurisdiction: string }>(input).jurisdiction,
+              asTestRaw<{ body: { jurisdiction: string } }>(input).body
+                .jurisdiction,
           ),
         ).toEqual([...PUBLIC_LEGISLATION_COUNTRIES]);
       });
@@ -672,7 +675,9 @@ describe("compat search reaching the public corpus", () => {
       // First page: no sub-cursor is passed for a country the cursor never
       // named, so nothing is skipped.
       for (const [input] of searchDecisionsHandlerMock.mock.calls) {
-        expect(asTestRaw<{ cursor?: string }>(input).cursor).toBeUndefined();
+        expect(
+          asTestRaw<{ body: { cursor?: string } }>(input).body.cursor,
+        ).toBeUndefined();
       }
       expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(
         PUBLIC_CASE_LAW_COUNTRIES.length,
@@ -720,7 +725,7 @@ describe("compat search reaching the public corpus", () => {
         cursor: "matter-2",
       });
       expect(searchDecisionsHandlerMock.mock.calls.at(0)?.[0]).toMatchObject({
-        cursor: "decisions-2",
+        body: { cursor: "decisions-2" },
       });
       // Statutes ended on the first page, so they are not asked again.
       expect(searchLegislationHandlerMock).not.toHaveBeenCalled();

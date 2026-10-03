@@ -595,7 +595,9 @@ describe("the Postgres search path", () => {
           languages: [],
         },
       ]),
-  } satisfies NonNullable<Parameters<typeof searchLegislationHandler>[3]>;
+  } satisfies NonNullable<
+    Parameters<typeof searchLegislationHandler>[0]["dependencies"]
+  >;
 
   test.each([
     ["OZ", STATUTE_ALIASES.cze.oz],
@@ -605,16 +607,16 @@ describe("the Postgres search path", () => {
   ] as const)(
     "the embedded abbreviation %s reaches the public search result as a strict pin",
     async (abbreviation, target) => {
-      const response = await searchLegislationHandler(
-        {
+      const response = await searchLegislationHandler({
+        body: {
           query: `Použití ${abbreviation} při výkladu`,
           jurisdiction: "CZE",
           limit: 10,
         },
         legislationDb,
-        "unobserved",
-        searchDependencies,
-      );
+        observer: "unobserved",
+        dependencies: searchDependencies,
+      });
       if (!("items" in response)) {
         panic("the search refused an embedded act abbreviation");
       }
@@ -632,17 +634,17 @@ describe("the Postgres search path", () => {
     let cursor: string | undefined;
     for (let page = 0; page < 10; page += 1) {
       // db-await-in-loop: one keyset page per iteration, as a reader pages
-      const response = await searchLegislationHandler(
-        {
+      const response = await searchLegislationHandler({
+        body: {
           query,
           jurisdiction: "CZE",
           limit,
           ...(cursor === undefined ? {} : { cursor }),
         },
         legislationDb,
-        "unobserved",
-        searchDependencies,
-      );
+        observer: "unobserved",
+        dependencies: searchDependencies,
+      });
       if (!("items" in response)) {
         return panic("the search refused a page it issued the cursor for");
       }
@@ -657,33 +659,33 @@ describe("the Postgres search path", () => {
 
   test("an issued Postgres cursor is bound to its query and filters", async () => {
     const body = { query: "smlouva", jurisdiction: "CZE", limit: 1 };
-    const page = await searchLegislationHandler(
+    const page = await searchLegislationHandler({
       body,
       legislationDb,
-      "unobserved",
-      searchDependencies,
-    );
+      observer: "unobserved",
+      dependencies: searchDependencies,
+    });
     if (!("items" in page) || page.nextCursor === null) {
       panic("the fixture did not issue a Postgres cursor");
     }
-    const control = await searchLegislationHandler(
-      { ...body, cursor: page.nextCursor },
+    const control = await searchLegislationHandler({
+      body: { ...body, cursor: page.nextCursor },
       legislationDb,
-      "unobserved",
-      searchDependencies,
-    );
+      observer: "unobserved",
+      dependencies: searchDependencies,
+    });
     if (!("items" in control)) {
       panic("the search refused its own cursor");
     }
     expect(control.items.length).toBeGreaterThan(0);
     for (const change of [{ query: "náhrada" }, { language: "cs" }]) {
       // db-await-in-loop: each replay changes an independent request field
-      const response = await searchLegislationHandler(
-        { ...body, ...change, cursor: page.nextCursor },
+      const response = await searchLegislationHandler({
+        body: { ...body, ...change, cursor: page.nextCursor },
         legislationDb,
-        "unobserved",
-        searchDependencies,
-      );
+        observer: "unobserved",
+        dependencies: searchDependencies,
+      });
       expect(response).toMatchObject({
         code: 400,
         response: { message: "Invalid cursor" },
@@ -776,11 +778,11 @@ const oversizedDisplayFieldProperty = (provider: "pg-fts" | "corpus-index") =>
           )
         : null;
     try {
-      const response = await searchLegislationHandler(
-        { query: "bytecapfixture", jurisdiction: "CZE", limit: 20 },
+      const response = await searchLegislationHandler({
+        body: { query: "bytecapfixture", jurisdiction: "CZE", limit: 20 },
         legislationDb,
-        "unobserved",
-        {
+        observer: "unobserved",
+        dependencies: {
           provider,
           loadSearchConfigs: async () => [
             {
@@ -796,7 +798,7 @@ const oversizedDisplayFieldProperty = (provider: "pg-fts" | "corpus-index") =>
             cluster: "q09",
           }),
         },
-      );
+      });
       if (!("items" in response)) {
         panic("byte-cap fixture search was refused");
       }

@@ -419,10 +419,15 @@ describe.skipIf(!runEngineTests)(
         ).map(({ id }) => String(id));
         expect(expectedDocumentIds.length).toBeGreaterThan(0);
         const definition = createPublicStatuteSearch(
-          async (body, _publicDb, observability) =>
-            await searchLegislationHandler(body, legislationDb, observability, {
-              provider: "corpus-index",
-              loadSearchConfigs: async () => [],
+          async ({ body, observer }) =>
+            await searchLegislationHandler({
+              body,
+              legislationDb,
+              observer,
+              dependencies: {
+                provider: "corpus-index",
+                loadSearchConfigs: async () => [],
+              },
             }),
         );
         const app = new Elysia().get(
@@ -480,10 +485,15 @@ describe.skipIf(!runEngineTests)(
       "public statute search preserves its measured top-five act recall and nonempty pages",
       async () => {
         const definition = createPublicStatuteSearch(
-          async (body, _publicDb, observability) =>
-            await searchLegislationHandler(body, legislationDb, observability, {
-              provider: "corpus-index",
-              loadSearchConfigs: async () => [],
+          async ({ body, observer }) =>
+            await searchLegislationHandler({
+              body,
+              legislationDb,
+              observer,
+              dependencies: {
+                provider: "corpus-index",
+                loadSearchConfigs: async () => [],
+              },
             }),
         );
         const app = new Elysia().get(
