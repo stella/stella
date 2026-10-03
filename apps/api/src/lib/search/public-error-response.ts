@@ -39,7 +39,11 @@ export const publicInconsistentVersionsSchema = t.Array(
         PUBLIC_ERROR_TEXT_BYTES.versionDate,
       ),
       basis: t.Union([
-        t.UnionEnum(Object.values(LEGISLATION_WINDOW_DISPOSITION_BASES).flat()),
+        t.Union(
+          Object.values(LEGISLATION_WINDOW_DISPOSITION_BASES)
+            .flat()
+            .map((basis) => t.Literal(basis)),
+        ),
         t.Null(),
       ]),
     },
@@ -94,67 +98,80 @@ export const projectPublicErrorBody = (
   if (!isObject(value)) {
     return { message: "Internal server error" };
   }
-  const issues = Array.isArray(value.issues)
-    ? value.issues
+  const issues = Array.isArray(value["issues"])
+    ? value["issues"]
         .slice(0, PUBLIC_ERROR_TEXT_BYTES.issueCount)
         .filter(isObject)
         .map((issue) => ({
           path:
-            optionalText(issue.path, PUBLIC_ERROR_TEXT_BYTES.issuePath) ?? "",
+            optionalText(issue["path"], PUBLIC_ERROR_TEXT_BYTES.issuePath) ??
+            "",
           message:
-            optionalText(issue.message, PUBLIC_ERROR_TEXT_BYTES.issueMessage) ??
-            "Internal server error",
+            optionalText(
+              issue["message"],
+              PUBLIC_ERROR_TEXT_BYTES.issueMessage,
+            ) ?? "Internal server error",
         }))
     : undefined;
-  const versions = Array.isArray(value.versions)
-    ? value.versions
+  const versions = Array.isArray(value["versions"])
+    ? value["versions"]
         .slice(0, PUBLIC_ERROR_TEXT_BYTES.versionCount)
         .filter(isObject)
         .map((version) => ({
           id:
             optionalText(
-              version.id,
+              version["id"],
               LIMITS.legislationSearchTextBytes.documentId,
             ) ?? "",
           language:
             optionalText(
-              version.language,
+              version["language"],
               LIMITS.legislationSearchTextBytes.language,
             ) ?? "",
           versionValidFrom:
             optionalText(
-              version.versionValidFrom,
+              version["versionValidFrom"],
               PUBLIC_ERROR_TEXT_BYTES.versionDate,
             ) ?? null,
           versionValidTo:
             optionalText(
-              version.versionValidTo,
+              version["versionValidTo"],
               PUBLIC_ERROR_TEXT_BYTES.versionDate,
             ) ?? null,
           basis:
             Object.values(LEGISLATION_WINDOW_DISPOSITION_BASES)
               .flat()
-              .find((basis) => basis === version.basis) ?? null,
+              .find((basis) => basis === version["basis"]) ?? null,
         }))
     : undefined;
+  const code = optionalText(value["code"], PUBLIC_ERROR_TEXT_BYTES.code);
+  const hint = optionalText(value["hint"], PUBLIC_ERROR_TEXT_BYTES.hint);
+  const contactUrl = optionalText(
+    value["contactUrl"],
+    PUBLIC_ERROR_TEXT_BYTES.contactUrl,
+  );
+  const country = optionalText(
+    value["country"],
+    PUBLIC_ERROR_TEXT_BYTES.country,
+  );
+  const status = optionalText(value["status"], PUBLIC_ERROR_TEXT_BYTES.status);
+  const reason = optionalText(value["reason"], PUBLIC_ERROR_TEXT_BYTES.reason);
   return {
-    type: value.type === "conflict" ? value.type : undefined,
-    versions,
     message:
-      optionalText(value.message, PUBLIC_ERROR_TEXT_BYTES.message) ??
+      optionalText(value["message"], PUBLIC_ERROR_TEXT_BYTES.message) ??
       "Internal server error",
-    code: optionalText(value.code, PUBLIC_ERROR_TEXT_BYTES.code),
-    hint: optionalText(value.hint, PUBLIC_ERROR_TEXT_BYTES.hint),
-    contactUrl: optionalText(
-      value.contactUrl,
-      PUBLIC_ERROR_TEXT_BYTES.contactUrl,
-    ),
-    retryable:
-      typeof value.retryable === "boolean" ? value.retryable : undefined,
-    country: optionalText(value.country, PUBLIC_ERROR_TEXT_BYTES.country),
-    status: optionalText(value.status, PUBLIC_ERROR_TEXT_BYTES.status),
-    reason: optionalText(value.reason, PUBLIC_ERROR_TEXT_BYTES.reason),
-    issues,
+    ...(value["type"] === "conflict" ? { type: value["type"] } : {}),
+    ...(versions === undefined ? {} : { versions }),
+    ...(code === undefined ? {} : { code }),
+    ...(hint === undefined ? {} : { hint }),
+    ...(contactUrl === undefined ? {} : { contactUrl }),
+    ...(country === undefined ? {} : { country }),
+    ...(status === undefined ? {} : { status }),
+    ...(reason === undefined ? {} : { reason }),
+    ...(typeof value["retryable"] === "boolean"
+      ? { retryable: value["retryable"] }
+      : {}),
+    ...(issues === undefined ? {} : { issues }),
   };
 };
 
