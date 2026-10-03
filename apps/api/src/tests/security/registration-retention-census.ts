@@ -333,8 +333,8 @@ export const collectRetentionWrites = ({
             node.getSourceFile().fileName,
             statement.moduleSpecifier.text,
           );
-          const file = module && getFile(module);
-          if (file) {
+          const file = module === undefined ? undefined : getFile(module);
+          if (file !== undefined) {
             const targetNode = resolve({ file, name: node.name.text });
             if (!targetNode) {
               issues.add(
@@ -744,7 +744,7 @@ export const collectRetentionWrites = ({
         const handler = node.arguments.at(1);
         const options = node.arguments.at(2);
         const overridesSession =
-          options &&
+          options !== undefined &&
           ts.isObjectLiteralExpression(options) &&
           options.properties.some(
             (property) =>
@@ -753,10 +753,9 @@ export const collectRetentionWrites = ({
                 property.name.getText(),
               ),
           );
-        const requiresSession =
-          overridesSession && options
-            ? hasSessionGuard(options)
-            : hasSessionGuard(node.expression.expression);
+        const requiresSession = hasSessionGuard(
+          overridesSession ? options : node.expression.expression,
+        );
         if (handler && !requiresSession) {
           visit(handler);
         }

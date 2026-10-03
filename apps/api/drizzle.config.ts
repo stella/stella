@@ -12,7 +12,6 @@ export default defineConfig({
     "./src/db/schema.ts",
     "./src/db/auth-schema.ts",
     "./src/db/agent-auth-schema.ts",
-    "./src/db/registration-budget-schema.ts",
     "./src/db/rls.ts",
   ],
   dialect: "postgresql",
