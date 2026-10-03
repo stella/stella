@@ -3149,7 +3149,9 @@ export const euEcjAdapter = defineSourceAdapter({
             decisionOf: (value) => value,
             adapterKey: ADAPTER_KEYS.EU_ECJ,
 
-            rawListing: JSON.stringify(variantBindings),
+            // Stored listings are one SPARQL binding; replay and source-field
+            // readers parse that shape. SAFETY: Map.groupBy groups are non-empty.
+            rawListing: JSON.stringify(variantBindings[0]),
             build: async () =>
               await buildPendingVariant({
                 bindings: variantBindings,
