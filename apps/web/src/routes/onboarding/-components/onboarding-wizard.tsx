@@ -38,7 +38,7 @@ import { refreshAuthQueries, sessionOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyAuthClientError } from "@/lib/errors/user-toast";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { suggestedCountryCodes as getSuggestedCountryCodes } from "@/lib/jurisdictions";
 import {
@@ -284,10 +284,7 @@ export const OnboardingWizard = () => {
 
       if (createOrgError) {
         analytics.captureError(toAuthClientError(createOrgError));
-        notifyUserError(
-          toAuthClientError(createOrgError),
-          t("errors.actionFailed"),
-        );
+        notifyAuthClientError(createOrgError, t("errors.actionFailed"));
         setIsCreating(false);
         return;
       }
@@ -300,10 +297,7 @@ export const OnboardingWizard = () => {
 
       if (setActiveError) {
         analytics.captureError(toAuthClientError(setActiveError));
-        notifyUserError(
-          toAuthClientError(setActiveError),
-          t("errors.actionFailed"),
-        );
+        notifyAuthClientError(setActiveError, t("errors.actionFailed"));
         setIsCreating(false);
         return;
       }

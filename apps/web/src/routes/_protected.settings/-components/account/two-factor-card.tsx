@@ -45,7 +45,7 @@ import {
 import { sessionOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
+import { APIError, toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { downloadFile } from "@/lib/utils";
@@ -229,10 +229,12 @@ const showManagementMutationError = (
   if (error.status === HTTP_TOO_MANY_REQUESTS) {
     return;
   }
-  notifyUserError(
-    error.status === HTTP_BAD_REQUEST ? undefined : toAuthClientError(error),
-    invalidCodeMessage,
-  );
+  if (error.status === HTTP_BAD_REQUEST) {
+    notifyUserError(undefined, invalidCodeMessage);
+    return;
+  }
+  const authError = toAuthClientError(error);
+  notifyUserError(authError, authError.message);
 };
 
 const getTotpSecret = (totpURI: string): string | null => {
@@ -344,7 +346,10 @@ const EnableTwoFactorDialog = ({
       });
     },
     onError: (error) => {
-      notifyUserError(error, t("errors.actionFailed"));
+      notifyUserError(
+        error,
+        APIError.is(error) ? error.message : t("errors.actionFailed"),
+      );
       analytics.captureError(error);
     },
   });
@@ -666,7 +671,10 @@ const DisableTwoFactorDialog = ({
       });
     },
     onError: (error) => {
-      notifyUserError(error, t("errors.actionFailed"));
+      notifyUserError(
+        error,
+        APIError.is(error) ? error.message : t("errors.actionFailed"),
+      );
       analytics.captureError(error);
     },
   });
@@ -845,7 +853,10 @@ const RegenerateBackupCodesDialog = ({
       });
     },
     onError: (error) => {
-      notifyUserError(error, t("errors.actionFailed"));
+      notifyUserError(
+        error,
+        APIError.is(error) ? error.message : t("errors.actionFailed"),
+      );
       analytics.captureError(error);
     },
   });

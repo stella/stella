@@ -93,7 +93,7 @@ export const ReportExportTracker = ({
     if (settledDetail.status === "failed") {
       notifyUserError(undefined, t("workspaces.views.reportExport.failed"), {
         toastId,
-        description: t("common.unexpectedError"),
+        description: settledDetail.error ?? t("common.unexpectedError"),
       });
       return;
     }

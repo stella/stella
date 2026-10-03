@@ -792,3 +792,46 @@ test("download errors preserve every admission refusal for all renditions", asyn
     }
   }
 });
+
+test("original and PDF download refusals retain localized status reasons without raw server details", async () => {
+  const { APIError, toAPIError } = await import("@/lib/errors/api");
+  const { notifyUserError } = await import("@/lib/errors/user-toast");
+  const privateMessage = "Private storage account and object details";
+  for (const variant of ["original", "pdf"] as const) {
+    for (const status of [403, 404, 409, 500]) {
+      const fetch = spyOn(globalThis, "fetch").mockResolvedValue(
+        Response.json({ message: privateMessage }, { status }),
+      );
+      const toast = spyOn(stellaToast, "add").mockReturnValue("failure");
+      const errors: unknown[] = [];
+      try {
+        await downloadTabFile({
+          fieldId: "field-refused",
+          fileName: "refused.docx",
+          workspaceId: "matter",
+          variant,
+          onError: (message, error) => {
+            errors.push(error);
+            notifyUserError(error, message);
+          },
+        });
+        expect(errors).toHaveLength(1);
+        expect(APIError.is(errors.at(0))).toBe(true);
+        const expected = toAPIError({
+          status,
+          value: { message: privateMessage },
+        });
+        expect(expected.message).not.toBe(privateMessage);
+        expect(toast).toHaveBeenCalledTimes(1);
+        expect(toast.mock.calls.at(0)?.at(0)).toMatchObject({
+          title: expected.message,
+          type: "error",
+        });
+        expect(JSON.stringify(toast.mock.calls)).not.toContain(privateMessage);
+      } finally {
+        toast.mockRestore();
+        fetch.mockRestore();
+      }
+    }
+  }
+});

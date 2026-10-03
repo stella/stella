@@ -167,7 +167,10 @@ const InstalledSkillResourcePanel = ({
           });
     setSaving(false);
     if (response.error) {
-      notifyUserError(toAPIError(response.error), t("common.unexpectedError"));
+      const error = toAPIError(response.error);
+      notifyUserError(error, t("common.unexpectedError"), {
+        description: error.message,
+      });
       return;
     }
     updateSkillResourceTabContent(tab.id, nextContent);
@@ -226,10 +229,10 @@ const InstalledSkillResourcePanel = ({
         if (next !== null) {
           continue;
         }
-        notifyUserError(
-          toAPIError(response.error),
-          t("common.unexpectedError"),
-        );
+        const error = toAPIError(response.error);
+        notifyUserError(error, t("common.unexpectedError"), {
+          description: error.message,
+        });
         break;
       }
       updateSkillResourceTabContent(tabId, stored);

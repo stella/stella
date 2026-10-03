@@ -22,6 +22,28 @@ describe("original error toast identity", () => {
       ),
     ).toEqual([2, 3, 4, 5]);
   });
+  test("follows extracted callbacks, aliases and lexical bindings", async () => {
+    expect(
+      await lint(
+        [
+          imports,
+          'const onError = () => notify(undefined, "Failed"); mutate(value, { onError });',
+          'const handler = () => notify(void 0, "Failed"); promise.catch(handler);',
+          'function failed(error) { notify(undefined, "Failed"); } promise.catch(failed);',
+          'const original = () => notify(undefined, "Failed"); const alias = original; promise.catch(alias);',
+          'const typed = (() => notify(undefined, "Failed")) satisfies Handler; mutate(value, { onError: typed });',
+          'const later = () => notify(undefined, "Failed"); promise.catch(later);',
+          'const clean = (error) => notify(error, "Failed"); mutate(value, { onError: clean }); promise.catch(clean);',
+          'const synthetic = () => notify(undefined, "Missing selection"); button.onClick = synthetic;',
+          'const shadowed = () => notify(undefined, "Missing selection"); { const shadowed = (error) => notify(error, "Failed"); promise.catch(shadowed); }',
+          'const fulfilled = () => notify(undefined, "Missing selection"); promise.then(fulfilled);',
+          'const extraArgument = () => notify(undefined, "Missing selection"); promise.catch(clean, extraArgument);',
+          'let replaced = () => notify(undefined, "Missing selection"); replaced = (error) => notify(error, "Failed"); promise.catch(replaced);',
+          'const originalSynthetic = () => notify(undefined, "Missing selection"); let replacedAlias = originalSynthetic; replacedAlias = clean; promise.catch(replacedAlias);',
+        ].join("\n"),
+      ),
+    ).toEqual([2, 3, 4, 5, 6, 7]);
+  });
   test("rejects error flattening before notification", async () => {
     expect(
       await lint(

@@ -19,7 +19,8 @@ const { actionAdmissionOutcome } =
 const { stellaToast, ToastProvider } = await import("@stll/ui/toast");
 const { ActionAdmissionOutcome, notifyActionAdmissionRefusal } =
   await import("./action-admission-outcome");
-const { notifyUserError } = await import("@/lib/errors/user-toast");
+const { notifyAuthClientError, notifyUserError } =
+  await import("@/lib/errors/user-toast");
 const { toAPIError } = await import("@/lib/errors/api");
 
 afterEach(cleanup);
@@ -282,5 +283,42 @@ test("observer and local failure handlers render one refusal notice", async () =
     await act(async () => {
       stellaToast.close();
     });
+  }
+});
+
+test("organization setup keeps human client reasons without exposing server failures", () => {
+  const add = spyOn(stellaToast, "add");
+  const fallback = "Organization setup failed";
+  try {
+    for (const code of [
+      undefined,
+      "ORGANIZATION_NAME_INVALID",
+      "DISPOSABLE_EMAIL_NOT_ALLOWED",
+    ]) {
+      for (const status of [400, 403, 500]) {
+        for (const message of [
+          undefined,
+          "Organization name must be shorter",
+          "",
+        ]) {
+          add.mockClear();
+          expect(
+            notifyAuthClientError(
+              { code, status, statusText: "Failure", message },
+              fallback,
+            ),
+          ).toBe(true);
+          expect(add).toHaveBeenCalledWith(
+            expect.objectContaining({
+              type: "error",
+              description: status < 500 ? (message ?? fallback) : fallback,
+            }),
+          );
+          expect(add).toHaveBeenCalledTimes(1);
+        }
+      }
+    }
+  } finally {
+    add.mockRestore();
   }
 });

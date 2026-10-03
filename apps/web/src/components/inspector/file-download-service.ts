@@ -135,7 +135,8 @@ export const downloadTabFile = async ({
     .get({ query: { purpose: asPdf ? "display" : "download" } });
 
   if (response.error) {
-    onError(downloadFailed, toAPIError(response.error));
+    const error = toAPIError(response.error);
+    onError(error.message, error);
     return;
   }
 

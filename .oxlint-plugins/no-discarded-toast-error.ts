@@ -1,12 +1,63 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  type AstNode,
+  type ScopeContext,
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
+  isSingleAssignment,
   resolveImportedExpression,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
+
+const isErrorCallbackUse = (
+  context: ScopeContext,
+  node: unknown,
+  seen = new Set<AstNode>(),
+): boolean => {
+  if (!isAstNode(node) || seen.has(node)) {
+    return false;
+  }
+  seen.add(node);
+  const parent = node.parent;
+  if (!isAstNode(parent)) {
+    return false;
+  }
+  if (parent.type === "Property") {
+    return getPropertyName(parent.key) === "onError" && parent.value === node;
+  }
+  if (parent.type === "CallExpression") {
+    return (
+      isAstNode(parent.callee) &&
+      parent.callee.type === "MemberExpression" &&
+      getPropertyName(parent.callee.property) === "catch" &&
+      Array.isArray(parent.arguments) &&
+      parent.arguments.at(0) === node
+    );
+  }
+  if (unwrapExpression(parent) === node) {
+    return isErrorCallbackUse(context, parent, seen);
+  }
+  const identifier =
+    parent.type === "VariableDeclarator" && parent.init === node
+      ? parent.id
+      : node.type === "FunctionDeclaration"
+        ? node.id
+        : null;
+  if (!isIdentifierReference(identifier)) {
+    return false;
+  }
+  const variable = resolveVariable(context, identifier);
+  if (variable === null || !isSingleAssignment(variable)) {
+    return false;
+  }
+  return variable.references.some((reference) =>
+    isErrorCallbackUse(context, reference.identifier, seen),
+  );
+};
 
 export default eslintCompatPlugin({
   meta: { name: "no-discarded-toast-error" },
@@ -55,17 +106,10 @@ export default eslintCompatPlugin({
               }
               if (
                 ancestor.type === "ArrowFunctionExpression" ||
-                ancestor.type === "FunctionExpression"
+                ancestor.type === "FunctionExpression" ||
+                ancestor.type === "FunctionDeclaration"
               ) {
-                const parent = ancestor.parent;
-                const errorCallback =
-                  isAstNode(parent) &&
-                  ((parent.type === "Property" &&
-                    getPropertyName(parent.key) === "onError") ||
-                    (parent.type === "CallExpression" &&
-                      isAstNode(parent.callee) &&
-                      parent.callee.type === "MemberExpression" &&
-                      getPropertyName(parent.callee.property) === "catch"));
+                const errorCallback = isErrorCallbackUse(context, ancestor);
                 if (errorCallback) {
                   context.report({ node, messageId: "discarded" });
                 }

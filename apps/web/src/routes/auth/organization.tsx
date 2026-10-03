@@ -41,7 +41,10 @@ import { authClient } from "@/lib/auth-client";
 import { refreshAuthQueries } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import {
+  notifyAuthClientError,
+  notifyUserError,
+} from "@/lib/errors/user-toast";
 import {
   getOauthHashFragment,
   getOauthRedirectUrl,
@@ -345,10 +348,7 @@ const CreateOrganizationForm = ({
 
         if (slugCheckError) {
           analytics.captureError(toAuthClientError(slugCheckError));
-          notifyUserError(
-            toAuthClientError(slugCheckError),
-            t("errors.actionFailed"),
-          );
+          notifyAuthClientError(slugCheckError, t("errors.actionFailed"));
           return;
         }
 
@@ -367,10 +367,7 @@ const CreateOrganizationForm = ({
 
         if (createError) {
           analytics.captureError(toAuthClientError(createError));
-          notifyUserError(
-            toAuthClientError(createError),
-            t("errors.actionFailed"),
-          );
+          notifyAuthClientError(createError, t("errors.actionFailed"));
           return;
         }
 
@@ -381,10 +378,7 @@ const CreateOrganizationForm = ({
 
         if (setActiveError) {
           analytics.captureError(toAuthClientError(setActiveError));
-          notifyUserError(
-            toAuthClientError(setActiveError),
-            t("errors.actionFailed"),
-          );
+          notifyAuthClientError(setActiveError, t("errors.actionFailed"));
           return;
         }
 

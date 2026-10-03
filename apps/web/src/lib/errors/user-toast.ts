@@ -1,6 +1,7 @@
 import { stellaToast } from "@stll/ui/toast";
 
 import { notifyActionAdmissionRefusal } from "@/components/action-admission-outcome";
+import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 type UserErrorToastOptions = Omit<
@@ -33,3 +34,16 @@ export const notifyUserError = (
   stellaToast.add(toast);
   return true;
 };
+
+const SERVER_ERROR_THRESHOLD = 500;
+
+export const notifyAuthClientError = (
+  error: Parameters<typeof toAuthClientError>[0],
+  fallback: string,
+) =>
+  notifyUserError(toAuthClientError(error), fallback, {
+    description:
+      error.status < SERVER_ERROR_THRESHOLD
+        ? (error.message ?? fallback)
+        : fallback,
+  });

@@ -65,7 +65,10 @@ export const useSkillHistoryActions = ({
   };
 
   const report = (error: Parameters<typeof toAPIError>[0]) => {
-    notifyUserError(toAPIError(error), t("common.unexpectedError"));
+    const apiError = toAPIError(error);
+    notifyUserError(apiError, t("common.unexpectedError"), {
+      description: apiError.message,
+    });
   };
 
   const invalidateComments = () => {
