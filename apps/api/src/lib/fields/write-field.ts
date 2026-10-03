@@ -121,7 +121,7 @@ export const upsertFieldContentSchema = t.Union(
   { description: "The value to set; 'type' must match the property." },
 );
 
-export type UpsertFieldContent = Static<typeof upsertFieldContentSchema>;
+export type FieldWriteContent = Static<typeof upsertFieldContentSchema>;
 
 type LockCellArgs = {
   tx: Transaction;
@@ -199,7 +199,7 @@ const lockCellOnManualEdit = async ({
 // (property content types never include clip), and the variants that carry no
 // `value` answer for themselves: a money amount of zero is an amount, and a
 // person is empty only when unnamed.
-const isEmptyContent = (content: UpsertFieldContent): boolean => {
+const isEmptyContent = (content: FieldWriteContent): boolean => {
   switch (content.type) {
     case "text":
     case "single-select":
@@ -230,7 +230,7 @@ export type WriteFieldValueProps = {
    * The value to store. An empty value, or `null`, clears the cell; `null`
    * clears a cell whose type has no empty value (an `int`).
    */
-  content: UpsertFieldContent | null;
+  content: FieldWriteContent | null;
   flushSearchRepairs?: boolean;
 };
 

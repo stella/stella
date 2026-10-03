@@ -53,7 +53,7 @@ import {
   FIELD_VALUE_WRITE_PERMISSIONS,
   writeFieldValue,
 } from "@/api/lib/fields/write-field";
-import type { UpsertFieldContent } from "@/api/lib/fields/write-field";
+import type { FieldWriteContent } from "@/api/lib/fields/write-field";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -2313,7 +2313,7 @@ const setFieldValueArgsSchema = nullAsAbsent(
 
 type SetFieldValueContent = v.InferOutput<typeof setFieldValueContentSchema>;
 
-const toFieldContent = (content: SetFieldValueContent): UpsertFieldContent => {
+const toFieldContent = (content: SetFieldValueContent): FieldWriteContent => {
   if (content.type === "int") {
     return {
       version: 1,
