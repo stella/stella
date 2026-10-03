@@ -309,7 +309,9 @@ describe("federated OpenRouter 401 recovery at the inference boundary", () => {
     env.OPENROUTER_WIF_STS_REGION = REGION;
     const logger = installRecordingLogger();
     const metricLines: string[] = [];
-    setMetricLineSinkForTesting((line) => metricLines.push(line));
+    setMetricLineSinkForTesting((line) => {
+      metricLines.push(line);
+    });
     try {
       for (const { policy, host } of [
         { policy: managedPolicy("eu"), host: "eu.openrouter.ai" },

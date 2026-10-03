@@ -181,7 +181,7 @@ class ManagedOpenRouterCredentialProvider {
   private retryNotBefore = 0;
   private loggedMode: ManagedOpenRouterConfiguration["type"] | undefined;
 
-  private clock = () => {
+  private readonly clock = () => {
     const { now, monotonicNow } = this.options;
     const wall = now();
     const monotonic = monotonicNow();
@@ -197,10 +197,10 @@ class ManagedOpenRouterCredentialProvider {
     this.lastMonotonic = monotonic;
     return { wall, monotonic };
   };
-  private unavailable = () =>
+  private readonly unavailable = () =>
     Result.err(managedProviderUnavailable("openrouter"));
 
-  private mint = async (
+  private readonly mint = async (
     config: Extract<ManagedOpenRouterConfiguration, { type: "federated" }>,
     configurationKey: string,
     currentGeneration: number,
@@ -424,7 +424,7 @@ class ManagedOpenRouterCredentialProvider {
       this.generation++;
     }
   };
-  private mintIdentity = async (
+  private readonly mintIdentity = async (
     config: Extract<ManagedOpenRouterConfiguration, { type: "federated" }>,
   ) => {
     const { createStsClient, timeoutMs } = this.options;

@@ -247,7 +247,7 @@ class InstanceOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
     this.credential = credential;
   }
 
-  private isFederatedCredentialRefusal = (error: unknown): boolean => {
+  private readonly isFederatedCredentialRefusal = (error: unknown): boolean => {
     if (
       this.credential.type !== "federated" ||
       readProviderStatus(error)?.status !== 401
@@ -386,10 +386,10 @@ type ManagedOpenRouterTextOptions = {
 export const createManagedOpenRouterText = (
   options: ManagedOpenRouterTextOptions,
 ): StellaOpenRouterTextAdapter => {
-  const credential =
-    options.credential === undefined
-      ? { type: "static" as const, apiKey: options.apiKey }
-      : options.credential;
+  const credential = options.credential ?? {
+    type: "static" as const,
+    apiKey: options.apiKey,
+  };
   return new ManagedOpenRouterTextAdapter(
     {
       apiKey: credential.apiKey,
