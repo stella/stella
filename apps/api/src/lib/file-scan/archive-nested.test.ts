@@ -73,7 +73,7 @@ const matchRules = async (bytes: Buffer) =>
 test("inspects a packaged document field", async () => {
   const inner = await packageOf([
     Buffer.from(
-      `<w:document><w:instrText>${MARKER}</w:instrText></w:document>`,
+      `<w:document><w:instrText>${MARKER.toString("utf-8")}</w:instrText></w:document>`,
     ),
   ]);
   expect(await matchRules(await wrap(inner))).toEqual(["sample_field"]);
