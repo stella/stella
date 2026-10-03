@@ -1849,12 +1849,14 @@
   },
   "consent": {
     "allow": "Zezwól",
+    "appIdentity": "Tożsamość aplikacji",
     "completeSetup": "Zakończ konfigurację",
     "defaultClientName": "Aplikacja",
     "description": "{clientName} chce uzyskać dostęp do Twojego obszaru roboczego w stella",
     "error": "Coś poszło nie tak. Spróbuj ponownie.",
     "missingJurisdictions": "Twoja organizacja w stelli nie skonfigurowała jeszcze swoich jurysdykcji praktyki. Niektóre narzędzia uwzględniające jurysdykcję będą niedostępne do czasu zakończenia konfiguracji.",
     "permissions": "Spowoduje to przyznanie aplikacji dostępu do:",
+    "redirectDestination": "Cel przekierowania",
     "scopeAdminRead": "Odczyt dziennika audytu Twojej organizacji",
     "scopeAdminWrite": "Zarządzanie członkami i ustawieniami organizacji",
     "scopeBillingWrite": "Tworzenie, edytowanie i usuwanie Twoich wpisów czasu",
@@ -1875,7 +1877,8 @@
     "scopeSkills": "Korzystanie z zapisanych umiejętności stella",
     "scopeTemplates": "Wyświetlanie, wypełnianie i tworzenie szablonów dokumentów",
     "scopeTemplatesAnonymized": "Wyświetlanie, wypełnianie i tworzenie zanonimizowanych wersji Twoich szablonów dokumentów",
-    "title": "Autoryzacja dostępu"
+    "title": "Autoryzacja dostępu",
+    "unverifiedApp": "Niezweryfikowana aplikacja"
   },
   "contacts": {
     "alsoPartyIn": "Występuje również jako strona w {count, plural, one {# innej sprawie} few {# innych sprawach} many {# innych sprawach} other {# innych sprawach}}",

@@ -52,7 +52,7 @@ export const createBullMqDispatchTask =
   };
 
 const getConnection = (createConnection: typeof createBullMqConnection) => {
-  cache.connection ??= createConnection();
+  cache.connection ??= createConnection({ storeClass: "durable-coordination" });
   return cache.connection;
 };
 

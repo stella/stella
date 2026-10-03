@@ -1346,7 +1346,12 @@ export const initDocumentTranslationRunWorker = ({
   const worker = new Worker<DocumentTranslationRunJobData>(
     QUEUE_NAME,
     async (job) => await processRunJob(job.data),
-    { connection: createBullMqConnection(), concurrency: WORKER_CONCURRENCY },
+    {
+      connection: createBullMqConnection({
+        storeClass: "durable-coordination",
+      }),
+      concurrency: WORKER_CONCURRENCY,
+    },
   );
   worker.on("failed", (job, error) => {
     if (job) {

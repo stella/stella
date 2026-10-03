@@ -43,8 +43,8 @@ const partitionedPeer = Bun.listen({
 const { createSseBroadcastPublisher, SSEBroadcastError } =
   await import("@/api/lib/sse-broadcast");
 const { publishWorkspaceEvent } = createSseBroadcastPublisher({
-  createClient: (options) =>
-    new RedisClient(`redis://127.0.0.1:${partitionedPeer.port}`, options),
+  createClient: ({ overrides }) =>
+    new RedisClient(`redis://127.0.0.1:${partitionedPeer.port}`, overrides),
 });
 const { resourceUpdatedRealtimeEvent } = await import("@stll/api-contract");
 const { brandPersistedWorkspaceId, brandPersistedEntityId } =

@@ -1849,12 +1849,14 @@
   },
   "consent": {
     "allow": "Zulassen",
+    "appIdentity": "App-Identität",
     "completeSetup": "Einrichtung abschließen",
     "defaultClientName": "Eine Anwendung",
     "description": "{clientName} möchte auf Ihren stella-Arbeitsbereich zugreifen",
     "error": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
     "missingJurisdictions": "Ihre stella-Organisation hat ihre Tätigkeitsgebiete noch nicht eingerichtet. Einige gebietsabhängige Tools sind erst verfügbar, wenn Sie die Einrichtung abschließen.",
     "permissions": "Dies erlaubt der Anwendung:",
+    "redirectDestination": "Weiterleitungsziel",
     "scopeAdminRead": "Das Audit-Protokoll Ihrer Organisation lesen",
     "scopeAdminWrite": "Mitglieder und Einstellungen der Organisation verwalten",
     "scopeBillingWrite": "Ihre Zeiteinträge erstellen, bearbeiten und löschen",
@@ -1875,7 +1877,8 @@
     "scopeSkills": "Ihre gespeicherten stella-Skills verwenden",
     "scopeTemplates": "Dokumentvorlagen auflisten, ausfüllen und erstellen",
     "scopeTemplatesAnonymized": "Anonymisierte Versionen Ihrer Dokumentvorlagen auflisten, ausfüllen und erstellen",
-    "title": "Zugriff autorisieren"
+    "title": "Zugriff autorisieren",
+    "unverifiedApp": "Nicht verifizierte App"
   },
   "contacts": {
     "alsoPartyIn": "Tritt auch als Partei in {count, plural, one {# weiteren Akte} other {# weiteren Akten}} auf",

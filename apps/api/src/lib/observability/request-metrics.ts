@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
+import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
@@ -499,6 +500,30 @@ export const emitAnonymizationRefusalMetric = (
 };
 
 const ACTION_RESPONSE_OVERSIZE_METRIC = "ActionResponseOversize";
+
+type PublicCorpusAdmissionMetric = {
+  class: Exclude<PublicCorpusClass, "browse">;
+  outcome: "refused";
+};
+
+export const emitPublicCorpusAdmissionMetric = (
+  input: PublicCorpusAdmissionMetric,
+): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["class", "outcome"]],
+          Metrics: [{ Name: "PublicCorpusAdmissions", Unit: "Count" }],
+        },
+      ],
+    },
+    ...input,
+    PublicCorpusAdmissions: 1,
+  });
+};
 
 export const emitActionResponseOversizeMetric = (
   transport: "http" | "mcp",

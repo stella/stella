@@ -35,8 +35,8 @@ type PublisherStore = {
 };
 
 const withStore = async (run: (store: PublisherStore) => Promise<void>) => {
-  const first = createRedisClient();
-  const second = createRedisClient();
+  const first = createRedisClient({ storeClass: "cache" });
+  const second = createRedisClient({ storeClass: "cache" });
   const slot = `publisher-backoff-test:${Bun.randomUUIDv7()}`;
   const { key, cooldownKey } = publisherGateKeys(slot);
   try {

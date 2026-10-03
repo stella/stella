@@ -97,7 +97,9 @@ const executeAdmittedFlowStep = async ({
  * connection.
  */
 export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
-  const workerConnection = createBullMqConnection();
+  const workerConnection = createBullMqConnection({
+    storeClass: "durable-coordination",
+  });
 
   const worker = new Worker<FlowStepJobData>(
     FLOW_RUN_QUEUE_NAME,

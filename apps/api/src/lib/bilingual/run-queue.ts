@@ -240,7 +240,12 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
     async (job) => {
       await processBilingualRunJob(job.data);
     },
-    { connection: createBullMqConnection(), concurrency: WORKER_CONCURRENCY },
+    {
+      connection: createBullMqConnection({
+        storeClass: "durable-coordination",
+      }),
+      concurrency: WORKER_CONCURRENCY,
+    },
   );
 
   worker.on("failed", (job, error) => {

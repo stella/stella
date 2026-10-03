@@ -89,6 +89,8 @@ type RedisRateLimitContextOptions = {
   commandTimeoutMs?: number;
   createRedis?: () => RedisRateLimitClient;
   failurePolicy: RedisRateLimitFailurePolicy;
+  localMax?: number;
+  onLocalFallback?: () => void;
   onRedisError?: (error: unknown, operation: RedisRateLimitOperation) => void;
   scheduleTimeout?: ScheduleTimeout;
 };
@@ -96,6 +98,8 @@ type RedisRateLimitContextOptions = {
 type CreateRedisRateLimitOptions = {
   counterKeyGenerator?: RateLimitGenerator;
   failurePolicy: RedisRateLimitFailurePolicy;
+  localMax?: number;
+  onLocalFallback?: () => void;
   scope: string;
 };
 
@@ -134,6 +138,8 @@ export class RedisRateLimitContext implements RateLimitContext {
   private readonly commandTimeoutMs: number;
   private readonly createRedis: () => RedisRateLimitClient;
   private readonly failurePolicy: RedisRateLimitFailurePolicy;
+  private readonly localMax: number | undefined;
+  private readonly onLocalFallback: (() => void) | undefined;
   private readonly fallback = new InMemoryRateLimitContext();
   private readonly onRedisError: (
     error: unknown,
@@ -152,14 +158,21 @@ export class RedisRateLimitContext implements RateLimitContext {
     commandTimeoutMs = REDIS_COMMAND_TIMEOUT_MS,
     createRedis = () =>
       createRedisClient({
-        connectionTimeout: commandTimeoutMs,
-        enableOfflineQueue: false,
+        storeClass: "durable-coordination",
+        overrides: {
+          connectionTimeout: commandTimeoutMs,
+          enableOfflineQueue: false,
+        },
       }),
     failurePolicy,
+    localMax,
+    onLocalFallback,
     onRedisError,
     scheduleTimeout = defaultScheduleTimeout,
   }: RedisRateLimitContextOptions) {
     this.commandTimeoutMs = commandTimeoutMs;
+    this.localMax = localMax;
+    this.onLocalFallback = onLocalFallback;
     this.createRedis = createRedis;
     this.failurePolicy = failurePolicy;
     this.onRedisError =
@@ -241,6 +254,13 @@ export class RedisRateLimitContext implements RateLimitContext {
         }
       }
       if (this.failurePolicy === "fail_open_local") {
+        this.onLocalFallback?.();
+        if (
+          this.localMax !== undefined &&
+          fallbackCounter.count > this.localMax
+        ) {
+          return { ...fallbackCounter, count: FAIL_CLOSED_COUNT };
+        }
         return fallbackCounter;
       }
       return {
@@ -433,11 +453,17 @@ const requestScopedGenerator = (
 export const createRedisRateLimit = ({
   counterKeyGenerator,
   failurePolicy,
+  localMax,
+  onLocalFallback,
   scope,
 }: CreateRedisRateLimitOptions): RedisRateLimitBinding => ({
   // Keep the context and request-token generator paired: the token lets a
   // failed request refund only the specific increment attempt it made.
-  context: new RedisRateLimitContext({ failurePolicy }),
+  context: new RedisRateLimitContext({
+    failurePolicy,
+    ...(localMax === undefined ? {} : { localMax }),
+    ...(onLocalFallback === undefined ? {} : { onLocalFallback }),
+  }),
   generator: requestScopedGenerator(scope, counterKeyGenerator),
 });
 

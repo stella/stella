@@ -33,6 +33,7 @@
   "exports": {
     ".": "./src/cli.ts",
     "./capability-catalog-data": "./src/capability-catalog-data.ts",
+    "./client-metadata-document": "./src/auth/client-metadata-document.ts",
     "./capabilities/*.json": "./capabilities/*.json"
   },
   "publishConfig": {

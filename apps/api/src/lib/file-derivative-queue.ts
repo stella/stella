@@ -330,7 +330,9 @@ export const enqueueImageThumbnailOrMarkFailed = async (
 export const initFileDerivativeWorker = () => {
   // BullMQ workers use blocking commands and need a dedicated connection
   // separate from the queue's. Create a fresh raw client per worker init.
-  const workerConnection = createBullMqConnection();
+  const workerConnection = createBullMqConnection({
+    storeClass: "durable-coordination",
+  });
 
   const worker = new Worker<FileDerivativeJobData>(
     QUEUE_NAME,

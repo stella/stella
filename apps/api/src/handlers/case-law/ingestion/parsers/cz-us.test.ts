@@ -958,3 +958,20 @@ test("excludes all RTF header and footer destinations", () => {
     expect(parsed.fulltext).toBe("Visible");
   }
 });
+
+for (const tag of ["script", "style"]) {
+  test(`ignores ${tag} text in decision form and cross references`, () => {
+    const clean = `<html><body><span id="lblDecisionForm">Nález</span>
+      <div class="DocContent"><p>Rozhodnutí soudu obsahuje odkaz na
+      <a href="GetRegSignDecisions.aspx?sz=II.US.200.25">II.ÚS 200/25</a>.</p></div>
+    </body></html>`;
+    const hidden = `<${tag}>qzmetadataHidden</${tag}>`;
+    const injected = clean
+      .replace("Nález</span>", () => `Nález${hidden}</span>`)
+      .replace("II.ÚS 200/25</a>", () => `II.ÚS 200/25${hidden}</a>`);
+    expect(injected).not.toBe(clean);
+    expect(parseUsDecisionHtml(baseInput(injected))).toEqual(
+      parseUsDecisionHtml(baseInput(clean)),
+    );
+  });
+}

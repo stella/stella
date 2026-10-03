@@ -440,7 +440,7 @@ export const elementName = (element: unknown): string | null => {
 // Every node under `root`, reached without assuming a shape: asking what a
 // component renders means crossing statements, branches, and helper calls that
 // a JSX-only traversal never sees.
-export const everyNode = (root: AstNode): AstNode[] => {
+export const everyNode = (root: unknown): AstNode[] => {
   const out: AstNode[] = [];
   const seen = new Set<unknown>();
   const pending: unknown[] = [root];

@@ -136,13 +136,6 @@
       "inputs": ["$TURBO_DEFAULT$"],
       "cache": false
     },
-    "@stll/redis-config#test": {
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/apps/**",
-        "$TURBO_ROOT$/packages/**"
-      ]
-    },
     "transit": {
       "dependsOn": ["^transit"]
     },
