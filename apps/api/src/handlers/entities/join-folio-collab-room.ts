@@ -496,6 +496,11 @@ export const joinFolioCollabRoomHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Provides working-copy URLs covered by the collaboration-room lifecycle audit.",
+  },
   body: joinFolioCollabRoomBodySchema,
   permissions: { entity: ["update"] },
   mcp: { type: "internal", reason: "session_token_exchange" },

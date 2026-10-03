@@ -99,6 +99,11 @@ const compareOutputSchema = t.Union([
 ]);
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Returns comparison output covered by the comparison operation audit.",
+  },
   description:
     "Create tracked-changes DOCX redlines between stored versions of one " +
     `document in a matter. Select an explicit base and up to ${String(DOCUMENT_COMPARE_TARGET_LIMIT)} targets, ` +

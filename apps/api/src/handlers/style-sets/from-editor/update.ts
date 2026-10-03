@@ -19,6 +19,10 @@ import {
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Updates a style package without delivering stored-file bytes.",
+  },
   description:
     "Rewrite one style set's package from explicit editor settings, using " +
     "its current package as the base, and set its name at the same time. " +

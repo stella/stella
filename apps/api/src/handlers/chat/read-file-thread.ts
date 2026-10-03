@@ -40,6 +40,11 @@ const readFileThreadQuerySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Returns thread metadata for a file without delivering its stored bytes.",
+  },
   // `chat` has no separate read permission; ["create"] is the established
   // chat-access permission every chat read endpoint declares (get-threads,
   // get-messages).

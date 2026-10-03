@@ -31,6 +31,7 @@ const CONTACT_EXPORT_CSV_MEDIA_TYPE = "text/csv; charset=utf-8";
 const CONTACT_EXPORT_JSON_MEDIA_TYPE = "application/json";
 
 const config = {
+  contentDelivery: { type: "audited" },
   description:
     "Export the contact directory as a bounded CSV or versioned JSON download.",
   permissions: { workspace: ["read"] },

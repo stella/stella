@@ -694,6 +694,11 @@ const copyToWorkspaceHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Copies stored content and returns operation metadata rather than file bytes.",
+  },
   description:
     "Copy a document or folder subtree into another matter, or move it with " +
     "deleteSource, which permanently deletes the source documents and their " +

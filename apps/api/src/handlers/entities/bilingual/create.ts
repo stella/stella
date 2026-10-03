@@ -48,6 +48,11 @@ const createBilingualBody = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Creates a translated document without returning stored-file bytes.",
+  },
   description:
     "Create a two-column bilingual copy of a DOCX document (source text on the left, a copy to translate on the right) as a new document.",
   permissions: { entity: ["create"] },

@@ -17,6 +17,11 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores a style package and returns its metadata rather than file bytes.",
+  },
   description:
     "Replace one style set's stored package with the styles from an uploaded " +
     "DOCX, keeping its id and name. Any upload whose file name ends in .docx " +

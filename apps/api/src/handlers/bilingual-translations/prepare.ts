@@ -26,6 +26,11 @@ import { readScannedBilingualDocx } from "@/api/lib/file-scan/document-parsers";
 const PREPARE_TIMEOUT_MS = 150_000;
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Returns translation preparation metadata rather than stored-file bytes.",
+  },
   description:
     "Read the rows of a bilingual (two-column) document and propose, for review, what to do with each row and which glossary renderings to use.",
   permissions: { entity: ["create"] },

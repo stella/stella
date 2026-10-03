@@ -10,6 +10,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { buildLineDiffSegments, diffSegmentsToText } from "@/api/lib/text-diff";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Returns a version summary rather than stored-file bytes.",
+  },
   description:
     "Summarize in prose what changed between one document version and its " +
     "predecessor, over the same server-resolved text diff " +

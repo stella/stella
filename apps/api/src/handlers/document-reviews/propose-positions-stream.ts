@@ -25,6 +25,10 @@ import { pinProposedPositions } from "@/api/lib/document-review/reference-passag
 import { sseResponse } from "@/api/lib/sse";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Processes document inputs and streams proposed review positions.",
+  },
   description:
     "Stream proposed review positions from one or more reference documents as they are produced: the target's parties first, then each verified position (its kind, severity, what the term is for and what to compare, and the reference passages that state the standard), then what was read and deliberately not compared.",
   permissions: { workspace: ["read"] },

@@ -48,6 +48,11 @@ const previewBodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Returns parsed property preview data rather than stored-file bytes.",
+  },
   description:
     "Run a column prompt against one document without creating the column or " +
     "storing anything, so a prompt can be tried before it is saved. Pass the " +

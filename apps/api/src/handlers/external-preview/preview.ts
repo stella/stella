@@ -44,6 +44,10 @@ type ExternalPreviewResponse = {
 };
 
 const config = {
+  contentDelivery: {
+    type: "public",
+    reason: "Returns previews of public external sources.",
+  },
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "url_preview" },
   access: "read",

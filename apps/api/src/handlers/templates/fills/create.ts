@@ -65,6 +65,11 @@ const resolveDocumentFileName = (
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Fill a stored template and save the result as a new document in a " +
     "matter rather than returning bytes. Same values and clauseOverrides " +

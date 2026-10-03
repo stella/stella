@@ -29,6 +29,11 @@ const CREATE_FROM_LEGAL_SOURCE_ERROR_CODE = {
 
 export default createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason:
+        "Stores document content and returns operation metadata rather than stored-file bytes.",
+    },
     description:
       "Compile a plain-text legal draft written in stella's legal-source " +
       "markup into a DOCX and store it as a new document in the current " +

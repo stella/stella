@@ -17,6 +17,11 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores a style package and returns its metadata rather than file bytes.",
+  },
   description:
     "Create an organization style set from an uploaded DOCX, taking that " +
     "document's styles as the stored package. Any upload whose file name " +

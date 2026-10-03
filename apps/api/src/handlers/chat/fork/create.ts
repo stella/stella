@@ -50,6 +50,11 @@ import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { parseUserFileId, toUserFileUrl } from "@/api/lib/user-files/types";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Copies thread attachments and returns thread metadata rather than stored-file bytes.",
+  },
   description:
     "Fork one of your own chat threads into a new thread that keeps the " +
     "history up to a chosen answer, so another direction or model can be " +

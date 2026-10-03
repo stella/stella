@@ -63,6 +63,11 @@ const createTemplateFromStyleSetHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Create an empty template whose document is built from one of the " +
     "organization's style sets, so it starts in that house style, with a " +

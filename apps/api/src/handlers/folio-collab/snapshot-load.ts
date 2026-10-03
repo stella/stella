@@ -15,6 +15,11 @@ import {
 import { authorizeFolioCollabService } from "./service-credentials";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Returns collaboration protocol state to the authorized collaboration service.",
+  },
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: permissiveBodySchema({ keys: ["roomId"] }),
 } satisfies TokenHandlerConfig;

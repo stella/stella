@@ -34,6 +34,7 @@ import { DOCX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 const JUSTIFICATION_FIELD_ID_BATCH = 1000;
 
 const config = {
+  contentDelivery: { type: "audited" },
   description:
     "Export one view's rows as a file in CSV, XLSX, or DOCX, using the " +
     "columns, filters, and ordering the view defines. Returns the file " +

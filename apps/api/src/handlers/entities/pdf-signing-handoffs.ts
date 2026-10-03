@@ -115,6 +115,10 @@ const baseVersionChanged = () =>
   });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Prepares a signing handoff without returning stored-file bytes.",
+  },
   body: createPdfSigningHandoffBodySchema,
   permissions: { entity: ["update"] },
   mcp: { type: "internal", reason: "session_token_exchange" },

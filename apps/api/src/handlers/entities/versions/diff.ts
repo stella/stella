@@ -7,6 +7,11 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Returns a parsed version comparison rather than stored-file bytes.",
+  },
   description:
     "Return a plain-text, line-level diff of one document version's DOCX " +
     "against its immediate predecessor; the first version is diffed against " +

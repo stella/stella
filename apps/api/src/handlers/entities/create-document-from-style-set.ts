@@ -14,6 +14,11 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Creates a document from a style configuration without delivering stored-file bytes.",
+  },
   permissions: { entity: ["create"], styleSet: ["use"] },
   mcp: { type: "internal", reason: "compound_consent" },
   body: bodySchema,

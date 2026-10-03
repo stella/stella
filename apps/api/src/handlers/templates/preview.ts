@@ -59,6 +59,11 @@ const previewTemplateHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Read one stored template as text for display: its paragraphs tagged " +
     "with header, body, or footer origin, the character count, the " +

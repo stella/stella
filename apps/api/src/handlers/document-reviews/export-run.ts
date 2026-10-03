@@ -65,6 +65,7 @@ const withoutExtension = (name: string): string => {
 };
 
 const config = {
+  contentDelivery: { type: "audited" },
   description:
     "Download a document review run as an issues table (XLSX, DOCX or CSV).",
   permissions: { workspace: ["read"] },

@@ -105,6 +105,11 @@ export const discoverHandler = async ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Inspect DOCX fields, marker configuration, named conditions and structural errors. " +
     "With templateId, resolve the stored template and linked clauses; otherwise inspect uploaded bytes. Stores nothing.",
