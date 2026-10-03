@@ -33,6 +33,7 @@ import {
   FileScanRejectedError,
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
+import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
@@ -334,6 +335,7 @@ const loadInput = async ({
   });
   if (Result.isError(scanned)) {
     const scanError = scanned.error;
+    observeScanFailures(scanError);
     // A scanner failure says nothing about the bytes: keep the staged input
     // so the retry the hint suggests can still find it.
     if (!FileScanRejectedError.is(scanError)) {

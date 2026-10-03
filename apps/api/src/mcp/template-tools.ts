@@ -42,6 +42,7 @@ import {
   FileScanRejectedError,
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
+import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import {
@@ -2249,6 +2250,7 @@ const readCreateTemplateDocx = async ({
   });
   if (Result.isError(scanned)) {
     const scanError = scanned.error;
+    observeScanFailures(scanError);
     if (!FileScanRejectedError.is(scanError)) {
       return {
         status: "error",

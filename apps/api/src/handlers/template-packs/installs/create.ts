@@ -14,7 +14,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, withDescription } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { LIMITS } from "@/api/lib/limits";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
