@@ -319,7 +319,11 @@ if (!databaseUrl || !runPostgresTests) {
         documentUrl: null,
       });
 
-      const pending = await loadPendingDocuments(scopedDb, 100);
+      const pending = await loadPendingDocuments({
+        scopedDb,
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        limit: 100,
+      });
       const ids = pending.map((row) => row.id);
 
       expect(ids).toContain(waiting);
@@ -364,7 +368,11 @@ if (!databaseUrl || !runPostgresTests) {
           : 0,
       ).toBe(1);
 
-      const stillPending = await loadPendingDocuments(scopedDb, 100);
+      const stillPending = await loadPendingDocuments({
+        scopedDb,
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        limit: 100,
+      });
       expect(stillPending.map((pending) => pending.id)).not.toContain(id);
     });
 
@@ -380,7 +388,11 @@ if (!databaseUrl || !runPostgresTests) {
         scopedDb,
       });
 
-      const pending = await loadPendingDocuments(scopedDb, 100);
+      const pending = await loadPendingDocuments({
+        scopedDb,
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        limit: 100,
+      });
       expect(pending.map((row) => row.id)).not.toContain(id);
 
       const [row] = await db
@@ -562,7 +574,11 @@ if (!databaseUrl || !runPostgresTests) {
         contentHash: EMPTY_CORPUS_CONTENT_HASHES.at(0) ?? "",
       });
 
-      const queue = await loadPendingDocuments(scopedDb, QUEUE_READ_LIMIT);
+      const queue = await loadPendingDocuments({
+        scopedDb,
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        limit: QUEUE_READ_LIMIT,
+      });
 
       expect(onlyThese(queue, [trimmed, emptyObjects])).toEqual([emptyObjects]);
     });
@@ -671,7 +687,11 @@ if (!databaseUrl || !runPostgresTests) {
         documentFetchAttempts: 1,
       });
 
-      const queue = await loadPendingDocuments(scopedDb, QUEUE_READ_LIMIT);
+      const queue = await loadPendingDocuments({
+        scopedDb,
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        limit: QUEUE_READ_LIMIT,
+      });
 
       expect(onlyThese(queue, [cooling, cooled])).toEqual([cooled]);
     });
@@ -705,7 +725,11 @@ if (!databaseUrl || !runPostgresTests) {
         decisionDate: "2026-01-01",
       });
 
-      const queue = await loadPendingDocuments(scopedDb, QUEUE_READ_LIMIT);
+      const queue = await loadPendingDocuments({
+        scopedDb,
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        limit: QUEUE_READ_LIMIT,
+      });
 
       // Newest first, whatever each has already cost: the cooled
       // refusals, then the older untried decision.
@@ -759,7 +783,11 @@ if (!databaseUrl || !runPostgresTests) {
         older,
         exhausted,
       ];
-      const queue = await loadPendingDocuments(scopedDb, QUEUE_READ_LIMIT);
+      const queue = await loadPendingDocuments({
+        scopedDb,
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        limit: QUEUE_READ_LIMIT,
+      });
 
       expect(onlyThese(queue, expected)).toEqual(expected);
     });
@@ -937,7 +965,11 @@ if (!databaseUrl || !runPostgresTests) {
           failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
           detail: "http-400",
         });
-        const queue = await loadPendingDocuments(scopedDb, QUEUE_READ_LIMIT);
+        const queue = await loadPendingDocuments({
+          scopedDb,
+          adapterKey: ADAPTER_KEYS.SK_COURTS,
+          limit: QUEUE_READ_LIMIT,
+        });
         expect(onlyThese(queue, [id])).toEqual([]);
       });
 
