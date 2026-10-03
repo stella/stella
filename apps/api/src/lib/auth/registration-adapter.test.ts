@@ -217,13 +217,12 @@ describe("auth persistence retention", () => {
     "applies client admission to metadata registration: %s",
     async (admitted) => {
       const clientId = "https://client.example.test/metadata.json";
-      const oauthClients: Record<string, unknown>[] = [];
-      const database = {
+      const database: Record<string, Record<string, unknown>[]> = {
         user: [],
         session: [],
         account: [],
         verification: [],
-        oauthClient: oauthClients,
+        oauthClient: [],
         oauthClientResource: [],
         oauthResource: [],
       };
@@ -292,17 +291,17 @@ describe("auth persistence retention", () => {
       );
       expect(fetched).toBe(1);
       expect(admissions).toBe(1);
-      expect(database.user).toHaveLength(0);
-      expect(database.session).toHaveLength(0);
-      expect(oauthClients).toHaveLength(admitted ? 1 : 0);
+      expect(database["user"]).toHaveLength(0);
+      expect(database["session"]).toHaveLength(0);
+      expect(database["oauthClient"]).toHaveLength(admitted ? 1 : 0);
       if (admitted) {
         expect(response.status).toBe(302);
-        expect(oauthClients.at(0)).toMatchObject({
+        expect(database["oauthClient"]?.at(0)).toMatchObject({
           registrationOrigin: "open-client",
         });
       } else {
         expect(response.status).toBe(503);
-        expect(oauthClients.at(0)).toBeUndefined();
+        expect(database["oauthClient"]?.at(0)).toBeUndefined();
       }
     },
   );

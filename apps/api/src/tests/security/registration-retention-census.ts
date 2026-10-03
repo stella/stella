@@ -90,7 +90,7 @@ export const collectRetentionWrites = ({
     }
     const key = `${file.fileName}:${name}`;
     const clause = statement.importClause;
-    if (!clause || clause.isTypeOnly) {
+    if (!clause || clause.phaseModifier === ts.SyntaxKind.TypeKeyword) {
       return undefined;
     }
     if (
@@ -126,11 +126,11 @@ export const collectRetentionWrites = ({
       return undefined;
     }
     const target = resolveModule(file.fileName, statement.moduleSpecifier.text);
-    const targetFile = target && getFile(target);
-    if (targetFile && imported === "*") {
+    const targetFile = target === undefined ? undefined : getFile(target);
+    if (targetFile !== undefined && imported === "*") {
       return undefined;
     }
-    if (targetFile) {
+    if (targetFile !== undefined) {
       const targetNode = resolve({
         file: targetFile,
         name: imported,
@@ -173,7 +173,7 @@ export const collectRetentionWrites = ({
       statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
         ? resolveModule(file.fileName, statement.moduleSpecifier.text)
         : file.fileName;
-    const targetFile = target && getFile(target);
+    const targetFile = target === undefined ? undefined : getFile(target);
     if (!targetFile) {
       if (
         statement.moduleSpecifier &&
