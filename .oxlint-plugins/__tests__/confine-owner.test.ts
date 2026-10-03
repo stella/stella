@@ -5,6 +5,28 @@ import { lintSingleRule } from "./lint-single-rule.ts";
 
 setDefaultTimeout(20_000);
 
+test("every admission-store consumer must use the checked facade", async () => {
+  const admission = OWNERSHIP.find(({ id }) => id === "admission-redis");
+  if (admission?.enforcement.kind !== "import") {
+    throw new TypeError("Missing admission-store ownership");
+  }
+  const consumers = admission.enforcement.allowed;
+  expect(consumers.length).toBeGreaterThan(0);
+  for (const { path: sourcePath } of consumers) {
+    const source = [
+      'import { createRedisClient } from "@/api/lib/redis-client";',
+      'const unchecked = await import("@/api/lib/redis-client");',
+      'import { createAdmissionRedis } from "@/api/lib/admission-redis";',
+    ].join("\n");
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ruleOptions: { entries: OWNERSHIP },
+        sourcePath,
+      }),
+    ).toEqual([1, 2]);
+  }
+});
+
 // `member-call` rows are scoped by path, which the passive fixture under
 // `.oxlint-plugins/__fixtures__` cannot sit inside, so they are exercised here
 // with a source written beneath the scoped prefix.

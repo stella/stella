@@ -166,8 +166,14 @@ import {
   withFinalResponseCompletion,
 } from "@/api/lib/observability/request-lifecycle";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
-import { closeActionAdmissionRedis } from "@/api/lib/rate-limit/action-admission";
-import { closeMcpReadFenceRedis } from "@/api/lib/rate-limit/mcp-read-fence";
+import {
+  closeActionAdmissionRedis,
+  startActionAdmissionRedis,
+} from "@/api/lib/rate-limit/action-admission";
+import {
+  closeMcpReadFenceRedis,
+  startMcpReadFenceRedis,
+} from "@/api/lib/rate-limit/mcp-read-fence";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
@@ -678,6 +684,12 @@ const startServer = async (): Promise<void> => {
       rejectUnauthorized: envBase.REDIS_TLS_REJECT_UNAUTHORIZED,
     }).unwrap("Redis connection configuration must be valid.");
     logger.info("redis.connection.mode", { mode });
+    if (env.FEATURE_ACTION_ADMISSION) {
+      detached(startActionAdmissionRedis(), "admission-store.start");
+    }
+    if (env.FEATURE_MCP_READ_FENCE) {
+      detached(startMcpReadFenceRedis(), "read-fence-store.start");
+    }
   }
 
   startMemoryPressureHandler();
