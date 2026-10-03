@@ -325,7 +325,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
       expect(held.failures).toEqual([]);
       expect((await checkpoint()).batch.holdUntil).not.toBeNull();
       expect(
-        await operator.unsafe(
+        await operator.unsafe<{ name: string }[]>(
           `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
         ),
       ).toHaveLength(0);
@@ -333,7 +333,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
       await resumed.run();
       expect(resumed.failures).toEqual([]);
       expect(
-        await operator.unsafe(
+        await operator.unsafe<{ name: string }[]>(
           `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
         ),
       ).toHaveLength(2);
