@@ -71,6 +71,8 @@ jobs:
       # services, other platforms). Production E2E also runs on PRs that
       # change its spec tree, and service suites when their dependencies change.
       suite_depth: ${{ steps.depth.outputs.suite_depth }}
+      queue_depth: ${{ steps.depth.outputs.queue_depth || 'full' }}
+      thin_jobs: ${{ steps.heavy-plan.outputs.thin_jobs }}
       heavy_jobs: ${{ steps.heavy-plan.outputs.heavy_jobs }}
       heavy_web_build_required: ${{ inputs.heavy_only == true && 'true' || 'false' }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
@@ -115,10 +117,18 @@ jobs:
       - name: Resolve suite depth
         id: depth
         env:
+          MERGE_QUEUE_DEPTH: ${{ vars.MERGE_QUEUE_DEPTH }}
           DISPATCH_DEPTH: ${{ inputs.depth }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
+          case "${MERGE_QUEUE_DEPTH:-}" in
+            ""|full|thin) ;;
+            *)
+              echo "::error::Unknown MERGE_QUEUE_DEPTH '$MERGE_QUEUE_DEPTH'; choose full or thin (unset means full)."
+              exit 1
+              ;;
+          esac
           if [[ "${HEAVY_ONLY:-false}" == true ]]; then
             if [[ "$DISPATCH_DEPTH" != full ]]; then
               echo "::error::Heavy-only runs require full depth."
@@ -127,11 +137,14 @@ jobs:
             echo "suite_depth=full" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Full on merge_group only: the heavy suites check the tree that
-          # will land, once, in the merge queue. A pull request plans fast.
+          # Merge groups keep full scope planning; queue_depth controls which
+          # jobs certify the tree. A pull request continues to plan fast.
           # A manual run takes its `depth` input.
           case "$EVENT_NAME" in
             merge_group)
+              if [[ "${MERGE_QUEUE_DEPTH:-full}" == thin ]]; then
+                echo "queue_depth=thin" >> "$GITHUB_OUTPUT"
+              fi
               echo "suite_depth=full" >> "$GITHUB_OUTPUT"
               exit 0
               ;;
@@ -230,13 +243,13 @@ jobs:
         run: echo "image=$(cat .github/actions/setup-playwright/image.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun for heavy job planning
-        if: inputs.heavy_only == true
+        if: inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
 
       - name: Install heavy planner dependencies
-        if: inputs.heavy_only == true
+        if: inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')
         run: bun install --frozen-lockfile --ignore-scripts --filter @stll/scripts
         env:
           NPM_TOKEN: ""
@@ -245,7 +258,7 @@ jobs:
       # older main commit that predates this planner.
       - name: Derive heavy jobs
         id: heavy-plan
-        if: inputs.heavy_only == true
+        if: inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')
         env:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
@@ -745,12 +758,14 @@ jobs:
     name: Sandbox Docker and image dependency checks
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.docker_checks_required == 'true'
       && (needs.ci-plan.outputs.suite_depth == 'full'
           || (needs.ci-plan.outputs.suite_depth == 'fast'
               && needs.ci-plan.outputs.docker_checks_pr_required == 'true'))
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
@@ -1987,6 +2002,10 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/main-heavy-plan.test.ts scripts/main-heavy.test.ts scripts/validate-main-heavy-sha.test.ts
 
+      - name: Test thin merge queue contracts
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/thin-queue.test.ts
+
       - name: Test service-suite dependency scope
         run: bun test scripts/detect-service-suite-changes.test.ts
 
@@ -2311,9 +2330,11 @@ jobs:
   ci-browser:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:
@@ -2747,12 +2768,14 @@ jobs:
   service-suites:
     needs: ci-plan
     if: >-
-      needs.ci-plan.outputs.service_suites_required == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && (needs.ci-plan.outputs.service_suites_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && (needs.ci-plan.outputs.suite_depth == 'full'
           || (needs.ci-plan.outputs.suite_depth == 'fast'
               && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -2880,10 +2903,12 @@ jobs:
     # parity. See scripts/rehearse-migration-upgrade.sh.
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.migration_rehearsal_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -2974,11 +2999,13 @@ jobs:
   release-typecheck:
     needs: ci-plan
     if: >-
-      (github.event_name == 'pull_request'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((github.event_name == 'pull_request'
        || github.event_name == 'merge_group'
        || inputs.heavy_only == true)
       && needs.ci-plan.outputs.release_typecheck_required == 'true'
       && needs.ci-plan.outputs.trusted == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -3015,9 +3042,11 @@ jobs:
   fix-tests-on-base:
     needs: ci-plan
     if: >-
-      github.event_name == 'pull_request'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && (github.event_name == 'pull_request'
       && needs.ci-plan.outputs.fix_tests_on_base_required == 'true'
       && needs.ci-plan.outputs.trusted == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -3338,9 +3367,11 @@ jobs:
   web-image-smoke:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.web_image_smoke_required == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 8
     permissions:
@@ -3407,10 +3438,12 @@ jobs:
   mobile-build:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.mobile_build_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -3448,9 +3481,11 @@ jobs:
   landing-build:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.landing_build_required == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -3487,8 +3522,10 @@ jobs:
   heavy-web-build:
     needs: ci-plan
     if: >-
-      needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && (needs.ci-plan.outputs.trusted == 'true'
       && needs.ci-plan.outputs.heavy_web_build_required == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -3522,11 +3559,13 @@ jobs:
   route-smoke:
     needs: [ci-plan, web-build, heavy-web-build]
     if: >-
-      always()
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && (always()
       && needs.ci-plan.outputs.trusted == 'true'
       && needs.ci-plan.outputs.route_smoke_required == 'true'
       && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success')
       && (github.event_name == 'pull_request' || inputs.heavy_only == true)
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -3608,12 +3647,14 @@ jobs:
   e2e-production-shard:
     needs: [ci-plan, web-build, heavy-web-build]
     if: >-
-      always()
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_production_required == 'true'
       && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -3746,10 +3787,12 @@ jobs:
   stack-redaction-browsers:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.stack_redaction_browsers_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -3782,10 +3825,12 @@ jobs:
   e2e-vite-canary:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_core_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -3958,10 +4003,12 @@ jobs:
   e2e-landing:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_landing_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -4045,13 +4092,15 @@ jobs:
     # declare the producer so artifact consumers start only after it succeeds.
     needs: [ci-plan, web-build, heavy-web-build]
     if: >-
-      always()
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.marketing_screenshots_required == 'true'
       && (needs.ci-plan.outputs.web_build_required != 'true'
           || (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success'))
+      )
     uses: ./.github/workflows/marketing-screenshots.yml
     permissions:
       actions: read
@@ -4124,9 +4173,11 @@ jobs:
     name: API release image (${{ matrix.platform }})
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.api_image_smoke_required == 'true'
+      )
     strategy:
       fail-fast: false
       matrix:
@@ -4226,12 +4277,14 @@ jobs:
   legal-atlas-image:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.legal_atlas_image_required == 'true'
       && (needs.ci-plan.outputs.suite_depth == 'full'
           || (needs.ci-plan.outputs.suite_depth == 'fast'
               && needs.ci-plan.outputs.legal_atlas_image_pr_required == 'true'))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -4279,9 +4332,11 @@ jobs:
   windows-scripts:
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.windows_scripts_required == 'true'
+      )
     runs-on: windows-latest
     timeout-minutes: 10
     permissions:
@@ -4330,9 +4385,11 @@ jobs:
     name: Desktop Rust (${{ matrix.os }})
     needs: ci-plan
     if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.desktop_rust_checks_required == 'true'
+      )
     strategy:
       fail-fast: false
       matrix:
@@ -4453,7 +4510,9 @@ jobs:
 
   dependency-malware:
     needs: ci-plan
-    if: needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.dependency_malware_required == 'true'
+    if: >-
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && (needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.dependency_malware_required == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -4615,6 +4674,8 @@ jobs:
           SUITE_DEPTH: ${{ needs.ci-plan.outputs.suite_depth }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
           HEAVY_JOBS: ${{ needs.ci-plan.outputs.heavy_jobs || '[]' }}
+          QUEUE_DEPTH: ${{ needs.ci-plan.outputs.queue_depth || 'full' }}
+          THIN_JOBS: ${{ needs.ci-plan.outputs.thin_jobs || '[]' }}
           TRUSTED: ${{ needs.ci-plan.outputs.trusted }}
           # The ci-plan output each job's `if:` selects it by; null for a job
           # that always runs at full depth. scripts/ci-plan.test.ts binds each
@@ -4747,23 +4808,33 @@ jobs:
             exit 1
           fi
 
+          if [[ "$QUEUE_DEPTH" == thin && "$EVENT" != merge_group ]]; then
+            echo "::error::Thin queue depth is valid only for merge_group."
+            exit 1
+          fi
+          if [[ "$QUEUE_DEPTH" == thin ]] && ! jq -e 'type == "array" and length > 0 and all(.[]; type == "string")' <<< "$THIN_JOBS" > /dev/null; then
+            echo "::error::Thin queue has no derived required job set."
+            exit 1
+          fi
           case "$SUITE_DEPTH" in
             full)
-              # Every job the plan selected must succeed: a skipped or
-              # cancelled one did not check this tree.
-              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" '
+              # Planned checks must succeed. A thin queue allows only the
+              # heavy skips selected by the same plan, and rejects failures.
+              violations=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" '
                 [to_entries[] | select(.key != "ci-plan") | .key as $job | .value.result as $result
-                  | if ($scopes | has($job) | not) then "\($job) (no entry in JOB_SCOPES)"
+                  | if $queue == "thin" and ($thin | index($job) | not) then
+                      (if $result == "success" or $result == "skipped" then empty else "\($job) (\($result))" end)
+                    elif ($scopes | has($job) | not) then "\($job) (no entry in JOB_SCOPES)"
                     elif ($scopes[$job] == null or $plan[$scopes[$job]] == "true") then
                       (if $result == "success" then empty else "\($job) (planned, \($result))" end)
                     elif $result == "success" or $result == "skipped" then empty
                     else "\($job) (\($result))"
                     end]
                 | join(", ")' <<< "$NEEDS")
-              folded_violations=$(jq -r --argjson plan "$PLAN" --argjson suites "$FOLDED_SUITES" '
+              folded_violations=$(jq -r --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" --argjson plan "$PLAN" --argjson suites "$FOLDED_SUITES" '
                 . as $needs
                 | [$suites | to_entries[] | .key as $job | .value | to_entries[]
-                  | select($plan[.value] == "true") | .key as $suite
+                  | select(($queue != "thin" or ($thin | index($job))) and $plan[.value] == "true") | .key as $suite
                   | ($needs[$job].outputs[$suite] // "missing") as $result
                   | select($result != "success") | "\($suite) (planned, \($result))"]
                 | join(", ")' <<< "$NEEDS")
