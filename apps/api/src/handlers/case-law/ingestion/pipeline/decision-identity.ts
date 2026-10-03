@@ -80,6 +80,7 @@ export type ObservedDecision = {
 };
 
 type ObserveDecisionOptions = {
+  metadataUrlSchema?: unknown;
   input: IngestionResult;
   sourceId: SafeId<"caseLawSource">;
 };
@@ -89,10 +90,11 @@ type ObserveDecisionOptions = {
  * may already own it. Logs a stated date the row cannot carry.
  */
 export const observeDecision = ({
+  metadataUrlSchema,
   input,
   sourceId,
 }: ObserveDecisionOptions): ObservedDecision => {
-  const observed = sanitizeResult(input);
+  const observed = sanitizeResult(input, metadataUrlSchema);
   const docket = observedDocketOf(input);
   if (docket.type !== "kept") {
     // The row is written either way; the event is the flag an operator

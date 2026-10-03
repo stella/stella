@@ -16,7 +16,27 @@
     "reason": "Replaced by CLI committed registry and derived runtime guard: checks committed projections separately and verifies ignored runtime generation."
   },
   {
+    "name": "CLI committed registry and derived runtime guard",
+    "reason": "Replaced by CLI sharded registry and derived runtime guard: derives the API capability runtime from committed shards before regenerating the CLI registry and runtime."
+  },
+  {
     "name": "Web API types drift guard",
     "reason": "Replaced by the determinism guard; the generated API types file is no longer committed"
+  },
+  {
+    "name": "Select measured ratchet base",
+    "reason": "Renamed to Select measured ratchet base from the target branch; it now measures from the pull request's base branch instead of main"
+  },
+  {
+    "name": "Marketing content evidence",
+    "reason": "Renamed to Marketing content check; it now runs with the package checks, after the dependency install"
+  },
+  {
+    "name": "Release marketing freshness warning",
+    "reason": "Renamed to Release marketing staleness warning; it now runs with the package checks, after the dependency install"
+  },
+  {
+    "name": "Model catalog snapshot drift guard",
+    "reason": "Renamed to Model catalog snapshot drift check; it now runs with the package checks, after the dependency install"
   }
 ]

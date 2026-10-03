@@ -10,7 +10,7 @@ import type {
 import { status, t } from "elysia";
 
 import type { ModelRole } from "@stll/ai-catalog";
-import type { PermissionInput, roles } from "@stll/permissions";
+import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
@@ -64,6 +64,7 @@ import {
   hasMemberPermission,
   readAuthorizedMemberRole,
 } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
@@ -438,9 +439,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     pinServerValidatedWorkspaceId: (
       workspaceId: SafeId<"workspace">,
     ) => boolean;
-    memberRole: {
-      role: keyof typeof roles;
-    };
+    memberRole: AuthorizedMemberRole;
     orgAIConfig: OrgAIConfig | null;
     /**
      * Whether `orgAIConfig` reflects the org's stored configuration.
@@ -876,14 +875,19 @@ const runAdmittedFiniteHandler = async function* <
           getRequestContext(ctx.request)?.requestId ?? Bun.randomUUIDv7(),
       },
       run: async (signal) => {
-        // A disconnected request may carry no reason after signal composition.
+        // Check before composing signals: composition can drop the request's
+        // reason. Keep a typed refusal's status; any other disconnect is a 400.
         if (ctx.request.signal.aborted) {
+          // The DOM types the reason as any; read it as unknown and narrow.
+          const reason: unknown = ctx.request.signal.reason;
           return Result.err(
-            new HandlerError({
-              status: 400,
-              message: "Request aborted",
-              cause: ctx.request.signal.reason,
-            }),
+            reason instanceof HandlerError
+              ? reason
+              : new HandlerError({
+                  status: 400,
+                  message: "Request aborted",
+                  cause: reason,
+                }),
           );
         }
         ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);

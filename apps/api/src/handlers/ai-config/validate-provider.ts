@@ -53,7 +53,7 @@ const truncateProbeError = (message: string): string =>
  */
 const validateProvider = createSafeSessionHandler(
   config,
-  async function* ({ body, request, user }) {
+  async function* ({ body, request, set, user }) {
     if (
       body.region &&
       body.region !== "global" &&
@@ -89,6 +89,7 @@ const validateProvider = createSafeSessionHandler(
         try: async () =>
           await isActiveOrganizationMember({
             headers: request.headers,
+            responseHeaders: set.headers,
             userId: user.id,
           }),
         catch: probeUnavailable,

@@ -20,12 +20,13 @@ import {
   twoFactor,
 } from "better-auth/plugins";
 import { panic, Result } from "better-result";
-import { and, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
+import { and, count, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
+import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
-import { ac, roles } from "@stll/permissions";
+import { ac, assignableRoles, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
@@ -63,6 +64,7 @@ import {
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth/auth-paths";
+import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
 import {
   checkConfiguredDemoAccountAccess,
   checkDemoAccountOperation,
@@ -78,6 +80,11 @@ import {
   warnDemoAccountConfiguration,
 } from "@/api/lib/auth/demo-account-policy";
 import { createSessionBearer } from "@/api/lib/auth/session-bearer";
+import {
+  createSessionLifetime,
+  SESSION_LIFETIME_FIELDS,
+} from "@/api/lib/auth/session-lifetime";
+import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import {
   createSocialIdentityValidation,
   isVerifiedMicrosoftIdentity,
@@ -118,10 +125,16 @@ import {
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { isMemberRole } from "@/api/lib/member-roles";
+import {
+  mapMembershipInvariantError,
+  ownerRequiredError,
+} from "@/api/lib/membership-role-invariants";
 import { resolveLoopbackClientRegistrationOverride } from "@/api/lib/oauth-loopback-registration";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   enrichRequestContext,
   getRequestContext,
@@ -135,6 +148,7 @@ import {
 import {
   hasMemberPermission,
   readAuthorizedMemberRole,
+  sessionMemberRole,
 } from "@/api/lib/permission-authorization";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import { createOtpAccountLimitPlugin } from "@/api/lib/rate-limit/otp-account-budget";
@@ -546,6 +560,14 @@ const requireTwoFactorManageOtp = async ({
 
 /** TOTP issuer label shown in authenticator apps (e.g. "Stella (user@example.com)"). */
 const TWO_FACTOR_ISSUER = "Stella";
+const MEMBERSHIP_UPDATE_FAILED = failureSink({
+  event: "auth.membership_update_failed",
+  expected: [],
+});
+const MEMBERSHIP_REMOVAL_FAILED = failureSink({
+  event: "auth.membership_removal_failed",
+  expected: [],
+});
 
 /** Session lifetime in seconds (7 days). */
 const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
@@ -553,12 +575,7 @@ const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
 /** How often the session expiry is refreshed, in seconds (1 day). */
 const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
 
-/**
- * How long the signed session-cookie snapshot may satisfy `getSession`
- * without touching the database. Bounds revocation latency: a revoked
- * session's already-issued cookie stays valid for at most this long.
- * Exported for the pinning invariant in `auth.test.ts`.
- */
+/** Signed session snapshots bound credential acceptance without storage reads. */
 export const SESSION_COOKIE_CACHE_MAX_AGE_SECONDS = 60;
 
 const { cookiePrefix, useSecureCookies } = authCookiePolicy();
@@ -877,7 +894,15 @@ const oauthUiFragmentBridgePlugin = {
 // database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
 // evaluates this module before db/index.ts finishes.
-const createAuth = () => {
+export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
+  const sessionLifetime = createSessionLifetime({
+    store: createDatabaseSessionLifetimeStore(rootDb, {
+      expiresIn: SESSION_LIFETIME_SECONDS,
+      updateAge: SESSION_UPDATE_AGE_SECONDS,
+      rotationEnabled: env.SESSION_TOKEN_ROTATION_ENABLED,
+      capEnabled: env.SESSION_LIFETIME_CAP_ENABLED,
+    }),
+  });
   const demoConfig = getDemoAccountConfig();
   const demoSessionGuard = createDemoAuthSessionGuard(demoConfig);
   warnDemoAccountConfiguration(demoConfig, (attributes) =>
@@ -918,6 +943,108 @@ const createAuth = () => {
         message: admission.error.message,
       });
     }
+  };
+
+  const requireAssignableMemberRole = async (
+    organizationId: SafeId<"organization">,
+    role: string,
+  ) => {
+    const endpoint = tryGetCurrentAuthEndpointContext();
+    // Inspect the original input as well: the plugin normalizes comma lists
+    // before invoking organization hooks.
+    const input =
+      endpoint && isRecord(endpoint.body) ? endpoint.body["role"] : role;
+    if (
+      typeof input !== "string" ||
+      !isMemberRole(input) ||
+      !isMemberRole(role)
+    ) {
+      throw new APIError("BAD_REQUEST", {
+        code: "invalid_member_role",
+        message: "Select one product membership role.",
+      });
+    }
+    const headers =
+      endpoint?.headers instanceof Headers
+        ? endpoint.headers
+        : endpoint?.request?.headers;
+    if (!headers) {
+      throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
+    }
+    const session = await getAuth().api.getSession({
+      headers,
+      query: { disableCookieCache: true, disableRefresh: true },
+    });
+    if (!session) {
+      throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
+    }
+    const actor = await rootDb.query.member.findFirst({
+      columns: { role: true },
+      where: {
+        organizationId: { eq: organizationId },
+        userId: { eq: session.user.id },
+      },
+    });
+    if (
+      !actor ||
+      !isMemberRole(actor.role) ||
+      !roleAssignmentPolicy(actor.role).includes(role)
+    ) {
+      throw new APIError("FORBIDDEN", {
+        code: "member_role_not_assignable",
+        message: "You cannot assign this membership role.",
+      });
+    }
+  };
+
+  const refuseLastOwnerChange = async (
+    organizationId: SafeId<"organization">,
+    role: string,
+  ) => {
+    if (role !== "owner") {
+      return;
+    }
+    const [owners] = await rootDb
+      .select({ count: count() })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, organizationId),
+          eq(member.role, "owner"),
+        ),
+      );
+    if (!owners || owners.count <= 1) {
+      throw ownerRequiredError();
+    }
+  };
+
+  const rawAuthAdapter = drizzleAdapter(rootDb, AUTH_DATABASE_ADAPTER_OPTIONS);
+  const membershipAuthAdapter: typeof rawAuthAdapter = (options) => {
+    const adapter = rawAuthAdapter(options);
+    return {
+      ...adapter,
+      // The hook's preflight cannot hold a lock across this plugin write.
+      // Translate the database's final refusal at the adapter boundary.
+      update: async <T>(args: Parameters<typeof adapter.update>[0]) => {
+        const update = await Result.tryPromise({
+          try: async () => await adapter.update<T>(args),
+          catch: mapMembershipInvariantError,
+        });
+        if (Result.isError(update)) {
+          if (
+            !(update.error instanceof APIError) ||
+            update.error.statusCode >= 500
+          ) {
+            observeFailure(update.error, {
+              sink: MEMBERSHIP_UPDATE_FAILED,
+              ctx: { operation: args.model },
+            });
+          }
+          throw update.error;
+        }
+        return update.value;
+      },
+    };
   };
 
   const organizationLifecycleHooks = createOrganizationLifecycleHooks({
@@ -990,28 +1117,16 @@ const createAuth = () => {
     },
     account: { accountLinking: SOCIAL_ACCOUNT_LINKING_OPTIONS },
     session: {
+      additionalFields: SESSION_LIFETIME_FIELDS,
       expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
       ...AUTH_SESSION_STORAGE_OPTIONS,
-      // Short-lived signed cookie cache for session resolution. Every API
-      // request runs `getSession` through `sessionAuthMacro` /
-      // `getSessionAndMemberAuthorization`, and without this cache each of
-      // those pays two session/user reads on the primary database — the
-      // single largest per-request DB cost in the network baseline's
-      // `x-db-queries` budgets. With the cache, a request whose signed
-      // cookie snapshot is younger than `maxAge` skips those reads
-      // entirely; the HMAC signature keeps the payload tamper-evident.
-      //
-      // Deliberate trade-off, kept narrow: a revoked session stays usable
-      // for up to SESSION_COOKIE_CACHE_MAX_AGE_SECONDS after revocation on
-      // clients that still hold the cached cookie. Authorization is NOT
-      // cached — member role and workspace access run live per request
-      // (`resolveMemberAuthorization`), so role demotion and workspace
-      // removal take effect immediately; only the identity snapshot rides
-      // the cache. Change the window deliberately: the `auth.test.ts`
-      // invariant pins it.
+      // Cached snapshots perform no database work. Their lifetime bounds
+      // prior-credential acceptance; startup reads bypass this snapshot.
+      // Member and matter authorization remain live per request.
       cookieCache: {
         enabled: true,
+        version: sessionLifetime.cookieCacheVersion,
         maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
       },
       // Disable Better Auth's session-freshness gate. It defaults to 1 day
@@ -1141,7 +1256,7 @@ const createAuth = () => {
         },
       },
     },
-    database: drizzleAdapter(rootDb, AUTH_DATABASE_ADAPTER_OPTIONS),
+    database: membershipAuthAdapter,
     socialProviders: {
       ...(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET
         ? {
@@ -1173,6 +1288,7 @@ const createAuth = () => {
         : {}),
     },
     plugins: [
+      sessionLifetime.plugin,
       createAgentUserPlugin(),
       createSessionBearer(),
       createDemoSessionFilter(demoConfig),
@@ -1352,6 +1468,10 @@ const createAuth = () => {
             invitation,
             inviter,
           }) {
+            await requireAssignableMemberRole(
+              brandPersistedOrganizationId(org.id),
+              invitation.role,
+            );
             requireDemoAccountAccess(
               checkConfiguredDemoAccountAccess({
                 email: inviter.email,
@@ -1381,7 +1501,30 @@ const createAuth = () => {
               "membership",
             );
           },
-          async beforeAddMember({ organization: org, user }) {
+          async beforeAddMember({
+            organization: org,
+            user,
+            member: addedMember,
+          }) {
+            const endpoint = tryGetCurrentAuthEndpointContext();
+            if (endpoint?.path === "/organization/create") {
+              // Better Auth supplies the creator role, before a membership or
+              // browser session exists on the system provisioning path.
+              if (
+                addedMember.role !==
+                BETTER_AUTH_ORGANIZATION_OPTIONS.creatorRole
+              ) {
+                throw new APIError("BAD_REQUEST", {
+                  code: "invalid_member_role",
+                  message: "Select one product membership role.",
+                });
+              }
+            } else {
+              await requireAssignableMemberRole(
+                brandPersistedOrganizationId(org.id),
+                addedMember.role,
+              );
+            }
             requireDemoAccountAccess(
               checkConfiguredDemoAccountAccess({
                 email: user.email,
@@ -1392,6 +1535,22 @@ const createAuth = () => {
               brandPersistedOrganizationId(org.id),
               "membership",
             );
+          },
+          async beforeUpdateMemberRole({
+            member: updatedMember,
+            newRole,
+            organization: org,
+          }) {
+            await requireAssignableMemberRole(
+              brandPersistedOrganizationId(org.id),
+              newRole,
+            );
+            if (newRole !== "owner") {
+              await refuseLastOwnerChange(
+                brandPersistedOrganizationId(org.id),
+                updatedMember.role,
+              );
+            }
           },
           async afterRemoveMember({
             member: removedMember,
@@ -1424,28 +1583,45 @@ const createAuth = () => {
             // ids for the tenant predicates the helper applies.
             const organizationId = brandPersistedOrganizationId(org.id);
             const userId = brandPersistedUserId(removedMember.userId);
-            await rootDb.transaction(async (tx) => {
-              const timerClose = await closeRemovedMemberActiveTimer({
-                organizationId,
-                tx,
-                userId,
-              });
-              if (Result.isError(timerClose)) {
-                throw timerClose.error;
-              }
-              // Better Auth deletes the member after this hook, outside this
-              // transaction. Remove the exact row here so a timer cannot start
-              // between the timer check and membership removal.
-              await tx
-                .delete(member)
-                .where(
-                  and(
-                    eq(member.id, removedMember.id),
-                    eq(member.organizationId, organizationId),
-                    eq(member.userId, userId),
-                  ),
-                );
+            await refuseLastOwnerChange(organizationId, removedMember.role);
+            const removal = await Result.tryPromise({
+              try: async () =>
+                await rootDb.transaction(async (tx) => {
+                  const timerClose = await closeRemovedMemberActiveTimer({
+                    organizationId,
+                    tx,
+                    userId,
+                  });
+                  if (Result.isError(timerClose)) {
+                    throw timerClose.error;
+                  }
+                  // Better Auth deletes the member after this hook, outside this
+                  // transaction. Remove the exact row here so a timer cannot start
+                  // between the timer check and membership removal.
+                  await tx
+                    .delete(member)
+                    .where(
+                      and(
+                        eq(member.id, removedMember.id),
+                        eq(member.organizationId, organizationId),
+                        eq(member.userId, userId),
+                      ),
+                    );
+                }),
+              catch: mapMembershipInvariantError,
             });
+            if (Result.isError(removal)) {
+              if (
+                !(removal.error instanceof APIError) ||
+                removal.error.statusCode >= 500
+              ) {
+                observeFailure(removal.error, {
+                  sink: MEMBERSHIP_REMOVAL_FAILED,
+                  ctx: { organizationId },
+                });
+              }
+              throw removal.error;
+            }
           },
         },
         async sendInvitationEmail(data, request) {
@@ -1588,6 +1764,7 @@ const createAuth = () => {
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        sessionLifetime.prepare(ctx.context);
         if (!ctx.path) {
           return undefined;
         }
@@ -1772,16 +1949,25 @@ export const getAuth = () => {
 
 export type { MemberRole } from "@/api/lib/member-roles";
 
-const getSessionAndMemberAuthorization = async (
-  headers: Headers | Record<string, string>,
-  workspaceId?: SafeId<"workspace">,
-) => {
-  const sessionResult = await Result.tryPromise(
-    async () =>
-      await getAuth().api.getSession({
-        headers,
-      }),
-  );
+type GetSessionAndMemberAuthorizationOptions = {
+  headers: Headers | Record<string, string>;
+  responseHeaders: Context["set"]["headers"];
+  workspaceId?: SafeId<"workspace"> | undefined;
+};
+
+const getSessionAndMemberAuthorization = async ({
+  headers,
+  responseHeaders,
+  workspaceId,
+}: GetSessionAndMemberAuthorizationOptions) => {
+  const sessionResult = await Result.tryPromise(async () => {
+    const resolved = await getAuth().api.getSession({
+      headers,
+      returnHeaders: true,
+    });
+    forwardAuthResponseCookies(responseHeaders, resolved.headers);
+    return resolved.response;
+  });
 
   const session = Result.isOk(sessionResult)
     ? sessionResult.value?.session
@@ -1820,13 +2006,15 @@ const getSessionAndMemberAuthorization = async (
 
 export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
   validateSession: {
-    async resolve({ status, request }) {
-      const sessionResult = await Result.tryPromise(
-        async () =>
-          await getAuth().api.getSession({
-            headers: request.headers,
-          }),
-      );
+    async resolve({ status, request, set }) {
+      const sessionResult = await Result.tryPromise(async () => {
+        const resolved = await getAuth().api.getSession({
+          headers: request.headers,
+          returnHeaders: true,
+        });
+        forwardAuthResponseCookies(set.headers, resolved.headers);
+        return resolved.response;
+      });
 
       if (Result.isError(sessionResult)) {
         return status(500);
@@ -1997,14 +2185,20 @@ export const resolveCredentialMemberAuthorization = async (
  */
 export const isActiveOrganizationMember = async ({
   headers,
+  responseHeaders,
   userId,
 }: {
   headers: Headers;
+  responseHeaders: Context["set"]["headers"];
   userId: SafeId<"user">;
 }): Promise<boolean> => {
-  const resolved = await getAuth().api.getSession({ headers });
+  const resolved = await getAuth().api.getSession({
+    headers,
+    returnHeaders: true,
+  });
+  forwardAuthResponseCookies(responseHeaders, resolved.headers);
   const activeOrganizationId = getSessionActiveOrganizationId(
-    resolved?.session,
+    resolved.response?.session,
   );
   if (activeOrganizationId === undefined) {
     return true;
@@ -2137,16 +2331,25 @@ export const realtimeAuthorizers = {
  * Letting inference flow keeps the real (wide) transaction type, which is
  * what every handler's `ctx.scopedDb`/`ctx.safeDb` callback expects.
  */
-const resolveValidateAuth = async (
-  request: Request,
-  server: Parameters<typeof createAuditRecorder>[0]["server"],
-  initialWorkspaceId: SafeId<"workspace"> | null,
-) => {
+type ResolveValidateAuthOptions = {
+  request: Request;
+  server: Parameters<typeof createAuditRecorder>[0]["server"];
+  initialWorkspaceId: SafeId<"workspace"> | null;
+  responseHeaders: Context["set"]["headers"];
+};
+
+const resolveValidateAuth = async ({
+  request,
+  server,
+  initialWorkspaceId,
+  responseHeaders,
+}: ResolveValidateAuthOptions) => {
   const { sessionResult, memberAuthorizationResult } =
-    await getSessionAndMemberAuthorization(
-      request.headers,
-      initialWorkspaceId ?? undefined,
-    );
+    await getSessionAndMemberAuthorization({
+      headers: request.headers,
+      responseHeaders,
+      workspaceId: initialWorkspaceId ?? undefined,
+    });
 
   if (Result.isError(sessionResult)) {
     return { ok: false as const, statusCode: 500 as const };
@@ -2168,7 +2371,7 @@ const resolveValidateAuth = async (
     return { ok: false as const, statusCode: 401 as const };
   }
   const { role } = authorization;
-  const memberRole = { role };
+  const memberRole = sessionMemberRole(role);
   const activeOrganizationId = toSafeId<"organization">(rawOrgId);
   const userId = toSafeId<"user">(user.id);
 
@@ -2374,13 +2577,18 @@ const validateAuthResolutionCache = new WeakMap<
 export const authMacro = new Elysia({ name: "authMacro" }).macro({
   validateAuth: {
     detail: { [TENANT_ACTION_DETAIL]: true },
-    async resolve({ params, query, status, request, server }) {
+    async resolve({ params, query, status, request, server, set }) {
       const initialWorkspaceId = readInitialWorkspaceId(params, query);
       const result = await memoizePerRequest(
         validateAuthResolutionCache,
         request,
         async () =>
-          await resolveValidateAuth(request, server, initialWorkspaceId),
+          await resolveValidateAuth({
+            request,
+            server,
+            initialWorkspaceId,
+            responseHeaders: set.headers,
+          }),
       );
 
       if (!result.ok) {

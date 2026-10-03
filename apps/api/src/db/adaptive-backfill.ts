@@ -86,8 +86,8 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
   log(start);
   const slotState = { acquired: false };
   try {
-    const outcome = await Result.tryPromise(
-      async () =>
+    const outcome = await Result.tryPromise({
+      try: async () =>
         await runInTransaction(async (tx) => {
           const checkpoint = await readCheckpoint(tx);
           if (
@@ -97,6 +97,7 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
             log({ action: "hold", ...checkpoint.batch, verdict, config });
             return {
               status: "held" as const,
+              verdict,
               checkpoint,
               scanned: 0,
               written: 0,
@@ -134,6 +135,7 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
             await persistCheckpoint(tx, held);
             return {
               status: "held" as const,
+              verdict: effectiveVerdict,
               checkpoint: held,
               scanned: 0,
               written: 0,
@@ -175,12 +177,14 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
           });
           return {
             status: page.done ? ("done" as const) : ("advanced" as const),
+            verdict,
             checkpoint: committed,
             scanned: page.items.length,
             written: items.length,
           };
         }),
-    );
+      catch: (cause: unknown) => cause,
+    });
     if (Result.isOk(outcome)) {
       return outcome.value;
     }
@@ -204,6 +208,8 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
       await persistCheckpoint(tx, held);
       return {
         status: "retry" as const,
+        error: outcome.error,
+        verdict,
         checkpoint: held,
         scanned: 0,
         written: 0,

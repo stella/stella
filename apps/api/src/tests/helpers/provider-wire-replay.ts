@@ -166,6 +166,7 @@ export const decodeAwsEventStream = (
       ) {
         payload = Object.fromEntries(Object.entries(parsed));
       }
+      // swallow-ok: non-JSON wire data stays verbatim for subsequent transcript inspection
     } catch {
       // Not JSON: kept as the literal payload.
     }
@@ -289,6 +290,7 @@ const responseFor = (
       onAbort = () => {
         try {
           controller.error(abortError());
+          // swallow-ok: abort can race a closed controller; the stream has already exposed its terminal state
         } catch {
           // Already closed.
         }
@@ -394,6 +396,7 @@ export const installProviderWireReplay = ({
       let body: unknown = null;
       try {
         body = JSON.parse(bodyText);
+        // swallow-ok: unparseable request bodies remain null and are reported by transcript validation
       } catch {
         // Unreadable: the transcript check reports it.
       }

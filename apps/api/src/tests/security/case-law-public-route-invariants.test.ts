@@ -885,6 +885,28 @@ describe("public case-law route boundary", () => {
     expect(markerSource).toContain("PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY");
   });
 
+  test("every related-decision read in the citation graph goes through its one gate", async () => {
+    const source = await readSource(CITATION_GRAPH_FILE);
+    const count = (token: string) => source.split(token).length - 1;
+
+    // Each component of the gate is stated once, inside `visibleFor`, so no
+    // read can hand-roll a subset of it.
+    for (const component of [
+      "redistributableCaseLawSourceFor(",
+      "publishedCaseLawDecisionFor(",
+      "[...PUBLIC_CASE_LAW_COUNTRIES]",
+    ]) {
+      expect({ component, count: count(component) }).toEqual({
+        component,
+        count: 1,
+      });
+    }
+    // Every read that joins the far end's source applies the gate to it.
+    const joins = count("Join(relatedSource,");
+    expect(joins).toBeGreaterThan(0);
+    expect(count("visibleFor({")).toBe(joins);
+  });
+
   test("the live citation score and its materialized twin gate the citing side alike", async () => {
     // Two statements over the same citing rows: the lateral that scores a
     // search page now, and the sweep that writes `citation_count` and

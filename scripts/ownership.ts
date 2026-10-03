@@ -336,6 +336,18 @@ const MODEL_REQUEST_NAMES = [
 
 export const OWNERSHIP = [
   {
+    id: "api-test-memory-planner",
+    capability: "Measured API test memory and batch composition",
+    owner: ["apps/api/scripts/test-batch-plan.ts"],
+    summary:
+      "The planner owns measured peak RSS, conservative unknown weights and automatic process isolation. Batch plans must fit their execution-class memory caps before a test starts.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["apps/api/scripts/test-peak-rss.json"],
+      allowed: [],
+    },
+  },
+  {
     id: "model-request-send-mode",
     capability: "Sending a request to an AI model",
     owner: [
@@ -763,6 +775,77 @@ export const OWNERSHIP = [
           path: "apps/api/src/scripts/polarity-system-one-compare.ts",
           reason:
             "Measures the raw model against the corpus with a pinned client; the floor is what it calibrates, so it reads below `decide`.",
+        },
+      ],
+    },
+  },
+  {
+    id: "member-authorization",
+    capability: "Deciding what a request's member role and credential may do",
+    owner: [
+      "apps/api/src/lib/permission-authorization.ts",
+      "apps/web/src/lib/organization/role-assignment.logic.ts",
+    ],
+    summary:
+      "Every permission decision reads the request's `AuthorizedMemberRole`: " +
+      "the member role together with the credential behind the request. A " +
+      "person's session spends the role; a credential minted with a narrower " +
+      "permission set spends only what both grant. `hasMemberPermission` and " +
+      "`hasManagementPermission` are the reads, and every handler context " +
+      "builder sets the credential once, so no handler-level check can fall " +
+      "back to the role's full authority. Reading the role table directly " +
+      "skips the credential. The web organization role-policy owner derives " +
+      "session UI visibility and assignable roles from the shared role policy; " +
+      "API decisions still enforce the request credential.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@stll/permissions"],
+      names: ["roles", "isOrganizationManagementRole"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/member-roles.ts",
+          reason:
+            "Recognizes the role names the table defines; it decides no permission.",
+        },
+        {
+          path: "apps/api/src/lib/auth.ts",
+          reason:
+            "Configures the authentication library's organization roles from the same table.",
+        },
+        {
+          path: "apps/web/src/lib/auth-client.ts",
+          reason:
+            "Configures the web authentication client's organization roles from the same table.",
+        },
+        {
+          path: "packages/scripts/src/agent-session.ts",
+          reason:
+            "Local development tooling seeds an owner's key with the owner's full statement set.",
+        },
+        {
+          path: "apps/api/src/handlers/chat/tools/chat-tools.ts",
+          reason:
+            "Chat tools run only inside a person's own chat session, which carries no narrower credential.",
+        },
+        {
+          path: "apps/api/src/mcp/billing-tools.ts",
+          reason:
+            "`isVisibleToMemberRole` decides which tools are listed; each tool checks the request's effective authority when called.",
+        },
+        {
+          path: "apps/api/src/handlers/entities/join-folio-collab-room.ts",
+          reason:
+            "Re-checks the person's current membership role, read from the database, when a room is joined.",
+        },
+        {
+          path: "apps/api/src/lib/folio-collab-rooms.ts",
+          reason:
+            "Re-checks the person's current membership role, read from the database, when a room token is used.",
+        },
+        {
+          path: "apps/api/src/lib/entities/workspace-entity-write-access.ts",
+          reason:
+            "Re-checks the person's current membership role, read from the database, when a desktop or signing session is used.",
         },
       ],
     },
@@ -1254,6 +1337,23 @@ export const OWNERSHIP = [
       "The shared discriminated values make text presence and row-preview truncation explicit to API consumers. " +
       "The API owner classifies source values, converts them to storage metadata, " +
       "and reconstructs bounded public values; the adapter lint keeps protected keys behind that boundary.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "case-law-plain-text",
+    capability:
+      "Sanitizing publisher labels and metadata into branded plain text",
+    owner: [
+      "apps/api/src/lib/case-law/plain-text.ts",
+      "apps/api/src/lib/legal-search/plain-text-assembly.ts",
+      "apps/api/src/lib/case-law/plain-text-markup.ts",
+    ],
+    summary:
+      "The shared sanitizer owns the private PlainText brand, markup removal, " +
+      "and structural whitespace normalization. Adapters pass publisher text " +
+      "through this boundary; no-forged-plain-text rejects casts, type predicates, " +
+      "and parallel brand declarations outside the owner. The markup module " +
+      "shares the language-blind output predicate used by ingestion guards.",
     enforcement: { kind: "none" },
   },
   {

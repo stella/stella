@@ -1,8 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import {
   canStartCyclePage,
   remainingCycleMs,
+  reserveCycleBudget,
   startCycleDeadline,
 } from "@/api/lib/legal-search/cycle-deadline";
 
@@ -35,4 +36,22 @@ describe("cycle deadline", () => {
     drain.abort();
     expect(canStartCyclePage(deadline, 100)).toBe(false);
   });
+});
+
+test("cycle reservations immediately reduce page eligibility and stay isolated per cycle", () => {
+  const clock = spyOn(performance, "now").mockReturnValue(0);
+  try {
+    const first = { expiresAt: 20_000, signal: new AbortController().signal };
+    const second = { expiresAt: 20_000, signal: new AbortController().signal };
+    expect(reserveCycleBudget(first, 10_000)).toBe(true);
+    expect(remainingCycleMs(first)).toBe(10_000);
+    expect(remainingCycleMs(second)).toBe(20_000);
+    expect(canStartCyclePage(first, 10_001)).toBe(false);
+    expect(reserveCycleBudget(first, 10_001)).toBe(false);
+    expect(remainingCycleMs(first)).toBe(10_000);
+    expect(reserveCycleBudget(first, 10_000)).toBe(true);
+    expect(remainingCycleMs(first)).toBe(0);
+  } finally {
+    clock.mockRestore();
+  }
 });
