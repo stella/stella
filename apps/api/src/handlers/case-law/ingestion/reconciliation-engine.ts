@@ -1805,9 +1805,7 @@ const retryParkedItems = async ({
       recheck: reconciliation.recheckHeld,
     },
   });
-  const heldItems = candidates.filter(({ identityKey }) =>
-    held.has(identityKey),
-  );
+  const heldItems = due.filter(({ identityKey }) => held.has(identityKey));
   summary.heldBefore = heldItems.length;
   if (heldItems.length > 0) {
     await lease.beforeDatabaseMark();

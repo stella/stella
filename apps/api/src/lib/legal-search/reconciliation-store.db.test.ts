@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -31,6 +31,8 @@ import {
   selectDueReconciliationItems,
 } from "@/api/lib/legal-search/reconciliation-store";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+import { fingerprintReconciliationPayload } from "./reconciliation-payload";
 
 // What is asserted here is the store's own arithmetic against real columns:
 // that repeated parks advance one row rather than accumulating rows, that the
@@ -782,16 +784,72 @@ test("held-item batch resolution removes only the revisions it consumed", async 
       errorTag: "unavailable",
     });
   }
+  const due = await selectDueReconciliationItems(scopedDb, {
+    sourceId,
+    now: new Date("2026-10-03T12:00:00Z"),
+    limit: 10,
+  });
   expect(
     await resolveReconciliationItems(scopedDb, {
       sourceId,
       leaseToken: LEASE_TOKEN,
-      items: [
-        { identityKey: DOCUMENT_KEY, payload: PAYLOAD },
-        { identityKey: DOCKET_KEY, payload: { newer: true } },
-      ],
+      items: due.map(({ identityKey, payloadHash }) => ({
+        identityKey,
+        payloadHash:
+          identityKey === DOCKET_KEY
+            ? fingerprintReconciliationPayload({ newer: true })
+            : payloadHash,
+      })),
     }),
-  ).toEqual({ outcome: "recorded" });
+  ).toEqual({ outcome: "superseded" });
   expect(await readRow(sourceId, DOCUMENT_KEY)).toBeUndefined();
   expect((await readRow(sourceId, DOCKET_KEY))?.payload).toEqual(PAYLOAD);
+});
+
+test("held-item batch resolution uses stored revisions despite lossy JSON numbers", async () => {
+  const sourceId = await seedSource();
+  const now = new Date("2026-10-02T12:00:00Z");
+  for (const payloadHash of [
+    null,
+    fingerprintReconciliationPayload({ revision: "r1" }),
+  ]) {
+    await parkReconciliationItem(scopedDb, {
+      sourceId,
+      leaseToken: LEASE_TOKEN,
+      identityKey: DOCUMENT_KEY,
+      slice: SLICE,
+      payload: { revision: "r1" },
+      revisionOf: (payload) => payload,
+      now,
+      errorTag: "unavailable",
+    });
+    await db
+      .update(caseLawReconciliationItems)
+      .set({
+        payload: sql`'{"revision":"r1","counter":9007199254740993}'::jsonb`,
+        payloadHash,
+      })
+      .where(eq(caseLawReconciliationItems.sourceId, sourceId));
+    const due = await selectDueReconciliationItems(scopedDb, {
+      sourceId,
+      now: new Date("2026-10-03T12:00:00Z"),
+      limit: 10,
+    });
+    expect(due).toHaveLength(1);
+    expect(due.at(0)?.payload).toEqual({
+      revision: "r1",
+      counter: 9_007_199_254_740_992,
+    });
+    expect(JSON.stringify(due.at(0)?.payload)).not.toContain(
+      "9007199254740993",
+    );
+    expect(
+      await resolveReconciliationItems(scopedDb, {
+        sourceId,
+        leaseToken: LEASE_TOKEN,
+        items: due,
+      }),
+    ).toEqual({ outcome: "recorded" });
+    expect(await readRow(sourceId, DOCUMENT_KEY)).toBeUndefined();
+  }
 });

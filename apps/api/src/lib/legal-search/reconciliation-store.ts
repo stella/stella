@@ -118,6 +118,7 @@ export type ParkedReconciliationItem = {
   slice: string;
   identityKey: string;
   payload: unknown;
+  payloadHash: string | null;
   attempts: number;
 };
 
@@ -434,7 +435,10 @@ export const resolveReconciliationItem = async (
   });
 
 type ResolveReconciliationItemsInput = ReconciliationLease & {
-  items: readonly { identityKey: string; payload: unknown }[];
+  items: readonly Pick<
+    ParkedReconciliationItem,
+    "identityKey" | "payloadHash"
+  >[];
 };
 
 /** Resolve a bounded batch of held listings without a transaction per identity. */
@@ -447,15 +451,30 @@ export const resolveReconciliationItems = async (
       if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
         return { outcome: "superseded" as const };
       }
+      const identities = page.map(({ identityKey, payloadHash }) => ({
+        identityKey,
+        payloadHash,
+      }));
       // audit: skip — ingestion bookkeeping for public source data
-      await tx.execute(sql`
+      const removed = executedRows(
+        await tx.execute(sql`
         DELETE FROM ${caseLawReconciliationItems} AS tracked
-        USING jsonb_to_recordset(${JSON.stringify(page)}::text::jsonb)
-          AS incoming("identityKey" text, payload jsonb)
+        USING jsonb_to_recordset(${JSON.stringify(identities)}::text::jsonb)
+          AS incoming("identityKey" text, "payloadHash" text)
         WHERE tracked.source_id = ${sourceId}
           AND tracked.identity_key = incoming."identityKey"
-          AND tracked.payload = incoming.payload
-      `);
+          AND tracked.payload_hash IS NOT DISTINCT FROM incoming."payloadHash"
+        RETURNING tracked.id
+      `),
+      );
+      if (removed.length !== page.length) {
+        logger.warn("case_law.reconciliation.batch_resolution_mismatch", {
+          sourceId,
+          expected: page.length,
+          removed: removed.length,
+        });
+        return { outcome: "superseded" as const };
+      }
       return { outcome: "recorded" as const };
     });
     if (result.outcome === "superseded") {
@@ -484,6 +503,7 @@ export const selectDueReconciliationItems = async (
           slice: caseLawReconciliationItems.slice,
           identityKey: caseLawReconciliationItems.identityKey,
           payload: caseLawReconciliationItems.payload,
+          payloadHash: caseLawReconciliationItems.payloadHash,
           attempts: caseLawReconciliationItems.attempts,
         })
         .from(caseLawReconciliationItems)
