@@ -45,7 +45,7 @@ export const PaymentRetryBanner = () => {
       : undefined;
   useExternalSyncEffect(() => {
     if (retryEndsAt === undefined || retryEndsAt <= now) {
-      return;
+      return undefined;
     }
     const timer = window.setTimeout(
       () => setNow(Temporal.Now.instant().epochMilliseconds),
