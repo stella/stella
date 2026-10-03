@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 3.5.4
+
+### Patch Changes
+
+- [#4608](https://github.com/stella/stella/pull/4608) [`43f98b6`](https://github.com/stella/stella/commit/43f98b6ae327251066763a6593ca05e833be3968) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update linked clause discovery and authoring guidance in the capability catalog.
+
 ## 3.5.3
 
 ### Patch Changes
