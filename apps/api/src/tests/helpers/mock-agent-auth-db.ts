@@ -73,7 +73,7 @@ const installDatabaseBoundary = (database: TestDatabase) => {
             async () =>
               await callback(
                 new Proxy(transaction, {
-                  get: (target, property, receiver) =>
+                  get: (target, property, receiver): unknown =>
                     property === "execute"
                       ? async (
                           query: Parameters<typeof transaction.execute>[0],
