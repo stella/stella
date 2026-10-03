@@ -1,5 +1,12 @@
 import { panic, Result, TaggedError } from "better-result";
-import { and, asc, eq, inArray, lt } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  lt,
+  TransactionRollbackError,
+} from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { drainFanOut } from "@stll/concurrency";
@@ -7,7 +14,7 @@ import { Temporal } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { abortableTx } from "@/api/db/safe-db";
+import { resultTx } from "@/api/db/safe-db";
 import {
   entities,
   flowRuns,
@@ -292,7 +299,7 @@ export const executeFlowStep = async (
       return;
     }
     case "create-document": {
-      const output = await runCreateDocumentStep({
+      await runCreateDocumentStep({
         stepDef,
         stepIndex,
         run,
@@ -300,17 +307,6 @@ export const executeFlowStep = async (
         actorUserId,
         scopedDb,
         createEntity,
-      });
-      await completeStepAndAdvance({
-        runId,
-        stepIndex,
-        stepCount: run.definitionSnapshot.steps.length,
-        output,
-        workspaceId: run.workspaceId,
-        organizationId: scope.organizationId,
-        actorUserId,
-        flowName: run.definitionSnapshot.name,
-        scopedDb,
         broadcastUpdate,
         enqueueStep,
       });
@@ -765,6 +761,8 @@ type RunCreateDocumentArgs = {
   actorUserId: SafeId<"user">;
   scopedDb: ReturnType<typeof createRootScopedDb>;
   createEntity: typeof createEntityFromBuffer;
+  broadcastUpdate: typeof broadcastFlowRunUpdate;
+  enqueueStep: typeof enqueueFlowStep;
 };
 
 const runCreateDocumentStep = async ({
@@ -775,7 +773,9 @@ const runCreateDocumentStep = async ({
   actorUserId,
   scopedDb,
   createEntity,
-}: RunCreateDocumentArgs): Promise<FlowStepOutput> => {
+  broadcastUpdate,
+  enqueueStep,
+}: RunCreateDocumentArgs): Promise<void> => {
   const priorMarkdown = await scopedDb(
     async (tx) => await readPriorAiMarkdown(tx, run.id, stepIndex),
   );
@@ -798,28 +798,67 @@ const runCreateDocumentStep = async ({
     actorUserId,
   });
 
-  const created = await createEntity({
-    scopedDb,
-    organizationId,
+  let superseded = false;
+  let completion: Awaited<ReturnType<typeof completeStepInTransaction>> = null;
+  const completionArgs = {
+    runId: run.id,
+    stepIndex,
+    stepCount: run.definitionSnapshot.steps.length,
     workspaceId: run.workspaceId,
-    userId: actorUserId,
-    recordAuditEvent,
-    buffer: docx,
-    // Pass the raw title: `createEntityFromBuffer` sanitizes with
-    // `sanitizeFilenamePreservingExtension`, which truncates the base name
-    // rather than the extension. Pre-sanitizing with the plain
-    // `sanitizeFilename` here would drop the `.docx` for near-max-length titles
-    // before the extension-preserving pass could protect it.
-    fileName: `${stepDef.documentTitle}.docx`,
-    mimeType: DOCX_MIME_TYPE,
+    organizationId,
+    actorUserId,
+    flowName: run.definitionSnapshot.name,
+    scopedDb,
+    broadcastUpdate,
+    enqueueStep,
+  };
+  const created = await Result.tryPromise({
+    try: async () =>
+      await createEntity({
+        scopedDb,
+        organizationId,
+        workspaceId: run.workspaceId,
+        userId: actorUserId,
+        recordAuditEvent,
+        buffer: docx,
+        // Pass the raw title: `createEntityFromBuffer` sanitizes with
+        // `sanitizeFilenamePreservingExtension`, which truncates the base name
+        // rather than the extension. Pre-sanitizing with the plain
+        // `sanitizeFilename` here would drop the `.docx` for near-max-length titles
+        // before the extension-preserving pass could protect it.
+        fileName: `${stepDef.documentTitle}.docx`,
+        mimeType: DOCX_MIME_TYPE,
+        afterCreate: async (tx, document) => {
+          // The entity creator holds the workspace cap lock before this run lock.
+          // Keep the artifact and its owning step in the same commit: cancellation
+          // or another worker winning the run lock rolls both back.
+          completion = await completeStepInTransaction(tx, {
+            ...completionArgs,
+            output: { kind: "create-document", entityId: document.entityId },
+          });
+          if (completion === null) {
+            superseded = true;
+            return tx.rollback();
+          }
+        },
+      }),
+    catch: (cause) => cause,
   });
-
-  const document = unwrapOrFlowStepError(
-    created,
+  if (
+    superseded &&
+    created.isErr() &&
+    created.error instanceof TransactionRollbackError
+  ) {
+    return;
+  }
+  unwrapOrFlowStepError(
+    Result.flatten(created),
     "The document could not be created for this workspace (entity limit reached or missing file property).",
   );
-
-  return { kind: "create-document", entityId: document.entityId };
+  if (completion === null) {
+    return panic("Created flow document without its owning step completion");
+  }
+  await publishCompletedStep(completionArgs, completion);
 };
 
 // ── Shared transition writers ───────────────────────────
@@ -838,68 +877,80 @@ type CompleteStepArgs = {
   enqueueStep: typeof enqueueFlowStep;
 };
 
-const completeStepAndAdvance = async ({
-  runId,
-  stepIndex,
-  stepCount,
-  output,
-  workspaceId,
-  organizationId,
-  actorUserId,
-  flowName,
-  scopedDb,
-  broadcastUpdate,
-  enqueueStep,
-}: CompleteStepArgs): Promise<void> => {
+const completeStepInTransaction = async (
+  tx: Transaction,
+  {
+    runId,
+    stepIndex,
+    stepCount,
+    output,
+    workspaceId,
+    organizationId,
+    actorUserId,
+    flowName,
+  }: CompleteStepArgs,
+) => {
   const advance = advanceAfterStep({ stepIndex, stepCount });
   const now = new Date();
 
-  const completed = await scopedDb(async (tx) => {
-    const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
-    if (
-      current === undefined ||
-      isTerminalFlowRunStatus(current.run.status) ||
-      current.run.currentStepIndex !== stepIndex ||
-      current.step?.status !== "running"
-    ) {
-      return null;
-    }
-    await tx
-      .update(flowRunSteps)
-      .set({ status: "completed", output, finishedAt: now })
-      .where(
-        and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
-      );
+  const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
+  if (
+    current === undefined ||
+    isTerminalFlowRunStatus(current.run.status) ||
+    current.run.currentStepIndex !== stepIndex ||
+    current.step?.status !== "running"
+  ) {
+    return null;
+  }
+  await tx
+    .update(flowRunSteps)
+    .set({ status: "completed", output, finishedAt: now })
+    .where(
+      and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
+    );
 
-    if (advance.kind !== "finish") {
-      await tx
-        .update(flowRuns)
-        .set({ status: "running", currentStepIndex: advance.nextStepIndex })
-        .where(eq(flowRuns.id, runId));
-      return { payload: await readRunProgress(tx, runId), pings: [] };
-    }
-
+  if (advance.kind !== "finish") {
     await tx
       .update(flowRuns)
-      .set({ status: "completed", finishedAt: now })
+      .set({ status: "running", currentStepIndex: advance.nextStepIndex })
       .where(eq(flowRuns.id, runId));
-    // Filed in the same transaction as the terminal status, so the badge and
-    // the run can never disagree, and keyed on the run so a redelivered
-    // worker job cannot raise it twice.
-    const runPings = await createNotificationsInTransaction(
-      [
-        flowRunCompletedNotification({
-          actorUserId,
-          flowName,
-          organizationId,
-          runId,
-          workspaceId,
-        }),
-      ],
-      tx,
-    );
-    return { payload: await readRunProgress(tx, runId), pings: runPings };
-  });
+    return { payload: await readRunProgress(tx, runId), pings: [] };
+  }
+
+  await tx
+    .update(flowRuns)
+    .set({ status: "completed", finishedAt: now })
+    .where(eq(flowRuns.id, runId));
+  // Filed in the same transaction as the terminal status, so the badge and
+  // the run can never disagree, and keyed on the run so a redelivered
+  // worker job cannot raise it twice.
+  const runPings = await createNotificationsInTransaction(
+    [
+      flowRunCompletedNotification({
+        actorUserId,
+        flowName,
+        organizationId,
+        runId,
+        workspaceId,
+      }),
+    ],
+    tx,
+  );
+  return { payload: await readRunProgress(tx, runId), pings: runPings };
+};
+
+const publishCompletedStep = async (
+  {
+    stepCount,
+    stepIndex,
+    workspaceId,
+    runId,
+    broadcastUpdate,
+    enqueueStep,
+  }: Omit<CompleteStepArgs, "output">,
+  completed: Awaited<ReturnType<typeof completeStepInTransaction>>,
+): Promise<void> => {
+  const advance = advanceAfterStep({ stepIndex, stepCount });
 
   if (completed === null) {
     return;
@@ -911,6 +962,15 @@ const completeStepAndAdvance = async ({
   if (advance.kind === "advance") {
     await enqueueStep({ runId, stepIndex: advance.nextStepIndex });
   }
+};
+
+const completeStepAndAdvance = async (
+  args: CompleteStepArgs,
+): Promise<void> => {
+  const completed = await args.scopedDb(
+    async (tx) => await completeStepInTransaction(tx, args),
+  );
+  await publishCompletedStep(args, completed);
 };
 
 /**
@@ -1323,20 +1383,24 @@ export const resolveFlowReviewGate = async (
 ): Promise<Result<FlowRunActionResult, HandlerError | SafeDbError>> =>
   await Result.gen(async function* () {
     const result = yield* Result.await(
-      abortableTx(safeDb, async (tx) => {
+      resultTx(safeDb, async (tx) => {
         const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
         if (current === undefined) {
-          throw new HandlerError({
-            status: 404,
-            message: "Flow run not found",
-          });
+          return Result.err(
+            new HandlerError({
+              status: 404,
+              message: "Flow run not found",
+            }),
+          );
         }
         const { run, step } = current;
         if (!canReviewFlowRun(run.status)) {
-          throw new HandlerError({
-            status: 409,
-            message: "This run is not awaiting review.",
-          });
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: "This run is not awaiting review.",
+            }),
+          );
         }
         if (
           !step ||
@@ -1345,10 +1409,12 @@ export const resolveFlowReviewGate = async (
           (reviewTaskEntityId !== undefined &&
             step.reviewTaskEntityId !== reviewTaskEntityId)
         ) {
-          throw new HandlerError({
-            status: 409,
-            message: "This run has no open review gate.",
-          });
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: "This run has no open review gate.",
+            }),
+          );
         }
         const stepIndex = run.currentStepIndex;
         const resolution = resolveReviewGateTransition({
@@ -1424,12 +1490,12 @@ export const resolveFlowReviewGate = async (
           changes: { review: { old: null, new: { decision } } },
         });
 
-        return {
+        return Result.ok({
           run,
           resolution,
           nextStatus,
           payload: await readRunProgress(tx, runId),
-        };
+        });
       }),
     );
 
@@ -1541,13 +1607,15 @@ export const cancelFlowRun = async ({
 
     const now = new Date();
     const payload = yield* Result.await(
-      abortableTx(safeDb, async (tx) => {
+      resultTx(safeDb, async (tx) => {
         const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
         if (current === undefined) {
-          throw new HandlerError({
-            status: 404,
-            message: "Flow run not found",
-          });
+          return Result.err(
+            new HandlerError({
+              status: 404,
+              message: "Flow run not found",
+            }),
+          );
         }
         // Progressing work remains cancellable. A request that observed an
         // open gate cannot replace a decision committed while it waited.
@@ -1556,10 +1624,12 @@ export const cancelFlowRun = async ({
           (run.status === "awaiting_review" &&
             current.run.status !== "awaiting_review")
         ) {
-          throw new HandlerError({
-            status: 409,
-            message: "This run changed before it could be cancelled.",
-          });
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: "This run changed before it could be cancelled.",
+            }),
+          );
         }
         await tx
           .update(flowRuns)
@@ -1596,7 +1666,7 @@ export const cancelFlowRun = async ({
             recordAuditEvent,
           });
         }
-        return await readRunProgress(tx, runId);
+        return Result.ok(await readRunProgress(tx, runId));
       }),
     );
 

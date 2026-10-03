@@ -70,13 +70,13 @@ type GateDecisionForTaskStatusOptions = ReviewGateForTaskOptions & {
 export const gateDecisionForTaskStatus = async (
   tx: Transaction,
   { requestedStatus, ...task }: GateDecisionForTaskStatusOptions,
-): Promise<FlowReviewDecision | null> => {
+): Promise<Result<FlowReviewDecision | null, HandlerError>> => {
   if (requestedStatus === undefined) {
-    return null;
+    return Result.ok(null);
   }
   const gate = await reviewGateForTask(tx, task);
   if (!gate) {
-    return null;
+    return Result.ok(null);
   }
   if (gate.status !== "awaiting_review") {
     const currentTask = await tx.query.entities.findFirst({
@@ -87,25 +87,29 @@ export const gateDecisionForTaskStatus = async (
       columns: { status: true },
     });
     if (currentTask?.status === requestedStatus) {
-      return null;
+      return Result.ok(null);
     }
   }
   if (requestedStatus === TASK_STATUS.CANCELLED) {
-    return gateDecisionForTransition(WORK_OBLIGATION_TRANSITION_ACTION.CANCEL);
+    return Result.ok(
+      gateDecisionForTransition(WORK_OBLIGATION_TRANSITION_ACTION.CANCEL),
+    );
   }
   if (requestedStatus === TASK_STATUS.DONE) {
-    return gateDecisionForTransition(
-      WORK_OBLIGATION_TRANSITION_ACTION.COMPLETE,
+    return Result.ok(
+      gateDecisionForTransition(WORK_OBLIGATION_TRANSITION_ACTION.COMPLETE),
     );
   }
   if (gate.status !== "awaiting_review") {
-    throw new HandlerError({
-      status: 409,
-      message:
-        "A workflow review cannot be reopened; start the workflow again instead",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message:
+          "A workflow review cannot be reopened; start the workflow again instead",
+      }),
+    );
   }
-  return null;
+  return Result.ok(null);
 };
 
 type DecideGateForTaskOptions = {

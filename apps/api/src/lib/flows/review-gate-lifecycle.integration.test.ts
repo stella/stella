@@ -25,7 +25,7 @@ const workspaceId = createSafeId<"workspace">();
 type WorkerDependencies = Parameters<typeof executeFlowStep>[2];
 const database = asTestRaw<WorkerDependencies["database"]>(db);
 const makeScopedDb = asTestRaw<NonNullable<WorkerDependencies["makeScopedDb"]>>(
-  (scope) =>
+  (scope: Parameters<NonNullable<WorkerDependencies["makeScopedDb"]>>[0]) =>
     createScopedDb(db, scope.workspaceIds, scope.organizationId, scope.userId),
 );
 const safeDb = asTestRaw<SafeDb>(

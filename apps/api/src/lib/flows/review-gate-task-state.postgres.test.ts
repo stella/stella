@@ -13,7 +13,7 @@ import {
   flowReviewGateFixture,
   waitForBlockedPid,
 } from "@/api/tests/helpers/flow-review-gate";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -55,20 +55,24 @@ const taskAction = async ({ fixture: f, safeDb, entry }: TaskActionOptions) => {
     workspaceId: f.workspaceId,
     user: { id: f.userId },
     session: { activeOrganizationId: f.organizationId },
-    memberRole: { role: "owner" },
     request: new Request("https://example.test/review"),
     recordAuditEvent: f.recordAuditEvent,
+    createAuditRecorder: () => f.recordAuditEvent,
   };
   const result =
     entry === "Kanban"
       ? await updateKanbanPlacement.handler(
-          asTestRaw<Parameters<typeof updateKanbanPlacement.handler>[0]>({
+          createTestHandlerContext<
+            Parameters<typeof updateKanbanPlacement.handler>[0]
+          >({
             ...context,
             body: { entityId: f.taskEntityId, status: "cancelled", fields: [] },
           }),
         )
       : await transitionWorkObligation.handler(
-          asTestRaw<Parameters<typeof transitionWorkObligation.handler>[0]>({
+          createTestHandlerContext<
+            Parameters<typeof transitionWorkObligation.handler>[0]
+          >({
             ...context,
             params: { entityId: f.taskEntityId, workspaceId: f.workspaceId },
             body: { action: "cancel" },

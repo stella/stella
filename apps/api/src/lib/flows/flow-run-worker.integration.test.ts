@@ -17,6 +17,7 @@ import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   mock,
@@ -51,7 +52,6 @@ import updateKanbanPlacement from "@/api/handlers/fields/kanban-placement/update
 import readTaskById from "@/api/handlers/tasks/get";
 import transitionWorkObligation from "@/api/handlers/work-obligations/transition";
 import updateWorkObligation from "@/api/handlers/work-obligations/update";
-import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
@@ -77,6 +77,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -274,6 +275,12 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     });
   });
 
+  beforeEach(() => {
+    enqueuedSteps.length = 0;
+    enqueueFlowStepMock.mockClear();
+    generateTanStackTextForRoleMock.mockClear();
+  });
+
   afterAll(async () => {
     fake.stop();
     await releaseTestDb();
@@ -336,20 +343,18 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     });
     expect(obligation !== undefined).toBe(governedWorkflow);
     const recordAuditEvent = async () => undefined;
-    const context = {
+    const context = createTestHandlerContext({
       safeDb,
       scopedDb: createScopedDb(testDb, [workspaceId], organizationId, userId),
       workspaceId,
       user: { id: userId },
       session: { activeOrganizationId: organizationId },
-      memberRole: { role: "owner" },
       recordAuditEvent,
       createAuditRecorder: () => recordAuditEvent,
       orgAIConfig: null,
-      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       managedAIResidency: "eu",
       request: new Request("https://example.test/review-task"),
-    };
+    });
     return { runId, taskEntityId, safeDb, context };
   };
 
@@ -575,6 +580,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
             id: lanePropertyId,
             workspaceId,
             name: "Lane",
+            status: "fresh",
             content: { type: "text", version: 1 },
             tool: { type: "manual-input", version: 1 },
           });
@@ -901,10 +907,11 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
           where: { workspaceId: { eq: workspaceId }, kind: { eq: "task" } },
           orderBy: { id: "asc" },
         }),
-        notices: await testDb.query.notifications.findMany({
-          where: { entityId: { eq: runId } },
-          orderBy: { id: "asc" },
-        }),
+        notices: await testDb
+          .select()
+          .from(notifications)
+          .where(eq(notifications.entityId, runId))
+          .orderBy(asc(notifications.id)),
       });
       const job = { runId, stepIndex: 0 };
       const worker =
@@ -1013,10 +1020,11 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       task: await testDb.query.entities.findFirst({
         where: { id: { eq: taskEntityId } },
       }),
-      notices: await testDb.query.notifications.findMany({
-        where: { entityId: { eq: runId } },
-        orderBy: { id: "asc" },
-      }),
+      notices: await testDb
+        .select()
+        .from(notifications)
+        .where(eq(notifications.entityId, runId))
+        .orderBy(asc(notifications.id)),
     });
     const worker = executeFlowStep(
       { runId, stepIndex: 0 },
@@ -1370,7 +1378,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     }
     const { runId } = started.value;
 
-    enqueuedSteps.length = 0;
+    expect(enqueuedSteps.pop()).toEqual({ runId, stepIndex: 0 });
     await executeFlowStepWithTestModel(
       { runId, stepIndex: 0 },
       new AbortController().signal,
@@ -1443,7 +1451,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     }
     const { runId } = started.value;
 
-    enqueuedSteps.length = 0;
+    expect(enqueuedSteps.pop()).toEqual({ runId, stepIndex: 0 });
     await executeFlowStepWithTestModel(
       { runId, stepIndex: 0 },
       new AbortController().signal,
@@ -1521,7 +1529,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     }
     const { runId } = started.value;
 
-    enqueuedSteps.length = 0;
+    expect(enqueuedSteps.pop()).toEqual({ runId, stepIndex: 0 });
     await executeFlowStepWithTestModel(
       { runId, stepIndex: 0 },
       new AbortController().signal,

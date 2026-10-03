@@ -552,13 +552,16 @@ const applyTaskUpdate = async function* ({
       // gate's decision, whichever surface asks for it. Nothing is written
       // here and no task or obligation lock is taken before the run's locks,
       // including when this is part of an outer Kanban transaction.
-      const decision = await gateDecisionForTaskStatus(tx, {
+      const gateDecision = await gateDecisionForTaskStatus(tx, {
         workspaceId,
         taskEntityId: body.taskId,
         requestedStatus: body.status,
       });
-      if (decision !== null) {
-        return { type: "gate" as const, decision };
+      if (gateDecision.isErr()) {
+        return { type: "refused" as const, error: gateDecision.error };
+      }
+      if (gateDecision.value !== null) {
+        return { type: "gate" as const, decision: gateDecision.value };
       }
 
       const workflowRelevant =
@@ -842,6 +845,9 @@ const applyTaskUpdate = async function* ({
     }),
   );
 
+  if (txResult.type === "refused") {
+    return Result.err(txResult.error);
+  }
   if (txResult.type === "gate") {
     return Result.ok(
       applyTaskUpdateOutcome({ type: "gate", decision: txResult.decision }),
