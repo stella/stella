@@ -18,7 +18,7 @@ import {
   SIZE_LINT_RULES,
   designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
-import { OWNERSHIP } from "./scripts/ownership.ts";
+import { OWNERSHIP, STATUS_TRANSITION_OWNERSHIP } from "./scripts/ownership.ts";
 import core from "./scripts/oxlint-presets/core.mjs";
 import react from "./scripts/oxlint-presets/react.mjs";
 import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
@@ -44,7 +44,9 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
 // Only the rows that declare an enforcement kind reach the lint rule; the rest
 // document an owner that no rule can yet prove.
 const enforcedOwnershipEntries = OWNERSHIP.filter(
-  (entry) => entry.enforcement.kind !== "none",
+  (entry) =>
+    entry.enforcement.kind !== "none" &&
+    entry.enforcement.kind !== "status-set",
 );
 
 const PUBLIC_SSR_AMBIENT_STATE_MESSAGE =
@@ -1372,6 +1374,8 @@ export default defineConfig({
     "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-owner.ts",
+    "./.oxlint-plugins/no-direct-status-set.ts",
+    "./.oxlint-plugins/no-discarded-transition-result.ts",
     "./.oxlint-plugins/queue-worker-error-sink.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
@@ -1384,6 +1388,46 @@ export default defineConfig({
   ],
 
   overrides: [
+    {
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/scripts/**/*.test.ts",
+      ],
+      rules: {
+        "no-direct-status-set/no-direct-status-set": [
+          "warn",
+          {
+            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
+          },
+        ],
+        "no-discarded-transition-result/no-discarded-transition-result":
+          "error",
+      },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/no-direct-status-set.fixture.ts"],
+      rules: {
+        "no-direct-status-set/no-direct-status-set": [
+          "error",
+          {
+            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
+          },
+        ],
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-discarded-transition-result.fixture.ts",
+      ],
+      rules: {
+        "no-discarded-transition-result/no-discarded-transition-result":
+          "error",
+      },
+    },
     {
       files: ["**/*.{ts,tsx,mts,cts,js,mjs}"],
       rules: { "s3-object-boundary/no-etag-content-identity": "error" },
