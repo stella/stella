@@ -63,7 +63,7 @@ const turnProps = (
   editApplyMode: "manual",
   hasActiveDocxEditClient: false,
   hasActiveDocxFileClient: false,
-  memberRole: "owner",
+  memberRole: sessionMemberRole("owner"),
   memoryEnabled: false,
   organizationId,
   orgAIConfig: null,

@@ -983,6 +983,66 @@ export const OWNERSHIP = [
     },
   },
   {
+    id: "member-authority-context",
+    capability: "Building the authority a request context carries",
+    owner: ["apps/api/src/lib/permission-authorization.ts"],
+    summary:
+      "Context builders construct opaque member authority once; handlers spend it through the permission owner.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/permission-authorization"],
+      names: ["sessionMemberRole", "authorizedMemberRole"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/auth.ts",
+          reason: "Builds the authenticated session context.",
+        },
+        {
+          path: "apps/api/src/mcp/effective-authority.ts",
+          reason: "Builds authority for the MCP request context.",
+        },
+        {
+          path: "apps/api/src/mcp/api-key-auth.ts",
+          reason:
+            "Validates a credential's grants against its current membership.",
+        },
+        {
+          path: "apps/api/src/lib/business-registries/desktop/auth.ts",
+          reason: "Builds the authenticated desktop account context.",
+        },
+        {
+          path: "apps/api/src/lib/business-registries/desktop/link-grants.ts",
+          reason: "Builds the linked desktop account context.",
+        },
+        {
+          path: "apps/api/scripts/ai-provider-canary-chat-toolsets.ts",
+          reason:
+            "Builds an owner session to assemble the full chat tool set for provider schema checks; serves no request.",
+        },
+      ],
+    },
+  },
+  {
+    id: "current-member-permission",
+    capability:
+      "Revalidating a persisted membership during an authorized operation",
+    owner: ["apps/api/src/lib/permission-authorization.ts"],
+    summary:
+      "The request spends its credential at the handler boundary; a locked membership is revalidated by the permission owner.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/permission-authorization"],
+      names: ["hasCurrentMemberPermission"],
+      allowed: [
+        {
+          path: "apps/api/src/lib/workspace-deletion.ts",
+          reason:
+            "Revalidates the actor's locked membership after the handler authorizes deletion.",
+        },
+      ],
+    },
+  },
+  {
     id: "member-authorization",
     capability: "Deciding what a request's member role and credential may do",
     owner: [
@@ -1024,11 +1084,6 @@ export const OWNERSHIP = [
           path: "packages/scripts/src/agent-session.ts",
           reason:
             "Local development tooling seeds an owner's key with the owner's full statement set.",
-        },
-        {
-          path: "apps/api/src/handlers/chat/tools/chat-tools.ts",
-          reason:
-            "Chat tools run only inside a person's own chat session, which carries no narrower credential.",
         },
         {
           path: "apps/api/src/mcp/billing-tools.ts",

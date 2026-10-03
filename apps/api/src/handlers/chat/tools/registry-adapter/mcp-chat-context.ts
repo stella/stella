@@ -3,7 +3,11 @@ import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/autho
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { MemberRole } from "@/api/lib/member-roles";
+import {
+  credentialPermissionsForContext,
+  roleForDisplay,
+} from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { createWorkspaceAccessBoundary } from "@/api/mcp/workspace-access-boundary";
@@ -20,7 +24,7 @@ export type ChatRegistryContextDeps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   userEmail: string;
-  memberRole: MemberRole;
+  memberRole: AuthorizedMemberRole;
   /**
    * Pin a workspace into the request's RLS identity only when request auth
    * already proved it accessible. Projected mutations need this to finish
@@ -120,7 +124,8 @@ export const buildMcpContextFromChat = (
     // A session-authed chat turn carries no OAuth scopes; the generic capability
     // path (the only reader of grantedScopes) is never reached from chat.
     grantedScopes: [],
-    memberRole: deps.memberRole,
+    memberRole: roleForDisplay(deps.memberRole),
+    credentialPermissions: credentialPermissionsForContext(deps.memberRole),
     organizationId: deps.organizationId,
     pinServerValidatedWorkspaceId,
     recordAuditEvent: deps.recordAuditEvent ?? NO_OP_AUDIT_RECORDER,
