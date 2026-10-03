@@ -246,13 +246,16 @@ describe("createArchiveContentScanner", () => {
   test("leaves an archive the index guard reports uninflated", async () => {
     let inflated = false;
     const scanner = createArchiveContentScanner({
-      inner: {
-        scan: async () => {
+      rules: {
+        maxMatchBytes: 16,
+        countingRules: new Set(),
+        occurrences: () => {
           inflated = true;
-          return await Promise.resolve([]);
+          return [];
         },
+        evaluate: () => null,
       },
-      budget: { maxEntries: 10, maxEntryBytes: 1024, maxTotalBytes: 1024 },
+      budget: { windowBytes: 1024, maxEvidenceBytes: 1024, timeBudgetMs: 1000 },
       guard,
     });
 

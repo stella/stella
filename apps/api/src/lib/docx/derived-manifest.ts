@@ -36,10 +36,12 @@ export const deriveManifest = (
   discovered: DiscoveredTemplate,
 ): TemplateManifest => {
   const declared: TemplateManifest = {
+    clauseSlots: discovered.clauseSlots,
     version: MANIFEST_VERSION,
     fields: [...discovered.documentFields],
   };
   return {
+    clauseSlots: discovered.clauseSlots,
     version: MANIFEST_VERSION,
     fields: manifestFieldsFromMerge(
       mergeManifestWithDiscovery(declared, discovered),

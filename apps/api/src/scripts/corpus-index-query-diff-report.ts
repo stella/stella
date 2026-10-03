@@ -8,6 +8,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
+import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
 
 /**
@@ -106,10 +107,17 @@ export type GoldenQueryRequest = {
  * holds several jurisdictions is compared on the query's jurisdiction alone.
  * Null when the query text carries no searchable term.
  */
-export const goldenQueryRequest = (
-  generation: string,
-  query: GoldenQuery,
-): GoldenQueryRequest | null => {
+type GoldenQueryRequestOptions = {
+  generation: string;
+  query: GoldenQuery;
+  queryVariant?: CorpusIndexQueryVariant;
+};
+
+export const goldenQueryRequest = ({
+  generation,
+  query,
+  queryVariant = "off",
+}: GoldenQueryRequestOptions): GoldenQueryRequest | null => {
   const { indexId, jurisdictionClause } = corpusIndexRoute(
     requireCorpusIndexManifest("case_law", generation),
     query.jurisdiction,
@@ -125,6 +133,7 @@ export const goldenQueryRequest = (
   const engineQuery = caseLawCorpusQuery({
     jurisdiction: query.jurisdiction,
     text: query.text,
+    queryVariant,
     filters: { ...query.filters, jurisdiction: jurisdictionClause },
     stemming,
     surfaceFields,

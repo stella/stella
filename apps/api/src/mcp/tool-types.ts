@@ -4,6 +4,8 @@ import type {
 } from "@modelcontextprotocol/server";
 import type * as v from "valibot";
 
+import type { SearchPaginationOutcome } from "@stll/api-contract/search";
+
 import type { env } from "@/api/env";
 import type {
   MCP_ALL_RESOURCE_SCOPES,
@@ -528,6 +530,7 @@ export type InternalToolResult<TData = unknown> =
 export type McpEgressPlan<TPayload = unknown> =
   | {
       egress: "compatSearch";
+      paginationOutcome?: SearchPaginationOutcome;
       nextCursor: string | null | undefined;
       results: readonly McpCompatSearchResult[];
     }

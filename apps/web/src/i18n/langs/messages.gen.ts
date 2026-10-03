@@ -1455,6 +1455,7 @@ type Messages = {
     "deleteClause": "Delete clause";
     "deleteFailed": "Failed to delete";
     "descriptionPlaceholder": "Brief description of the clause";
+    "directivesInvalid": "Correct the clause directives before saving a version.";
     "editClause": "Edit clause";
     "editVariant": "Edit variant";
     "export": "Export";
@@ -1470,6 +1471,7 @@ type Messages = {
     "languagePlaceholder": "e.g. en";
     "leaveAndDiscard": "Leave and discard unsaved changes";
     "leaveWithoutVersion": "Leave without a version";
+    "legacyDirectiveWarning": "Legacy directive markers were preserved in clause {clauseName}{version, select, none {} other { (version {version})}}.";
     "limitReached": "Clause limit reached";
     "linkClause": "Link clause";
     "linkFailed": "Failed to link clause";
@@ -1756,6 +1758,7 @@ type Messages = {
     "organization": "Organization";
     "organizationName": "Organization name";
     "page": "Page {page}";
+    "paymentRetryNotice": "Payment issue. Update your payment method by {date} to keep access.";
     "pin": "Pin";
     "playbooks": "Playbooks";
     "preparing": "Preparing…";
@@ -2255,6 +2258,9 @@ type Messages = {
       "aiConfigModelInvalid": "The AI model configuration is invalid. Check the selected models.";
       "aiConfigProviderInvalid": "The AI provider configuration is invalid. Check the provider settings.";
       "aiConfigProviderValidationFailed": "The AI provider rejected the configuration. Check the API key and model.";
+      "clauseDirectivesInvalid": "A linked clause has invalid directives. Correct the clause before filling the template.";
+      "clauseDirectivesInvalidDetails": "Clause {clauseName} in slot {slotName} has invalid directives. Open the clause editor, correct the named paragraphs, and fill the template again.";
+      "clauseDirectivesOverrideInvalidDetails": "The override for clause {clauseName} in slot {slotName} has invalid directives. Correct this fill’s override before filling again.";
       "deeplKeyRejected": "The stored DeepL key was rejected. Replace it in organization settings.";
       "deeplQuotaExceeded": "The DeepL character quota for this organization has been used up.";
       "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.";
@@ -4879,6 +4885,7 @@ type Messages = {
     "conditionOpOnOrBefore": "on or before";
     "conditionOperator": "Operator";
     "conditionOverrideHint": "Click to set this yourself, click again to hand it back to AI";
+    "conditionPreviewIncomplete": "Condition preview is incomplete because the linked clauses exceed the preview limit.";
     "conditionUseFieldInstead": "Use a field instead";
     "conditionUseFormula": "ƒ Calculated value…";
     "conditionWhen": "When";

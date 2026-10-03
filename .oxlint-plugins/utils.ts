@@ -132,7 +132,7 @@ export const getCalleeName = (callee: unknown): string | null => {
 // Nodes that wrap an expression without changing its runtime value:
 // `x as T`, `x satisfies T`, `<T>x`, `x!`, `f<T>`, `(x)`, and the optional
 // chain container around `a?.b`.
-const TRANSPARENT_WRAPPERS: ReadonlySet<string> = new Set([
+export const TRANSPARENT_WRAPPERS: ReadonlySet<string> = new Set([
   "ChainExpression",
   "ParenthesizedExpression",
   "TSAsExpression",
