@@ -11,6 +11,7 @@ import {
   CASE_LAW_SEARCH_WARNING_CODES,
   FACET_COUNT_TYPE,
   SEARCH_EXCERPTS,
+  SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_NOT_COUNTED,
   type SearchExcerpt,
 } from "@stll/api-contract/search";
@@ -78,6 +79,7 @@ const validResponse = {
   facets: null,
   total: SEARCH_TOTAL_NOT_COUNTED,
   nextCursor: null,
+  paginationOutcome: SEARCH_PAGINATION_COMPLETE,
   queryUsed: "nájemné výpověď",
   warnings: [],
 };

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
+  SEARCH_PAGINATION_COMPLETE,
   countedSearchTotal,
   LEGISLATION_SEARCH_MATCH_TYPES,
   SEARCH_TOTAL_TYPE,
@@ -1330,6 +1331,7 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ country: "CZE", queries: ["dobré mravy"] }),
       setup: () => {
         searchDecisionsHandlerMock.mockResolvedValue({
+          paginationOutcome: SEARCH_PAGINATION_COMPLETE,
           facets: null,
           hits: [
             {
@@ -1544,6 +1546,7 @@ const CONTRACT_CORPUS = {
     buildArgs: () => ({ country: "CZE", query: "náhrada škody" }),
     setup: () => {
       searchLegislationHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         items: [
           {
             documentId: uid(70),

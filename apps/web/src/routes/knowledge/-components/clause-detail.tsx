@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
 import { compareByLocale } from "@stll/collation";
 import { displayLanguageName, LANGUAGES, toLanguageCode } from "@stll/locales";
 import {
@@ -72,9 +73,13 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
-import { clauseDetailOptions, knowledgeKeys } from "@/lib/knowledge/queries";
+import {
+  clauseDetailOptions,
+  knowledgeKeys,
+  invalidateTemplateClauseSources,
+} from "@/lib/knowledge/queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import type { ClauseEditorReviewStatus } from "@/routes/knowledge/-components/clause-ai-tracked-changes";
@@ -292,7 +297,12 @@ export const DetailContent = ({
       },
       rewrite: undefined,
     } satisfies ClauseDetailTransport);
+  const [directiveRefusal, setDirectiveRefusal] = useState(false);
   const cacheHead = async (head: ClauseHead) => {
+    setDirectiveRefusal(false);
+    if (head.currentVersion !== detail.currentVersion) {
+      await invalidateTemplateClauseSources(queryClient, organizationId);
+    }
     await queryClient.cancelQueries({
       queryKey: options.queryKey,
       exact: true,
@@ -303,6 +313,10 @@ export const DetailContent = ({
     onRefresh();
   };
   const reportBodyError = (error: unknown) => {
+    if (APIError.is(error) && error.code === CLAUSE_DIRECTIVES_INVALID_CODE) {
+      setDirectiveRefusal(true);
+      return;
+    }
     getAnalytics().captureError(error);
     stellaToast.add({
       type: "error",
@@ -440,6 +454,11 @@ export const DetailContent = ({
             bodySave={bodySave}
             rewrite={resolvedTransport.rewrite}
           />
+          {directiveRefusal && (
+            <p role="alert" className="text-destructive mt-2 text-sm">
+              {t("clauses.directivesInvalid")}
+            </p>
+          )}
           <ClauseUsageNotesField
             canEdit={canEdit}
             clauseId={clauseId}
@@ -451,7 +470,13 @@ export const DetailContent = ({
         <TabsPanel value="variants">
           <VariantsTab
             clauseId={clauseId}
-            onRefresh={onRefresh}
+            onRefresh={() => {
+              onRefresh();
+              detached(
+                invalidateTemplateClauseSources(queryClient, organizationId),
+                "clause-detail.variant-invalidate",
+              );
+            }}
             onPromote={promoteBody}
             variants={detail.variants}
           />

@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 import Elysia from "elysia";
 
-import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
+import {
+  SEARCH_PAGINATION_COMPLETE,
+  SEARCH_TOTAL_TYPE,
+} from "@stll/api-contract/search";
 
 import { createPublicStatuteSearch } from "@/api/handlers/legislation/public-search";
 import type { searchLegislationHandler } from "@/api/handlers/legislation/search";
@@ -16,6 +19,7 @@ import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 const result = {
   items: [],
   nextCursor: null,
+  paginationOutcome: SEARCH_PAGINATION_COMPLETE,
   total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
 };
 
