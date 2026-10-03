@@ -9,6 +9,10 @@ import {
 } from "@/api/lib/limits";
 
 const configurationSchema = v.object({
+  PUBLIC_LAW_DATABASE_URL: envBaseServerSchema.PUBLIC_LAW_DATABASE_URL,
+  DATABASE_ROOT_POOL_MAX: envBaseServerSchema.DATABASE_ROOT_POOL_MAX,
+  PUBLIC_CORPUS_RESERVED_CONNECTIONS:
+    envBaseServerSchema.PUBLIC_CORPUS_RESERVED_CONNECTIONS,
   PUBLIC_LAW_DATABASE_POOL_MAX:
     envBaseServerSchema.PUBLIC_LAW_DATABASE_POOL_MAX,
   PUBLIC_CORPUS_ASSUMED_REPLICAS:
@@ -30,6 +34,8 @@ const configurationSchema = v.object({
 const defaults = () =>
   ({
     ...v.parse(configurationSchema, {}),
+    PUBLIC_LAW_DATABASE_URL: "postgres://readonly:password@localhost/corpus",
+    PUBLIC_CORPUS_RESERVED_CONNECTIONS: undefined,
     PUBLIC_CORPUS_SEARCH_GLOBAL_MAX: undefined,
     PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX: undefined,
     PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX: undefined,
@@ -68,6 +74,45 @@ describe("public corpus capacity configuration", () => {
       duration: 60_000,
       max: 30,
     });
+  });
+
+  test("root-backed requests use only the reserved share of the effective pool", () => {
+    for (const rootPool of [1, 2, 5, 8, 20]) {
+      const reservation = Math.max(1, Math.floor(rootPool / 4));
+      const limits = getPublicCorpusLimits({
+        ...defaults(),
+        PUBLIC_LAW_DATABASE_URL: undefined,
+        DATABASE_ROOT_POOL_MAX: rootPool,
+        PUBLIC_LAW_DATABASE_POOL_MAX: 100,
+      });
+      expect(limits.totalConcurrency).toBe(reservation);
+      expect(limits.classes.search.concurrency).toBe(reservation);
+      const aggregate = Math.max(1, Math.floor(reservation / 2));
+      expect(limits.classes.aggregate.concurrency).toBe(aggregate);
+      expect(limits.classes.search.global.max).toBe(120 * reservation);
+      expect(limits.classes.aggregate.global.max).toBe(60 * aggregate);
+      expect(limits.classes.sitemap.global.max).toBe(4 * reservation);
+    }
+  });
+
+  test("operator root reservations are capped at the root pool and do not affect dedicated pools", () => {
+    for (const reserved of [1, 3, 20]) {
+      const configuration = {
+        ...defaults(),
+        DATABASE_ROOT_POOL_MAX: 8,
+        PUBLIC_CORPUS_RESERVED_CONNECTIONS: reserved,
+      };
+      expect(getPublicCorpusLimits(configuration).totalConcurrency).toBe(6);
+      const limits = getPublicCorpusLimits({
+        ...configuration,
+        PUBLIC_LAW_DATABASE_URL: undefined,
+      });
+      expect(limits.totalConcurrency).toBe(Math.min(reserved, 8));
+      expect(limits.classes.search.concurrency).toBe(limits.totalConcurrency);
+      expect(limits.classes.aggregate.concurrency).toBe(
+        Math.max(1, Math.floor(limits.totalConcurrency / 2)),
+      );
+    }
   });
 
   test("custom pool, replicas and latency independently scale request budgets", () => {
@@ -138,7 +183,9 @@ describe("public corpus capacity configuration", () => {
   });
 
   test("configuration accepts positive integers and rejects zero, signed, fractional and nonnumeric values", () => {
-    const keys = Object.keys(configurationSchema.entries);
+    const keys = Object.keys(configurationSchema.entries).filter(
+      (key) => key !== "PUBLIC_LAW_DATABASE_URL",
+    );
     for (const key of keys) {
       expect(
         v.safeParse(configurationSchema, { [key]: "13" }).success,

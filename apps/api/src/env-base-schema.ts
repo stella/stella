@@ -132,6 +132,7 @@ export const envBaseServerSchema = {
   // longer a deployable rollback target. All consumers use PUBLIC_LAW_*.
   CASE_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
   CASE_LAW_DATABASE_POOL_MAX: v.optional(positiveIntegerValueSchema),
+  PUBLIC_CORPUS_RESERVED_CONNECTIONS: v.optional(positiveIntegerValueSchema),
   PUBLIC_CORPUS_ASSUMED_REPLICAS: v.optional(positiveIntegerValueSchema, "2"),
   PUBLIC_CORPUS_SEARCH_P95_SECONDS: v.optional(positiveIntegerValueSchema, "1"),
   PUBLIC_CORPUS_AGGREGATE_P95_SECONDS: v.optional(

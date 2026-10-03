@@ -877,6 +877,9 @@ export const API_RATE_LIMITS = {
 export type PublicCorpusLimitsConfiguration = Pick<
   typeof env,
   | "PUBLIC_LAW_DATABASE_POOL_MAX"
+  | "PUBLIC_LAW_DATABASE_URL"
+  | "DATABASE_ROOT_POOL_MAX"
+  | "PUBLIC_CORPUS_RESERVED_CONNECTIONS"
   | "PUBLIC_CORPUS_ASSUMED_REPLICAS"
   | "PUBLIC_CORPUS_SEARCH_P95_SECONDS"
   | "PUBLIC_CORPUS_AGGREGATE_P95_SECONDS"
@@ -893,10 +896,21 @@ export type PublicCorpusLimitsConfiguration = Pick<
 export const getPublicCorpusLimits = (
   configuration: PublicCorpusLimitsConfiguration,
 ) => {
-  const pool = configuration.PUBLIC_LAW_DATABASE_POOL_MAX;
+  const dedicatedPool = configuration.PUBLIC_LAW_DATABASE_URL !== undefined;
+  const rootReservation = Math.min(
+    configuration.DATABASE_ROOT_POOL_MAX,
+    configuration.PUBLIC_CORPUS_RESERVED_CONNECTIONS ??
+      Math.max(1, Math.floor(configuration.DATABASE_ROOT_POOL_MAX / 4)),
+  );
+  const pool = dedicatedPool
+    ? configuration.PUBLIC_LAW_DATABASE_POOL_MAX
+    : rootReservation;
   const replicas = configuration.PUBLIC_CORPUS_ASSUMED_REPLICAS;
-  const totalConcurrency = 3 * pool;
-  const searchConcurrency = 2 * pool;
+  const totalConcurrency = dedicatedPool ? 3 * pool : rootReservation;
+  const searchConcurrency = Math.min(2 * pool, totalConcurrency);
+  const aggregateConcurrency = dedicatedPool
+    ? pool
+    : Math.max(1, Math.floor(rootReservation / 2));
   type GlobalBudgetOptions = {
     permits: number;
     p95Seconds: number;
@@ -924,10 +938,10 @@ export const getPublicCorpusLimits = (
         }),
       },
       aggregate: {
-        concurrency: pool,
+        concurrency: aggregateConcurrency,
         address: { duration: 60_000, max: 60 },
         global: globalBudget({
-          permits: pool,
+          permits: aggregateConcurrency,
           p95Seconds: configuration.PUBLIC_CORPUS_AGGREGATE_P95_SECONDS,
           override: configuration.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX,
         }),

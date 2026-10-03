@@ -92,6 +92,14 @@ const INTERNAL_SERVER_KEYS = new Set([
   "BETTER_AUTH_URL",
   "CASE_LAW_DATABASE_POOL_MAX",
   "PUBLIC_LAW_DATABASE_POOL_MAX",
+  "PUBLIC_CORPUS_RESERVED_CONNECTIONS",
+  "PUBLIC_CORPUS_ASSUMED_REPLICAS",
+  "PUBLIC_CORPUS_SEARCH_P95_SECONDS",
+  "PUBLIC_CORPUS_AGGREGATE_P95_SECONDS",
+  "PUBLIC_CORPUS_SITEMAP_P95_SECONDS",
+  "PUBLIC_CORPUS_SEARCH_GLOBAL_MAX",
+  "PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX",
+  "PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX",
   "CORPUS_PROJECTION_OWNER",
   "CORPUS_INDEX_Q09_ENDPOINT",
   "CORPUS_INDEX_Q09_SEARCH_ENDPOINT",
@@ -304,6 +312,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Maximum RLS pool size. Keep its sum with DATABASE_ROOT_POOL_MAX, plus one connection for the periodic login check outside local development, within the process connection budget.",
   DATABASE_ROOT_POOL_MAX:
     "Maximum root pool size. Keep its sum with DATABASE_RLS_POOL_MAX, plus one connection for the periodic login check outside local development, within the process connection budget.",
+  PUBLIC_CORPUS_RESERVED_CONNECTIONS:
+    "Public corpus concurrent-work reservation when using the root pool. Unset reserves max(1, floor(DATABASE_ROOT_POOL_MAX / 4)); values are capped at the root pool size. A dedicated PUBLIC_LAW_DATABASE_URL uses its own pool limits.",
   PUBLIC_LAW_DATABASE_POOL_MAX:
     "Maximum connections in the optional local read-only public-law pool.",
   PUBLIC_LAW_DATABASE_URL:

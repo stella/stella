@@ -10,6 +10,7 @@ import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import { getPublicCorpusClassPolicy } from "@/api/public-corpus-policy";
 
 import {
   createPublicCorpusAddressRateLimitOptions,
@@ -128,6 +129,124 @@ const admissionCount = ({
   }).length;
 
 describe("public corpus fleet request budgets", () => {
+  test("accepted requests report the tightest applicable address or fleet policy", async () => {
+    const bindings = createBindings();
+    const previous = env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX;
+    try {
+      env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = 100;
+      const app = createApp(bindings.binding);
+      for (const { path, limit } of [
+        { path: "/law/statutes/search", limit: 30 },
+        { path: "/law/statutes/facets", limit: 60 },
+        { path: "/law/sitemap/shards", limit: 10 },
+      ]) {
+        const response = await bindings.send({
+          app,
+          incoming: request(path),
+          address: "192.0.2.1",
+        });
+        expect(response.status).toBe(200);
+        expect(response.headers.get("RateLimit-Limit")).toBe(String(limit));
+        expect(response.headers.get("RateLimit-Remaining")).toBe(
+          String(limit - 1),
+        );
+      }
+    } finally {
+      env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = previous;
+      bindings.kill();
+    }
+  });
+
+  for (const { path, method, routeClass } of [
+    { path: "/law/statutes/search", method: "GET", routeClass: "search" },
+    { path: "/case/decisions/search", method: "POST", routeClass: "search" },
+    { path: "/law/statutes/facets", method: "GET", routeClass: "aggregate" },
+    { path: "/law/sitemap/shards", method: "GET", routeClass: "sitemap" },
+  ] as const) {
+    test(`capacity refusals leave fleet budgets available after admitted work finishes: ${method} ${path}`, async () => {
+      const bindings = createBindings();
+      const policy = getPublicCorpusClassPolicy();
+      const capacity =
+        routeClass === "sitemap"
+          ? policy.totalConcurrency
+          : policy.classes[routeClass].concurrency;
+      const completion = Promise.withResolvers<string>();
+      const entered = Promise.withResolvers<undefined>();
+      let started = 0;
+      const work = async ({ request: incoming }: { request: Request }) => {
+        expect(incoming.method).toBe(method);
+        started += 1;
+        if (started === capacity) {
+          entered.resolve(undefined);
+        }
+        return await completion.promise;
+      };
+      const composition = createPublicStatuteSearchRateLimitComposition({
+        routes: new Elysia().get("/law/statutes/search", work),
+        createRedisBinding: bindings.binding,
+      });
+      const app = new Elysia().group(STELLA_API_VERSION_PREFIX, (group) =>
+        group
+          .use(composition.shared)
+          .use(composition.publicLegislation)
+          .post("/case/decisions/search", work)
+          .get("/law/statutes/facets", work)
+          .get("/law/sitemap/shards", work),
+      );
+      const running = Array.from({ length: capacity }, (_, index) =>
+        bindings.send({
+          app,
+          incoming: request(path, method),
+          address: `192.0.2.${index + 1}`,
+        }),
+      );
+      try {
+        await Promise.race([
+          entered.promise,
+          Promise.all(running).then((responses) => 
+            panic(
+              `Capacity fixture completed before admission: ${responses.map((response) => response.status).join(",")}`,
+            )
+          ),
+        ]);
+        const scope = `public-corpus-global-${routeClass}`;
+        expect(bindings.increments.get(scope)).toBe(capacity);
+        for (
+          let index = 0;
+          index < policy.classes[routeClass].global.max + 1;
+          index += 1
+        ) {
+          const response = await bindings.send({
+            app,
+            incoming: request(path, method),
+            address: `198.51.100.${index + 1}`,
+          });
+          expect(response.status).toBe(429);
+        }
+        expect(started).toBe(capacity);
+        expect(bindings.increments.get(scope)).toBe(capacity);
+        completion.resolve("done");
+        for (const response of await Promise.all(running)) {
+          expect(response.status).toBe(200);
+        }
+        expect(
+          (
+            await bindings.send({
+              app,
+              incoming: request(path, method),
+              address: "203.0.113.1",
+            })
+          ).status,
+        ).toBe(200);
+        expect(bindings.increments.get(scope)).toBe(capacity + 1);
+      } finally {
+        completion.resolve("done");
+        await Promise.all(running);
+        bindings.kill();
+      }
+    });
+  }
+
   test("distinct client addresses share the global budget across law and case routes", async () => {
     const previous = {
       search: env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX,
@@ -267,6 +386,10 @@ describe("public corpus fleet request budgets", () => {
 
   test("aggregate and sitemap per-address caps are isolated from ordinary navigation", async () => {
     const bindings = createBindings();
+    const previousSitemap = env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX;
+    const previousAggregate = env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX;
+    env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = 100;
+    env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = 100;
     const app = createApp(bindings.binding);
     const lines: string[] = [];
     setMetricLineSinkForTesting((line) => lines.push(line));
@@ -325,6 +448,8 @@ describe("public corpus fleet request budgets", () => {
       }
       expect(lines).toEqual([]);
     } finally {
+      env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = previousSitemap;
+      env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = previousAggregate;
       bindings.kill();
       resetMetricLineSinkForTesting();
     }

@@ -150,7 +150,10 @@ describe("public corpus active request capacity", () => {
     }
   });
 
-  test("search and aggregate retain independent class ceilings below the total cap", async () => {
+  test("dedicated-pool search and aggregate retain independent class ceilings below the total cap", async () => {
+    const previous = env.PUBLIC_LAW_DATABASE_URL;
+    env.PUBLIC_LAW_DATABASE_URL =
+      "postgres://readonly:password@localhost/corpus";
     const { app, pending } = createCapacityApp();
     const running = Array.from(
       { length: getPublicCorpusClassPolicy().classes.search.concurrency },
@@ -170,6 +173,7 @@ describe("public corpus active request capacity", () => {
         job.finish();
       }
       await Promise.all(running);
+      env.PUBLIC_LAW_DATABASE_URL = previous;
     }
   });
   for (const [routeClass, paths] of [

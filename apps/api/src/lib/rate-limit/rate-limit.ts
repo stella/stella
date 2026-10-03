@@ -203,9 +203,19 @@ const writeRateLimitHeaders = ({
   retryAfter: boolean;
   set: RateLimitResponseSet;
 }): void => {
-  set.headers["RateLimit-Limit"] = String(max);
-  set.headers["RateLimit-Remaining"] = String(remaining);
-  set.headers["RateLimit-Reset"] = String(reset);
+  const previousRemaining = Number(set.headers["RateLimit-Remaining"]);
+  const previousReset = Number(set.headers["RateLimit-Reset"]);
+  // Keep one complete policy tuple: the tightest remaining budget wins,
+  // with the earliest reset breaking ties between equally tight budgets.
+  if (
+    set.headers["RateLimit-Remaining"] === undefined ||
+    remaining < previousRemaining ||
+    (remaining === previousRemaining && reset < previousReset)
+  ) {
+    set.headers["RateLimit-Limit"] = String(max);
+    set.headers["RateLimit-Remaining"] = String(remaining);
+    set.headers["RateLimit-Reset"] = String(reset);
+  }
   if (retryAfter) {
     set.headers["Retry-After"] = String(reset);
   }

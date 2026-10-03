@@ -76,6 +76,7 @@ export const createPublicStatuteSearchRateLimitComposition = <
           ),
         ),
       )
+      .use(concurrency.shared)
       .use(
         rateLimit({
           ...searchGlobal,
@@ -100,7 +101,6 @@ export const createPublicStatuteSearchRateLimitComposition = <
           ),
         ),
       )
-      .use(concurrency.shared)
       .as("scoped"),
     publicLegislation: new Elysia()
       .use(
@@ -108,13 +108,13 @@ export const createPublicStatuteSearchRateLimitComposition = <
           createPublicStatuteSearchRateLimitOptions(createRedisBinding),
         ),
       )
+      .use(concurrency.statute)
       .use(
         rateLimit({
           ...searchGlobal,
           skip: (request) => !isPublicStatuteSearchRateLimitedRequest(request),
         }),
       )
-      .use(concurrency.statute)
       .use(routes),
   };
 };
