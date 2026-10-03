@@ -940,6 +940,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "SMOKE_API_URL",
   "SMOKE_TEST",
   "STAGING_STATE",
+  // CI names the target-branch revision the statute recall floor compares to.
+  "STATUTE_RECALL_BASE_REF",
   "STELLA_AGENT_CAPTURE_LOG",
   "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
   "STELLA_COLLAB_TEST_REDIS_URL",

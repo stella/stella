@@ -438,7 +438,7 @@ describe.skipIf(!runEngineTests)(
         url.searchParams.set("country", "CZE");
         url.searchParams.set("limit", "10");
         const firstRead = nativeReads.length;
-        const response = await app.handle(new Request(url));
+        const response = await app.handle(new Request(url.href));
         expect(response.status).toBe(200);
         const body: unknown = await response.json();
         if (!Value.Check(searchLegislationSuccessResponseSchema, body)) {
@@ -500,7 +500,7 @@ describe.skipIf(!runEngineTests)(
           url.searchParams.set("query", fixture.query);
           url.searchParams.set("country", "CZE");
           url.searchParams.set("limit", "10");
-          const response = await app.handle(new Request(url));
+          const response = await app.handle(new Request(url.href));
           expect(response.status, fixture.id).toBe(200);
           const body: unknown = await response.json();
           if (!Value.Check(searchLegislationSuccessResponseSchema, body)) {
