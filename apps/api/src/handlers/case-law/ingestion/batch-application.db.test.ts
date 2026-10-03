@@ -468,7 +468,8 @@ test("the registered batch clones and persists declared URL scalars and diagnost
         .where(eq(caseLawDecisions.sourceId, sourceId))
     ).at(0);
     expect(afterReplay?.metadata).toEqual(row?.metadata);
-    expect(batch).toMatchObject(originalBatch);
+    // structuredClone drops Symbol keys, so clone both sides before comparing.
+    expect(structuredClone(batch)).toEqual(originalBatch);
   } finally {
     fakeS3.stop();
   }
