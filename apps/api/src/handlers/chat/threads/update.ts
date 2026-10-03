@@ -125,7 +125,6 @@ const updateThread = createSafeRootHandler(
               created: {
                 old: null,
                 new: {
-                  title: CHAT_THREAD_PLACEHOLDER_TITLE,
                   webSearchEnabled: body.webSearchEnabled,
                 },
               },

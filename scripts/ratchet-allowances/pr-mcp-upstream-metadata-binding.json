@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/mcp-upstream/connections.ts",
+  "delta": 1,
+  "reason": "Token resolution waits for a concurrent refresh: at most MCP_REFRESH_WAIT_ATTEMPTS (4) rounds, each re-reading one connection row after a pause; the reads must be sequential."
+}

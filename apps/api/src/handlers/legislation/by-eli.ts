@@ -11,6 +11,7 @@ import {
 import type { LegislationInconsistentVersion } from "@stll/api-contract/legislation-expression";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import { projectInconsistentVersion } from "@/api/handlers/legislation/catalog-response";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
@@ -62,7 +63,7 @@ export const publisherWindowInconsistentBody = (
 ) => ({
   code: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_CODE,
   message: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE,
-  versions,
+  versions: versions.map(projectInconsistentVersion),
 });
 
 /**

@@ -17,6 +17,7 @@ import {
   legislationTitleName,
   legislationTitleSortKey,
 } from "@/api/db/schema";
+import { projectStatuteListItem } from "@/api/handlers/legislation/catalog-response";
 import {
   statuteCitationCaseCount,
   statuteCitationCountStateJoin,
@@ -400,7 +401,7 @@ export const listStatutesHandler = async (
         titleSortKey: _titleSortKey,
         validFromKey: _validFromKey,
         ...item
-      }) => item,
+      }) => projectStatuteListItem(item),
     ),
   };
 };

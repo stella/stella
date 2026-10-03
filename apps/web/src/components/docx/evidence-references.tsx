@@ -18,7 +18,6 @@ import {
 } from "@stll/ui/dialog";
 import { Link2Icon, PlusIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import { stellaToast } from "@stll/ui/toast";
 
 import { openSourceBoundEntityFile } from "@/components/chat/entity-open";
 import { useMountEffect } from "@/hooks/use-effect";
@@ -26,7 +25,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { isFileDisplayable } from "@/lib/types";
 import { entitiesWindowOptions } from "@/lib/workspaces/queries/entities";
 
@@ -245,10 +244,7 @@ const EvidenceFilePicker = ({
       return;
     }
     getAnalytics().captureError(error);
-    stellaToast.add({
-      title: userErrorFromThrown(error, t("folio.evidenceUnavailable")),
-      type: "error",
-    });
+    notifyUserError(error, t("folio.evidenceUnavailable"));
   };
   const insert = useMutation({
     mutationFn: async ({

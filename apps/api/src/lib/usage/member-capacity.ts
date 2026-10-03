@@ -28,8 +28,8 @@ import {
   usageSeatAssignments,
 } from "@/api/db/schema";
 import type { USAGE_POLICY_PRICE_BASES } from "@/api/db/schema";
-import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const MEMBER_CAPACITY_REACHED_ERROR_CODE =
@@ -213,7 +213,7 @@ export const memberMayUseAI = async (
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
 ): Promise<boolean> => {
-  if (!env.FEATURE_ORG_ACCESS_STATE) {
+  if (!isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE")) {
     return true;
   }
   const rows = await db

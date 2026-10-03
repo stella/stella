@@ -29,6 +29,7 @@ import type {
 } from "@/api/lib/ai-config";
 import {
   classifyAIError,
+  type AIErrorKind,
   providerErrorBody,
   providerStatusCode,
 } from "@/api/lib/ai-error";
@@ -67,6 +68,11 @@ import type {
   StreamChatChunksOptions,
   TanStackTextFinishReason,
 } from "@/api/lib/chat/tanstack-chat-runtime";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import {
+  createProviderCallError,
+  providerRequestIdFrom,
+} from "@/api/lib/errors/provider-call-failure";
 import {
   AIGenerationCancelledError,
   HandlerError,
@@ -392,30 +398,40 @@ export type TanStackTextRun = {
  * {@link textAdapterWithNormalizedStops}.
  */
 export const collectTanStackTextRun = async (
-  options: StreamChatChunksOptions,
+  options: StreamChatChunksOptions & { model: ResolvedTanStackTextModel },
 ): Promise<TanStackTextRun> => {
   // Assigned from the loop below; a property keeps the declared union instead
   // of narrowing to the initial branch.
   const run: { finish: TextRunFinish } = { finish: { kind: "unfinished" } };
   let text = "";
 
-  for await (const chunk of streamChatChunks(options)) {
-    throwIfTanStackRunError(chunk);
-    if (chunk.type === EventType.RUN_FINISHED) {
-      // A tool loop runs several times inside one call; the last finish is
-      // the one that produced the answer being returned.
-      run.finish =
-        runFinishedOutcomeOf(chunk) === "cancelled"
-          ? { kind: "unfinished" }
-          : { kind: "finished", reason: finishReasonOf(chunk) };
-      continue;
+  const result = await Result.tryPromise(async () => {
+    for await (const chunk of streamChatChunks(options)) {
+      throwIfTanStackRunError(chunk, options.model);
+      if (chunk.type === EventType.RUN_FINISHED) {
+        // A tool loop runs several times inside one call; the last finish is
+        // the one that produced the answer being returned.
+        run.finish =
+          runFinishedOutcomeOf(chunk) === "cancelled"
+            ? { kind: "unfinished" }
+            : { kind: "finished", reason: finishReasonOf(chunk) };
+        continue;
+      }
+      if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
+        text += chunk.delta;
+      }
     }
-    if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
-      text += chunk.delta;
-    }
-  }
 
-  return { finish: run.finish, text };
+    return { finish: run.finish, text };
+  });
+  if (Result.isError(result)) {
+    throw withRecoveredProviderStatus({
+      error: result.error.cause,
+      model: options.model,
+      abortSignal: options.abortController?.signal,
+    });
+  }
+  return result.value;
 };
 
 const streamTanStackTextDeltas = async function* ({
@@ -442,6 +458,7 @@ const streamTanStackTextDeltas = async function* ({
   onFinishReason?: ((reason: TanStackTextFinishReason) => void) | undefined;
 }): AsyncIterable<string> {
   yield* iterateWithStandardServiceTierFallback({
+    abortSignal: abortController?.signal,
     model,
     serviceTier,
     stream: (requestedServiceTier) =>
@@ -476,6 +493,7 @@ const streamTanStackTextDeltas = async function* ({
 };
 
 type StandardServiceTierFallbackOptions<TResult> = {
+  abortSignal?: AbortSignal | undefined;
   model: ResolvedTanStackTextModel;
   serviceTier: AIRequestServiceTier;
   run: (serviceTier: AIRequestServiceTier) => Promise<TResult>;
@@ -489,6 +507,7 @@ type StandardServiceTierFallbackOptions<TResult> = {
 // false, so it takes the throw), which leaves both attempts recovered without
 // a second exit to keep in step.
 const withStandardServiceTierFallback = async <TResult>({
+  abortSignal,
   model,
   serviceTier,
   run,
@@ -496,7 +515,11 @@ const withStandardServiceTierFallback = async <TResult>({
   try {
     return await run(serviceTier);
   } catch (error) {
-    const recovered = withRecoveredProviderStatus(error);
+    const recovered = withRecoveredProviderStatus({
+      error,
+      model,
+      abortSignal,
+    });
     if (
       !shouldRetryWithStandardServiceTier({
         error: recovered,
@@ -508,6 +531,7 @@ const withStandardServiceTierFallback = async <TResult>({
     }
 
     return await withStandardServiceTierFallback({
+      abortSignal,
       model,
       run,
       serviceTier: "standard",
@@ -519,6 +543,7 @@ type StandardServiceTierStreamFallbackOptions<
   TChunk extends PublicStreamChunk,
   TResult,
 > = {
+  abortSignal?: AbortSignal | undefined;
   model: ResolvedTanStackTextModel;
   serviceTier: AIRequestServiceTier;
   stream: (serviceTier: AIRequestServiceTier) => AsyncIterable<TChunk>;
@@ -529,6 +554,7 @@ const iterateWithStandardServiceTierFallback = async function* <
   TChunk extends PublicStreamChunk,
   TResult,
 >({
+  abortSignal,
   model,
   serviceTier,
   stream,
@@ -541,7 +567,7 @@ const iterateWithStandardServiceTierFallback = async function* <
 
   try {
     for await (const chunk of stream(serviceTier)) {
-      throwIfTanStackRunError(chunk);
+      throwIfTanStackRunError(chunk, model);
       const result = onChunk(chunk);
       if (result === undefined) {
         continue;
@@ -551,94 +577,117 @@ const iterateWithStandardServiceTierFallback = async function* <
     }
     return;
   } catch (error) {
+    const recovered = withRecoveredProviderStatus({
+      error,
+      model,
+      abortSignal,
+    });
     if (
       yielded ||
-      !shouldRetryWithStandardServiceTier({ error, model, serviceTier })
+      !shouldRetryWithStandardServiceTier({
+        error: recovered,
+        model,
+        serviceTier,
+      })
     ) {
-      throw error;
+      throw recovered;
     }
   }
 
-  for await (const chunk of stream("standard")) {
-    throwIfTanStackRunError(chunk);
-    const result = onChunk(chunk);
-    if (result !== undefined) {
-      yield result;
-    }
-  }
+  yield* iterateWithStandardServiceTierFallback({
+    abortSignal,
+    model,
+    serviceTier: "standard",
+    stream,
+    onChunk,
+  });
 };
 
-const throwIfTanStackRunError = (chunk: PublicStreamChunk): void => {
+const throwIfTanStackRunError = (
+  chunk: PublicStreamChunk,
+  model: ResolvedTanStackTextModel,
+): void => {
   if (chunk.type !== EventType.RUN_ERROR) {
     return;
   }
-
-  throw tanStackRunError(chunk);
+  throw tanStackRunError(chunk, model);
 };
 
-// The classifier reads a wrapped provider failure off the cause, so the body
-// has to survive the wrap. `rawEvent` carries it only for the adapters whose
-// SDK exception exposes one; `providerErrorBody` recovers it from the message
-// for the rest, which would otherwise reach the classifier with no status and
-// be named a transient transport outage.
-const tanStackRunError = (chunk: RunErrorEvent): HandlerError => {
-  const cause: unknown = chunk.rawEvent ?? providerErrorBody(chunk.message);
-  const error = new HandlerError({
+const tanStackRunError = (
+  chunk: RunErrorEvent,
+  model: ResolvedTanStackTextModel,
+): ProviderCallError => {
+  const error = createProviderCallError({
+    model,
     status: chunk.code === MANAGED_PROVIDER_UNAVAILABLE_CODE ? 503 : 502,
-    message: chunk.message,
-    ...(chunk.code ? { code: chunk.code } : {}),
-    ...(cause === undefined ? {} : { cause }),
+    code: chunk.code,
+    evidence: chunk.rawEvent ?? providerErrorBody(chunk.message),
   });
   return chunk.code === MANAGED_PROVIDER_UNAVAILABLE_CODE
     ? classifyFailure(error, "model_unavailable")
     : error;
 };
 
-/**
- * The same recovery as {@link tanStackRunError}, for the seam that does not
- * stream.
- *
- * `chat({ outputSchema })` never yields the run error to its caller: it rebuilds
- * it as `new Error(message)`, keeping the event's `code` only when the adapter
- * set one and dropping its `rawEvent`. An adapter that reports the status as a
- * plain field on its SDK exception and stringifies the response body into the
- * message sets neither, so the rebuilt error reaches `classifyAIError` with no
- * status at all and quota, billing, retired model and outage all read as one
- * unnamed transport failure, while the identical provider answer classifies
- * once streamed. Recover the body here so one answer is named one way
- * whichever seam asked for it.
- *
- * The error passes through untouched unless the recovered body actually names
- * the failure, so an engine-internal error keeps its own identity.
- */
-const withRecoveredProviderStatus = (error: unknown): unknown => {
+type RecoveredProviderStatusOptions = {
+  error: unknown;
+  model: ResolvedTanStackTextModel;
+  abortSignal?: AbortSignal | undefined;
+};
+
+const PROVIDER_OWNED_ERROR_KIND = {
+  quota_exhausted: true,
+  provider_billing: true,
+  provider_credentials_rejected: true,
+  model_unavailable: true,
+  provider_unavailable: true,
+  provider_stream_incomplete: true,
+  loop_detected: false,
+  empty_completion: false,
+  unknown: false,
+} as const satisfies Record<AIErrorKind, boolean>;
+
+export const withRecoveredProviderStatus = ({
+  error,
+  model,
+  abortSignal,
+}: RecoveredProviderStatusOptions): unknown => {
+  if (
+    error instanceof ProviderCallError ||
+    isAbortRejection({ error, signal: abortSignal })
+  ) {
+    return error;
+  }
   if (!(error instanceof Error)) {
     return error;
   }
   if (hasManagedProviderUnavailableCode(error)) {
     return classifyFailure(
-      new HandlerError({
+      createProviderCallError({
+        model,
         status: 503,
         code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
-        message: error.message,
-        cause: error,
+        evidence: error,
       }),
       "model_unavailable",
     );
   }
-  if (classifyAIError(error) !== "unknown") {
+  const body = providerErrorBody(error.message);
+  const evidence =
+    body === undefined
+      ? error
+      : { cause: body, requestId: providerRequestIdFrom(error) };
+  const kind = classifyAIError(evidence);
+  if (
+    !hasProviderFailureInCauseChain(evidence) &&
+    !PROVIDER_OWNED_ERROR_KIND[kind]
+  ) {
     return error;
   }
-  const cause = providerErrorBody(error.message);
-  if (cause === undefined) {
-    return error;
-  }
-  const recovered = new HandlerError({
-    status: 502,
-    message: error.message,
-    cause,
+  return createProviderCallError({
+    model,
+    status: kind === "unknown" ? 500 : 502,
+    evidence,
   });
-  return classifyAIError(recovered) === "unknown" ? error : recovered;
 };
 
 const shouldRetryWithStandardServiceTier = ({
@@ -680,6 +729,23 @@ const hasManagedProviderUnavailableCode = (error: unknown): boolean => {
   return false;
 };
 
+const hasProviderFailureInCauseChain = (error: unknown): boolean => {
+  let current = error;
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth += 1) {
+    if (!isRecord(current)) {
+      return false;
+    }
+    if (
+      current instanceof ProviderCallError ||
+      providerStatusCode(current) !== null
+    ) {
+      return true;
+    }
+    current = current["cause"];
+  }
+  return false;
+};
+
 const providerErrorInCauseChain = (
   error: unknown,
 ): { record: Record<string, unknown>; statusCode: number } | null => {
@@ -712,7 +778,9 @@ const providerErrorInCauseChain = (
  * provider's verdict however it was spelled.
  */
 const isUnattributedRunError = (error: unknown): boolean =>
-  HandlerError.is(error) && classifyAIError(error) === "unknown";
+  error instanceof ProviderCallError &&
+  error.status === 502 &&
+  classifyAIError(error) === "unknown";
 
 const isRetryableServiceTierFallbackError = (error: unknown): boolean => {
   const provider = providerErrorInCauseChain(error);
@@ -831,6 +899,7 @@ export const generateTanStackObjectForRole = async <
   );
 
   const output = await withStandardServiceTierFallback({
+    abortSignal: abortController?.signal,
     model,
     serviceTier: options.serviceTier,
     run: async (serviceTier) =>
@@ -977,6 +1046,7 @@ const streamTanStackStructuredOutput = async function* <
   );
 
   const stream = iterateWithStandardServiceTierFallback({
+    abortSignal: abortController?.signal,
     model,
     serviceTier,
     stream: (requestedServiceTier) =>

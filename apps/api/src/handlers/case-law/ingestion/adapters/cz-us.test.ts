@@ -24,6 +24,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { NalusRateLimitedError } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
@@ -45,6 +46,8 @@ type ResultRow = {
   ecli?: string | undefined;
   textUrl?: string | null | undefined;
   textActionLabel?: string | undefined;
+  primaryExtraHtml?: string;
+  actionsExtraHtml?: string;
 };
 
 /**
@@ -178,10 +181,10 @@ const makeResultsPage = (
       return `
 <tr class='resultData${(index + renderPositionOffset) % 2}'>
   <td></td>
-  <td><a href='${detailUrl}'>${row.listedCaseNumber ?? row.caseNumber}${counterLabel}</a><br />${row.ecli ?? ""}<br />Jan Novák</td>
+  <td><a href='${detailUrl}'>${row.listedCaseNumber ?? row.caseNumber}${counterLabel}</a><br />${row.ecli ?? ""}<br />Jan Novák${row.primaryExtraHtml ?? ""}</td>
 </tr>
 <tr class='resultData${(index + renderPositionOffset) % 2}' valign="top">
-  <td>${textAction}</td>
+  <td>${textAction}${row.actionsExtraHtml ?? ""}</td>
 </tr>`;
     })
     .join("");
@@ -232,6 +235,8 @@ type MockSearchOptions = {
   rangeFrom?: number;
   reported?: number;
   empty?: boolean;
+  documentText?: string;
+  recordCardSuffix?: string;
   abstract?: string;
   legalSentence?: string;
   abstractStatus?: number;
@@ -287,6 +292,8 @@ const installSearchMock = ({
   rangeFrom = 1,
   reported = rows.length,
   empty = false,
+  documentText = "Lorem ipsum dolor sit amet.",
+  recordCardSuffix = "",
   abstract = "",
   legalSentence = "",
   abstractStatus = 200,
@@ -375,6 +382,9 @@ const installSearchMock = ({
                       row.caseNumber,
                       row.date,
                       counterText === undefined ? {} : { counter: counterText },
+                    ).replace(
+                      "Lorem ipsum dolor sit amet.",
+                      () => documentText,
                     ),
                 { status: detailStatus },
               )
@@ -391,7 +401,7 @@ const installSearchMock = ({
                 makeRecordCardPage(row.caseNumber, row.date, {
                   rapporteur,
                   dissenters,
-                }),
+                }) + recordCardSuffix,
               )
             : new Response("no card", {
                 status: recordCardStatus === 200 ? 404 : recordCardStatus,
@@ -1170,7 +1180,7 @@ describe("czUsAdapter.fetchPage", () => {
     expect(
       Bun.deepEquals(
         page.decisions[0]?.textFields.abstract,
-        absentDecisionTextFields(TEXT_ABSENCE_REASON.PARSE_FAILED).abstract,
+        absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED).abstract,
       ),
     ).toBe(true);
   });
@@ -1241,6 +1251,86 @@ describe("czUsAdapter.fetchPage", () => {
 
     expect(first?.rawHash).not.toBe(second?.rawHash);
   });
+
+  test("ignores hidden ASP.NET request state in the source hash", async () => {
+    const rows = [
+      {
+        id: "9101",
+        sz: "raw-hash_1",
+        caseNumber: "Fixture 1",
+        date: "1. 1. 2024",
+      },
+    ];
+    const captures = [];
+    for (const state of ["first", "second"]) {
+      installSearchMock({
+        rows,
+        recordCardSuffix: `<input type="hidden" name="__VIEWSTATE" value="${state} > token" /><input name="__EVENTVALIDATION" value="${state}" type="hidden"><input type="hidden" name="__VIEWSTATEGENERATOR" value="${state}">`,
+      });
+      captures.push(
+        unwrap(
+          await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+        ).decisions.at(0),
+      );
+    }
+    const [first, second] = captures;
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    expect(first?.sourceRaw).not.toBe(second?.sourceRaw);
+    expect(first?.rawHash).toBe(second?.rawHash);
+  });
+
+  for (const payload of ["document", "record-card"] as const) {
+    test(`moves the source hash when publisher ${payload} bytes change`, async () => {
+      const rows = [
+        {
+          id: "9101",
+          sz: "raw-hash_1",
+          caseNumber: "Fixture 1",
+          date: "1. 1. 2024",
+        },
+      ];
+      installSearchMock({ rows });
+      const first = unwrap(
+        await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+      ).decisions.at(0);
+      installSearchMock({
+        rows,
+        ...(payload === "document"
+          ? { documentText: "Corrected publisher decision text." }
+          : { recordCardSuffix: "<!-- Publisher card revision -->" }),
+      });
+      const second = unwrap(
+        await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+      ).decisions.at(0);
+      expect(first).toBeDefined();
+      expect(second).toBeDefined();
+      expect(first?.sourceRaw).not.toBe(second?.sourceRaw);
+      expect(first?.rawHash).not.toBe(second?.rawHash);
+      if (second?.sourceRaw === undefined) {
+        return;
+      }
+      const replay = await czUsAdapter.reparseStoredRaw?.({
+        raw: new TextEncoder().encode(second.sourceRaw),
+        contentType: second.sourceRawContentType ?? null,
+        caseNumber: second.caseNumber,
+        sourceDocumentId: second.sourceDocumentId ?? null,
+        language: second.language,
+        court: second.court,
+        ecli: second.ecli ?? null,
+        decisionDate: second.decisionDate ?? null,
+        decisionType: second.decisionType ?? null,
+        sourceUrl: second.sourceUrl ?? null,
+        documentUrl: second.documentUrl ?? null,
+        metadata: second.metadata,
+      });
+      expect(replay?.type).toBe("parsed");
+      if (replay?.type !== "parsed") {
+        return;
+      }
+      expect(replay.result.rawHash).toBe(second.rawHash);
+    });
+  }
 
   test("stores no headnote where the court prints that it has none", async () => {
     // Both cells are always filled: with the text, or with a sentence saying
@@ -1874,6 +1964,48 @@ describe("czUsAdapter.fetchPage", () => {
     );
   });
 
+  test.each(["script", "style"])(
+    "retains stored raw-text quarantine fingerprints as repair-only aliases for %s",
+    async (tag) => {
+      const row = {
+        sz: "",
+        caseNumber: "Pl.ÚS 12/24",
+        date: "4. 1. 2024",
+        textUrl: null,
+        primaryExtraHtml: `<${tag}>oldPrimary()</${tag}>`,
+        actionsExtraHtml: `<${tag}>oldAction()</${tag}>`,
+      };
+      // The digest is pinned to the pre-cutover projection, independent of
+      // the current text reader and alias construction.
+      const legacyId = `nalus-quarantine:${hashContent(
+        JSON.stringify({
+          stablePrimaryText: "Jan NovákoldPrimary()",
+          stableActionsText: "oldAction()",
+          stableDetailText: "Pl.ÚS 12/24",
+          stableCounterText: "1",
+        }),
+      )}`;
+      installSearchMock({ rows: [row] });
+      const quarantined = unwrap(
+        await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+      ).decisions.at(0);
+      expect(quarantined?.sourceDocumentId).not.toBe(legacyId);
+      expect(quarantined?.sourceDocumentIdRepairAliases).toBeUndefined();
+
+      installSearchMock({
+        rows: [{ ...row, sz: "Pl-12-24_1", textUrl: undefined }],
+      });
+      const recovered = unwrap(
+        await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+      ).decisions.at(0);
+      expect(recovered?.sourceDocumentIdRepairAliases).toContain(legacyId);
+      expect(recovered?.sourceDocumentIdRepairAliases).toContain(
+        quarantined?.sourceDocumentId,
+      );
+      expect(recovered?.sourceDocumentIdAliases).not.toContain(legacyId);
+    },
+  );
+
   test("recovers a missing listed docket from the decision detail", async () => {
     installSearchMock({
       rows: [
@@ -2335,6 +2467,35 @@ describe("czUsAdapter.reparseStoredRaw", () => {
 
   const textPage = makeTextPage("Pl.ÚS 9/26", "3. 2. 2026", { counter: 1 });
 
+  for (const [state, reason] of [
+    ["absent", TEXT_ABSENCE_REASON.NOT_PUBLISHED],
+    ["unavailable", TEXT_ABSENCE_REASON.PARSE_FAILED],
+  ] as const) {
+    test(`replays the ${state} abstract answer with its absence reason`, async () => {
+      const stored = storedInput(
+        JSON.stringify({ version: 1, parts: { document: textPage } }),
+        SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      );
+      const outcome = await czUsAdapter.reparseStoredRaw?.({
+        ...stored,
+        metadata: { ...stored.metadata, abstractState: state },
+      });
+      expect(outcome?.type).toBe("parsed");
+      if (outcome?.type !== "parsed") {
+        return;
+      }
+      expect(outcome.result.textFields.abstract).toEqual({
+        type: TEXT_FIELD_TYPE.ABSENT,
+        reason,
+      });
+      expect(outcome.result.textFields.legalSentence).toEqual({
+        type: TEXT_FIELD_TYPE.ABSENT,
+        reason,
+      });
+      expect(outcome.result.metadata).toMatchObject({ abstractState: state });
+    });
+  }
+
   test("reads the judges back out of an envelope without contacting the court", async () => {
     const stored = storedInput(
       JSON.stringify({
@@ -2424,4 +2585,16 @@ describe("czUsAdapter.reparseStoredRaw", () => {
       logs.restore();
     }
   });
+});
+
+test("record card ignores excluded HTML in every label and value", async () => {
+  const html = await recordCardFixture("cz-us-record-card-dissents.html.gz");
+  const contaminated = html.replaceAll(
+    "</td>",
+    "<script>hidden-script</script><style>hidden-style</style></td>",
+  );
+  expect(contaminated).not.toBe(html);
+  const expected = parseNalusDetail(html);
+  expect(expected).not.toBeNull();
+  expect(parseNalusDetail(contaminated)).toEqual(expected);
 });

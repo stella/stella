@@ -1,6 +1,9 @@
 import { panic, Result } from "better-result";
 
-import { DOCUMENT_OUTSTANDING_INDEX } from "@/api/lib/legal-search/sk-document-outstanding-index";
+import {
+  DOCUMENT_OUTSTANDING_DATE_INDEX,
+  DOCUMENT_OUTSTANDING_INDEX,
+} from "@/api/lib/legal-search/sk-document-outstanding-index";
 
 import {
   REWRITTEN_MIGRATION_INDEXES,
@@ -133,6 +136,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "case_law_decisions",
   },
   DOCUMENT_OUTSTANDING_INDEX,
+  DOCUMENT_OUTSTANDING_DATE_INDEX,
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "case_law_decisions_docket_family_key_idx" ON public."case_law_decisions" USING btree ("docket_family_key") WHERE "docket_family_key" IS NOT NULL',
@@ -336,6 +340,10 @@ type OnlineIndexReplacement = {
 };
 
 const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
+  {
+    legacyName: "case_law_decisions_document_pending_date_idx",
+    replacementNames: [DOCUMENT_OUTSTANDING_DATE_INDEX.name],
+  },
   {
     legacyName: "case_law_decisions_source_case_lang_idx",
     replacementNames: [

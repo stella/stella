@@ -1,9 +1,8 @@
+import type { ReactNode } from "react";
 /**
  * Where a list item's source points: its document and, in a PDF, the page.
  * Shared by the list's source panel and the anchor facts of a verification.
  */
-
-import type { ReactNode } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -11,13 +10,13 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
-import { stellaToast } from "@stll/ui/toast";
 
 import { openSourceFile } from "@/components/workspaces/list-source.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import type { LegalListSourceLocator } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 
 type SourceLocatorLabelProps = {
@@ -87,7 +86,7 @@ export const useOpenSourceDocument = (workspaceId: string) => {
         });
         if (Result.isError(result)) {
           getAnalytics().captureError(result.error);
-          stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+          notifyUserError(result.error, t("errors.actionFailed"));
         }
       })(),
       "list-source.open-document",

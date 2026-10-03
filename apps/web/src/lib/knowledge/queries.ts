@@ -1010,6 +1010,10 @@ export const mcpConnectorsOptions = (organizationId: string) =>
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
+export type McpConnectorsResponse = Awaited<
+  ReturnType<NonNullable<ReturnType<typeof mcpConnectorsOptions>["queryFn"]>>
+>;
+
 export const mcpConnectionsOptions = (organizationId: string, userId: string) =>
   queryOptions({
     queryKey: knowledgeKeys.mcp.connections(organizationId, userId),
@@ -1019,6 +1023,10 @@ export const mcpConnectionsOptions = (organizationId: string, userId: string) =>
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
+
+export type McpConnectionsResponse = Awaited<
+  ReturnType<NonNullable<ReturnType<typeof mcpConnectionsOptions>["queryFn"]>>
+>;
 
 /** Clause publications and link edits refresh both schema discovery and slot previews. */
 export const invalidateTemplateClauseSources = async (

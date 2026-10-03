@@ -18,10 +18,7 @@ import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { completeWorkspaceDeletion } from "@/api/lib/organization-storage-teardown";
-import {
-  hasMemberPermission,
-  sessionMemberRole,
-} from "@/api/lib/permission-authorization";
+import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 
 const ORGANIZATION_WIDE_WORKSPACE_ROLES = new Set(["owner", "admin"]);
@@ -86,7 +83,7 @@ const lockAuthorizedActorRole = async ({
     !isMemberRole(actor.role) ||
     // Re-checks the actor's live role under the row lock; the request already
     // spent its credential's `workspace:delete` at the handler boundary.
-    !hasMemberPermission(sessionMemberRole(actor.role), {
+    !hasCurrentMemberPermission(actor.role, {
       workspace: ["delete"],
     })
   ) {

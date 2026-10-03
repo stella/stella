@@ -7,11 +7,11 @@ import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { stellaToast } from "@stll/ui/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { updateMemory } from "@/lib/memory-api";
 import {
   invalidateMemories,
@@ -68,7 +68,7 @@ export const SuggestionsQueue = (props: SuggestionsQueueProps) => {
     },
     onError: (error: unknown) => {
       analytics.captureError(error);
-      stellaToast.add({ title: tErrors("actionFailed"), type: "error" });
+      notifyUserError(error, tErrors("actionFailed"));
     },
   });
 

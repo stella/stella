@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 
 import type { rootDb } from "@/api/db/root";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/utils";
 import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
 import type {
@@ -255,7 +255,7 @@ export const startAutomatedFlowRun = async (
       triggerType: triggerSource.type,
     });
   };
-  if (!env.FEATURE_ACTION_ADMISSION) {
+  if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
     await createAndEnqueue();
     return;
   }
