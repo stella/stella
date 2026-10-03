@@ -118,6 +118,28 @@ afterEach(() => {
 const scanRequestCount = (): number =>
   requestBodies.filter((body) => body["snippet_fields"] === undefined).length;
 
+const recurringFixtureIdentities = (
+  identityOf: (id: string) => string = (id) => id,
+) => {
+  const seen = new Set<string>();
+  const recurring = new Set<string>();
+  for (const hit of engineHits ?? []) {
+    const identity = identityOf(hit.document_id);
+    if (seen.has(identity)) {
+      recurring.add(identity);
+    }
+    seen.add(identity);
+  }
+  return recurring;
+};
+
+const recurringDocumentTokens = (candidates: readonly { id: string }[]) => {
+  const recurring = recurringFixtureIdentities();
+  return candidates
+    .filter(({ id }) => recurring.has(id))
+    .map(({ id }) => corpusSearchGroupToken(id));
+};
+
 const readPage = async (
   limit = 10,
   parsedCursor: SearchCursor | null = null,
@@ -141,9 +163,7 @@ const readPage = async (
     unseenScoreUpperBound: () => 0,
     rankCandidates: async (candidates) => ({
       context: null,
-      groups: candidates.map((candidate) =>
-        corpusSearchGroupToken(candidate.id),
-      ),
+      groups: recurringDocumentTokens(candidates),
       ranked: candidates
         .filter(
           (candidate) =>
@@ -317,9 +337,7 @@ describe("a page settles within one scan round", () => {
       unseenScoreUpperBound: (score) => stableBlendUpperBound(score, weight),
       rankCandidates: async (candidates) => ({
         context: null,
-        groups: candidates.map((candidate) =>
-          corpusSearchGroupToken(candidate.id),
-        ),
+        groups: recurringDocumentTokens(candidates),
         ranked: blendStableCitationAuthority({
           candidates: candidates.filter(
             (candidate) =>
@@ -446,9 +464,7 @@ describe("the scan is bounded by engine round trips", () => {
       unseenScoreUpperBound: (score) => score + 1,
       rankCandidates: async (candidates) => ({
         context: null,
-        groups: candidates.map((candidate) =>
-          corpusSearchGroupToken(candidate.id),
-        ),
+        groups: recurringDocumentTokens(candidates),
         ranked: candidates
           .filter(
             (candidate) =>
@@ -491,21 +507,51 @@ describe("the scan is bounded by engine round trips", () => {
     expect(page.scan.indexMs).toBeGreaterThanOrEqual(0);
   });
 
-  test("a capped scan exceeding the exclusion budget offers no continuation", async () => {
+  test("singleton documents exceeding the exclusion budget retain continuation", async () => {
     const reachable =
       LIMITS.corpusIndexSearchMaxRounds *
       LIMITS.corpusIndexSearchCandidateLimit;
 
     const page = await readCappedPage(reachable);
 
-    // Every singleton needs a carried token; a continuation cannot forget
-    // emitted identities when their count exceeds the cursor budget.
+    // Single-passage documents cannot recur beyond this window.
     expect(reachable).toBeGreaterThan(
       LIMITS.corpusIndexSearchMaxExcludedGroups,
     );
     expect(page.pageRanked).toHaveLength(reachable);
-    expect(page.nextCursor).toBeNull();
+    expect(page.nextCursor).not.toBeNull();
+    expect(page.nextCursor?.excludedGroups).toBeUndefined();
   });
+
+  test.each([37, 200, 300])(
+    "single-passage documents walk every window without loss or duplicates at limit %i",
+    async (limit) => {
+      engineHits = Array.from({ length: 1001 }, (_, index) => ({
+        document_id: documentId(index),
+      }));
+      expect(engineHits.length).toBeGreaterThan(
+        LIMITS.corpusIndexSearchMaxExcludedGroups,
+      );
+      const expectedIds = engineHits.map(({ document_id }) => document_id);
+      const seen: string[] = [];
+      const windows = new Set<number>();
+      let cursor: SearchCursor | null = null;
+      for (let pageIndex = 0; pageIndex < 50; pageIndex += 1) {
+        const page = await readCappedPage(limit, cursor);
+        seen.push(...page.pageRanked.map(({ id }) => id));
+        cursor = page.nextCursor;
+        if (cursor === null) {
+          break;
+        }
+        windows.add(cursor.windowStart ?? 0);
+        expect(cursor.excludedGroups).toBeUndefined();
+      }
+      expect(cursor).toBeNull();
+      expect(windows.size).toBeGreaterThan(1);
+      expect(new Set(seen).size).toBe(seen.length);
+      expect(seen).toEqual(expectedIds);
+    },
+  );
 
   test("a scan that reached the end of the hit list offers no next window", async () => {
     engineHits = Array.from({ length: 40 }, (_, index) => ({
@@ -582,9 +628,7 @@ describe("a passage flood does not strand the reader", () => {
         stableBlendUpperBound(score, DEFAULT_AUTHORITY_WEIGHT),
       rankCandidates: async (candidates) => ({
         context: null,
-        groups: candidates.map((candidate) =>
-          corpusSearchGroupToken(candidate.id),
-        ),
+        groups: recurringDocumentTokens(candidates),
         ranked: blendStableCitationAuthority({
           candidates: candidates.filter(
             (candidate) =>
@@ -685,9 +729,11 @@ describe("residual filters preserve progress past empty scan windows", () => {
       unseenScoreUpperBound: (score) => score,
       rankCandidates: async (candidates) => ({
         context: null,
-        groups: candidates
-          .filter((candidate) => candidate.id.startsWith("zz-match-"))
-          .map((candidate) => corpusSearchGroupToken(candidate.id)),
+        groups: recurringDocumentTokens(
+          candidates.filter((candidate) =>
+            candidate.id.startsWith("zz-match-"),
+          ),
+        ),
         ranked: candidates
           .filter(
             (candidate) =>
@@ -813,9 +859,7 @@ describe("split legislation stays one hit across cursor pages", () => {
         unseenScoreUpperBound: () => 0,
         rankCandidates: async (candidates) => ({
           context: null,
-          groups: candidates.map((candidate) =>
-            corpusSearchGroupToken(candidate.id),
-          ),
+          groups: recurringDocumentTokens(candidates),
           ranked: candidates
             .filter(
               (candidate) =>
@@ -886,6 +930,7 @@ describe("ranker-folded candidates stay folded across pages", () => {
           })),
           groupOf,
         );
+        const recurring = recurringFixtureIdentities((id) => groupOf(id) ?? id);
         return {
           context: null,
           ranked: representatives.filter(
@@ -895,7 +940,9 @@ describe("ranker-folded candidates stay folded across pages", () => {
                   panic("Missing representative token"),
               ),
           ),
-          groups: [...groupTokenById.values()],
+          groups: [...groupTokenById]
+            .filter(([id]) => recurring.has(groupOf(id) ?? id))
+            .map(([, token]) => token),
         };
       },
     });
@@ -1417,10 +1464,20 @@ describe("folded acts stay folded across capped windows", () => {
           excludedWork: parsedCursor === null ? null : actOf(parsedCursor.id),
           excludedWorkTokens: new Set(parsedCursor?.excludedGroups),
         });
+        const recurringTokens = new Set(
+          [...recurringFixtureIdentities(actOf)].map((work) =>
+            corpusSearchGroupToken(work),
+          ),
+        );
         return {
           context: null,
           ranked: collapsed.ranked,
-          groups: collapsed.workTokens,
+          groups: collapsed.workTokens.filter(
+            (token) =>
+              recurringTokens.has(token) ||
+              (parsedCursor !== null &&
+                token === corpusSearchGroupToken(actOf(parsedCursor.id))),
+          ),
         };
       },
     });
@@ -1521,10 +1578,15 @@ describe("folded acts stay folded across capped windows", () => {
     expect(last.nextCursor).toBeNull();
   });
 
-  test("a continuation that would carry too many acts is not offered", async () => {
-    engineHits = Array.from({ length: reachable + 20 }, (_, index) => ({
-      document_id: `act-${String(index).padStart(4, "0")}#1`,
-    }));
+  test("a continuation that would carry too many acts reports truncation", async () => {
+    engineHits = [
+      ...Array.from({ length: reachable }, (_, index) => ({
+        document_id: `act-${String(index).padStart(4, "0")}#1`,
+      })),
+      ...Array.from({ length: reachable }, (_, index) => ({
+        document_id: `act-${String(index).padStart(4, "0")}#2`,
+      })),
+    ];
 
     const first = await readActPage(reachable, null);
 
@@ -1535,5 +1597,9 @@ describe("folded acts stay folded across capped windows", () => {
     );
     expect(first.scan.roundCapHit).toBe(true);
     expect(first.nextCursor).toBeNull();
+    expect(first.paginationOutcome).toEqual({
+      type: "truncated",
+      reason: "exclusion_budget",
+    });
   });
 });

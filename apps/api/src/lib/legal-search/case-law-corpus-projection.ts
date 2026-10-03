@@ -1,10 +1,26 @@
 import { type SQL, sql } from "drizzle-orm";
 
-import { caseLawDecisions, corpusIndexProjectionStates } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  corpusIndexProjectionIntents,
+  corpusIndexProjectionStates,
+} from "@/api/db/schema";
 import { caseLawIndexIdSql } from "@/api/lib/legal-search/case-law-index-groups";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 
 const CASE_LAW_FAMILY = "case_law" satisfies CorpusFamily;
+
+/** Only an applied revision with exactly one physical passage proves a singleton. */
+export const caseLawCorpusDocumentCanRecur = (generation: string) =>
+  sql<boolean>`coalesce((
+    SELECT ${corpusIndexProjectionIntents.expectedDocumentCount}
+    FROM ${corpusIndexProjectionStates}
+    INNER JOIN ${corpusIndexProjectionIntents}
+      ON ${corpusIndexProjectionIntents.id} = ${corpusIndexProjectionStates.appliedRevision}
+    WHERE ${corpusIndexProjectionStates.family} = ${CASE_LAW_FAMILY}
+      AND ${corpusIndexProjectionStates.generation} = ${generation}
+      AND ${corpusIndexProjectionStates.entityId} = ${caseLawDecisions.id}
+  ), 0) <> 1`;
 
 /** The physical index this generation projects a decision's current country into. */
 export const caseLawDecisionCorpusIndexIdSql = (generation: string) =>

@@ -157,6 +157,7 @@ const handleLawCompatSearchTool: McpToolHandler<
   // serialize the same way.
   return {
     egress: "compatSearch",
+    paginationOutcome: corpus.paginationOutcome,
     nextCursor: hasMoreCorpusPages(corpus.cursors)
       ? encodeCompatSearchCursor({ matter: null, corpus: corpus.cursors })
       : null,

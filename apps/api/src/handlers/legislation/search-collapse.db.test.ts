@@ -285,7 +285,7 @@ beforeAll(
         status: "applied" as const,
         appendStartedAt: new Date(),
         appendCommittedAt: new Date(),
-        expectedDocumentCount: 1,
+        expectedDocumentCount: entityId === vat.id ? 3 : 1,
         appliedAt: new Date(),
       })),
     );
@@ -504,6 +504,29 @@ describe("acts the query names come first", () => {
 });
 
 describe("acts an earlier scan window showed", () => {
+  test("only recurring Works consume the carried budget, including the cursor Work", async () => {
+    const result = await rehydrate("smlouva", [
+      [amendment, 0.9],
+      [vat, 0.8],
+      [code2014, 0.7],
+    ]);
+    const tokenOf = (seed: VersionSeed) =>
+      corpusSearchGroupToken(
+        legislationWorkRefKey({ sourceId, eli: seed.eli, language: "cs" }),
+      );
+    expect(new Set(result.groups)).toEqual(
+      new Set([tokenOf(vat), tokenOf(code2014)]),
+    );
+    expect(ids(result)).toContain(String(amendment.id));
+
+    const continuation = await rehydrate(
+      "smlouva",
+      [[vat, 0.8]],
+      String(amendment.id),
+    );
+    expect(continuation.groups).toContain(tokenOf(amendment));
+  });
+
   test("stay off the page when the cursor carries them", async () => {
     const codeToken = corpusSearchGroupToken(
       legislationWorkRefKey({ sourceId, eli: code2014.eli, language: "cs" }),

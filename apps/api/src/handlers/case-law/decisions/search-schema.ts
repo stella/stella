@@ -30,6 +30,7 @@ import {
   tPublicLawCountry,
 } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
+import { searchPaginationOutcomeSchema } from "@/api/lib/search/pagination-outcome-schema";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
 export const searchDecisionsBodySchema = t.Object({
@@ -225,6 +226,7 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
     ]),
     total: searchTotalSchema,
     nextCursor: nullableStringSchema,
+    paginationOutcome: searchPaginationOutcomeSchema,
     /**
      * The query the engine actually answered: the words it required, with a
      * phrase still quoted. Equal in meaning to the request's `query` when

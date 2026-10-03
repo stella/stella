@@ -122,3 +122,14 @@ export const GLOBAL_SEARCH_RESULT_TYPES = [
 
 export type GlobalSearchResultType =
   (typeof GLOBAL_SEARCH_RESULT_TYPES)[number];
+
+/** A page can stop before exhaustion when its continuation exceeds a bound. */
+export const SEARCH_PAGINATION_COMPLETE = { type: "complete" } as const;
+export const SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET = {
+  type: "truncated",
+  reason: "exclusion_budget",
+} as const;
+
+export type SearchPaginationOutcome =
+  | typeof SEARCH_PAGINATION_COMPLETE
+  | typeof SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET;

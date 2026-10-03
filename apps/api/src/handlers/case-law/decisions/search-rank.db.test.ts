@@ -1,5 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
@@ -16,6 +17,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { caseLawCorpusDocumentCanRecur } from "@/api/lib/legal-search/case-law-corpus-projection";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -27,6 +29,7 @@ import {
 import {
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
+  corpusSearchGroupToken,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
@@ -178,7 +181,7 @@ beforeAll(
         status: "applied" as const,
         appendStartedAt: appliedAt,
         appendCommittedAt: appliedAt,
-        expectedDocumentCount: 1,
+        expectedDocumentCount: entityId === districtId ? 3 : 1,
         appliedAt,
       })),
     );
@@ -209,6 +212,35 @@ afterAll(async () => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+});
+
+test("only recurrent decisions consume the carried group budget", async () => {
+  const { groups, ranked } = await rank([
+    { id: supremeId, score: 0.5 },
+    { id: districtId, score: 0.5 },
+    { id: singletonId, score: 0.5 },
+    { id: groupCsId, score: 0.5 },
+  ]);
+  expect(ranked).toHaveLength(4);
+  expect(new Set(groups)).toEqual(
+    new Set([
+      corpusSearchGroupToken("language:rank-district"),
+      corpusSearchGroupToken("language:rank-group"),
+    ]),
+  );
+});
+
+test("a missing applied passage count cannot prove a singleton", async () => {
+  const rows = await caseLawDb(
+    async (tx) =>
+      await tx
+        .select({
+          canRecur: caseLawCorpusDocumentCanRecur("missing-generation"),
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, singletonId)),
+  );
+  expect(rows).toEqual([{ canRecur: true }]);
 });
 
 test("a fresh supreme decision outranks an equally matching cited district one", async () => {

@@ -1,5 +1,10 @@
 import { panic } from "better-result";
 
+import {
+  SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+  type SearchPaginationOutcome,
+} from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -77,7 +82,7 @@ export type SearchCursor = {
    * Groups a ranker folds its hits into (`CorpusIndexRanking.groups`) that
    * earlier windows already showed. A window move hands them on, because a
    * group's deeper member in the next window would otherwise show it again;
-   * the ranker leaves them out. Singleton documents also have a token.
+   * the ranker leaves them out. Proven singletons need no token.
    * Absent before any window has moved.
    */
   excludedGroups?: readonly string[] | undefined;
@@ -87,7 +92,7 @@ type CorpusIndexRanking<TContext> = {
   ranked: readonly RankedHit[];
   context: TContext;
   /**
-   * Tokens of every emitted group, including singleton documents and any
+   * Tokens of emitted units that may recur beyond this window, including any
    * cursor group the ranker omits, for a continuation into the next window.
    * Rankers must exclude tokens carried in `SearchCursor.excludedGroups`.
    */
@@ -189,8 +194,9 @@ type CorpusIndexSearchPageResult<TContext> = {
    * was emitted with.
    */
   passageCountById: Map<string, number>;
-  /** Where the next page resumes, or null when this page is the last. */
+  /** Where the next page resumes; null on exhaustion or explicit truncation. */
   nextCursor: SearchCursor | null;
+  paginationOutcome: SearchPaginationOutcome;
   /** What the scan spent reaching this page, and why it stopped. */
   scan: CorpusIndexScanReport;
   /** The scores the scan read, under the `scored` transport; null otherwise. */
@@ -637,6 +643,11 @@ type ResolveCorpusSearchCursorOptions = {
 // go, and there is no ceiling on passages per document that the cap could
 // be sized above (the chunker's is a hostile-input bound, orders of
 // magnitude higher).
+type ResolvedCorpusSearchCursor = Pick<
+  CorpusIndexSearchPageResult<unknown>,
+  "nextCursor" | "paginationOutcome"
+>;
+
 const resolveCorpusSearchCursor = ({
   parsedCursor,
   sort,
@@ -649,57 +660,68 @@ const resolveCorpusSearchCursor = ({
   lastScannedId,
   ranking,
   unseenScoreUpperBound,
-}: ResolveCorpusSearchCursorOptions): SearchCursor | null => {
+}: ResolveCorpusSearchCursorOptions): ResolvedCorpusSearchCursor => {
+  const complete = (nextCursor: SearchCursor | null) => ({
+    nextCursor,
+    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+  });
   const lastEmitted = pageRanked.at(-1);
   const carriedGroups = new Set(parsedCursor?.excludedGroups);
   const windowStart = parsedCursor?.windowStart ?? 0;
   if (hasMoreInWindow || (!roundCapHit && windowCanContinue)) {
     if (lastEmitted === undefined) {
-      return null;
+      return complete(null);
     }
     // Still inside this window: the groups earlier windows showed stay
     // excluded, and this window's own are behind the cursor.
-    return withGroups(
-      {
-        score: lastEmitted.score,
-        id: lastEmitted.id,
-        sort,
-        windowStart,
-      },
-      [...carriedGroups],
+    return complete(
+      withGroups(
+        {
+          score: lastEmitted.score,
+          id: lastEmitted.id,
+          sort,
+          windowStart,
+        },
+        [...carriedGroups],
+      ),
     );
   }
   if (!roundCapHit || startOffset >= totalHits) {
-    return null;
+    return complete(null);
   }
   // Hydration can reject every candidate in a capped window. Its scanned
   // boundary still advances the next request, without an emitted hit.
   const boundaryId = lastScannedId ?? lastEmitted?.id;
   if (boundaryId === undefined) {
-    return null;
+    return complete(null);
   }
   const excludedGroups = groupsPastWindow(carriedGroups, ranking);
   if (excludedGroups === null) {
-    return null;
+    return {
+      nextCursor: null,
+      paginationOutcome: SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+    };
   }
   const unseenScoreBound = unseenScoreUpperBound(
     corpusIndexLexicalScore(startOffset),
   );
-  return withGroups(
-    {
-      // Above every blended score the next window can hold, by the bound's
-      // own contract. Strictly above: equality would subject the first
-      // unread hit to the cursor's id tie-break and could discard it.
-      score:
-        unseenScoreBound +
-        Math.max(1, Math.abs(unseenScoreBound)) * Number.EPSILON,
-      // This id is a scan boundary, not an emitted hit. Group tokens,
-      // including singleton documents, exclude results from earlier windows.
-      id: boundaryId,
-      sort,
-      windowStart: startOffset,
-    },
-    excludedGroups,
+  return complete(
+    withGroups(
+      {
+        // Above every blended score the next window can hold, by the bound's
+        // own contract. Strictly above: equality would subject the first
+        // unread hit to the cursor's id tie-break and could discard it.
+        score:
+          unseenScoreBound +
+          Math.max(1, Math.abs(unseenScoreBound)) * Number.EPSILON,
+        // This id is a scan boundary, not an emitted hit. Group tokens
+        // exclude recurring results from earlier windows.
+        id: boundaryId,
+        sort,
+        windowStart: startOffset,
+      },
+      excludedGroups,
+    ),
   );
 };
 
@@ -871,7 +893,7 @@ const readPositionSearchPage = async <TContext>({
   // candidates while the window's own budget is not exhausted; past it a
   // cursor could never be satisfied and must not be advertised.
   const windowCanContinue = startOffset < totalHits && scanned < scanBudget();
-  const nextCursor = resolveCorpusSearchCursor({
+  const { nextCursor, paginationOutcome } = resolveCorpusSearchCursor({
     parsedCursor,
     sort: order.type,
     pageRanked,
@@ -906,6 +928,7 @@ const readPositionSearchPage = async <TContext>({
     anchorIdById,
     passageCountById,
     nextCursor,
+    paginationOutcome,
     scan: {
       rounds,
       passagesScanned: scanned,
@@ -1101,6 +1124,7 @@ const readBm25SearchPage = async <TContext>(
     anchorIdById,
     passageCountById,
     nextCursor,
+    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
     scan: {
       rounds: 1,
       passagesScanned: hits.length,

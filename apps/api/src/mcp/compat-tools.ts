@@ -520,6 +520,7 @@ const handleCompatSearchTool: McpToolHandler<
   // anonymized mode. The handler never branches on mode.
   return {
     egress: "compatSearch",
+    paginationOutcome: corpus.paginationOutcome,
     nextCursor: exhausted
       ? null
       : encodeCompatSearchCursor({

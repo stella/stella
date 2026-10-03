@@ -15,7 +15,6 @@ import {
   corpusRankingCursorTarget,
   corpusQueryRankingMode,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
-import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 import {
@@ -23,7 +22,6 @@ import {
   courtTierSignal,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
-import { LIMITS } from "@/api/lib/limits";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -46,7 +44,7 @@ const rankingTestOptions = {
   unseenScoreUpperBound: stableBlendUpperBound,
   rankCandidates: async (candidates) => ({
     context: null,
-    groups: candidates.map(({ id }) => corpusSearchGroupToken(id)),
+    groups: [],
     ranked: blendStableCitationAuthority({
       candidates,
       authorityById: new Map(),
@@ -335,7 +333,9 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
         return {
           context: null,
           ranked: representatives,
-          groups: [...groupTokenById.values()],
+          groups: [...groupTokenById]
+            .filter(([id]) => id === "doc-9" || id === "doc-10")
+            .map(([, token]) => token),
         };
       },
     });
@@ -408,7 +408,9 @@ test("BM25 pages honor and carry the groups their cursor excludes", async () => 
                 groupTokenById.get(id) ?? panic("Missing representative token"),
               ),
           ),
-          groups: [...groupTokenById.values()],
+          groups: [...groupTokenById]
+            .filter(([id]) => groupKeyOf(id) !== null)
+            .map(([, token]) => token),
         };
       },
     });
@@ -609,27 +611,15 @@ test("a tied cutoff falls back once and every position page keeps that mode", as
       fc.integer({ min: 1, max: 20 }),
       fc.integer({ min: 100, max: 200 }),
       async (extra, limit) => {
-        // A window move carries every group the window emitted, and a
-        // continuation past the exclusion bound is not offered. Multi-passage
-        // documents keep the whole tied universe inside that bound.
-        const passages = CORPUS_BM25_PASSAGE_LIMIT + extra;
-        const passagesPerDocument = 40;
-        const count = Math.ceil(passages / passagesPerDocument);
-        expect(count).toBeLessThanOrEqual(
-          LIMITS.corpusIndexSearchMaxExcludedGroups,
-        );
-        stubRankingScores(
-          Array.from({ length: passages }, () => 1),
-          passagesPerDocument,
-        );
+        const count = CORPUS_BM25_PASSAGE_LIMIT + extra;
+        stubRankingScores(Array.from({ length: count }, () => 1));
         let cursor: SearchCursor | null = null;
         const seen: string[] = [];
         for (
           let page = 0;
-          page < Math.ceil(count / limit) + Math.ceil(passages / 900) + 1;
+          page < Math.ceil(count / limit) + Math.ceil(count / 900) + 1;
           page += 1
         ) {
-          const excluded = new Set(cursor?.excludedGroups);
           // An explicit result type breaks the cursor/result inference cycle.
           const result: Awaited<ReturnType<typeof readCorpusIndexSearchPage>> =
             await readCorpusIndexSearchPage({
@@ -637,16 +627,6 @@ test("a tied cutoff falls back once and every position page keeps that mode", as
               limit,
               rankingMode: "bm25-ratio",
               parsedCursor: cursor,
-              rankCandidates: async (candidates) => ({
-                context: null,
-                groups: candidates.map(({ id }) => corpusSearchGroupToken(id)),
-                ranked: blendStableCitationAuthority({
-                  candidates: candidates.filter(
-                    ({ id }) => !excluded.has(corpusSearchGroupToken(id)),
-                  ),
-                  authorityById: new Map(),
-                }),
-              }),
             });
           seen.push(...result.pageRanked.map(({ id }) => id));
           cursor = result.nextCursor;
