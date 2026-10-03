@@ -61,7 +61,9 @@ export const nonEvictingRedis = ({
   const check = (state: CheckedConnection) => {
     state.checking ??= (async () => {
       for (;;) {
-        if (current !== state) {return;}
+        if (current !== state) {
+          return;
+        }
         const generation = state.generation;
         const reply = await Result.tryPromise(() =>
           withCommandTimeout({
