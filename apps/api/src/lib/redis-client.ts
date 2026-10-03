@@ -170,7 +170,7 @@ class ConfiguredRedisClient
 
 type ClassifiedRedisClientOptions = {
   storeClass: StoreClass;
-  overrides?: RedisClientOverrides;
+  overrides?: RedisClientOverrides | undefined;
 };
 
 const createClassifiedRedisClient = (

@@ -1,5 +1,5 @@
 import { Redis as RedisExtension } from "@hocuspocus/extension-redis";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, spyOn, test } from "bun:test";
 import RedisClient, { Command } from "ioredis";
 
@@ -10,12 +10,86 @@ import {
 
 import { createCollabRedisClient } from "./redis-client";
 
+const expectStoreRefusal = async (command: Promise<unknown>) => {
+  const result = await Result.tryPromise({
+    try: async () => await command,
+    catch: (error: unknown) => error,
+  });
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error).toBeInstanceOf(StoreUnavailableError);
+  }
+};
+
+test.each(["cache", "durable-coordination"] as const)(
+  "%s collaboration clients retain URL, credentials and TLS options through duplication",
+  (storeClass) => {
+    const client = createCollabRedisClient({
+      redisUrl: "rediss://user:p%40ss@redis.example.test:6380/4",
+      rejectUnauthorized: false,
+      storeClass,
+    });
+    const clone = client.duplicate({ db: 7, enableOfflineQueue: false });
+    try {
+      const sharedOptions = {
+        host: "redis.example.test",
+        port: 6380,
+        username: "user",
+        password: "p@ss",
+        tls: { rejectUnauthorized: false },
+        lazyConnect: true,
+      };
+      expect(client.options).toMatchObject({ ...sharedOptions, db: 4 });
+      expect(clone.options).toMatchObject({
+        ...sharedOptions,
+        db: 7,
+        enableOfflineQueue: false,
+      });
+    } finally {
+      clone.disconnect();
+      client.disconnect();
+    }
+  },
+);
+
+test("collaboration clients apply enforced authentication and TLS settings at construction", () => {
+  const client = createCollabRedisClient({
+    redisUrl: "rediss://redis.example.test:6380/3",
+    rejectUnauthorized: false,
+    storeClass: "durable-coordination",
+    settings: {
+      REDIS_CONNECTION_ENFORCED: true,
+      REDIS_USERNAME: "service",
+      REDIS_PASSWORD: "example-value",
+      REDIS_TLS_CA_PEM: "example-ca",
+      REDIS_TLS_SERVER_NAME: "redis.example.test",
+    },
+  });
+  try {
+    expect(client.options).toMatchObject({
+      host: "redis.example.test",
+      port: 6380,
+      db: 3,
+      username: "service",
+      password: "example-value",
+      tls: {
+        ca: "example-ca",
+        servername: "redis.example.test",
+        rejectUnauthorized: true,
+      },
+      lazyConnect: true,
+    });
+  } finally {
+    client.disconnect();
+  }
+});
+
 test("collaboration coordination commands require an allowed store policy", async () => {
   const sent: string[] = [];
   let policy = "allkeys-lru";
   const observed: StorePolicyStatus[] = [];
   const send = spyOn(RedisClient.prototype, "sendCommand").mockImplementation(
-    (command) => {
+    async (command) => {
       sent.push(command.name);
       command.resolve(
         command.name === "info" ? `maxmemory_policy:${policy}\r\n` : "OK",
@@ -26,12 +100,12 @@ test("collaboration coordination commands require an allowed store policy", asyn
   const client = createCollabRedisClient({
     redisUrl: "redis://localhost:6379",
     storeClass: "durable-coordination",
-    onPolicyStatus: (status) => observed.push(status),
+    onPolicyStatus: (status) => {
+      observed.push(status);
+    },
   });
   try {
-    await expect(client.eval("return 1", 0)).rejects.toBeInstanceOf(
-      StoreUnavailableError,
-    );
+    await expectStoreRefusal(client.eval("return 1", 0));
     expect(sent).toEqual(["info"]);
     const callbackError = await new Promise<Error | null>((resolve) => {
       void client.eval("return 1", 0, (error) => resolve(error));
@@ -40,9 +114,7 @@ test("collaboration coordination commands require an allowed store policy", asyn
     expect(sent).toEqual(["info"]);
     const clone = client.duplicate();
     try {
-      await expect(clone.eval("return 1", 0)).rejects.toBeInstanceOf(
-        StoreUnavailableError,
-      );
+      await expectStoreRefusal(clone.eval("return 1", 0));
       const results = await clone.pipeline().eval("return 1", 0).exec();
       expect(results?.at(0)?.at(0)).toBeInstanceOf(StoreUnavailableError);
     } finally {
@@ -55,9 +127,7 @@ test("collaboration coordination commands require an allowed store policy", asyn
     expect(sent).toEqual(["info", "eval"]);
     policy = "allkeys-lru";
     client.emit("close");
-    await expect(client.eval("return 1", 0)).rejects.toBeInstanceOf(
-      StoreUnavailableError,
-    );
+    await expectStoreRefusal(client.eval("return 1", 0));
     expect(sent).toEqual(["info", "eval", "info"]);
     expect(observed).toEqual(["refused", "refused", "allowed", "refused"]);
   } finally {
@@ -69,7 +139,7 @@ test("collaboration coordination commands require an allowed store policy", asyn
 test("the collaboration extension consumes publishing before subscription clients", async () => {
   const sent: string[] = [];
   const send = spyOn(RedisClient.prototype, "sendCommand").mockImplementation(
-    (command) => {
+    async (command) => {
       sent.push(command.name);
       command.resolve(
         command.name === "info" ? "maxmemory_policy:allkeys-lru\r\n" : 1,
@@ -99,9 +169,7 @@ test("the collaboration extension consumes publishing before subscription client
     await clients.subscribe.ping();
     expect(sent).toContain("subscribe");
     expect(sent).not.toContain("info");
-    await expect(clients.publish.eval("return 1", 0)).rejects.toBeInstanceOf(
-      StoreUnavailableError,
-    );
+    await expectStoreRefusal(clients.publish.eval("return 1", 0));
     expect(sent).not.toContain("eval");
     expect(await clients.subscribe.subscribe("another-channel")).toBe(1);
   } finally {
@@ -114,7 +182,7 @@ test("the collaboration extension consumes publishing before subscription client
 test("cache clients deliver commands without policy inspection", async () => {
   const sent: string[] = [];
   const send = spyOn(RedisClient.prototype, "sendCommand").mockImplementation(
-    (command) => {
+    async (command) => {
       sent.push(command.name);
       command.resolve("OK");
       return command.promise;
@@ -136,7 +204,7 @@ test("cache clients deliver commands without policy inspection", async () => {
 test("driver handshakes remain available before command policy inspection", async () => {
   const sent: string[] = [];
   const send = spyOn(RedisClient.prototype, "sendCommand").mockImplementation(
-    (command) => {
+    async (command) => {
       sent.push(command.name);
       command.resolve(
         command.name === "info" ? "maxmemory_policy:allkeys-lru\r\n" : "OK",
@@ -153,9 +221,7 @@ test("driver handshakes remain available before command policy inspection", asyn
       "OK",
     );
     expect(sent).toEqual(["auth"]);
-    await expect(client.eval("return 1", 0)).rejects.toBeInstanceOf(
-      StoreUnavailableError,
-    );
+    await expectStoreRefusal(client.eval("return 1", 0));
     expect(sent).toEqual(["auth", "info"]);
   } finally {
     client.disconnect();
@@ -169,16 +235,20 @@ test.skipIf(redisTestUrl === undefined)(
   "real collaboration clients decode and enforce policy observations",
   async () => {
     if (redisTestUrl === undefined) {
-      return panic("Redis test URL is required");
+      panic("Redis test URL is required");
     }
     const statuses: string[] = [];
     const errors: unknown[] = [];
     const client = createCollabRedisClient({
       redisUrl: redisTestUrl,
       storeClass: "durable-coordination",
-      onPolicyStatus: (status) => statuses.push(status),
+      onPolicyStatus: (status) => {
+        statuses.push(status);
+      },
     });
-    client.on("error", (error) => errors.push(error));
+    client.on("error", (error) => {
+      errors.push(error);
+    });
     const original = RedisClient.prototype.sendCommand;
     let reported = "noeviction";
     const send = spyOn(RedisClient.prototype, "sendCommand").mockImplementation(
@@ -206,9 +276,7 @@ test.skipIf(redisTestUrl === undefined)(
       expect(statuses).toEqual(["allowed"]);
       reported = "allkeys-lru";
       client.emit("close");
-      await expect(client.eval("return 1", 0)).rejects.toBeInstanceOf(
-        StoreUnavailableError,
-      );
+      await expectStoreRefusal(client.eval("return 1", 0));
       expect(statuses).toEqual(["allowed", "refused"]);
       reported = "noeviction";
       client.emit("close");

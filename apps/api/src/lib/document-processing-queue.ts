@@ -3104,6 +3104,9 @@ export const abortDocumentProcessingWorkerBeforeClose = async ({
   await closeWorker();
 };
 
+export const createDocumentProcessingWorkerConnection = () =>
+  createBullMqConnection({ storeClass: "durable-coordination" });
+
 export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
   const lifecycle = new AbortController();
   const ocrConfigured = isLocalDocumentOcrConfigured();
@@ -3124,9 +3127,7 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
       }
     },
     {
-      connection: createBullMqConnection({
-        storeClass: "durable-coordination",
-      }),
+      connection: createDocumentProcessingWorkerConnection(),
       concurrency: WORKER_CONCURRENCY,
       lockDuration: 35 * 60 * 1000,
       stalledInterval: 60_000,

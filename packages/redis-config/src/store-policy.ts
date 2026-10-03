@@ -37,7 +37,7 @@ export const createStorePolicy = ({
   let checking: Promise<void> | undefined;
   let generation = 0;
 
-  const refresh = () => {
+  const refresh = async () => {
     const inspectedGeneration = generation;
     const attempt = (async () => {
       let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -74,7 +74,7 @@ export const createStorePolicy = ({
       }
     });
     checking = pending;
-    return pending;
+    await pending;
   };
 
   return {
@@ -91,7 +91,7 @@ export const createStorePolicy = ({
         await (checking ?? refresh());
       }
       if (status === "refused") {
-        return await Promise.reject(
+        await Promise.reject(
           new StoreUnavailableError({
             message: STORE_POLICY_MESSAGE,
             reason: "unavailable",

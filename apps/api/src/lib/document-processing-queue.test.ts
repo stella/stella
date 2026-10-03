@@ -1,5 +1,8 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { RedisClient } from "bun";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+
+import { StoreUnavailableError } from "@stll/redis-config/store-policy";
 
 import type { rootDb } from "@/api/db/root";
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -9,6 +12,7 @@ import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
 import {
   abortDocumentProcessingWorkerBeforeClose,
   createDocumentProcessingLeaseRenewal,
+  createDocumentProcessingWorkerConnection,
   createDocumentProcessingReconciliationPhases,
   createRepairPassMemo,
   createWorkerReconciliationPhases,
@@ -504,9 +508,32 @@ describe("reconciliation fault isolation", () => {
     expect(queueSource).toContain(
       "connectionTimeout: REPAIR_SCAN_CURSOR_COMMAND_TIMEOUT_MS",
     );
-    expect(queueSource).toContain(
-      'connection: createBullMqConnection({ storeClass: "durable-coordination" }),',
+  });
+  test("the worker connection refuses an evicting coordination store", async () => {
+    const connect = spyOn(RedisClient.prototype, "connect").mockResolvedValue(
+      undefined,
     );
+    const send = spyOn(RedisClient.prototype, "send").mockResolvedValue(
+      "maxmemory_policy:allkeys-lru\r\n",
+    );
+    const connection = createDocumentProcessingWorkerConnection();
+    try {
+      const refused1 = await Result.tryPromise({
+        try: async () => {
+          await connection.connect();
+        },
+        catch: (error: unknown) => error,
+      });
+      expect(refused1.isErr()).toBe(true);
+      if (refused1.isErr()) {
+        expect(refused1.error).toBeInstanceOf(StoreUnavailableError);
+      }
+      expect(send).toHaveBeenCalledWith("INFO", ["memory"]);
+    } finally {
+      connection.disconnect();
+      connect.mockRestore();
+      send.mockRestore();
+    }
   });
 });
 

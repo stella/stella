@@ -16,9 +16,9 @@ const enabled = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
 describe.skipIf(!enabled)("classified clients over Valkey", () => {
   test("native commands, BullMQ producers and workers enforce the inspected policy", async () => {
     const key = coordinationKey({
-      scope: "store-policy-test",
+      scope: "security-canary",
       slot: Bun.randomUUIDv7(),
-      suffix: "v1",
+      suffix: "store-policy-test:v1",
     });
     const cache = createRedisClient({ storeClass: "cache" });
     await cache.connect();

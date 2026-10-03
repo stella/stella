@@ -14,9 +14,9 @@ import { coordinationKey } from "@/api/lib/redis-keys";
 import { createMcpGatewayRateLimiter } from "@/api/mcp/gateway/rate-limit";
 
 const key = coordinationKey({
-  scope: "store-policy-test",
+  scope: "security-canary",
   slot: "test",
-  suffix: "v1",
+  suffix: "store-policy-test:v1",
 });
 
 const withReportedPolicy = async (run: (sent: string[]) => Promise<void>) => {

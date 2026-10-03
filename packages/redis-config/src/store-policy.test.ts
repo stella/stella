@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
@@ -20,14 +21,32 @@ for (const reported of [
     const policy = createStorePolicy({
       storeClass: "durable-coordination",
       inspect: async () => `# Memory\r\nmaxmemory_policy:${reported}\r\n`,
-      observe: (status) => observed.push(status),
+      observe: (status) => {
+        observed.push(status);
+      },
     });
-    await expect(policy.assertAllowed()).rejects.toBeInstanceOf(
-      StoreUnavailableError,
-    );
-    await expect(policy.assertAllowed()).rejects.toMatchObject({
-      reason: "unavailable",
+    const refused1 = await Result.tryPromise({
+      try: async () => {
+        await policy.assertAllowed();
+      },
+      catch: (error: unknown) => error,
     });
+    expect(refused1.isErr()).toBe(true);
+    if (refused1.isErr()) {
+      expect(refused1.error).toBeInstanceOf(StoreUnavailableError);
+    }
+    const refused2 = await Result.tryPromise({
+      try: async () => {
+        await policy.assertAllowed();
+      },
+      catch: (error: unknown) => error,
+    });
+    expect(refused2.isErr()).toBe(true);
+    if (refused2.isErr()) {
+      expect(refused2.error).toMatchObject({
+        reason: "unavailable",
+      });
+    }
     expect(observed).toEqual(["refused"]);
   });
 }
@@ -41,7 +60,9 @@ test("cache commands never inspect or refuse a store", async () => {
       inspected += 1;
       return "maxmemory_policy:allkeys-lru\r\n";
     },
-    observe: (status) => observed.push(status),
+    observe: (status) => {
+      observed.push(status);
+    },
   });
   await policy.assertAllowed();
   policy.invalidate();
@@ -62,7 +83,9 @@ test("one inspection serves concurrent operations and refreshes after reconnect 
       inspected += 1;
       return `maxmemory_policy:${reported}\r\n`;
     },
-    observe: (status) => observed.push(status),
+    observe: (status) => {
+      observed.push(status);
+    },
   });
   await Promise.all(
     Array.from({ length: 20 }, async () => await policy.assertAllowed()),
@@ -73,9 +96,16 @@ test("one inspection serves concurrent operations and refreshes after reconnect 
   await policy.assertAllowed();
   expect(inspected).toBe(1);
   now = 60_000;
-  await expect(policy.assertAllowed()).rejects.toBeInstanceOf(
-    StoreUnavailableError,
-  );
+  const refused3 = await Result.tryPromise({
+    try: async () => {
+      await policy.assertAllowed();
+    },
+    catch: (error: unknown) => error,
+  });
+  expect(refused3.isErr()).toBe(true);
+  if (refused3.isErr()) {
+    expect(refused3.error).toBeInstanceOf(StoreUnavailableError);
+  }
   reported = "noeviction";
   policy.invalidate();
   await policy.assertAllowed();
@@ -89,7 +119,9 @@ for (const reply of [undefined, 5, "# Memory\r\n", "maxmemory_policy:\r\n"]) {
     const policy = createStorePolicy({
       storeClass: "durable-coordination",
       inspect: async () => reply,
-      observe: (status) => observed.push(status),
+      observe: (status) => {
+        observed.push(status);
+      },
     });
     await policy.assertAllowed();
     expect(observed).toEqual(["unknown"]);
@@ -111,7 +143,9 @@ test("inspection errors and timeouts remain available and emit unknown", async (
     const policy = createStorePolicy({
       storeClass: "durable-coordination",
       inspect,
-      observe: (status) => observed.push(status),
+      observe: (status) => {
+        observed.push(status);
+      },
     });
     await policy.assertAllowed();
     expect(observed).toEqual(["unknown"]);
@@ -125,9 +159,16 @@ test("an unknown refreshed policy permits operations after a refusal", async () 
     inspect: async () => reply,
     observe: () => {},
   });
-  await expect(policy.assertAllowed()).rejects.toBeInstanceOf(
-    StoreUnavailableError,
-  );
+  const refused4 = await Result.tryPromise({
+    try: async () => {
+      await policy.assertAllowed();
+    },
+    catch: (error: unknown) => error,
+  });
+  expect(refused4.isErr()).toBe(true);
+  if (refused4.isErr()) {
+    expect(refused4.error).toBeInstanceOf(StoreUnavailableError);
+  }
   reply = "# Memory\r\n";
   policy.invalidate();
   await policy.assertAllowed();
@@ -145,12 +186,23 @@ test("a reconnect during inspection waits for the replacement policy", async () 
         ? await first.promise
         : "maxmemory_policy:allkeys-lru\r\n";
     },
-    observe: (status) => observed.push(status),
+    observe: (status) => {
+      observed.push(status);
+    },
   });
   const operation = policy.assertAllowed();
   policy.invalidate();
   first.resolve("maxmemory_policy:noeviction\r\n");
-  await expect(operation).rejects.toBeInstanceOf(StoreUnavailableError);
+  const refused5 = await Result.tryPromise({
+    try: async () => {
+      await operation;
+    },
+    catch: (error: unknown) => error,
+  });
+  expect(refused5.isErr()).toBe(true);
+  if (refused5.isErr()) {
+    expect(refused5.error).toBeInstanceOf(StoreUnavailableError);
+  }
   expect(inspections).toBe(2);
   expect(observed).toEqual(["refused"]);
 });

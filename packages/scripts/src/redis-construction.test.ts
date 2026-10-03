@@ -108,7 +108,10 @@ const inspectConstruction = (source: string, file: string) => {
     ) {
       const module = node.moduleSpecifier.text;
       const clause = node.importClause;
-      if (clause !== undefined && !clause.isTypeOnly) {
+      if (
+        clause !== undefined &&
+        clause.phaseModifier !== ts.SyntaxKind.TypeKeyword
+      ) {
         const bindings = clause.namedBindings;
         if (
           clause.name !== undefined &&
