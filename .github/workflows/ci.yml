@@ -508,12 +508,12 @@ jobs:
             # change: Dockerfiles, manifests, the runner and its packages.
             # The merge queue keeps the broad selection above.
             case "$file" in
-              */Dockerfile|*.Dockerfile|*/package.json|package.json|bun.lock|bunfig.toml|.npmrc|patches/*|turbo.json|scripts/pull-base-images.sh|apps/legal-atlas-runner/*|packages/legal-atlas/*|packages/agent-engine/docker/*)
+              */Dockerfile|*.Dockerfile|*/package.json|package.json|bun.lock|bunfig.toml|.npmrc|patches/*|turbo.json|scripts/pull-base-images.sh|apps/legal-atlas-runner/*|packages/legal-atlas/*|packages/agent-engine/docker/*|.dockerignore)
                 image_inputs_changed=true
                 ;;
             esac
             case "$file" in
-              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/retry.sh|.github/workflows/ci.yml)
+              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml)
                 legal_atlas_image_required=true
                 ;;
             esac
