@@ -6,7 +6,10 @@ import type {
   RemainingDocumentCursor,
 } from "@/api/lib/legal-search/sk-document-backfill";
 
-/** Outstanding rows examined in one drain cycle, including ineligible rows. */
+/**
+ * Bounds candidate rows returned per call, including ineligible rows.
+ * The three-branch SQL union can read up to three times each page's limit.
+ */
 export const DOCUMENT_SCAN_ROW_BUDGET = 1000;
 /** Candidate page size, independent of the number of ready rows requested. */
 export const DOCUMENT_SCAN_PAGE_LIMIT = Math.floor(
@@ -28,6 +31,19 @@ export type RemainingDocumentScanResult =
   | { type: "rows"; rows: PendingDocument[] }
   | { type: "budget-spent" }
   | { type: "exhausted" };
+
+type CursorOrderOptions = {
+  candidate: RemainingDocumentCursor;
+  cursor: RemainingDocumentCursor;
+};
+
+/** Matches decision_date DESC NULLS LAST, id ASC without needing a live cursor row. */
+const atOrAfterCursor = ({ candidate, cursor }: CursorOrderOptions) =>
+  candidate.decisionDate === cursor.decisionDate
+    ? candidate.id >= cursor.id
+    : candidate.decisionDate === null ||
+      (cursor.decisionDate !== null &&
+        candidate.decisionDate < cursor.decisionDate);
 
 /**
  * Read cursors live with the queue buffer, not as durable checkpoints.
@@ -70,6 +86,8 @@ export const createRemainingDocumentScan = ({
     }
     let examined = 0;
     const rows: PendingDocument[] = [];
+    const finishAvailableRows = (emptyType: "budget-spent" | "exhausted") =>
+      finish(rows.length > 0 ? { type: "rows", rows } : { type: emptyType });
     while (examined < DOCUMENT_SCAN_ROW_BUDGET) {
       const cursor = head ? head.after : after;
       const pageLimit = Math.min(
@@ -82,8 +100,19 @@ export const createRemainingDocumentScan = ({
       });
       examined += page.length;
       let consumed = 0;
+      let reachedSweep = false;
       for (const { ready, ...decision } of page) {
         const next = { decisionDate: decision.decisionDate, id: decision.id };
+        // The head owns only positions before the sweep, even if the row
+        // that established the sweep cursor has since left the queue.
+        if (
+          head &&
+          after &&
+          atOrAfterCursor({ candidate: next, cursor: after })
+        ) {
+          reachedSweep = true;
+          break;
+        }
         if (head) {
           head.after = next;
         } else {
@@ -98,28 +127,22 @@ export const createRemainingDocumentScan = ({
         }
       }
       const exhausted = consumed === page.length && page.length < pageLimit;
-      if (head && rows.length > 0) {
+      if (head && (rows.length > 0 || reachedSweep || exhausted)) {
         head = undefined;
         headReprobeAt = now() + DOCUMENT_SCAN_REPROBE_MS;
-        return finish({ type: "rows", rows });
-      }
-      if (head && exhausted) {
-        head = undefined;
-        headReprobeAt = now() + DOCUMENT_SCAN_REPROBE_MS;
+        if (rows.length > 0) {
+          return finish({ type: "rows", rows });
+        }
       } else if (!head && exhausted) {
         after = undefined;
         reprobeAt = now() + DOCUMENT_SCAN_REPROBE_MS;
         headReprobeAt = reprobeAt;
-        return finish(
-          rows.length > 0 ? { type: "rows", rows } : { type: "exhausted" },
-        );
+        return finishAvailableRows("exhausted");
       }
       if (rows.length === limit || (rows.length > 0 && exhausted)) {
         return finish({ type: "rows", rows });
       }
     }
-    return finish(
-      rows.length > 0 ? { type: "rows", rows } : { type: "budget-spent" },
-    );
+    return finishAvailableRows("budget-spent");
   };
 };

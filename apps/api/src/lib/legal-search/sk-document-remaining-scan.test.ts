@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { createPendingDocumentQueue } from "@/api/lib/legal-search/sk-document-queue";
 import {
   createRemainingDocumentScan,
@@ -23,16 +23,32 @@ const candidate = (ready: boolean): RemainingDocumentCandidate => ({
 });
 
 const fixture = (rows: RemainingDocumentCandidate[]) => {
+  // Give the fake page loader the production's newest-first ordering.
+  for (const [index, row] of rows.entries()) {
+    row.decisionDate = new Date(Date.UTC(2026, 0, 1) - index * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+  }
   let clock = 0;
   let examined = 0;
   let calls = 0;
+  const pageCursors: (RemainingDocumentCandidate["id"] | undefined)[] = [];
   const loadRemaining = createRemainingDocumentScan({
     now: () => clock,
     loadPage: async ({ limit, after }) => {
       expect(limit).toBeLessThanOrEqual(DOCUMENT_SCAN_PAGE_LIMIT);
       calls += 1;
-      const start = after ? rows.findIndex(({ id }) => id === after.id) + 1 : 0;
-      const page = rows.slice(start, start + limit);
+      pageCursors.push(after?.id);
+      const start = after
+        ? rows.findIndex(({ id, decisionDate }) =>
+            decisionDate === after.decisionDate
+              ? id > after.id
+              : decisionDate === null ||
+                (after.decisionDate !== null &&
+                  decisionDate < after.decisionDate),
+          )
+        : 0;
+      const page = start < 0 ? [] : rows.slice(start, start + limit);
       examined += page.length;
       return page;
     },
@@ -50,6 +66,7 @@ const fixture = (rows: RemainingDocumentCandidate[]) => {
     },
     examined: () => examined,
     calls: () => calls,
+    pageCursors: () => pageCursors,
   };
 };
 
@@ -84,6 +101,7 @@ for (const mode of ["arrival", "expired retry"] as const) {
     }
     const fresh = mode === "arrival" ? candidate(true) : retry;
     if (mode === "arrival") {
+      fresh.decisionDate = retry.decisionDate;
       rows.splice(parked.length, 0, fresh);
     } else {
       retry.ready = true;
@@ -179,13 +197,11 @@ test("head probes resume through more than one budget of parked candidates", asy
   for (const row of rows.slice(0, 20)) {
     row.ready = false;
   }
-  const fresh = candidate(true);
-  rows.unshift(
-    ...Array.from({ length: DOCUMENT_SCAN_ROW_BUDGET + 21 }, () =>
-      candidate(false),
-    ),
-    fresh,
+  const prefix = Array.from({ length: DOCUMENT_SCAN_ROW_BUDGET + 21 }, () =>
+    candidate(false),
   );
+  const fresh = candidate(true);
+  rows.unshift(...prefix, fresh);
   f.advance();
   const before = f.examined();
   expect(await f.queue.next()).toEqual({ type: "budget-spent" });
@@ -196,3 +212,61 @@ test("head probes resume through more than one budget of parked candidates", asy
     expect(next.row.decision.id).toBe(fresh.id);
   }
 });
+
+for (const order of ["dated", "ties", "null tail", "dated to null"] as const) {
+  test(`head probing stops at the sweep through several parked budgets (${order})`, async () => {
+    const prefix = Array.from(
+      { length: DOCUMENT_SCAN_ROW_BUDGET * 3 + 21 },
+      () => candidate(false),
+    );
+    const archive = Array.from({ length: 100 }, () => candidate(true));
+    const rows = [...prefix, ...archive];
+    const f = fixture(rows);
+    for (const [index, row] of rows.entries()) {
+      row.id = toSafeId<"caseLawDecision">(
+        `00000000-0000-7000-8000-${String(index).padStart(12, "0")}`,
+      );
+      if (order === "ties") {
+        row.decisionDate = "2026-01-01";
+      } else if (order === "null tail") {
+        row.decisionDate = null;
+      } else if (order === "dated to null" && index >= prefix.length + 20) {
+        row.decisionDate = null;
+      }
+    }
+    for (let i = 0; i < 3; i += 1) {
+      expect(await f.queue.next()).toEqual({ type: "budget-spent" });
+    }
+    for (let i = 0; i < 20; i += 1) {
+      expect((await f.queue.next()).type).toBe("row");
+    }
+    for (const row of archive.slice(0, 20)) {
+      row.ready = false;
+    }
+    // A completed cursor row disappears, so equality alone cannot stop a probe.
+    rows.splice(prefix.length + 19, 1);
+    for (let cycle = 0; cycle < 2; cycle += 1) {
+      f.advance();
+      for (let budget = 0; budget < 3; budget += 1) {
+        const calls = f.calls();
+        expect(await f.queue.next()).toEqual({ type: "budget-spent" });
+        expect(f.calls() - calls).toBe(4);
+      }
+      const calls = f.calls();
+      const next = await f.queue.next();
+      expect(next.type).toBe("row");
+      if (next.type === "row") {
+        expect(next.row.decision.id).toBe(archive.at(20 + cycle * 20)?.id);
+      }
+      // One page reaches the cursor; the second belongs to the sweep.
+      expect(f.calls() - calls).toBe(2);
+      expect(f.pageCursors().at(-1)).toBe(archive.at(19 + cycle * 20)?.id);
+      for (let i = 1; i < 20; i += 1) {
+        expect((await f.queue.next()).type).toBe("row");
+      }
+      for (const row of archive.slice(20 + cycle * 20, 40 + cycle * 20)) {
+        row.ready = false;
+      }
+    }
+  });
+}
