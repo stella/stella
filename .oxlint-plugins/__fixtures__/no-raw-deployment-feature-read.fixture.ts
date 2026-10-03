@@ -1,6 +1,8 @@
 // Passive regression fixture for
 // `no-raw-deployment-feature-read/no-raw-deployment-feature-read`.
 
+import { env as apiConfig } from "@/api/env";
+
 declare const env: Record<string, boolean>;
 declare const envDocumentProcessingWorker: Record<string, boolean>;
 declare const isDeploymentFeatureEnabled: (flag: string) => boolean;
@@ -33,3 +35,7 @@ export const otherKey = env.ACTION_COST_RETENTION_DAYS;
 export const workerFlag = envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
 
 void destructured;
+
+// MUST flag: an aliased import of the API env is the same object.
+// oxlint-disable-next-line no-raw-deployment-feature-read/no-raw-deployment-feature-read -- fixture: aliased env reads go through the owner
+export const rawAliased = apiConfig.FEATURE_LEGAL_LISTS;

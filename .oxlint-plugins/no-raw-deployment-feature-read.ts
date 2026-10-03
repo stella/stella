@@ -6,16 +6,16 @@
 // an in-handler default can disagree about one flag. This rule reports, in the
 // files it is enabled for:
 //
-//   - a member read of a `FEATURE_*` key on an identifier named `env`
-//     (`env.FEATURE_X`, `env?.FEATURE_X`, `env["FEATURE_X"]`);
-//   - a destructuring of a `FEATURE_*` key from `env`
+//   - a member read of a `FEATURE_*` key on the API env object, whether named
+//     `env` or imported from `@/api/env` under another local name
+//     (`env.FEATURE_X`, `env?.FEATURE_X`, `env["FEATURE_X"]`, `config.FEATURE_X`);
+//   - a destructuring of a `FEATURE_*` key from that object
 //     (`const { FEATURE_X } = env`).
 //
 // Test files are exempt. An intentional raw read is an `allowedReads` entry
 // (`{ file, flags }`, with its reason as a config comment), never a
-// suppression. Detection is syntactic: an alias of `env`, a dynamic key, or a
-// differently named env object (a worker's own schema) is out of scope; the
-// owner itself reads through a dynamic key.
+// suppression. A dynamic key or a different env object (a worker's own
+// schema) is out of scope; the owner itself reads through a dynamic key.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
@@ -24,12 +24,15 @@ import {
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isImportedFrom,
   isTestFile,
   memberPropertyName,
   repoRelativeFilename,
 } from "./utils.ts";
 
 const ENV_IDENTIFIER = "env";
+const ENV_MODULES = ["apps/api/src/env"];
+const ENV_EXPORTS: ReadonlySet<string> = new Set([ENV_IDENTIFIER]);
 const FEATURE_PREFIX = "FEATURE_";
 
 type AllowedRead = { file: string; flags: readonly string[] };
@@ -59,14 +62,35 @@ const readAllowedReads = (options: unknown): AllowedRead[] => {
 const featureKey = (name: string | null): string | null =>
   name?.startsWith(FEATURE_PREFIX) === true ? name : null;
 
-const featureMemberRead = (node: AstNode): string | null =>
-  isIdentifier(node.object, ENV_IDENTIFIER)
+type RuleContext = Parameters<typeof isImportedFrom>[0]["context"];
+
+// The API env object: the import resolved through any local alias, or a
+// binding literally named `env`.
+const isEnvObject = (context: RuleContext, node: unknown): boolean =>
+  isIdentifier(node, ENV_IDENTIFIER) ||
+  (isAstNode(node) &&
+    node.type === "Identifier" &&
+    isImportedFrom({
+      context,
+      node,
+      modules: ENV_MODULES,
+      names: ENV_EXPORTS,
+    }));
+
+const featureMemberRead = (
+  context: RuleContext,
+  node: AstNode,
+): string | null =>
+  isEnvObject(context, node.object)
     ? featureKey(memberPropertyName(node))
     : null;
 
-const destructuredFeatureKeys = (node: AstNode): string[] => {
+const destructuredFeatureKeys = (
+  context: RuleContext,
+  node: AstNode,
+): string[] => {
   if (
-    !isIdentifier(node.init, ENV_IDENTIFIER) ||
+    !isEnvObject(context, node.init) ||
     !isAstNode(node.id) ||
     node.id.type !== "ObjectPattern" ||
     !Array.isArray(node.id.properties)
@@ -132,13 +156,19 @@ export default eslintCompatPlugin({
             return !isTestFile(filename);
           },
           MemberExpression(node) {
-            const flag = featureMemberRead(node);
+            if (!isAstNode(node)) {
+              return;
+            }
+            const flag = featureMemberRead(context, node);
             if (flag !== null) {
               report(node, flag);
             }
           },
           VariableDeclarator(node) {
-            for (const flag of destructuredFeatureKeys(node)) {
+            if (!isAstNode(node)) {
+              return;
+            }
+            for (const flag of destructuredFeatureKeys(context, node)) {
               report(node, flag);
             }
           },
