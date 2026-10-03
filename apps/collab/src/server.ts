@@ -423,7 +423,7 @@ export const createCollabServer = async (
     // The subscriber starts through the extension's initial SUBSCRIBE. The
     // publisher also needs an initial connection before any room is opened.
     void Result.tryPromise({
-      try: () => redisExtension.pub.connect(),
+      try: async () => await redisExtension.pub.connect(),
       catch: (cause: unknown) => cause,
     }).then((connected) => {
       if (Result.isError(connected)) {

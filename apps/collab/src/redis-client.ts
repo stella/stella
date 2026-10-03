@@ -70,7 +70,7 @@ class ClassifiedRedisClient<
     let refreshTimer: ReturnType<typeof setInterval> | undefined;
     const inspectPolicy = () => {
       void Result.tryPromise({
-        try: () => this.#policy.assertAllowed(),
+        try: async () => await this.#policy.assertAllowed(),
         catch: (cause: unknown) => cause,
       }).then((checked) => {
         if (Result.isError(checked)) {
@@ -119,7 +119,7 @@ class ClassifiedRedisClient<
       return super.sendCommand(...args);
     }
     void Result.tryPromise({
-      try: () => this.#policy.assertAllowed(),
+      try: async () => await this.#policy.assertAllowed(),
       catch: (cause: unknown) => {
         if (cause instanceof Error) {
           return cause;
