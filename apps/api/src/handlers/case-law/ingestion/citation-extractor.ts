@@ -1561,10 +1561,14 @@ export const bareCitationKey = (text: string): string =>
 export const citationKeyOf = (text: string): string | null =>
   bareCitationKey(text) || null;
 
+/** Width of the decision's `citation_key` column. */
+const DECISION_CITATION_KEY_MAX_LENGTH = 128;
+
 /**
  * A decision's own `citation_key`: its docket's key, and none where the
  * primary reference is not a docket. Citations reach such a decision through
- * its typed identifiers instead.
+ * its typed identifiers instead. A reference whose key would not fit the
+ * column is no docket a citation could name, so it gets no key either.
  */
 export const decisionCitationKeyOf = ({
   caseNumber,
@@ -1572,8 +1576,15 @@ export const decisionCitationKeyOf = ({
 }: {
   caseNumber: string;
   caseNumberType: DecisionPrimaryReferenceType;
-}): string | null =>
-  primaryReferenceIsDocket(caseNumberType) ? citationKeyOf(caseNumber) : null;
+}): string | null => {
+  if (!primaryReferenceIsDocket(caseNumberType)) {
+    return null;
+  }
+  const key = citationKeyOf(caseNumber);
+  return key !== null && key.length <= DECISION_CITATION_KEY_MAX_LENGTH
+    ? key
+    : null;
+};
 
 export const normalizeDecisionIdentifier = (
   identifier: DecisionIdentifier,
