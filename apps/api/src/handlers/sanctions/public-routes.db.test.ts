@@ -833,7 +833,12 @@ describe("public sanctions search parity", () => {
         db: publicDb,
         now: FRESH_NOW,
         screen,
-        rateLimitOptions: { context, max: 1000, duration: 60_000 },
+        rateLimitOptions: {
+          context,
+          generator: scopedGenerator("rollover-test"),
+          max: 1000,
+          duration: 60_000,
+        },
       });
       const search = async (firstName: string, lastName: string) => {
         const response = await route.handle(

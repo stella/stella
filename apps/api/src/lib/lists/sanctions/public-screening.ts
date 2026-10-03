@@ -24,7 +24,10 @@ export const createPublicSanctionsScreening = ({
   loadEntries = loadEditionEntries,
 }: PublicScreeningOptions = {}): typeof screenSanctionsSubject => {
   const warming: { pending: Promise<unknown> | null } = { pending: null };
-  const coldLoads = new Map<string, ReturnType<typeof loadEditionEntries>>();
+  const coldLoads = new Map<
+    string,
+    { signal: AbortSignal; entries: ReturnType<typeof loadEditionEntries> }
+  >();
   const execute = async (
     props: Parameters<typeof screenSanctionsSubject>[0],
     options?: { deadlineMs: number; onSettled: () => void },
@@ -40,21 +43,30 @@ export const createPublicSanctionsScreening = ({
             let entries = null;
             if (!session.hasEdition(source, edition.id)) {
               const key = `${source}:${edition.id}`;
-              let pending = coldLoads.get(key);
-              if (pending === undefined) {
-                if (coldLoads.size >= SANCTIONS_MATCHER_CONFIG.poolSizeMax) {
-                  return null;
+              while (!isSanctionsMatcherCancelled(session.signal)) {
+                let pending = coldLoads.get(key);
+                if (pending === undefined) {
+                  if (coldLoads.size >= SANCTIONS_MATCHER_CONFIG.poolSizeMax) {
+                    return null;
+                  }
+                  pending = {
+                    signal: session.signal,
+                    entries: loadEntries({
+                      db,
+                      edition,
+                      signal: session.signal,
+                    }).finally(() => {
+                      coldLoads.delete(key);
+                    }),
+                  };
+                  coldLoads.set(key, pending);
                 }
-                pending = loadEntries({
-                  db,
-                  edition,
-                  signal: session.signal,
-                }).finally(() => {
-                  coldLoads.delete(key);
-                });
-                coldLoads.set(key, pending);
+                entries = await pending.entries;
+                // Join canceled reads before replacing them, preserving the load cap.
+                if (!isSanctionsMatcherCancelled(pending.signal)) {
+                  break;
+                }
               }
-              entries = await pending;
             }
             if (
               isSanctionsMatcherCancelled(session.signal) ||
