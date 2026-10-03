@@ -1,6 +1,6 @@
 import { panic } from "better-result";
-import { getTableColumns, isSQLWrapper, sql } from "drizzle-orm";
-import type { GetColumnData, SQL } from "drizzle-orm";
+import { getColumns, isSQLWrapper, sql } from "drizzle-orm";
+import type { DriverValueDecoder, GetColumnData, SQL } from "drizzle-orm";
 import type {
   AnyPgColumn,
   PgTable,
@@ -19,7 +19,7 @@ export type TransitionSpec = {
   readonly table: PgTable;
   readonly edges: Readonly<Record<string, readonly string[]>>;
   readonly terminal: readonly string[];
-  readonly fence?: string;
+  readonly fence: string | undefined;
 };
 
 /** Same-state writes preserve metadata without reopening a lifecycle. */
@@ -71,7 +71,7 @@ export const defineTransitions = <
   }
   if (
     options.fence !== undefined &&
-    !Object.hasOwn(getTableColumns(table), options.fence)
+    !Object.hasOwn(getColumns(table), options.fence)
   ) {
     panic("The declared transition fence is not a table column");
   }
@@ -122,16 +122,19 @@ type Fence<
   ? { fence: GetColumnData<TTable["_"]["columns"][TKey]> }
   : { fence?: never };
 
+type TransitionOwnedKeys<TOptions> =
+  | "id"
+  | "status"
+  | (TOptions extends { fence: infer TKey extends string } ? TKey : never);
+
 type TransitionOptions<
   TTable extends LifecycleTable,
   TEdges extends Readonly<Record<string, readonly string[]>>,
   TOptions extends { fence?: string },
 > = Move<TEdges> &
   Fence<TTable, TOptions> & {
-    set?: Omit<
-      PgUpdateSetSource<TTable>,
-      "id" | "status" | NonNullable<TOptions["fence"]>
-    >;
+    set?: Omit<PgUpdateSetSource<TTable>, TransitionOwnedKeys<TOptions>> &
+      Partial<Record<TransitionOwnedKeys<TOptions>, never>>;
   };
 
 export type TransitionResult<TId, TStatus> =
@@ -163,11 +166,12 @@ export const transition = async <
   ) {
     panic("Illegal status transition");
   }
-  const columns = getTableColumns(spec.table);
+  const columns = getColumns(spec.table);
   const assignments = [
     sql`${sql.identifier(spec.table.status.name)} = ${options.to}`,
   ];
-  for (const [key, value] of Object.entries(options.set ?? {})) {
+  const metadata: Readonly<Record<string, unknown>> = options.set ?? {};
+  for (const [key, value] of Object.entries(metadata)) {
     const column = columns[key];
     if (
       column === undefined ||
@@ -199,10 +203,13 @@ export const transition = async <
     );
   }
   const fence = spec.fence === undefined ? undefined : columns[spec.fence];
-  if (spec.fence !== undefined && options.fence === undefined) {
+  // Untyped callers still need fence validation when the generic excludes a fence.
+  const runtimeOptions: { readonly fence?: unknown } = options;
+  const expectedFence = runtimeOptions.fence;
+  if (spec.fence !== undefined && expectedFence === undefined) {
     panic("The transition requires its declared fence");
   }
-  if (spec.fence === undefined && options.fence !== undefined) {
+  if (spec.fence === undefined && expectedFence !== undefined) {
     panic("This transition table has no fence");
   }
   const rows = await tx.execute<{
@@ -220,13 +227,21 @@ export const transition = async <
     RETURNING ${spec.table.id} AS "id", ${spec.table.status} AS "status"
   `);
   const row = rows.at(0);
-  return row === undefined
-    ? { type: "stale" }
-    : {
-        type: "transitioned",
-        row: {
-          id: spec.table.id.mapFromDriverValue(row.id),
-          status: spec.table.status.mapFromDriverValue(row.status),
-        },
-      };
+  if (row === undefined) {
+    return { type: "stale" };
+  }
+  // Column's runtime decoder erases its data type; restore its declared codec contract.
+  const idDecoder: DriverValueDecoder<
+    GetColumnData<TTable["id"]>,
+    unknown
+  > = spec.table.id;
+  const statusDecoder: DriverValueDecoder<Status<TTable>, unknown> = spec.table
+    .status;
+  return {
+    type: "transitioned",
+    row: {
+      id: idDecoder.mapFromDriverValue(row.id),
+      status: statusDecoder.mapFromDriverValue(row.status),
+    },
+  };
 };

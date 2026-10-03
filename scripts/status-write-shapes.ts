@@ -70,7 +70,7 @@ const bindingsFor = (source: ts.SourceFile) => {
   const scopes = new Map<ts.Node, Map<string, Binding>>();
   const scopeOf = (node: ts.Node): ts.Node => {
     let scope = node;
-    while (!isScope(scope) && scope.parent !== undefined) {
+    while (!isScope(scope)) {
       scope = scope.parent;
     }
     return scope;
@@ -128,15 +128,17 @@ const bindingsFor = (source: ts.SourceFile) => {
   };
   collect(source);
   return (name: string, node: ts.Node): Binding | undefined => {
-    let current: ts.Node | undefined = node;
-    while (current !== undefined) {
+    let current = node;
+    while (true) {
       const binding = scopes.get(current)?.get(name);
       if (binding !== undefined) {
         return binding;
       }
+      if (ts.isSourceFile(current)) {
+        return undefined;
+      }
       current = current.parent;
     }
-    return undefined;
   };
 };
 
@@ -456,9 +458,8 @@ const payloadsFor = (inspector: ReturnType<typeof mutationsFor>) => {
     return value.properties.some((property) =>
       ts.isSpreadAssignment(property)
         ? containsStatus(property.expression, keys, seen)
-        : property.name !== undefined &&
-          (payloadKey(property.name) === undefined ||
-            keys.includes(payloadKey(property.name) ?? "")),
+        : payloadKey(property.name) === undefined ||
+          keys.includes(payloadKey(property.name) ?? ""),
     );
   };
   const conflictSetWrites = (
@@ -802,10 +803,7 @@ export const unmanagedTransitionTables = (
     seen.add(object);
     return object.properties.some((property) => {
       if (!ts.isSpreadAssignment(property)) {
-        return (
-          property.name !== undefined &&
-          propertyName(property.name) === "unmanaged"
-        );
+        return propertyName(property.name) === "unmanaged";
       }
       const spread = objectOf(property.expression);
       return spread !== undefined && hasUnmanaged(spread, seen);

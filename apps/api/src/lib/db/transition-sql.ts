@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { getTableName, getTableColumns } from "drizzle-orm";
+import { getTableName, getColumns } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 
 import type { TransitionSpec } from "@/api/lib/db/transitions";
@@ -10,7 +10,7 @@ const literal = (value: string) => `'${value.replaceAll("'", "''")}'`;
 /** Called by migrations and real-engine tests; SQL has no separate graph. */
 export const transitionTriggerSql = (spec: TransitionSpec): string => {
   const tableName = getTableName(spec.table);
-  const columnName = getTableColumns(spec.table)["status"]?.name;
+  const columnName = getColumns(spec.table)["status"]?.name;
   if (columnName === undefined) {
     panic("A transition trigger requires a status column");
   }
@@ -62,7 +62,7 @@ FOR EACH ROW EXECUTE FUNCTION ${functionName}();
 export const transitionDomainSql = (spec: TransitionSpec): string => {
   const { name, schema, columns } = getTableConfig(spec.table);
   const status = columns.find(
-    (column) => column === getTableColumns(spec.table)["status"],
+    (column) => column === getColumns(spec.table)["status"],
   );
   if (status === undefined) {
     panic("A transition domain requires a status column");

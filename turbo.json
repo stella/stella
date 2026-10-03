@@ -609,9 +609,7 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
-        "$TURBO_ROOT$/oxlint.config.ts",
-        "$TURBO_ROOT$/scripts/generated-artifacts.ts",
-        "$TURBO_ROOT$/.oxfmtrc.json"
+        "$TURBO_ROOT$/oxlint.config.ts"
       ]
     },
     "@stll/web#test": {

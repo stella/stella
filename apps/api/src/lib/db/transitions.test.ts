@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { integer, pgTable, text, PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
@@ -34,6 +35,27 @@ const fenced = defineTransitions(jobs, graph, {
   fence: "attempt",
 });
 const dialect = new PgDialect();
+
+const assertTransitionRejected = async (
+  operation: Promise<unknown>,
+  expected: string | Error,
+) => {
+  const result = await Result.tryPromise({
+    try: async () => await operation,
+    catch: (error) => error,
+  });
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    if (typeof expected === "string") {
+      expect(result.error).toHaveProperty(
+        "message",
+        expect.stringContaining(expected),
+      );
+    } else {
+      expect(result.error).toBe(expected);
+    }
+  }
+};
 
 describe("conditional status transitions", () => {
   test("status transition graph pairs", () => {
@@ -109,47 +131,62 @@ describe("conditional status transitions", () => {
     const extraFence = { ...missingFence, fence: 3 } as const;
     const overrideStatus = {
       ...missingFence,
-      set: { status: "failed" },
+      set: { status: "failed", description: "metadata" },
     } as const;
-    const overrideFence = { ...extraFence, set: { attempt: 4 } } as const;
+    const overrideFence = {
+      ...extraFence,
+      set: { attempt: 4, description: "metadata" },
+    } as const;
     const unknownColumn = { ...missingFence, set: { unknown: true } } as const;
-    const overrideId = { ...missingFence, set: { id: "other" } } as const;
-    await expect(
+    const overrideId = {
+      ...missingFence,
+      set: { id: "other", description: "metadata" },
+    } as const;
+    await assertTransitionRejected(
       // @ts-expect-error a terminal source cannot reopen
       transition(tx, spec, "job", reopen),
-    ).rejects.toThrow("Illegal status transition");
-    await expect(
+      "Illegal status transition",
+    );
+    await assertTransitionRejected(
       // @ts-expect-error every source must permit the target
       transition(tx, spec, "job", mixed),
-    ).rejects.toThrow("Illegal status transition");
-    await expect(
+      "Illegal status transition",
+    );
+    await assertTransitionRejected(
       // @ts-expect-error an empty source list cannot claim a transition
       transition(tx, spec, "job", empty),
-    ).rejects.toThrow("Illegal status transition");
-    await expect(
+      "Illegal status transition",
+    );
+    await assertTransitionRejected(
       // @ts-expect-error configured fences are required
       transition(tx, fenced, "job", missingFence),
-    ).rejects.toThrow("requires its declared fence");
-    await expect(
+      "requires its declared fence",
+    );
+    await assertTransitionRejected(
       // @ts-expect-error unfenced tables reject unexpected fences
       transition(tx, spec, "job", extraFence),
-    ).rejects.toThrow("has no fence");
-    await expect(
+      "has no fence",
+    );
+    await assertTransitionRejected(
       // @ts-expect-error metadata cannot override the owner's status
       transition(tx, spec, "job", overrideStatus),
-    ).rejects.toThrow("cannot set status");
-    await expect(
+      "cannot set status",
+    );
+    await assertTransitionRejected(
       // @ts-expect-error metadata cannot replace the fence
       transition(tx, fenced, "job", overrideFence),
-    ).rejects.toThrow("cannot set attempt");
-    await expect(
+      "cannot set attempt",
+    );
+    await assertTransitionRejected(
       // @ts-expect-error metadata must be table columns
       transition(tx, spec, "job", unknownColumn),
-    ).rejects.toThrow("cannot set unknown");
-    await expect(
+      "cannot set unknown",
+    );
+    await assertTransitionRejected(
       // @ts-expect-error metadata cannot replace the primary key
       transition(tx, spec, "job", overrideId),
-    ).rejects.toThrow("cannot set id");
+      "cannot set id",
+    );
   });
 
   test("invalid definitions fail before any write", () => {
@@ -193,8 +230,9 @@ describe("conditional status transitions", () => {
         throw failure;
       },
     };
-    await expect(
+    await assertTransitionRejected(
       transition(tx, spec, "job", { from: ["queued"], to: "running" }),
-    ).rejects.toBe(failure);
+      failure,
+    );
   });
 });

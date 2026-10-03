@@ -2908,12 +2908,12 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       STATUS_TRANSITION_OWNERSHIP.owner.some((owner) => file === owner),
     perFile: true,
     growth: "shrink-only",
-    count: (content, { file }) =>
+    count: ((content, { file }) =>
       statusWriteCalls({
         content,
         file,
         columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
-      }).length,
+      }).length) satisfies FileCounter,
   },
   {
     scope: "repo",

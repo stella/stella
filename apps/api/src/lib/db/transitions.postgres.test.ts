@@ -33,7 +33,7 @@ const fencedJobs = pgTable("transition_fenced_jobs", {
   id: encodedId().primaryKey(),
   status: text({ enum: ["queued", "running", "done"] }).notNull(),
   attempt: integer().notNull(),
-  leaseToken: text(),
+  leaseToken: text("lease_token"),
   claimedAt: timestamptz("claimed_at"),
   description: text(),
   payload: jsonb(),
@@ -266,7 +266,7 @@ if (!databaseUrl || !enabled) {
                 row: { id: ownerId, status: to },
               });
             } else {
-              expect(String(owned.error)).toContain(
+              expect(owned.error.message).toContain(
                 "Illegal status transition",
               );
             }

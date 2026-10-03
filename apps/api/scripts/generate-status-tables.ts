@@ -1,4 +1,4 @@
-import { getTableColumns, isTable } from "drizzle-orm";
+import { getColumns, isTable } from "drizzle-orm";
 
 import {
   formattedLikeRepository,
@@ -17,7 +17,7 @@ export const statusColumns = (exports: Readonly<Record<string, unknown>>) => {
     if (!isTable(table)) {
       continue;
     }
-    const columns = Object.keys(getTableColumns(table))
+    const columns = Object.keys(getColumns(table))
       .filter((column) => /(?:status|state|phase)$/iu.test(column))
       .toSorted();
     if (columns.length > 0) {
