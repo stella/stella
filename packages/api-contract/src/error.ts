@@ -1,5 +1,6 @@
 export const CLAUSE_DIRECTIVES_INVALID_CODE =
   "clause_directives_invalid" as const;
+export const CLAUSE_VERSION_LIMIT_ERROR_CODE = "clause_version_limit_reached";
 
 export const API_VALIDATION_ERROR_CODE = "validation" as const;
 
@@ -120,12 +121,14 @@ export const parseApiErrorValue = (input: unknown): ApiErrorValue => {
   if (!("message" in input) || typeof input.message !== "string") {
     return null;
   }
-  const result: ApiErrorObjectValue = { message: input.message };
-  for (const [key, value] of Object.entries(input)) {
-    if (key !== "code" && key !== "message" && key !== "type") {
-      result[key] = value;
-    }
-  }
+  const result: ApiErrorObjectValue = {
+    message: input.message,
+    ...Object.fromEntries(
+      Object.entries(input).filter(
+        ([key]) => key !== "code" && key !== "message" && key !== "type",
+      ),
+    ),
+  };
   if ("code" in input && typeof input.code === "string") {
     result.code = input.code;
   }

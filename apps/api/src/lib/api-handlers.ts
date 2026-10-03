@@ -876,14 +876,19 @@ const runAdmittedFiniteHandler = async function* <
           getRequestContext(ctx.request)?.requestId ?? Bun.randomUUIDv7(),
       },
       run: async (signal) => {
-        // A disconnected request may carry no reason after signal composition.
+        // Check before composing signals: composition can drop the request's
+        // reason. Keep a typed refusal's status; any other disconnect is a 400.
         if (ctx.request.signal.aborted) {
+          // The DOM types the reason as any; read it as unknown and narrow.
+          const reason: unknown = ctx.request.signal.reason;
           return Result.err(
-            new HandlerError({
-              status: 400,
-              message: "Request aborted",
-              cause: ctx.request.signal.reason,
-            }),
+            reason instanceof HandlerError
+              ? reason
+              : new HandlerError({
+                  status: 400,
+                  message: "Request aborted",
+                  cause: reason,
+                }),
           );
         }
         ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);

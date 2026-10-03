@@ -25,7 +25,9 @@ type DefaultViewTemplate = {
   position: number;
 };
 
-const emptyLayout = (type: RequiredViewLayoutType): ViewLayout => {
+const emptyLayout = (
+  type: RequiredViewLayoutType | "correspondence",
+): ViewLayout => {
   const base: Pick<
     ViewLayout,
     "filters" | "sorts" | "hiddenProperties" | "calculations"
@@ -91,6 +93,7 @@ const VIEW_NAMES = {
     files: "Files",
     lists: "Lists",
     todos: "Todos",
+    correspondence: "Correspondence",
   },
   ar: {
     overview: "نظرة عامة",
@@ -98,6 +101,7 @@ const VIEW_NAMES = {
     files: "الملفات",
     lists: "القوائم",
     todos: "المهام",
+    correspondence: "المراسلات",
   },
   cs: {
     overview: "Přehled",
@@ -105,6 +109,7 @@ const VIEW_NAMES = {
     files: "Soubory",
     lists: "Seznamy",
     todos: "Úkoly",
+    correspondence: "Korespondence",
   },
   de: {
     overview: "Übersicht",
@@ -112,6 +117,7 @@ const VIEW_NAMES = {
     files: "Dateien",
     lists: "Listen",
     todos: "Aufgaben",
+    correspondence: "Korrespondenz",
   },
   es: {
     overview: "Resumen",
@@ -119,6 +125,7 @@ const VIEW_NAMES = {
     files: "Archivos",
     lists: "Listas",
     todos: "Tareas",
+    correspondence: "Correspondencia",
   },
   et: {
     overview: "Ülevaade",
@@ -126,6 +133,7 @@ const VIEW_NAMES = {
     files: "Failid",
     lists: "Loendid",
     todos: "Ülesanded",
+    correspondence: "Kirjavahetus",
   },
   fr: {
     overview: "Aperçu",
@@ -133,6 +141,7 @@ const VIEW_NAMES = {
     files: "Fichiers",
     lists: "Listes",
     todos: "Tâches",
+    correspondence: "Correspondance",
   },
   hu: {
     overview: "Áttekintés",
@@ -140,6 +149,7 @@ const VIEW_NAMES = {
     files: "Fájlok",
     lists: "Listák",
     todos: "Feladatok",
+    correspondence: "Levelezés",
   },
   lt: {
     overview: "Apžvalga",
@@ -147,6 +157,7 @@ const VIEW_NAMES = {
     files: "Failai",
     lists: "Sąrašai",
     todos: "Užduotys",
+    correspondence: "Korespondencija",
   },
   lv: {
     overview: "Pārskats",
@@ -154,6 +165,7 @@ const VIEW_NAMES = {
     files: "Faili",
     lists: "Saraksti",
     todos: "Uzdevumi",
+    correspondence: "Sarakste",
   },
   pl: {
     overview: "Przegląd",
@@ -161,6 +173,7 @@ const VIEW_NAMES = {
     files: "Pliki",
     lists: "Listy",
     todos: "Zadania",
+    correspondence: "Korespondencja",
   },
   "pt-BR": {
     overview: "Visão geral",
@@ -168,6 +181,7 @@ const VIEW_NAMES = {
     files: "Arquivos",
     lists: "Listas",
     todos: "Tarefas",
+    correspondence: "Correspondência",
   },
   sk: {
     overview: "Prehľad",
@@ -175,6 +189,7 @@ const VIEW_NAMES = {
     files: "Súbory",
     lists: "Zoznamy",
     todos: "Úlohy",
+    correspondence: "Korešpondencia",
   },
 } as const satisfies Record<SupportedLang, Record<string, string>>;
 
@@ -191,6 +206,12 @@ const defaultViewTemplates = (
   legalListsEnabled
     ? { nameKey: "lists", layout: listLayout(), position: 3 }
     : { nameKey: "todos", layout: listLayout(), position: 3 },
+  // Last, and removable: a matter without inbound mail can drop the tab.
+  {
+    nameKey: "correspondence",
+    layout: emptyLayout("correspondence"),
+    position: 4,
+  },
 ];
 
 type DefaultView = {
@@ -293,6 +314,7 @@ const BASE_LAYOUT_TYPE_TO_NAME_KEY: Partial<
   overview: "overview",
   table: "table",
   filesystem: "files",
+  correspondence: "correspondence",
 };
 
 const LEGACY_TODO_VIEW_NAMES = [
@@ -323,6 +345,7 @@ const DEFAULT_NAME_SETS: Record<
     files: new Set<string>(),
     lists: new Set<string>(),
     todos: new Set<string>(),
+    correspondence: new Set<string>(),
   };
   for (const names of Object.values(VIEW_NAMES)) {
     sets.overview.add(names.overview);
@@ -331,6 +354,7 @@ const DEFAULT_NAME_SETS: Record<
     sets.lists.add(names.lists);
     sets.todos.add(names.todos);
     sets.todos.add(names.lists);
+    sets.correspondence.add(names.correspondence);
   }
   for (const legacyName of LEGACY_TODO_VIEW_NAMES) {
     sets.lists.add(legacyName);

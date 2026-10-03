@@ -1,10 +1,18 @@
+// parser-output-unchanged: adapter stop kinds and TimeoutError reexport preserve successful parsed records.
 import { panic, TaggedError } from "better-result";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
-import { declareFailureClass } from "@stll/errors";
+import { TimeoutError } from "@stll/concurrency/with-timeout";
+import { declareFailureClass, FetchBoundaryError } from "@stll/errors";
+import { isConnectionFailure } from "@stll/fetch";
 import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
+import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+} from "@stll/legal-atlas/ingestion-cycle";
 
 export { FetchBoundaryError } from "@stll/errors";
+export { TimeoutError } from "@stll/concurrency/with-timeout";
 
 export type HandlerErrorStatusCode =
   | 400
@@ -532,14 +540,118 @@ export class TemplateDirectiveError extends TaggedError(
   }[];
 }> {}
 
-/** Case-law adapter page-fetch failure. */
-export class AdapterFetchError extends TaggedError("AdapterFetchError")<{
+type AdapterFetchErrorOptions = {
   message: string;
   adapterKey: string;
   cursor: string | null;
   httpStatus?: number;
+  retryAfter?: string;
   cause?: unknown;
-}> {}
+  stopKind?: IngestionStopKind;
+};
+
+type IngestionFailure =
+  | { type: "classified"; stopKind: IngestionStopKind }
+  | { type: "publisher-response"; httpStatus: number }
+  | { type: "connection" }
+  | { type: "deadline" }
+  | { type: "adapter" }
+  | { type: "internal" };
+
+const ingestionFailureStopKind = (
+  failure: IngestionFailure,
+): IngestionStopKind => {
+  switch (failure.type) {
+    case "classified":
+      return failure.stopKind;
+    case "publisher-response": {
+      const { httpStatus } = failure;
+      if (httpStatus >= 500 || httpStatus === 408) {
+        return INGESTION_STOP_KIND.SOURCE_UNREACHABLE;
+      }
+      if (httpStatus === 401 || httpStatus === 403 || httpStatus === 429) {
+        return INGESTION_STOP_KIND.PUBLISHER_REFUSAL;
+      }
+      return INGESTION_STOP_KIND.ADAPTER_ERROR;
+    }
+    case "connection":
+      return INGESTION_STOP_KIND.SOURCE_UNREACHABLE;
+    case "deadline":
+      return INGESTION_STOP_KIND.DEADLINE;
+    case "adapter":
+      return INGESTION_STOP_KIND.ADAPTER_ERROR;
+    case "internal":
+      return INGESTION_STOP_KIND.INTERNAL_ERROR;
+    default:
+      failure satisfies never;
+      return panic("Unhandled ingestion failure kind");
+  }
+};
+
+const ingestionFailureOf = (
+  cause: unknown,
+  fallback: "adapter" | "internal",
+): IngestionFailure => {
+  const visited = new Set<unknown>();
+  let current = cause;
+  while (current instanceof Error && !visited.has(current)) {
+    visited.add(current);
+    if (current instanceof AdapterFetchError) {
+      return { type: "classified", stopKind: current.stopKind };
+    }
+    if (current instanceof TimeoutError) {
+      return { type: "internal" };
+    }
+    if (current.name === "TimeoutError") {
+      return { type: "connection" };
+    }
+    if (current.name === "AbortError") {
+      return { type: "deadline" };
+    }
+    if (fallback === "adapter") {
+      if (
+        current instanceof FetchBoundaryError &&
+        current.status !== undefined
+      ) {
+        return { type: "publisher-response", httpStatus: current.status };
+      }
+      if (isConnectionFailure(current)) {
+        return { type: "connection" };
+      }
+    }
+    current = current.cause;
+  }
+  return { type: fallback };
+};
+
+/** Ingestion entry points classify operational exceptions without changing their identity. */
+export const ingestionStopKindOf = (
+  cause: unknown,
+  origin: "adapter" | "internal" = "internal",
+): IngestionStopKind =>
+  ingestionFailureStopKind(ingestionFailureOf(cause, origin));
+
+const adapterFetchStopKind = ({
+  httpStatus,
+  cause,
+}: AdapterFetchErrorOptions): IngestionStopKind =>
+  ingestionFailureStopKind(
+    httpStatus === undefined
+      ? ingestionFailureOf(cause, "adapter")
+      : { type: "publisher-response", httpStatus },
+  );
+
+/** Case-law adapter page-fetch failure; wrappers retain its operational kind. */
+export class AdapterFetchError extends TaggedError(
+  "AdapterFetchError",
+)<AdapterFetchErrorOptions> {
+  override readonly stopKind: IngestionStopKind;
+
+  constructor(options: AdapterFetchErrorOptions) {
+    super(options);
+    this.stopKind = options.stopKind ?? adapterFetchStopKind(options);
+  }
+}
 
 /**
  * One source made no progress for a sustained run of ingestion cycles.
@@ -627,14 +739,6 @@ export class ExtractionWorkerError extends TaggedError(
   mimeType: string;
   sizeBytes: number;
   termination: ExtractionWorkerTermination | null;
-}> {}
-
-/** Timeout waiting for a readiness probe, subprocess, or external resource. */
-export class TimeoutError extends TaggedError("TimeoutError")<{
-  message: string;
-  label: string;
-  timeoutMs?: number;
-  cause?: unknown;
 }> {}
 
 /**

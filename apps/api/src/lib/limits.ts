@@ -273,6 +273,8 @@ export const LIMITS = {
   sseHeartbeatMs: 15_000,
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
+  clauseExpectedBodyTextChars: 10 * 1024 * 1024,
+  clauseExpectedBodyParagraphs: 100_000,
   templateClausesPerTemplate: 50,
   templateVersionsPerTemplate: 50,
   /** Approval-snapshot history per playbook (one row per `approve` call, never
