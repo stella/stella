@@ -1280,7 +1280,7 @@ type FilesystemRowProps = {
   getAncestorIds: (id: string) => string[];
 };
 
-const FilesystemRow = ({
+export const FilesystemRow = ({
   node,
   depth = 0,
   workspaceId,

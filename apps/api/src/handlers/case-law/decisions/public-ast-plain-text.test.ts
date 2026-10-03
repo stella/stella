@@ -1,3 +1,4 @@
+import { Glob } from "bun";
 /**
  * The public decision read drops every `plainText` a reader can rebuild
  * from the `inlines` beside it. That is lossless only while exactly one
@@ -21,8 +22,6 @@
  * space. `plainText` feeds search and AI reads, never rendering offsets
  * — those index the raw `plainTextOf` axis, which nothing here touches.
  */
-
-import { Glob } from "bun";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -47,6 +46,7 @@ import {
 import { parsePersistedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 // Each eu-ecj fixture gunzips and parses one of the largest documents in
 // the repo; the whole corpus runs in one test.
@@ -57,7 +57,7 @@ const decoder = new TextDecoder();
 
 /** The AST as ingestion would store it. */
 const storedAst = (documentAst: DocumentAst, name = ""): DocumentAst => {
-  const result: IngestionResult = {
+  const result: IngestionResult = plainTextIngestionResult({
     caseNumber: "1 Az 1/2020",
     court: "Test court",
     country: "AT",
@@ -66,7 +66,7 @@ const storedAst = (documentAst: DocumentAst, name = ""): DocumentAst => {
     textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     rawHash: "0".repeat(64),
     documentAst,
-  };
+  });
   const sanitized = sanitizeResult(result).documentAst;
   if (!isDocumentAst(sanitized)) {
     throw new Error(`sanitizeResult dropped the AST: ${name}`);

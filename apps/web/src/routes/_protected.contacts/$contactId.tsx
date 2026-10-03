@@ -43,7 +43,6 @@ import { PartyMatterRow } from "@/routes/_protected.contacts/-components/party-m
 
 export const Route = createFileRoute("/_protected/contacts/$contactId")({
   component: ContactDetailPage,
-  pendingComponent: ContactDetailPending,
   loader: async ({ context, params }) => {
     // Prime the contact query the page suspends on so the fetch starts during
     // navigation instead of after the component mounts and suspends.
@@ -52,6 +51,8 @@ export const Route = createFileRoute("/_protected/contacts/$contactId")({
       contactOptions(context.user.activeOrganizationId, params.contactId),
     );
   },
+  pendingComponent: ContactDetailPending,
+  remountDeps: ({ params }) => params.contactId,
 });
 
 const SECTION_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
@@ -293,7 +294,7 @@ function ContactDetailPage() {
         </section>
 
         {contact.type === "person" && (
-          <ContactPersonDetailsEditor contact={contact} key={contact.id} />
+          <ContactPersonDetailsEditor contact={contact} />
         )}
 
         {/* Communication */}

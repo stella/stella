@@ -21,6 +21,13 @@ declare const shouldRevoke: boolean;
 declare const failure: Error;
 declare const scope: Parameters<typeof removeMember>[1];
 declare const transaction: Parameters<typeof removeMember>[0];
+declare const Result: {
+  tryPromise: (options: {
+    try: () => Promise<unknown>;
+    catch: (cause: unknown) => Error;
+  }) => Promise<unknown>;
+};
+declare const toError: (cause: unknown) => Error;
 
 export const notificationOrganizationOptions = {
   // oxlint-disable-next-line auth-lifecycle/member-removal-revokes-artifacts -- fixture: required before hook
@@ -216,4 +223,29 @@ export const localNamedDelete = () => {
   const session = unrelatedTable;
   // expect-clean: auth-lifecycle/no-direct-auth-artifact-delete
   return db.delete(session);
+};
+export const resultWrappedTransactionHooks = {
+  // expect-clean: auth-lifecycle/member-removal-revokes-artifacts
+  beforeRemoveMember: async () => {
+    const removal = await Result.tryPromise({
+      try: async () =>
+        await rootDb.transaction(async (tx) => {
+          await removeMember(tx, scope);
+        }),
+      catch: toError,
+    });
+    return removal;
+  },
+};
+export const resultWrappedWithoutTransactionHooks = {
+  // oxlint-disable-next-line auth-lifecycle/member-removal-revokes-artifacts -- fixture: wrapper still needs the root transaction
+  beforeRemoveMember: async () => {
+    const removal = await Result.tryPromise({
+      try: async () => {
+        await removeMember(transaction, scope);
+      },
+      catch: toError,
+    });
+    return removal;
+  },
 };

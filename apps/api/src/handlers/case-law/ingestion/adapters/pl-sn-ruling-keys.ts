@@ -13,8 +13,8 @@ import { foldDecisionIdentifierInput } from "@stll/api-contract/decision-docket-
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifier } from "@stll/legal-ast/decision-identifier";
 
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { arrayOrEmpty } from "@/api/lib/array";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 const SUPREME_COURT = "sąd najwyższy";
 
@@ -90,7 +90,7 @@ const rulingKindOf = (decisionType: string): string | undefined => {
 };
 
 type SupremeCourtRulingKeyInput = Pick<
-  IngestionResult,
+  RawIngestionResult,
   "caseNumber" | "court" | "decisionDate" | "decisionType"
 > & {
   /** Every further identifier the row states; only its dockets count. */

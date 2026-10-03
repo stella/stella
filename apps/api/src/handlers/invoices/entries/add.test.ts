@@ -3,6 +3,7 @@ import { describe, expect, mock, test } from "bun:test";
 
 import { BILLING_STATUS, INVOICE_STATUS, invoices } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
@@ -32,7 +33,7 @@ const createContext = (
       invoiceId: toSafeId<"invoice">("inv_test"),
     },
     workspaceId: toSafeId<"workspace">("ws_test"),
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     session: { activeOrganizationId: toSafeId<"organization">("org_test") },
     user: { id: toSafeId<"user">("user_test") },
     recordAuditEvent: async () => {},
@@ -105,7 +106,7 @@ describe("addEntries currency enforcement", () => {
             }),
           },
         },
-        select: (fields: object) => ({
+        select: (fields?: object) => ({
           from: (table: unknown) => {
             if (table === invoices) {
               return {
@@ -118,7 +119,7 @@ describe("addEntries currency enforcement", () => {
             }
 
             return createSelectQueryMock(
-              "status" in fields
+              fields && "status" in fields
                 ? [
                     {
                       id: toSafeId<"timeEntry">("te_1"),

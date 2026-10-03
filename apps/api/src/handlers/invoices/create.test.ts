@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { BILLING_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -46,7 +47,7 @@ const createContext = ({
     scopedDb,
     recordAuditEvent,
     workspaceId: toSafeId<"workspace">("ws_test"),
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     session: {
       activeOrganizationId: toSafeId<"organization">("org_test"),
     },
@@ -66,8 +67,8 @@ describe("createInvoice", () => {
     const entries = [entry("te_1", "USD"), entry("te_2", "EUR")];
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
-      select: (fields: object) =>
-        createSelectQueryMock("status" in fields ? entries : []),
+      select: (fields?: object) =>
+        createSelectQueryMock(fields && "status" in fields ? entries : []),
     });
 
     const result = await createInvoice.handler(
@@ -87,26 +88,16 @@ describe("createInvoice", () => {
   });
 
   test("returns 409 when the invoice number already exists", async () => {
-    const entries = [entry("te_1", "USD")];
     const { scopedDb } = createScopedDbMock({});
-
-    // Preflight returns the selected entries; the insert transaction returns
-    // the unique violation through the production safeDb error boundary.
-    let call = 0;
-    const safeDb: CreateInvoiceCtx["safeDb"] = asTestRaw<
-      CreateInvoiceCtx["safeDb"]
-    >(async () => {
-      call += 1;
-      if (call === 1) {
-        return Result.ok(entries);
-      }
-      return Result.err(
+    // The guarded creation now validates and inserts in one transaction.
+    const safeDb = asTestRaw<CreateInvoiceCtx["safeDb"]>(async () =>
+      Result.err(
         new DatabaseError({
           code: PG_ERROR.UNIQUE_VIOLATION,
           message: "duplicate key",
         }),
-      );
-    });
+      ),
+    );
 
     const result = await createInvoice.handler(
       createContext({
@@ -131,8 +122,8 @@ describe("createInvoice", () => {
     ];
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
-      select: (fields: object) =>
-        createSelectQueryMock("status" in fields ? entries : []),
+      select: (fields?: object) =>
+        createSelectQueryMock(fields && "status" in fields ? entries : []),
     });
 
     const result = await createInvoice.handler(
@@ -147,8 +138,7 @@ describe("createInvoice", () => {
       code: 400,
       response: {
         message:
-          "All entries must be approved, billable," +
-          " and not already on an invoice",
+          "All entries must be approved, not already on an invoice, and billable for hourly billing",
       },
     });
   });
@@ -162,8 +152,8 @@ describe("createInvoice", () => {
     let auditCalls = 0;
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
-      select: (fields: object) =>
-        createSelectQueryMock("status" in fields ? entries : []),
+      select: (fields?: object) =>
+        createSelectQueryMock(fields && "status" in fields ? entries : []),
       insert: () => ({
         values: () => ({
           returning: async () => [

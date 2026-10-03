@@ -89,6 +89,51 @@ const containsReachableReturn = (root: AstNode): boolean =>
     return node === root;
   });
 
+// `const x = await ...`: the single initializer of a one-binding declaration.
+const declaredValue = (statement: AstNode): AstNode | null => {
+  if (
+    !Array.isArray(statement.declarations) ||
+    statement.declarations.length !== 1
+  ) {
+    return null;
+  }
+  const declarator: unknown = statement.declarations.at(0);
+  return isAstNode(declarator) ? unwrapExpression(declarator.init) : null;
+};
+
+// `Result.tryPromise({ try: async () => ... })` runs its `try` callback
+// unconditionally; its direct calls count as the hook's own.
+const tryPromiseCalls = (call: AstNode): AstNode[] => {
+  const callee = unwrapExpression(call.callee);
+  if (
+    callee?.type !== "MemberExpression" ||
+    memberPropertyName(callee) !== "tryPromise" ||
+    !isIdentifier(callee.object, "Result") ||
+    !Array.isArray(call.arguments)
+  ) {
+    return [];
+  }
+  const options = unwrapExpression(call.arguments.at(0));
+  if (
+    options?.type !== "ObjectExpression" ||
+    !Array.isArray(options.properties)
+  ) {
+    return [];
+  }
+  const attempt: unknown = options.properties.find(
+    (property: unknown) =>
+      isAstNode(property) &&
+      property.type === "Property" &&
+      getPropertyName(property.key) === "try",
+  );
+  const callback = isAstNode(attempt) ? unwrapExpression(attempt.value) : null;
+  return callback !== null &&
+    (callback.type === "ArrowFunctionExpression" ||
+      callback.type === "FunctionExpression")
+    ? directCalls(callback.body)
+    : [];
+};
+
 const directCalls = (root: unknown): AstNode[] => {
   const expression = unwrapExpression(root);
   if (expression === null) {
@@ -114,7 +159,9 @@ const directCalls = (root: unknown): AstNode[] => {
         ? unwrapExpression(statement.expression)
         : statement.type === "ReturnStatement"
           ? unwrapExpression(statement.argument)
-          : null;
+          : statement.type === "VariableDeclaration"
+            ? declaredValue(statement)
+            : null;
     const call =
       value?.type === "AwaitExpression"
         ? unwrapExpression(value.argument)
@@ -150,50 +197,52 @@ const containsTransactionalRemoval = (
   ) {
     return false;
   }
-  return directCalls(hook.body).some((call) => {
-    const callee = unwrapExpression(call.callee);
-    if (
-      callee?.type !== "MemberExpression" ||
-      memberPropertyName(callee) !== "transaction" ||
-      !isImportedFrom({
-        context,
-        node: callee.object,
-        modules: [ROOT_MODULE],
-        names: ROOT_DATABASE,
-      }) ||
-      !Array.isArray(call.arguments)
-    ) {
-      return false;
-    }
-    const callback = unwrapExpression(call.arguments.at(0));
-    if (
-      callback === null ||
-      (callback.type !== "ArrowFunctionExpression" &&
-        callback.type !== "FunctionExpression") ||
-      callback.async !== true ||
-      !Array.isArray(callback.params)
-    ) {
-      return false;
-    }
-    const transaction = callback.params.at(0);
-    if (!isIdentifier(transaction)) {
-      return false;
-    }
-    return directCalls(callback.body).some((operation) => {
+  return directCalls(hook.body)
+    .flatMap((call) => [call].concat(tryPromiseCalls(call)))
+    .some((call) => {
+      const callee = unwrapExpression(call.callee);
       if (
-        !Array.isArray(operation.arguments) ||
-        !isIdentifier(operation.arguments.at(0), transaction.name)
+        callee?.type !== "MemberExpression" ||
+        memberPropertyName(callee) !== "transaction" ||
+        !isImportedFrom({
+          context,
+          node: callee.object,
+          modules: [ROOT_MODULE],
+          names: ROOT_DATABASE,
+        }) ||
+        !Array.isArray(call.arguments)
       ) {
         return false;
       }
-      return isImportedFrom({
-        context,
-        node: invokedCallee(operation),
-        modules: [HELPER_MODULE],
-        names: HELPER,
+      const callback = unwrapExpression(call.arguments.at(0));
+      if (
+        callback === null ||
+        (callback.type !== "ArrowFunctionExpression" &&
+          callback.type !== "FunctionExpression") ||
+        callback.async !== true ||
+        !Array.isArray(callback.params)
+      ) {
+        return false;
+      }
+      const transaction = callback.params.at(0);
+      if (!isIdentifier(transaction)) {
+        return false;
+      }
+      return directCalls(callback.body).some((operation) => {
+        if (
+          !Array.isArray(operation.arguments) ||
+          !isIdentifier(operation.arguments.at(0), transaction.name)
+        ) {
+          return false;
+        }
+        return isImportedFrom({
+          context,
+          node: invokedCallee(operation),
+          modules: [HELPER_MODULE],
+          names: HELPER,
+        });
       });
     });
-  });
 };
 
 // The auth artifact table a `<receiver>.delete(<table>)` call targets.

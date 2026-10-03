@@ -3,6 +3,7 @@ import { Elysia, type Context } from "elysia";
 
 import { Temporal } from "@stll/time";
 
+import { env } from "@/api/env";
 import {
   type RateLimitClientAddressOptions,
   resolveRateLimitClientAddress,
@@ -178,6 +179,16 @@ type RateLimitApplicationPhase = "before_handler" | "early_failure";
 
 const DEFAULT_RATE_LIMIT_ERROR_RESPONSE = "rate-limit reached";
 
+/**
+ * Before-handle hooks `rateLimit` installed. The composed-route census asserts
+ * every `/v1` route carries one, which a hook's name cannot guarantee.
+ */
+const rateLimitHooks = new WeakSet<object>();
+
+/** Whether a mounted route's before-handle hook came out of `rateLimit`. */
+export const isRateLimitHook = (hook: unknown): boolean =>
+  typeof hook === "function" && rateLimitHooks.has(hook);
+
 const writeRateLimitHeaders = ({
   max,
   remaining,
@@ -249,7 +260,9 @@ export const rateLimit = ({
     server: RequestIpServer | null;
     set: RateLimitResponseSet;
   }): Promise<RateLimitErrorResponse | undefined> => {
-    if (await skip(request)) {
+    // The validated development-only switch applies to every HTTP budget,
+    // including dedicated budgets whose route policy does not define a bypass.
+    if (env.E2E_DISABLE_AUTH_RATE_LIMIT || (await skip(request))) {
       requestState.set(request, { type: "skipped" });
       return undefined;
     }
@@ -292,16 +305,23 @@ export const rateLimit = ({
     return undefined;
   };
 
-  plugin.onBeforeHandle(
-    { as: "scoped" },
-    async ({ request, server, set }) =>
-      await applyRateLimit({
-        phase: "before_handler",
-        request,
-        server,
-        set,
-      }),
-  );
+  const beforeHandle = async ({
+    request,
+    server,
+    set,
+  }: {
+    request: Request;
+    server: RequestIpServer | null;
+    set: RateLimitResponseSet;
+  }) =>
+    await applyRateLimit({
+      phase: "before_handler",
+      request,
+      server,
+      set,
+    });
+  rateLimitHooks.add(beforeHandle);
+  plugin.onBeforeHandle({ as: "scoped" }, beforeHandle);
 
   plugin.onError(
     { as: "scoped" },

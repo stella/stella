@@ -10,21 +10,28 @@
 import { describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
+import JSZip from "jszip";
 
+import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   buildListingQuery,
   ecjRawParts,
   euEcjAdapter,
+  refreshEcjStoredFormex,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import type { EcjSparqlBinding } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { parseFormexBibliography } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-bibliography";
 import { parseEcjNotice } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-notice";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  decodeSourceRawEnvelope,
+  STORED_RAW_REPARSE_REJECTION,
 } from "@/api/lib/legal-search/ingestion-types";
 import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
+import { isRecord } from "@/api/lib/type-guards";
 
 const CELEX = "62022CJ0128";
 const EXPRESSION = "cc021804-9350-11ee-8aa6-01aa75ed71a1.0011";
@@ -231,20 +238,226 @@ describe("the branch notice is read per expression", () => {
   });
 });
 
+describe("stored Formex refresh", () => {
+  const signal = new AbortController().signal;
+  const refreshStored = (parts: Record<string, string>) =>
+    storedFrom(encodeSourceRawEnvelope(parts));
+  const response = (
+    body: string | Uint8Array,
+    status = 200,
+    type = "application/xml",
+  ) => new Response(body, { status, headers: { "content-type": type } });
+
+  test("replaces only Formex while retaining unknown Unicode parts and rebuilding the decision", async () => {
+    const before = {
+      ...ecjRawParts({
+        binding: { ...binding },
+        html: documentEn,
+        notice: noticeEn,
+        formex: "<old-formex />",
+      }),
+      "future-part": "Zażółć gęślą jaźń 🧑🏽‍⚖️",
+    };
+    const outcome = await refreshEcjStoredFormex({
+      stored: refreshStored(before),
+      signal,
+      fetchFormex: async () => response("<new-formex />"),
+    });
+
+    expect(outcome.type).toBe("refreshed");
+    if (outcome.type !== "refreshed") {
+      throw new TypeError(`Expected refreshed, got ${outcome.type}`);
+    }
+    expect(outcome.formexShape).toBe("xml");
+    expect(outcome.bytes).toBe(
+      new TextEncoder().encode("<new-formex />").byteLength,
+    );
+    const after = decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "");
+    expect(after).not.toBeNull();
+    expect(after?.["formex"]).toBe("<new-formex />");
+    expect(after?.["future-part"]).toBe(before["future-part"]);
+    for (const [key, value] of Object.entries(before)) {
+      if (key !== "formex") {
+        expect(after?.[key]).toBe(value);
+      }
+    }
+    expect(outcome.decision.fulltext).not.toBe("");
+  });
+
+  test("stores a fetched ZIP as the adapter's Formex archive shape", async () => {
+    const archive = new JSZip();
+    archive.file("FORMEX/main.xml", "<new-formex />");
+    const bytes = await archive.generateAsync({ type: "uint8array" });
+    const outcome = await refreshEcjStoredFormex({
+      stored: refreshStored({
+        ...ecjRawParts({
+          binding: { ...binding },
+          html: documentEn,
+          notice: noticeEn,
+          formex: "<old-formex />",
+        }),
+      }),
+      signal,
+      fetchFormex: async () => response(bytes, 200, "application/zip"),
+    });
+
+    expect(outcome.type).toBe("refreshed");
+    if (outcome.type !== "refreshed") {
+      throw new TypeError(`Expected refreshed, got ${outcome.type}`);
+    }
+    expect(outcome.formexShape).toBe("archive");
+    expect(outcome.bytes).toBeGreaterThan(0);
+    const after = decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "");
+    expect(after?.["formex"]?.startsWith("formex-archive:")).toBe(true);
+  });
+
+  test("rejects a refreshed decision whose source identity differs from the stored row", async () => {
+    const mismatched = await refreshEcjStoredFormex({
+      stored: {
+        ...refreshStored(
+          ecjRawParts({
+            binding: { ...binding },
+            html: documentEn,
+            notice: noticeEn,
+            formex: "<old-formex />",
+          }),
+        ),
+        sourceDocumentId: `${CELEX}:fr`,
+      },
+      signal,
+      fetchFormex: async () => response("<new-formex />"),
+    });
+    expect(mismatched).toEqual({
+      type: "write-rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+    });
+  });
+
+  test("returns typed outcomes for missing notice, missing manifestation, gone and exhausted responses", async () => {
+    const withoutNotice = ecjRawParts({
+      binding: { ...binding },
+      html: documentEn,
+      notice: undefined,
+      formex: "<old-formex />",
+    });
+    expect(
+      await refreshEcjStoredFormex({
+        stored: refreshStored(withoutNotice),
+        signal,
+        fetchFormex: async () =>
+          await Promise.reject(new Error("must not fetch")),
+      }),
+    ).toEqual({ type: "notice-missing" });
+
+    const $notice = cheerio.load(noticeEn, { xml: true });
+    $notice("NOTICE > MANIFESTATION").remove();
+    expect(
+      await refreshEcjStoredFormex({
+        stored: refreshStored({
+          ...ecjRawParts({
+            binding: { ...binding },
+            html: documentEn,
+            notice: $notice.xml(),
+            formex: "<old-formex />",
+          }),
+        }),
+        signal,
+        fetchFormex: async () =>
+          await Promise.reject(new Error("must not fetch")),
+      }),
+    ).toEqual({ type: "formex-not-located" });
+
+    for (const [status, expected] of [
+      [404, "formex-gone"],
+      [410, "formex-gone"],
+      [403, "retryable-exhausted"],
+      [408, "retryable-exhausted"],
+      [429, "retryable-exhausted"],
+      [503, "retryable-exhausted"],
+    ] as const) {
+      const outcome = await refreshEcjStoredFormex({
+        stored: refreshStored({
+          ...ecjRawParts({
+            binding: { ...binding },
+            html: documentEn,
+            notice: noticeEn,
+            formex: "<old-formex />",
+          }),
+        }),
+        signal,
+        fetchFormex: async () => response("", status),
+      });
+      expect(outcome).toEqual({ type: expected });
+    }
+
+    const refusal = new PublisherRateLimitRefusalError({
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      cursor: null,
+      publisherKey: "cellar-eu",
+      status: 429,
+      cooldownUntilEpochMs: 1_800_000_000_000,
+    });
+    const rateLimited = await refreshEcjStoredFormex({
+      stored: refreshStored({
+        ...ecjRawParts({
+          binding: { ...binding },
+          html: documentEn,
+          notice: noticeEn,
+          formex: "<old-formex />",
+        }),
+      }),
+      signal,
+      fetchFormex: async () => await Promise.reject(refusal),
+    });
+    expect(rateLimited).toEqual({
+      type: "rate-limited",
+      publisherKey: "cellar-eu",
+      status: 429,
+      cooldownUntilEpochMs: 1_800_000_000_000,
+    });
+  });
+
+  test("treats a stored archive as current without contacting Cellar", async () => {
+    const currentFormex = `formex-archive:${encodeSourceRawEnvelope({
+      "FORMEX/main.xml": Buffer.from("<current-formex />").toString("base64"),
+    })}`;
+
+    const outcome = await refreshEcjStoredFormex({
+      stored: refreshStored({
+        ...ecjRawParts({
+          binding: { ...binding },
+          html: documentEn,
+          notice: undefined,
+          formex: currentFormex,
+        }),
+      }),
+      signal,
+      fetchFormex: async () =>
+        await Promise.reject(new Error("current row must not fetch")),
+    });
+    expect(outcome).toEqual({ type: "unchanged-already-current" });
+  });
+});
+
 describe("what the notice adds to a stored row", () => {
   test("names the court outright instead of inferring it from the ECLI", async () => {
     const decision = await decisionFrom(noticeEn);
 
-    expect(decision.court).toBe("Court of Justice");
+    expect(decision.court === "Court of Justice").toBe(true);
   });
 
   test("emits the rapporteur and the Advocate General as the bench", async () => {
     const decision = await decisionFrom(noticeEn);
 
-    expect(decision.judges).toEqual([
-      { role: DECISION_JUDGE_ROLE.RAPPORTEUR, nameAsPrinted: "Safjan" },
-      { role: DECISION_JUDGE_ROLE.ADVOCATE_GENERAL, nameAsPrinted: "Emiliou" },
-    ]);
+    expect(
+      Bun.deepEquals(decision.judges, [
+        { role: DECISION_JUDGE_ROLE.RAPPORTEUR, nameAsPrinted: "Safjan" },
+        {
+          role: DECISION_JUDGE_ROLE.ADVOCATE_GENERAL,
+          nameAsPrinted: "Emiliou",
+        },
+      ]),
+    ).toBe(true);
   });
 
   test("keeps the publisher's own cited-works list", async () => {
@@ -252,7 +465,9 @@ describe("what the notice adds to a stored row", () => {
 
     // The ground truth citation extraction is measured against, which is why
     // it is carried beside the row rather than stored on it.
-    expect(decision.publisherCitedCases).toContain("62015CJ0601");
+    expect(
+      decision.publisherCitedCases?.some((value) => value === "62015CJ0601"),
+    ).toBe(true);
     expect(decision.publisherCitedCases?.length).toBeGreaterThan(40);
   });
 
@@ -264,15 +479,27 @@ describe("what the notice adds to a stored row", () => {
       dossier: ["case:C-128/22"],
       publishedInReports: [true],
     });
-    expect(decision.metadata["caseLawDirectory"]).toContainEqual({
-      code: "1.09.03.02",
-      label:
-        "Restrictions justified on grounds of public policy, public security or public health",
-    });
-    expect(decision.metadata["caseLawDirectoryNew"]).toContainEqual({
-      code: "4.06.01.02",
-      label: "Crossing of external borders",
-    });
+    const directory = decision.metadata["caseLawDirectory"];
+    expect(
+      Array.isArray(directory) &&
+        directory.some((value) =>
+          Bun.deepEquals(value, {
+            code: "1.09.03.02",
+            label:
+              "Restrictions justified on grounds of public policy, public security or public health",
+          }),
+        ),
+    ).toBe(true);
+    const directoryNew = decision.metadata["caseLawDirectoryNew"];
+    expect(
+      Array.isArray(directoryNew) &&
+        directoryNew.some((value) =>
+          Bun.deepEquals(value, {
+            code: "4.06.01.02",
+            label: "Crossing of external borders",
+          }),
+        ),
+    ).toBe(true);
     expect(decision.metadata["nationalJudgment"]).toContainEqual(
       expect.stringContaining(
         "Nederlandstalige rechtbank van eerste aanleg Brussel",
@@ -363,3 +590,53 @@ describe("the listing query binds CELEX the way the endpoint answers", () => {
     expect(query).toContain('FILTER(STR(?date) >= "2024-01-01")');
   });
 });
+
+for (const candidate of [
+  " https://example.org/manifestation?a=1&amp;b=2#part ",
+  "https://example.org/%26amp%3B?a=1&b=2",
+  "//example.org/manifestation",
+  "/manifestation",
+  "ftp://example.org/document",
+  "data:text/plain,manifestation",
+  "mailto:publisher@example.org",
+]) {
+  test(`notice manifestation URI provenance: ${candidate}`, async () => {
+    const $ = cheerio.load(noticeEn, { xml: true });
+    const manifestations = $("NOTICE > MANIFESTATION");
+    expect(manifestations.length).toBeGreaterThan(0);
+    manifestations.each((_, element) => {
+      $(element).children("URI").children("VALUE").text(candidate);
+    });
+    const decision = await decisionFrom($.xml());
+    const listed = decision.metadata["manifestations"];
+    expect(Array.isArray(listed) ? listed.length : 0).toBe(
+      manifestations.length,
+    );
+    if (candidate.trim().startsWith("https://")) {
+      expect(
+        Array.isArray(listed)
+          ? listed.map((item: unknown) =>
+              isRecord(item) ? item["uri"] : undefined,
+            )
+          : [],
+      ).toEqual(
+        Array.from({ length: manifestations.length }, () => candidate.trim()),
+      );
+      expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+    } else {
+      expect(
+        Array.isArray(listed) &&
+          listed.every(
+            (item: unknown) => isRecord(item) && !Object.hasOwn(item, "uri"),
+          ),
+      ).toBe(true);
+      expect(decision.metadata).toHaveProperty("metadataUrlDiagnostics", {
+        entries: Array.from({ length: manifestations.length }, (_, index) => ({
+          address: `manifestations[${index}].uri`,
+          reason: candidate.startsWith("/") ? "invalid-url" : "unsafe-protocol",
+        })),
+        overflowCount: 0,
+      });
+    }
+  });
+}

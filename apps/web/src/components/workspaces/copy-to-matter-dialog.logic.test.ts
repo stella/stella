@@ -3,9 +3,48 @@ import { describe, expect, test } from "bun:test";
 import {
   buildSelectionParentLookup,
   getCopyToMatterRootEntities,
+  getCopyToMatterErrorKey,
   resolveAncestorIds,
   type CopyToMatterEntity,
 } from "@/components/workspaces/copy-to-matter-dialog.logic";
+
+describe("move refusal messages", () => {
+  test("uses a localized recovery message for each actionable source refusal", () => {
+    for (const [code, key] of [
+      [
+        "entity_transfer_source_changed",
+        "workspaces.copyToMatter.sourceChanged",
+      ],
+      [
+        "entity_transfer_source_limit",
+        "workspaces.copyToMatter.sourceVersionLimit",
+      ],
+      ["entity_transfer_source_in_use", "workspaces.copyToMatter.sourceInUse"],
+      [
+        "entity_transfer_source_referenced",
+        "workspaces.copyToMatter.sourceReferenced",
+      ],
+    ] as const) {
+      expect(getCopyToMatterErrorKey({ code, message: "Server details" })).toBe(
+        key,
+      );
+    }
+  });
+
+  test("uses the generic translated fallback for unknown or malformed refusals", () => {
+    for (const value of [
+      undefined,
+      null,
+      "Server details",
+      {},
+      { code: 409 },
+      { message: "Server details" },
+      { code: "future_refusal" },
+    ]) {
+      expect(getCopyToMatterErrorKey(value)).toBe("errors.actionFailed");
+    }
+  });
+});
 
 const entity = ({
   ancestorIds = [],

@@ -19,6 +19,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -49,7 +50,7 @@ const workspaceContext = () => ({
     { id: ids.wsA1, status: "active" as const },
   ],
   getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" as const }),
-  memberRole: { role: "owner" },
+  memberRole: sessionMemberRole("owner"),
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
   managedAIResidency: "eu" as const,

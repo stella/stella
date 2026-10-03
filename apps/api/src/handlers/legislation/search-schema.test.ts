@@ -15,6 +15,7 @@ type SearchLegislationSuccess = Extract<
 const validResponse = {
   items: [
     {
+      match: { type: "strict" },
       documentId: "document-id",
       eli: "eli",
       slug: null,
@@ -31,7 +32,7 @@ const validResponse = {
   ],
   nextCursor: null,
   total: SEARCH_TOTAL_NOT_COUNTED,
-};
+} satisfies Static<typeof searchLegislationSuccessResponseSchema>;
 
 describe("legislation search response schema", () => {
   test("matches the handler's complete success payload", () => {

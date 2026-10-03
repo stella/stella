@@ -10,6 +10,8 @@ import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry"
 
 import { DECLARED_SCHEDULER_JOBS, upsertSchedulerJob } from "./jobs";
 import { acquireNextDueJob, runJob } from "./runner";
+import { createCaseLawProvisionStateBackfillTask } from "./tasks/case-law-provision-state-backfill";
+import { createLegislationExpressionIdBackfill } from "./tasks/legislation-expression-id-backfill";
 import type { SchedulerTask } from "./types";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -400,6 +402,66 @@ if (!databaseUrl || !runPostgresTests) {
         expect(indefinite?.paused).toBe(true);
       });
     });
+
+    test.each(["provision-state", "expression-ids"] as const)(
+      "%s operator pause prevents runtime initialization despite a healthy signal",
+      async (kind) => {
+        await withJob(async ({ db, jobId, taskName }) => {
+          let readings = 0;
+          const readVerdict = async () => {
+            readings += 1;
+            return { kind: "normal" as const, signals: [] };
+          };
+          const task =
+            kind === "provision-state"
+              ? createCaseLawProvisionStateBackfillTask({ readVerdict })
+              : createLegislationExpressionIdBackfill({ readVerdict });
+          const registry = new Map([[taskName, task]]);
+          const job =
+            (await acquireNextDueJob({
+              db,
+              leaseMs: LEASE_MS,
+              now: () => CLOCK_MS,
+              registry,
+              runnerId: jobId,
+            })) ?? panic("Expected scheduler lease");
+          const pausedUntil = new Date(CLOCK_MS + 60_000);
+          await db
+            .update(schedulerJobs)
+            .set({
+              pausedUntil,
+              pausedBy: PAUSED_BY,
+              pauseReason: PAUSE_REASON,
+            })
+            .where(eq(schedulerJobs.id, jobId));
+          expect(
+            await runJob({
+              db,
+              heartbeatIntervalMs: 1000,
+              job,
+              leaseMs: LEASE_MS,
+              maxRuntimeMs: 60_000,
+              now: () => CLOCK_MS,
+              registry,
+              runnerId: jobId,
+              signal: undefined,
+            }),
+          ).toBe("skipped");
+          expect(readings).toBe(0);
+          const persisted = (
+            await db
+              .select()
+              .from(schedulerJobs)
+              .where(eq(schedulerJobs.id, jobId))
+          ).at(0);
+          expect(persisted).toMatchObject({
+            pausedUntil,
+            pausedBy: PAUSED_BY,
+            pauseReason: PAUSE_REASON,
+          });
+        });
+      },
+    );
 
     test.each([true, false])(
       "a pause committed after acquisition blocks the handler and records attribution (enabled=%s)",

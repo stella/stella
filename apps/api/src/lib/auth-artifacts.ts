@@ -423,6 +423,26 @@ export const revokeOAuthClientAuthArtifacts = async (
     );
 };
 
+type SessionRevocationDatabase = {
+  delete: (table: typeof sessionTable) => ExecutableWhereStep;
+};
+
+type UserSessionRevocationOptions = {
+  sessionId: string;
+  userId: SafeId<"user">;
+};
+
+export const revokeUserSessionById = async (
+  db: SessionRevocationDatabase,
+  { sessionId, userId }: UserSessionRevocationOptions,
+): Promise<void> => {
+  await db
+    .delete(sessionTable)
+    .where(
+      and(eq(sessionTable.id, sessionId), eq(sessionTable.userId, userId)),
+    );
+};
+
 /**
  * Ends every web session a user holds, across all organizations. Account
  * deletion only: the user row is soft-deleted, so the `session` cascade on

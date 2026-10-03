@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
+
 import type { Role } from "@/lib/auth-client";
-import { roleTranslationKeys } from "@/lib/organization/consts";
 import { isBillingSettingsAccessible } from "@/routes/_protected.settings/-components/organization/billing-settings.logic";
 
 const ROLE_ACCESS = {
@@ -14,7 +15,7 @@ const ROLE_ACCESS = {
 
 describe("billing settings access", () => {
   test("requires the preview and an organization management role", () => {
-    for (const { value: role } of roleTranslationKeys) {
+    for (const role of ORGANIZATION_ROLE_NAMES) {
       const expected = ROLE_ACCESS[role];
       expect(isBillingSettingsAccessible({ previewEnabled: true, role })).toBe(
         expected,
