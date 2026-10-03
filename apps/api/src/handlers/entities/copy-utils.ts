@@ -1,8 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import { deepEquals } from "bun";
-import { and, asc, count, eq, inArray, isNull, like, sql } from "drizzle-orm";
-
-import { ENTITY_NAME_MAX_LENGTH, truncateEntityName } from "@stll/api-contract";
+import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
@@ -16,6 +14,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import type { EntityStamp } from "@/api/lib/document-counter";
 import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
+import { resolveSiblingName } from "@/api/lib/entities/sibling-name";
 import {
   lockWorkspacesForEntityCap,
   lockWorkspacesForEntityTransfer,
@@ -26,7 +25,6 @@ import {
 } from "@/api/lib/entity-versions/insert-entity-batch";
 import { carryVerificationCodes } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { escapeLike } from "@/api/lib/escape-like";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
@@ -540,8 +538,6 @@ export const rollbackS3Copies = async (keys: string[]): Promise<void> => {
   }
 };
 
-const trailingSuffixRe = /_\d+$/u;
-
 type ResolveEntityNameProps = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
@@ -549,35 +545,12 @@ type ResolveEntityNameProps = {
   name: string;
 };
 
-/**
- * Generate a unique entity name by appending `_N` suffix.
- * Splits on the last dot to preserve file extensions:
- *   "Report.pdf" → "Report_1.pdf", "Report_2.pdf", …
- *   "My Folder"  → "My Folder_1", "My Folder_2", …
- * Strips any existing `_N` suffix before computing the
- * next number so re-duplicating "Report_1" still increments
- * from the highest sibling, not from the stripped base.
- */
 export const resolveEntityName = async ({
   tx,
   workspaceId,
   parentId,
   name,
 }: ResolveEntityNameProps): Promise<string> => {
-  const lastDot = name.lastIndexOf(".");
-  const hasExt = lastDot > 0;
-  const rawBase = hasExt ? name.slice(0, lastDot) : name;
-  const ext = hasExt ? name.slice(lastDot) : "";
-
-  // Strip trailing _N to get the root name
-  const base = rawBase.replace(trailingSuffixRe, "");
-
-  const longestSuffix = `_${LIMITS.entitiesCount}`;
-  const searchPrefix = truncateEntityName(
-    base,
-    Math.max(ENTITY_NAME_MAX_LENGTH - ext.length - longestSuffix.length, 0),
-  );
-  const pattern = `${escapeLike(searchPrefix)}%`;
   const parentCondition = parentId
     ? eq(entities.parentId, parentId)
     : isNull(entities.parentId);
@@ -585,47 +558,12 @@ export const resolveEntityName = async ({
   const siblings = await tx
     .select({ name: entities.name })
     .from(entities)
-    .where(
-      and(
-        eq(entities.workspaceId, workspaceId),
-        parentCondition,
-        like(entities.name, pattern),
-      ),
-    );
+    .where(and(eq(entities.workspaceId, workspaceId), parentCondition));
 
-  // If no conflict with the original name, keep it unchanged
-  const siblingNames = new Set(siblings.map((s) => s.name));
-  if (!siblingNames.has(name)) {
-    return name;
-  }
-
-  const collisionName = (suffixNumber: number) => {
-    const suffix = `_${suffixNumber}`;
-    const boundedExtension = truncateEntityName(
-      ext,
-      ENTITY_NAME_MAX_LENGTH - suffix.length,
-    );
-    const boundedBase = truncateEntityName(
-      base,
-      ENTITY_NAME_MAX_LENGTH - suffix.length - boundedExtension.length,
-    );
-    return `${boundedBase}${suffix}${boundedExtension}`;
-  };
-
-  let maxSuffixNumber = 0;
-  for (const siblingName of siblingNames) {
-    for (const match of siblingName.matchAll(/_(\d+)/gu)) {
-      const suffixNumber = Number.parseInt(match[1] ?? "", 10);
-      if (
-        suffixNumber > maxSuffixNumber &&
-        siblingName === collisionName(suffixNumber)
-      ) {
-        maxSuffixNumber = suffixNumber;
-      }
-    }
-  }
-
-  return collisionName(maxSuffixNumber + 1);
+  return resolveSiblingName({
+    name,
+    siblingNames: new Set(siblings.map(({ name: sibling }) => sibling)),
+  });
 };
 
 export const getFolderSubtree = <

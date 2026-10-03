@@ -12,14 +12,14 @@
  *   can refuse to issue a URL the user couldn't redeem anyway.
  *
  * - `finalizeEntityCreate`: the transactional domain step.
- *   Reuses `resolveFileName` (filename de-duplication) and
+ *   Reuses `resolveEntityCreateFileName` (filename de-duplication) and
  *   `allocateEntityStamp` (workspace doc-sequence) from the
  *   existing slice. Mirrors the original handler's audit log,
  *   workspace `lastActivityAt` bump, and post-promote PDF-derivative
  *   + extraction enqueues.
  */
 import { Result, panic } from "better-result";
-import { and, count, eq, isNull, like, ne, or, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
 
 import { jsonField } from "@/api/db/json-utils";
 import type { Transaction } from "@/api/db/root";
@@ -44,10 +44,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
+import { resolveSiblingName } from "@/api/lib/entities/sibling-name";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { escapeLike } from "@/api/lib/escape-like";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
@@ -79,8 +79,6 @@ import {
 } from "@/api/lib/uploads/runtime";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
-const MAX_FILENAME_LENGTH = 255;
-
 type ResolveFileNameProps = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
@@ -96,18 +94,13 @@ export const resolveEntityCreateFileName = async ({
   parentId,
   name,
 }: ResolveFileNameProps) => {
-  const lastDot = name.lastIndexOf(".");
-  const base = lastDot === -1 ? name : name.slice(0, lastDot);
-  const ext = lastDot === -1 ? "" : name.slice(lastDot);
-  const pattern = `${escapeLike(base)}%${escapeLike(ext)}`;
-
   const siblingParentFilter =
     parentId === null
       ? isNull(entities.parentId)
       : eq(entities.parentId, parentId);
 
-  const countRows = await tx
-    .select({ total: count() })
+  const siblings = await tx
+    .select({ name: jsonField(fields.content, "v1")("fileName") })
     .from(fields)
     .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
     .innerJoin(
@@ -123,24 +116,13 @@ export const resolveEntityCreateFileName = async ({
         eq(fields.propertyId, propertyId),
         eq(entities.workspaceId, workspaceId),
         siblingParentFilter,
-        like(jsonField(fields.content, "v1")("fileName"), pattern),
       ),
     );
-  const fieldsCount = countRows.at(0)?.total ?? 0;
-
-  if (fieldsCount === 0) {
-    return { renamed: false as const, value: name };
-  }
-
-  const suffix = `_${fieldsCount}`;
-  const maxBase = MAX_FILENAME_LENGTH - suffix.length - ext.length;
-  const truncatedBase = maxBase > 0 ? base.slice(0, maxBase) : base;
-
-  // SAFETY: name is already sanitized; the suffix is digits and underscore only
-  return {
-    renamed: true as const,
-    value: sanitizeFilename(`${truncatedBase}${suffix}${ext}`),
-  };
+  const value = resolveSiblingName({
+    name,
+    siblingNames: new Set(siblings.map(({ name: sibling }) => sibling)),
+  });
+  return { renamed: value !== name, value: sanitizeFilename(value) };
 };
 
 export type ValidateEntityCreateProps = {
