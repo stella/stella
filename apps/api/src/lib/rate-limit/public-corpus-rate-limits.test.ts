@@ -61,7 +61,7 @@ const createBindings = () => {
         decrement: (key) => context.decrement(key),
         kill: () => context.kill(),
       },
-      generator: (incoming, server) =>
+      generator: async (incoming, server) =>
         generator(incoming, peers.get(incoming) ?? server),
     };
   };
@@ -136,7 +136,9 @@ describe("public corpus fleet request budgets", () => {
     };
     const bindings = createBindings();
     const lines: string[] = [];
-    setMetricLineSinkForTesting((line) => lines.push(line));
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
     try {
       env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX = 3;
       env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = 3;
@@ -269,7 +271,9 @@ describe("public corpus fleet request budgets", () => {
     const bindings = createBindings();
     const app = createApp(bindings.binding);
     const lines: string[] = [];
-    setMetricLineSinkForTesting((line) => lines.push(line));
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
     try {
       for (const { path, max, routeClass } of [
         { path: "/law/statutes/facets", max: 60, routeClass: "aggregate" },
@@ -336,7 +340,9 @@ describe("public corpus fleet request budgets", () => {
     const lines: string[] = [];
     const bindings = createBindings();
     const previous = env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX;
-    setMetricLineSinkForTesting((line) => lines.push(line));
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
     try {
       env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX =
         2 * env.PUBLIC_CORPUS_ASSUMED_REPLICAS;
@@ -347,7 +353,7 @@ describe("public corpus fleet request budgets", () => {
       const captured = bindings.optionsByScope.get(
         "public-corpus-global-search",
       );
-      if (!captured?.onLocalFallback) {
+      if (!captured?.onLocalFallback || captured.localMax === undefined) {
         panic("Global policy must report local fallback");
       }
       expect(captured.localMax).toBe(2);

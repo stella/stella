@@ -30,7 +30,7 @@ const createCapacityApp = () => {
     >
   >[0][] = [];
   const pending: { finish: () => void; fail: (error: unknown) => void }[] = [];
-  const work = ({ request }: { request: Request }) => {
+  const work = async ({ request }: { request: Request }) => {
     if (request.headers.has("x-capacity-probe")) {
       return "probe-started";
     }
@@ -68,7 +68,7 @@ const createCapacityApp = () => {
 const request = (
   { path, method }: { path: string; method: string },
   signal?: AbortSignal,
-) => new Request(`http://localhost${path}`, { method, signal });
+) => new Request(`http://localhost${path}`, { method, signal: signal ?? null });
 
 const probeRequest = (route: { path: string; method: string }) =>
   new Request(request(route), { headers: { "x-capacity-probe": "1" } });
@@ -76,30 +76,34 @@ const probeRequest = (route: { path: string; method: string }) =>
 describe("public corpus active request capacity", () => {
   test("capacity telemetry emits refusals while accepted requests emit no metric lines", async () => {
     const lines: string[] = [];
-    setMetricLineSinkForTesting((line) => lines.push(line));
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
     const completion = Promise.withResolvers<string>();
     const middleware = publicCorpusConcurrencyLimit();
     const app = new Elysia()
       .use(middleware.shared)
-      .post("/v1/case/decisions/search", ({ request: incoming }) =>
+      .post("/v1/case/decisions/search", async ({ request: incoming }) =>
         incoming.headers.has("x-capacity-probe") ? "probe" : completion.promise,
       )
       .get("/v1/law/statutes", () => "browse");
     const route = { method: "POST", path: "/v1/case/decisions/search" };
     const running = Array.from(
       { length: getPublicCorpusClassPolicy().classes.search.concurrency },
-      () => app.handle(request(route)),
+      async () => app.handle(request(route)),
     );
     try {
       await app.handle(request({ method: "GET", path: "/v1/law/statutes" }));
       expect(lines).toEqual([]);
       expect((await app.handle(probeRequest(route))).status).toBe(429);
       expect(lines).toHaveLength(1);
-      expect(JSON.parse(lines[0])).toMatchObject({
-        class: "search",
-        outcome: "refused",
-        PublicCorpusAdmissions: 1,
-      });
+      for (const line of lines) {
+        expect(JSON.parse(line)).toMatchObject({
+          class: "search",
+          outcome: "refused",
+          PublicCorpusAdmissions: 1,
+        });
+      }
     } finally {
       completion.resolve("done");
       await Promise.all(running);
@@ -111,7 +115,7 @@ describe("public corpus active request capacity", () => {
     const sitemap = { method: "GET", path: "/v1/case/sitemap/shards" };
     const running = Array.from(
       { length: getPublicCorpusClassPolicy().totalConcurrency },
-      () => app.handle(request(sitemap)),
+      async () => app.handle(request(sitemap)),
     );
     try {
       expect(
@@ -154,7 +158,7 @@ describe("public corpus active request capacity", () => {
     const { app, pending } = createCapacityApp();
     const running = Array.from(
       { length: getPublicCorpusClassPolicy().classes.search.concurrency },
-      () => app.handle(request(searchPaths[0])),
+      async () => app.handle(request(searchPaths[0])),
     );
     try {
       await app.handle(request({ method: "GET", path: "/v1/law/statutes" }));
@@ -260,7 +264,7 @@ describe("public corpus active request capacity", () => {
       const path = { method: "POST", path: "/v1/case/decisions/search" };
       const running = Array.from(
         { length: getPublicCorpusClassPolicy().classes.search.concurrency },
-        () => app.handle(request(path)),
+        async () => app.handle(request(path)),
       );
       try {
         await app.handle(request({ method: "GET", path: "/v1/law/statutes" }));

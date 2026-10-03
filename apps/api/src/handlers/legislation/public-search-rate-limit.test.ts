@@ -156,7 +156,7 @@ describe("public statute search request budget", () => {
                 Number(left.scope < right.scope),
             ),
         ).toEqual(
-          [
+          ([
             { scope: "api", failurePolicy: "fail_open_local" },
             {
               scope: "public-statute-search",
@@ -182,7 +182,7 @@ describe("public statute search request budget", () => {
               scope: "public-corpus-global-sitemap",
               failurePolicy: "fail_open_local",
             },
-          ].toSorted(
+          ] as const).toSorted(
             (left, right) =>
               Number(left.scope > right.scope) -
               Number(left.scope < right.scope),
