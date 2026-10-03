@@ -369,19 +369,22 @@ export const requiresServiceSuites = (
   root = repositoryRoot,
 ) => Object.values(planServiceSuites(files, root)).some(Boolean);
 
-if (import.meta.main) {
-  const scopes = process.argv.at(2) === "--scopes";
-  const files = process.argv.slice(scopes ? 3 : 2);
+/** The line the CLI prints for its arguments; ci-plan reads it. */
+export const serviceSuiteCliOutput = (args: readonly string[]): string => {
+  const scopes = args.at(0) === "--scopes";
+  const files = args.slice(scopes ? 1 : 0);
   // A missing/deleted dependency or an unreadable graph must widen the scope.
   try {
     const plan = planServiceSuites(files);
-    console.log(
-      scopes
-        ? [plan.postgres, plan.corpus, plan.valkey, plan.collab].join(" ")
-        : Object.values(plan).some(Boolean),
-    );
+    return scopes
+      ? [plan.postgres, plan.corpus, plan.valkey, plan.collab].join(" ")
+      : String(Object.values(plan).some(Boolean));
   } catch (error) {
     console.error(error);
-    console.log(scopes ? "true true true true" : true);
+    return scopes ? "true true true true" : "true";
   }
+};
+
+if (import.meta.main) {
+  console.log(serviceSuiteCliOutput(process.argv.slice(2)));
 }
