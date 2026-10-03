@@ -4,17 +4,22 @@ import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { mcpConnectors } from "@/api/db/schema";
+import type { McpConnectorAuthType } from "@/api/db/schema";
 import {
   connectorSlugCandidates,
   firstFreeConnectorSlug,
 } from "@/api/handlers/mcp-connectors/connector-slug";
 import { discoverMcpIconUrl } from "@/api/handlers/mcp-connectors/icons";
 import { probeMcpServer } from "@/api/handlers/mcp-connectors/probe";
+import type { McpProbeResult } from "@/api/handlers/mcp-connectors/probe";
 import {
   mcpConnectorUrlVariants,
   normalizeMcpConnectorUrl,
 } from "@/api/handlers/mcp-connectors/url-normalization";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type {
+  HandlerConfig,
+  SafeHandlerGenerator,
+} from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -44,13 +49,34 @@ type CreateMcpConnectorDependencies = {
   discoverIconUrl: typeof discoverMcpIconUrl;
 };
 
+type CreateMcpConnectorResult =
+  | {
+      type: "confirmation_required";
+      issuer: string;
+      endpointOrigins: string[];
+    }
+  | {
+      type: "created";
+      connector: {
+        id: SafeId<"mcpConnector">;
+        slug: string;
+        authType: McpConnectorAuthType;
+      };
+      probe: McpProbeResult;
+    };
+
 export const createMcpConnectorHandler = ({
   probeServer,
   discoverIconUrl,
 }: CreateMcpConnectorDependencies) =>
   createSafeRootHandler(
     config,
-    async function* ({ body: input, safeDb, session, recordAuditEvent }) {
+    async function* ({
+      body: input,
+      safeDb,
+      session,
+      recordAuditEvent,
+    }): SafeHandlerGenerator<CreateMcpConnectorResult> {
       const normalizedUrl = yield* normalizeMcpConnectorUrl(input.url);
       const duplicate = yield* Result.await(
         findDuplicateConnector({
@@ -127,7 +153,7 @@ export const createMcpConnectorHandler = ({
         !issuerConfirmed
       ) {
         return Result.ok({
-          type: "confirmation_required" as const,
+          type: "confirmation_required",
           issuer: probe.authorizationServerUrl,
           endpointOrigins: probe.endpointOrigins,
         });
@@ -206,7 +232,7 @@ export const createMcpConnectorHandler = ({
         );
       }
 
-      return Result.ok({ type: "created" as const, connector, probe });
+      return Result.ok({ type: "created", connector, probe });
     },
   );
 

@@ -9,7 +9,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 type CreationSetupOptions = {
   issuer: string;
   endpointOrigins?: string[];
-  confirmedIssuer?: string;
+  confirmedIssuer?: string | undefined;
   confirmedEndpointOrigins?: string[];
 };
 const setup = ({
