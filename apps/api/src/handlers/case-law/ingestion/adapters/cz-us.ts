@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, TaggedError, panic } from "better-result";
 import * as cheerio from "cheerio";
@@ -1805,7 +1806,7 @@ const redirectsToResults = (response: Response): boolean => {
  */
 const nalusResponse = async (
   url: string,
-  init?: NalusRequestInit,
+  init: NalusRequestInit,
 ): Promise<Response> => {
   const response = await fetchNalus(url, init);
   if (Result.isError(response)) {
@@ -1847,6 +1848,7 @@ const fetchSearchPage = async ({
   signal,
 }: FetchSearchPageOptions): Promise<FetchedSearchPage | null> => {
   const first = await nalusOkResponse({
+    fetchStage: "listing",
     subject: "search form",
     url: SEARCH_URL,
     signal,
@@ -1881,6 +1883,7 @@ const fetchSearchPage = async ({
   });
   const initialCookies = cookieHeader([first]);
   const submit = await nalusResponse(SEARCH_URL, {
+    fetchStage: "listing",
     method: "POST",
     signal,
     headers: {
@@ -1912,6 +1915,7 @@ const fetchSearchPage = async ({
   const pageUrl =
     state.page === 0 ? RESULTS_URL : `${RESULTS_URL}?page=${state.page}`;
   const results = await nalusOkResponse({
+    fetchStage: "listing",
     subject: "results",
     url: pageUrl,
     headers: { Cookie: cookies },
@@ -1957,6 +1961,7 @@ export const openNalusSession = async (
   signal?: AbortSignal,
 ): Promise<NalusSession> => {
   const response = await nalusOkResponse({
+    fetchStage: "listing",
     subject: "session",
     url: SEARCH_URL,
     signal,
@@ -1994,6 +1999,7 @@ export const fetchNalusRecordCard = async (
   const url = new URL(RESULT_DETAIL_URL);
   url.searchParams.set("id", nalusRecordId);
   const response = await nalusResponse(url.href, {
+    fetchStage: "document",
     signal,
     headers: { Cookie: session.cookie },
   });
@@ -2180,7 +2186,10 @@ const fetchListedDecision = async (
       decision: listedOnlyDecision(listed, "missing-text-action"),
     };
   }
-  const response = await nalusResponse(listed.sourceUrl, { signal });
+  const response = await nalusResponse(listed.sourceUrl, {
+    fetchStage: "document",
+    signal,
+  });
   if (!response.ok) {
     if (response.status === 404 || response.status === 410) {
       return {
@@ -2255,7 +2264,10 @@ const fetchListedDecision = async (
       const abstractUrl = `${ABSTRACT_URL}?${new URLSearchParams({
         sz: listed.sz ?? "",
       }).toString()}`;
-      const abstractResponse = await nalusResponse(abstractUrl, { signal });
+      const abstractResponse = await nalusResponse(abstractUrl, {
+        fetchStage: "document",
+        signal,
+      });
       if (abstractResponse.ok) {
         return {
           type: CZ_US_ABSTRACT_STATE.READ,
@@ -2822,6 +2834,7 @@ const NALUS_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const czUsAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.CZ_US,
   sourceSurfaces: NALUS_SOURCE_SURFACES,
   sourceFields: {
@@ -2845,7 +2858,10 @@ export const czUsAdapter = defineSourceAdapter({
    */
   async getTotalCount(signal) {
     try {
-      const first = await nalusResponse(SEARCH_URL, { signal });
+      const first = await nalusResponse(SEARCH_URL, {
+        fetchStage: "listing",
+        signal,
+      });
       if (!first.ok) {
         return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
@@ -2880,6 +2896,7 @@ export const czUsAdapter = defineSourceAdapter({
         ctl00$MainContent$but_search: "Vyhledat",
       });
       const submit = await nalusResponse(SEARCH_URL, {
+        fetchStage: "listing",
         method: "POST",
         signal,
         headers: {
@@ -2892,6 +2909,7 @@ export const czUsAdapter = defineSourceAdapter({
         return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
       const results = await nalusResponse(RESULTS_URL, {
+        fetchStage: "listing",
         signal,
         headers: { Cookie: cookies },
       });

@@ -87,6 +87,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import { playbookPositionsSchema } from "@/api/lib/workflow/playbook-positions";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import { DOCUMENT_TOOL_DEFINITIONS } from "@/api/mcp/document-tools";
+import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
 import { KNOWLEDGE_TOOL_DEFINITIONS } from "@/api/mcp/knowledge-tools";
 import { getStaticMcpToolHandler } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_DEFINITIONS } from "@/api/mcp/stella-tools";
@@ -797,7 +798,7 @@ const resolveBehaviorSkill = async (
 ): Promise<ActiveChatSkillContext> => {
   const resolved = await resolveActiveChatSkillContext({
     activeSkill: { skillName: PLAYBOOK_BUILDER_SKILL },
-    memberRole: { role: store.context.memberRole },
+    memberRole: mcpMemberAuthority(store.context),
     organizationId: store.context.organizationId,
     safeDb: store.context.safeDb,
     userId: store.context.userId,

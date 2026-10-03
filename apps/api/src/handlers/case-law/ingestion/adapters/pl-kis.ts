@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
  * Polish tax interpretations and rulings (EUREKA) adapter.
@@ -48,6 +49,7 @@
 
 import { Result, panic } from "better-result";
 
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -532,7 +534,13 @@ type EurekaResponse = {
 const fetchEureka = async (
   rawUrl: string,
   init: { method?: string; headers: Record<string, string>; body?: string },
-  signal?: AbortSignal,
+  {
+    fetchStage,
+    signal,
+  }: {
+    fetchStage: DocumentFetchStage;
+    signal?: AbortSignal | undefined;
+  },
 ): Promise<EurekaResponse> => {
   const target = restrictOutboundUrl({
     hostPolicy: PL_KIS_HOST_POLICY,
@@ -550,6 +558,7 @@ const fetchEureka = async (
       redirect: "error",
     },
     {
+      fetchStage,
       adapterKey: ADAPTER_KEYS.PL_KIS,
       signal,
       timeoutMs: REQUEST_TIMEOUT_MS,
@@ -640,7 +649,7 @@ const search = async (
       },
       body: plKisListingBody(query),
     },
-    signal,
+    { fetchStage: "listing", signal },
   );
   if (!response.ok || response.bytes === null) {
     return Result.err(
@@ -1358,7 +1367,7 @@ const fetchDetailText = async (
   const response = await fetchEureka(
     detailUrl(id),
     { headers: { Accept: "application/json" } },
-    signal,
+    { fetchStage: "document", signal },
   );
   if (response.status === 404 || response.status === 410) {
     return Result.ok(undefined);
@@ -1383,7 +1392,7 @@ const fetchPdf = async (
   const response = await fetchEureka(
     pdfUrl(id),
     { headers: { Accept: "application/pdf" } },
-    signal,
+    { fetchStage: "document", signal },
   );
   if (response.status === 404 || response.status === 410) {
     return Result.ok(undefined);
@@ -2231,6 +2240,7 @@ const plKisTotalCount = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const plKisAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_KIS,
   language: LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,

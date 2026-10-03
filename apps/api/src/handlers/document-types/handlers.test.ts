@@ -17,6 +17,7 @@ import updateDocumentType from "@/api/handlers/document-types/update";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -50,7 +51,7 @@ const createOrgContext = (
     createAuditRecorder: () => noopAuditRecorder,
     // The wrapped safe handler authorizes `organizationSettings: ["update"]`
     // against this role before invoking the generator; owner clears every gate.
-    memberRole: { role: "owner" as const },
+    memberRole: sessionMemberRole("owner"),
     recordAuditEvent: noopAuditRecorder,
     request: new Request("https://example.test/document-types"),
     route: "/document-types",

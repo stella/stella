@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 /**
@@ -54,6 +55,7 @@ import {
   DECISION_DOCUMENT_ROLE,
   type DecisionDocumentRole,
 } from "@stll/api-contract/decision-document-role";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -1500,12 +1502,14 @@ const mediaTypeOf = (contentType: string | null): string =>
  */
 const request = async ({
   cursor,
+  fetchStage,
   params,
   path,
   signal,
   timeoutMs,
 }: {
   cursor: string;
+  fetchStage: DocumentFetchStage;
   params: Record<string, string>;
   path: string;
   signal?: AbortSignal | undefined;
@@ -1521,7 +1525,12 @@ const request = async ({
   const response = await fetchWithRetry(
     target.toString(),
     { headers: { Accept: "text/xml" }, redirect: "error" },
-    { adapterKey: ADAPTER_KEYS.PL_NCOURT, signal, timeoutMs },
+    {
+      fetchStage,
+      adapterKey: ADAPTER_KEYS.PL_NCOURT,
+      signal,
+      timeoutMs,
+    },
   );
   const bytes =
     response.body === null
@@ -1580,6 +1589,7 @@ const listWindow = async ({
 }): Promise<Result<Listed, AdapterFetchError>> => {
   const requested = await request({
     cursor,
+    fetchStage: "listing",
     params,
     path: "/judgements",
     signal,
@@ -1648,6 +1658,7 @@ const fetchPlNcourtDecision = async ({
   }
   const detail = await request({
     cursor,
+    fetchStage: "document",
     params: { id },
     path: "/judgement/details",
     signal,
@@ -1684,6 +1695,7 @@ const fetchPlNcourtDecision = async ({
   }
   const content = await request({
     cursor,
+    fetchStage: "document",
     params: { id },
     path: "/judgement/content",
     signal,
@@ -2635,6 +2647,7 @@ export const plNcourtCensus = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const plNcourtAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_NCOURT,
   language: PL_NCOURT_LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,

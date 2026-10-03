@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
  * Polish Supreme Court (Sąd Najwyższy) adapter.
@@ -47,6 +48,7 @@
 
 import { Result, panic } from "better-result";
 
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { Temporal } from "@stll/time";
 
 import {
@@ -123,6 +125,12 @@ const PROXY_TASK = {
 } as const;
 
 type ProxyTask = (typeof PROXY_TASK)[keyof typeof PROXY_TASK];
+
+const FETCH_STAGE_BY_PROXY_TASK = {
+  [PROXY_TASK.SEARCH]: "listing",
+  [PROXY_TASK.DETAILS]: "document",
+  [PROXY_TASK.DOCUMENT]: "document",
+} as const satisfies Record<ProxyTask, DocumentFetchStage>;
 
 /**
  * Shortest gap between two requests to this publisher, read off the policy
@@ -379,6 +387,7 @@ const requestProxy = async ({
     target.toString(),
     { headers: { Accept: "application/json" }, redirect: "error" },
     {
+      fetchStage: FETCH_STAGE_BY_PROXY_TASK[task],
       adapterKey: ADAPTER_KEYS.PL_SN,
       signal,
       timeoutMs,
@@ -1450,6 +1459,7 @@ const plSnFetchPage = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const plSnAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_SN,
   language: PL_SN_LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,

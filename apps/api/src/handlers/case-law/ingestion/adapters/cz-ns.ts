@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 
@@ -761,12 +762,14 @@ export const buildCzNsDecision = async (
   // work.
   const [detailResponse, printResponse] = await Promise.all([
     fetchPublisher(webUrl, {
+      fetchStage: "document",
       adapterKey: ADAPTER_KEYS.CZ_NS,
       signal,
       headers: COMMON_HEADERS,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     }),
     fetchPublisher(printUrl, {
+      fetchStage: "document",
       adapterKey: ADAPTER_KEYS.CZ_NS,
       signal,
       headers: COMMON_HEADERS,
@@ -1130,6 +1133,7 @@ const listCzNsSlicePage = async ({
     `&Start=1&Count=${CZ_NS_LISTING_WINDOW}`;
 
   const response = await fetchPublisher(url, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.CZ_NS,
     signal,
     headers: COMMON_HEADERS,
@@ -1303,6 +1307,7 @@ const CZ_NS_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const czNsAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.CZ_NS,
   sourceSurfaces: CZ_NS_SOURCE_SURFACES,
   sourceFields: {
@@ -1347,6 +1352,7 @@ export const czNsAdapter = defineSourceAdapter({
         `&Count=1&Start=1&OutputFormat=JSON`;
 
       const response = await fetchPublisher(url, {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.CZ_NS,
         signal,
         headers: COMMON_HEADERS,
@@ -1387,6 +1393,7 @@ export const czNsAdapter = defineSourceAdapter({
           `&OutputFormat=JSON`;
 
         const listResponse = await fetchPublisher(listUrl, {
+          fetchStage: "listing",
           adapterKey: ADAPTER_KEYS.CZ_NS,
           headers: COMMON_HEADERS,
           signal,

@@ -775,6 +775,16 @@ export const CAPABILITY_DISPATCH = {
   "properties.update": {
     load: async () => await import("@/api/handlers/properties/update"),
   },
+  "rates.arrangement.get": {
+    load: async () => await import("@/api/handlers/rates/arrangement/get"),
+  },
+  "rates.arrangement.summary.get": {
+    load: async () =>
+      await import("@/api/handlers/rates/arrangement/summary/get"),
+  },
+  "rates.arrangement.update": {
+    load: async () => await import("@/api/handlers/rates/arrangement/update"),
+  },
   "rates.create": {
     load: async () => await import("@/api/handlers/rates/create"),
   },

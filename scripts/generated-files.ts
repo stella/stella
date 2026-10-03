@@ -224,7 +224,7 @@ export const GENERATORS = [
   },
   {
     id: "route-tree",
-    outputKind: "committed",
+    outputKind: "derived",
     outputs: ["apps/web/src/routeTree.gen.ts"],
     inputs: [
       "apps/web/src/routes/**",
@@ -247,7 +247,7 @@ export const GENERATORS = [
     inputs: MODEL_CATALOG_INPUTS,
     write: ["bun", "--filter", "@stll/ai-catalog", "gen:rates"],
     check: null,
-    checkedBy: "Model catalog snapshot drift guard",
+    checkedBy: "Model catalog snapshot drift check",
     autofix: false,
     after: [],
   },
@@ -258,7 +258,7 @@ export const GENERATORS = [
     inputs: MODEL_CATALOG_INPUTS,
     write: ["bun", "--filter", "@stll/ai-catalog", "gen:capabilities"],
     check: null,
-    checkedBy: "Model catalog snapshot drift guard",
+    checkedBy: "Model catalog snapshot drift check",
     autofix: false,
     after: [],
   },
