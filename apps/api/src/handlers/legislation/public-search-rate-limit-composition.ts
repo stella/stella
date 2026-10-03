@@ -1,11 +1,17 @@
 import { type AnyElysia, Elysia } from "elysia";
 
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { publicCorpusConcurrencyLimit } from "@/api/lib/rate-limit/public-corpus-concurrency";
+import {
+  createPublicCorpusAddressRateLimitOptions,
+  createPublicCorpusGlobalRateLimitOptions,
+} from "@/api/lib/rate-limit/public-corpus-rate-limits";
 import {
   type RateLimitOptions,
   rateLimit,
 } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
+import { resolvePublicCorpusPolicy } from "@/api/public-corpus-policy";
 
 import {
   createPublicStatuteSearchRateLimitOptions,
@@ -27,17 +33,101 @@ export const createPublicStatuteSearchRateLimitComposition = <
   routes,
   skipShared = () => false,
   createRedisBinding = createRedisRateLimit,
-}: PublicStatuteSearchRateLimitCompositionOptions<Routes>) => ({
-  shared: rateLimit({
-    duration: API_RATE_LIMITS.api.duration,
-    max: API_RATE_LIMITS.api.max,
-    ...createRedisBinding({ failurePolicy: "fail_open_local", scope: "api" }),
-    skip: async (request) =>
-      isPublicStatuteSearchRateLimitedRequest(request) || skipShared(request),
-  }),
-  publicLegislation: new Elysia()
-    .use(
-      rateLimit(createPublicStatuteSearchRateLimitOptions(createRedisBinding)),
-    )
-    .use(routes),
-});
+}: PublicStatuteSearchRateLimitCompositionOptions<Routes>) => {
+  const concurrency = publicCorpusConcurrencyLimit();
+  const searchGlobal = createPublicCorpusGlobalRateLimitOptions(
+    "search",
+    createRedisBinding,
+  );
+  const searchAddress = createPublicCorpusAddressRateLimitOptions(
+    "search",
+    createRedisBinding,
+  );
+  return {
+    shared: new Elysia()
+      .use(
+        rateLimit({
+          duration: API_RATE_LIMITS.api.duration,
+          max: API_RATE_LIMITS.api.max,
+          ...createRedisBinding({
+            failurePolicy: "fail_open_local",
+            scope: "api",
+          }),
+          skip: async (request) => {
+            const policy = resolvePublicCorpusPolicy(request);
+            return (
+              isPublicStatuteSearchRateLimitedRequest(request) ||
+              policy?.class === "aggregate" ||
+              policy?.class === "sitemap" ||
+              skipShared(request)
+            );
+          },
+        }),
+      )
+      .use(
+        rateLimit(
+          createPublicCorpusAddressRateLimitOptions(
+            "aggregate",
+            createRedisBinding,
+          ),
+        ),
+      )
+      .use(
+        rateLimit(
+          createPublicCorpusAddressRateLimitOptions(
+            "sitemap",
+            createRedisBinding,
+          ),
+        ),
+      )
+      // Statute and case search will share one address bucket in the follow-up.
+      .use(
+        rateLimit({
+          ...searchAddress,
+          skip: (request) =>
+            searchAddress.skip(request) ||
+            isPublicStatuteSearchRateLimitedRequest(request),
+        }),
+      )
+      .use(concurrency.shared)
+      .use(
+        rateLimit({
+          ...searchGlobal,
+          skip: (request) =>
+            searchGlobal.skip(request) ||
+            isPublicStatuteSearchRateLimitedRequest(request),
+        }),
+      )
+      .use(
+        rateLimit(
+          createPublicCorpusGlobalRateLimitOptions(
+            "aggregate",
+            createRedisBinding,
+          ),
+        ),
+      )
+      .use(
+        rateLimit(
+          createPublicCorpusGlobalRateLimitOptions(
+            "sitemap",
+            createRedisBinding,
+          ),
+        ),
+      )
+      .as("scoped"),
+    publicLegislation: new Elysia()
+      .use(
+        rateLimit(
+          createPublicStatuteSearchRateLimitOptions(createRedisBinding),
+        ),
+      )
+      .use(concurrency.statute)
+      .use(
+        rateLimit({
+          ...searchGlobal,
+          skip: (request) => !isPublicStatuteSearchRateLimitedRequest(request),
+        }),
+      )
+      .use(routes),
+  };
+};

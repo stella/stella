@@ -1850,12 +1850,14 @@
   },
   "consent": {
     "allow": "Autoriser",
+    "appIdentity": "Identité de l’application",
     "completeSetup": "Terminer la configuration",
     "defaultClientName": "Une application",
     "description": "{clientName} souhaite accéder à votre espace de travail stella",
     "error": "Une erreur s’est produite. Veuillez réessayer.",
     "missingJurisdictions": "Votre organisation stella n’a pas encore configuré ses juridictions d’exercice. Certains outils tenant compte de la juridiction resteront indisponibles tant que vous n’aurez pas terminé la configuration.",
     "permissions": "Cela autorisera l’application à :",
+    "redirectDestination": "Destination de redirection",
     "scopeAdminRead": "Lire le journal d'audit de votre organisation",
     "scopeAdminWrite": "Gérer les membres et les paramètres de l'organisation",
     "scopeBillingWrite": "Créer, modifier et supprimer vos saisies de temps",
@@ -1876,7 +1878,8 @@
     "scopeSkills": "Utiliser vos compétences stella enregistrées",
     "scopeTemplates": "Lister, remplir et créer vos modèles de documents",
     "scopeTemplatesAnonymized": "Lister, remplir et créer des versions anonymisées de vos modèles de documents",
-    "title": "Autoriser l’accès"
+    "title": "Autoriser l’accès",
+    "unverifiedApp": "Application non vérifiée"
   },
   "contacts": {
     "alsoPartyIn": "Apparaît également comme partie dans {count, plural, one {# autre dossier} many {# autres dossiers} other {# autres dossiers}}",

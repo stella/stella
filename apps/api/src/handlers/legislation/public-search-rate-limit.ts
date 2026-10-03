@@ -6,6 +6,7 @@ import {
   scopedGenerator,
 } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
+import { getPublicCorpusClassPolicy } from "@/api/public-corpus-policy";
 
 export const PUBLIC_STATUTE_SEARCH_PATH = "/law/statutes/search";
 const VERSIONED_PUBLIC_STATUTE_SEARCH_PATH = `${STELLA_API_VERSION_PREFIX}${PUBLIC_STATUTE_SEARCH_PATH}`;
@@ -41,6 +42,7 @@ export const createPublicStatuteSearchRateLimitOptions = (
 ) =>
   ({
     ...PUBLIC_STATUTE_SEARCH_RATE_LIMIT_POLICY,
+    ...getPublicCorpusClassPolicy().classes.search.address,
     ...createRedisBinding({
       counterKeyGenerator: publicStatuteSearchRateLimitKey,
       failurePolicy: "fail_open_local",

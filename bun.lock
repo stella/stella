@@ -943,6 +943,7 @@
       "name": "@stll/redis-config",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/time": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },

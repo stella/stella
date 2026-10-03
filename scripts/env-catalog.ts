@@ -57,6 +57,9 @@ export type EnvCatalogEntry = {
 type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
+  "UNUSED_CLIENT_RETENTION_DAYS",
+  "AGENT_REGISTRATION_DAILY_LIMIT",
+  "OPEN_CLIENT_REGISTRATION_DAILY_LIMIT",
   "ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY",
   "ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY",
   "ACTION_ADMISSION_LEASE_MS",
@@ -97,6 +100,14 @@ const INTERNAL_SERVER_KEYS = new Set([
   "BETTER_AUTH_URL",
   "CASE_LAW_DATABASE_POOL_MAX",
   "PUBLIC_LAW_DATABASE_POOL_MAX",
+  "PUBLIC_CORPUS_RESERVED_CONNECTIONS",
+  "PUBLIC_CORPUS_ASSUMED_REPLICAS",
+  "PUBLIC_CORPUS_SEARCH_P95_SECONDS",
+  "PUBLIC_CORPUS_AGGREGATE_P95_SECONDS",
+  "PUBLIC_CORPUS_SITEMAP_P95_SECONDS",
+  "PUBLIC_CORPUS_SEARCH_GLOBAL_MAX",
+  "PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX",
+  "PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX",
   "CORPUS_PROJECTION_OWNER",
   "CORPUS_INDEX_Q09_ENDPOINT",
   "CORPUS_INDEX_Q09_SEARCH_ENDPOINT",
@@ -263,6 +274,12 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  UNUSED_CLIENT_RETENTION_DAYS:
+    "Age in days before unused client registrations expire (1–365; default 30).",
+  AGENT_REGISTRATION_DAILY_LIMIT:
+    "Maximum agent registrations per UTC day (1–1000000; default 10000).",
+  OPEN_CLIENT_REGISTRATION_DAILY_LIMIT:
+    "Maximum open client registrations per UTC day (1–1000000; default 10000).",
   HOSTED_USAGE_WEBHOOK_RETENTION_DAYS:
     "Retention in days for completed provider event details; unset disables redaction.",
   AGENT_CLIENT_STORAGE_V1_ENABLED:
@@ -304,6 +321,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Maximum RLS pool size. Keep its sum with DATABASE_ROOT_POOL_MAX, plus one connection for the periodic login check outside local development, within the process connection budget.",
   DATABASE_ROOT_POOL_MAX:
     "Maximum root pool size. Keep its sum with DATABASE_RLS_POOL_MAX, plus one connection for the periodic login check outside local development, within the process connection budget.",
+  PUBLIC_CORPUS_RESERVED_CONNECTIONS:
+    "Public corpus concurrent-work reservation when using the root pool. Unset reserves max(1, floor(DATABASE_ROOT_POOL_MAX / 4)); values are capped at the root pool size. A dedicated PUBLIC_LAW_DATABASE_URL uses its own pool limits.",
   PUBLIC_LAW_DATABASE_POOL_MAX:
     "Maximum connections in the optional local read-only public-law pool.",
   PUBLIC_LAW_DATABASE_URL:
@@ -424,7 +443,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Leave on unless the endpoint presents a certificate no trust anchor can " +
     "validate and the private network is the boundary instead.",
   REDIS_URL:
-    "Valkey or Redis URL used for cross-instance broadcasts and rate limits. Set maxmemory-policy noeviction on the server for admission, reservations, and fences. Treated as secret because it may contain credentials.",
+    "Valkey or Redis URL used for cross-instance broadcasts and rate limits. Set maxmemory-policy noeviction on the server for durable coordination, including queues, locks, reservations, and fences. Treated as secret because it may contain credentials.",
   S3_ACCESS_KEY_ID:
     'S3 access-key ID. Required with S3_CREDENTIALS_PROVIDER="env"; otherwise omit it with the secret to use the selected provider.',
   S3_BUCKET: "S3 bucket for uploaded files.",
@@ -570,6 +589,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   ACTION_REQUEST_MAX_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_RESPONSE_MAX_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_CLIENT_STORAGE_V1_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  AGENT_REGISTRATION_DAILY_LIMIT: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_SANDBOX_DOCKER_NETWORK: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_SANDBOX_DOCKER_SOCKET: ENV_CREDENTIAL_KIND.notCredential,
   AGENT_SANDBOX_HARNESS_API_KEY: ENV_CREDENTIAL_KIND.credential,
@@ -703,6 +723,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   OPENROUTER_WIF_AUDIENCE: ENV_CREDENTIAL_KIND.notCredential,
   OPENROUTER_WIF_POLICY_ID: ENV_CREDENTIAL_KIND.notCredential,
   OPENROUTER_WIF_STS_REGION: ENV_CREDENTIAL_KIND.notCredential,
+  OPEN_CLIENT_REGISTRATION_DAILY_LIMIT: ENV_CREDENTIAL_KIND.notCredential,
   ORG_EVALUATION_PERIOD_DAYS: ENV_CREDENTIAL_KIND.notCredential,
   PAYMENT_RETRY_WINDOW_MS: ENV_CREDENTIAL_KIND.notCredential,
   PDF_SIGNING_TSA_TRUST_PEM: ENV_CREDENTIAL_KIND.notCredential,
@@ -712,6 +733,14 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   POSTHOG_HOST: ENV_CREDENTIAL_KIND.notCredential,
   POSTHOG_KEY: ENV_CREDENTIAL_KIND.notCredential,
   POSTHOG_LOCAL_DEBUG: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_AGGREGATE_P95_SECONDS: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_ASSUMED_REPLICAS: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_RESERVED_CONNECTIONS: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_SEARCH_GLOBAL_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_SEARCH_P95_SECONDS: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_SITEMAP_P95_SECONDS: ENV_CREDENTIAL_KIND.notCredential,
   PUBLIC_LAW_DATABASE_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
   PUBLIC_LAW_DATABASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   PUBLIC_URL: ENV_CREDENTIAL_KIND.notCredential,
@@ -774,6 +803,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   TRANSACTIONAL_EMAIL_FROM: ENV_CREDENTIAL_KIND.notCredential,
   TYPESAFE_API_KEY: ENV_CREDENTIAL_KIND.credential,
   TYPESAFE_MODEL: ENV_CREDENTIAL_KIND.notCredential,
+  UNUSED_CLIENT_RETENTION_DAYS: ENV_CREDENTIAL_KIND.notCredential,
   USAGE_ENFORCEMENT_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   USE_MOCK_AI: ENV_CREDENTIAL_KIND.notCredential,
   VITE_API_URL: ENV_CREDENTIAL_KIND.notCredential,
