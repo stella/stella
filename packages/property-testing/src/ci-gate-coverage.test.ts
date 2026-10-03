@@ -466,20 +466,38 @@ const grepDiscoveryCovers = (
   if (step.allowsFailure || !environmentSetsGate(step.env, declaration)) {
     return false;
   }
-  // Recognize the literal grep discovery form used by CI; dynamic shell
-  // expressions cannot establish a static search scope.
+  // Recognize the literal discovery form used by CI: grep output collected
+  // into an array that a `bun test` command in the same step runs. Dynamic
+  // shell expressions cannot establish a static search scope.
   const commands = step.run
     .split("\n")
     .filter((line) => !/^\s*#/u.test(line))
     .join("\n");
   const discoveries = commands.matchAll(
-    /(?:^\s*|[<(;|]\s*)grep\s+-rl\s+--include=(?:'([^']+)'|"([^"]+)"|([^\s'"|)]+))\s+([A-Z][A-Z0-9_]*)\s+([A-Za-z0-9_./-]+)(?=\s|\)|$)/gmu,
+    /^\s*mapfile\s+-t\s+([A-Za-z_][A-Za-z0-9_]*)\s+<\s+<\(grep\s+-rl\s+--include=(?:'([^']+)'|"([^"]+)"|([^\s'"|)]+))\s+([A-Z][A-Z0-9_]*)\s+([A-Za-z0-9_./-]+)(?=\s|\)|$)/gmu,
+  );
+  const testedArrays = new Set(
+    commands
+      .split("\n")
+      .filter((line) => /^\s*bun\s+test\b/u.test(line))
+      .flatMap((line) =>
+        [...line.matchAll(/"\$\{([A-Za-z_][A-Za-z0-9_]*)\[@\]\}"/gu)].flatMap(
+          (reference) => (reference[1] === undefined ? [] : [reference[1]]),
+        ),
+      ),
   );
   for (const match of discoveries) {
-    const include = match[1] ?? match[2] ?? match[3];
-    const gate = match[4];
-    const directory = match[5];
-    if (!include || !directory || gate !== declaration.gate) {
+    const array = match[1];
+    const include = match[2] ?? match[3] ?? match[4];
+    const gate = match[5];
+    const directory = match[6];
+    if (
+      !array ||
+      !testedArrays.has(array) ||
+      !include ||
+      !directory ||
+      gate !== declaration.gate
+    ) {
       continue;
     }
     const searchRoot = path.posix.join(step.workingDirectory, directory);
@@ -549,27 +567,37 @@ const isWired = ({
 describe("ci-gate coverage convention", () => {
   test.each([
     {
-      run: `grep -rl --include="*.test.ts" EXAMPLE_GATE src`,
+      run: `mapfile -t files < <(grep -rl --include="*.test.ts" EXAMPLE_GATE src)\n          bun test "\${files[@]}"`,
       condition: "true",
       covered: true,
     },
     {
-      run: `grep -rl --include=*.test.ts EXAMPLE_GATE src`,
+      run: `mapfile -t files < <(grep -rl --include=*.test.ts EXAMPLE_GATE src | sort)\n          bun test --preload ./setup.ts "\${files[@]}"`,
       condition: "true",
       covered: true,
     },
     {
-      run: `# mapfile -t files < <(grep -rl --include='*.test.ts' EXAMPLE_GATE src)`,
+      run: `mapfile -t files < <(grep -rl --include='*.test.ts' EXAMPLE_GATE src)\n          printf '%s\\n' "\${files[@]}"\n          bun test src/unrelated.test.ts`,
       condition: "true",
       covered: false,
     },
     {
-      run: `echo grep -rl --include='*.test.ts' EXAMPLE_GATE src`,
+      run: `mapfile -t files < <(grep -rl --include='*.test.ts' EXAMPLE_GATE src)\n          bun test "\${other[@]}"`,
       condition: "true",
       covered: false,
     },
     {
-      run: `grep -rl --include='*.test.ts' EXAMPLE_GATE src`,
+      run: `grep -rl --include='*.test.ts' EXAMPLE_GATE src\n          bun test`,
+      condition: "true",
+      covered: false,
+    },
+    {
+      run: `# mapfile -t files < <(grep -rl --include='*.test.ts' EXAMPLE_GATE src)\n          bun test "\${files[@]}"`,
+      condition: "true",
+      covered: false,
+    },
+    {
+      run: `mapfile -t files < <(grep -rl --include='*.test.ts' EXAMPLE_GATE src)\n          bun test "\${files[@]}"`,
       condition: "false",
       covered: false,
     },
