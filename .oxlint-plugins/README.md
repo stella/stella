@@ -310,3 +310,7 @@ implies a hazard that is gone.
 - [no-parser-validator-calls](./no-parser-validator-calls.ts): `no-parser-validator-calls` confines text-retention validation to the ingestion pipeline, with a shrinking legacy import/call ledger.
 
 - [`no-unvalidated-clause-write`](./no-unvalidated-clause-write.ts) (`no-unvalidated-clause-write`): confines clause, variant, and version body writes to their owning operations and requires a preceding `yield*` of the shared directive validator, or legacy inspection in the import/restore owners. Working-copy updates validate when publishing; draft persistence remains allowed. This syntactic check does not prove control-flow dominance. Search index maintenance may write only its static `searchVector` column.
+
+- [`no-direct-error-toast`](./no-direct-error-toast.ts) (`no-direct-error-toast`): confines error toast creation, updates, and promise handling to the shared notifier.
+
+- [`no-discarded-toast-error`](./no-discarded-toast-error.ts) (`no-discarded-toast-error`): preserves original caught errors through shared notification.

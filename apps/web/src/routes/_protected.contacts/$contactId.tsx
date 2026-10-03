@@ -29,7 +29,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useDeleteContact } from "@/lib/contacts/mutations";
 import { contactOptions, contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";
@@ -146,10 +146,7 @@ function ContactDetailPage() {
           );
         },
         onError: (error) => {
-          stellaToast.add({
-            title: userErrorFromThrown(error, t("errors.actionFailed")),
-            type: "error",
-          });
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -157,10 +154,7 @@ function ContactDetailPage() {
 
   const handleDeleteOpen = () => {
     if (contact.clientMatterCount > 0) {
-      stellaToast.add({
-        title: deleteBlockedDescription,
-        type: "error",
-      });
+      notifyUserError(undefined, deleteBlockedDescription);
       return;
     }
 
