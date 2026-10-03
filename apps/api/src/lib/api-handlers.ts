@@ -1,13 +1,8 @@
 import type { TSchema } from "@sinclair/typebox";
 import type { Err } from "better-result";
 import { Result, UnhandledException } from "better-result";
-import type {
-  Context,
-  ElysiaCustomStatusResponse,
-  InputSchema,
-  UnwrapRoute,
-} from "elysia";
-import { status, t } from "elysia";
+import type { Context, InputSchema, UnwrapRoute } from "elysia";
+import { ElysiaCustomStatusResponse, status, t } from "elysia";
 
 import type { ModelRole } from "@stll/ai-catalog";
 import type { PermissionInput } from "@stll/permissions";
@@ -70,6 +65,13 @@ import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
 import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
 import {
+  projectPublicErrorBody,
+  PUBLIC_ERROR_TEXT_BYTES,
+  safePublicHandlerErrorOrStatusTextResponseSchema,
+  safePublicHandlerErrorResponseSchema,
+} from "@/api/lib/search/public-error-response";
+import { truncateTextBytes } from "@/api/lib/search/response-text-bounds";
+import {
   applyResponseCachePolicy,
   type CachePolicy,
 } from "@/api/lib/security-headers";
@@ -89,6 +91,8 @@ import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
 import type { McpReadClass } from "@/api/mcp/tool-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
+
+export { safePublicHandlerErrorResponseSchema } from "@/api/lib/search/public-error-response";
 
 /**
  * The closed set of curated static MCP tool names. Every `type: "tool"` and
@@ -624,6 +628,23 @@ export const safeHandlerResponseSchemasWithStatusText = <
 ): SafeHandlerStatusTextResponseSchemas<TSuccessSchema> => ({
   200: successSchema,
   ...SAFE_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS,
+});
+
+const SAFE_PUBLIC_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS =
+  safeHandlerErrorResponseSchemas(
+    safePublicHandlerErrorOrStatusTextResponseSchema,
+  );
+
+export const safePublicHandlerResponseSchemasWithStatusText = <
+  TSuccessSchema extends TSchema,
+>(
+  successSchema: TSuccessSchema,
+): SafeHandlerResponseSchemasFor<
+  TSuccessSchema,
+  typeof safePublicHandlerErrorOrStatusTextResponseSchema
+> => ({
+  200: successSchema,
+  ...SAFE_PUBLIC_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS,
 });
 
 // The conditional form is intentional: it keeps status unions distributive so
@@ -1546,10 +1567,32 @@ export const createSafePublicHandler = <
   config: TConfig,
   handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,
 ): SafeHandlerDefinition<TConfig, PublicHandlerContext<TConfig>, TResult> => {
+  // Schema opt-in preserves self-authorizing public endpoints' ceremony fields.
+  // Corpus routes declare this bounded contract and share its wire projection.
+  const boundsPublicErrors =
+    config.response !== undefined &&
+    Object.values(config.response).some(
+      (schema) =>
+        schema === safePublicHandlerErrorResponseSchema ||
+        schema === safePublicHandlerErrorOrStatusTextResponseSchema,
+    );
   const definition = {
     config,
     handler: async (ctx: PublicHandlerContext<TConfig>) => {
       const response = await runSafeHandler(ctx, handler);
+      if (
+        boundsPublicErrors &&
+        response instanceof ElysiaCustomStatusResponse &&
+        response.code >= 400
+      ) {
+        response.response =
+          typeof response.response === "string"
+            ? truncateTextBytes(
+                response.response,
+                PUBLIC_ERROR_TEXT_BYTES.statusText,
+              )
+            : projectPublicErrorBody(response.response);
+      }
       applyResponseCachePolicy({
         cache: config.cache,
         response,
