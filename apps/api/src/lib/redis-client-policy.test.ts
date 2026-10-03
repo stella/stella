@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { RedisClient } from "bun";
 import { expect, spyOn, test } from "bun:test";
 
@@ -12,6 +13,17 @@ import {
 } from "@/api/lib/redis-client";
 import { coordinationKey } from "@/api/lib/redis-keys";
 import { createMcpGatewayRateLimiter } from "@/api/mcp/gateway/rate-limit";
+
+const expectStoreRefusal = async (command: Promise<unknown>) => {
+  const result = await Result.tryPromise({
+    try: async () => await command,
+    catch: (error: unknown) => error,
+  });
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error).toBeInstanceOf(StoreUnavailableError);
+  }
+};
 
 const key = coordinationKey({
   scope: "security-canary",
@@ -45,18 +57,10 @@ test("durable native methods, connection startup and duplicate clients require t
     const client = createRedisClient({ storeClass: "durable-coordination" });
     const clone = await client.duplicate();
     try {
-      await expect(client.connect()).rejects.toBeInstanceOf(
-        StoreUnavailableError,
-      );
-      await expect(
-        client.send("EVAL", ["return 1", "1", key]),
-      ).rejects.toBeInstanceOf(StoreUnavailableError);
-      await expect(client.get(key)).rejects.toBeInstanceOf(
-        StoreUnavailableError,
-      );
-      await expect(clone.send("PING", [])).rejects.toBeInstanceOf(
-        StoreUnavailableError,
-      );
+      await expectStoreRefusal(client.connect());
+      await expectStoreRefusal(client.send("EVAL", ["return 1", "1", key]));
+      await expectStoreRefusal(client.get(key));
+      await expectStoreRefusal(clone.send("PING", []));
       expect(sent).toEqual(["INFO", "INFO"]);
     } finally {
       client.close();
@@ -86,16 +90,12 @@ test("BullMQ refuses startup and enqueue commands through its classified raw cli
       storeClass: "durable-coordination",
     });
     try {
-      await expect(connection.connect()).rejects.toBeInstanceOf(
-        StoreUnavailableError,
-      );
+      await expectStoreRefusal(connection.connect());
       connection.defineCommand("policyTest", {
         numberOfKeys: 1,
         lua: "return 1",
       });
-      await expect(
-        connection.runCommand("policyTest", [key]),
-      ).rejects.toBeInstanceOf(StoreUnavailableError);
+      await expectStoreRefusal(connection.runCommand("policyTest", [key]));
       expect(sent.every((command) => command === "INFO")).toBe(true);
       expect(sent.length).toBeGreaterThan(0);
     } finally {

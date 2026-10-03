@@ -184,7 +184,8 @@ const createClassifiedRedisClient = (
       if (!raw.connected) {
         await raw.connect();
       }
-      return await raw.send("INFO", ["memory"]);
+      const reply: unknown = await raw.send("INFO", ["memory"]);
+      return reply;
     },
     observe: (status) => {
       emitAdmissionStorePolicyMetric(status === "refused");
@@ -224,7 +225,9 @@ const createClassifiedRedisClient = (
     get: (target, key) => {
       if (key === "duplicate") {
         return async () =>
-          createClassifiedRedisClient(url, { storeClass, overrides });
+          await Promise.resolve(
+            createClassifiedRedisClient(url, { storeClass, overrides }),
+          );
       }
       const value: unknown = Reflect.get(target, key, target);
       if (typeof value !== "function") {
@@ -245,7 +248,7 @@ const createClassifiedRedisClient = (
         if (key === "connect") {
           await target.connect();
           await policy.assertAllowed();
-          return;
+          return undefined;
         }
         await policy.assertAllowed();
         const result: unknown = Reflect.apply(value, target, args);
@@ -291,7 +294,7 @@ export const connectWithColdStartRetries = async (
       return;
     }
     if (StoreUnavailableError.is(result.error)) {
-      return await Promise.reject(result.error);
+      await Promise.reject(result.error);
     }
     logger.warn(
       "redis.cold_start_reconnect",

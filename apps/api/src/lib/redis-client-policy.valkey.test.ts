@@ -11,6 +11,17 @@ import {
 } from "@/api/lib/redis-client";
 import { coordinationKey } from "@/api/lib/redis-keys";
 
+const expectStoreRefusal = async (command: Promise<unknown>) => {
+  const result = await Result.tryPromise({
+    try: async () => await command,
+    catch: (error: unknown) => error,
+  });
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error).toBeInstanceOf(StoreUnavailableError);
+  }
+};
+
 const enabled = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
 
 describe.skipIf(!enabled)("classified clients over Valkey", () => {
@@ -67,25 +78,23 @@ describe.skipIf(!enabled)("classified clients over Valkey", () => {
     worker.on("error", (error) => errors.push(error));
     try {
       await cache.set(key, "cache");
-      await expect(refused.set(key, "refused")).rejects.toBeInstanceOf(
-        StoreUnavailableError,
-      );
-      await expect(clone.get(key)).rejects.toBeInstanceOf(
-        StoreUnavailableError,
-      );
+      await expectStoreRefusal(refused.set(key, "refused"));
+      await expectStoreRefusal(clone.get(key));
       expect(await cache.get(key)).toBe("cache");
-      await expect(queue.add("policy", {})).rejects.toBeInstanceOf(
-        StoreUnavailableError,
-      );
-      await expect(worker.waitUntilReady()).rejects.toBeInstanceOf(
-        StoreUnavailableError,
-      );
+      await expectStoreRefusal(queue.add("policy", {}));
+      await expectStoreRefusal(worker.waitUntilReady());
       expect(executed).toBe(0);
     } finally {
       // A refused readiness promise is also returned by BullMQ close.
       const closures = await Promise.all([
-        Result.tryPromise(() => queue.close()),
-        Result.tryPromise(() => worker.close(true)),
+        Result.tryPromise({
+          try: async () => await queue.close(),
+          catch: (error: unknown) => error,
+        }),
+        Result.tryPromise({
+          try: async () => await worker.close(true),
+          catch: (error: unknown) => error,
+        }),
       ]);
       for (const closure of closures) {
         if (Result.isError(closure)) {

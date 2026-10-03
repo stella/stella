@@ -107,9 +107,11 @@ test("collaboration coordination commands require an allowed store policy", asyn
   try {
     await expectStoreRefusal(client.eval("return 1", 0));
     expect(sent).toEqual(["info"]);
-    const callbackError = await new Promise<Error | null>((resolve) => {
-      void client.eval("return 1", 0, (error) => resolve(error));
-    });
+    const callbackError = await new Promise<Error | null | undefined>(
+      (resolve) => {
+        void client.eval("return 1", 0, (error) => resolve(error));
+      },
+    );
     expect(callbackError).toBeInstanceOf(StoreUnavailableError);
     expect(sent).toEqual(["info"]);
     const clone = client.duplicate();
@@ -184,7 +186,7 @@ test("cache clients deliver commands without policy inspection", async () => {
   const send = spyOn(RedisClient.prototype, "sendCommand").mockImplementation(
     async (command) => {
       sent.push(command.name);
-      command.resolve("OK");
+      command.resolve(1);
       return command.promise;
     },
   );
@@ -193,7 +195,7 @@ test("cache clients deliver commands without policy inspection", async () => {
     storeClass: "cache",
   });
   try {
-    expect(await client.publish("channel", "message")).toBe("OK");
+    expect(await client.publish("channel", "message")).toBe(1);
     expect(sent).toEqual(["publish"]);
   } finally {
     client.disconnect();
