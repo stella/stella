@@ -3342,6 +3342,107 @@ test("drawn property samples are the inputs fc.assert would run", () => {
   expect(separate).toEqual(drawSamples(failedGatedJobs, 100));
 });
 
+test("image checks run on pull requests that change image inputs and bind the fast result gate", () => {
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  for (const { job, broad, scope, cases } of [
+    {
+      job: "docker-checks",
+      broad: "docker_checks_required",
+      scope: "docker_checks_pr_required",
+      cases: [
+        {
+          file: "packages/agent-engine/docker/sandbox.Dockerfile",
+          required: true,
+        },
+        { file: "apps/api/Dockerfile", required: true },
+        { file: "apps/legal-atlas-runner/src/index.ts", required: true },
+        { file: "packages/money/package.json", required: true },
+        { file: ".dockerignore", required: false },
+        { file: "bun.lock", required: true },
+        { file: "apps/api/src/handlers/new.ts", required: false },
+        { file: "packages/agent-engine/src/new.ts", required: false },
+        { file: ".github/workflows/ci.yml", required: false },
+        { file: "docs/guide.md", required: false },
+      ],
+    },
+    {
+      job: "legal-atlas-image",
+      broad: "legal_atlas_image_required",
+      scope: "legal_atlas_image_pr_required",
+      cases: [
+        { file: "apps/legal-atlas-runner/Dockerfile", required: true },
+        { file: "apps/legal-atlas-runner/src/index.ts", required: true },
+        { file: "packages/legal-atlas/src/new.ts", required: true },
+        { file: ".dockerignore", required: true },
+        { file: "bun.lock", required: true },
+        { file: "apps/api/src/handlers/new.ts", required: false },
+        { file: "docs/guide.md", required: false },
+      ],
+    },
+  ]) {
+    const condition = jobIf(ciJobs[job]);
+    expect(condition, job).toContain(
+      "needs.ci-plan.outputs.suite_depth == 'fast'",
+    );
+    expect(condition, job).toContain(
+      `needs.ci-plan.outputs.${scope} == 'true'`,
+    );
+    expect(fastJobScopes[job], job).toBe(scope);
+    expect(fastRequired, job).toContain(job);
+    expect(plan.outputs[scope], job).toBe(
+      `\${{ steps.changed-files.outputs.${scope} }}`,
+    );
+    for (const { file, required } of cases) {
+      const [broadOutput, scopeOutput] = runSelector([file], [broad, scope]);
+      const broadPlanned = String(broadOutput);
+      const planned = scopeOutput === "true";
+      expect(planned, `${job} ${file}`).toBe(required);
+      // A pull request never runs an image check the merge queue would skip.
+      if (planned) {
+        expect(broadPlanned, `${job} ${file}`).toBe("true");
+      }
+      for (const suiteDepth of ["fast", "full"]) {
+        const executable = condition
+          .replaceAll(
+            `needs.ci-plan.outputs.${broad}`,
+            () => `'${broadPlanned}'`,
+          )
+          .replaceAll(
+            `needs.ci-plan.outputs.${scope}`,
+            () => `'${String(planned)}'`,
+          )
+          .replaceAll(
+            "needs.ci-plan.outputs.suite_depth",
+            () => `'${suiteDepth}'`,
+          )
+          .replaceAll("needs.ci-plan.outputs.trusted", "'true'")
+          .replaceAll("github.event_name", "'pull_request'");
+        expect(
+          Bun.spawnSync(["bash", "-c", `[[ ${executable} ]]`]).exitCode,
+          `${job} ${file} ${suiteDepth}`,
+        ).toBe(
+          broadPlanned === "true" && (suiteDepth === "full" || planned) ? 0 : 1,
+        );
+      }
+      for (const result of ["success", "failure", "skipped"]) {
+        expect(
+          evaluateResult({
+            event: EVENT.pullRequest,
+            results: { [job]: result },
+            unplannedScopes: planned ? [] : [scope],
+          }),
+          `${job} ${file} ${result}`,
+        ).toBe(
+          result === "success" || (result === "skipped" && !planned) ? 0 : 1,
+        );
+      }
+    }
+  }
+}, 30_000);
+
 test("each folded service step follows its own dependency scope at PR depth", () => {
   const scopes = [
     "postgres_suites_required",

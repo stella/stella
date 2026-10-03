@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 
 import { isAfterSearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
+import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import {
   collapseLegislationHitsByWork,
-  legislationWorkToken,
   pinnedLegislationWorks,
   shownLegislationVersionId,
 } from "@/api/lib/legal-search/legislation-work-collapse";
@@ -127,6 +127,21 @@ describe("collapseLegislationHitsByWork", () => {
     expect(collapse(ranked)).toEqual(collapse(ranked.toReversed()));
   });
 
+  test("a window move carries the cursor Work even when no passage of it survives", () => {
+    const { ranked, workTokens } = collapseLegislationHitsByWork({
+      ranked: [hit("c-only", 0.7), hit("b-2001", 0.6)],
+      workOf: WORK_OF,
+      representatives: REPRESENTATIVES,
+      namedWorks: [],
+      namedScoreFloor: 10,
+      excludedWork: "A",
+    });
+    expect(ranked.map(({ id }) => id)).toEqual(["c-only", "b-2001"]);
+    expect(new Set(workTokens)).toEqual(
+      new Set(["A", "B", "C"].map(corpusSearchGroupToken)),
+    );
+  });
+
   test("works an earlier window showed stay off the page, named or not", () => {
     const { ranked, workTokens } = collapseLegislationHitsByWork({
       ranked: [hit("a-2014", 0.9), hit("c-only", 0.7), hit("b-2001", 0.6)],
@@ -136,8 +151,8 @@ describe("collapseLegislationHitsByWork", () => {
       namedScoreFloor: 10,
       excludedWork: null,
       excludedWorkTokens: new Set([
-        legislationWorkToken("A"),
-        legislationWorkToken("N"),
+        corpusSearchGroupToken("A"),
+        corpusSearchGroupToken("N"),
       ]),
     });
 
@@ -145,7 +160,7 @@ describe("collapseLegislationHitsByWork", () => {
     // The pin keeps its slot, so C scores as it did before N was shown.
     expect(ranked[0]?.score).toBe(12);
     expect(workTokens.toSorted()).toEqual(
-      [legislationWorkToken("B"), legislationWorkToken("C")].toSorted(),
+      [corpusSearchGroupToken("B"), corpusSearchGroupToken("C")].toSorted(),
     );
   });
 });
@@ -169,7 +184,7 @@ describe("the rules both search paths share", () => {
   });
 
   test("a token is fixed-width and differs between works", () => {
-    expect(legislationWorkToken("A")).toMatch(/^[A-Za-z0-9_-]{6}$/u);
-    expect(legislationWorkToken("A")).not.toBe(legislationWorkToken("B"));
+    expect(corpusSearchGroupToken("A")).toMatch(/^[A-Za-z0-9_-]{6}$/u);
+    expect(corpusSearchGroupToken("A")).not.toBe(corpusSearchGroupToken("B"));
   });
 });
