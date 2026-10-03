@@ -283,7 +283,9 @@ export const projectProvisionPreview = (preview: ProvisionPreview) => ({
       id: truncateTextBytes(block.id, readerTextBytes.blockId),
       text: truncateHeadlineBytes(block.text, readerTextBytes.previewText),
     };
-    if (block.anchorId === undefined) {return projected;}
+    if (block.anchorId === undefined) {
+      return projected;
+    }
     return {
       id: projected.id,
       anchorId: truncateTextBytes(block.anchorId, readerTextBytes.anchor),
