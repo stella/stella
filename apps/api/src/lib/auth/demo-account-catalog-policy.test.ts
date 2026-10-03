@@ -4,10 +4,8 @@ import * as v from "valibot";
 import type { statements } from "@stll/permissions";
 
 import { env } from "@/api/env";
-import {
-  ACCOUNT_ACCESS,
-  type AccountAccess,
-} from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
+import type { AccountAccess } from "@/api/lib/api-handlers";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 
 import { discoverSafeHandlers } from "../../../scripts/lib/enumerate-safe-handlers";

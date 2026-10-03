@@ -1,12 +1,14 @@
 import { Result } from "better-result";
 import type { Context } from "elysia";
 
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 import type {
   PublicHandlerConfig,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   createMcpMetadataHeaders,

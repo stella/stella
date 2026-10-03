@@ -22,11 +22,11 @@ import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-s
 import { documentReviewTargetSchema } from "@/api/handlers/document-reviews/schemas";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import {
+  ACCOUNT_ACCESS,
   assertUsageAvailableForHandler,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   detectReviewParties,

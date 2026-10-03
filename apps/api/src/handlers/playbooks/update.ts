@@ -3,9 +3,8 @@ import {
   updatePlaybookDefinitionBodySchema,
 } from "@/api/handlers/playbooks/schema";
 import { updatePlaybookDefinitionHandler } from "@/api/handlers/playbooks/update-shared";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 
 const config = {
   description:

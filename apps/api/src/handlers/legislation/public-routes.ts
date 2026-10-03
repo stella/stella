@@ -59,10 +59,10 @@ import {
   listStatuteVersionsQuerySchema,
 } from "@/api/handlers/legislation/versions";
 import {
+  ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import { isPublicLawEnabled } from "@/api/lib/legal-search/public-law-feature";

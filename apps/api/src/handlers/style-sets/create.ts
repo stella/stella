@@ -2,9 +2,8 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { createStoredStyleSet } from "@/api/handlers/style-sets/storage";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import {

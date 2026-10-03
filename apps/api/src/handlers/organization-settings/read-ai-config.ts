@@ -12,9 +12,8 @@ import {
   storedAIConfigUnreadableError,
 } from "@/api/lib/ai-config-response";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { hasInstanceDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 

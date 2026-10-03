@@ -8,9 +8,8 @@ import {
   parseContactImportMappingText,
   previewContactImport,
 } from "@/api/handlers/contacts/contact-import-file";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 
 const importPreviewBodySchema = t.Object({

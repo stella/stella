@@ -6,9 +6,11 @@ import {
   GUIDE_PROGRESS_TOUR_IDS,
 } from "@stll/api-contract";
 
-import { createSafeSessionHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeSessionHandler,
+} from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { patchUserGuideProgress } from "@/api/lib/guide-progress";
 

@@ -99,18 +99,3 @@ export const createDemoSessionFilter = (config: DemoAccountConfig) =>
       ],
     },
   }) satisfies BetterAuthPlugin;
-
-/**
- * Whether the configured demo account may call a handler. Every handler config
- * declares one: `standard` refuses the demo account, `sandbox` admits it.
- */
-export const ACCOUNT_ACCESS = {
-  standard: "standard",
-  sandbox: "sandbox",
-} as const;
-
-export type AccountAccess =
-  (typeof ACCOUNT_ACCESS)[keyof typeof ACCOUNT_ACCESS];
-
-export const requiresStandardAccount = (accountAccess: AccountAccess) =>
-  accountAccess === ACCOUNT_ACCESS.standard;

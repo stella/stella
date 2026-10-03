@@ -3,10 +3,9 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { numberSeries } from "@/api/db/schema";
 import { createNumberSeriesBody } from "@/api/handlers/number-series/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   MAX_NUMBER_SERIES_SEQUENCE_DIGITS,
   validateNumberPattern,

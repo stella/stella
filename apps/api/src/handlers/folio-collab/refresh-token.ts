@@ -1,8 +1,7 @@
 import { Result } from "better-result";
 
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeTokenHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   recordFolioCollabContribution,

@@ -3,10 +3,9 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { matterInboundAddresses, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 

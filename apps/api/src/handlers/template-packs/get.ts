@@ -4,9 +4,8 @@ import { t } from "elysia";
 import { agentInputNormalizationMetadata } from "@stll/agent-input";
 import { TEMPLATE_PACK_SLUG_PATTERN } from "@stll/template-packs/schema";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 

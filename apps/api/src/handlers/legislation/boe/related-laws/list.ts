@@ -5,8 +5,7 @@ import { findRelatedLaws, RELATION_TYPES } from "@stll/boe";
 import type { RelationType } from "@stll/boe";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 
 const paramsSchema = t.Object({
   lawId: t.String({ pattern: "^BOE-[A-Z]-\\d{4}-\\d+$" }),

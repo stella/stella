@@ -19,9 +19,8 @@ import {
   tokenExpiresAt,
 } from "@/api/handlers/sharepoint/graph-oauth";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { oauthCallbackFailureReason } from "@/api/lib/errors/oauth-callback-failure";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 

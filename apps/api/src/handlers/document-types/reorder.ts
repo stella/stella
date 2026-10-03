@@ -3,9 +3,8 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { documentTypes } from "@/api/db/schema";
 import { reorderDocumentTypesBodySchema } from "@/api/handlers/document-types/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const config = {

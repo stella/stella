@@ -7,8 +7,7 @@ import {
   toChatResourceHref,
 } from "@stll/api-contract";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { legalSourceToDocx } from "@/api/lib/docx-authoring/from-legal-source";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";

@@ -6,8 +6,7 @@ import {
 } from "@stll/api-contract/folio-collab";
 
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeTokenHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { permissiveBodySchema } from "@/api/lib/permissive-route-schema";
 
 import { authorizeFolioCollabCredentials } from "./room-credentials";

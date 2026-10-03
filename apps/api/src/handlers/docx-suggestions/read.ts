@@ -5,8 +5,7 @@ import { t } from "elysia";
 import { DOCX_SUGGESTIONS_PAGE_SIZE_MAX } from "@stll/api-contract";
 
 import { docxSuggestions } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
   tPaginationCursor,
   tSafeId,

@@ -3,9 +3,8 @@ import { and, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { correspondence } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { readCorrespondenceProvenance } from "@/api/lib/email/correspondence/provenance";

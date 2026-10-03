@@ -9,8 +9,7 @@ import {
   upsertFieldHandler,
 } from "@/api/handlers/fields/upsert";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FlowRunCompletionNotice } from "@/api/lib/flows/flow-run-actor";

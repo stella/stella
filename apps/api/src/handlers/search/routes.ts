@@ -15,10 +15,9 @@ import {
 } from "@/api/handlers/search/facets";
 import searchPreviewEndpoint from "@/api/handlers/search/preview";
 import { searchBodySchema, searchHandler } from "@/api/handlers/search/search";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 
 const searchEndpoint = createSafeRootHandler(
   {

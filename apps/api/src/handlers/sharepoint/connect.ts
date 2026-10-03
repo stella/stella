@@ -10,8 +10,7 @@ import {
   getSharepointRedirectUri,
 } from "@/api/handlers/sharepoint/graph-oauth";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 
 const config = {
   permissions: { integration: ["create"] },

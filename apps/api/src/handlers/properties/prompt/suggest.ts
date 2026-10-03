@@ -3,9 +3,8 @@ import type { Static } from "elysia";
 
 import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { suggestColumnPrompt } from "@/api/lib/properties/column-prompt-suggestion";
 

@@ -4,11 +4,11 @@ import { t } from "elysia";
 import { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import { coverageResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
 import {
-  safePublicHandlerResponseSchemasWithStatusText,
+  ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { projectResponseText } from "@/api/lib/search/project-response-text";
 import { boundedString } from "@/api/lib/search/response-text-bounds";

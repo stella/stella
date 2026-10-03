@@ -2,8 +2,7 @@ import { Result } from "better-result";
 import { and, eq, ne } from "drizzle-orm";
 
 import { docxSuggestions } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { syncReviewFindingsForSuggestions } from "@/api/lib/document-review/suggestion-finding-sync";
 import {

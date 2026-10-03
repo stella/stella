@@ -1,7 +1,6 @@
 import { t } from "elysia";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import { tSafeId } from "@/api/lib/custom-schema";

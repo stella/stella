@@ -14,9 +14,8 @@ import { member, user } from "@/api/db/auth-schema";
 import { feedbackIntakeGuards } from "@/api/handlers/feedback/intake-guards";
 import { FEEDBACK_REQUEST_ID_PATTERN } from "@/api/handlers/feedback/sanitize-report";
 import { submitFeedbackReport } from "@/api/handlers/feedback/submit";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /** A person files a handful of reports at most; above this it is a script. */

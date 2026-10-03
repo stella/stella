@@ -3,8 +3,7 @@ import { and, asc, gt } from "drizzle-orm";
 import { t } from "elysia";
 
 import { timeTimers } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { ownedTimers, timerItem } from "@/api/lib/billing/time-timers";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

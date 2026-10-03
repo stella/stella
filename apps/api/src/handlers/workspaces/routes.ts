@@ -49,10 +49,9 @@ import workflowStart from "@/api/handlers/workspaces/workflow/start";
 import workflowTargetCount from "@/api/handlers/workspaces/workflow/targets/count";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import {
   organizationResourceSetUpdates,

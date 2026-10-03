@@ -4,8 +4,10 @@ import {
   AGENT_AUTH_MANIFEST_HEADERS,
   getAgentAuthManifest,
 } from "@/api/agent-auth/manifest";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 
 const readManifest = createSafePublicHandler(
   {

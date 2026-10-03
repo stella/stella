@@ -2,10 +2,9 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { PdfSigningSessionCloseReason } from "@/api/db/schema";
-import { createSafeTokenHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { loadPdfSigningBaseBytes } from "@/api/lib/files/pdf-signing/base-bytes";
 import { inspectSigningCertificate } from "@/api/lib/files/pdf-signing/certificate";

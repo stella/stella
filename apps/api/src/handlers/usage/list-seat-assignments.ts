@@ -2,9 +2,8 @@ import { Result } from "better-result";
 import { asc, eq } from "drizzle-orm";
 
 import { usageEntitlements, usageSeatAssignments } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { LIMITS } from "@/api/lib/limits";
 
 /**

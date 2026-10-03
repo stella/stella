@@ -78,10 +78,10 @@ import {
   sitemapShardsResponseSchema,
 } from "@/api/handlers/case-law/public-response-schemas";
 import {
+  ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";

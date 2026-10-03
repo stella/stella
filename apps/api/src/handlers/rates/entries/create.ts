@@ -6,9 +6,8 @@ import type { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { rateEntries } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   tMinorUnitAmount,
   tSafeId,
