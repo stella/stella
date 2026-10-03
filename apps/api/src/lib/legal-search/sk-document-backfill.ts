@@ -683,8 +683,11 @@ export const remainingDocumentCandidateQuery = ({
       )
       .orderBy(...remainingDocumentOrder)
       .limit(pageLimit);
-  if (after === undefined || after.decisionDate === null) {
-    return page(after ? remainingCursorPredicate(after) : undefined);
+  if (after === undefined) {
+    return page(undefined);
+  }
+  if (after.decisionDate === null) {
+    return page(remainingCursorPredicate(after));
   }
   // Mixed DESC/ASC order cannot use a tuple comparison. Separate tight
   // ranges prevent the OR boundary becoming a filter over the entire prefix.
