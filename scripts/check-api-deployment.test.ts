@@ -78,17 +78,15 @@ describe("API deployment health receipt", () => {
       new URL("../.github/workflows/publish-npm.yml", import.meta.url),
     ).text();
 
-    const setupPin =
-      /stella\/\.github\/actions\/setup-bun-cached@(?<sha>[0-9a-f]{40})/u.exec(
-        workflow,
-      )?.groups?.["sha"];
     const releasePin =
       /stella\/\.github\/\.github\/workflows\/npm-independent-release\.yml@(?<sha>[0-9a-f]{40}) # release job environment input/u.exec(
         workflow,
       )?.groups?.["sha"];
 
-    expect(setupPin).toBeDefined();
-    expect(releasePin).toBe(setupPin);
+    expect(releasePin).toBeDefined();
+    // What the pack job builds is published, so it restores no shared cache.
+    expect(workflow).not.toContain("setup-bun-cached");
+    expect(workflow).not.toMatch(/actions\/cache@|cache: true/u);
   });
 
   test("staging checks share their access configuration", async () => {

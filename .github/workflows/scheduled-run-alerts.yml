@@ -23,9 +23,14 @@ permissions: {}
 
 jobs:
   notify:
+    # A workflow_run trigger is accepted only from the listed workflows of
+    # this repository, started by this repository's own events.
     if: >-
       github.event_name == 'workflow_dispatch'
-      || contains(fromJSON('["failure", "startup_failure", "timed_out"]'), github.event.workflow_run.conclusion)
+      || (contains(fromJSON('["failure", "startup_failure", "timed_out"]'), github.event.workflow_run.conclusion)
+      && github.event.workflow_run.head_repository.full_name == github.repository
+      && contains(fromJSON('[".github/workflows/nightly-test.yml", ".github/workflows/nightly-typecheck.yml", ".github/workflows/ai-provider-canary.yml", ".github/workflows/mcp-canary.yml", ".github/workflows/agent-sandbox-canary.yml", ".github/workflows/desktop-release-canary.yml", ".github/workflows/landing-canary.yml", ".github/workflows/model-catalog-check.yml", ".github/workflows/deploy-landing.yml"]'), github.event.workflow_run.path)
+      && contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event.workflow_run.event))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
