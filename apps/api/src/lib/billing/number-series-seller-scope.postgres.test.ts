@@ -14,6 +14,7 @@ import {
 } from "@/api/lib/billing/number-series";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import {
   openGatedTestDatabase,
@@ -92,7 +93,7 @@ if (!databaseUrl || !runPostgresTests) {
         safeDb: createSafeDb(markRlsDatabase(database), [], orgId, userId),
         session: { activeOrganizationId: orgId },
         user: { id: userId, email: `${userId}@example.test` },
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         request: new Request("https://example.test/v1/number-series", {
           method: "POST",
         }),

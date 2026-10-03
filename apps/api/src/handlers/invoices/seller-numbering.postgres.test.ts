@@ -19,6 +19,7 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   openGatedTestDatabase,
   withGatedTestClients,
@@ -221,7 +222,7 @@ if (!databaseUrl || !runPostgres) {
             userId,
           ),
           user: { id: userId, email: `${userId}@example.test` },
-          memberRole: { role: "owner" },
+          memberRole: sessionMemberRole("owner"),
           session: { activeOrganizationId: orgId },
           request: new Request(
             `https://example.test/v1/workspaces/${wsId}/invoices/${invoiceId}/transition`,
