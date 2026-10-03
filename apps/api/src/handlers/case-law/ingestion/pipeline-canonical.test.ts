@@ -329,7 +329,7 @@ const scopedDb: ScopedDb = async (callback) => {
     update: (table: unknown) => ({
       set: (values: { syncCursor?: string | null }) => {
         events.push("row-update");
-        if (table === caseLawSources) {
+        if (table === caseLawSources && values.syncCursor !== undefined) {
           persistedCursor = values.syncCursor;
         } else if (table === caseLawDecisions) {
           updatedDecisionRows.push(values);
@@ -943,6 +943,7 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
       );
 
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb,
@@ -989,6 +990,7 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
       );
 
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb,

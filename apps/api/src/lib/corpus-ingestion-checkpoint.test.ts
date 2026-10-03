@@ -408,6 +408,7 @@ describe("case-law source ingestion lease", () => {
 
     try {
       const result = await runIngestionPipeline({
+        acquireStoredTotalAdmission: async () => "held",
         maxPages: 1,
         scopedDb,
         source: lease.source,
