@@ -1,5 +1,0 @@
-{
-  "metric": "web-lib-top-level-entries",
-  "delta": 1,
-  "reason": "Extract canonical auth query options into a pure module so shortcut cache subscriptions retain the session query function without initializing the auth client."
-}

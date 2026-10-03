@@ -323,7 +323,11 @@ const readLaneBudgets = async ({
           userId,
         ),
       });
-      enabled = (await getLane.handler(context)).budgets !== null;
+      const response = await getLane.handler(context);
+      if (!("budgets" in response)) {
+        panic("Lane read returned an unexpected error response");
+      }
+      enabled = response.budgets !== null;
       nested.rollback();
     })
     .then(

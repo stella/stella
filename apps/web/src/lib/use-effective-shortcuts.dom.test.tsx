@@ -9,7 +9,7 @@ const { QueryClient, QueryClientProvider, useQuery } =
   await import("@tanstack/react-query");
 const { act, cleanup, renderHook, waitFor } =
   await import("@testing-library/react");
-const { rootKeys, sessionOptions } = await import("@/lib/auth-query-options");
+const { rootKeys, sessionOptions } = await import("@/lib/auth-queries");
 const { useShortcutOverrides } = await import("@/lib/use-effective-shortcuts");
 
 afterEach(cleanup);

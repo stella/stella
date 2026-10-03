@@ -4,7 +4,7 @@ import type { Hotkey } from "@tanstack/react-hotkeys";
 import { hashKey, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
-import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
+import { rootKeys, sessionOptions } from "@/lib/auth-queries";
 import { SHORTCUT_GROUPS } from "@/lib/hotkeys";
 import type { ShortcutGroup, ShortcutId } from "@/lib/hotkeys";
 import {

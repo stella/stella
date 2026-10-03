@@ -19,7 +19,7 @@ const { act, cleanup, render, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
-const { roleOptions } = await import("@/lib/auth-query-options");
+const { roleOptions } = await import("@/lib/auth-queries");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
