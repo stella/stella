@@ -264,8 +264,11 @@ const oauthRow = (
   // Expired by default so the refresh path is exercised.
   expiresAt: new Date(Date.now() - 60_000),
   oauthAuthorizationServerUrl: "https://auth.example.com",
-  oauthApprovedIssuer: "https://auth.example.com",
-  oauthConfirmedEndpointOrigins: [],
+  oauthIssuerBinding: {
+    type: "approved",
+    issuer: "https://auth.example.com",
+    endpointOrigins: [],
+  },
   oauthClientId: "client-1",
   oauthClientSecretEncrypted: Buffer.from("secret"),
   oauthClientSecretIv: Buffer.from("iv"),
@@ -688,7 +691,11 @@ describe("MCP upstream connection lifecycle", () => {
       const client = await createMcpClientForConnection({
         organizationId,
         row: oauthRow({
-          oauthApprovedIssuer: "https://auth.example.com/current",
+          oauthIssuerBinding: {
+            type: "approved",
+            issuer: "https://auth.example.com/current",
+            endpointOrigins: [],
+          },
           expiresAt,
         }),
         safeDb: makeSafeDb(),
@@ -705,7 +712,7 @@ describe("MCP upstream connection lifecycle", () => {
   test("requests review of a connector without a configured issuer", async () => {
     const client = await createMcpClientForConnection({
       organizationId,
-      row: oauthRow({ oauthApprovedIssuer: null }),
+      row: oauthRow({ oauthIssuerBinding: { type: "unconfigured" } }),
       safeDb: makeSafeDb(),
       userId,
     });
@@ -726,7 +733,7 @@ describe("MCP upstream connection lifecycle", () => {
   test("records no review when discovery for an unconfigured issuer fails", async () => {
     const client = await createMcpClientForConnectionImpl({
       organizationId,
-      row: oauthRow({ oauthApprovedIssuer: null }),
+      row: oauthRow({ oauthIssuerBinding: { type: "unconfigured" } }),
       safeDb: makeSafeDb(),
       userId,
       outboundFetch,
@@ -785,7 +792,11 @@ describe("MCP upstream connection lifecycle", () => {
       await createMcpClientForConnectionImpl({
         organizationId,
         row: oauthRow({
-          oauthConfirmedEndpointOrigins: confirmedEndpointOrigins,
+          oauthIssuerBinding: {
+            type: "approved",
+            issuer: "https://auth.example.com",
+            endpointOrigins: confirmedEndpointOrigins,
+          },
         }),
         safeDb: makeSafeDb(),
         userId,
@@ -979,8 +990,10 @@ describe("loading a user's active MCP connections", () => {
     displayName: "Registry",
     expiresAt: null,
     oauthAuthorizationServerUrl: "https://auth.example.com",
-    oauthApprovedIssuer: "https://auth.example.com",
-    oauthConfirmedEndpointOrigins: [],
+    oauthConnectorIssuer: "https://auth.example.com",
+    oauthConnectorConfirmedEndpointOrigins: [],
+    oauthReviewApprovedIssuer: null,
+    oauthReviewApprovedEndpointOrigins: null,
     oauthClientId: "client-1",
     oauthClientSecretEncrypted: null,
     oauthClientSecretIv: null,

@@ -243,6 +243,42 @@ describe("mcpOAuthCallback identity binding", () => {
     }
   });
 
+  test("records a review for a connector without an approved issuer", async () => {
+    const counter = { calls: 0 };
+    let discovered = 0;
+    const callback = createMcpOAuthCallbackHandler(async () => {
+      discovered += 1;
+      return Result.ok({
+        protectedResource: {
+          resource: "https://rs.example.com",
+          authorization_servers: ["https://as.example.com"],
+        },
+        authorizationServer: {
+          issuer: "https://as.example.com",
+          authorization_endpoint: "https://as.example.com/authorize",
+          token_endpoint: "https://as.example.com/token",
+        },
+      });
+    });
+    const result = await callback.handler(
+      callbackContext(
+        stateRow({
+          connector: {
+            id: toSafeId<"mcpConnector">("conn_1"),
+            slug: "acme",
+            url: "https://rs.example.com",
+            oauthIssuer: null,
+            oauthConfirmedEndpointOrigins: null,
+          },
+        }),
+        counter,
+      ),
+    );
+    expect(reasonOf(result)).toBe("approval-required");
+    expect(discovered).toBe(1);
+    expect(counter.calls).toBe(3);
+  });
+
   test("uses the connector resource configured for the pending connection", async () => {
     const counter = { calls: 0 };
     const result = await mcpOAuthCallback.handler(

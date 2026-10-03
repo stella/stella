@@ -146,6 +146,12 @@ describe("upstream metadata binding", () => {
       ["https://first.github.io", "https://second.github.io", false],
       ["https://first.github.io", "https://tokens.first.github.io", true],
       ["http://localhost:3000", "http://localhost:4000", false],
+      ["https://notexample.com", "https://example.com", false],
+      ["https://example.com.evil.net", "https://example.com", false],
+      ["https://192.0.2.1", "https://example.com", false],
+      ["https://192.0.2.1", "https://192.0.2.2", false],
+      ["https://[2001:db8::1]", "https://example.com", false],
+      ["https://192.0.2.1", "https://192.0.2.1:8443", false],
     ] as const) {
       expect(oauthDomainsMatch(first, second)).toBe(matches);
     }
@@ -411,20 +417,32 @@ describe("upstream metadata binding", () => {
     expect(url.origin).toBe(issuer);
     expect(url.searchParams.get("resource")).toBe(connectorUrl);
     expect(url.searchParams.get("scope")).toBe("read");
-    expect(Result.isOk(validateApprovedOAuthIssuer(result.value, null))).toBe(
-      true,
-    );
-    expect(Result.isOk(validateApprovedOAuthIssuer(result.value, issuer))).toBe(
-      true,
-    );
-    const approval = validateApprovedOAuthIssuer(
-      result.value,
+    expect(
+      Result.isOk(
+        validateApprovedOAuthIssuer(result.value, {
+          type: "approved",
+          issuer,
+          endpointOrigins: [],
+        }),
+      ),
+    ).toBe(true);
+    for (const approvedIssuer of [
       `${issuer}/other`,
-    );
-    expect(Result.isError(approval)).toBe(true);
-    if (Result.isError(approval)) {
-      expect(approval.error.status).toBe(409);
-      expect(approval.error.code).toBe("mcp_authorization_approval_required");
+      `${issuer}/`,
+      "https://AS.example.com",
+      "https://as.example.com:443",
+      "http://as.example.com",
+    ]) {
+      const approval = validateApprovedOAuthIssuer(result.value, {
+        type: "approved",
+        issuer: approvedIssuer,
+        endpointOrigins: [],
+      });
+      expect(Result.isError(approval)).toBe(true);
+      if (Result.isError(approval)) {
+        expect(approval.error.status).toBe(409);
+        expect(approval.error.code).toBe("mcp_authorization_approval_required");
+      }
     }
   });
 
