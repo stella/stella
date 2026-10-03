@@ -323,7 +323,7 @@ test.each([
   'export { VALUE } from "example";',
   'export const VALUE = import("example");',
   "export const VALUE = readFile();",
-  "export const VALUE = process.env.VALUE;",
+  "export const VALUE = process.env.NODE_ENV;",
   'export const VALUE = { [readKey()]: "example" };',
   "export const VALUE = { ...other };",
   'export const VALUE = { get name() { return "example"; } };',
