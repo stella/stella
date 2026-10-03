@@ -14,15 +14,19 @@ on:
         type: string
 
 concurrency:
-  group: main-heavy-${{ inputs.sha || github.sha }}
+  # Ordinary thin-mode pushes share one running and one replaceable pending run.
+  # Release merges and explicit historical dispatches retain their SHA identity.
+  group: "${{ github.event_name == 'push' && vars.MERGE_QUEUE_DEPTH == 'thin' && !startsWith(github.event.head_commit.message, 'chore: release v') && 'main-heavy-push' || format('main-heavy-{0}', inputs.sha || github.sha) }}"
   cancel-in-progress: false
 
 permissions: {}
 
 jobs:
   validate:
+    # Thin queues move heavy suites to main. Unknown values reach validation
+    # so a typo fails instead of suppressing the run.
     # Prefix matching also requires the release title to begin the first line.
-    if: "github.event_name != 'push' || startsWith(github.event.head_commit.message, 'chore: release v')"
+    if: "github.event_name != 'push' || (vars.MERGE_QUEUE_DEPTH != '' && vars.MERGE_QUEUE_DEPTH != 'full') || startsWith(github.event.head_commit.message, 'chore: release v')"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -30,6 +34,18 @@ jobs:
     outputs:
       sha: ${{ steps.ancestor.outputs.sha }}
     steps:
+      - name: Validate merge queue depth
+        env:
+          MERGE_QUEUE_DEPTH: ${{ vars.MERGE_QUEUE_DEPTH }}
+        run: |
+          case "${MERGE_QUEUE_DEPTH:-}" in
+            ""|full|thin) ;;
+            *)
+              echo "::error::Unknown MERGE_QUEUE_DEPTH '$MERGE_QUEUE_DEPTH'; choose full or thin (unset means full)."
+              exit 1
+              ;;
+          esac
+
       # No repository code executes before the target has been validated.
       - name: Validate SHA format
         env:
