@@ -38,7 +38,7 @@ export const queryStateCensus = () => {
   const config = path.join(directory, "oxlint.config.ts");
   const report = path.join(directory, "report.json");
   const sources = Bun.spawnSync(
-    ["rg", "--files", "apps/web/src", "-g", "*.ts", "-g", "*.tsx"],
+    ["git", "ls-files", "--", "apps/web/src/**/*.ts", "apps/web/src/**/*.tsx"],
     { cwd: ROOT },
   );
   if (sources.exitCode !== 0) {

@@ -85,7 +85,7 @@ describe("query view states", () => {
     });
 
     test(`retains cached empty items on ${fetchStatus} refetch failure`, () => {
-      const data = [];
+      const data: number[] = [];
       const isEmpty = mock(() => true);
       expect(
         queryView(

@@ -22,8 +22,6 @@ const QUERY_STATE = new Set([
   "error",
   "status",
   "isSuccess",
-  "fetchStatus",
-  "failureCount",
   "isLoadingError",
   "isRefetchError",
 ]);

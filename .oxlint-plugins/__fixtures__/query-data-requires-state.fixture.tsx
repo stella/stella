@@ -45,3 +45,18 @@ export const Suspense = () => {
   const { data } = useSuspenseQuery(options);
   return data;
 };
+
+export const SpinnerOnly = () => {
+  // oxlint-disable-next-line query-data-requires-state/query-data-requires-state
+  const query = useQuery(options);
+  if (query.fetchStatus === "fetching") {
+    return <List />;
+  }
+  return query.data ?? [];
+};
+
+export const FailureCounterOnly = () => {
+  // oxlint-disable-next-line query-data-requires-state/query-data-requires-state
+  const { data, failureCount } = useQuery(options);
+  return { data, failureCount };
+};

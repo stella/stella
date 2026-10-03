@@ -31,6 +31,16 @@ function Alias() { const query = useQuery(q); const other = query; const { data 
     ).toEqual([5, 6, 7, 8, 9, 10, 11, 12, 13]);
   });
 
+  test("spinner and retry counters cannot distinguish an initial error from empty data", async () => {
+    expect(
+      await lint(`
+function Spinner(){const query=useQuery(q); if(query.fetchStatus === "fetching")return <Spinner/>; return query.data ?? [];}
+function Counter(){const {data,failureCount}=useQuery(q); display(failureCount); return data ?? [];}
+function ForwardCounter(){const {data,failureCount}=useQuery(q); return {data,failureCount};}
+`),
+    ).toEqual([5, 6, 7]);
+  });
+
   test("accepts state handling, complete results, suspense and unrelated names", async () => {
     expect(
       await lint(`
