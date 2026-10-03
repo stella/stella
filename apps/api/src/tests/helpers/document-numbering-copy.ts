@@ -6,6 +6,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import { createCopyToWorkspace } from "@/api/handlers/entities/copy";
 import { createEntitiesHandler } from "@/api/handlers/entities/create";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -59,7 +60,7 @@ export const runNumberingCopy = async ({
   }
   const copied = await copy.handler(
     asTestRaw<Parameters<typeof copy.handler>[0]>({
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       body: {
         entityId: created.value.entityId,
         targetWorkspaceId,

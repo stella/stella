@@ -1,7 +1,3 @@
-import { BASELINE_PATHS } from "./baseline-paths";
-
-export const RATCHET_GENERATOR_ID = "ratchet-improvements";
-
 type GeneratorCheck =
   | { check: readonly string[]; checkedBy?: never; unchecked?: never }
   | { check: null; checkedBy: string; unchecked?: never }
@@ -35,29 +31,11 @@ const MODEL_CATALOG_INPUTS = [
 
 export const GENERATORS = [
   {
-    id: RATCHET_GENERATOR_ID,
-    outputKind: "committed",
-    outputs: [BASELINE_PATHS.ratchet],
-    // Whole-tree metrics include source, configuration and workspace structure.
-    inputs: ["**"],
-    write: [
-      "bun",
-      "--no-install",
-      "--no-env-file",
-      "scripts/ratchet.ts",
-      "--write-improvements-only",
-    ],
-    check: null,
-    checkedBy: "Ratchet guard",
-    autofix: true,
-    after: [],
-  },
-  {
     id: "capability-catalog",
     outputKind: "committed",
     outputs: [
-      "packages/cli/capability-catalog.json",
-      "apps/api/src/mcp/generated/capability-dispatch.ts",
+      "packages/cli/capabilities/**",
+      "apps/api/src/mcp/generated/capability-dispatch/*.ts",
       "docs/capability-coverage.md",
     ],
     inputs: [
@@ -76,6 +54,25 @@ export const GENERATORS = [
     checkedBy: "Capability catalog drift guard",
     autofix: true,
     after: [],
+  },
+  {
+    id: "capability-runtime",
+    outputKind: "derived",
+    outputs: [
+      "apps/api/src/mcp/generated/capability-catalog.ts",
+      "apps/api/src/mcp/generated/capability-dispatch.ts",
+    ],
+    inputs: [
+      "packages/cli/capabilities/**",
+      "apps/api/src/mcp/generated/capability-dispatch/*.ts",
+      "apps/api/scripts/generate-capability-runtime.ts",
+      "packages/cli/src/capability-catalog-data.ts",
+    ],
+    write: ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
+    check: null,
+    checkedBy: "CLI sharded registry and derived runtime guard",
+    autofix: true,
+    after: ["capability-catalog"],
   },
   {
     id: "cli-registry",
@@ -99,13 +96,13 @@ export const GENERATORS = [
       ".oxfmtrc.json",
       "packages/cli/src/**",
       "packages/cli/package.json",
-      "packages/cli/capability-catalog.json",
+      "packages/cli/capabilities/**",
     ],
     write: ["bun", "--cwd=packages/cli", "run", "codegen"],
     check: null,
-    checkedBy: "CLI committed registry and derived runtime guard",
+    checkedBy: "CLI sharded registry and derived runtime guard",
     autofix: true,
-    after: ["capability-catalog"],
+    after: ["capability-runtime"],
   },
   {
     id: "cli-runtime",
@@ -116,8 +113,9 @@ export const GENERATORS = [
     ],
     inputs: [
       "packages/cli/package.json",
-      "packages/cli/capability-catalog.json",
+      "packages/cli/capabilities/**",
       "packages/cli/src/codegen.ts",
+      "packages/cli/src/capability-catalog-data.ts",
       "packages/cli/src/write-generated-file.ts",
       "packages/cli/src/capability-catalog-load.ts",
       "packages/cli/src/generate-capability-tree.ts",
@@ -135,7 +133,7 @@ export const GENERATORS = [
     ],
     write: ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],
     check: null,
-    checkedBy: "CLI committed registry and derived runtime guard",
+    checkedBy: "CLI sharded registry and derived runtime guard",
     autofix: true,
     after: ["cli-registry"],
   },
@@ -246,7 +244,7 @@ export const GENERATORS = [
   },
   {
     id: "route-tree",
-    outputKind: "committed",
+    outputKind: "derived",
     outputs: ["apps/web/src/routeTree.gen.ts"],
     inputs: [
       "apps/web/src/routes/**",
@@ -269,7 +267,7 @@ export const GENERATORS = [
     inputs: MODEL_CATALOG_INPUTS,
     write: ["bun", "--filter", "@stll/ai-catalog", "gen:rates"],
     check: null,
-    checkedBy: "Model catalog snapshot drift guard",
+    checkedBy: "Model catalog snapshot drift check",
     autofix: false,
     after: [],
   },
@@ -280,7 +278,7 @@ export const GENERATORS = [
     inputs: MODEL_CATALOG_INPUTS,
     write: ["bun", "--filter", "@stll/ai-catalog", "gen:capabilities"],
     check: null,
-    checkedBy: "Model catalog snapshot drift guard",
+    checkedBy: "Model catalog snapshot drift check",
     autofix: false,
     after: [],
   },
@@ -754,12 +752,12 @@ export const generatorsForFiles = (files: readonly string[]) => {
 };
 
 export const allowedOutputs = (generators: readonly Generator[]) => [
-  // The ratchet output requires a separate trusted proof, never the plan alone.
+  // A planner cannot authorize recreating the retired ratchet budget.
   ...new Set(
     generators
       .filter((generator) => generator.outputKind === "committed")
       .flatMap((generator) => generator.outputs)
-      .filter((output) => output !== BASELINE_PATHS.ratchet),
+      .filter((output) => output !== "scripts/ratchet-baseline.json"),
   ),
 ];
 

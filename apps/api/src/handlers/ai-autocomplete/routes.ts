@@ -2,6 +2,8 @@ import Elysia from "elysia";
 
 import autocompleteStream from "@/api/handlers/ai-autocomplete/stream";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
+import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 // Mounted at `/v1/ai-autocomplete` directly at the root rather
@@ -15,6 +17,7 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
 export const aiAutocompleteRoute = new Elysia({
   prefix: "/v1/ai-autocomplete",
 })
+  .use(rateLimit(createStandardApiRateLimitOptions()))
   .use(authMacro)
   .use(permissionMacro)
   .guard({

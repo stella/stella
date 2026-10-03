@@ -926,13 +926,14 @@ jobs:
           cd ../web
           cp .env.example .env
 
-      - name: CLI committed registry and derived runtime guard
+      - name: CLI sharded registry and derived runtime guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # The CLI and shared chat-policy projections must match the live MCP
         # registry: regenerate all of them and fail on any diff so a registry
         # change cannot silently ship stale CLI, web approval, or skill behavior.
         # Regenerate: `bun run codegen` in packages/cli.
         run: |
+          bun apps/api/scripts/generate-capability-runtime.ts
           (cd packages/cli && bun run codegen)
           (cd packages/cli && bun run codegen:runtime)
           git diff --exit-code -- \
@@ -1070,6 +1071,12 @@ jobs:
           cd ../web
           cp .env.example .env
 
+      - name: Generate web route tree
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The scriptless install does not create the derived route tree, and
+        # both knip checks resolve the router through it.
+        run: bun --filter @stll/web generate:route-tree
+
       - name: Compute affected flag
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         id: affected
@@ -1101,16 +1108,21 @@ jobs:
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
           bun --bun turbo run format "${args[@]}" -- --check
 
+      - name: Select measured ratchet base
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+        run: |
+          base="${MERGE_GROUP_BASE_SHA:-$(git merge-base origin/main HEAD)}"
+          git cat-file -e "$base^{commit}"
+          echo "RATCHET_BASE_REF=$base" >> "$GITHUB_ENV"
+
       - name: Ratchet guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # Whole-repo convention metrics (see RATCHET_METRICS in
-        # scripts/ratchet.ts) that may only ever
-        # decrease. Each metric's current count is compared to a committed
-        # baseline; a rise fails CI (a new violation), a fall just prompts a
-        # `--write` to lock in the improvement. Line-based counters, no AST —
-        # fast. The --self-test run first proves each counter counts what it
-        # claims and that a rise regresses, so a broken guard cannot pass
-        # silently. Regenerate: `bun scripts/ratchet.ts --write`.
+        # Whole-repo metrics compare to a measured export of RATCHET_BASE_REF.
+        # A rise fails; decreases require no committed baseline update. Both
+        # trees use the current registry, including per-file ceilings.
+        # The self-test proves counter and gate behavior before the comparison.
         run: |
           bun test scripts/ratchet-improvements.test.ts scripts/autofix-ratchet-boundary.test.ts scripts/ratchet-derived-totals.test.ts
           bun scripts/ratchet.ts --self-test
@@ -1381,7 +1393,8 @@ jobs:
       - name: Policy evidence
         run: bun run policies:check
 
-      - name: Marketing content evidence
+      - name: Marketing content check
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun run marketing:check
 
       - name: Railway template shape
@@ -1478,10 +1491,11 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: bun scripts/sql-perf-suppressions.ts
 
-      - name: Release marketing freshness warning
+      - name: Release marketing staleness warning
         if: >-
-          github.event_name == 'pull_request'
-          || github.event_name == 'merge_group'
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && (github.event_name == 'pull_request'
+          || github.event_name == 'merge_group')
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: |
@@ -1683,8 +1697,10 @@ jobs:
           bun scripts/chat-fixture-guard.ts --self-test
           bun scripts/chat-fixture-guard.ts
 
-      - name: Model catalog snapshot drift guard
-        if: needs.ci-plan.outputs.model_catalog_drift_required == 'true'
+      - name: Model catalog snapshot drift check
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.model_catalog_drift_required == 'true'
         # These fetch models.dev and OpenRouter and byte-compare the
         # deterministic output with the committed snapshots, so hand-editing a
         # `.gen.ts` row instead of regenerating it cannot ship: only the
@@ -1898,6 +1914,13 @@ jobs:
           scripts/check-base-image-pulls.test.ts
           scripts/dependabot-changeset.test.ts
 
+      - name: Test install-free CI commands
+        run: bun test scripts/install-free-ci.test.ts
+
+      - name: Test merge-base network comparison
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/network-baseline-comparison.test.ts
+
       # Needs the installed workspace (fast-check, property-testing), so it
       # cannot join the no-install invariants step above.
       - name: Test CLI release coupling gate
@@ -1907,6 +1930,10 @@ jobs:
       - name: Test CLI runtime package parity
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
+
+      - name: Test capability shard merge and package parity
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/capability-shard-merge.test.ts scripts/capability-shard-pack.test.ts
 
       - name: Test CLI contract changeset guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -2665,6 +2692,8 @@ jobs:
           STELLA_RUN_CORPUS_ENGINE_TESTS: "true"
         run: |
           mapfile -t engine_tests < <(grep -rl --include='*.test.ts' STELLA_RUN_CORPUS_ENGINE_TESTS src | sort)
+          # This suite is mandatory; retain dynamic discovery for the other engine contracts.
+          printf '%s\n' "${engine_tests[@]}" | grep -Fx 'src/handlers/legislation/search-relaxed.contract.test.ts'
           test "${#engine_tests[@]}" -gt 0
           bun test --preload ./src/tests/setup-env.ts --reporter=junit --reporter-outfile=engine-tests.xml "${engine_tests[@]}"
           python3 -c 'import xml.etree.ElementTree as E; r=E.parse("engine-tests.xml").getroot(); n=len(list(r.iter("testcase"))); assert n > 0 and not any(list(r.iter(t)) for t in ("skipped", "failure", "error")) and not any(int(e.get(k, "0")) for e in r.iter() for k in ("skipped", "disabled", "failures", "errors")), "Engine tests must execute without skips or failures"; print(f"Executed {n} engine tests")'
@@ -2921,6 +2950,7 @@ jobs:
         # The guard calls tsc directly (no turbo), so the generated inputs
         # that turbo's typecheck pipeline would produce must exist first.
         run: |
+          bun --filter @stll/api generate:capability-runtime
           bun run generate
           bun run typegen
 
@@ -2932,6 +2962,10 @@ jobs:
           (
             cd "$base_dir"
             bash scripts/retry.sh bun ci --ignore-scripts
+            # Older merge bases still commit the runtime aggregates.
+            if [[ -f apps/api/scripts/generate-capability-runtime.ts ]]; then
+              bun --filter @stll/api generate:capability-runtime
+            fi
             # Older bases commit the snapshot. Generate only when the base
             # owns an untracked output, using its cached producer if present.
             if [[ ! -f apps/web/src/generated/api-routes.gen.ts ]]; then
@@ -2940,6 +2974,9 @@ jobs:
               else
                 bun --filter @stll/api gen:web-api-types
               fi
+            fi
+            if [[ ! -f apps/web/src/routeTree.gen.ts ]]; then
+              bun --filter @stll/web generate:route-tree
             fi
             bun run typegen
           )
@@ -2972,6 +3009,37 @@ jobs:
               printf 'Generated API types are unchanged.\n'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generated route tree review diff
+        run: |
+          patch="$RUNNER_TEMP/route-tree.patch"
+          base_tree="$RUNNER_TEMP/typecheck-base/apps/web/src/routeTree.gen.ts"
+          head_tree="apps/web/src/routeTree.gen.ts"
+          test -f "$base_tree"
+          test -f "$head_tree"
+          status=0
+          diff -u --label base/routeTree.gen.ts --label head/routeTree.gen.ts \
+            "$base_tree" "$head_tree" > "$patch" || status=$?
+          if [[ "$status" -gt 1 ]]; then
+            exit "$status"
+          fi
+          {
+            printf '### Generated route tree diff\n\n'
+            if [[ -s "$patch" ]]; then
+              printf '```diff\n'
+              sed -n '1,300p' "$patch" | cut -c 1-1000
+              printf '\n```\n\nShowing at most 300 lines (1000 characters per line); the full patch is attached as an artifact.\n'
+            else
+              printf 'Generated routes are unchanged.\n'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload generated route tree review diff
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: generated-route-tree-diff
+          path: ${{ runner.temp }}/route-tree.patch
+          retention-days: 14
 
       - name: Upload generated API type review diff
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -3240,11 +3308,13 @@ jobs:
     timeout-minutes: 12
     permissions:
       contents: read
+      actions: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
@@ -3273,6 +3343,12 @@ jobs:
             echo "::error::Route smoke requires a ready production browser stack."
             exit 1
           fi
+
+      - name: Prepare merge-base network budget
+        uses: ./.github/actions/prepare-network-baseline
+        with:
+          base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          token: ${{ github.token }}
 
       - name: Check route network baseline
         id: network-baseline
@@ -3318,6 +3394,7 @@ jobs:
     timeout-minutes: 12
     permissions:
       contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -3329,6 +3406,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
@@ -3351,6 +3429,13 @@ jobs:
 
       # Keep fixture cardinality equal to baseline generation and prevent other
       # specs' workspace events from refetching queries during measurement.
+      - name: Prepare merge-base network budget
+        if: matrix.shard == 'network-baseline'
+        uses: ./.github/actions/prepare-network-baseline
+        with:
+          base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          token: ${{ github.token }}
+
       - name: Check route network baseline
         if: >-
           steps.e2e-stack.outputs.status == 'ready'
@@ -4308,7 +4393,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"service-suites": "service_suites_pr_required"}
           FAST_REQUIRED: >-
-            ["api-image-smoke", "dependency-malware", "marketing-screenshots", "parser-version-guard", "service-suites", "web-image-smoke", "e2e-production-shard", "route-smoke", "desktop-clippy", "windows-scripts"]
+            ["api-image-smoke", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "ci-tests", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "desktop-clippy", "e2e-production-shard", "fix-tests-on-base", "landing-build", "marketing-screenshots", "parser-version-guard", "release-typecheck", "route-smoke", "service-suites", "typecheck-baseline", "web-build", "web-image-smoke", "windows-scripts"]
         run: |
           # Queued jobs may have no concurrency annotation. A newer run in
           # the same workflow/group proves supersession, unless any cancelled

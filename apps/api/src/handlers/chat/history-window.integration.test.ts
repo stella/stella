@@ -1,13 +1,9 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import {
-  chatMessages,
-  chatThreadCompactions,
-  chatThreads,
-} from "@/api/db/schema";
+import { chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { shouldCompactChatMessages } from "@/api/handlers/chat/compaction";
 import type { WindowedThreadMessage } from "@/api/handlers/chat/history-window";
@@ -16,10 +12,9 @@ import {
   loadWindowedThreadMessages,
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
-import type { ChatCompactionSummary } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
+import { seedActiveChatCompaction } from "@/api/tests/helpers/chat-compaction-checkpoint";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -109,68 +104,10 @@ const seedThread = async (
   };
 };
 
-const emptySummary: ChatCompactionSummary = {
-  version: 1,
-  blocked: [],
-  constraints: [],
-  criticalContext: [],
-  done: [],
-  goal: "Continue the matter.",
-  inProgress: [],
-  keyDecisions: [],
-  modifiedFiles: [],
-  nextSteps: [],
-  readFiles: [],
-};
-
-const seedActiveCheckpoint = async ({
-  threadId,
-  firstSummarizedMessageId,
-  lastSummarizedMessageId,
-  firstKeptMessageId,
-  summarizedMessageCount,
-}: {
-  threadId: SafeId<"chatThread">;
-  firstSummarizedMessageId: SafeId<"chatMessage">;
-  lastSummarizedMessageId: SafeId<"chatMessage">;
-  firstKeptMessageId: SafeId<"chatMessage">;
-  summarizedMessageCount: number;
-}): Promise<void> => {
-  // The window seeks from the checkpoint's cursor, so it must be built from the
-  // boundary row's own microsecond timestamp as the compactor stores it. A JS
-  // Date would truncate to milliseconds and re-admit same-millisecond rows.
-  const boundary = await testDb
-    .select({
-      createdAtCursor:
-        chatMessageCursorCodec.cursorValue.as("created_at_cursor"),
-    })
-    .from(chatMessages)
-    .where(eq(chatMessages.id, lastSummarizedMessageId))
-    .limit(1);
-  const boundaryCursor = boundary.at(0)?.createdAtCursor;
-  if (boundaryCursor === undefined) {
-    throw new Error("seed precondition failed: boundary message not found");
-  }
-
-  await testDb.insert(chatThreadCompactions).values({
-    id: toSafeId<"chatThreadCompaction">(Bun.randomUUIDv7()),
-    threadId,
-    status: "active",
-    summary: emptySummary,
-    summaryMarkdown: "## Goal\nContinue the matter.",
-    firstSummarizedMessageId,
-    lastSummarizedMessageId,
-    firstKeptMessageId,
-    summarizedMessageCount,
-    totalSummarizedMessageCount: summarizedMessageCount,
-    deltaCursor: chatMessageCursorCodec.encode(
-      boundaryCursor,
-      lastSummarizedMessageId,
-    ),
-    totalTokens: 70_000,
-    preservedTokens: 30_000,
-    promptVersion: 1,
-  });
+const seedActiveCheckpoint = async (
+  checkpoint: Omit<Parameters<typeof seedActiveChatCompaction>[0], "testDb">,
+): Promise<void> => {
+  await seedActiveChatCompaction({ ...checkpoint, testDb });
 };
 
 const unwrap = <T>(result: Result<T, { message: string }>): T => {

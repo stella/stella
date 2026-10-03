@@ -1,5 +1,8 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 import * as v from "valibot";
+
 /**
  * Slovak Constitutional Court (Ústavný súd SR) adapter.
  *
@@ -33,8 +36,8 @@ import * as v from "valibot";
  * the crawl cursor ever reaching it. See `reconciliation`
  * at the bottom of this file.
  */
-
 import { classifyFailure } from "@stll/errors";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
 import { Temporal } from "@stll/time";
 
@@ -76,6 +79,7 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
   backoffMs,
@@ -103,6 +107,8 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -359,7 +365,9 @@ const fetchPdfBytes = async (
 ): Promise<Uint8Array | undefined> => {
   try {
     const response = await fetchPublisher(`${DOC_DOWNLOAD_URL}/${documentId}`, {
+      fetchStage: "document",
       adapterKey: ADAPTER_KEYS.SK_US,
+      expectedContentType: "pdf",
       headers: { "User-Agent": INGESTION_USER_AGENT },
       signal,
       timeoutMs: 30_000,
@@ -406,12 +414,17 @@ const fetchPdfBytes = async (
  */
 const fetchJson = async (
   path: string,
-  init: { body?: string; signal?: AbortSignal },
+  init: {
+    body?: string;
+    signal?: AbortSignal;
+    fetchStage: DocumentFetchStage;
+  },
 ): Promise<string | undefined> =>
   (
     await Result.tryPromise({
       try: async (): Promise<string | undefined> => {
         const response = await fetchPublisher(`${SERVICE_URL}/${path}`, {
+          fetchStage: init.fetchStage,
           adapterKey: ADAPTER_KEYS.SK_US,
           ...(init.body === undefined
             ? {}
@@ -452,6 +465,7 @@ const fetchDocumentXhtml = async (
       documentId,
       docType: DECISION_DOC_TYPE,
     }),
+    fetchStage: "document",
     ...(signal === undefined ? {} : { signal }),
   });
   if (body === undefined) {
@@ -487,6 +501,7 @@ const fetchFacets = async (
   signal?: AbortSignal,
 ): Promise<string | undefined> =>
   await fetchJson(SEARCH_PATH, {
+    fetchStage: "listing",
     body: JSON.stringify({
       docType: DECISION_DOC_TYPE,
       start: 0,
@@ -519,6 +534,7 @@ const fetchCollectionListing = async (
   signal?: AbortSignal,
 ): Promise<string | undefined> =>
   await fetchJson(SEARCH_PATH, {
+    fetchStage: "listing",
     body: JSON.stringify({
       docType: COLLECTION_DOC_TYPE,
       start: 0,
@@ -557,6 +573,7 @@ const fetchCourtFile = async (
   signal?: AbortSignal,
 ): Promise<string | undefined> =>
   await fetchJson(`${COURT_FILE_PATH}/${rvpNumber.replace("/", ":")}`, {
+    fetchStage: "document",
     ...(signal === undefined ? {} : { signal }),
   });
 
@@ -665,6 +682,7 @@ const perKey = <T>(
 export const createSkUsPageContext = (): SkUsPageContext => {
   const codelist = perKey(async (_key, signal) => {
     const body = await fetchJson(CODELIST_PATH, {
+      fetchStage: "listing",
       ...(signal === undefined ? {} : { signal }),
     });
     return body === undefined ? undefined : parseCodelist(body);
@@ -848,6 +866,7 @@ export const fetchSkUsListing = async ({
       try: async (): Promise<SkUsListingFetchOutcome> => {
         const response = await request(SEARCH_URL, {
           adapterKey: ADAPTER_KEYS.SK_US,
+          fetchStage: "listing",
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -996,7 +1015,9 @@ const skUsRapporteurs = (doc: SearchDocument): string[] =>
  */
 const NO_LEGAL_SENTENCE = "- bez právnej vety -";
 
-const skUsTextFields = (doc: SearchDocument): IngestionResult["textFields"] => {
+const skUsTextFields = (
+  doc: SearchDocument,
+): RawIngestionResult["textFields"] => {
   const absent = absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED);
   const headnote = doc.mkClauseTitle?.trim();
   const legalSentence = doc.mkClauseText?.trim();
@@ -1192,7 +1213,7 @@ const skUsCollectionPublication = (
 const skUsCollectionTextFields = (
   doc: SearchDocument,
   collection: SkUsCollectionMatch,
-): IngestionResult["textFields"] => {
+): RawIngestionResult["textFields"] => {
   const stated = skUsTextFields(doc);
   switch (collection.status) {
     case "unresolved":
@@ -1440,7 +1461,7 @@ export const buildSkUsDecision = async (
   };
   const sourceRaw = encodeSourceRawEnvelope(parts);
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
     sourceDocumentId: documentId,
     // What every row this adapter wrote before it stated an id was stored
@@ -1488,7 +1509,7 @@ export const buildSkUsDecision = async (
           },
         }),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 
   return pdfBytes === undefined
     ? { type: "detail-unavailable", decision }
@@ -1526,6 +1547,7 @@ const executeSearch = async ({
   signal,
 }: ExecuteSearchOptions): Promise<SearchResponse | null> => {
   const response = await fetchPublisher(SEARCH_URL, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_US,
     method: "POST",
     headers: {
@@ -2433,7 +2455,7 @@ const reparseStoredRaw = (
 
   return {
     type: "parsed",
-    result: {
+    result: plainTextIngestionResult({
       caseNumber: fields.caseNumber,
       sourceDocumentId: fields.documentId,
       ecli: listing.mkECLI ?? undefined,
@@ -2463,7 +2485,7 @@ const reparseStoredRaw = (
       documentAst: parsed === null ? EMPTY_AST : parsed.documentAst,
       sourceRaw: raw,
       sourceRawContentType: stored.contentType ?? "application/json",
-    },
+    }),
   };
 };
 
@@ -2540,6 +2562,7 @@ const SK_US_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const skUsAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.SK_US,
   sourceSurfaces: SK_US_SOURCE_SURFACES,
   sourceFields: {
@@ -2585,6 +2608,57 @@ export const skUsAdapter = defineSourceAdapter({
    * each item the way the ingest would, and compare against what is held.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            documentId: payload["documentId"],
+            docType: payload["docType"],
+            title: payload["title"],
+            content: payload["content"],
+            extension: payload["extension"],
+            size: payload["size"],
+            contentType: payload["contentType"],
+            mkDocumentType: payload["mkDocumentType"],
+            mkRSAPNumberOfFile: payload["mkRSAPNumberOfFile"],
+            mkRVPNumberOfFile: payload["mkRVPNumberOfFile"],
+            mkECLI: payload["mkECLI"],
+            mkDateOfDecision: payload["mkDateOfDecision"],
+            mkDateOfLegalForce: payload["mkDateOfLegalForce"],
+            mkPublicationDate: payload["mkPublicationDate"],
+            mkFormOfDecision: payload["mkFormOfDecision"],
+            mkTypeOfDecision: payload["mkTypeOfDecision"],
+            mkTypeOfProceeding: payload["mkTypeOfProceeding"],
+            mkTypeOfNegotiation: payload["mkTypeOfNegotiation"],
+            mkDecisionInTermsOf: payload["mkDecisionInTermsOf"],
+            mkResultOfNegotiation: payload["mkResultOfNegotiation"],
+            mkCause: payload["mkCause"],
+            mkJudgeReporter: payload["mkJudgeReporter"],
+            mkDifferentView: payload["mkDifferentView"],
+            mkWordRegister: payload["mkWordRegister"],
+            mkMaterialRegister: payload["mkMaterialRegister"],
+            mkComplainedLegalRegulation: payload["mkComplainedLegalRegulation"],
+            mkClarificationOfLegalRegulation:
+              payload["mkClarificationOfLegalRegulation"],
+            mkFileReference: payload["mkFileReference"],
+            mkReferences: payload["mkReferences"],
+            mkTypeOfProposer: payload["mkTypeOfProposer"],
+            mkAffectedLegalRegulation: payload["mkAffectedLegalRegulation"],
+            mkUnderage: payload["mkUnderage"],
+            mkIncludeToZnaU: payload["mkIncludeToZnaU"],
+            mkEntryDate: payload["mkEntryDate"],
+            mkFormOfEntry: payload["mkFormOfEntry"],
+            mkTypeOfEntry: payload["mkTypeOfEntry"],
+            mkParentIdDecision: payload["mkParentIdDecision"],
+            mkLawReportsNumber: payload["mkLawReportsNumber"],
+            mkVolumeOfLawReports: payload["mkVolumeOfLawReports"],
+            mkYearOfLawReports: payload["mkYearOfLawReports"],
+            mkTimePeriodZNaU: payload["mkTimePeriodZNaU"],
+            mkClauseTitle: payload["mkClauseTitle"],
+            mkClauseText: payload["mkClauseText"],
+            mkWebTitle: payload["mkWebTitle"],
+          }
+        : null,
     firstSlice: SK_US_FIRST_SLICE,
     sliceOf: skUsSliceOf,
     nextSlice: skUsNextSlice,
@@ -2642,6 +2716,7 @@ export const skUsAdapter = defineSourceAdapter({
         }
 
         const decisions: IngestionResult[] = [];
+        let failed = 0;
         // One context for the page: the vocabularies are fetched once for
         // it, and a docket listed twice on it costs one facet query and one
         // docket-file read.
@@ -2649,10 +2724,34 @@ export const skUsAdapter = defineSourceAdapter({
 
         for (const doc of data.documents) {
           try {
-            const built = await buildSkUsDecision(doc, {
-              context,
-              ...(signal === undefined ? {} : { signal }),
+            const attempted = await buildPlainTextItem({
+              decisionOf: (value) => {
+                switch (value.type) {
+                  case "built":
+                  case "detail-unavailable":
+                    return value.decision;
+                  case "unkeyable":
+                    return undefined;
+                  default:
+                    value satisfies never;
+                    return panic("Unhandled source build outcome");
+                }
+              },
+              adapterKey: ADAPTER_KEYS.SK_US,
+
+              rawListing: JSON.stringify(doc),
+              build: async () =>
+                await buildSkUsDecision(doc, {
+                  context,
+                  ...(signal === undefined ? {} : { signal }),
+                }),
             });
+            if (attempted.type === "item_build_failed") {
+              failed++;
+              decisions.push(attempted.decision);
+              continue;
+            }
+            const built = attempted.value;
             switch (built.type) {
               case "unkeyable":
                 break;
@@ -2669,12 +2768,17 @@ export const skUsAdapter = defineSourceAdapter({
               }
             }
           } catch (error) {
-            if (error instanceof DOMException) {
+            if (
+              error instanceof DOMException ||
+              error instanceof AdapterFetchError ||
+              error instanceof FetchBoundaryError
+            ) {
               throw error;
             }
             // The cursor moves past this document and the reconciliation walk
             // is what recovers it; reported so a build failing on every row
             // is not read as a page with nothing on it.
+            failed++;
             logger.warn("case_law.ingestion.item_build_failed", {
               adapterKey: ADAPTER_KEYS.SK_US,
               ...(typeof doc.documentId === "string"
@@ -2693,6 +2797,7 @@ export const skUsAdapter = defineSourceAdapter({
         if (hasMore) {
           return {
             decisions,
+            itemBuildFailures: { type: "item_build_failed", count: failed },
             nextCursor: encodeCursor({ year, offset: nextOffset }),
           };
         }
@@ -2701,6 +2806,7 @@ export const skUsAdapter = defineSourceAdapter({
         if (year < currentYear) {
           return {
             decisions,
+            itemBuildFailures: { type: "item_build_failed", count: failed },
             nextCursor: encodeCursor({ year: year + 1, offset: 0 }),
           };
         }
@@ -2716,6 +2822,7 @@ export const skUsAdapter = defineSourceAdapter({
         // to find, not this cursor's.
         return {
           decisions,
+          itemBuildFailures: { type: "item_build_failed", count: failed },
           nextCursor: encodeCursor({
             year,
             offset: offset + data.documents.length,

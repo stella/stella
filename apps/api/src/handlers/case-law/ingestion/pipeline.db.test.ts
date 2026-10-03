@@ -12,6 +12,7 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
@@ -52,7 +53,7 @@ const documentAst = {
   ],
 } satisfies DocumentAst;
 
-const ingestionResult = {
+const ingestionResult = plainTextIngestionResult({
   caseNumber: "28 Cdo 5171/2008",
   ecli: "ECLI:CZ:NS:2009:28.CDO.5171.2008.1",
   court: "Nejvyšší soud",
@@ -68,7 +69,7 @@ const ingestionResult = {
   rawHash: "jsonb-regression-hash",
   documentAst,
   parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS],
-} satisfies IngestionResult;
+}) satisfies IngestionResult;
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("case-law ingestion JSONB persistence", () => {
@@ -142,11 +143,11 @@ if (!databaseUrl || !runPostgresTests) {
         observedAt: new Date("2026-07-31T12:00:00.000Z"),
       });
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...ingestionResult,
           rawHash: "jsonb-regression-hash-refresh",
           metadata: { source: "regression-refresh" },
-        },
+        }),
         observationOrder: 2n,
         sourceId,
         scopedDb,
@@ -170,11 +171,11 @@ if (!databaseUrl || !runPostgresTests) {
 
     test("database-fences legacy refreshes after observation ordering activates", async () => {
       const caseNumber = `legacy-fence-${Bun.randomUUIDv7()}`;
-      const initial = {
+      const initial = plainTextIngestionResult({
         ...ingestionResult,
         caseNumber,
         rawHash: "legacy-fence-current",
-      };
+      });
       await processDecision({
         input: initial,
         observationOrder: 10n,
@@ -257,11 +258,11 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       const replayCaseNumber = `compensation-cas-${Bun.randomUUIDv7()}`;
-      const replayInput = {
+      const replayInput = plainTextIngestionResult({
         ...ingestionResult,
         caseNumber: replayCaseNumber,
         rawHash: "compensation-cas-current",
-      };
+      });
       await processDecision({
         input: replayInput,
         observationOrder: 20n,

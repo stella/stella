@@ -6,6 +6,33 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "**/*.[tT][sS]"
+      - "**/*.[tT][sS][xX]"
+      - "**/*.[mM][tT][sS]"
+      - "**/*.[cC][tT][sS]"
+      - "**/*.[jJ][sS]"
+      - "**/*.[jJ][sS][xX]"
+      - "**/*.[mM][jJ][sS]"
+      - "**/*.[cC][jJ][sS]"
+      - "**/*.[eE][sS]"
+      - "**/*.[eE][sS]6"
+      - "**/*.[xX][sS][jJ][sS]"
+      - "**/*.[xX][sS][jJ][sS][lL][iI][bB]"
+      - "**/*.[hH][tT][mM][lL]"
+      - "**/*.[hH][tT][mM]"
+      - "**/*.[xX][hH][tT][mM][lL]"
+      - "**/*.[xX][hH][tT][mM]"
+      - "**/*.[vV][uU][eE]"
+      - "**/*.[eE][jJ][sS]"
+      - "**/*.[hH][bB][sS]"
+      - "**/*.[nN][jJ][kK]"
+      - "**/*.[hH][tT][mM][lL].[eE][rR][bB]"
+      - "**/*.[jJ][sS][pP]"
+      - "**/*.[hH][tT][mM][lL].[dD][oO][tT]"
+      - ".github/codeql/**"
+      - ".github/workflows/codeql.yml"
+      - "scripts/detect-security-workflow-changes.sh"
   # Nightly full scan on the default branch catches new vulnerability patterns
   schedule:
     - cron: "37 2 * * *"

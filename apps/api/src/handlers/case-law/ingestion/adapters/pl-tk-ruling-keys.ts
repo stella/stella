@@ -18,8 +18,8 @@ import { polishConstitutionalDocketKey } from "@stll/api-contract/decision-docke
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifier } from "@stll/legal-ast/decision-identifier";
 
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { arrayOrEmpty } from "@/api/lib/array";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 const CONSTITUTIONAL_TRIBUNAL = "trybunał konstytucyjny";
 
@@ -50,7 +50,7 @@ const familyOf = (decisionType: string): string => {
 };
 
 type ConstitutionalTribunalRulingKeyInput = Pick<
-  IngestionResult,
+  RawIngestionResult,
   "caseNumber" | "court" | "decisionDate" | "decisionType"
 > & {
   /** Every further identifier the row states; only its dockets count. */

@@ -27,7 +27,7 @@
     "agent:attach": "bun packages/scripts/src/agent-session.ts attach",
     "typegen": "turbo run typegen",
     "typecheck": "turbo run typecheck",
-    "typecheck:repo": "([ -n \"$TURBO_HASH\" ] || bun run generate) && bun --cwd=packages/cli run codegen:runtime && bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.scripts.json && bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.tooling.json && bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.oxlint-plugins.json",
+    "typecheck:repo": "([ -n \"$TURBO_HASH\" ] || bun run generate) && bun --cwd=packages/cli run codegen:runtime && bun apps/api/scripts/generate-capability-runtime.ts && bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.scripts.json && bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.tooling.json && bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.oxlint-plugins.json",
     "code-check": "bun run generate && bun scripts/code-check-affected.ts --all",
     "code-check:affected": "bun run generate && bun scripts/code-check-affected.ts",
     "secrets:check:staged": "bash scripts/check-staged-secrets.sh",
@@ -120,11 +120,11 @@
     "setup:mcp": "bun install --cwd .claude/mcp --frozen-lockfile",
     "setup:worktree": "bash scripts/setup-worktree.sh",
     "hooks:install": "lefthook install",
-    "knip": "knip-bun",
+    "knip": "bun apps/api/scripts/generate-capability-runtime.ts && knip-bun",
     "hooks:uninstall": "lefthook uninstall",
     "postinstall": "bun run lint:ws && bun run generate",
     "dependencies:check": "DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include dependencies,unlisted",
-    "generate": "turbo run generate:api-types --filter=@stll/web"
+    "generate": "turbo run generate:route-tree generate:api-types --filter=@stll/web"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",

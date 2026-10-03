@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 
 // `parseCapabilityCatalog` is the trust boundary between the committed catalog
@@ -241,8 +242,10 @@ const CAPABILITY_ID_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 
 describe("committed capability-catalog snapshot", () => {
   test("every id is dotted lowercase kebab-case", async () => {
-    const catalogUrl = new URL("../capability-catalog.json", import.meta.url);
-    const catalog: { id: string }[] = await Bun.file(catalogUrl).json();
+    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    if (catalog === null) {
+      throw new TypeError("Invalid capability catalog");
+    }
     expect(catalog.length).toBeGreaterThan(0);
 
     const malformed = catalog

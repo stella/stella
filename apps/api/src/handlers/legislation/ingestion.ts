@@ -673,6 +673,97 @@ const writeDecidedVersionTx = async (
   return id;
 };
 
+type CommitLegislationVersionOptions = {
+  input: LegislationDocumentInput;
+  existing: StoredVersion | undefined;
+  stated: LegislationExpressionClassification;
+  window: StoredWindow;
+  values: typeof legislationDocuments.$inferInsert;
+  corpusMode: LegislationCorpusDependencies["mode"];
+  expectedContentHash: string;
+  scopedDb: ScopedDb;
+};
+
+/**
+ * Update the version's row, or insert it. Under the identity lock a writer
+ * that found nothing looks once more before inserting: a concurrent writer
+ * may have stored the version since, and then its row is this version's row.
+ *
+ * The row is read again under its lock and the classification decided from
+ * that read, not the one before the payload write: a withdrawal committed in
+ * between is what the row now says, and a write decided from the older read
+ * would lift it.
+ */
+const commitLegislationVersion = async ({
+  input,
+  existing,
+  stated,
+  window,
+  values,
+  corpusMode,
+  expectedContentHash,
+  scopedDb,
+}: CommitLegislationVersionOptions) =>
+  await scopedDb(async (tx) => {
+    await declareWriterContract(tx);
+    // Settle and the write-error retry take the projection source before the
+    // row; this write takes them in the same order so they cannot deadlock.
+    const projectionLock =
+      corpusMode === "off" || existing === undefined
+        ? null
+        : await lockActiveCorpusProjectionSourceTx(tx, {
+            family: "legislation",
+            entityId: existing.id,
+          });
+    const publisherId = input.expression?.publisherId;
+    let row =
+      existing === undefined
+        ? undefined
+        : await lockStoredVersionTx(
+            tx,
+            eq(legislationDocuments.id, existing.id),
+          );
+    if (row === undefined && publisherId !== undefined) {
+      await lockExpressionIdentity(tx, input, publisherId);
+      row = await lockStoredVersionTx(tx, byPublisherId(input, publisherId));
+    }
+    const decided = storedClassification(input, stated, row);
+    // The new body reaches object storage only after this commit. Until it
+    // settles, the stored pointers would serve the previous body under this
+    // write's metadata, so a changed body clears them: reads use the columns
+    // written here and the search projection stops serving the old passages.
+    const bodyChanged =
+      corpusMode !== "off" &&
+      row !== undefined &&
+      row.contentHash !== expectedContentHash;
+    const decidedValues = {
+      ...values,
+      ...decided,
+      ...(bodyChanged
+        ? {
+            textS3Key: null,
+            normalizedS3Key: null,
+            astS3Key: null,
+            contentHash: null,
+          }
+        : {}),
+      sourceHash: legislationSourceHash(input, window, decided),
+    };
+    const id = await writeDecidedVersionTx(tx, row, decidedValues, publisherId);
+    if (bodyChanged && projectionLock !== null) {
+      await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+        lock: projectionLock,
+        subject: { family: "legislation", entityId: id },
+      });
+    }
+    return {
+      id,
+      row,
+      classification: decided,
+      sourceHash: decidedValues.sourceHash,
+    };
+  });
+
 const selectStoredVersion = async (
   scopedDb: ScopedDb,
   where: SQL | undefined,
@@ -958,43 +1049,15 @@ export const processLegislationDocument = async (
       : {}),
   };
 
-  /**
-   * Update the version's row, or insert it. Under the identity lock a writer
-   * that found nothing looks once more before inserting: a concurrent writer
-   * may have stored the version since, and then its row is this version's row.
-   *
-   * The row is read again under its lock and the classification decided from
-   * that read, not the one before the payload write: a withdrawal committed in
-   * between is what the row now says, and a write decided from the older read
-   * would lift it.
-   */
-  const written = await scopedDb(async (tx) => {
-    await declareWriterContract(tx);
-    const publisherId = input.expression?.publisherId;
-    let row =
-      existing === undefined
-        ? undefined
-        : await lockStoredVersionTx(
-            tx,
-            eq(legislationDocuments.id, existing.id),
-          );
-    if (row === undefined && publisherId !== undefined) {
-      await lockExpressionIdentity(tx, input, publisherId);
-      row = await lockStoredVersionTx(tx, byPublisherId(input, publisherId));
-    }
-    const decided = storedClassification(input, stated, row);
-    const decidedValues = {
-      ...values,
-      ...decided,
-      sourceHash: legislationSourceHash(input, window, decided),
-    };
-    const id = await writeDecidedVersionTx(tx, row, decidedValues, publisherId);
-    return {
-      id,
-      row,
-      classification: decided,
-      sourceHash: decidedValues.sourceHash,
-    };
+  const written = await commitLegislationVersion({
+    input,
+    existing,
+    stated,
+    window,
+    values,
+    corpusMode: corpus.mode,
+    expectedContentHash,
+    scopedDb,
   });
   const { id } = written;
   const inserted = written.row === undefined;

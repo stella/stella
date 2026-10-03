@@ -5,6 +5,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { BILLING_STATUS } from "@/api/db/schema";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
@@ -35,7 +36,7 @@ const createContext = ({
     safeDb,
     scopedDb,
     workspaceId: toSafeId<"workspace">("workspace_test"),
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     session: {
       activeOrganizationId: toSafeId<"organization">("org_test"),
     },

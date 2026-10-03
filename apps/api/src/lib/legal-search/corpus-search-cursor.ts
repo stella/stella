@@ -40,6 +40,12 @@
  * never read as each other. A replica that predates the segment refuses such a
  * cursor as malformed rather than misreading it.
  *
+ * Legislation can append a `p` segment after these optional segments, carrying
+ * base64url JSON for its strict or relaxed phase, query fingerprint, serving
+ * generation and, for relaxed results, the strict Works already returned.
+ * It is unauthenticated like the enclosing cursor; continuation validation
+ * compares its phase identity with the current request before using it.
+ *
  * `windowStart` is a decimal rank, `dictionary` is a payload's sha256 hex or
  * `none`, `sort` is one of `SEARCH_SORTS`, and `id` is one segment — the
  * corpus addresses documents by uuid, so the grammar is fixed-width in its
@@ -64,7 +70,8 @@
  * One metadata segment therefore means a window rank and nothing else.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -72,6 +79,10 @@ import {
   SEARCH_SORTS,
   type SearchSort,
 } from "@/api/lib/legal-search/corpus-search-order";
+import {
+  CORPUS_INDEX_GENERATION_MAX_LENGTH,
+  isCorpusIndexGeneration,
+} from "@/api/lib/legal-search/index-naming";
 import {
   type ExpansionDictionaryIdentity,
   NO_EXPANSION_DICTIONARY_IDENTITY,
@@ -96,6 +107,7 @@ export type CorpusSearchCursor = SearchCursor & {
    * whose cursors keep the form they always had.
    */
   target: string | null;
+  phase?: CorpusSearchPhase | undefined;
 };
 
 /** Hex characters of a read target's identity (`corpusIndexReadTarget`). */
@@ -121,6 +133,40 @@ const GROUP_TOKEN_PATTERN = new RegExp(
   "u",
 );
 const GROUPS_SEGMENT_PREFIX = "x";
+const PHASE_SEGMENT_PREFIX = "p";
+const PHASE_FINGERPRINT_PATTERN = /^[0-9a-f]{64}$/u;
+
+const phaseIdentityFields = {
+  fingerprint: v.pipe(v.string(), v.regex(PHASE_FINGERPRINT_PATTERN)),
+  generation: v.pipe(v.string(), v.check(isCorpusIndexGeneration)),
+};
+const corpusSearchPhaseSchema = v.variant("type", [
+  v.strictObject({ type: v.literal("strict"), ...phaseIdentityFields }),
+  v.strictObject({
+    type: v.literal("relaxed"),
+    ...phaseIdentityFields,
+    strictWorkTokens: v.pipe(
+      v.array(v.pipe(v.string(), v.regex(GROUP_TOKEN_PATTERN))),
+      v.maxLength(LIMITS.corpusIndexSearchMaxExcludedGroups),
+      v.check((tokens) => new Set(tokens).size === tokens.length),
+      v.readonly(),
+    ),
+  }),
+]);
+export type CorpusSearchPhase = v.InferOutput<typeof corpusSearchPhaseSchema>;
+
+const readPhase = (value: unknown): CorpusSearchPhase | null => {
+  const result = v.safeParse(corpusSearchPhaseSchema, value);
+  return result.success ? result.output : null;
+};
+
+const serializePhase = (phase: CorpusSearchPhase): string => {
+  const validated = readPhase(phase);
+  if (validated === null) {
+    return panic("A search phase does not satisfy the corpus cursor grammar");
+  }
+  return `${PHASE_SEGMENT_PREFIX}${Buffer.from(JSON.stringify(validated)).toString("base64url")}`;
+};
 
 /** The excluded-groups segment, or null when there is nothing to carry. */
 const serializeExcludedGroups = (
@@ -186,6 +232,38 @@ const DECISION_ID_MAX_CHARS = 36;
 const SORT_MAX_CHARS = Math.max(...SEARCH_SORTS.map((sort) => sort.length));
 /** Four base64 characters per three bytes, rounded up to a whole group. */
 const base64Length = (bytes: number): number => Math.ceil(bytes / 3) * 4;
+const PHASE_SEGMENT_MAX_CHARS =
+  PHASE_SEGMENT_PREFIX.length +
+  base64Length(
+    JSON.stringify({
+      type: "relaxed",
+      fingerprint: "a".repeat(DICTIONARY_IDENTITY_MAX_CHARS),
+      generation: "a".repeat(CORPUS_INDEX_GENERATION_MAX_LENGTH),
+      strictWorkTokens: Array.from(
+        { length: LIMITS.corpusIndexSearchMaxExcludedGroups },
+        () => "a".repeat(CORPUS_CURSOR_GROUP_TOKEN_CHARS),
+      ),
+    }).length,
+  );
+
+const parsePhase = (segment: string): CorpusSearchPhase | null => {
+  if (segment.length > PHASE_SEGMENT_MAX_CHARS) {
+    return null;
+  }
+  const payload = segment.slice(PHASE_SEGMENT_PREFIX.length);
+  if (!/^[A-Za-z0-9_-]+$/u.test(payload)) {
+    return null;
+  }
+  const decoded = Buffer.from(payload, "base64url");
+  if (decoded.toString("base64url") !== payload) {
+    return null;
+  }
+  const parsed = Result.try({
+    try: (): unknown => JSON.parse(decoded.toString("utf-8")),
+    catch: () => undefined,
+  });
+  return Result.isError(parsed) ? null : readPhase(parsed.value);
+};
 
 export const CORPUS_SEARCH_CURSOR_MAX_LENGTH = base64Length(
   SCORE_MAX_CHARS +
@@ -224,6 +302,13 @@ export const CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH = base64Length(
     DECISION_ID_MAX_CHARS,
 );
 
+/** Legislation's phase plus the existing cursor's maximum framed payload. */
+export const CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH = base64Length(
+  (CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH / 4) * 3 +
+    1 +
+    PHASE_SEGMENT_MAX_CHARS,
+);
+
 export const encodeCorpusSearchCursor = ({
   dictionary,
   excludedGroups,
@@ -232,11 +317,12 @@ export const encodeCorpusSearchCursor = ({
   sort,
   target,
   windowStart,
+  phase,
 }: CorpusSearchCursor): string => {
   const groups = serializeExcludedGroups(excludedGroups);
   return encodeCursor(
     score,
-    `${windowStart}:${serializeExpansionDictionaryIdentity(dictionary)}:${sort}:${target === null ? "" : `${target}:`}${groups === null ? "" : `${groups}:`}${id}`,
+    `${windowStart}:${serializeExpansionDictionaryIdentity(dictionary)}:${sort}:${target === null ? "" : `${target}:`}${groups === null ? "" : `${groups}:`}${phase === undefined ? "" : `${serializePhase(phase)}:`}${id}`,
   );
 };
 
@@ -247,20 +333,31 @@ type CursorRanking = {
   sort: SearchSort;
   target?: string | null;
   excludedGroups?: readonly string[];
+  phase?: CorpusSearchPhase | undefined;
 };
 
 type OptionalSegments = {
   target: string | null;
   excludedGroups: readonly string[];
+  phase?: CorpusSearchPhase | undefined;
 };
 
 /**
  * The optional segments after the sort, in order: a read target, the groups
- * segment, both, or neither. Null for anything else.
+ * segment, both, or neither, optionally followed by a phase. Null otherwise.
  */
 const parseOptionalSegments = (
   segments: readonly string[],
 ): OptionalSegments | null => {
+  const last = segments.at(-1);
+  if (last?.startsWith(PHASE_SEGMENT_PREFIX)) {
+    const phase = parsePhase(last);
+    const preceding = parseOptionalSegments(segments.slice(0, -1));
+    if (phase === null || preceding === null || preceding.phase !== undefined) {
+      return null;
+    }
+    return { ...preceding, phase };
+  }
   const [first, second, ...rest] = segments;
   if (first === undefined) {
     return { target: null, excludedGroups: [] };
@@ -354,7 +451,8 @@ export const decodeCorpusSearchCursor = (
     // The current form, with a read target, a groups segment, both or neither.
     case 4:
     case 5:
-    case 6: {
+    case 6:
+    case 7: {
       const ranking = parseCurrentForm(segments.slice(0, -1));
       return ranking === null ? null : cursorOf(ranking);
     }
@@ -373,6 +471,7 @@ type CorpusSearchRanking = {
   sort: SearchSort;
   /** The read's target identity; a cursor must carry exactly this one. */
   target: string | null;
+  phase?: CorpusSearchPhase | undefined;
 };
 
 /**
@@ -382,9 +481,12 @@ type CorpusSearchRanking = {
  */
 export const isStaleCorpusSearchCursor = (
   cursor: CorpusSearchCursor | null,
-  { dictionary, sort, target }: CorpusSearchRanking,
+  { dictionary, sort, target, phase }: CorpusSearchRanking,
 ): boolean =>
   cursor !== null &&
   (!sameExpansionDictionary(cursor.dictionary, dictionary) ||
     cursor.sort !== sort ||
-    cursor.target !== target);
+    cursor.target !== target ||
+    cursor.phase?.type !== phase?.type ||
+    cursor.phase?.fingerprint !== phase?.fingerprint ||
+    cursor.phase?.generation !== phase?.generation);

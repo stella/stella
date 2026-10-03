@@ -141,6 +141,12 @@ const avtLayoutSchema = v.strictObject({
   ),
 });
 
+/** The matter's inbound mail: its address and the messages filed to it. */
+const correspondenceLayoutSchema = v.strictObject({
+  type: v.literal("correspondence"),
+  ...versionedBaseLayoutSchema,
+});
+
 const layoutSchemas = [
   overviewLayoutSchema,
   tableLayoutSchema,
@@ -149,6 +155,7 @@ const layoutSchemas = [
   calendarLayoutSchema,
   timelineLayoutSchema,
   avtLayoutSchema,
+  correspondenceLayoutSchema,
 ] as const;
 
 export const viewLayoutSchema = v.variant("type", layoutSchemas);
@@ -363,6 +370,13 @@ const tViewLayoutDefinition = t.Union([
       type: t.Literal("avt"),
       ...tVersionedBaseLayoutSchema,
       listId: t.Union([tSafeId("legalList"), t.Null()]),
+    },
+    strictObjectOptions,
+  ),
+  t.Object(
+    {
+      type: t.Literal("correspondence"),
+      ...tVersionedBaseLayoutSchema,
     },
     strictObjectOptions,
   ),

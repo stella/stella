@@ -1,5 +1,5 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
+import { useState } from "react";
+
 import { useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/input";
@@ -9,7 +9,6 @@ import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import type { ContactUpdate } from "@/lib/contacts/mutations";
 import { detached } from "@/lib/detached";
-import { invalidateContactCaches } from "@/routes/_protected.contacts/-components/contact-caches";
 import {
   buildNumericContactPayload,
   buildTextContactPayload,
@@ -21,8 +20,6 @@ import type {
   ContactData,
   EditableField,
 } from "@/routes/_protected.contacts/-components/types";
-
-const protectedRouteApi = getRouteApi("/_protected");
 
 type EditableRowProps = {
   label: string;
@@ -38,17 +35,18 @@ export const EditableRow = ({
   contact,
 }: EditableRowProps) => {
   const t = useTranslations();
-  const queryClient = useQueryClient();
   const updateContact = useUpdateContact();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const [scope] = useState(() => ({
+    organizationId: contact.organizationId,
+    contactId: contact.id,
+  }));
 
   const policy = EDITABLE_FIELD_POLICY[field];
   const inputAttributes = getEditableFieldInputAttributes(field);
 
   const rename = useInlineRename({
     initial: value ?? "",
+    commitOnUnmount: true,
     // Every contact field handles the empty case explicitly in
     // `onCommit`: `displayName` toasts (it's required), the
     // numeric fields parse to `null`, and the remaining optional
@@ -92,27 +90,10 @@ export const EditableRow = ({
         payload = buildTextContactPayload(field, trimmed);
       }
 
-      updateContact.mutate(
-        { contactId: contact.id, ...payload },
-        {
-          onSuccess: () => {
-            detached(
-              invalidateContactCaches(queryClient, {
-                activeOrganizationId,
-                contactId: contact.id,
-                invalidateWorkspaces: field === "displayName",
-              }),
-              "editable-row.invalidate-contact-caches",
-            );
-          },
-          onError: () => {
-            stellaToast.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
-          },
-        },
-      );
+      updateContact.mutate({
+        ...scope,
+        ...payload,
+      });
     },
   });
 

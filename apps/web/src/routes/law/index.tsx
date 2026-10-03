@@ -20,6 +20,10 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
+import {
+  parseStatuteQuery,
+  type StatuteQueryIntent,
+} from "@stll/api-contract/statute-query-intent";
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
 import {
   ActivityIcon,
@@ -55,10 +59,6 @@ import { latestDecisionsOptions } from "@/features/case-law/queries/decisions";
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
 import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { formatValidityDate } from "@/features/statutes/statute-format";
-import {
-  parseStatuteQuery,
-  type StatuteQueryIntent,
-} from "@/features/statutes/statute-query-intent";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
