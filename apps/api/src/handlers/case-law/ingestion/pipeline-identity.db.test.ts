@@ -1071,15 +1071,15 @@ if (!databaseUrl || !runPostgresTests) {
         fetchSpy.mockRestore();
         sleepSpy.mockRestore();
         if (Result.isError(page)) {
-          return panic(page.error.message);
+          panic(page.error.message);
         }
         if (Result.isError(page.value)) {
-          return panic(page.value.error.message);
+          panic(page.value.error.message);
         }
         const recovered = page.value.value.decisions.at(0);
         expect(page.value.value.decisions).toHaveLength(1);
         if (!recovered?.sourceDocumentId) {
-          return panic("Expected recovered NALUS observation");
+          panic("Expected recovered NALUS observation");
         }
         expect(recovered.sourceDocumentId).toBe(`nalus-sz:${publisherId}`);
         // Raw storage has its own integration tests; this suite exercises DB identity.
@@ -1114,7 +1114,7 @@ if (!databaseUrl || !runPostgresTests) {
           );
         expect(stored).toBeDefined();
         if (!stored) {
-          return panic("Expected stored NALUS quarantine row");
+          panic("Expected stored NALUS quarantine row");
         }
         if (identityState === "legacy") {
           await db
@@ -1317,9 +1317,12 @@ if (!databaseUrl || !runPostgresTests) {
               ]),
             ),
           );
-        expect(
-          rows.map(({ sourceDocumentId }) => sourceDocumentId).toSorted(),
-        ).toEqual([...quarantineIds, canonicalId].toSorted());
+        const storedIds = rows.map(({ sourceDocumentId }) => sourceDocumentId);
+        // The expected ids are distinct, so length plus containment is equality.
+        expect(storedIds).toHaveLength(quarantineIds.length + 1);
+        expect(storedIds).toEqual(
+          expect.arrayContaining([...quarantineIds, canonicalId]),
+        );
       },
     );
 
