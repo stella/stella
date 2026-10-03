@@ -56,6 +56,7 @@ import {
   StatuteTable,
   useStatuteColumnGroups,
 } from "@/features/statutes/components/statute-table";
+import { createStatuteFilters } from "@/features/statutes/open-statute-match";
 import {
   statuteFacetsOptions,
   statuteSearchInfiniteOptions,

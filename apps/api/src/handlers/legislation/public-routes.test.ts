@@ -93,7 +93,9 @@ describe("public statute routes", () => {
         const response = await publicLegislationRoute.handle(
           new Request(`http://localhost${path}`),
         );
-        expect(response.status).toBe(404);
+        // Valid requests to a disabled public surface are not found.
+        expect(response.status, path).toBe(404);
+        expect(await response.json()).toEqual({ message: "Not Found" });
       }
     } finally {
       restoreRuntimeMode();

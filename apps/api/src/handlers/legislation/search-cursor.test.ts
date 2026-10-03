@@ -10,6 +10,7 @@ import {
   legislationQueryFingerprint,
   searchLegislationHandler,
 } from "@/api/handlers/legislation/search";
+import { toSafeId } from "@/api/lib/branded-types";
 import { encodeCorpusSearchCursor } from "@/api/lib/legal-search/corpus-search-cursor";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 
@@ -130,7 +131,7 @@ test.each(["corpus-index", "pg-fts"] as const)(
       { documentType: "act" },
       { status: "current" },
       { language: "cs" },
-      { source: DOCUMENT_ID },
+      { source: toSafeId<"legislationSource">(DOCUMENT_ID) },
       { dateFrom: "2020-01-01" },
       { dateTo: "2030-01-01" },
     ];

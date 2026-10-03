@@ -10,10 +10,13 @@ describe("public statute full-text loader", () => {
     test(`${cause} returns the server shell without starting API queries`, async () => {
       const requests: string[] = [];
       const fetch = spyOn(globalThis, "fetch").mockImplementation(
-        async (input) => {
-          requests.push(input instanceof Request ? input.url : String(input));
-          return Response.json({ items: [], nextCursor: null });
-        },
+        Object.assign(
+          async (input: Parameters<typeof globalThis.fetch>[0]) => {
+            requests.push(input instanceof Request ? input.url : String(input));
+            return Response.json({ items: [], nextCursor: null });
+          },
+          { preconnect: globalThis.fetch.preconnect },
+        ),
       );
       const queryClient = new QueryClient();
       const searches = ["contractual obligations", "občanské právo"];

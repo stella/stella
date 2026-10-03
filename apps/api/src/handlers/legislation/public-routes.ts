@@ -282,7 +282,7 @@ export const publicLegislationRoute = new Elysia({
     }
 
     set.status = 404;
-    return { error: "Not Found" } as const;
+    return { message: "Not Found" } as const;
   })
   .get("/statutes", listStatutes.handler, {
     query: listStatutes.config.query,
