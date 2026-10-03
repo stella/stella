@@ -13,10 +13,7 @@ import {
   type DecisionIdentifiers,
 } from "@stll/legal-ast/decision-identifier";
 
-import {
-  safeHandlerErrorResponseSchema,
-  safeHandlerResponseSchemas,
-} from "@/api/lib/api-handlers";
+import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { searchExcerptSchema } from "@/api/lib/case-law/search-excerpt-schema";
@@ -34,6 +31,7 @@ import {
 } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { searchPaginationOutcomeSchema } from "@/api/lib/search/pagination-outcome-schema";
+import { safePublicHandlerErrorOrStatusTextResponseSchema } from "@/api/lib/search/public-error-response";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
 export const searchDecisionsBodySchema = t.Object({
@@ -265,10 +263,15 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
 );
 
 export const searchDecisionsResponseSchema = {
-  ...safeHandlerResponseSchemas(searchDecisionsSuccessResponseSchema),
-  503: t.Union([safeHandlerErrorResponseSchema, tPublicCountryUnavailable]),
+  ...safePublicHandlerResponseSchemasWithStatusText(
+    searchDecisionsSuccessResponseSchema,
+  ),
+  503: t.Union([
+    safePublicHandlerErrorOrStatusTextResponseSchema,
+    tPublicCountryUnavailable,
+  ]),
   404: t.Union([
-    safeHandlerErrorResponseSchema,
+    safePublicHandlerErrorOrStatusTextResponseSchema,
     t.Object(
       { error: t.Literal("Not Found") },
       { additionalProperties: false },
