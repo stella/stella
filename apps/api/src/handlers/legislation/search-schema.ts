@@ -5,8 +5,8 @@ import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-pub
 import { LEGISLATION_SEARCH_MATCH_TYPES } from "@stll/api-contract/search";
 
 import {
-  safeHandlerErrorResponseSchema,
-  safeHandlerResponseSchemasWithStatusText,
+  safePublicHandlerErrorResponseSchema,
+  safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import {
   tPaginationCursor,
@@ -90,8 +90,11 @@ export const searchLegislationSuccessResponseSchema = t.Object(
 );
 
 export const searchLegislationResponseSchema = {
-  ...safeHandlerResponseSchemasWithStatusText(
+  ...safePublicHandlerResponseSchemasWithStatusText(
     searchLegislationSuccessResponseSchema,
   ),
-  503: t.Union([safeHandlerErrorResponseSchema, tPublicCountryUnavailable]),
+  503: t.Union([
+    safePublicHandlerErrorResponseSchema,
+    tPublicCountryUnavailable,
+  ]),
 };
