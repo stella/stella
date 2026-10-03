@@ -86,7 +86,13 @@ describe("API deployment health receipt", () => {
     expect(releasePin).toBeDefined();
     // What the pack job builds is published, so it restores no shared cache.
     expect(workflow).not.toContain("setup-bun-cached");
-    expect(workflow).not.toMatch(/actions\/cache@|cache: true/u);
+    expect(workflow).not.toMatch(/actions\/cache(\/save)?@|rust-cache@/u);
+    const setups =
+      workflow.match(/oven-sh\/setup-bun@[^\n]*\n(?: {8,}.*\n)*/gu) ?? [];
+    expect(setups.length).toBeGreaterThan(0);
+    for (const setup of setups) {
+      expect(setup).toContain("no-cache: true");
+    }
   });
 
   test("staging checks share their access configuration", async () => {

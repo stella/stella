@@ -33,6 +33,81 @@ const SOURCE_CHECKS = [
 /** Status functions that run a job even when a job it needs was skipped. */
 const RUNS_AFTER_SKIP = /\b(always|failure|cancelled)\(\)/u;
 
+// Release and deploy jobs restore caches from the default branch's scope.
+// pull_request runs save only to their own pull request's scope, but
+// pull_request_target runs (and workflow_run runs, gated above) save to the
+// default branch's scope while a fork can influence them. So none of their
+// jobs may save to any cache, and a reusable workflow they call must be one
+// reviewed for that.
+const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
+  "stella/.github/.github/workflows/pr-lint.yml@aff5017c264acce5a2bcdf15876da08835e6de70":
+    "title, label, size and assignee actions only; no cache",
+};
+
+/** Why a step can save to the Actions cache, or null when it cannot. */
+const cacheSave = (step: Record<string, unknown>): string | null => {
+  const uses = typeof step["uses"] === "string" ? step["uses"] : "";
+  const inputs = isRecord(step["with"]) ? step["with"] : {};
+  if (uses === "") {
+    return null;
+  }
+  if (uses.startsWith("./")) {
+    return `local action ${uses} is not reviewed for cache use`;
+  }
+  if (/^actions\/cache(\/save)?@/u.test(uses)) {
+    return `${uses} saves a cache`;
+  }
+  if (/setup-bun-cached@|^Swatinem\/rust-cache@/u.test(uses)) {
+    return `${uses} saves a cache`;
+  }
+  if (uses.startsWith("oven-sh/setup-bun@") && inputs["no-cache"] !== true) {
+    return `${uses} caches the Bun binary unless no-cache is true`;
+  }
+  const setupGo = uses.startsWith("actions/setup-go@");
+  if (setupGo && inputs["cache"] !== false) {
+    return `${uses} caches by default unless cache is false`;
+  }
+  if (
+    /^actions\/setup-[a-z]+@/u.test(uses) &&
+    !setupGo &&
+    inputs["cache"] !== undefined &&
+    inputs["cache"] !== false &&
+    inputs["cache"] !== ""
+  ) {
+    return `${uses} saves a cache through its cache input`;
+  }
+  return null;
+};
+
+/** Why a job of a fork-influenced default-branch workflow could seed a cache. */
+const cacheSaveProblems = (workflow: unknown): string[] => {
+  if (
+    !isRecord(workflow) ||
+    !triggers(workflow["on"]).includes("pull_request_target")
+  ) {
+    return [];
+  }
+  const jobs = isRecord(workflow["jobs"]) ? workflow["jobs"] : {};
+  return Object.entries(jobs).flatMap(([name, job]) => {
+    if (!isRecord(job)) {
+      return [];
+    }
+    const reusable = typeof job["uses"] === "string" ? job["uses"] : null;
+    if (reusable !== null) {
+      return reusable in REVIEWED_REUSABLE_WORKFLOWS
+        ? []
+        : [
+            `job '${name}' calls ${reusable}, which is not reviewed for cache use`,
+          ];
+    }
+    const steps = Array.isArray(job["steps"]) ? job["steps"] : [];
+    return steps.flatMap((step) => {
+      const reason = isRecord(step) ? cacheSave(step) : null;
+      return reason === null ? [] : [`job '${name}': ${reason}`];
+    });
+  });
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -127,18 +202,21 @@ const trustProblems = (workflow: unknown): string[] => {
   return [...problems.values()];
 };
 
-const workflowRunWorkflows = () => {
+const allWorkflows = () => {
   const root = fileURLToPath(WORKFLOWS_URL);
-  return [...new Bun.Glob("*.{yml,yaml}").scanSync({ cwd: root })]
-    .map((file) => ({
+  return [...new Bun.Glob("*.{yml,yaml}").scanSync({ cwd: root })].map(
+    (file) => ({
       file,
       workflow: Bun.YAML.parse(readFileSync(`${root}/${file}`, "utf-8")),
-    }))
-    .filter(
-      ({ workflow }) =>
-        isRecord(workflow) && triggers(workflow["on"]).includes("workflow_run"),
-    );
+    }),
+  );
 };
+
+const workflowRunWorkflows = () =>
+  allWorkflows().filter(
+    ({ workflow }) =>
+      isRecord(workflow) && triggers(workflow["on"]).includes("workflow_run"),
+  );
 
 const GATE = [
   "github.event.workflow_run.head_repository.full_name == github.repository",
@@ -230,6 +308,70 @@ describe("workflow_run trust", () => {
       jobs: { a: { needs: "b" }, b: { needs: "a" }, c: { needs: "missing" } },
     };
     expect(trustProblems(workflow)).toHaveLength(3);
+  });
+
+  test("no pull_request_target job can save to a cache", () => {
+    const workflows = allWorkflows().filter(
+      ({ workflow }) =>
+        isRecord(workflow) &&
+        triggers(workflow["on"]).includes("pull_request_target"),
+    );
+    // cla.yml and pr-lint.yml today. Fewer means the scan broke.
+    expect(workflows.length).toBeGreaterThanOrEqual(2);
+    const problems = workflows.flatMap(({ file, workflow }) =>
+      cacheSaveProblems(workflow).map((problem) => `${file}: ${problem}`),
+    );
+    expect(problems).toEqual([]);
+  });
+
+  test("rejects every cache-saving step shape in a pull_request_target job", () => {
+    const steps = [
+      { uses: "actions/cache@abc" },
+      { uses: "actions/cache/save@abc" },
+      { uses: "stella/.github/actions/setup-bun-cached@abc" },
+      { uses: "Swatinem/rust-cache@abc" },
+      { uses: "oven-sh/setup-bun@abc" },
+      { uses: "actions/setup-go@abc" },
+      { uses: "actions/setup-node@abc", with: { cache: "npm" } },
+      { uses: "./.github/actions/local" },
+    ];
+    for (const step of steps) {
+      const workflow = {
+        on: ["pull_request_target"],
+        jobs: { a: { steps: [step] } },
+      };
+      expect(cacheSaveProblems(workflow), step.uses).toHaveLength(1);
+    }
+    const unreviewed = {
+      on: { pull_request_target: {} },
+      jobs: { a: { uses: "someone/repo/.github/workflows/x.yml@abc" } },
+    };
+    expect(cacheSaveProblems(unreviewed)).toHaveLength(1);
+  });
+
+  test("accepts steps that cannot save to a cache", () => {
+    const workflow = {
+      on: ["pull_request_target"],
+      jobs: {
+        a: {
+          steps: [
+            { uses: "actions/cache/restore@abc" },
+            { uses: "oven-sh/setup-bun@abc", with: { "no-cache": true } },
+            { uses: "actions/setup-go@abc", with: { cache: false } },
+            { uses: "actions/setup-node@abc" },
+            { uses: "actions/github-script@abc" },
+            { run: "echo ok" },
+          ],
+        },
+      },
+    };
+    expect(cacheSaveProblems(workflow)).toEqual([]);
+    expect(
+      cacheSaveProblems({
+        on: ["pull_request"],
+        jobs: { a: { steps: [{ uses: "actions/cache@abc" }] } },
+      }),
+    ).toEqual([]);
   });
 
   test("ignores workflows without a workflow_run trigger", () => {

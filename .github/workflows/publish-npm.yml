@@ -291,6 +291,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
+          no-cache: true
 
       # --ignore-scripts: the package builds run tsc/tsdown only and do not
       # depend on install lifecycle scripts; other CI jobs build the same
