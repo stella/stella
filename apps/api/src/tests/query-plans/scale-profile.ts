@@ -271,10 +271,13 @@ export const injectScaleProfile = async (
  * full index's page count from its file, so a small index looks cheap to read
  * whole: the query's shape, not these numbers, has to keep a path bounded.
  */
-export const scaleTableToProfile = async (
+export const scaleTableToProfile = async <Table extends string>(
   db: ScaleDb,
-  table: GuardedTable,
-  profile: ScaleProfile,
+  table: Table,
+  profile: {
+    tables: Record<Table, TableScale>;
+    attributes: readonly AttributeScale[];
+  },
 ): Promise<void> => {
   const scale = profile.tables[table];
   const stats = await relationStats(db, table);

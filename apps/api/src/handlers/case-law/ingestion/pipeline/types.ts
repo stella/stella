@@ -8,6 +8,7 @@ import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/o
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusPackBatch } from "@/api/lib/legal-search/corpus-pack-batch";
+import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
 export const CONTENTION_RECONCILIATION = {
   INITIAL: "initial",
@@ -98,6 +99,8 @@ export type DecisionRefresh =
   (typeof DECISION_REFRESH)[keyof typeof DECISION_REFRESH];
 
 export type ProcessDecisionAttemptOptions = {
+  signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   metadataUrlSchema?: unknown;
   input: IngestionResult;
   judges: CaseLawJudgeDependencies;

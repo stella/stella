@@ -86,6 +86,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 let fake: FakeS3;
 
 beforeEach(() => {
+  decisionUpdates.length = 0;
   fake = startFakeS3();
 });
 
@@ -93,8 +94,19 @@ afterEach(() => {
   fake.stop();
 });
 
+const decisionUpdates: string[] = [];
 const connect = (client: Awaited<ReturnType<typeof createTestPglite>>) =>
-  drizzle({ client, relations: { ...relations, ...authRelationsPart } });
+  drizzle({
+    client,
+    relations: { ...relations, ...authRelationsPart },
+    logger: {
+      logQuery: (query) => {
+        if (/^update "case_law_decisions"/iu.test(query)) {
+          decisionUpdates.push(query);
+        }
+      },
+    },
+  });
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof connect>;
@@ -258,9 +270,7 @@ test("a writing replay goes through the pipeline, and replaying again converges"
     observationOrder: 1n,
   });
 
-  // Same payload, same parser: the second run re-derives the stored hash, so
-  // the pipeline advances the observation watermark and rewrites nothing.
-  // That fixed point is what makes a re-run safe.
+  // Same payload, same parser: the second run preserves the entire stored row.
   const second = await replay();
   if (second.type !== "ran") {
     throw new TypeError("Expected the capable adapter to run");
@@ -281,7 +291,7 @@ test("a writing replay goes through the pipeline, and replaying again converges"
     fulltext: NEW_PARSER_TEXT,
     sourceHash: "hash-from-the-new-parser",
     sourceRawS3Key: contentAddressedKey,
-    observationOrder: 2n,
+    observationOrder: 1n,
   });
   // A converged replay re-reads the payload but has nothing to store: the
   // key the row already records names an object with these exact bytes.
@@ -896,7 +906,7 @@ test.each(["r o z h o d o l :", "Body text.\u0000"])(
 );
 
 test.each(["row-columns", "content-hash"])(
-  "a version-only replay stamps without payload or projection writes: %p",
+  "an identical replay never updates the decision at a newer parser version: %p",
   async (storage) => {
     const fixture = await replayConvergenceFixture("Unchanged body text.");
     await db
@@ -925,7 +935,7 @@ test.each(["row-columns", "content-hash"])(
     if (dry.type !== "ran") {
       throw new TypeError("Expected replay to run");
     }
-    expect(dry.report.outcomes[REPLAY_ROW_OUTCOME.WOULD_APPLY]).toBe(1);
+    expect(dry.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
     expect(await readRow()).toEqual(before);
     const lease = await acquireCaseLawSourceIngestionLease({
       scopedDb,
@@ -934,12 +944,14 @@ test.each(["row-columns", "content-hash"])(
     if (lease === null) {
       throw new TypeError("Expected the source ingestion lease to be free");
     }
+    const updatesBefore = decisionUpdates.length;
     const run = await fixture.replay(lease);
     if (run.type !== "ran") {
       throw new TypeError("Expected replay to run");
     }
-    expect(run.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
-    expect(await readRow()).toEqual({ ...before, parserVersion: 4 });
+    expect(run.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+    expect(decisionUpdates.slice(updatesBefore)).toEqual([]);
+    expect(await readRow()).toEqual(before);
     const [timestamp] = await db
       .select({ value: sql<string>`${caseLawDecisions.updatedAt}::text` })
       .from(caseLawDecisions)
@@ -986,7 +998,7 @@ test.each(["row-columns", "content-hash"])(
   },
 );
 
-test("a stamp cannot overwrite a version written after the row was selected", async () => {
+test("an identical replay preserves a newer version written after row selection", async () => {
   const fixture = await replayConvergenceFixture("Unchanged body text.");
   await db
     .update(caseLawDecisions)
@@ -1021,7 +1033,7 @@ test("a stamp cannot overwrite a version written after the row was selected", as
   if (run.type !== "ran") {
     throw new TypeError("Expected replay to run");
   }
-  expect(run.report.outcomes[REPLAY_ROW_OUTCOME.RETRYABLE]).toBe(1);
+  expect(run.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
   const [row] = await db
     .select({ version: caseLawDecisions.parserVersion })
     .from(caseLawDecisions)
