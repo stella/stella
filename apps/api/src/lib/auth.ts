@@ -1297,6 +1297,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         context: new RedisRateLimitContext({
           failurePolicy: "fail_open_local",
         }),
+        demoAccountEmail: demoConfig.email,
       }),
       // The after-hook on /get-session signs a `set-auth-jwt` response
       // header on every session resolution by reading the jwks table.

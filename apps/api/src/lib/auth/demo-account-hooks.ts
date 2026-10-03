@@ -94,7 +94,7 @@ export const createDemoSessionPolicy =
       throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
     }
     const { email } = account;
-    if (email.trim().toLowerCase() !== config.email.toLowerCase()) {
+    if (email.trim().toLowerCase() !== config.email.trim().toLowerCase()) {
       return undefined;
     }
     const organizationId = config.organizationId;

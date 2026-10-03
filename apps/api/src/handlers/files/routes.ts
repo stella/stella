@@ -23,11 +23,12 @@ import { updateDocumentProperties } from "@/api/handlers/files/update-document-p
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
-const readFileEndpoint = createSafeHandler(
+export const readFileEndpoint = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
@@ -39,11 +40,15 @@ const readFileEndpoint = createSafeHandler(
   async function* ({
     params: { fieldId },
     query: { purpose },
+    user,
     scopedDb,
     session,
     workspaceId,
     recordAuditEvent,
   }) {
+    if (purpose === "download") {
+      yield* checkDemoAccountOperation(user.email);
+    }
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -62,7 +67,7 @@ const readFileEndpoint = createSafeHandler(
   },
 );
 
-const readEmailHtmlPreviewEndpoint = createSafeHandler(
+export const readEmailHtmlPreviewEndpoint = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
@@ -85,8 +90,9 @@ const readEmailHtmlPreviewEndpoint = createSafeHandler(
   },
 );
 
-const printPdfEndpoint = createSafeHandler(
+export const printPdfEndpoint = createSafeHandler(
   {
+    accountAccess: "standard",
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
@@ -115,8 +121,9 @@ const printPdfEndpoint = createSafeHandler(
   },
 );
 
-const stampedDownloadEndpoint = createSafeHandler(
+export const stampedDownloadEndpoint = createSafeHandler(
   {
+    accountAccess: "standard",
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
@@ -255,6 +262,7 @@ export const updateDocumentPropertiesEndpoint = createSafeHandler(
 
 export const scrubbedDownloadEndpoint = createSafeHandler(
   {
+    accountAccess: "standard",
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",
@@ -286,6 +294,7 @@ export const scrubbedDownloadEndpoint = createSafeHandler(
 
 export const ocrExportEndpoint = createSafeHandler(
   {
+    accountAccess: "standard",
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",

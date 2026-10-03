@@ -22,6 +22,7 @@ import {
 } from "./query";
 
 const config = {
+  accountAccess: "standard",
   permissions: { auditLog: ["read"] },
   mcp: { type: "internal", reason: "ui_navigation_state" },
   query: readAuditLogsQuerySchema,
