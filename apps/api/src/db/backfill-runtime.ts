@@ -1,13 +1,22 @@
 import { panic, Result } from "better-result";
 import { sql, type SQL } from "drizzle-orm";
 
-import { BackfillHeldError } from "@stll/db-load-gate/backfill-pass";
 import {
+  BackfillFailedError,
+  BackfillHeldError,
+} from "@stll/db-load-gate/backfill-pass";
+import {
+  backfillHeartbeat,
   combine,
   defaultConfig,
   initialBatchState,
 } from "@stll/db-load-gate/health";
-import type { HealthConfig, Signal, Verdict } from "@stll/db-load-gate/health";
+import type {
+  BatchState,
+  HealthConfig,
+  Signal,
+  Verdict,
+} from "@stll/db-load-gate/health";
 import {
   AUTOVACUUM_SQL,
   LONG_TRANSACTION_SQL,
@@ -40,17 +49,28 @@ import type { Transaction } from "./root";
 import type { CreateIngestionDbOptions } from "./scoped";
 import { setSharedQueryTimeouts } from "./shared-pool-timeouts";
 
-export { BackfillHeldError } from "@stll/db-load-gate/backfill-pass";
+export {
+  BackfillFailedError,
+  BackfillHeldError,
+} from "@stll/db-load-gate/backfill-pass";
 
 type Query = IndicatorQuery;
+export type BackfillRunStatus = ReturnType<typeof backfillHeartbeat> & {
+  transitionEvent?: "backfill.yielded" | "backfill.resumed";
+};
+
 type RuntimeOptions = {
   name: string;
   tableName: string;
   initialSize: number;
+  initialCursor?: string | null;
   config?: HealthConfig | undefined;
   clock?: (() => number) | undefined;
   readVerdict?: (() => Promise<Verdict>) | undefined;
   log?: ((record: unknown) => void) | undefined;
+  reporting?: "detailed" | "changes";
+  statementTimeoutPolicy?: "defer" | "fail";
+  observeStatus?: ((record: BackfillRunStatus) => void) | undefined;
 };
 type BatchWork<BatchTransaction, Value> = (options: {
   tx: BatchTransaction;
@@ -180,10 +200,119 @@ const createVerdictReader = ({
     );
 };
 
+type RuntimeReportingOptions = {
+  reporting: NonNullable<RuntimeOptions["reporting"]>;
+  log: NonNullable<RuntimeOptions["log"]>;
+  observeStatus: RuntimeOptions["observeStatus"];
+};
+type RuntimeDecision = {
+  status: "done" | "advanced" | "held" | "retry";
+  verdict: Verdict;
+  holdCause: BatchState["holdCause"];
+};
+
+const createRuntimeReporter = ({
+  log,
+  observeStatus,
+  reporting,
+}: RuntimeReportingOptions) => {
+  let previousDecision: string | undefined;
+  let summary: BackfillRunStatus | undefined;
+  let firstTransition: BackfillRunStatus["transitionEvent"];
+  return {
+    logBatch: reporting === "detailed" ? log : () => undefined,
+    logDecision: ({ status, verdict, holdCause }: RuntimeDecision) => {
+      if (reporting === "detailed") {
+        return;
+      }
+      const settledStatus = status === "done" ? "advanced" : status;
+      const identity = JSON.stringify({
+        status: settledStatus,
+        verdict: verdict.kind,
+        signals: verdict.signals.map(({ indicator, kind, reason }) => ({
+          indicator,
+          kind,
+          reason,
+        })),
+        holdCause,
+      });
+      if (identity === previousDecision) {
+        return;
+      }
+      log({
+        action: "batch_decision",
+        status: settledStatus,
+        verdict,
+        holdCause,
+      });
+      previousDecision = identity;
+    },
+    recordStatus: (record: ReturnType<typeof backfillHeartbeat>) => {
+      if (reporting === "detailed") {
+        observeStatus?.(record);
+        return;
+      }
+      if (
+        firstTransition === undefined &&
+        (record.event === "backfill.yielded" ||
+          record.event === "backfill.resumed")
+      ) {
+        firstTransition = record.event;
+      }
+      summary =
+        firstTransition === undefined
+          ? record
+          : {
+              ...record,
+              event: record.event ?? firstTransition,
+              transitionEvent: firstTransition,
+            };
+    },
+    flush: () => {
+      if (summary === undefined) {
+        return;
+      }
+      const record = summary;
+      summary = undefined;
+      observeStatus?.(record);
+    },
+  };
+};
+
+type BackfillBatchResult = Awaited<ReturnType<typeof runAdaptiveBackfillBatch>>;
+
+type BackfillDeferralOptions = {
+  name: string;
+  result: BackfillBatchResult;
+  statementTimeoutPolicy: NonNullable<RuntimeOptions["statementTimeoutPolicy"]>;
+};
+const throwIfBackfillDeferred = ({
+  name,
+  result,
+  statementTimeoutPolicy,
+}: BackfillDeferralOptions) => {
+  if (result.status === "retry" && statementTimeoutPolicy === "fail") {
+    throw new BackfillFailedError({
+      message: `Backfill ${name} batch failed (statement timeout)`,
+      cause: result.error,
+      holdUntil: result.checkpoint.batch.holdUntil,
+      heldSince: result.checkpoint.batch.heldSince,
+    });
+  }
+  if (result.status === "held" || result.status === "retry") {
+    throw new BackfillHeldError({
+      message: `Backfill ${name} deferred (${result.status})`,
+      holdUntil: result.checkpoint.batch.holdUntil,
+      heldSince: result.checkpoint.batch.heldSince,
+    });
+  }
+};
+
 const createRuntime = <BatchTransaction>({
   name,
   tableName,
   initialSize,
+  initialCursor = null,
   runInTransaction,
   transactionQuery,
   slot,
@@ -191,6 +320,9 @@ const createRuntime = <BatchTransaction>({
   config = defaultConfig,
   clock = () => Temporal.Now.instant().epochMilliseconds,
   readVerdict,
+  observeStatus,
+  reporting = "detailed",
+  statementTimeoutPolicy = "defer",
   log = (record) =>
     process.stderr.write(
       `${JSON.stringify({ event: "database_backfill_decision", name, record })}\n`,
@@ -223,9 +355,10 @@ const createRuntime = <BatchTransaction>({
       lockTimeoutMs: config.batchLockTimeoutMs,
     });
     await q(
-      "INSERT INTO database_backfill_states (name, batch) VALUES ($1, $2::text::jsonb) ON CONFLICT (name) DO NOTHING",
+      "INSERT INTO database_backfill_states (name, cursor, batch) VALUES ($1, $2, $3::text::jsonb) ON CONFLICT (name) DO NOTHING",
       [
         name,
+        initialCursor,
         JSON.stringify({ ...initialBatchState(config), size: initialSize }),
       ],
     );
@@ -264,22 +397,32 @@ const createRuntime = <BatchTransaction>({
     }
     return checkpoint;
   };
+  const persistCheckpoint = async (
+    tx: BatchTransaction,
+    checkpoint: BackfillCheckpoint<string | null>,
+  ) => {
+    await transactionQuery(tx)(
+      "UPDATE database_backfill_states SET cursor = $2, batch = $3::text::jsonb, updated_at = now() WHERE name = $1",
+      [name, checkpoint.cursor, JSON.stringify(checkpoint.batch)],
+    );
+  };
+  const reporter = createRuntimeReporter({ log, observeStatus, reporting });
   const step = async <Value>(work: BatchWork<BatchTransaction, Value>) => {
     const completion: { result?: { value: Value } } = {};
+    let previousHeldSince: number | null = null;
     const result = await runAdaptiveBackfillBatch({
       runInTransaction,
       config,
       clock,
-      log,
+      log: reporter.logBatch,
       readVerdict: readSettledVerdict,
       slot,
-      readCheckpoint,
-      persistCheckpoint: async (tx, checkpoint) => {
-        await transactionQuery(tx)(
-          "UPDATE database_backfill_states SET cursor = $2, batch = $3::text::jsonb, updated_at = now() WHERE name = $1",
-          [name, checkpoint.cursor, JSON.stringify(checkpoint.batch)],
-        );
+      readCheckpoint: async (tx) => {
+        const checkpoint = await readCheckpoint(tx);
+        previousHeldSince = checkpoint.batch.heldSince;
+        return checkpoint;
       },
+      persistCheckpoint,
       // Work is already a bounded, idempotent SQL batch. It executes in the
       // checkpoint transaction; external I/O must be performed beforehand.
       selectPage: async (tx, cursor, size) => {
@@ -297,24 +440,83 @@ const createRuntime = <BatchTransaction>({
       persistItems: () => undefined,
       isStatementTimeout: (cause) => isPgError(cause, PG_ERROR.QUERY_CANCELED),
     });
-    if (result.status === "held" || result.status === "retry") {
-      throw new BackfillHeldError({
-        message: `Backfill ${name} deferred (${result.status})`,
-        holdUntil: result.checkpoint.batch.holdUntil,
-        heldSince: result.checkpoint.batch.heldSince,
-      });
-    }
-    if (completion.result === undefined) {
-      return panic("Backfill batch completed without a result");
-    }
+    reporter.logDecision({
+      status: result.status,
+      verdict: result.verdict,
+      holdCause: result.checkpoint.batch.holdCause,
+    });
+    reporter.recordStatus(
+      backfillHeartbeat({
+        name,
+        state: result.checkpoint.batch,
+        previousHeldSince,
+        verdict: result.verdict,
+        now: clock(),
+        config,
+      }),
+    );
+    throwIfBackfillDeferred({ name, result, statementTimeoutPolicy });
+    const completedBatch =
+      completion.result ?? panic("Backfill batch completed without a result");
     return {
       done: result.status === "done",
       cursor: result.checkpoint.cursor,
       sleepMs: result.checkpoint.batch.sleepMs,
-      value: completion.result.value,
+      value: completedBatch.value,
     };
   };
-  return { step, close };
+  const recordCompletion = async (
+    confirm: (tx: BatchTransaction) => Promise<boolean>,
+  ) => {
+    const completed = await runInTransaction(async (tx) => {
+      const checkpoint = await readCheckpoint(tx);
+      if (!(await confirm(tx))) {
+        return null;
+      }
+      // Completion is confirmed against the actual work under this row lock,
+      // so a hold left by another worker must not survive completed work.
+      // During a rolling deploy an older replica may confirm its older unit
+      // set and clear a newer replica's hold. This can reset heldSince/backoff
+      // until the next run. Every new unit still reads load and acquires its
+      // heavy slot, but a cleared latch can admit throttled work from hardFloor
+      // upward instead of waiting for resumeFloor; startFloor separates normal
+      // from throttled work. Holds may flap each minute during the rollout,
+      // resetting heldSince/backoff, so held-too-long cannot fire until the
+      // newer build records its first admission. This bounded rollout tradeoff
+      // prevents a concurrent worker's hold from surviving completed work.
+      const batch = {
+        ...initialBatchState(config),
+        size: checkpoint.batch.size,
+        sleepMs: checkpoint.batch.sleepMs,
+      };
+      await persistCheckpoint(tx, { cursor: null, batch });
+      return { batch, previousHeldSince: checkpoint.batch.heldSince };
+    });
+    if (completed === null) {
+      return;
+    }
+    reporter.recordStatus(
+      backfillHeartbeat({
+        name,
+        state: completed.batch,
+        previousHeldSince: completed.previousHeldSince,
+        verdict: { kind: "normal", signals: [] },
+        now: clock(),
+        config,
+      }),
+    );
+  };
+  return {
+    step,
+    recordCompletion,
+    close: async () => {
+      try {
+        await close();
+      } finally {
+        reporter.flush();
+      }
+    },
+  };
 };
 
 const drizzleQuery =
@@ -516,14 +718,16 @@ export const createDatabaseLoadVerdictReader = ({
 
 export const createScriptBackfillRuntime = ({
   db,
+  slot: injectedSlot,
   ...options
 }: RuntimeOptions & {
   db: {
     transaction: IngestionTransactionRunner<Transaction>;
     execute: (statement: SQL) => PromiseLike<unknown>;
   };
+  slot?: DatabaseRuntimeOptions<Transaction>["slot"];
 }) => {
-  const slot = {
+  const slot = injectedSlot ?? {
     tryAcquire: async (tx: Transaction) =>
       await tryAcquireBackfillTransactionSlot({
         query: async (statement, parameters) =>
@@ -557,7 +761,9 @@ export const createScriptBackfillRuntime = ({
 };
 
 export const createBackfillRuntime = (
-  options: RuntimeOptions & { connection: OnlineMigrationConnection },
+  options: RuntimeOptions & {
+    connection: Pick<OnlineMigrationConnection, "execute" | "query">;
+  },
 ) => {
   const { connection } = options;
   const slot = createHeavyWorkSlot({
@@ -573,7 +779,7 @@ export const createBackfillRuntime = (
     },
   });
   const runInTransaction: IngestionTransactionRunner<
-    OnlineMigrationConnection
+    Pick<OnlineMigrationConnection, "execute" | "query">
   > = async (work) => {
     await connection.execute("BEGIN");
     const outcome = await Result.tryPromise({
@@ -602,7 +808,9 @@ export const createBackfillRuntime = (
       },
       release: slot.release,
     },
-    transactionQuery: (tx: OnlineMigrationConnection) => tx.query,
+    transactionQuery: (
+      tx: Pick<OnlineMigrationConnection, "execute" | "query">,
+    ) => tx.query,
     config: {
       ...(options.config ?? defaultConfig),
       minSize: Math.min(

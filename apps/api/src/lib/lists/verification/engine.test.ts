@@ -121,6 +121,42 @@ describe("locateQuote", () => {
 });
 
 describe("extractClaims", () => {
+  test("repeated statements with equivalent whitespace keep distinct anchors", async () => {
+    const text = "paid on time; paid\ton time again";
+    const raw = {
+      blockId: "b1",
+      quote: "paid on time",
+      type: "fact",
+      framing: "asserted",
+    } as const;
+    answers.push({ claims: [raw, raw] });
+    const result = await extractClaims({
+      blocks: [
+        { id: "b1", text, source: { type: "docx-block", blockId: "b1" } },
+      ],
+      deps,
+    });
+    expect(Result.isOk(result)).toBe(true);
+    expect(
+      Result.isOk(result)
+        ? result.value.map((claim) => ({
+            text: claim.text,
+            anchor: claim.anchor,
+          }))
+        : null,
+    ).toEqual([
+      {
+        text: "paid on time",
+        anchor: { type: "docx-block", blockId: "b1", start: 0, end: 12 },
+      },
+      {
+        text: "paid\ton time",
+        anchor: { type: "docx-block", blockId: "b1", start: 14, end: 26 },
+      },
+    ]);
+    expect(captured).toHaveLength(1);
+  });
+
   test("anchors claims to block offsets and repairs a misquote once", async () => {
     answers.push(
       {
@@ -208,14 +244,93 @@ describe("gradeClaims", () => {
     {
       key: "0",
       text: "I first met him on 9 March 2021",
-      context: "I first met him on 9 March 2021. We spoke briefly.",
+      context: {
+        text: "I first met him on 9 March 2021. We spoke briefly.",
+        anchor: { start: 0, end: "I first met him on 9 March 2021".length },
+      },
     },
     {
       key: "1",
       text: "The amount was EUR 40,000",
-      context: "The amount was EUR 40,000 in total.",
+      context: {
+        text: "The amount was EUR 40,000 in total.",
+        anchor: { start: 0, end: "The amount was EUR 40,000".length },
+      },
     },
   ];
+
+  test("a long block supplies passage context around the claim span", async () => {
+    const text = "The payment was approved";
+    const context = `${"L".repeat(3000)}${text}${"R".repeat(3000)}`;
+    answers.push({
+      grades: [
+        {
+          claimId: "C1",
+          verdict: "nocover",
+          score: null,
+          refs: [],
+          conflict: null,
+        },
+      ],
+    });
+    const result = await gradeClaims({
+      claims: [
+        {
+          key: "late",
+          text,
+          context: {
+            text: context,
+            anchor: { start: 3000, end: 3000 + text.length },
+          },
+        },
+      ],
+      facts: [fact(FACT_A, "An unrelated meeting")],
+      deps,
+    });
+    expect(Result.isOk(result)).toBe(true);
+    expect(captured).toHaveLength(1);
+    const sent = JSON.stringify(captured.at(0)?.messages);
+    expect(sent).toContain(
+      `passage: ${"L".repeat(738)}${text}${"R".repeat(738)}`,
+    );
+    expect(sent).not.toContain(`passage: ${"L".repeat(1500)}`);
+  });
+
+  test("short block passage text stays byte-identical at the grading boundary", async () => {
+    const text = "EUR 40,000";
+    const context = "The payment of “EUR 40,000” was proper.";
+    const start = context.indexOf(text);
+    answers.push({
+      grades: [
+        {
+          claimId: "C1",
+          verdict: "nocover",
+          score: null,
+          refs: [],
+          conflict: null,
+        },
+      ],
+    });
+    const result = await gradeClaims({
+      claims: [
+        {
+          key: "short",
+          text,
+          context: {
+            text: context,
+            anchor: { start, end: start + text.length },
+          },
+        },
+      ],
+      facts: [fact(FACT_A, "An unrelated meeting")],
+      deps,
+    });
+    expect(Result.isOk(result)).toBe(true);
+    expect(captured).toHaveLength(1);
+    expect(JSON.stringify(captured.at(0)?.messages)).toContain(
+      `passage: ${context}`,
+    );
+  });
 
   test("a list with no facts answers no coverage without a model call", async () => {
     const result = await gradeClaims({ claims, facts: [], deps });
@@ -310,12 +425,18 @@ describe("gradeClaims", () => {
         {
           key: "opinion",
           text: "The arrangement was proper",
-          context: "The arrangement was proper.",
+          context: {
+            text: "The arrangement was proper.",
+            anchor: { start: 0, end: "The arrangement was proper".length },
+          },
         },
         {
           key: "fact",
           text: "The payment was approved",
-          context: "The payment was approved.",
+          context: {
+            text: "The payment was approved.",
+            anchor: { start: 0, end: "The payment was approved".length },
+          },
         },
       ],
       facts: [fact(FACT_A, "An unrelated meeting took place")],

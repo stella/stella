@@ -1,5 +1,7 @@
 import { Result, panic } from "better-result";
 
+import type { DocumentStageObserver } from "@stll/legal-atlas/document-fetch-diagnostics";
+
 import type { IngestionScopedDb } from "@/api/db/safe-db";
 import type { caseLawSources } from "@/api/db/schema";
 import {
@@ -66,6 +68,7 @@ type DbSlot = {
 };
 
 type PipelineInput = {
+  onDocumentObservation?: DocumentStageObserver;
   source: typeof caseLawSources.$inferSelect;
   sourceLease: CaseLawSourceIngestionLease;
   scopedDb: IngestionScopedDb;
@@ -215,6 +218,7 @@ export const runIngestionPipeline = async ({
   scopedDb,
   acquireStoredTotalAdmission,
   countStoredTotalSource,
+  onDocumentObservation,
   cycle,
   maxPages: maxPagesOverride,
   maxDecisions,
@@ -275,6 +279,7 @@ export const runIngestionPipeline = async ({
             fetchCursor,
             source.config ?? {},
             pageSignal,
+            onDocumentObservation,
           );
           if (Result.isError(pageResult)) {
             return { error: pageResult.error, type: "fetch-error" } as const;

@@ -1,5 +1,13 @@
 # @stll/cli
 
+## 3.4.0
+
+### Minor Changes
+
+- [#4146](https://github.com/stella/stella/pull/4146) [`1a16c0c`](https://github.com/stella/stella/commit/1a16c0cef6bba7a8dc281ad18851b393f8153589) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Screen counterparties against the sanctions lists.
+
+- [#4490](https://github.com/stella/stella/pull/4490) [`032e379`](https://github.com/stella/stella/commit/032e379de50656a9ac259b0225414855630fa8c6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add daily time target controls and remaining minutes to the personal day view.
+
 ## 3.3.4
 
 ### Patch Changes

@@ -58,6 +58,7 @@
         "@libpdf/core": "catalog:",
         "@litko/yara-x": "^0.7.2",
         "@modelcontextprotocol/server": "2.0.0",
+        "@openrouter/sdk": "0.13.20",
         "@opentelemetry/api-logs": "^0.222.0",
         "@opentelemetry/exporter-logs-otlp-http": "^0.222.0",
         "@opentelemetry/resources": "^2.11.0",
@@ -159,7 +160,6 @@
         "@mistralai/mistralai": "2.2.0",
         "@modelcontextprotocol/client": "2.0.0",
         "@modelcontextprotocol/ext-apps": "^2.0.0",
-        "@openrouter/sdk": "0.13.20",
         "@standard-schema/spec": "^1.1.0",
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
@@ -686,7 +686,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "3.3.4",
+      "version": "3.4.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -857,6 +857,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/api-contract": "workspace:*",
+        "@stll/concurrency": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "better-result": "catalog:",
       },
@@ -1136,7 +1137,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.40.0",
+      "version": "0.40.1",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",

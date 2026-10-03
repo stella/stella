@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { DOCUMENT_OUTSTANDING_INDEX } from "@/api/lib/legal-search/sk-document-outstanding-index";
+
 import {
   REWRITTEN_MIGRATION_INDEXES,
   type RequiredMigrationIndex,
@@ -70,6 +72,15 @@ type OnlineIndex = RequiredMigrationIndex & {
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql:
+      'CREATE INDEX CONCURRENTLY "rate_entries_table_role_from_idx" ON public."rate_entries" USING btree ("rate_table_id", "role", "effective_from")',
+    definitionBody:
+      "ON public.rate_entries USING btree (rate_table_id, role, effective_from)",
+    isUnique: false,
+    name: "rate_entries_table_role_from_idx",
+    tableName: "rate_entries",
+  },
+  {
+    createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "session_priorTokenHash_idx" ON public."session" USING btree ("prior_token_hash")',
     definitionBody: "ON public.session USING btree (prior_token_hash)",
     isUnique: true,
@@ -120,6 +131,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "case_law_decisions_provision_scope_cursor_idx",
     tableName: "case_law_decisions",
   },
+  DOCUMENT_OUTSTANDING_INDEX,
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "case_law_decisions_docket_family_key_idx" ON public."case_law_decisions" USING btree ("docket_family_key") WHERE "docket_family_key" IS NOT NULL',

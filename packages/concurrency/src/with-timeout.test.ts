@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
-import { withTimeout } from "@/api/lib/with-timeout";
+import { TimeoutError, withTimeout } from "./with-timeout";
 
 describe("withTimeout", () => {
   test("returns the operation result when it settles before the deadline", async () => {

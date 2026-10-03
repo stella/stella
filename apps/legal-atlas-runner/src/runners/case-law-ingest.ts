@@ -1,6 +1,3 @@
-import { panic } from "better-result";
-
-import { Temporal } from "@stll/time";
 /**
  * Continuous case law ingestion daemon.
  *
@@ -19,6 +16,16 @@ import { Temporal } from "@stll/time";
  * Without arguments, runs all sources in independent loops.
  * With an adapter key, runs only that source once and exits.
  */
+
+import { panic, Result } from "better-result";
+
+import {
+  DOCUMENT_FETCH_EVENT,
+  documentFetchErrorOutcome,
+  type DocumentStageObservation,
+} from "@stll/legal-atlas/document-fetch-diagnostics";
+import { observeDocumentStageSafely } from "@stll/legal-atlas/document-stage-observer";
+import { Temporal } from "@stll/time";
 
 import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
@@ -66,6 +73,7 @@ import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-
 import {
   DOCUMENT_FETCH_BUDGET_MS,
   fetchDecisionDocument,
+  hasPendingDeferredDocuments,
   scopedPendingDocumentTierLoaders,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import { createPendingDocumentQueue } from "@/api/lib/legal-search/sk-document-queue";
@@ -139,6 +147,22 @@ const logError = (message: string, detail?: unknown): void => {
   const formattedDetail = formatLogDetail(detail);
   const line = formattedDetail ? `${message} ${formattedDetail}` : message;
   void Bun.write(Bun.stderr, `${line}\n`);
+};
+
+const logDocumentStageObservation = async (
+  observation: DocumentStageObservation,
+): Promise<void> => {
+  await observeDocumentStageSafely({
+    observation,
+    observer: "builtin",
+    observe: ({ event, ...attributes }) => {
+      logger.info(event, attributes);
+    },
+    reportFailure: ({ event, ...attributes }, signal) => {
+      signal.throwIfAborted();
+      logger.warn(event, attributes);
+    },
+  });
 };
 
 /** Set to true once daemon mode starts; single-adapter mode exits on all errors. */
@@ -1374,9 +1398,31 @@ export const runCaseLawIngest = async (
     }
     const fetchDelayMs = LEGAL_ATLAS_RUNNER_ENV.skDocumentFetchDelayMs;
     logInfo(`[sk-documents] Enabled (one fetch per ${fetchDelayMs}ms)`);
+    const documentLoaders = scopedPendingDocumentTierLoaders(backfillDb);
     await runSkDocumentDrain({
+      documentObservations: {
+        source: ADAPTER_KEYS.SK_COURTS,
+        observe: async (observation) => {
+          if (observation.event === DOCUMENT_FETCH_EVENT.window) {
+            await logDocumentStageObservation(observation);
+          }
+        },
+        hasPending: async () => {
+          const pending = await Result.tryPromise({
+            try: async () => await hasPendingDeferredDocuments(backfillDb),
+            catch: (error) => error,
+          });
+          if (Result.isError(pending)) {
+            await logDocumentStageObservation(
+              documentFetchErrorOutcome(ADAPTER_KEYS.SK_COURTS, pending.error),
+            );
+            throw pending.error;
+          }
+          return pending.value;
+        },
+      },
       queue: createPendingDocumentQueue({
-        loaders: scopedPendingDocumentTierLoaders(backfillDb),
+        loaders: documentLoaders,
         pageSize: SK_DOCUMENT_PAGE_SIZE,
         requestedPollIntervalMs: SK_DOCUMENT_REQUESTED_POLL_INTERVAL_MS,
       }),
@@ -1384,12 +1430,13 @@ export const runCaseLawIngest = async (
       // the transaction handle bounds its writes; the hard deadline is the
       // same backstop the other loops carry, for a future await that slips
       // in unbounded and would otherwise park the walk forever.
-      fetchDocument: async (decision) =>
+      fetchDocument: async (decision, onDocumentObservation) =>
         await runWithHardDeadline(
           "sk-documents",
           BACKFILL_HARD_DEADLINE_MS,
           async () =>
             await fetchDecisionDocument({
+              onDocumentObservation,
               decision,
               fetchDocument: skCourtsDocumentFetch,
               scopedDb: backfillDb,
