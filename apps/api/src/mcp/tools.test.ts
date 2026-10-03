@@ -50,6 +50,8 @@ import {
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { DECISION_DOCUMENT_HYDRATION } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import { searchCorpusIndexDecisions } from "@/api/handlers/case-law/decisions/search";
+import * as searchInterpretation from "@/api/handlers/case-law/decisions/search-interpretation";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { executeRegistryLookup } from "@/api/lib/business-registries/dispatch";
@@ -64,6 +66,11 @@ import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
+import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
+import type { ServingCorpusIndexTarget } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
+import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
+import { corpusQueryVariantCursorTarget } from "@/api/lib/legal-search/corpus-query-variant-policy";
+import { corpusRankingCursorTarget } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
   CORPUS_SEARCH_CURSOR_MAX_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
@@ -2120,6 +2127,93 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(second.text).toBe("y".repeat(1000));
     expect(second.metadata.truncated).toBe(false);
     expect(second.nextCursor).toBeNull();
+  });
+
+  test("search_case_law and its handler interpret the enabled query variant identically", async () => {
+    const configuredVariant = "provision-refs";
+    const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+    const resolution = corpusIndexReadTarget({
+      manifest,
+      jurisdiction: "CZE",
+      attestedGroups: new Set(),
+      enrolledGroups: new Set(),
+    });
+    if (resolution.type !== "ready") {
+      panic("Expected the base Czech corpus group to be ready");
+    }
+    const target = {
+      ...resolution.target,
+      manifest,
+      serving: {
+        family: "case_law",
+        generation: manifest.generation,
+        cluster: manifest.cluster,
+      },
+    } as const satisfies ServingCorpusIndexTarget;
+    // An off-variant cursor stops the real handler after interpretation,
+    // before database or engine reads, when provision grouping is enabled.
+    const cursor = encodeCorpusSearchCursor({
+      dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+      id: DECISION_ID,
+      score: 0.5,
+      sort: "relevance",
+      windowStart: 0,
+      target: corpusQueryVariantCursorTarget(
+        corpusRankingCursorTarget(
+          target.cursorTarget,
+          envBase.CORPUS_INDEX_RANKING_MODE,
+        ),
+        "off",
+      ),
+    });
+    const unreadableDb = Object.assign(
+      async () => panic("A cross-variant cursor must not read the database"),
+      caseLawPublicReadDb,
+    );
+    searchDecisionsHandlerMock.mockImplementation(
+      async (body, _caseLawDb, observer) =>
+        await searchCorpusIndexDecisions({
+          body,
+          caseLawDb: unreadableDb,
+          observer,
+          dependencies: {
+            configuredVariant,
+            readServingTarget: async () => Result.ok(target),
+          },
+        }),
+    );
+    const capture = spyOn(searchInterpretation, "interpretDecisionQuery");
+    try {
+      const result = await handleMcpToolCall({
+        args: {
+          country: "CZE",
+          queries: ["§ 451 občanského zákoníku"],
+          cursor,
+        },
+        context: createContext({
+          testDependencies: { corpusIndexQueryVariant: configuredVariant },
+        }),
+        toolName: "search_case_law",
+      });
+      expect(result.isError).toBe(true);
+      expect(parseToolPayload(result)).toMatchObject({
+        error: {
+          code: "validation_error",
+          message: "Invalid cursor",
+          hint: expect.stringContaining("search_case_law"),
+        },
+      });
+      expect(capture).toHaveBeenCalledTimes(2);
+      const mcpInterpretation = capture.mock.results.at(0);
+      const handlerInterpretation = capture.mock.results.at(1);
+      expect(mcpInterpretation).toEqual({
+        type: "return",
+        value: expect.objectContaining({ queryVariant: "provision-refs" }),
+      });
+      expect(handlerInterpretation).toEqual(mcpInterpretation);
+    } finally {
+      capture.mockRestore();
+    }
   });
 
   test("search_case_law maps filters and returns decision links", async () => {

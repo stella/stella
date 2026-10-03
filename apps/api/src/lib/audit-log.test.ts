@@ -7,6 +7,7 @@ import {
   createBackgroundAuditRecorder,
   createAuditRecorder,
 } from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -332,20 +333,25 @@ describe("audit detail projection", () => {
           },
         }),
       });
-      await recorder(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-        resourceId: "thread-1",
-        changes: {
-          title: { old: "Chat A", new: "Chat B" },
-          chatModel: { old: "model-a", new: "model-b" },
-          created: {
-            old: null,
-            new: { title: "Chat A", chatModel: "model-a" },
+      // A payload from before the field list existed, shaped as stored.
+      await recorder(
+        tx,
+        asTestRaw<AuditEvent>({
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+          resourceId: "thread-1",
+          changes: {
+            title: { old: "Chat A", new: "Chat B" },
+            name: { old: "Chat A", new: "Chat B" },
+            chatModel: { old: "model-a", new: "model-b" },
+            created: {
+              old: null,
+              new: { title: "Chat A", summary: "Chat A", chatModel: "model-a" },
+            },
           },
-        },
-        metadata: { title: "Chat A", threadId: "thread-1" },
-      });
+          metadata: { title: "Chat A", threadId: "thread-1" },
+        }),
+      );
       expect(inserted.at(0)?.["changes"]).toEqual({
         chatModel: { old: "model-a", new: "model-b" },
         created: { old: null, new: { chatModel: "model-a" } },
@@ -355,5 +361,60 @@ describe("audit detail projection", () => {
       });
       expect(inserted.at(0)?.["metadata"]).not.toHaveProperty("title");
     }
+  });
+
+  test("chat message and file entries keep no change fields", async () => {
+    let inserted: Record<string, unknown>[] = [];
+    const tx = asTestRaw<Transaction>({
+      insert: () => ({
+        values: async (rows: Record<string, unknown>[]) => {
+          inserted = rows;
+        },
+      }),
+    });
+    const recorder = createBackgroundAuditRecorder({
+      organizationId: safeId<"organization">("org-1"),
+      userId: safeId<"user">("user-1"),
+      workspaceId: null,
+      execution: {
+        performer: { type: "user", id: safeId<"user">("user-1") },
+        trigger: { type: "direct" },
+      },
+    });
+    await recorder(
+      tx,
+      [AUDIT_RESOURCE_TYPE.CHAT_MESSAGE, AUDIT_RESOURCE_TYPE.CHAT_FILE].map(
+        (resourceType) =>
+          asTestRaw<AuditEvent>({
+            action: AUDIT_ACTION.UPDATE,
+            resourceType,
+            resourceId: "resource-1",
+            changes: { text: { old: "Chat A", new: "Chat B" } },
+          }),
+      ),
+    );
+    expect(inserted.map((row) => row["changes"])).toEqual([{}, {}]);
+  });
+
+  test("chat entries accept only their listed change fields", () => {
+    const listed: AuditEvent = {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+      resourceId: "thread-1",
+      changes: {
+        dataWorkspaceIds: { old: [], new: ["workspace-1"] },
+        titleChanged: { old: false, new: true },
+      },
+    };
+    const unlisted: AuditEvent = {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+      resourceId: "thread-1",
+      changes: {
+        // @ts-expect-error -- free text is not a chat thread change field
+        title: { old: "Chat A", new: "Chat B" },
+      },
+    };
+    expect([listed, unlisted]).toHaveLength(2);
   });
 });

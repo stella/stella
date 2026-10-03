@@ -175,7 +175,6 @@ const updateThreadModel = createSafeRootHandler(
               created: {
                 old: null,
                 new: {
-                  title: CHAT_THREAD_PLACEHOLDER_TITLE,
                   chatModel: model,
                   chatReasoningEffort: reasoningEffort,
                 },
