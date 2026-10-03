@@ -302,7 +302,7 @@ describe("writing a field value", () => {
     const [restAudit] = rest.audits;
     const [chatAudit] = chat.audits;
     if (!restAudit || !chatAudit) {
-      return panic("Expected one audit row per write");
+      panic("Expected one audit row per write");
     }
     expect(chatAudit).toMatchObject({
       action: "create",

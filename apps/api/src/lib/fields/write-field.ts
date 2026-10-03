@@ -211,8 +211,7 @@ const isEmptyContent = (content: FieldWriteContent): boolean => {
       return content.name === "";
     case "int":
     case "money":
-      return false;
-    default:
+    case "clip":
       return false;
   }
 };

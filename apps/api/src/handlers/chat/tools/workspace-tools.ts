@@ -295,7 +295,15 @@ const toChatToolError = ({
         kind: "invalid-input",
         message: error.message,
       });
-    default:
+    case 401:
+    case 402:
+    case 413:
+    case 422:
+    case 428:
+    case 429:
+    case 500:
+    case 502:
+    case 503:
       return new ChatToolError({
         kind: "server-defect",
         message: "The field could not be updated.",
