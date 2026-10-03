@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 3.5.2
+
+### Patch Changes
+
+- [#4454](https://github.com/stella/stella/pull/4454) [`5518250`](https://github.com/stella/stella/commit/55182503902d5ada7d4f7e5e514a7f2ce78c3de1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Accept corpus search cursors that carry the ranking mode.
+
 ## 3.5.1
 
 ### Patch Changes
