@@ -1,9 +1,9 @@
 /**
  * Seed usage policies from deployment-owned JSON config.
  *
- * Idempotent: repeated runs upsert by `policyKey` and
- * leave existing rows in place. Source defaults are intentionally
- * empty so the public repo does not encode an operator policy.
+ * Idempotent: runs upsert by `policyKey`; non-empty seeds hide public
+ * rows whose keys are absent. Source defaults are intentionally empty
+ * so the public repo does not encode an operator policy.
  */
 
 import { Result } from "better-result";

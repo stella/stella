@@ -233,16 +233,20 @@ test("empty and invalid configurations produce empty files without opening the d
       expect(readFileSync(path, "utf-8")).toBe("");
     }
     let opened = false;
-    expect(
-      runSeedReport({
-        input: "[]",
-        resultsPath: nodePath.join(dir, "0.jsonl"),
-        openDb: () => {
-          opened = true;
-          throw new TypeError("Unexpected database access");
-        },
-      }),
-    ).rejects.toThrow("EEXIST");
+    const rejection = await runSeedReport({
+      input: "[]",
+      resultsPath: nodePath.join(dir, "0.jsonl"),
+      openDb: () => {
+        opened = true;
+        throw new TypeError("Unexpected database access");
+      },
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(() => {
+      throw rejection;
+    }).toThrow("EEXIST");
     expect(opened).toBe(false);
   } finally {
     rmSync(dir, { recursive: true });

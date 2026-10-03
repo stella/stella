@@ -53,13 +53,20 @@ test("the usage policy seed is available at the documented operator path", () =>
   );
   const commands = [
     ...docs.matchAll(
-      /^<!-- usage-policy-seed-command -->\n\n```bash\n(bun \/app\/[^\n]+)\n```$/gmu,
+      /^<!-- usage-policy-seed-command -->\n\n```bash\n([\s\S]+?)\n```$/gmu,
     ),
   ];
   expect(commands).toHaveLength(1);
   const command = commands.at(0)?.at(1);
   expect(command).toBeDefined();
-  const output = command?.split(" ").at(1);
+  const invocation = logicalInstructions(command ?? "").at(0);
+  expect(invocation).toStartWith(
+    "docker compose --env-file deploy/selfhost/.env ",
+  );
+  expect(invocation).toContain(
+    "-f docker-compose.selfhost.yml run --rm --no-deps api bun ",
+  );
+  const output = invocation?.match(/\bbun (\/app\/\S+)/u)?.at(1);
   if (output === undefined) {
     throw new TypeError("Missing documented seed entrypoint");
   }
