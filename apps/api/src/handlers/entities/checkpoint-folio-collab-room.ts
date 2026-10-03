@@ -10,7 +10,6 @@ import {
   bufferObjectCleanupIntents,
   folioCollabRooms,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -26,6 +25,7 @@ import {
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   presignDocxDownloadFromFileId,
   readVersionDocxTarget,
@@ -113,7 +113,7 @@ export const writeFolioCollabCheckpointObject = async ({
     HandlerError<409 | 413 | 503> | UnhandledException
   >
 > =>
-  !env.FEATURE_FILE_USAGE_LIMITS
+  !isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
     ? await Result.tryPromise({
         try: async () =>
           await writeS3ObjectWithRetry(

@@ -16,6 +16,8 @@ import {
 } from "@stll/api-contract/decision-query-intent";
 import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import {
+  SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   DEFAULT_SEARCH_SORT,
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
@@ -31,6 +33,7 @@ import type {
   ContactPhone,
   FieldContent,
 } from "@/api/db/schema-validators";
+import { envBase } from "@/api/env-base";
 import {
   DECISION_DOCUMENT_HYDRATION,
   DECISION_DOCUMENT_STATE,
@@ -91,7 +94,7 @@ import { scannedDocxToMarkdown } from "@/api/lib/file-scan/document-parsers";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
-import { CORPUS_SEARCH_CURSOR_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
+import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import {
@@ -638,7 +641,8 @@ const SET_PRACTICE_JURISDICTIONS_TOOL = "set_practice_jurisdictions";
  * and four base64 characters per three bytes.
  */
 export const CASE_LAW_SEARCH_CURSOR_MAX_LENGTH = Math.ceil(
-  (((CORPUS_SEARCH_CURSOR_MAX_LENGTH + 3) * LIMITS.caseLawSearchQueriesMax +
+  (((CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH + 3) *
+    LIMITS.caseLawSearchQueriesMax +
     2) *
     4) /
     3,
@@ -2083,6 +2087,47 @@ const mismatchedSearchCursorResult = (encoded: number, queryCount: number) =>
     hint: `Send the same ${String(encoded)} queries this cursor was issued for, in the same order, or omit 'cursor' to start a new search.`,
   });
 
+const mcpCorpusQueryVariant = ({ testDependencies }: McpRequestContext) =>
+  testDependencies?.corpusIndexQueryVariant ??
+  envBase.CORPUS_INDEX_QUERY_VARIANT;
+
+const caseLawSearchResult = ({
+  hit,
+  matchedQueries,
+}: ReturnType<typeof mergeCaseLawSearchHits>[number]) => {
+  const resource = resourceRef({
+    type: RESOURCE_TYPE.CASE_LAW_DECISION,
+    id: brandPersistedCaseLawDecisionId(hit.decisionId),
+  });
+  return {
+    matchedQueries,
+    appUrl: buildCaseLawDecisionAppUrl({
+      caseNumber: hit.caseNumber,
+      country: hit.country,
+      court: hit.court,
+      decisionId: hit.decisionId,
+      language: hit.language,
+      languageAlternates: hit.languageAlternates,
+      slug: hit.slug,
+    }),
+    caseNumber: hit.caseNumber,
+    citationAuthority: hit.citationAuthority,
+    citationCount: hit.citationCount,
+    country: hit.country,
+    court: hit.court,
+    courtAbbreviation: hit.courtAbbreviation,
+    decisionDate: hit.decisionDate,
+    decisionId: hit.decisionId,
+    resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
+    decisionType: hit.decisionType,
+    ecli: hit.ecli,
+    language: hit.language,
+    matchingPassages: hit.matchingPassages,
+    snippet: toPlainTextSnippet(hit.headline),
+    sourceUrl: hit.sourceUrl,
+  };
+};
+
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
 > = async ({ args, context }) => {
@@ -2182,10 +2227,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       body,
       query,
       subCursor,
-      interpretation: interpretDecisionQuery(
+      interpretation: interpretDecisionQuery({
         body,
-        parseDecisionQuery(query, { grammar, reporters }),
-      ),
+        configuredVariant: mcpCorpusQueryVariant(context),
+        intent: parseDecisionQuery(query, { grammar, reporters }),
+      }),
     };
   });
   const outcomes = await mapWithConcurrency({
@@ -2197,7 +2243,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       }
       return {
         exhausted: false as const,
-        result: await search(body, caseLawPublicReadDb, observer),
+        result: await search({
+          body,
+          caseLawDb: caseLawPublicReadDb,
+          observer,
+        }),
       };
     },
   });
@@ -2257,6 +2307,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       return {
         query,
         queryUsed: interpretation.queryUsed,
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         warnings: filterWarnings,
       };
     }
@@ -2267,6 +2318,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     return {
       query,
       queryUsed: outcome.page.queryUsed,
+      paginationOutcome: outcome.page.paginationOutcome,
       warnings: [
         ...filterWarnings,
         ...outcome.page.warnings.map((warning) =>
@@ -2280,39 +2332,14 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     facets: first.exhausted ? null : first.page.facets,
     searches,
     nextCursor: single === undefined ? mergedCursor : single.nextCursor,
-    results: merged.map(({ hit, matchedQueries }) => {
-      const resource = resourceRef({
-        type: RESOURCE_TYPE.CASE_LAW_DECISION,
-        id: brandPersistedCaseLawDecisionId(hit.decisionId),
-      });
-      return {
-        matchedQueries,
-        appUrl: buildCaseLawDecisionAppUrl({
-          caseNumber: hit.caseNumber,
-          country: hit.country,
-          court: hit.court,
-          decisionId: hit.decisionId,
-          language: hit.language,
-          languageAlternates: hit.languageAlternates,
-          slug: hit.slug,
-        }),
-        caseNumber: hit.caseNumber,
-        citationAuthority: hit.citationAuthority,
-        citationCount: hit.citationCount,
-        country: hit.country,
-        court: hit.court,
-        courtAbbreviation: hit.courtAbbreviation,
-        decisionDate: hit.decisionDate,
-        decisionId: hit.decisionId,
-        resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
-        decisionType: hit.decisionType,
-        ecli: hit.ecli,
-        language: hit.language,
-        matchingPassages: hit.matchingPassages,
-        snippet: toPlainTextSnippet(hit.headline),
-        sourceUrl: hit.sourceUrl,
-      };
-    }),
+    paginationOutcome: pages.some(
+      (outcome) =>
+        !outcome.exhausted &&
+        outcome.page.paginationOutcome.type === "truncated",
+    )
+      ? SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET
+      : SEARCH_PAGINATION_COMPLETE,
+    results: merged.map(caseLawSearchResult),
     total:
       single === undefined
         ? { type: SEARCH_TOTAL_TYPE.NOT_COUNTED }

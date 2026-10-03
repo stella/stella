@@ -81,6 +81,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/email/correspondence/**/*.ts",
   "apps/api/src/lib/email/inbound/**/*.ts",
   "apps/api/src/lib/extraction-runs/**/*.ts",
+  "apps/api/src/lib/fields/**/*.ts",
   "apps/api/src/lib/files/pdf-signing/**/*.ts",
   "apps/api/src/lib/infosoud/**/*.ts",
   "apps/api/src/lib/json-schema/**/*.ts",
@@ -129,6 +130,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
   "apps/web/src/queries/**/*.{ts,tsx}",
+  "apps/web/src/routes/-protected-app/**/*.{ts,tsx}",
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
@@ -167,6 +169,8 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 export const RESULT_BOUNDARY_GLOBS = [
   // Better Auth invokes these hooks and consumes rejected APIError values.
   "apps/api/src/lib/auth/demo-account-hooks.ts",
+  // Better Auth consumes adapter failures through Promise rejection.
+  "apps/api/src/lib/auth/registration-adapter.ts",
 
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",

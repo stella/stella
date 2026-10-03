@@ -10,7 +10,7 @@ import {
   AUDIT_RESOURCE_TYPE,
   ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
 } from "@/api/lib/audit-log";
-import { auditDetailsForResource } from "@/api/lib/audit-log-details";
+import { auditChangesForResource } from "@/api/lib/audit-log-details";
 import { escapeCSV } from "@/api/lib/csv";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -22,6 +22,7 @@ import {
 } from "./query";
 
 const config = {
+  accountAccess: "standard",
   permissions: { auditLog: ["read"] },
   mcp: { type: "internal", reason: "ui_navigation_state" },
   query: readAuditLogsQuerySchema,
@@ -121,7 +122,7 @@ const exportAuditLogs = createSafeRootHandler(
       const u = row.userId ? userMap.get(row.userId) : undefined;
       const userName = u?.name ?? "";
       const userEmail = u?.email ?? "";
-      const changes = auditDetailsForResource(row.resourceType, row.changes);
+      const changes = auditChangesForResource(row.resourceType, row.changes);
       csvRows.push(
         [
           escapeCSV(new Date(row.createdAt).toISOString()),

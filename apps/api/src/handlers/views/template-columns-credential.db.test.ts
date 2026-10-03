@@ -10,7 +10,10 @@ import createView from "@/api/handlers/views/create";
 import updateView from "@/api/handlers/views/update";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  authorizedMemberRole,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { ViewLayout, ViewTemplateProperty } from "@/api/lib/views-schema";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
@@ -61,10 +64,11 @@ afterAll(async () => {
   }
 });
 
-const ownerKey = (permissions: PermissionInput): AuthorizedMemberRole => ({
-  role: "owner",
-  credential: { type: "attenuated", permissions },
-});
+const ownerKey = (permissions: PermissionInput): AuthorizedMemberRole =>
+  authorizedMemberRole({
+    role: "owner",
+    credential: { type: "attenuated", permissions },
+  });
 
 const VIEW_ONLY = { view: ["create", "update"] } satisfies PermissionInput;
 const VIEW_AND_COLUMNS = {

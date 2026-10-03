@@ -1,6 +1,3 @@
-// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
-// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
-// parser-output-unchanged: session refusals retain their HTTP status; successful page parsing is unchanged.
 import { panic, Result } from "better-result";
 /**
  * Polish Constitutional Tribunal (Trybunał Konstytucyjny) adapter.
@@ -113,6 +110,7 @@ import type {
   PlTkCaseRecord,
   PlTkRuling,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
+import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
   TEXT_ABSENCE_REASON,
@@ -621,7 +619,7 @@ export const parsePlTkListingPage = (
   if (body.children("tr.ui-datatable-empty-message").length > 0) {
     return { page: 1, totalPages: 0, rows: [] };
   }
-  const pager = LISTING_PAGER.exec($("body").text())?.groups;
+  const pager = LISTING_PAGER.exec(visibleHtmlText($("body")))?.groups;
   const page = Number(pager?.["page"]);
   const totalPages = Number(pager?.["total"]);
   if (!Number.isSafeInteger(page) || !Number.isSafeInteger(totalPages)) {
@@ -640,12 +638,14 @@ export const parsePlTkListingPage = (
           ? undefined
           : URL.parse(href, `${PL_TK_BASE}/`)?.searchParams;
       const documentId = params?.get("dokument") ?? undefined;
-      const caseNumber = collapse(cell.find(".sygnatura").first().text());
+      const caseNumber = collapse(
+        visibleHtmlText(cell.find(".sygnatura").first()),
+      );
       const subjectNode = cell.find('span[style*="italic"]');
-      const subject = collapse(subjectNode.text());
+      const subject = collapse(visibleHtmlText(subjectNode));
       const lineNode = cell.clone();
       lineNode.find("a, span").remove();
-      const line = splitListingLine(collapse(lineNode.text()));
+      const line = splitListingLine(collapse(visibleHtmlText(lineNode)));
       const form = line?.form;
       const persistableId =
         documentId !== undefined &&

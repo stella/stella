@@ -6,7 +6,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { CatalogueDisplayEntry } from "@/lib/knowledge/catalogue-types";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
@@ -88,10 +88,7 @@ export const useUninstallEntry = (
       });
     },
     onError: (error) => {
-      stellaToast.add({
-        title: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };

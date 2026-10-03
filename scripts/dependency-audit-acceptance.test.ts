@@ -138,4 +138,36 @@ describe("audit acceptance expiry", () => {
       }),
     ).toEqual([]);
   });
+
+  test("every committed untilPatched acceptance also has an expiry date", async () => {
+    // untilPatched lapses through a registry lookup; the date makes sure an
+    // acceptance still ends if no fix is ever published.
+    const baseline: unknown = await Bun.file(
+      new URL("dependency-audit-baseline.json", import.meta.url),
+    ).json();
+    const accepted =
+      typeof baseline === "object" &&
+      baseline !== null &&
+      "accepted" in baseline &&
+      Array.isArray(baseline.accepted)
+        ? baseline.accepted
+        : [];
+    const temporary = accepted.filter(
+      (entry: unknown) =>
+        typeof entry === "object" &&
+        entry !== null &&
+        "untilPatched" in entry &&
+        entry.untilPatched === true,
+    );
+    expect(temporary.length).toBeGreaterThan(0);
+    for (const entry of temporary) {
+      const expiresOn =
+        typeof entry === "object" && entry !== null && "expiresOn" in entry
+          ? entry.expiresOn
+          : undefined;
+      expect(typeof expiresOn === "string" ? expiresOn : "").toMatch(
+        /^\d{4}-\d{2}-\d{2}$/u,
+      );
+    }
+  });
 });

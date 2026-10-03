@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * The wire format of a corpus-index search cursor: its one owner.
  *
@@ -42,7 +43,9 @@
  *     phase, query fingerprint, serving generation and, for relaxed results,
  *     the strict Works already returned. It is unauthenticated like the
  *     enclosing cursor; continuation validation compares its phase identity
- *     with the current request before using it.
+ *     with the current request before using it. Postgres legislation reads
+ *     use the same strict phase with a null generation, so the request stays
+ *     bound without a serving corpus index.
  *   - `r-<mode>`: an experimental session carries `r-off` or `r-bm25-ratio`.
  *     The effective mode survives fallback and every continuation; existing
  *     position cursors omit it and remain position cursors.
@@ -76,8 +79,7 @@
  *
  * One metadata segment therefore means a window rank and nothing else.
  */
-
-import { panic, Result } from "better-result";
+import { createHash } from "node:crypto";
 import * as v from "valibot";
 
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
@@ -139,6 +141,13 @@ const WINDOW_RANK_PATTERN = /^\d{1,10}$/u;
 
 /** Characters of one excluded-group token: base64url, fixed width. */
 export const CORPUS_CURSOR_GROUP_TOKEN_CHARS = 6;
+/** Fixed-width identity shared by every ranker and the cursor codec. */
+export const corpusSearchGroupToken = (key: string): string =>
+  createHash("sha256")
+    .update(key)
+    .digest("base64url")
+    .slice(0, CORPUS_CURSOR_GROUP_TOKEN_CHARS);
+
 const GROUP_TOKEN_PATTERN = new RegExp(
   `^[A-Za-z0-9_-]{${String(CORPUS_CURSOR_GROUP_TOKEN_CHARS)}}$`,
   "u",
@@ -156,7 +165,12 @@ const phaseIdentityFields = {
   generation: v.pipe(v.string(), v.check(isCorpusIndexGeneration)),
 };
 const corpusSearchPhaseSchema = v.variant("type", [
-  v.strictObject({ type: v.literal("strict"), ...phaseIdentityFields }),
+  v.strictObject({
+    type: v.literal("strict"),
+    ...phaseIdentityFields,
+    // Postgres has no serving index generation, but shares request binding.
+    generation: v.nullable(phaseIdentityFields.generation),
+  }),
   v.strictObject({
     type: v.literal("relaxed"),
     ...phaseIdentityFields,
@@ -240,7 +254,9 @@ const parseSearchSort = (value: string): SearchSort | null =>
  * query expansion the dictionary identity alone is a 64-character sha256, so
  * the emitted length is not a round number anyone should guess.
  */
-const SCORE_MAX_CHARS = 24;
+// Fixed notation just above 1e-6 can be longer than scientific notation:
+// -0.0000012345678901234567 occupies 25 characters.
+const SCORE_MAX_CHARS = 25;
 const WINDOW_RANK_MAX_CHARS = 10;
 const DICTIONARY_IDENTITY_MAX_CHARS = 64;
 const DECISION_ID_MAX_CHARS = 36;

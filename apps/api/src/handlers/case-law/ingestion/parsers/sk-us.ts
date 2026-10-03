@@ -1,3 +1,4 @@
+// parser-output-unchanged: the script/style check now calls the shared exclusion helper, which excludes the same two tags.
 /**
  * Slovak Constitutional Court document parser (the markup rendering).
  *
@@ -47,6 +48,7 @@ import type {
 import {
   ANONYMIZED_CLASS,
   inlinesToPlainText,
+  isExcludedHtmlTag,
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
@@ -165,7 +167,7 @@ const readMarkupLines = ($: cheerio.CheerioAPI): MarkupLine[] => {
       }
       // A script's source and a stylesheet are markup, never the decision's
       // text, whatever element they sit in.
-      if (child.name === "script" || child.name === "style") {
+      if (isExcludedHtmlTag(child.name)) {
         return;
       }
       const element = $(child);

@@ -16,7 +16,11 @@ const countedSearchTotalSchema = <TotalType extends CountedSearchTotalType>(
   t.Object(
     {
       type: t.Literal(type),
-      count: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+      count: t.Number({
+        minimum: 0,
+        maximum: Number.MAX_SAFE_INTEGER,
+        multipleOf: 1,
+      }),
     },
     { additionalProperties: false },
   );

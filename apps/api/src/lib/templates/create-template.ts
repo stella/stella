@@ -21,7 +21,6 @@ import {
   templateVersions,
 } from "@/api/db/schema";
 import type { TemplateKind, TemplateOrigin } from "@/api/db/schema";
-import { env } from "@/api/env";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -34,6 +33,7 @@ import {
   lockObjectCleanupIntentsForWriter,
   retirePublishedObjectCleanupIntentsInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -147,6 +147,36 @@ const prepareTemplateWrite = ({
     });
   });
 
+/** Writes the template object, metered against the organization's file usage
+ *  when that deployment feature is on. */
+const writeTemplateObject = async <T>({
+  organizationId,
+  objectKey,
+  sizeBytes,
+  write,
+}: {
+  organizationId: SafeId<"organization">;
+  objectKey: string;
+  sizeBytes: number;
+  write: () => Promise<T>;
+}): Promise<Result<T, HandlerError>> =>
+  isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
+    ? await writeOrganizationFile({
+        organizationId,
+        objectKey,
+        sizeBytes,
+        write,
+      })
+    : await Result.tryPromise({
+        try: write,
+        catch: (cause) =>
+          new HandlerError({
+            status: 503,
+            message: "Object storage is unavailable",
+            cause,
+          }),
+      });
+
 export const createStoredTemplate = async function* ({
   safeDb,
   organizationId,
@@ -181,26 +211,14 @@ export const createStoredTemplate = async function* ({
       writeState = written.certainty;
       return written;
     };
-    const { object: stored } = env.FEATURE_FILE_USAGE_LIMITS
-      ? yield* Result.await(
-          writeOrganizationFile({
-            organizationId,
-            objectKey: s3Key,
-            sizeBytes: file.bytes.byteLength,
-            write: writeObject,
-          }),
-        )
-      : yield* Result.await(
-          Result.tryPromise({
-            try: writeObject,
-            catch: (cause) =>
-              new HandlerError({
-                status: 503,
-                message: "Object storage is unavailable",
-                cause,
-              }),
-          }),
-        );
+    const { object: stored } = yield* Result.await(
+      writeTemplateObject({
+        organizationId,
+        objectKey: s3Key,
+        sizeBytes: file.bytes.byteLength,
+        write: writeObject,
+      }),
+    );
 
     // Advisory lock + count + insert in one transaction to
     // prevent TOCTOU on the template limit.

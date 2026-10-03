@@ -122,7 +122,6 @@ jobs:
             const MAX_WRITE_ATTEMPTS = 3;
             const MAX_PULL_COMMITS = 250;
             const MAX_COMMIT_AUTHORS = 1000;
-            const MAX_GROUP_COMMITS = MAX_PULL_COMMITS + 1;
             const { owner, repo } = context.repo;
             const api = github;
             const store = process.env.CLA_STORE_TOKEN ? new github.constructor({ auth: process.env.CLA_STORE_TOKEN }) : api;
@@ -246,24 +245,16 @@ jobs:
                   comparison.commits.length !== pull.commits || comparison.commits.some(({ sha }) => !commitShas.has(sha)) ||
                   new Set(comparison.commits.map(({ sha }) => sha)).size !== pull.commits) fail("CLA_COMMIT_SNAPSHOT_CHANGED");
               if (groupEntry) {
-                const { data: ancestry } = await request("GET /repos/{owner}/{repo}/compare/{basehead}", {
-                  basehead: `${pull.head.sha}...${groupEntry.headCommit.oid}`,
+                // The queue squashes: each entry adds exactly one commit on its
+                // predecessor, so the PR head is never an ancestor of the entry. GitHub
+                // dequeues a PR whose head moves, and the re-read below confirms the
+                // verified head did not. Any other shape fails closed.
+                const { data: added } = await request("GET /repos/{owner}/{repo}/compare/{basehead}", {
+                  basehead: `${groupEntry.baseCommit.oid}...${groupEntry.headCommit.oid}`,
                 });
-                if (ancestry.merge_base_commit?.sha !== pull.head.sha) fail("CLA_GROUP_PULL_CHANGED");
-                const grouped = [];
-                let total;
-                for (let page = 1; page <= Math.ceil(MAX_GROUP_COMMITS / 100); page++) {
-                  const { data } = await request("GET /repos/{owner}/{repo}/compare/{basehead}", {
-                    basehead: `${groupEntry.baseCommit.oid}...${groupEntry.headCommit.oid}`, per_page: 100, page,
-                  });
-                  if (!positiveInteger(data.total_commits) || data.total_commits > MAX_GROUP_COMMITS || !Array.isArray(data.commits)) fail("CLA_INVALID_GROUP_COMMIT_LIST");
-                  total ??= data.total_commits;
-                  if (data.total_commits !== total) fail("CLA_GROUP_COMMIT_SNAPSHOT_CHANGED");
-                  grouped.push(...data.commits);
-                  if (grouped.length >= total) break;
-                }
-                if (grouped.length !== total || new Set(grouped.map(({ sha }) => sha)).size !== total ||
-                    grouped.some(({ sha }) => sha !== groupEntry.headCommit.oid && !commitShas.has(sha))) fail("CLA_GROUP_COMMIT_SNAPSHOT_CHANGED");
+                const squash = Array.isArray(added.commits) && added.commits.length === 1 ? added.commits[0] : undefined;
+                if (added.total_commits !== 1 || squash?.sha !== groupEntry.headCommit.oid || !Array.isArray(squash.parents) ||
+                    squash.parents.length !== 1 || squash.parents[0]?.sha !== groupEntry.baseCommit.oid) fail("CLA_UNEXPECTED_GROUP_COMMIT");
               }
               const current = await readPull(pull.number);
               if (current.head.sha !== pull.head.sha || current.commits !== pull.commits) fail("CLA_PULL_CHANGED");
@@ -348,12 +339,7 @@ jobs:
               const verdict = await verifyPull(pull);
               await finishVerification(scoped, verdict.unsigned, verdict.unlinked);
             };
-            const verifyGroup = async (group) => {
-              const id = await startCheck(group?.head_sha);
-              if (!validSha(group.base_sha) || typeof group.base_ref !== "string" || typeof group.head_ref !== "string") fail("CLA_INVALID_MERGE_GROUP");
-              const anchor = group.head_ref.match(/\/pr-(\d+)-[0-9a-f]+$/u);
-              if (!anchor || !positiveInteger(Number(anchor[1]))) fail("CLA_INVALID_QUEUE_REF");
-              const baseRef = group.base_ref.replace(/^refs\/heads\//u, "");
+            const readQueueEntries = async (baseRef) => {
               const entries = new Map();
               const cursors = new Set();
               let cursor = null;
@@ -371,8 +357,9 @@ jobs:
                 const page = result.repository?.mergeQueue?.entries;
                 if (!Array.isArray(page?.nodes) || typeof page.pageInfo?.hasNextPage !== "boolean") fail("CLA_INVALID_QUEUE_RESPONSE");
                 for (const entry of page.nodes) {
-                  // Entries not yet built have no commits and cannot belong to this head.
-                  if (entry.headCommit === null && entry.baseCommit === null) continue;
+                  // Entries without both commits (not built yet, or unmergeable after a
+                  // rebuild) cannot link a chain; a group that needs one fails as incomplete.
+                  if (entry.headCommit === null || entry.baseCommit === null) continue;
                   if (!validSha(entry.headCommit?.oid) || !validSha(entry.baseCommit?.oid) || !positiveInteger(entry.pullRequest?.number)) fail("CLA_INVALID_QUEUE_ENTRY");
                   if (entries.has(entry.headCommit.oid)) fail("CLA_AMBIGUOUS_GROUP_CHAIN");
                   entries.set(entry.headCommit.oid, entry);
@@ -381,6 +368,33 @@ jobs:
                 if (page.pageInfo.hasNextPage && (typeof cursor !== "string" || cursors.has(cursor))) fail("CLA_INVALID_QUEUE_CURSOR");
                 cursors.add(cursor);
               } while (cursor !== null);
+              return entries;
+            };
+            // GitHub rebuilds a group when a member leaves or joins the queue. The old
+            // head can then never merge and the rebuilt group runs its own check, so a
+            // verification that a membership change broke ends neutral, but only after
+            // observing the transition: the first snapshot held this head and a later
+            // one does not. A head never seen (lagging or unbuilt entry) or still
+            // queued fails as before.
+            const GROUP_CHANGE_CODES = new Set(["CLA_GROUP_PULL_CHANGED", "CLA_INCOMPLETE_MERGE_GROUP",
+              "CLA_PULL_CHANGED", "CLA_COMMIT_SNAPSHOT_CHANGED"]);
+            const verifyGroup = async (group) => {
+              const id = await startCheck(group?.head_sha);
+              if (!validSha(group.base_sha) || typeof group.base_ref !== "string" || typeof group.head_ref !== "string") fail("CLA_INVALID_MERGE_GROUP");
+              const anchor = group.head_ref.match(/\/pr-(\d+)-[0-9a-f]+$/u);
+              if (!anchor || !positiveInteger(Number(anchor[1]))) fail("CLA_INVALID_QUEUE_REF");
+              const baseRef = group.base_ref.replace(/^refs\/heads\//u, "");
+              const entries = await readQueueEntries(baseRef);
+              try {
+                await verifyGroupChain({ id, group, baseRef, entries, anchor: Number(anchor[1]) });
+              } catch (error) {
+                if (error.name !== "ClaPolicyError" || !GROUP_CHANGE_CODES.has(error.message) || !entries.has(group.head_sha)) throw error;
+                if ((await readQueueEntries(baseRef)).has(group.head_sha)) throw error;
+                await completeCheck(id, "neutral", "CLA_GROUP_SUPERSEDED",
+                  `The merge group changed during verification (${error.message}); the rebuilt group is verified by its own run.`);
+              }
+            };
+            const verifyGroupChain = async ({ id, group, baseRef, entries, anchor }) => {
               // Queue entries link each cumulative head to its predecessor. Follow that
               // complete chain to the webhook base; commit-to-PR associations can omit
               // synthetic commits and therefore cannot prove group membership.
@@ -397,7 +411,7 @@ jobs:
                 groupedEntries.set(entry.pullRequest.number, entry);
                 head = entry.baseCommit.oid;
               }
-              if (entries.get(group.head_sha)?.pullRequest.number !== Number(anchor[1])) fail("CLA_INCOMPLETE_MERGE_GROUP");
+              if (entries.get(group.head_sha)?.pullRequest.number !== anchor) fail("CLA_INCOMPLETE_MERGE_GROUP");
               const unsigned = [];
               const unlinked = [];
               for (const number of numbers) {

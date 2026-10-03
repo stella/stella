@@ -55,7 +55,9 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { flowDetailOptions, knowledgeKeys } from "@/lib/knowledge/queries";
 import { WEEKDAY_NAME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -373,41 +375,29 @@ const FlowEditorForm = ({
   const handleSave = async () => {
     const trimmedName = name.trim();
     if (trimmedName === "") {
-      stellaToast.add({ type: "error", title: t("flows.nameRequired") });
+      notifyUserError(undefined, t("flows.nameRequired"));
       return;
     }
     if (steps.length === 0) {
-      stellaToast.add({ type: "error", title: t("flows.steps.required") });
+      notifyUserError(undefined, t("flows.steps.required"));
       return;
     }
     for (const step of steps) {
       if (step.name.trim() === "") {
-        stellaToast.add({
-          type: "error",
-          title: t("flows.steps.nameRequired"),
-        });
+        notifyUserError(undefined, t("flows.steps.nameRequired"));
         return;
       }
       if (step.kind === "ai" && step.prompt.trim() === "") {
-        stellaToast.add({
-          type: "error",
-          title: t("flows.steps.promptRequired"),
-        });
+        notifyUserError(undefined, t("flows.steps.promptRequired"));
         return;
       }
       if (step.kind === "create-document" && step.documentTitle.trim() === "") {
-        stellaToast.add({
-          type: "error",
-          title: t("flows.steps.documentTitleRequired"),
-        });
+        notifyUserError(undefined, t("flows.steps.documentTitleRequired"));
         return;
       }
     }
     if (trigger.type === "schedule" && trigger.schedule.workspaceId === "") {
-      stellaToast.add({
-        type: "error",
-        title: t("flows.schedule.workspaceRequired"),
-      });
+      notifyUserError(undefined, t("flows.schedule.workspaceRequired"));
       return;
     }
 
@@ -430,9 +420,7 @@ const FlowEditorForm = ({
     setSaving(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("flows.saveFailed"),
+      notifyUserError(toAPIError(response.error), t("flows.saveFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -465,9 +453,7 @@ const FlowEditorForm = ({
     setSaving(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("flows.deleteFailed"),
+      notifyUserError(toAPIError(response.error), t("flows.deleteFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),

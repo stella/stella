@@ -31,6 +31,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
 import type {
   ConditionNode,
@@ -162,10 +163,8 @@ export const PropertyPopover = ({
       });
     },
     onError: (error) => {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
+      notifyUserError(error, t("errors.actionFailed"), {
         description: userErrorFromThrown(error, t("common.unexpectedError")),
-        type: "error",
       });
     },
   });
@@ -231,10 +230,7 @@ export const PropertyPopover = ({
         detached(startWorkflow(), "property-popover.start-workflow");
       } catch (error) {
         getAnalytics().captureError(error);
-        stellaToast.add({
-          title: t("errors.actionFailed"),
-          type: "error",
-        });
+        notifyUserError(error, t("errors.actionFailed"));
       } finally {
         if (dependencyGenerationRef.current === generation) {
           setImmediateDeps(null);
@@ -272,10 +268,7 @@ export const PropertyPopover = ({
       case "ai-unavailable":
         // Re-running a column is an explicit request, so say why nothing
         // happened; the side-effect call sites stay quiet on this one.
-        stellaToast.add({
-          title: t("errors.failedToStartWorkflow"),
-          type: "error",
-        });
+        notifyUserError(undefined, t("errors.failedToStartWorkflow"));
         return;
       case "failed":
         // Already reported by `useStartWorkflow`, error included.

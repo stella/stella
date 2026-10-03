@@ -15,6 +15,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { externalApiOrigin } from "@/lib/api-origins";
 import { CONNECT_AI_ASSISTANT_DOCS_URL } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 const COPIED_FEEDBACK_MS = 1600;
@@ -155,7 +156,7 @@ const CopyTextButton = ({
     const result = await copyToClipboard(text);
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }
     stellaToast.add({ title: toast, type: "success" });

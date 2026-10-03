@@ -16,7 +16,6 @@ import {
   folioCollabPublications,
   folioCollabRooms,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -34,6 +33,7 @@ import {
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { COLLABORATION_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
@@ -400,7 +400,7 @@ const storePublicationSource = async ({
   safeDb,
   source,
 }: StorePublicationSourceOptions) => {
-  const written = !env.FEATURE_FILE_USAGE_LIMITS
+  const written = !isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
     ? await Result.tryPromise({
         try: async () =>
           await writeS3ObjectWithRetry(

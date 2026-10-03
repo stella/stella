@@ -2951,7 +2951,6 @@ describe("outgoing chat stream message ids", () => {
         type: EventType.RUN_ERROR,
         message: "quota_exhausted",
         code: "quota_exhausted",
-        rawEvent: { statusCode: 429 },
       },
     ]);
     expect(outcomes).toEqual(["failed"]);
@@ -3002,12 +3001,6 @@ describe("outgoing chat stream message ids", () => {
     ).toMatchObject({
       code: "provider_credentials_rejected",
       message: "provider_credentials_rejected",
-      rawEvent: {
-        code: "invalid_api_key",
-        message: "Incorrect API key",
-        param: null,
-        type: "invalid_request_error",
-      },
       type: EventType.RUN_ERROR,
     });
     expect(outcomes).toEqual(["failed"]);
@@ -3082,7 +3075,6 @@ describe("outgoing chat stream message ids", () => {
         type: EventType.RUN_ERROR,
         message: "unknown",
         code: "unknown",
-        rawEvent: expect.any(HandlerError),
       });
       expect(errorSpy).not.toHaveBeenCalledWith(
         "chat.stream_failed",
@@ -3255,7 +3247,6 @@ describe("outgoing chat stream message ids", () => {
       type: EventType.RUN_ERROR,
       message: "provider_billing",
       code: "provider_billing",
-      rawEvent: { statusCode: 402 },
     });
     expect(outcomes).toEqual(["failed"]);
   });

@@ -6,24 +6,29 @@ import {
 } from "@/api/lib/file-scan/scanner";
 import type { Match } from "@/api/lib/file-scan/scanner";
 import type { ScanFinding, ScanVerdict } from "@/api/lib/file-scan/types";
-import { yaraScanner } from "@/api/lib/file-scan/yara";
+import { yaraScanner, yaraWindowedRules } from "@/api/lib/file-scan/yara";
 
 const MAX_ZIP_ENTRIES = 1000;
+const MAX_INFLATED_BYTES = 500 * 1024 * 1024;
+const MAX_INSPECTION_BUFFER_BYTES = 8 * 1024 * 1024;
 
 const zipBombGuard = createZipBombGuard({
   maxEntries: MAX_ZIP_ENTRIES,
-  maxTotalUncompressedBytes: 500 * 1024 * 1024,
+  maxTotalUncompressedBytes: MAX_INFLATED_BYTES,
   maxCompressionRatio: 1000,
 });
 
-// Inflated bytes are held in memory for rule evaluation, so this budget is
-// far below the size at which the guard above rejects an archive outright.
+// The guard above bounds how much an archive may inflate to; this budget
+// bounds what inspecting it may hold and take. The time budget stays well
+// inside the upload finalize claim (FINALIZE_CLAIM_TIMEOUT_MS).
 const archiveContentScanner = createArchiveContentScanner({
-  inner: yaraScanner,
+  rules: yaraWindowedRules,
   budget: {
-    maxEntries: MAX_ZIP_ENTRIES,
-    maxEntryBytes: 32 * 1024 * 1024,
-    maxTotalBytes: 32 * 1024 * 1024,
+    windowBytes: 1024 * 1024,
+    maxEvidenceBytes: MAX_INSPECTION_BUFFER_BYTES,
+    maxNestedEntryBytes: MAX_INSPECTION_BUFFER_BYTES,
+    maxTotalInflatedBytes: MAX_INFLATED_BYTES,
+    timeBudgetMs: 30_000,
   },
   guard: zipBombGuard,
 });
@@ -55,4 +60,5 @@ export const mapMatchFinding = (m: Match): ScanFinding => ({
     typeof m.meta?.["description"] === "string"
       ? m.meta["description"]
       : m.rule,
+  ...(m.failure === undefined ? {} : { failure: m.failure }),
 });

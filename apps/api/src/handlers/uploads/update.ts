@@ -44,6 +44,7 @@ import {
   FileScanRejectedError,
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
+import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
@@ -475,6 +476,7 @@ const runFinalize = async function* ({
   });
   if (Result.isError(scanResult)) {
     const scanError = scanResult.error;
+    observeScanFailures(scanError);
     return Result.err(
       FileScanRejectedError.is(scanError)
         ? new UploadFinalizeError({

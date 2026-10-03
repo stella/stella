@@ -83,7 +83,7 @@ const turnProps = (
   editApplyMode: "manual",
   hasActiveDocxEditClient: false,
   hasActiveDocxFileClient: false,
-  memberRole: "owner",
+  memberRole: sessionMemberRole("owner"),
   memoryEnabled: false,
   organizationId,
   orgAIConfig: null,
@@ -306,7 +306,7 @@ describe("skill-documented chat reads", () => {
     const surface = createChatCodeModeSurface({
       concurrencyKey: "skill-documented-reads-test",
       documentedReads: [documented],
-      runReadTool: async () => ({}),
+      runReadTool: async () => Result.ok({}),
     });
 
     expect(surface.systemPrompt).toContain(stubOf(documented));

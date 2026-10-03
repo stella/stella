@@ -129,28 +129,36 @@ const invokedName = (
   return null;
 };
 
+// The one gating form: the flag read through its owner. Compared with
+// whitespace and the formatter's trailing comma removed.
+const FILE_USAGE_LIMITS_ENABLED =
+  'isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")';
+const FILE_USAGE_LIMITS_DISABLED = `!${FILE_USAGE_LIMITS_ENABLED}`;
+
+const normalizedCondition = (condition: ts.Expression): string =>
+  condition.getText().replaceAll(/\s/gu, "").replaceAll(",)", ")");
+
 const isFlagOff = (node: ts.Node): boolean => {
   let child = node;
   let current = node.parent;
   while (!ts.isSourceFile(current)) {
     if (ts.isIfStatement(current)) {
-      const condition = current.expression.getText();
+      const condition = normalizedCondition(current.expression);
       if (
-        (condition === "!env.FEATURE_FILE_USAGE_LIMITS" &&
+        (condition === FILE_USAGE_LIMITS_DISABLED &&
           child === current.thenStatement) ||
-        (condition === "env.FEATURE_FILE_USAGE_LIMITS" &&
+        (condition === FILE_USAGE_LIMITS_ENABLED &&
           child === current.elseStatement)
       ) {
         return true;
       }
     }
     if (ts.isConditionalExpression(current)) {
-      const condition = current.condition.getText();
+      const condition = normalizedCondition(current.condition);
       if (
-        (condition === "!env.FEATURE_FILE_USAGE_LIMITS" &&
+        (condition === FILE_USAGE_LIMITS_DISABLED &&
           child === current.whenTrue) ||
-        (condition === "env.FEATURE_FILE_USAGE_LIMITS" &&
-          child === current.whenFalse)
+        (condition === FILE_USAGE_LIMITS_ENABLED && child === current.whenFalse)
       ) {
         return true;
       }
@@ -630,7 +638,7 @@ describe("durable organization file writes", () => {
   test("recognizes a shared callback inside mapped writes and its flag-off path", () => {
     const source = `
       const write = async (file) => await writeS3ObjectWithRetry({ key: file.key });
-      if (env.FEATURE_FILE_USAGE_LIMITS) {
+      if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
         await writeOrganizationFiles(files.map((file) => ({ write: async () => await write(file) })));
       } else {
         for (const file of files) { await write(file); }

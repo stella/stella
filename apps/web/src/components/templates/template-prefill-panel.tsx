@@ -25,7 +25,8 @@ import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { userErrorMessage } from "@/lib/errors/user-safe";
+import { toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 
@@ -83,10 +84,7 @@ export const TemplatePrefillPanel = ({
       return;
     }
     if (!ACCEPTED_MIME_TYPES.includes(candidate.type)) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.invalidFileType"),
-      });
+      notifyUserError(undefined, t("templates.invalidFileType"));
       return;
     }
     setFile(candidate);
@@ -119,13 +117,10 @@ export const TemplatePrefillPanel = ({
     setLoading(false);
 
     if (response.error || response.data instanceof Response) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.prefillFailed"),
-        description: response.error
-          ? userErrorMessage(response.error, t("common.unexpectedError"))
-          : undefined,
-      });
+      notifyUserError(
+        response.error ? toAPIError(response.error) : undefined,
+        t("templates.prefillFailed"),
+      );
       return;
     }
 

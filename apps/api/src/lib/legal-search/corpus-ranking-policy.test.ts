@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
@@ -44,6 +44,7 @@ const rankingTestOptions = {
   unseenScoreUpperBound: stableBlendUpperBound,
   rankCandidates: async (candidates) => ({
     context: null,
+    groups: [],
     ranked: blendStableCitationAuthority({
       candidates,
       authorityById: new Map(),
@@ -51,7 +52,10 @@ const rankingTestOptions = {
   }),
 } satisfies Parameters<typeof readCorpusIndexSearchPage>[0];
 
-const stubRankingScores = (scores: readonly number[]) => {
+const stubRankingScores = (
+  scores: readonly number[],
+  passagesPerDocument = 1,
+) => {
   globalThis.fetch = Object.assign(
     async (
       _input: Parameters<typeof fetch>[0],
@@ -64,7 +68,7 @@ const stubRankingScores = (scores: readonly number[]) => {
       const body = JSON.parse(requestBody);
       const hits = scores.map((score, rank) => ({
         _source: {
-          document_id: `doc-${rank}`,
+          document_id: `doc-${Math.floor(rank / passagesPerDocument)}`,
           chunk_id: `passage-${rank}`,
           anchor_id: `anchor-${rank}`,
         },
@@ -322,11 +326,16 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
           authorityById: new Map([["doc-6513", 100]]),
           signals: [courtTierSignal(new Map([["doc-6513", 4]]))],
         });
+        const { representatives, groupTokenById } = collapseByLanguageGroup(
+          ranked,
+          (id) => (id === "doc-9" || id === "doc-10" ? "judgment" : null),
+        );
         return {
           context: null,
-          ranked: collapseByLanguageGroup(ranked, (id) =>
-            id === "doc-9" || id === "doc-10" ? "judgment" : null,
-          ).representatives,
+          ranked: representatives,
+          groups: [...groupTokenById]
+            .filter(([id]) => id === "doc-9" || id === "doc-10")
+            .map(([, token]) => token),
         };
       },
     });
@@ -363,6 +372,65 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
   scale = 0;
   const filterOnly = await read();
   expect(filterOnly.nextCursor?.rankingMode === "off").toBe(true);
+});
+
+test("BM25 pages honor and carry the groups their cursor excludes", async () => {
+  stubRankingScores([100, 90, 80, 70, 60]);
+  const groupKeyOf = (id: string) =>
+    id === "doc-1" || id === "doc-3" ? "judgment" : null;
+  const judgmentToken = collapseByLanguageGroup(
+    [{ id: "doc-1" }],
+    groupKeyOf,
+  ).groupTokenById.get("doc-1");
+  if (judgmentToken === undefined) {
+    throw new Error("Expected a token for the grouped judgment");
+  }
+  const read = async (parsedCursor: SearchCursor | null) =>
+    await readCorpusIndexSearchPage({
+      ...rankingTestOptions,
+      rankingMode: "bm25-ratio",
+      limit: 1,
+      parsedCursor,
+      rankCandidates: async (candidates) => {
+        const { representatives, groupTokenById } = collapseByLanguageGroup(
+          blendStableCitationAuthority({
+            candidates,
+            authorityById: new Map(),
+          }),
+          groupKeyOf,
+        );
+        const excluded = new Set(parsedCursor?.excludedGroups);
+        return {
+          context: null,
+          ranked: representatives.filter(
+            ({ id }) =>
+              !excluded.has(
+                groupTokenById.get(id) ?? panic("Missing representative token"),
+              ),
+          ),
+          groups: [...groupTokenById]
+            .filter(([id]) => groupKeyOf(id) !== null)
+            .map(([, token]) => token),
+        };
+      },
+    });
+
+  const first = await read(null);
+  expect(first.pageRanked.map(({ id }) => id)).toEqual(["doc-0"]);
+  expect(first.nextCursor?.excludedGroups).toBeUndefined();
+  if (first.nextCursor === null) {
+    throw new Error("Expected a continuation");
+  }
+  const second = await read({
+    ...first.nextCursor,
+    excludedGroups: [judgmentToken],
+  });
+  expect(second.pageRanked.map(({ id }) => id)).toEqual(["doc-2"]);
+  expect(second.nextCursor?.rankingMode).toBe("bm25-ratio");
+  expect(second.nextCursor?.excludedGroups).toEqual([judgmentToken]);
+  const third = await read(second.nextCursor);
+  expect(third.pageRanked.map(({ id }) => id)).toEqual(["doc-4"]);
+  expect(third.nextCursor).toBeNull();
 });
 
 test("BM25 ranking refuses a transport without scores or a date order", async () => {

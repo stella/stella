@@ -18,6 +18,9 @@ export type SearchSort = (typeof SEARCH_SORTS)[number];
 
 export const DEFAULT_SEARCH_SORT = SEARCH_SORTS[0];
 
+/** Public statute HTTP pages and their web client share the same bound. */
+export const PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX = 20;
+
 /**
  * How much of the matched passage a result carries.
  *
@@ -39,6 +42,15 @@ export const DEFAULT_SEARCH_EXCERPT = SEARCH_EXCERPTS[0];
 
 /** Match semantics shared by HTTP, MCP and persisted chat projections. */
 export const LEGISLATION_SEARCH_MATCH_TYPES = ["strict", "relaxed"] as const;
+
+export const FACET_COUNT_TYPE = {
+  EXACT: "exact",
+  AT_LEAST: "at-least",
+  ESTIMATE: "estimate",
+} as const;
+
+export type FacetCountType =
+  (typeof FACET_COUNT_TYPE)[keyof typeof FACET_COUNT_TYPE];
 
 export const SEARCH_TOTAL_TYPE = {
   EXACT: "exact",
@@ -122,3 +134,14 @@ export const GLOBAL_SEARCH_RESULT_TYPES = [
 
 export type GlobalSearchResultType =
   (typeof GLOBAL_SEARCH_RESULT_TYPES)[number];
+
+/** A page can stop before exhaustion when its continuation exceeds a bound. */
+export const SEARCH_PAGINATION_COMPLETE = { type: "complete" } as const;
+export const SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET = {
+  type: "truncated",
+  reason: "exclusion_budget",
+} as const;
+
+export type SearchPaginationOutcome =
+  | typeof SEARCH_PAGINATION_COMPLETE
+  | typeof SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET;
