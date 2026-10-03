@@ -14,7 +14,6 @@ import type {
   DerivativeFailureReason,
   FieldContent,
 } from "@/api/db/schema-validators";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -33,6 +32,7 @@ import {
   requeueDeterministicJob,
 } from "@/api/lib/bullmq-requeue";
 import type { QueueRequeueOutcome } from "@/api/lib/bullmq-requeue";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decidePdfDerivativeAction } from "@/api/lib/file-derivative-decision";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
@@ -502,7 +502,7 @@ const processPdfDerivativeJob = async ({
   let writeState: "confirmed" | "uncertain" = "uncertain";
   try {
     const pdfBytes = new Uint8Array(conversionResult.value.buffer);
-    if (!env.FEATURE_FILE_USAGE_LIMITS) {
+    if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
       await withTimeout(
         async (signal) =>
           await putS3ObjectWithSignal(pdfKey, pdfBytes, PDF_MIME_TYPE, signal),
@@ -744,7 +744,7 @@ const processImageThumbnailJob = async ({
 
   let writeState: "confirmed" | "uncertain" = "uncertain";
   try {
-    if (!env.FEATURE_FILE_USAGE_LIMITS) {
+    if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
       await withTimeout(
         async (signal) =>
           await putS3ObjectWithSignal(

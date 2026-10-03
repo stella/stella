@@ -1234,7 +1234,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       return typeof feature === "string" ? [[tool.name, feature] as const] : [];
     }),
   );
-  // DOMAIN_FEATURE values are plain strings (the McpToolFeatureFlag key-of-env
+  // DOMAIN_FEATURE values are plain strings (the DeploymentFeatureFlag key-of-env
   // type collapses outside the app tsconfig), so validate every flag against
   // the REAL deployment env at export time: a typo'd or removed flag fails the
   // build here instead of silently fail-closing every entry at runtime.

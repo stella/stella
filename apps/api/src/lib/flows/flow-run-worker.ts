@@ -3,10 +3,10 @@ import { and, asc, gt, inArray, lt, sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
 import { flowRuns } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import {
   executeFlowStep,
@@ -61,7 +61,7 @@ const executeAdmittedFlowStep = async ({
 }: AdmittedFlowStepOptions) => {
   const run = async (executionSignal: AbortSignal) =>
     await executeFlowStep(job.data, executionSignal, { database });
-  if (!env.FEATURE_ACTION_ADMISSION) {
+  if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
     await run(signal);
     return;
   }

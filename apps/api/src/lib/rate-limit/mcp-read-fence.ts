@@ -10,6 +10,7 @@ import {
   type AdmissionRedisClient,
 } from "@/api/lib/admission-redis";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
@@ -148,7 +149,7 @@ export const chargeMcpReadBytes = async ({
   userId,
   readClass,
   bytes,
-  enabled = env.FEATURE_MCP_READ_FENCE,
+  enabled = isDeploymentFeatureEnabled("FEATURE_MCP_READ_FENCE"),
   policy,
   redis,
 }: ChargeMcpReadBytesOptions): Promise<Result<void, ActionAdmissionError>> => {

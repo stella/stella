@@ -29,6 +29,7 @@ import type { UsageEntitlementStatus, UsagePolicyKind } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { DispatchOutcome } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import type {
   HostedUsageWebhookEvent,
@@ -228,7 +229,7 @@ const equalVersionIsStale = ({
   payload,
 }: Pick<StaleProviderEventParams, "existing" | "payload">): boolean =>
   // At equal versions, terminal/cancellation facts dominate an active replay.
-  (env.FEATURE_CONFIGURED_ACCESS &&
+  (isDeploymentFeatureEnabled("FEATURE_CONFIGURED_ACCESS") &&
     existing.status === "past_due" &&
     payload.status === "active" &&
     payload.cancel_at_period_end !== true) ||
@@ -240,7 +241,10 @@ const equalVersionIsStale = ({
   (existing.cancelAtPeriodEnd &&
     payload.cancel_at_period_end !== true &&
     payload.status !== "canceled" &&
-    !(env.FEATURE_CONFIGURED_ACCESS && payload.status === "past_due"));
+    !(
+      isDeploymentFeatureEnabled("FEATURE_CONFIGURED_ACCESS") &&
+      payload.status === "past_due"
+    ));
 
 const cancellationFlagAtVersion = ({
   existing,
@@ -248,7 +252,7 @@ const cancellationFlagAtVersion = ({
   occurredAt,
 }: Omit<StaleProviderEventParams, "mode">) =>
   (payload.cancel_at_period_end ?? false) ||
-  (env.FEATURE_CONFIGURED_ACCESS &&
+  (isDeploymentFeatureEnabled("FEATURE_CONFIGURED_ACCESS") &&
     existing.cancelAtPeriodEnd &&
     occurredAt !== null &&
     existing.hostedLastEventAt?.getTime() === occurredAt.getTime());
@@ -895,7 +899,7 @@ export const handleHostedEntitlementUpsert = async ({
     });
   }
 
-  if (env.FEATURE_CONFIGURED_ACCESS) {
+  if (isDeploymentFeatureEnabled("FEATURE_CONFIGURED_ACCESS")) {
     await applyConfiguredAccessEvent({
       tx,
       organizationId: ownerOrganizationId,
@@ -1156,7 +1160,7 @@ export const handleUsageEntitlementStatusChange = async ({
       status: { old: null, new: update.status },
     },
   });
-  if (env.FEATURE_CONFIGURED_ACCESS) {
+  if (isDeploymentFeatureEnabled("FEATURE_CONFIGURED_ACCESS")) {
     const policy = await tx
       .select({
         serviceActionsPerPeriod: usagePolicies.serviceActionsPerPeriod,

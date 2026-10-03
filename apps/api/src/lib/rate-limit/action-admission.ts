@@ -13,6 +13,7 @@ import {
   type AdmissionRedisReady,
 } from "@/api/lib/admission-redis";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   ActionAdmissionError,
   actionAdmissionRefusal as configuredActionAdmissionRefusal,
@@ -803,7 +804,7 @@ const createPeriodReservationScope = ({
 };
 
 export const reserveQueuedKickoffPeriod = async () => {
-  if (!env.FEATURE_ACTION_ADMISSION) {
+  if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
     return Result.ok(undefined);
   }
   const scope = admissionScope.getStore();
@@ -1161,7 +1162,9 @@ export const withActionAdmission = async <T>(
     costRecorder: options.costRecorder,
     run: options.run,
   });
-  if (!(options.enabled ?? env.FEATURE_ACTION_ADMISSION)) {
+  if (
+    !(options.enabled ?? isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION"))
+  ) {
     return await Result.tryPromise({
       try: async () =>
         await observedRun(new AbortController().signal, disabledControl),
@@ -1177,7 +1180,8 @@ export const withActionAdmission = async <T>(
       periodIdentity: options.periodIdentity,
       periodPolicy: options.periodPolicy,
       serviceBudgetsEnabled:
-        options.serviceBudgetsEnabled ?? env.FEATURE_ORG_SERVICE_BUDGETS,
+        options.serviceBudgetsEnabled ??
+        isDeploymentFeatureEnabled("FEATURE_ORG_SERVICE_BUDGETS"),
       serviceBudgetConfig:
         options.serviceBudgetConfig ?? configuredServiceBudgets(),
       organizationStateDb: options.organizationStateDb,

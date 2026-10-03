@@ -6,6 +6,7 @@ import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { logger } from "@/api/lib/observability/logger";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import {
@@ -422,7 +423,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: SWEEP_ACTION_COSTS_TASK,
     enabled:
-      env.FEATURE_ACTION_COST_RECORDS &&
+      isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS") &&
       env.ACTION_COST_RETENTION_DAYS !== undefined,
   },
   {
@@ -513,7 +514,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Age AI memories through the active -> stale -> archived lifecycle",
-    enabled: env.FEATURE_AI_MEMORY,
+    enabled: isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
     id: "memory.curator.nightly",
     mode: "recurring",
     schedule: {
@@ -527,7 +528,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Extract suggested AI memories from new chat-thread compactions",
-    enabled: env.FEATURE_AI_MEMORY,
+    enabled: isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
     id: "memory.extractor.hourly",
     mode: "recurring",
     schedule: {

@@ -8,7 +8,6 @@ import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageEventLane } from "@/api/db/schema";
-import { env } from "@/api/env";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import {
   CHAT_EDIT_APPLY_MODE,
@@ -99,6 +98,7 @@ import type {
 } from "@/api/lib/chat/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
@@ -642,7 +642,7 @@ const honouredSkillDeclarations = ({
 
 export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
-    memoryEnabled = env.FEATURE_AI_MEMORY,
+    memoryEnabled = isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
     safeDb,
     scopedDb,
     pinServerValidatedWorkspaceId,

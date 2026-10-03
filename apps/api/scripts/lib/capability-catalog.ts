@@ -1205,13 +1205,19 @@ const ROUTE_HOOK_SOURCE = String.raw`\.(?:onBeforeHandle|beforeHandle|onRequest)
 const ROUTE_HOOK_PATTERN = new RegExp(ROUTE_HOOK_SOURCE, "u");
 const ROUTE_HOOK_OCCURRENCES = new RegExp(ROUTE_HOOK_SOURCE, "gu");
 // The one hook the invoke path reproduces: `deploymentFeatureGate(() => <flag>)`
-// whose predicate is exactly a deployment flag (optionally opened in local
-// dev), or an imported helper whose whole body is that expression.
+// whose predicate is exactly the deployment-feature owner over one flag
+// (`isDeploymentFeatureEnabled("FEATURE_X")`), or an imported helper whose
+// whole body is that call.
 const FEATURE_GATE_CALL = /\.use\(\s*deploymentFeatureGate\(/u;
-const CANONICAL_FEATURE_EXPRESSION =
-  /^\s*(?:isLocalDevOpen\(\)\s*\|\|\s*)?env\.(?<flag>FEATURE_[A-Z0-9_]+)\s*$/u;
-const CANONICAL_FEATURE_PREDICATE =
-  /^\(\)\s*=>\s*(?:isLocalDevOpen\(\)\s*\|\|\s*)?env\.(?<flag>FEATURE_[A-Z0-9_]+)$/u;
+const CANONICAL_FEATURE_CALL = String.raw`isDeploymentFeatureEnabled\(\s*"(?<flag>FEATURE_[A-Z0-9_]+)",?\s*\)`;
+const CANONICAL_FEATURE_EXPRESSION = new RegExp(
+  String.raw`^\s*${CANONICAL_FEATURE_CALL}\s*$`,
+  "u",
+);
+const CANONICAL_FEATURE_PREDICATE = new RegExp(
+  String.raw`^\(\)\s*=>\s*${CANONICAL_FEATURE_CALL}$`,
+  "u",
+);
 const HELPER_REFERENCE = /^(?<name>[A-Za-z_$][\w$]*)$/u;
 // A `.use(x)` of a plain identifier mounts a plugin. One defined in this file
 // with `new Elysia`, or imported from a relative path or the handler tree, is a
