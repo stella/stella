@@ -15,8 +15,11 @@ pre-commit:
     lint:
       glob: "**/*.{ts,tsx,js,jsx}"
       # Lint autofixes never reach a commit unreviewed: the hook fails and
-      # prints them instead (scripts/precommit-lint.ts).
+      # prints them instead (scripts/precommit-lint.ts). stage_fixed makes
+      # lefthook hide unstaged changes, so lint checks the staged text; the
+      # script restores every file, so it never stages a fix.
       run: bun scripts/precommit-lint.ts {staged_files}
+      stage_fixed: true
     format:
       glob: "**/*.{ts,tsx,js,jsx,json,css}"
       run: bun run format:guard && bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern {staged_files}

@@ -1,4 +1,11 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -7,6 +14,10 @@ import {
   lintCommand,
   runPrecommitLint,
 } from "./precommit-lint";
+
+// Every test runs oxlint; the control runs it once per listed rule, which
+// passes the 5 s default on a busy CI runner.
+setDefaultTimeout(60_000);
 
 const ROOT = path.resolve(import.meta.dir, "..");
 // Inside the repository so oxlint.config.ts applies exactly as in the hook.
@@ -116,11 +127,16 @@ describe("pre-commit lint", () => {
       RECEIVER_FIXTURES["unicorn/prefer-regexp-test"],
     );
     runPrecommitLint([file], { cwd: ROOT });
-    const module = (await import(path.join(ROOT, file))) as {
-      matches: (include: string, name: string) => boolean;
-    };
-    expect(module.matches("*.ts", "a.ts")).toBe(true);
-    expect(module.matches("*.ts", "a.js")).toBe(false);
+    const loaded: unknown = await import(path.join(ROOT, file));
+    const matches =
+      typeof loaded === "object" && loaded !== null && "matches" in loaded
+        ? loaded.matches
+        : undefined;
+    expect(matches).toBeFunction();
+    if (typeof matches === "function") {
+      expect(matches("*.ts", "a.ts")).toBe(true);
+      expect(matches("*.ts", "a.js")).toBe(false);
+    }
   });
 
   test("a would-be autofix fails the hook, prints it and leaves the file as staged", () => {
@@ -167,16 +183,26 @@ describe("pre-commit lint", () => {
     expect(runPrecommitLint([missing], { cwd: ROOT }).changed).toEqual([]);
   });
 
-  test("lefthook runs this script and never stages lint fixes", () => {
-    type Command = { run: string; stage_fixed?: boolean };
-    const config = Bun.YAML.parse(
+  test("lefthook runs this script on the staged text", () => {
+    const isRecord = (value: unknown): value is Record<string, unknown> =>
+      typeof value === "object" && value !== null && !Array.isArray(value);
+    const config: unknown = Bun.YAML.parse(
       readFileSync(path.join(ROOT, "lefthook.yml"), "utf-8"),
-    ) as { "pre-commit": { commands: Record<string, Command> } };
-    const { lint, ...others } = config["pre-commit"].commands;
-    expect(lint?.run).toBe("bun scripts/precommit-lint.ts {staged_files}");
-    expect(lint?.stage_fixed).toBeUndefined();
+    );
+    const preCommit = isRecord(config) ? config["pre-commit"] : undefined;
+    const commands = isRecord(preCommit) ? preCommit["commands"] : undefined;
+    expect(isRecord(commands)).toBe(true);
+    const { lint, ...others } = isRecord(commands) ? commands : {};
+    expect(isRecord(lint) ? lint["run"] : undefined).toBe(
+      "bun scripts/precommit-lint.ts {staged_files}",
+    );
+    // lefthook hides unstaged changes only while a stage_fixed command runs;
+    // lint must see what the commit records, and it never leaves a change.
+    expect(isRecord(lint) ? lint["stage_fixed"] : undefined).toBe(true);
     for (const command of Object.values(others)) {
-      expect(command.run).not.toContain("oxlint");
+      expect(isRecord(command) ? String(command["run"]) : "").not.toContain(
+        "oxlint",
+      );
     }
   });
 });
