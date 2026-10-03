@@ -8,6 +8,11 @@ import { Temporal } from "@stll/time";
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
+  CORPUS_INDEX_MULTI_SEARCH_MAX_ITEMS,
+  CORPUS_INDEX_MULTI_SEARCH_MAX_BYTES,
+  CORPUS_INDEX_TERMS_MAX_VALUES,
+  corpusIndexDocumentTermsFilter,
+  corpusIndexMultiScoredSearchRequest,
   CORPUS_INDEX_CLUSTER_CONFIG,
   CORPUS_INDEX_COMMIT,
   CORPUS_INDEX_COMMIT_WAIT_TIMEOUT_MS,
@@ -2223,4 +2228,355 @@ test("a caller retry records every corpus outbound attempt into its captured act
     });
   }
   expect(calls.at(0)?.record.callId).not.toBe(calls.at(1)?.record.callId);
+});
+
+const multiInput = (queries: readonly string[]) =>
+  ({
+    observer: "unobserved",
+    fields: ["document_id"],
+    requests: queries.map((query) => ({
+      indexId: "case_law_v5_cs_sk",
+      query,
+      from: 0,
+      size: 5,
+      requiredFields: ["document_id"],
+    })),
+  }) as const;
+const multiItem = (id: string) => ({
+  status: 200,
+  timed_out: false,
+  _shards: { failed: 0 },
+  hits: {
+    total: { value: 1, relation: "eq" },
+    hits: [{ _source: { document_id: id }, sort: [2] }],
+  },
+});
+
+test("multi-search preserves successes around an item error in request order", async () => {
+  responseBody = {
+    responses: [
+      multiItem("last"),
+      { status: 400, error: { reason: "unknown field" } },
+      multiItem("first"),
+      multiItem("last"),
+    ],
+  };
+  const result = await getCorpusIndexClient("q09").multiScoredSearch(
+    multiInput(["last", "bad", "first", "last"]),
+  );
+  expect(result.isOk()).toBe(true);
+  if (result.isErr()) {
+    throw result.error;
+  }
+  expect(
+    result.value.map((item) =>
+      item.isOk()
+        ? item.value.hits.at(0)?.fields["document_id"]
+        : item.error.status,
+    ),
+  ).toEqual(["last", 400, "first", "last"]);
+  expect(requests).toHaveLength(1);
+  expect(requests.at(0)?.path).toBe("/api/v1/_elastic/_msearch");
+  expect(requests.at(0)?.search).toBe("?_source_includes=document_id");
+  const body = requests.at(0)?.body ?? "";
+  expect(body.endsWith("\n")).toBe(true);
+  expect(body.trimEnd().split("\n")).toHaveLength(8);
+});
+
+test("multi-search propagates whole-batch HTTP and response-count errors", async () => {
+  for (const status of [400, 503]) {
+    responseStatus = status;
+    const result = await getCorpusIndexClient("q09").multiScoredSearch(
+      multiInput(["x"]),
+    );
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) {
+      throw new Error("expected batch error");
+    }
+    expect(result.error).toMatchObject({
+      _tag: "CorpusIndexMultiSearchError",
+      cause: { status },
+    });
+  }
+  responseStatus = 200;
+  responseBody = { responses: [] };
+  const result = await getCorpusIndexClient("q09").multiScoredSearch(
+    multiInput(["x"]),
+  );
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error._tag).toBe("CorpusIndexMultiSearchError");
+  }
+});
+
+test("multi-search surfaces transport and unreadable-body failures as batch errors", async () => {
+  rejectFetchWith(new DOMException("The operation timed out.", "TimeoutError"));
+  const transport = await getCorpusIndexClient("q09").multiScoredSearch(
+    multiInput(["x"]),
+  );
+  if (transport.isOk()) {
+    throw new Error("expected transport error");
+  }
+  expect(transport.error).toMatchObject({
+    _tag: "CorpusIndexMultiSearchError",
+    cause: { message: expect.stringContaining("30000ms budget") },
+  });
+  const stub = async () => new Response("not json", { status: 200 });
+  globalThis.fetch = Object.assign(stub, {
+    preconnect: originalFetch.preconnect,
+  });
+  const unreadable = await getCorpusIndexClient("q09").multiScoredSearch(
+    multiInput(["x"]),
+  );
+  if (unreadable.isOk()) {
+    throw new Error("expected unreadable body error");
+  }
+  expect(unreadable.error).toMatchObject({
+    _tag: "CorpusIndexMultiSearchError",
+    cause: { message: expect.stringContaining("unreadable body") },
+  });
+});
+
+test("multi-search observes one round trip and none for a rejected batch", async () => {
+  let observed = 0;
+  const failures: unknown[] = [];
+  const observer = {
+    onRequest: () => {
+      observed += 1;
+    },
+    onError: (cause: unknown) => {
+      failures.push(cause);
+    },
+  };
+  responseBody = { responses: [multiItem("a"), multiItem("b")] };
+  const result = await getCorpusIndexClient("q09").multiScoredSearch({
+    ...multiInput(["a", "b"]),
+    observer,
+  });
+  if (result.isErr()) {
+    throw result.error;
+  }
+  const rejected = await getCorpusIndexClient("q09").multiScoredSearch({
+    ...multiInput(["😀".repeat(CORPUS_INDEX_MULTI_SEARCH_MAX_BYTES / 3)]),
+    observer,
+  });
+  if (rejected.isOk()) {
+    throw new Error("expected byte error");
+  }
+  expect(rejected.error).toMatchObject({ type: "bytes" });
+  expect(requests).toHaveLength(1);
+  expect(observed).toBe(1);
+  expect(failures).toEqual([]);
+});
+
+test("multi-search rejects malformed framing and incomplete item metadata", async () => {
+  for (const body of [
+    {},
+    { responses: [null] },
+    { responses: [multiItem("a"), multiItem("b")] },
+  ]) {
+    responseBody = body;
+    const result = await getCorpusIndexClient("q09").multiScoredSearch(
+      multiInput(["x"]),
+    );
+    expect(result.isErr()).toBe(true);
+  }
+  for (const item of [
+    { ...multiItem("a"), timed_out: true },
+    { ...multiItem("a"), _shards: { failed: 1 } },
+    { ...multiItem("a"), status: 500 },
+    {
+      ...multiItem("a"),
+      hits: { total: { value: 1, relation: "gte" }, hits: [] },
+    },
+    {
+      ...multiItem("a"),
+      hits: {
+        total: { value: 1, relation: "eq" },
+        hits: [{ _source: {}, sort: [2] }],
+      },
+    },
+  ]) {
+    responseBody = { responses: [item] };
+    const result = await getCorpusIndexClient("q09").multiScoredSearch(
+      multiInput(["x"]),
+    );
+    if (result.isErr()) {
+      throw result.error;
+    }
+    expect(result.value.at(0)?.isErr()).toBe(true);
+  }
+});
+
+test("multi-search checks item and exact serialized byte limits before fetch", async () => {
+  const oversized = multiInput(
+    Array.from({ length: CORPUS_INDEX_MULTI_SEARCH_MAX_ITEMS + 1 }, () => "x"),
+  );
+  const itemResult =
+    await getCorpusIndexClient("q09").multiScoredSearch(oversized);
+  if (itemResult.isOk()) {
+    throw new Error("expected count error");
+  }
+  expect(itemResult.error).toMatchObject({
+    type: "items",
+    measured: 9,
+    limit: CORPUS_INDEX_MULTI_SEARCH_MAX_ITEMS,
+  });
+  const emptyQuery = corpusIndexMultiScoredSearchRequest(multiInput([""]));
+  if (emptyQuery.isErr()) {
+    throw emptyQuery.error;
+  }
+  const overhead = new TextEncoder().encode(emptyQuery.value.body).byteLength;
+  const exact = corpusIndexMultiScoredSearchRequest(
+    multiInput(["x".repeat(CORPUS_INDEX_MULTI_SEARCH_MAX_BYTES - overhead)]),
+  );
+  if (exact.isErr()) {
+    throw exact.error;
+  }
+  expect(new TextEncoder().encode(exact.value.body).byteLength).toBe(
+    CORPUS_INDEX_MULTI_SEARCH_MAX_BYTES,
+  );
+  const byteResult = await getCorpusIndexClient("q09").multiScoredSearch(
+    multiInput([
+      "x".repeat(CORPUS_INDEX_MULTI_SEARCH_MAX_BYTES - overhead + 1),
+    ]),
+  );
+  if (byteResult.isOk()) {
+    throw new Error("expected byte error");
+  }
+  expect(byteResult.error).toMatchObject({
+    type: "bytes",
+    measured: CORPUS_INDEX_MULTI_SEARCH_MAX_BYTES + 1,
+    limit: CORPUS_INDEX_MULTI_SEARCH_MAX_BYTES,
+  });
+  expect(requests).toEqual([]);
+});
+
+test("document terms filters preserve numeric and UUID values and enforce the proved bound", async () => {
+  for (const values of [
+    [13, 17],
+    ["00000000-0000-4000-8000-000000000013"],
+    [],
+  ]) {
+    const filter = corpusIndexDocumentTermsFilter({
+      field: "document_id",
+      values,
+    });
+    if (filter.isErr()) {
+      throw filter.error;
+    }
+    expect(filter.value).toEqual({ terms: { document_id: values } });
+  }
+  const bounded = Array.from(
+    { length: CORPUS_INDEX_TERMS_MAX_VALUES },
+    (_, i) => i,
+  );
+  expect(
+    corpusIndexDocumentTermsFilter({
+      field: "decision_key",
+      values: bounded,
+    }).isOk(),
+  ).toBe(true);
+  bounded.push(2000);
+  const request = multiInput(["x"]).requests.at(0);
+  if (request === undefined) {
+    throw new Error("missing test request");
+  }
+  const result = await getCorpusIndexClient("q09").multiScoredSearch({
+    ...multiInput(["x"]),
+    requests: [
+      { ...request, documentIds: { field: "decision_key", values: bounded } },
+    ],
+  });
+  if (result.isOk()) {
+    throw new Error("expected terms error");
+  }
+  expect(result.error).toMatchObject({
+    type: "terms",
+    measured: 2001,
+    limit: 2000,
+  });
+  expect(requests).toEqual([]);
+});
+
+test("multi-search uses typed terms as filters without aggregations", () => {
+  const input = multiInput(["text:alpha"]);
+  const request = input.requests.at(0);
+  if (request === undefined) {
+    throw new Error("missing test request");
+  }
+  const result = corpusIndexMultiScoredSearchRequest({
+    ...input,
+    requests: [
+      { ...request, documentIds: { field: "decision_key", values: [13, 17] } },
+    ],
+  });
+  if (result.isErr()) {
+    throw result.error;
+  }
+  const body = result.value.body.split("\n").at(1) ?? "";
+  expect(JSON.parse(body)).toEqual({
+    query: {
+      bool: {
+        must: [
+          { query_string: { query: "text:alpha", default_operator: "AND" } },
+        ],
+        filter: [{ terms: { decision_key: [13, 17] } }],
+      },
+    },
+    from: 0,
+    size: 5,
+    sort: [{ _score: { order: "desc" } }],
+    track_total_hits: true,
+  });
+});
+
+test("accepted multi-search batches fit the exact UTF-8 serialized byte bound", () => {
+  assertProperty(
+    "accepted multi-search batches fit the exact UTF-8 serialized byte bound",
+    fc.property(
+      fc.constantFrom("a", "ž", "😀", "\n", '"', "\\"),
+      fc.integer({ min: 0, max: CORPUS_INDEX_MULTI_SEARCH_MAX_BYTES }),
+      fc.integer({ min: 0, max: CORPUS_INDEX_MULTI_SEARCH_MAX_ITEMS + 2 }),
+      (char, length, count) => {
+        const queries = Array.from({ length: count }, (_, position) =>
+          position === 0 ? char.repeat(length) : char,
+        );
+        const input = multiInput(queries);
+        const expected =
+          queries.length === 0
+            ? ""
+            : `${input.requests.flatMap((request) => [JSON.stringify({ index: request.indexId }), JSON.stringify(corpusIndexScoredSearchRequest({ ...request, fields: input.fields, observer: input.observer }).body)]).join("\n")}\n`;
+        const bytes = new TextEncoder().encode(expected).byteLength;
+        const result = corpusIndexMultiScoredSearchRequest(input);
+        if (result.isErr()) {
+          if (queries.length > CORPUS_INDEX_MULTI_SEARCH_MAX_ITEMS) {
+            expect(result.error.type).toBe("items");
+            return;
+          }
+          expect(result.error).toMatchObject({
+            type: "bytes",
+            measured: bytes,
+            limit: CORPUS_INDEX_MULTI_SEARCH_MAX_BYTES,
+          });
+          expect(bytes).toBeGreaterThan(CORPUS_INDEX_MULTI_SEARCH_MAX_BYTES);
+          return;
+        }
+        expect(result.value.body).toBe(expected);
+        expect(bytes).toBeLessThanOrEqual(CORPUS_INDEX_MULTI_SEARCH_MAX_BYTES);
+      },
+    ),
+    { numRuns: 30 },
+  );
+});
+
+test("empty multi-search returns an empty result without fetching", async () => {
+  const result = await getCorpusIndexClient("q09").multiScoredSearch(
+    multiInput([]),
+  );
+  if (result.isErr()) {
+    throw result.error;
+  }
+  expect(result.value).toEqual([]);
+  expect(requests).toEqual([]);
 });

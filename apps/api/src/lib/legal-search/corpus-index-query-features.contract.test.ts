@@ -10,7 +10,10 @@ import {
 import * as v from "valibot";
 
 import { envBase } from "@/api/env-base";
-import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  CorpusIndexError,
+  getCorpusIndexClient,
+} from "@/api/lib/legal-search/corpus-index-client";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexConfigFromManifest,
@@ -509,6 +512,101 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
       method: "DELETE",
     });
   }, TIMEOUT_MS);
+
+  test("multi-scored client preserves standalone scored hits and applies document terms filters", async () => {
+    const client = getCorpusIndexClient("q09");
+    const fields = [
+      "document_id",
+      "decision_key",
+      "passage_key",
+      "family",
+      "text",
+    ];
+    const requests = [
+      "decision_key:41",
+      "decision_key:40",
+      "decision_key:999999",
+      "decision_key:41",
+    ].map((query) => ({
+      indexId: INDEX_ID,
+      query,
+      from: 0,
+      size: 50,
+      requiredFields: fields,
+    }));
+    const standalone = await Promise.all(
+      requests.map(async (scoredRequest) => {
+        const result = await client.scoredSearch({
+          ...scoredRequest,
+          fields,
+          observer: "unobserved",
+        });
+        if (result.isErr()) {
+          throw result.error;
+        }
+        return result.value;
+      }),
+    );
+    const batch = await client.multiScoredSearch({
+      fields,
+      requests,
+      observer: "unobserved",
+    });
+    if (batch.isErr()) {
+      throw batch.error;
+    }
+    expect(batch.value).toHaveLength(requests.length);
+    for (const [position, item] of batch.value.entries()) {
+      if (item.isErr()) {
+        throw item.error;
+      }
+      expect(item.value).toEqual(standalone.at(position));
+    }
+    const filtered = await client.multiScoredSearch({
+      fields,
+      observer: "unobserved",
+      requests: [
+        {
+          indexId: INDEX_ID,
+          query: "text:alpha",
+          from: 0,
+          size: 50,
+          requiredFields: fields,
+          documentIds: { field: "decision_key", values: [13, 17, 20, 41] },
+        },
+        {
+          indexId: INDEX_ID,
+          query: "text:alpha",
+          from: 0,
+          size: 50,
+          requiredFields: fields,
+          documentIds: {
+            field: "document_id",
+            values: [
+              documentId(13),
+              documentId(17),
+              documentId(20),
+              documentId(41),
+            ],
+          },
+        },
+      ],
+    });
+    if (filtered.isErr()) {
+      throw filtered.error;
+    }
+    for (const item of filtered.value) {
+      if (item.isErr()) {
+        throw item.error;
+      }
+      expect(item.value.numHits).toBe(3);
+      expect(
+        item.value.hits
+          .map(({ fields: storedFields }) => storedFields["decision_key"])
+          .toSorted(),
+      ).toEqual([13, 17, 20]);
+    }
+  });
 
   test("multi-search preserves request order and standalone hits, including numeric term filters", async () => {
     const requests = [

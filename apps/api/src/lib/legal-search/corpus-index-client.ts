@@ -178,7 +178,7 @@ export type CorpusIndexSearchResponse = {
  * it can do two things that one cannot: project each hit to named stored
  * fields, and report the BM25 score beside the hit.
  */
-type CorpusIndexScoredSearchInput = {
+export type CorpusIndexScoredSearchInput = {
   observer: RegistryRequestObservation;
   indexId: string;
   /** Full corpus index query string, read exactly as `search` reads it. */
@@ -195,6 +195,71 @@ type CorpusIndexScoredSearchInput = {
    */
   requiredFields: readonly string[];
 };
+
+/** Eight requests cover six verification groups with two slots of headroom. */
+export const CORPUS_INDEX_MULTI_SEARCH_MAX_ITEMS = 8;
+/** Reserve 128 KiB (12.5%) below the engine's 1 MiB ES request ceiling. */
+export const CORPUS_INDEX_MULTI_SEARCH_MAX_BYTES = 896 * 1024;
+/** Largest terms set exercised by the stock-engine contract. */
+export const CORPUS_INDEX_TERMS_MAX_VALUES = 2000;
+
+export class CorpusIndexSearchLimitError extends TaggedError(
+  "CorpusIndexSearchLimitError",
+)<{
+  message: string;
+  type: "items" | "bytes" | "terms";
+  measured: number;
+  limit: number;
+}> {}
+
+export class CorpusIndexMultiSearchError extends TaggedError(
+  "CorpusIndexMultiSearchError",
+)<{
+  message: string;
+  cause: CorpusIndexError;
+}> {}
+
+export type CorpusIndexDocumentTerms = {
+  field: string;
+  values: readonly number[] | readonly string[];
+};
+
+export const corpusIndexDocumentTermsFilter = ({
+  field,
+  values,
+}: CorpusIndexDocumentTerms) => {
+  if (!STORED_FIELD_NAME.test(field)) {
+    panic(`Invalid document-id field name: ${field}`);
+  }
+  if (values.length > CORPUS_INDEX_TERMS_MAX_VALUES) {
+    return Result.err(
+      new CorpusIndexSearchLimitError({
+        message: "Document terms filter exceeds its value limit",
+        type: "terms",
+        measured: values.length,
+        limit: CORPUS_INDEX_TERMS_MAX_VALUES,
+      }),
+    );
+  }
+  return Result.ok({ terms: { [field]: values } });
+};
+
+export type CorpusIndexMultiScoredSearchInput = {
+  observer: RegistryRequestObservation;
+  /** ES multi-search applies source projection to the whole batch. */
+  fields: readonly string[];
+  requests: readonly (Omit<
+    CorpusIndexScoredSearchInput,
+    "observer" | "fields"
+  > & {
+    documentIds?: CorpusIndexDocumentTerms;
+  })[];
+};
+
+export type CorpusIndexMultiScoredSearchResult = Result<
+  Result<CorpusIndexScoredSearchResponse, CorpusIndexError>[],
+  CorpusIndexSearchLimitError | CorpusIndexMultiSearchError
+>;
 
 type CorpusIndexScoredHit = {
   /** The hit's stored fields, limited to the requested ones. */
@@ -253,6 +318,59 @@ export const corpusIndexScoredSearchRequest = ({
       track_total_hits: true,
     },
   };
+};
+
+/** Serialize once: the checked UTF-8 body is exactly the body sent. */
+export const corpusIndexMultiScoredSearchRequest = (
+  input: CorpusIndexMultiScoredSearchInput,
+) => {
+  if (input.requests.length > CORPUS_INDEX_MULTI_SEARCH_MAX_ITEMS) {
+    return Result.err(
+      new CorpusIndexSearchLimitError({
+        message: "Corpus multi-search exceeds its item limit",
+        type: "items",
+        measured: input.requests.length,
+        limit: CORPUS_INDEX_MULTI_SEARCH_MAX_ITEMS,
+      }),
+    );
+  }
+  const lines: string[] = [];
+  for (const request of input.requests) {
+    const { body } = corpusIndexScoredSearchRequest({
+      ...request,
+      fields: input.fields,
+      observer: input.observer,
+    });
+    if (request.documentIds !== undefined) {
+      const filter = corpusIndexDocumentTermsFilter(request.documentIds);
+      if (filter.isErr()) {
+        return filter;
+      }
+      body["query"] = {
+        bool: { must: [body["query"]], filter: [filter.value] },
+      };
+    }
+    lines.push(
+      JSON.stringify({ index: request.indexId }),
+      JSON.stringify(body),
+    );
+  }
+  const body = lines.length === 0 ? "" : `${lines.join("\n")}\n`;
+  const measured = new TextEncoder().encode(body).byteLength;
+  if (measured > CORPUS_INDEX_MULTI_SEARCH_MAX_BYTES) {
+    return Result.err(
+      new CorpusIndexSearchLimitError({
+        message: "Corpus multi-search exceeds its body byte limit",
+        type: "bytes",
+        measured,
+        limit: CORPUS_INDEX_MULTI_SEARCH_MAX_BYTES,
+      }),
+    );
+  }
+  return Result.ok({
+    path: `/api/v1/_elastic/_msearch?_source_includes=${input.fields.join(",")}`,
+    body,
+  });
 };
 
 const scoreOfScoredHit = (hit: Record<string, unknown>): number | null => {
@@ -453,6 +571,9 @@ export type CorpusIndexClient = {
   scoredSearch: (
     input: CorpusIndexScoredSearchInput,
   ) => Promise<Result<CorpusIndexScoredSearchResponse, CorpusIndexError>>;
+  multiScoredSearch: (
+    input: CorpusIndexMultiScoredSearchInput,
+  ) => Promise<CorpusIndexMultiScoredSearchResult>;
   aggregate: (
     input: CorpusIndexAggregateInput,
   ) => Promise<Result<CorpusIndexAggregations, CorpusIndexError>>;
@@ -1385,6 +1506,93 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       },
       catch: toCorpusIndexError,
     }),
+
+  multiScoredSearch: async (input) => {
+    const serialized = corpusIndexMultiScoredSearchRequest(input);
+    if (serialized.isErr()) {
+      return serialized;
+    }
+    if (input.requests.length === 0) {
+      return Result.ok([]);
+    }
+    return await Result.tryPromise({
+      try: async () => {
+        const response = await requestJson({
+          observer: input.observer,
+          baseUrl: searchBaseUrl(cluster),
+          path: serialized.value.path,
+          init: {
+            method: "POST",
+            headers: { "content-type": "application/x-ndjson" },
+            body: serialized.value.body,
+          },
+          timeoutMs: SEARCH_TIMEOUT_MS,
+        });
+        const responses = isRecord(response)
+          ? parseRecordArray(response["responses"])
+          : null;
+        if (responses === null || responses.length !== input.requests.length) {
+          throw new CorpusIndexError({
+            message:
+              "Corpus multi-search returned an invalid response count or envelope",
+          });
+        }
+        return responses.map((item, position) => {
+          const request =
+            input.requests.at(position) ??
+            panic("Missing multi-search request");
+          const status = item["status"];
+          if (
+            typeof status === "number" &&
+            Number.isInteger(status) &&
+            status >= 400 &&
+            status <= 599 &&
+            isRecord(item["error"])
+          ) {
+            return Result.err(
+              new CorpusIndexError({
+                message: `Corpus multi-search item failed with status ${status}`,
+                status,
+                rejection: rejectionForHttpStatus(status),
+                cause: item["error"],
+              }),
+            );
+          }
+          const shards = item["_shards"];
+          const hits = item["hits"];
+          const total = isRecord(hits) ? hits["total"] : undefined;
+          const parsed = parseCorpusIndexScoredSearchResponse(
+            item,
+            request.requiredFields,
+          );
+          if (
+            status !== 200 ||
+            item["error"] !== undefined ||
+            item["timed_out"] !== false ||
+            !isRecord(shards) ||
+            shards["failed"] !== 0 ||
+            !isRecord(total) ||
+            total["relation"] !== "eq" ||
+            parsed === null ||
+            !Number.isSafeInteger(parsed.numHits)
+          ) {
+            return Result.err(
+              new CorpusIndexError({
+                message:
+                  "Corpus multi-search item returned an invalid or incomplete response",
+              }),
+            );
+          }
+          return Result.ok(parsed);
+        });
+      },
+      catch: (cause) =>
+        new CorpusIndexMultiSearchError({
+          message: "Corpus multi-search batch failed",
+          cause: toCorpusIndexError(cause),
+        }),
+    });
+  },
 
   aggregate: async ({ indexId, query, aggs, observer }) =>
     await Result.tryPromise({

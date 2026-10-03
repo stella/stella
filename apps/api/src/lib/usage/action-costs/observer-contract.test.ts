@@ -27,6 +27,7 @@ const corpusContracts = {
   ingestQueuedBatch: true,
   search: true,
   scoredSearch: true,
+  multiScoredSearch: true,
   aggregate: true,
   deleteByQuery: true,
   readDeleteSettlements: true,
