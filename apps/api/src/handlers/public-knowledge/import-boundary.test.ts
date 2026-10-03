@@ -76,6 +76,8 @@ const allowedExternal = new Set([
   "jszip",
   "node:fs",
   "node:path",
+  "node:stream",
+  "node:zlib",
   "slimdom",
   "valibot",
 ]);
