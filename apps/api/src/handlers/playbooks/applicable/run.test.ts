@@ -134,14 +134,9 @@ describe("auto-run playbooks handler", () => {
       documentRunCount: 0,
       refusals: [
         {
-          ok: false,
+          ...refusal,
           playbookId,
           playbookName: "Vendor agreement review",
-          code: refusal.code,
-          status: refusal.status,
-          message: refusal.message,
-          hint: refusal.hint,
-          retryable: refusal.retryable,
         },
       ],
     };

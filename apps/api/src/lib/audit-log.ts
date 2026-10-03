@@ -95,7 +95,10 @@ export type AuditEvent = {
 };
 
 // Requiring rollback keeps a database handle from standing in for a transaction.
-type AuditTransaction = Pick<PgAsyncDatabase<PgQueryResultHKT>, "insert"> &
+type AuditTransaction = Pick<
+  PgAsyncDatabase<PgQueryResultHKT>,
+  "insert" | "select"
+> &
   Pick<Transaction, "rollback">;
 
 export type AuditRecorder = (
