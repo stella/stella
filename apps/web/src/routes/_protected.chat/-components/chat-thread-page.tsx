@@ -205,7 +205,7 @@ export const ChatThreadPage = ({
   // rendering while the entitlement state loads.
   const { data: usageEntitlementData } = useQuery({
     ...usageEntitlementOptions({ organizationId: activeOrganizationId }),
-    enabled: canManageOrganization,
+    enabled: env.VITE_FEATURE_USAGE && canManageOrganization,
   });
   const usageLimit = useUsageLimit({
     hasHostedEntitlement:
