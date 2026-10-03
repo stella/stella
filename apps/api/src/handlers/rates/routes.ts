@@ -2,6 +2,9 @@ import Elysia from "elysia";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
+import readBillingArrangement from "@/api/handlers/rates/arrangement/get";
+import readMatterBillingSummary from "@/api/handlers/rates/arrangement/summary/get";
+import setBillingArrangement from "@/api/handlers/rates/arrangement/update";
 import createRateTable from "@/api/handlers/rates/create";
 import deleteRateTable from "@/api/handlers/rates/delete";
 import createRateEntry from "@/api/handlers/rates/entries/create";
@@ -30,6 +33,17 @@ export const ratesRoute = new Elysia({
   .use(permissionMacro)
   .guard({
     validateWorkspaceAccess: true,
+  })
+  .get("/arrangement", readBillingArrangement.handler, {
+    permissions: readBillingArrangement.config.permissions,
+  })
+  .put("/arrangement", setBillingArrangement.handler, {
+    permissions: setBillingArrangement.config.permissions,
+    body: setBillingArrangement.config.body,
+    resourceSetUpdated: rateRealtimeUpdates,
+  })
+  .get("/summary", readMatterBillingSummary.handler, {
+    permissions: readMatterBillingSummary.config.permissions,
   })
   // Rate tables
   .get("/", readRateTables.handler, {

@@ -1642,17 +1642,13 @@ const countSliceOwnedWebComponents: RepoCounter = (context) => {
 // burning it down. Counting the committed artifact (rather than re-running the
 // exporter) keeps the scan cheap and deterministic.
 const countTruncatedCapabilitySchemas = (content: string): number => {
-  const parsed: unknown = JSON.parse(content);
-  if (!Array.isArray(parsed)) {
-    return 0;
-  }
-  return parsed.filter(
-    (entry) =>
-      typeof entry === "object" &&
+  const entry: unknown = JSON.parse(content);
+  return Number(
+    typeof entry === "object" &&
       entry !== null &&
       "inputSchemaTruncated" in entry &&
       entry.inputSchemaTruncated === true,
-  ).length;
+  );
 };
 
 // Capabilities carrying no authored `description` are tracked by exact id in
@@ -1674,39 +1670,36 @@ const countTruncatedCapabilitySchemas = (content: string): number => {
 // capability, so an entry blocked on both legs counts once. Counting the
 // committed artifact keeps the scan cheap and deterministic.
 const countFileTransportSuppressed = (content: string): number => {
-  const parsed: unknown = JSON.parse(content);
-  if (!Array.isArray(parsed)) {
+  const entry: unknown = JSON.parse(content);
+  if (typeof entry !== "object" || entry === null) {
     return 0;
   }
-  return parsed.filter((entry) => {
-    if (typeof entry !== "object" || entry === null) {
-      return false;
-    }
-    const transport: unknown = Object.hasOwn(entry, "transport")
-      ? Object.getOwnPropertyDescriptor(entry, "transport")?.value
-      : undefined;
-    if (typeof transport !== "object" || transport === null) {
-      return false;
-    }
-    const type: unknown = Object.getOwnPropertyDescriptor(
-      transport,
-      "type",
-    )?.value;
-    if (type === "file-response" || type === "file-both") {
-      return true;
-    }
-    if (type !== "file-input") {
-      return false;
-    }
-    const input: unknown = Object.getOwnPropertyDescriptor(
-      transport,
-      "input",
-    )?.value;
-    if (typeof input !== "object" || input === null) {
-      return false;
-    }
-    return Object.getOwnPropertyDescriptor(input, "required")?.value === true;
-  }).length;
+  const transport: unknown = Object.hasOwn(entry, "transport")
+    ? Object.getOwnPropertyDescriptor(entry, "transport")?.value
+    : undefined;
+  if (typeof transport !== "object" || transport === null) {
+    return 0;
+  }
+  const type: unknown = Object.getOwnPropertyDescriptor(
+    transport,
+    "type",
+  )?.value;
+  if (type === "file-response" || type === "file-both") {
+    return 1;
+  }
+  if (type !== "file-input") {
+    return 0;
+  }
+  const input: unknown = Object.getOwnPropertyDescriptor(
+    transport,
+    "input",
+  )?.value;
+  if (typeof input !== "object" || input === null) {
+    return 0;
+  }
+  return Number(
+    Object.getOwnPropertyDescriptor(input, "required")?.value === true,
+  );
 };
 
 // A READ capability that requires a write-only OAuth grant is unreachable by a
@@ -1721,25 +1714,20 @@ const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set(
 );
 
 const countReadCapabilitiesWithWriteScope = (content: string): number => {
-  const parsed: unknown = JSON.parse(content);
-  if (!Array.isArray(parsed)) {
+  const entry: unknown = JSON.parse(content);
+  if (typeof entry !== "object" || entry === null) {
     return 0;
   }
-  return parsed.filter((entry) => {
-    if (typeof entry !== "object" || entry === null) {
-      return false;
-    }
-    const read = (key: string): unknown =>
-      Object.hasOwn(entry, key)
-        ? Object.getOwnPropertyDescriptor(entry, key)?.value
-        : undefined;
-    const scope = read("scope");
-    return (
-      read("access") === "read" &&
+  const read = (key: string): unknown =>
+    Object.hasOwn(entry, key)
+      ? Object.getOwnPropertyDescriptor(entry, key)?.value
+      : undefined;
+  const scope = read("scope");
+  return Number(
+    read("access") === "read" &&
       typeof scope === "string" &&
-      WRITE_ONLY_SCOPES.has(scope)
-    );
-  }).length;
+      WRITE_ONLY_SCOPES.has(scope),
+  );
 };
 
 /**
@@ -3222,7 +3210,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     id: "capability-schemas-truncated",
     description:
       "capabilities carrying `inputSchemaTruncated`, the flag that used to mark a schema dropped for size. The exporter now $defs-compacts schemas and FAILS on one still over the byte cap, so this can only be reached by reintroducing the truncation pathway: it stays at 0",
-    include: ["packages/cli/capability-catalog.json"],
+    include: ["packages/cli/capabilities/*.json"],
     // Generated artifacts are the subject here, so the shared source
     // exclusions (which skip `.gen.`/generated paths) must not apply.
     exclude: () => false,
@@ -3233,7 +3221,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     id: "capability-file-transport-suppressed",
     description:
       "capabilities whose transport disposition suppresses them from the generic transport (a file response, or a REQUIRED file input): dropped from the CLI tree and refused by invoke_capability, so no agent surface can reach them. An OPTIONAL file input is not counted — its JSON modes stay invokable",
-    include: ["packages/cli/capability-catalog.json"],
+    include: ["packages/cli/capabilities/*.json"],
     // Generated artifacts are the subject here, so the shared source
     // exclusions (which skip `.gen.`/generated paths) must not apply.
     exclude: () => false,
@@ -3244,7 +3232,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     id: "read-capabilities-with-write-scope",
     description:
       "read capabilities whose required scope is a write-only grant (admin/billing/documents/knowledge/matters _write), unreachable by a read-only credential; the exporter's access-keyed scope resolver keeps this at 0",
-    include: ["packages/cli/capability-catalog.json"],
+    include: ["packages/cli/capabilities/*.json"],
     // Generated artifacts are the subject here, so the shared source
     // exclusions (which skip `.gen.`/generated paths) must not apply.
     exclude: () => false,
@@ -5522,7 +5510,7 @@ const writeFixture = (root: string, rel: string, content: string): void => {
 
 // Two truncated entries among four, plus shapes the counter must NOT count:
 // `inputSchemaTruncated: false`, and an entry that simply omits the field.
-const SELF_TEST_CAPABILITY_CATALOG = `${JSON.stringify([
+const SELF_TEST_CAPABILITY_CATALOG = [
   { id: "alpha.create", inputSchemaTruncated: true },
   { id: "beta.read", inputSchemaTruncated: false },
   { id: "gamma.update" },
@@ -5570,7 +5558,7 @@ const SELF_TEST_CAPABILITY_CATALOG = `${JSON.stringify([
   { id: "mu.get", access: "read", scope: "stella:admin_write" },
   { id: "nu.get", access: "read", scope: "stella:read" },
   { id: "xi.create", access: "write", scope: "stella:matters_write" },
-])}\n`;
+];
 // Two truncated entries in the catalog fixture.
 const EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS = 2;
 // Three suppressed entries (required file input, file response, and the
@@ -6147,11 +6135,13 @@ const runSelfTest = (): number => {
       "apps/api/src/lib/api-handlers.ts",
       SELF_TEST_RESULT_BOUNDARY_FILE,
     );
-    writeFixture(
-      root,
-      "packages/cli/capability-catalog.json",
-      SELF_TEST_CAPABILITY_CATALOG,
-    );
+    for (const capability of SELF_TEST_CAPABILITY_CATALOG) {
+      writeFixture(
+        root,
+        `packages/cli/capabilities/${capability.id}.json`,
+        `${JSON.stringify(capability)}\n`,
+      );
+    }
     // Both handler globs the subject-gate metric covers, plus the gate module
     // itself, so the exclusion is exercised rather than assumed.
     writeFixture(

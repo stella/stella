@@ -36,6 +36,7 @@ import {
   type ComposerContextMenuProps,
 } from "@/components/chat/composer-plus-menu";
 import { PromptEditorContent } from "@/components/prompt-editor";
+import { ReferenceRenderScope } from "@/components/references/reference-chip";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
@@ -265,20 +266,28 @@ export const ChatInputSurface = ({
               }}
               role="presentation"
             >
-              <PromptEditorContent
-                // Compact: default to a single text line and grow with content
-                // (drop the provider's `min-h-10`), matching the inspector and
-                // file-chat bars. Large: hold ~3 text lines (`text-sm` at
-                // `leading-5` = 20px per line) so the hero box keeps its
-                // stature while empty.
-                className={cn(
-                  variant === "large"
-                    ? "[&_.ProseMirror]:min-h-15"
-                    : "[&_.ProseMirror]:min-h-0",
-                  inputDisabled && "pointer-events-none",
-                )}
-                editor={editor}
-              />
+              <ReferenceRenderScope
+                workspaceId={
+                  context?.threadRef.scope === "workspace"
+                    ? context.threadRef.workspaceId
+                    : undefined
+                }
+              >
+                <PromptEditorContent
+                  // Compact: default to a single text line and grow with
+                  // content (drop the provider's `min-h-10`), matching the
+                  // inspector and file-chat bars. Large: hold ~3 text lines
+                  // (`text-sm` at `leading-5` = 20px per line) so the hero box
+                  // keeps its stature while empty.
+                  className={cn(
+                    variant === "large"
+                      ? "[&_.ProseMirror]:min-h-15"
+                      : "[&_.ProseMirror]:min-h-0",
+                    inputDisabled && "pointer-events-none",
+                  )}
+                  editor={editor}
+                />
+              </ReferenceRenderScope>
               {isBlank && (
                 <span
                   aria-hidden="true"

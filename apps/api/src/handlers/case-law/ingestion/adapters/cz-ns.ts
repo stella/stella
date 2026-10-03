@@ -1,4 +1,5 @@
-// parser-output-unchanged: Page validation and item-level failure reporting reject invalid publisher input without transforming parsed decision content.
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
@@ -41,6 +42,7 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -65,6 +67,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -666,7 +669,7 @@ const buildCzNsDecisionFromPages = ({
   });
   const publishedSummary = summaryOfLabels(meta);
 
-  return {
+  return plainTextIngestionResult({
     caseNumber,
     ...(firstPublisherIdentifier === undefined
       ? {}
@@ -726,7 +729,7 @@ const buildCzNsDecisionFromPages = ({
       [CZ_NS_RAW_PART.PRINT]: printHtml,
     }),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 /**
@@ -761,12 +764,14 @@ export const buildCzNsDecision = async (
   // work.
   const [detailResponse, printResponse] = await Promise.all([
     fetchPublisher(webUrl, {
+      fetchStage: "document",
       adapterKey: ADAPTER_KEYS.CZ_NS,
       signal,
       headers: COMMON_HEADERS,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     }),
     fetchPublisher(printUrl, {
+      fetchStage: "document",
       adapterKey: ADAPTER_KEYS.CZ_NS,
       signal,
       headers: COMMON_HEADERS,
@@ -1130,6 +1135,7 @@ const listCzNsSlicePage = async ({
     `&Start=1&Count=${CZ_NS_LISTING_WINDOW}`;
 
   const response = await fetchPublisher(url, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.CZ_NS,
     signal,
     headers: COMMON_HEADERS,
@@ -1303,6 +1309,7 @@ const CZ_NS_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const czNsAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.CZ_NS,
   sourceSurfaces: CZ_NS_SOURCE_SURFACES,
   sourceFields: {
@@ -1324,6 +1331,15 @@ export const czNsAdapter = defineSourceAdapter({
    * compare against what is held.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            unid: payload["unid"],
+            caseNumber: payload["caseNumber"],
+            additionalCaseNumbers: payload["additionalCaseNumbers"],
+          }
+        : null,
     firstSlice: CZ_NS_FIRST_SLICE,
     ...czNsDaySlices.walk,
     tipWindowDays: CZ_NS_TIP_WINDOW_DAYS,
@@ -1338,6 +1354,7 @@ export const czNsAdapter = defineSourceAdapter({
         `&Count=1&Start=1&OutputFormat=JSON`;
 
       const response = await fetchPublisher(url, {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.CZ_NS,
         signal,
         headers: COMMON_HEADERS,
@@ -1378,6 +1395,7 @@ export const czNsAdapter = defineSourceAdapter({
           `&OutputFormat=JSON`;
 
         const listResponse = await fetchPublisher(listUrl, {
+          fetchStage: "listing",
           adapterKey: ADAPTER_KEYS.CZ_NS,
           headers: COMMON_HEADERS,
           signal,
@@ -1453,7 +1471,31 @@ export const czNsAdapter = defineSourceAdapter({
           const caseNumber = entryField(entry, "znacka") ?? "";
 
           try {
-            const built = await buildCzNsDecision({ caseNumber, unid }, signal);
+            const attempted = await buildPlainTextItem({
+              decisionOf: (value) => {
+                switch (value.type) {
+                  case "built":
+                    return value.decision;
+                  case "unkeyable":
+                  case "detail-unavailable":
+                    return undefined;
+                  default:
+                    value satisfies never;
+                    return panic("Unhandled source build outcome");
+                }
+              },
+              adapterKey: ADAPTER_KEYS.CZ_NS,
+
+              rawListing: JSON.stringify(entry),
+              build: async () =>
+                await buildCzNsDecision({ caseNumber, unid }, signal),
+            });
+            if (attempted.type === "item_build_failed") {
+              refused++;
+              decisions.push(attempted.decision);
+              continue;
+            }
+            const built = attempted.value;
 
             switch (built.type) {
               case "built": {

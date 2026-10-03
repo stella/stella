@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
-import { roles } from "@stll/permissions";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { workspaceViews } from "@/api/db/schema";
@@ -12,6 +11,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { legalListsDeployed } from "@/api/lib/lists/deployment";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import {
@@ -135,9 +135,9 @@ const updateView = createSafeHandler(
             workspaceId,
             layout: parsedLayout,
             templateProperties: body.templateProperties,
-            canCreateProperties: roles[memberRole.role].authorize({
+            canCreateProperties: hasMemberPermission(memberRole, {
               property: ["create"],
-            }).success,
+            }),
             recordAuditEvent,
           });
           // Throwing aborts the transaction; `abortableTx` hands the HandlerError

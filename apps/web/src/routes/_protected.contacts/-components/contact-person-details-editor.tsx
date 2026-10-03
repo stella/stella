@@ -1,15 +1,13 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
-import { useQueryClient } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
+import { useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUpdateContact } from "@/lib/contacts/mutations";
-import { detached } from "@/lib/detached";
-import { invalidateContactCaches } from "@/routes/_protected.contacts/-components/contact-caches";
 import { PersonDetailsFields } from "@/routes/_protected.contacts/-components/person-details-fields";
 import {
   birthDateDraft,
@@ -18,19 +16,17 @@ import {
 import type { BirthDateDraft } from "@/routes/_protected.contacts/-components/person-details-fields.logic";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 export const ContactPersonDetailsEditor = ({
   contact,
 }: {
   contact: ContactData;
 }) => {
   const t = useTranslations();
-  const queryClient = useQueryClient();
   const updateContact = useUpdateContact();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const [scope] = useState(() => ({
+    organizationId: contact.organizationId,
+    contactId: contact.id,
+  }));
   const [birthDate, setBirthDate] = useState<BirthDateDraft>(() =>
     birthDateDraft(contact.dateOfBirth),
   );
@@ -48,7 +44,12 @@ export const ContactPersonDetailsEditor = ({
     JSON.stringify(comparableBirthDate) !== JSON.stringify(currentBirthDate) ||
     nationalityCodes.join(",") !== contact.nationalityCodes.join(",");
 
+  const submittedDraft = useRef<string | undefined>(undefined);
   const save = () => {
+    const draftKey = JSON.stringify({ birthDate, nationalityCodes });
+    if (!dirty || submittedDraft.current === draftKey) {
+      return;
+    }
     const dateOfBirth = parseBirthDateDraft(birthDate);
     if (hasBirthDateInput && !dateOfBirth) {
       stellaToast.add({
@@ -57,26 +58,27 @@ export const ContactPersonDetailsEditor = ({
       });
       return;
     }
+    submittedDraft.current = draftKey;
     updateContact.mutate(
-      { contactId: contact.id, dateOfBirth, nationalityCodes },
+      {
+        ...scope,
+        dateOfBirth,
+        nationalityCodes,
+      },
       {
         onSuccess: () => {
           setBirthDate(birthDateDraft(dateOfBirth));
-          detached(
-            invalidateContactCaches(queryClient, {
-              activeOrganizationId,
-              contactId: contact.id,
-            }),
-            "contact-person-details.invalidate-contact-caches",
-          );
           stellaToast.add({ title: t("contacts.saved"), type: "success" });
         },
         onError: () => {
-          stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+          submittedDraft.current = undefined;
         },
       },
     );
   };
+
+  const flush = useLatestCallback(save);
+  useMountEffect(() => () => flush());
 
   return (
     <section className="rounded-lg border p-4">
@@ -86,8 +88,14 @@ export const ContactPersonDetailsEditor = ({
       <PersonDetailsFields
         birthDate={birthDate}
         nationalityCodes={nationalityCodes}
-        onBirthDateChange={setBirthDate}
-        onNationalityCodesChange={setNationalityCodes}
+        onBirthDateChange={(value) => {
+          submittedDraft.current = undefined;
+          setBirthDate(value);
+        }}
+        onNationalityCodesChange={(value) => {
+          submittedDraft.current = undefined;
+          setNationalityCodes(value);
+        }}
       />
       {dirty && (
         <div className="mt-4 flex justify-end">

@@ -1,6 +1,14 @@
 import { Result, panic } from "better-result";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { DocumentStageObserver } from "@stll/legal-atlas/document-fetch-diagnostics";
+import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+  type IngestionPipelineResult,
+  CYCLE_HALT_REASON,
+} from "@stll/legal-atlas/ingestion-cycle";
+
+import type { IngestionScopedDb } from "@/api/db/safe-db";
 import type { caseLawSources } from "@/api/db/schema";
 import {
   ADAPTER_TIMEOUT,
@@ -34,7 +42,7 @@ import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestio
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
-import { refreshSourceStoredTotal } from "@/api/handlers/case-law/ingestion/source-totals";
+import { refreshNextSourceStoredTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
@@ -43,7 +51,9 @@ import {
   INGESTION_CHECKPOINT_STATUS,
 } from "@/api/lib/corpus-ingestion-checkpoint";
 import {
+  AdapterFetchError,
   ConcurrentModificationError,
+  ingestionStopKindOf,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
@@ -53,7 +63,10 @@ import {
   remainingCycleMs,
   startCycleDeadline,
 } from "@/api/lib/legal-search/cycle-deadline";
-import type { StartCycleDeadlineOptions } from "@/api/lib/legal-search/cycle-deadline";
+import type {
+  CycleDeadline,
+  StartCycleDeadlineOptions,
+} from "@/api/lib/legal-search/cycle-deadline";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -63,9 +76,17 @@ type DbSlot = {
 };
 
 type PipelineInput = {
+  onDocumentObservation?: DocumentStageObserver;
   source: typeof caseLawSources.$inferSelect;
   sourceLease: CaseLawSourceIngestionLease;
-  scopedDb: ScopedDb;
+  scopedDb: IngestionScopedDb;
+  countStoredTotalSource?: Parameters<
+    typeof refreshNextSourceStoredTotal
+  >[0]["countSource"];
+  acquireStoredTotalAdmission: (options: {
+    deadline: CycleDeadline | undefined;
+    phase?: "reserve" | "start";
+  }) => Promise<"granted" | "held" | "unknown">;
   /**
    * The cycle's time budget, and the signals that end it early. The loop
    * starts a page only while enough of the budget is left for the page to
@@ -95,26 +116,6 @@ type PipelineInput = {
   dbSlot?: DbSlot;
   corpus?: CaseLawCorpusDependencies;
 };
-
-type PipelineResult = {
-  inserted: number;
-  skipped: number;
-  searchVectorFailures: number;
-  s3UploadFailures: number;
-  pagesProcessed: number;
-  nextCursor: string | null;
-  /** Non-null if the adapter was halted early due to repeated failures. */
-  haltReason: string | null;
-};
-
-/**
- * Halt reasons the operator loop classifies on. The runner reads the timeout
- * one to separate a cycle that ran out of budget from one that failed, so the
- * text is a shared constant rather than a literal on both sides.
- */
-export const CYCLE_HALT_REASON = {
-  TIMEOUT: "Cycle timeout exceeded",
-} as const;
 
 const databaseTimeoutHaltReason = (error: TimeoutError): string =>
   `Database timeout; cursor held for retry: ${error.message.slice(0, 200)}`;
@@ -179,6 +180,25 @@ const batchHaltReason = (
   }
 };
 
+const batchStopKind = (
+  stop: DecisionBatchHalt,
+): IngestionStopKind | undefined => {
+  switch (stop.type) {
+    case "retryable":
+    case "timeout":
+      return INGESTION_STOP_KIND.INTERNAL_ERROR;
+    case "insert-limit":
+      return undefined;
+    case "failure-streak":
+      return stop.stopKind;
+    case "aborted":
+      return panic("A crawl batch carries no abort signal");
+    default:
+      stop satisfies never;
+      return panic(`Unhandled batch stop: ${String(stop)}`);
+  }
+};
+
 /** What a page asks the database to write: its decisions and supplements. */
 const pageItemCount = ({ decisions, supplements }: SyncPage): number =>
   decisions.length + (supplements?.length ?? 0);
@@ -203,13 +223,16 @@ export const runIngestionPipeline = async ({
   source,
   sourceLease,
   scopedDb,
+  acquireStoredTotalAdmission,
+  countStoredTotalSource,
+  onDocumentObservation,
   cycle,
   maxPages: maxPagesOverride,
   maxDecisions,
   batchRecordLimit = CASE_LAW_INGESTION_BATCH_LIMITS.records,
   dbSlot,
   corpus = CASE_LAW_CORPUS_DEPENDENCIES,
-}: PipelineInput): Promise<PipelineResult> => {
+}: PipelineInput): Promise<IngestionPipelineResult> => {
   const adapter = getAdapter(source.adapterKey);
 
   if (!adapter) {
@@ -235,6 +258,7 @@ export const runIngestionPipeline = async ({
    */
   let consecutiveFailures = 0;
   let haltReason: string | null = null;
+  let stopKind: IngestionStopKind | undefined;
   let checkpointObservationOrder = source.checkpointObservationOrder;
   /**
    * Compiled polarity rules for this cycle. One read per language the cycle
@@ -259,11 +283,29 @@ export const runIngestionPipeline = async ({
           if (deadline && !canStartCyclePage(deadline, pageTimeout)) {
             return { type: "budget-exhausted" } as const;
           }
-          const pageResult = await adapter.fetchPage(
-            fetchCursor,
-            source.config ?? {},
-            pageSignal,
-          );
+          const fetched = await Result.tryPromise({
+            try: async () =>
+              await adapter.fetchPage(
+                fetchCursor,
+                source.config ?? {},
+                pageSignal,
+                onDocumentObservation,
+              ),
+            catch: (cause) =>
+              new AdapterFetchError({
+                message: cause instanceof Error ? cause.message : String(cause),
+                adapterKey: adapter.key,
+                cursor: fetchCursor,
+                cause,
+                stopKind: pageSignal.aborted
+                  ? INGESTION_STOP_KIND.DEADLINE
+                  : ingestionStopKindOf(cause, "adapter"),
+              }),
+          });
+          if (Result.isError(fetched)) {
+            return { error: fetched.error, type: "fetch-error" } as const;
+          }
+          const pageResult = fetched.value;
           if (Result.isError(pageResult)) {
             return { error: pageResult.error, type: "fetch-error" } as const;
           }
@@ -290,7 +332,11 @@ export const runIngestionPipeline = async ({
       remainingMs: deadline ? Math.round(remainingCycleMs(deadline)) : 0,
       pageTimeoutMs: pageTimeout,
     });
-    return { type: "halt", reason: CYCLE_HALT_REASON.TIMEOUT } as const;
+    return {
+      type: "halt",
+      reason: CYCLE_HALT_REASON.TIMEOUT,
+      stopKind: INGESTION_STOP_KIND.DEADLINE,
+    } as const;
   };
 
   const fetchNextObservedPage = async () => {
@@ -312,6 +358,7 @@ export const runIngestionPipeline = async ({
         return {
           type: "halt",
           reason: databaseTimeoutHaltReason(observedPageResult.error),
+          stopKind: INGESTION_STOP_KIND.INTERNAL_ERROR,
         } as const;
       }
       if (observedPageResult.error instanceof Error) {
@@ -328,15 +375,20 @@ export const runIngestionPipeline = async ({
       // Expected operational failure: record one halt in the event/log path;
       // the runner, rather than every attempt, captures sustained stalls.
       const reason = `Page fetch failed: ${observedPageResult.value.error.message}`;
+      const pageStopKind =
+        deadline?.signal.aborted || pageSignal.aborted
+          ? INGESTION_STOP_KIND.DEADLINE
+          : observedPageResult.value.error.stopKind;
       logger.error("case_law.ingestion.adapter_halted", {
         adapterKey: adapter.key,
         cursor: cursor ?? "",
         httpStatus: String(observedPageResult.value.error.httpStatus ?? ""),
         reason,
+        stopKind: pageStopKind,
         inserted,
         skipped,
       });
-      return { type: "halt", reason } as const;
+      return { type: "halt", reason, stopKind: pageStopKind } as const;
     }
     return observedPageResult.value;
   };
@@ -451,6 +503,10 @@ export const runIngestionPipeline = async ({
           : batchHaltReason(applied.halt, maxDecisions)) ??
         failureLedgerHaltReason(applied.failureLedger);
       if (batchHalt !== null) {
+        stopKind =
+          applied.halt === null
+            ? INGESTION_STOP_KIND.INTERNAL_ERROR
+            : batchStopKind(applied.halt);
         return batchHalt;
       }
     }
@@ -561,6 +617,7 @@ export const runIngestionPipeline = async ({
     const observedPage = await fetchNextObservedPage();
     if (observedPage.type === "halt") {
       haltReason = observedPage.reason;
+      stopKind = observedPage.stopKind;
       break;
     }
 
@@ -577,6 +634,7 @@ export const runIngestionPipeline = async ({
     const pageSlot = await acquirePageSlot(page);
     if (pageSlot === PAGE_SLOT.CYCLE_ENDED) {
       haltReason = CYCLE_HALT_REASON.TIMEOUT;
+      stopKind = INGESTION_STOP_KIND.DEADLINE;
       break;
     }
     const pageT0 = performance.now();
@@ -614,10 +672,12 @@ export const runIngestionPipeline = async ({
       });
 
       if (haltReason) {
+        stopKind ??= INGESTION_STOP_KIND.INTERNAL_ERROR;
         logger.error("case_law.ingestion.adapter_halted", {
           adapterKey: adapter.key,
           cursor: cursor ?? "",
           reason: haltReason,
+          stopKind,
           inserted,
           skipped,
         });
@@ -667,15 +727,19 @@ export const runIngestionPipeline = async ({
   }
   cursor = checkpoint.cursor;
 
-  // After the checkpoint and outside its transaction: the count walks the
-  // source's whole index range, and holding the leased source row's
-  // transaction open for it would block the next cycle on bookkeeping. It
-  // rate-limits itself to one count per source per interval and reports its
-  // own failures, so its outcome never reaches this run's result.
-  await refreshSourceStoredTotal({
+  // Outside the checkpoint transaction: a durable refresh claim bounds
+  // daily counts, including failed attempts, through separate admission.
+  await refreshNextSourceStoredTotal({
     scopedDb,
-    sourceId: source.id,
-    now: new Date(),
+    ...(countStoredTotalSource === undefined
+      ? {}
+      : { countSource: countStoredTotalSource }),
+    ...(deadline === undefined ? {} : { deadline }),
+    acquireAdmission: async (phase) =>
+      await acquireStoredTotalAdmission({
+        deadline,
+        ...(phase === undefined ? {} : { phase }),
+      }),
   });
 
   return {
@@ -686,5 +750,6 @@ export const runIngestionPipeline = async ({
     pagesProcessed,
     nextCursor: cursor,
     haltReason,
+    ...(stopKind === undefined ? {} : { stopKind }),
   };
 };

@@ -31,7 +31,7 @@ const updateRateEntry = createSafeHandler(
     description:
       "Change one rate line's hourly rate or effective dates in a rate " +
       "table. Changing the dates re-checks for overlap against the other " +
-      "lines for the same user and is refused on a conflict; the user a line " +
+      "lines for the same person, role, or table default and is refused on a conflict; the selector a line " +
       "applies to cannot be changed here.",
     permissions: { rate: ["update"] },
     mcp: {
@@ -80,6 +80,7 @@ const updateRateEntry = createSafeHandler(
             },
             columns: {
               userId: true,
+              role: true,
               effectiveFrom: true,
               effectiveTo: true,
             },
@@ -123,6 +124,9 @@ const updateRateEntry = createSafeHandler(
           const overlapConditions = [
             eq(rateEntries.rateTableId, params.rateTableId),
             userCondition,
+            locked.role === null
+              ? isNull(rateEntries.role)
+              : eq(rateEntries.role, locked.role),
             ne(rateEntries.id, body.id),
             overlapToCondition,
           ];
@@ -142,7 +146,7 @@ const updateRateEntry = createSafeHandler(
               ok: false as const,
               status: 400 as const,
               message:
-                "Date range overlaps with an existing entry for this user",
+                "Date range overlaps with an existing entry for this person, role, or table default",
             };
           }
         }

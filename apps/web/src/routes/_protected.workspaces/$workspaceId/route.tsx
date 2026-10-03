@@ -34,6 +34,7 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { workflowOptions } from "@/lib/workspaces/queries/workspace";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { MatterUploadAction } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-upload-action";
 import { ReportExportTracker } from "@/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracker";
 import { WorkspaceDropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone";
 import { loadWorkspaceRouteQueries } from "@/routes/_protected.workspaces/$workspaceId/-route-loader.logic";
@@ -234,15 +235,17 @@ function RouteComponent() {
     shouldThrow: false,
   });
   const correspondenceMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/correspondence",
+    from: "/_protected/workspaces/$workspaceId/correspondence/$correspondenceId",
     shouldThrow: false,
   });
   // The right-side inspector pane (file viewers + chat tabs) is
   // mounted at the protected layout level (`_protected.tsx`) so
   // its mount survives matter→matter switches without flinching.
-  // Timesheets, invoices, and correspondence bypass the
+  // Timesheets, invoices, and a correspondence message bypass the
   // WorkspaceDropZone (they have their own layouts), but the inspector
-  // pane is still available everywhere inside a workspace.
+  // pane is still available everywhere inside a workspace. The matter's
+  // correspondence list is a view, so it sits in the drop zone like the
+  // other views.
   const content =
     timesheetsMatch || invoicesMatch || correspondenceMatch ? (
       <Outlet />
@@ -260,6 +263,7 @@ function RouteComponent() {
         previewClearTimers={previewClearTimers}
       />
       <ReportExportTracker workspaceId={workspaceId} />
+      <MatterUploadAction workspaceId={workspaceId} />
       <WorkflowServiceTierPromptProvider>
         {content}
       </WorkflowServiceTierPromptProvider>

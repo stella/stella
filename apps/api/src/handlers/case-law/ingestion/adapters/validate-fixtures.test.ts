@@ -13,8 +13,11 @@
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import {
+  toPlainTextIngestionResult,
+  type RawIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -22,7 +25,7 @@ type FixtureRecord = {
   adapter: string;
   recordedAt: string;
   page: {
-    decisions: IngestionResult[];
+    decisions: RawIngestionResult[];
     nextCursor: string | null;
   };
 };
@@ -53,11 +56,12 @@ const loadPageFixtures = async (): Promise<
 
 /** Validate a single IngestionResult has required fields. */
 const validateDecision = (
-  d: IngestionResult,
+  raw: RawIngestionResult,
   index: number,
   adapter: string,
 ): void => {
   const prefix = `${adapter}[${index}]`;
+  const d = toPlainTextIngestionResult(raw).unwrap(prefix);
 
   // Required fields
   expect(d.caseNumber, `${prefix}.caseNumber`).toBeTruthy();
