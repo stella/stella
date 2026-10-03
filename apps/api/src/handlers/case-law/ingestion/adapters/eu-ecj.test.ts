@@ -714,14 +714,38 @@ const installSparqlMock = ({
   return { queries, documentFetches, noticeRequests };
 };
 
+const variantDecisions = async (walk: "crawl" | "celex" | "reconciliation") => {
+  switch (walk) {
+    case "crawl":
+      return (await ecjAdapter.fetchPage("2024-01-18", {})).unwrap().decisions;
+    case "celex":
+      return await fetchDecisionsByCelex({
+        celexNumbers: [enBinding.celex.value],
+        signal: new AbortController().signal,
+      });
+    case "reconciliation":
+      break;
+    default:
+      walk satisfies never;
+  }
+  const outcome = await reconciliation.buildDecision({
+    celex: enBinding.celex.value,
+    language: "EN",
+  });
+  if (outcome.type !== "built") {
+    throw new TypeError(`Expected built, got ${outcome.type}`);
+  }
+  return [outcome.decision];
+};
+
 describe("language variant completion", () => {
   const originalFetch = globalThis.fetch;
   afterEach(() => {
     globalThis.fetch = originalFetch;
   });
 
-  test.each(["crawl", "celex"] as const)(
-    "%s retains rejected raw and tries later manifestations until text is accepted",
+  test.each(["crawl", "celex", "reconciliation"] as const)(
+    "%s returns only the accepted manifestation after a rejection",
     async (walk) => {
       const rejectedId = "5f978357-b5e4-11ee-b164-01aa75ed71a1.0005.05";
       const duplicateId = "5f978357-b5e4-11ee-b164-01aa75ed71a1.0006.05";
@@ -753,22 +777,49 @@ describe("language variant completion", () => {
         }
         return servedFetch(input, init);
       });
-      const decisions =
-        walk === "crawl"
-          ? (await ecjAdapter.fetchPage("2024-01-18", {})).unwrap().decisions
-          : await fetchDecisionsByCelex({
-              celexNumbers: [enBinding.celex.value],
-              signal: new AbortController().signal,
-            });
+      const decisions = await variantDecisions(walk);
       expect(
         decisions.map(({ plainTextOutcome }) => plainTextOutcome.type),
-      ).toEqual(["item_build_failed", "accepted"]);
+      ).toEqual(["accepted"]);
       expect(decisions.map(({ sourceDocumentId }) => sourceDocumentId)).toEqual(
-        [`${enBinding.celex.value}:en`, `${enBinding.celex.value}:en`],
+        [`${enBinding.celex.value}:en`],
       );
+      expect(decisions.at(0)?.documentUrl).toContain(EN_MANIFESTATION_ID);
       expect(documentFetches).toEqual([
         `https://publications.europa.eu/resource/cellar/${rejectedId}`,
         `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
+      ]);
+    },
+  );
+  test.each(["crawl", "celex", "reconciliation"] as const)(
+    "%s returns only the last typed failure when every manifestation is rejected",
+    async (walk) => {
+      const lastId = "5f978357-b5e4-11ee-b164-01aa75ed71a1.0006.05";
+      const rejectedBinding = {
+        ...enBinding,
+        ecli: { type: "literal", value: String.raw`\rtf1 ECLI:EU:C:2024:49` },
+      };
+      const lastBinding = withManifestation(rejectedBinding, {
+        cellarLanguage: "ENG",
+        manifestationId: lastId,
+      });
+      const { documentFetches } = installSparqlMock({
+        bindings: [rejectedBinding, lastBinding],
+        served: [EN_MANIFESTATION_ID, lastId],
+      });
+      const decisions = await variantDecisions(walk);
+      expect(decisions).toHaveLength(1);
+      expect(decisions.at(0)?.plainTextOutcome).toMatchObject({
+        type: "item_build_failed",
+        error: expect.any(Error),
+      });
+      expect(decisions.at(0)?.sourceDocumentId).toBe(
+        `${enBinding.celex.value}:en`,
+      );
+      expect(decisions.at(0)?.documentUrl).toContain(lastId);
+      expect(documentFetches).toEqual([
+        `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
+        `https://publications.europa.eu/resource/cellar/${lastId}`,
       ]);
     },
   );

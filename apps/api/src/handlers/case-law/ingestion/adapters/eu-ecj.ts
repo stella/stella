@@ -1113,27 +1113,37 @@ const COURT_EPOCH_YEAR = ADAPTER_MANIFESTS[
 /** First day the Court sat; the widest range a CELEX lookup can need. */
 const COURT_EPOCH = `${COURT_EPOCH_YEAR}-01-01`;
 
+const groupEcjVariants = (bindings: readonly SparqlResult[]) =>
+  Map.groupBy(
+    bindings,
+    ({ celex, language }) => `${celex.value}:${language.value}`,
+  ).values();
+
 type BuildPendingVariantOptions = {
-  binding: SparqlResult;
-  completedVariants: Set<string>;
+  bindings: readonly SparqlResult[];
   signal: AbortSignal;
 };
 
-// Rejected raw is retained, but only accepted text completes a variant.
+// A variant yields its accepted manifestation, or its last rejected raw.
 const buildPendingVariant = async ({
-  binding,
-  completedVariants,
+  bindings,
   signal,
 }: BuildPendingVariantOptions): Promise<IngestionResult | undefined> => {
-  const variantKey = `${binding.celex.value}:${binding.language.value}`;
-  if (completedVariants.has(variantKey)) {
-    return undefined;
+  let lastFailure: IngestionResult | undefined;
+  for (const binding of bindings) {
+    if (signal.aborted) {
+      break;
+    }
+    const decision = await buildDecision(binding, signal);
+    if (decision === undefined) {
+      continue;
+    }
+    if (decision.plainTextOutcome.type === "accepted") {
+      return decision;
+    }
+    lastFailure = decision;
   }
-  const decision = await buildDecision(binding, signal);
-  if (decision?.plainTextOutcome.type === "accepted") {
-    completedVariants.add(variantKey);
-  }
-  return decision;
+  return lastFailure;
 };
 
 type FetchDecisionsByCelexOptions = {
@@ -1173,15 +1183,13 @@ export const fetchDecisionsByCelex = async ({
   });
 
   const decisions: IngestionResult[] = [];
-  const completedVariants = new Set<string>();
-  for (const binding of bindings) {
-    const lang = toEcjLanguage(binding.language.value);
-    if (lang === undefined || (languages && !languages.includes(lang))) {
-      continue;
-    }
+  const selectedBindings = bindings.filter(({ language }) => {
+    const lang = toEcjLanguage(language.value);
+    return lang !== undefined && (!languages || languages.includes(lang));
+  });
+  for (const variantBindings of groupEcjVariants(selectedBindings)) {
     const decision = await buildPendingVariant({
-      binding,
-      completedVariants,
+      bindings: variantBindings,
       signal,
     });
     if (!decision) {
@@ -3131,10 +3139,8 @@ export const euEcjAdapter = defineSourceAdapter({
 
         const decisions: IngestionResult[] = [];
         let failed = 0;
-        const completedVariants = new Set<string>();
-
         // 2. Fetch and parse each language variant
-        for (const binding of bindings) {
+        for (const variantBindings of groupEcjVariants(bindings)) {
           if (abortSignal.aborted) {
             break;
           }
@@ -3143,11 +3149,10 @@ export const euEcjAdapter = defineSourceAdapter({
             decisionOf: (value) => value,
             adapterKey: ADAPTER_KEYS.EU_ECJ,
 
-            rawListing: JSON.stringify(binding),
+            rawListing: JSON.stringify(variantBindings),
             build: async () =>
               await buildPendingVariant({
-                binding,
-                completedVariants,
+                bindings: variantBindings,
                 signal: abortSignal,
               }),
           });
