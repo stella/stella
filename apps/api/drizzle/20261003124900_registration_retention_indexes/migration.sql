@@ -37,7 +37,7 @@ SET statement_timeout = '5s';
 --> statement-breakpoint
 SET lock_timeout = '1s';
 --> statement-breakpoint
-ALTER TABLE "oauth_client" VALIDATE CONSTRAINT "oauth_client_registration_origin_check";
---> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;
+--> statement-breakpoint
+ALTER TABLE "oauth_client" VALIDATE CONSTRAINT "oauth_client_registration_origin_check";
