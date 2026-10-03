@@ -31,6 +31,7 @@ import type {
   EmptyAst,
   IngestionResult,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { composedMetadataUrlSchema } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
 import { supplementAnchorPrefix } from "@/api/lib/case-law/decision-absorption";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
@@ -401,17 +402,20 @@ export const planSupplementComposition = async (
  */
 export const composeWithStoredSupplements = async ({
   scopedDb,
+  metadataUrlSchema,
   ...options
 }: PlanSupplementCompositionOptions & {
   scopedDb: ScopedDb;
+  metadataUrlSchema?: unknown;
 }): Promise<IngestionResult> => {
   const plan = await scopedDb(
     async (tx) => await planSupplementComposition(tx, options),
   );
-  return composeDecisionWithSupplements(
-    options.observation,
-    plan === null ? [] : plan.supplements,
-  );
+  return composeDecisionWithSupplements({
+    judgment: options.observation,
+    supplements: plan === null ? [] : plan.supplements,
+    metadataUrlSchema,
+  });
 };
 
 /** Whether two compositions took in the same versions of the same supplements. */
@@ -625,10 +629,17 @@ const compositeHash = (
  *
  * Pure, so the same inputs compose the same document on every write.
  */
-export const composeDecisionWithSupplements = (
-  judgment: IngestionResult,
-  supplements: readonly StoredSupplement[],
-): IngestionResult => {
+type ComposeDecisionWithSupplementsOptions = {
+  judgment: IngestionResult;
+  supplements: readonly StoredSupplement[];
+  metadataUrlSchema?: unknown;
+};
+
+export const composeDecisionWithSupplements = ({
+  judgment,
+  supplements,
+  metadataUrlSchema,
+}: ComposeDecisionWithSupplementsOptions): IngestionResult => {
   if (supplements.length === 0) {
     return judgment;
   }
@@ -660,21 +671,24 @@ export const composeDecisionWithSupplements = (
               text,
             })),
         ];
-  return plainTextIngestionResult({
-    ...judgment,
-    fulltext: fulltext.length > 0 ? fulltext : undefined,
-    documentAst,
-    sections,
-    rawHash: compositeHash(judgment, supplements),
-    metadata: {
-      ...judgment.metadata,
-      [DOCUMENT_SUPPLEMENTS_METADATA_KEY]: supplements.map(
-        ({ kind, sourceDocumentId, sourceUrl }) => ({
-          kind,
-          sourceDocumentId,
-          ...(sourceUrl === null ? {} : { sourceUrl }),
-        }),
-      ),
+  return plainTextIngestionResult(
+    {
+      ...judgment,
+      fulltext: fulltext.length > 0 ? fulltext : undefined,
+      documentAst,
+      sections,
+      rawHash: compositeHash(judgment, supplements),
+      metadata: {
+        ...judgment.metadata,
+        [DOCUMENT_SUPPLEMENTS_METADATA_KEY]: supplements.map(
+          ({ kind, sourceDocumentId, sourceUrl }) => ({
+            kind,
+            sourceDocumentId,
+            ...(sourceUrl === null ? {} : { sourceUrl }),
+          }),
+        ),
+      },
     },
-  });
+    composedMetadataUrlSchema(metadataUrlSchema),
+  );
 };

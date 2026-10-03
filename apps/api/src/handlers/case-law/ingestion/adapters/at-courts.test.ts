@@ -5,6 +5,7 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 import {
@@ -16,6 +17,8 @@ import {
   atRisPreviousMonth,
   createAtCourtsAdapter,
 } from "./at-courts";
+import { AT_RIS_HEADNOTE_METADATA_URL_SCHEMA } from "./at-courts.metadata-urls";
+import { AT_UMSE_SOURCE } from "./at-umse";
 import { rejectionOf, requireReconciliation } from "./test-utils";
 
 const SOURCE_ID = "JJT_20260115_OGH0002_0010OB00001_26A0000_000";
@@ -761,4 +764,118 @@ describe("Austrian RIS adapter", () => {
       rebuilt.filter((decision) => decision.isListingOnly === true),
     ).toEqual([]);
   });
+});
+
+describe("RIS metadata URL provenance", () => {
+  for (const candidate of [
+    " https://example.org/document?a=1&amp;b=2#part ",
+    "https://example.org/%26amp%3B?a=1&b=2",
+    "//example.org/document",
+    "/document",
+    "ftp://example.org/document",
+    "data:text/plain,document",
+    "mailto:publisher@example.org",
+  ]) {
+    it(`keeps or omits every declared address for ${candidate}`, async () => {
+      const item = listingItem();
+      nestedValue(item, ["Data", "Metadaten", "Judikatur"])[
+        "EntscheidungstextUrl"
+      ] = candidate;
+      for (const format of contentUrlsOf(item)) {
+        format["Url"] = candidate;
+      }
+      const headnote = headnoteItem();
+      nestedValue(headnote, ["Data", "Metadaten", "Allgemein"])["DokumentUrl"] =
+        candidate;
+      const decision = assembleAtRisDecision(AT_COURTS_SOURCE, item, {
+        documentXml: await fixtureXml(),
+        headnoteListing: await listingResponse([headnote]).text(),
+      });
+      const parts = decision.metadata["documentParts"];
+      const part = Array.isArray(parts) ? parts.at(0) : undefined;
+      const formats = isRecord(part) ? part["formats"] : undefined;
+      const format = Array.isArray(formats) ? formats.at(0) : undefined;
+      const headnotes = decision.metadata["headnotes"];
+      const summary = Array.isArray(headnotes) ? headnotes.at(0) : undefined;
+      if (candidate.trim().startsWith("https://")) {
+        expect(decision.metadata).toHaveProperty(
+          "decisionTextDocument",
+          candidate.trim(),
+        );
+        expect(isRecord(format) ? format["url"] : undefined).toBe(
+          candidate.trim(),
+        );
+        expect(isRecord(summary) ? summary["documentUrl"] : undefined).toBe(
+          candidate.trim(),
+        );
+        expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+      } else {
+        expect(Object.hasOwn(decision.metadata, "decisionTextDocument")).toBe(
+          false,
+        );
+        expect(isRecord(format) && Object.hasOwn(format, "url")).toBe(false);
+        expect(isRecord(summary) && Object.hasOwn(summary, "documentUrl")).toBe(
+          false,
+        );
+        expect(decision.metadata).toHaveProperty("metadataUrlDiagnostics", {
+          entries: [
+            {
+              address: "decisionTextDocument",
+              reason: candidate.startsWith("/")
+                ? "invalid-url"
+                : "unsafe-protocol",
+            },
+            {
+              address: "documentParts[0].formats[0].url",
+              reason: candidate.startsWith("/")
+                ? "invalid-url"
+                : "unsafe-protocol",
+            },
+            {
+              address: "documentParts[0].formats[1].url",
+              reason: candidate.startsWith("/")
+                ? "invalid-url"
+                : "unsafe-protocol",
+            },
+            {
+              address: "headnotes[0].documentUrl",
+              reason: candidate.startsWith("/")
+                ? "invalid-url"
+                : "unsafe-protocol",
+            },
+          ],
+          overflowCount: 0,
+        });
+      }
+    });
+  }
+});
+
+it("RIS related decisions remain display text even when they resemble a URL", async () => {
+  const listing: unknown = await Bun.file(
+    new URL("__fixtures__/at-ris-listing-umse.json", import.meta.url),
+  ).json();
+  const item = nestedValue(listing, [
+    "OgdSearchResult",
+    "OgdDocumentResults",
+    "OgdDocumentReference",
+  ]);
+  nestedValue(item, ["Data", "Metadaten", "Judikatur", "Umse", "Bezug"])[
+    "item"
+  ] = "https://example.org/item?a=1&amp;b=2";
+  const decision = assembleAtRisDecision(AT_UMSE_SOURCE, item, {
+    documentXml: await Bun.file(
+      new URL("../parsers/__fixtures__/at-ris-umse-text.xml", import.meta.url),
+    ).text(),
+  });
+  const projected = toPlainTextIngestionResult(
+    decision,
+    AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
+  ).unwrap();
+  for (const metadata of [decision.metadata, projected.metadata]) {
+    expect(metadata).toHaveProperty("relatedDecisions", [
+      "https://example.org/item?a=1&b=2",
+    ]);
+    expect(metadata["metadataUrlDiagnostics"]).toBeUndefined();
+  }
 });
