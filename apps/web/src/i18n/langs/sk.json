@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Pridať číselný rad",
       "advance": "Záloha",
+      "allSellers": "Všetci dodávatelia",
       "archiveConfirm": "Archivovať tento číselný rad? Nebude už dostupný pre nové doklady.",
       "creditNote": "Dobropis",
       "default": "Predvolený rad",
@@ -562,6 +563,9 @@
       "preview": "Ďalšie číslo",
       "previewAllocated": "Toto číslo už bolo pridelené.",
       "previewHelp": "Náhľad používa uložený vzor a nerezervuje číslo.",
+      "sellerProfile": "Profil dodávateľa",
+      "sellerUnavailable": "Dodávateľ je archivovaný alebo nedostupný",
+      "sellerUnavailableHelp": "Tento dodávateľ je archivovaný alebo nedostupný. Ponechajte priradenie alebo vyberte iného dodávateľa.",
       "setDefault": "Nastaviť ako predvolený rad",
       "title": "Číselné rady"
     },

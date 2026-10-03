@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Pridėti numerių seriją",
       "advance": "Avansas",
+      "allSellers": "Visi pardavėjai",
       "archiveConfirm": "Archyvuoti šią numerių seriją? Ji nebebus prieinama naujiems dokumentams.",
       "creditNote": "Kreditinė sąskaita",
       "default": "Numatytoji serija",
@@ -562,6 +563,9 @@
       "preview": "Kitas numeris",
       "previewAllocated": "Šis numeris jau priskirtas.",
       "previewHelp": "Peržiūroje naudojamas išsaugotas šablonas, numeris nerezervuojamas.",
+      "sellerProfile": "Pardavėjo profilis",
+      "sellerUnavailable": "Pardavėjas archyvuotas arba nepasiekiamas",
+      "sellerUnavailableHelp": "Šis pardavėjas yra archyvuotas arba nepasiekiamas. Palikite priskyrimą arba pasirinkite kitą pardavėją.",
       "setDefault": "Nustatyti kaip numatytąją seriją",
       "title": "Numerių serijos"
     },

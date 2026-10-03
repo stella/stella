@@ -57,6 +57,9 @@ export default createSafeRootHandler(
             and(
               eq(numberSeries.organizationId, session.activeOrganizationId),
               eq(numberSeries.documentType, body.documentType),
+              body.sellerProfileId
+                ? eq(numberSeries.sellerProfileId, body.sellerProfileId)
+                : isNull(numberSeries.sellerProfileId),
               eq(numberSeries.isDefault, true),
               isNull(numberSeries.archivedAt),
             ),
