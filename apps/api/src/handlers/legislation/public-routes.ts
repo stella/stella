@@ -26,7 +26,7 @@ import {
   readProvisionHistoryHandler,
 } from "@/api/handlers/legislation/provision-history";
 import readProvisionPreview from "@/api/handlers/legislation/provision-preview";
-import { createPublicStatuteSearch } from "@/api/handlers/legislation/public-search";
+import searchPublicStatutes from "@/api/handlers/legislation/public-search";
 import {
   resolveStatutesBodySchema,
   resolveStatutesHandler,
@@ -66,8 +66,6 @@ const listStatutes = createSafePublicHandler(
     return Result.ok(response);
   },
 );
-
-const searchPublicStatutes = createPublicStatuteSearch();
 
 const readLegislationShelf = createSafePublicHandler(
   {

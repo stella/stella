@@ -30,6 +30,29 @@ const handlerFactoryFile = nodePath.resolve(
   "lib/api-handlers.ts",
 );
 
+// Shared schema loads these domain declarations; none runs auth or a model.
+// Keep traversing them so an execution dependency added later still fails.
+const PUBLIC_SCHEMA_DOMAIN_IMPORTS = new Set([
+  "@/api/handlers/chat/chat-turn-state",
+  "@/api/lib/chat/ai-data-policy",
+  "@/api/lib/chat/thread-name-kinds",
+]);
+
+const isForbiddenPublicRuntimeImport = (path: string): boolean => {
+  const modulePath = path.replace(/\.tsx?$/u, "");
+  if (PUBLIC_SCHEMA_DOMAIN_IMPORTS.has(modulePath)) {
+    return false;
+  }
+  return (
+    /^@\/api\/(?:lib\/auth(?:$|\/)|lib\/chat\/|lib\/tanstack-ai-models|handlers\/chat\/)/u.test(
+      modulePath,
+    ) ||
+    /^(?:@tanstack\/ai(?:$|-)|@ai-sdk\/|openai$|@anthropic-ai\/sdk$)/u.test(
+      modulePath,
+    )
+  );
+};
+
 // The factory module also owns signed-in factories. Its public execution
 // branch is selected by the runtime stamp census, not its shared imports.
 const collectPublicOperationGraph = async (
@@ -78,11 +101,7 @@ describe("public legislation route boundary", () => {
     const forbiddenImports: string[] = [];
     for (const module of modules) {
       const relativePath = nodePath.relative(apiSourceRoot, module);
-      if (
-        /^(?:lib\/auth(?:\.ts$|\/)|lib\/chat\/|lib\/tanstack-ai-models|handlers\/chat\/)/u.test(
-          relativePath,
-        )
-      ) {
+      if (isForbiddenPublicRuntimeImport(`@/api/${relativePath}`)) {
         forbiddenImports.push(relativePath);
       }
       const source = await Bun.file(module).text();
@@ -90,14 +109,7 @@ describe("public legislation route boundary", () => {
         loader: module.endsWith(".tsx") ? "tsx" : "ts",
       }).scan(source).imports;
       for (const { path } of imports) {
-        if (
-          /^@\/api\/(?:lib\/auth(?:$|\/)|lib\/chat\/|lib\/tanstack-ai-models|handlers\/chat\/)/u.test(
-            path,
-          ) ||
-          /^(?:@tanstack\/ai(?:$|-)|@ai-sdk\/|openai$|@anthropic-ai\/sdk$)/u.test(
-            path,
-          )
-        ) {
+        if (isForbiddenPublicRuntimeImport(path)) {
           forbiddenImports.push(
             `${nodePath.relative(apiSourceRoot, module)} -> ${path}`,
           );
@@ -105,6 +117,48 @@ describe("public legislation route boundary", () => {
       }
     }
     expect(forbiddenImports.toSorted()).toEqual([]);
+  });
+
+  test("the boundary permits schema domains and erased types while rejecting runtime execution", () => {
+    const domainImports = [...PUBLIC_SCHEMA_DOMAIN_IMPORTS];
+    for (const path of domainImports) {
+      expect(isForbiddenPublicRuntimeImport(path)).toBe(false);
+      expect(isForbiddenPublicRuntimeImport(`${path}.ts`)).toBe(false);
+    }
+    const executionImports = [
+      "@/api/lib/auth",
+      "@/api/lib/auth.ts",
+      "@/api/handlers/chat/turn-execution",
+      "@/api/lib/chat/ai-data-policy-execution",
+      "@/api/lib/tanstack-ai-models",
+      "@tanstack/ai",
+      "@tanstack/ai-openai",
+      "@ai-sdk/openai",
+      "openai",
+      "@anthropic-ai/sdk",
+    ];
+    const source = [
+      'import type { StreamChunk } from "@tanstack/ai";',
+      'import { type Message } from "@/api/handlers/chat/types";',
+      ...domainImports.map(
+        (path, index) => `import { domain${index} } from "${path}";`,
+      ),
+      ...executionImports.map(
+        (path, index) => `import { execution${index} } from "${path}";`,
+      ),
+    ].join("\n");
+    const runtimeImports = new Bun.Transpiler({ loader: "ts" }).scan(
+      source,
+    ).imports;
+    expect(runtimeImports.map(({ path }) => path).toSorted()).toEqual(
+      [...domainImports, ...executionImports].toSorted(),
+    );
+    expect(
+      runtimeImports
+        .filter(({ path }) => isForbiddenPublicRuntimeImport(path))
+        .map(({ path }) => path)
+        .toSorted(),
+    ).toEqual(executionImports.toSorted());
   });
 
   test("public legislation routing never installs authenticated context", async () => {

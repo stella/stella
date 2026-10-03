@@ -40,31 +40,31 @@ export const createPublicStatuteSearch = (search = searchLegislationHandler) =>
       const countryRead = readPublicLawCountry(country, {
         admitted: PUBLIC_LEGISLATION_COUNTRIES,
       });
-      switch (countryRead.kind) {
-        case "unavailable":
-          return Result.ok(status(503, countryRead.response));
-        case "unreadable":
-          return Result.ok(status(400, { message: countryRead.message }));
-        case "read": {
-          const response = yield* Result.await(
-            Result.tryPromise(
-              async () =>
-                await search(
-                  {
-                    ...query,
-                    jurisdiction: countryRead.country,
-                    limit: query.limit ?? LIMITS.publicStatuteSearchPageSizeMax,
-                  },
-                  legislationPublicReadDb,
-                  "unobserved",
-                ),
-            ),
-          );
-          return Result.ok(response);
-        }
-        default:
-          countryRead satisfies never;
-          return panic("Unhandled public statute country state");
-      }
+      const response = yield* Result.await(
+        Result.tryPromise(async () => {
+          switch (countryRead.kind) {
+            case "unavailable":
+              return status(503, countryRead.response);
+            case "unreadable":
+              return status(400, { message: countryRead.message });
+            case "read":
+              return await search(
+                {
+                  ...query,
+                  jurisdiction: countryRead.country,
+                  limit: query.limit ?? LIMITS.publicStatuteSearchPageSizeMax,
+                },
+                legislationPublicReadDb,
+                "unobserved",
+              );
+            default:
+              countryRead satisfies never;
+              return panic("Unhandled public statute country state");
+          }
+        }),
+      );
+      return Result.ok(response);
     },
   );
+
+export default createPublicStatuteSearch();

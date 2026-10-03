@@ -46,7 +46,7 @@ const restrictedSourceId = createSafeId<"legislationSource">();
 const revokedSourceId = createSafeId<"legislationSource">();
 
 const descriptor = (allowsRedistribution: boolean) => ({
-  license: "fixture-license",
+  license: "official-open-data" as const,
   attribution: null,
   allowsRedistribution,
   allowsDerivedAi: false,
