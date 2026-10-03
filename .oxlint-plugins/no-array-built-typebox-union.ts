@@ -44,12 +44,59 @@ import {
 const UNION_BUILDERS = new Set(["Union", "UnionEnum"]);
 const TYPEBOX_NAMESPACES = new Set(["Type", NAMESPACE_IMPORT]);
 const ELYSIA_NAMESPACES = new Set(["t"]);
-const REFERENCE_TYPES = new Set(["Identifier", "MemberExpression"]);
+// Calls whose result type is a plain array even when their input is a tuple.
+const WIDENING_ARRAY_METHODS = new Set([
+  "concat",
+  "filter",
+  "flat",
+  "flatMap",
+  "map",
+  "reverse",
+  "slice",
+  "sort",
+  "toReversed",
+  "toSorted",
+  "toSpliced",
+]);
+const WIDENING_STATIC_CALLS: ReadonlyMap<string, ReadonlySet<string>> = new Map(
+  [
+    ["Array", new Set(["from", "of"])],
+    ["Object", new Set(["entries", "keys", "values"])],
+  ],
+);
 
-const isCallSpread = (element: unknown): boolean =>
+// Only known widening shapes: a helper with a declared tuple return type, or a
+// conditional between tuples, keeps its tuple type and is not reported.
+const isWideningCall = (expression: unknown): boolean => {
+  const call = unwrapExpression(expression);
+  if (call?.type !== "CallExpression") {
+    return false;
+  }
+  const callee = unwrapExpression(call.callee);
+  if (
+    callee?.type !== "MemberExpression" ||
+    callee.computed === true ||
+    !isAstNode(callee.property) ||
+    callee.property.type !== "Identifier" ||
+    typeof callee.property.name !== "string"
+  ) {
+    return false;
+  }
+  const method = callee.property.name;
+  const owner = unwrapExpression(callee.object);
+  const staticMethods =
+    owner?.type === "Identifier" && typeof owner.name === "string"
+      ? WIDENING_STATIC_CALLS.get(owner.name)
+      : undefined;
+  return staticMethods === undefined
+    ? WIDENING_ARRAY_METHODS.has(method)
+    : staticMethods.has(method);
+};
+
+const isWideningSpread = (element: unknown): boolean =>
   isAstNode(element) &&
   element.type === "SpreadElement" &&
-  unwrapExpression(element.argument)?.type === "CallExpression";
+  isWideningCall(element.argument);
 
 // The argument that makes the union's members a widened array, or null.
 const arrayBuiltArgument = (argument: AstNode): AstNode | null => {
@@ -58,10 +105,10 @@ const arrayBuiltArgument = (argument: AstNode): AstNode | null => {
     const onlySpreads = elements.every(
       (element) => isAstNode(element) && element.type === "SpreadElement",
     );
-    const spread = onlySpreads ? elements.find(isCallSpread) : undefined;
+    const spread = onlySpreads ? elements.find(isWideningSpread) : undefined;
     return isAstNode(spread) ? spread : null;
   }
-  return REFERENCE_TYPES.has(argument.type) ? null : argument;
+  return isWideningCall(argument) ? argument : null;
 };
 
 export default eslintCompatPlugin({

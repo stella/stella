@@ -46,7 +46,22 @@ const _record = t.Enum(STATUS);
 // expect-clean: no-array-built-typebox-union/no-array-built-typebox-union
 const _variadic = t.UnionEnum([DIRECTIONS[0], ...DIRECTIONS.slice(1)]);
 
+// A helper with a declared tuple return type keeps the tuple.
+const tupleMembers = (): readonly ["incoming", "outgoing"] => [
+  "incoming",
+  "outgoing",
+];
+// expect-clean: no-array-built-typebox-union/no-array-built-typebox-union
+const _helper = t.UnionEnum(tupleMembers());
+
+// A conditional between tuples keeps a tuple type.
+declare const wide: boolean;
+// expect-clean: no-array-built-typebox-union/no-array-built-typebox-union
+const _conditional = t.UnionEnum(wide ? DIRECTIONS : tupleMembers());
+
 export const __arrayBuiltTypeboxUnionFixture = {
+  _helper,
+  _conditional,
   _mapped,
   _objectValues,
   _filtered,
