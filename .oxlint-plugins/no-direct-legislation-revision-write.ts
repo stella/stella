@@ -3,7 +3,6 @@
 // and mutable aliases are outside this syntax guard's detection boundary.
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import type { AstNode } from "./utils.ts";
 import {
   filenameForContext,
   getPropertyName,
@@ -37,10 +36,9 @@ export const LEGISLATION_PARTIAL_WRITERS = {
 const MUTATION_METHODS = new Set(["insert", "update", "delete"]);
 
 const hasOnlyAllowedColumns = (
-  update: AstNode,
+  { parent: member }: { parent?: unknown },
   allowed: readonly string[],
 ): boolean => {
-  const member = update.parent;
   if (
     !isAstNode(member) ||
     member.type !== "MemberExpression" ||
