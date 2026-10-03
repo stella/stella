@@ -123,16 +123,28 @@ export const DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE =
 export const DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE =
   "Desktop editing moved to another device. This local copy is preserved.";
 
-export const authorizeDesktopEditSession = async ({
-  sessionId,
-  sessionToken,
-}: {
+type AuthorizeDesktopEditSessionOptions = {
   sessionId: SafeId<"desktopEditSession">;
   sessionToken: string;
-}): Promise<DesktopEditSessionAuthorizationResult> => {
+};
+
+export const authorizeDesktopEditSession = async (
+  options: AuthorizeDesktopEditSessionOptions,
+): Promise<DesktopEditSessionAuthorizationResult> => {
+  const authorization = await authorizeDesktopEditSessionWithDb(
+    options,
+    rootDb,
+  );
+  return authorization;
+};
+
+export const authorizeDesktopEditSessionWithDb = async (
+  { sessionId, sessionToken }: AuthorizeDesktopEditSessionOptions,
+  db: Pick<Transaction, "select">,
+): Promise<DesktopEditSessionAuthorizationResult> => {
   const tokenHash = hashDesktopEditSessionToken(sessionToken);
 
-  const rows = await rootDb
+  const rows = await db
     .select({
       createdBy: desktopEditSessions.createdBy,
       entityId: desktopEditSessions.entityId,
