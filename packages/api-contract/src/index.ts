@@ -85,7 +85,9 @@ export {
   CHAT_TOOL_SCOPE,
   CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
+  REQUEST_ID_HEADER,
 } from "./chat";
+export { CLAUSE_WARNINGS_HEADER } from "./template-fill-headers";
 export {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   CHAT_TOOL_POLICY_KIND,

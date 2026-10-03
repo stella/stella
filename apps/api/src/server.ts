@@ -2,7 +2,10 @@ import cors from "@elysia/cors";
 import { panic } from "better-result";
 import { Elysia } from "elysia";
 
-import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
+import {
+  REQUEST_ID_HEADER,
+  STELLA_API_VERSION_PREFIX,
+} from "@stll/api-contract";
 import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { redisConnectionConfig } from "@stll/redis-config";
 
@@ -155,7 +158,6 @@ import {
   enrichRequestContext,
   getRequestId,
   initRequestContext,
-  REQUEST_ID_HEADER,
 } from "@/api/lib/observability/request-context";
 import {
   answerRequestError,
