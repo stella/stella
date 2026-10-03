@@ -130,7 +130,7 @@ export const TRACKED_SUPPRESSION_RULES = [
     guards: "unredacted OAuth registration secrets persisted to JSONB",
   },
   {
-    rule: "auth-lifecycle/after-remove-member-revokes-artifacts",
+    rule: "auth-lifecycle/member-removal-revokes-artifacts",
     tier: "security",
     guards: "membership removal leaving auth artifacts behind",
   },
