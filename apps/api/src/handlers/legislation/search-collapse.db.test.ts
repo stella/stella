@@ -610,7 +610,7 @@ describe("the Postgres search path", () => {
       searchDependencies,
     );
     if (!("items" in page) || page.nextCursor === null) {
-      return panic("the fixture did not issue a Postgres cursor");
+      panic("the fixture did not issue a Postgres cursor");
     }
     const control = await searchLegislationHandler(
       { ...body, cursor: page.nextCursor },
@@ -619,7 +619,7 @@ describe("the Postgres search path", () => {
       searchDependencies,
     );
     if (!("items" in control)) {
-      return panic("the search refused its own cursor");
+      panic("the search refused its own cursor");
     }
     expect(control.items.length).toBeGreaterThan(0);
     for (const change of [{ query: "náhrada" }, { language: "cs" }]) {

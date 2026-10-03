@@ -32,7 +32,7 @@ export const createPublicStatuteSearchRateLimitComposition = <
     duration: API_RATE_LIMITS.api.duration,
     max: API_RATE_LIMITS.api.max,
     ...createRedisBinding({ failurePolicy: "fail_open_local", scope: "api" }),
-    skip: (request) =>
+    skip: async (request) =>
       isPublicStatuteSearchRateLimitedRequest(request) || skipShared(request),
   }),
   publicLegislation: new Elysia()

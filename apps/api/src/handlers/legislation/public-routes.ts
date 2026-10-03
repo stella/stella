@@ -276,13 +276,12 @@ const listStatuteSitemapStatutes = createSafePublicHandler(
 export const publicLegislationRoute = new Elysia({
   prefix: "/law",
 })
-  .onBeforeHandle(({ set }) => {
+  .onBeforeHandle(({ status }) => {
     if (isLocalDevOpen() || env.FEATURE_PUBLIC_LAW) {
       return undefined;
     }
 
-    set.status = 404;
-    return { message: "Not Found" } as const;
+    return status(404, { message: "Not Found" });
   })
   .get("/statutes", listStatutes.handler, {
     query: listStatutes.config.query,
