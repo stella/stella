@@ -82,8 +82,8 @@ class FixtureApiError extends TaggedError("FixtureApiError")<{
 }> {}
 
 type QueuePage = {
-  baseCommit: { oid: string };
-  headCommit: { oid: string };
+  baseCommit: { oid: string } | null;
+  headCommit: { oid: string } | null;
   pullRequest: { number: number };
 }[];
 type FixtureOptions = {
@@ -320,8 +320,10 @@ const fixture = ({
           .flat()
           .find(
             (candidate) =>
+              candidate.baseCommit !== null &&
+              candidate.headCommit !== null &&
               basehead ===
-              `${candidate.baseCommit.oid}...${candidate.headCommit.oid}`,
+                `${candidate.baseCommit.oid}...${candidate.headCommit.oid}`,
           );
         // Group fixtures may share their SHA with a PR; either route represents the same commits.
         const groupPull = entry
@@ -1326,6 +1328,37 @@ describe("contributor signature workflow", () => {
     await unseen.execute();
     expect(unseen.errors).toEqual(["CLA_INCOMPLETE_MERGE_GROUP"]);
     expect(lastOutput(unseen).conclusion).toBe("failure");
+    // Entries with only one commit (an unmergeable entry keeps its base but
+    // loses its head; a queued one has neither) never link the chain.
+    const partial = [
+      {
+        baseCommit: { oid: predecessor },
+        headCommit: null,
+        pullRequest: { number: 19 },
+      },
+      {
+        baseCommit: null,
+        headCommit: { oid: "4".repeat(40) },
+        pullRequest: { number: 20 },
+      },
+      { baseCommit: null, headCommit: null, pullRequest: { number: 21 } },
+    ];
+    const withPartial = fixture({
+      ...options,
+      queuePages: [[...group, ...partial]],
+    });
+    await withPartial.execute();
+    expect(withPartial.errors).toEqual([]);
+    expect(lastOutput(withPartial).conclusion).toBe("success");
+    // The group's own predecessor losing its head leaves the chain incomplete.
+    const brokenChain = fixture({
+      ...options,
+      queuePages: [[group[0], { ...group[1], headCommit: null }, ...partial]],
+      rebuiltQueuePages: [[group[0]]],
+    });
+    await brokenChain.execute();
+    expect(brokenChain.errors).toEqual(["CLA_INCOMPLETE_MERGE_GROUP"]);
+    expect(lastOutput(brokenChain).conclusion).toBe("failure");
     // Only membership changes end neutral: an unsigned author in a rebuilt
     // group still fails.
     const unsigned = fixture({ ...options, signatures: [] });
