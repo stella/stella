@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import {
   FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
@@ -113,7 +114,7 @@ export type DocTypeClassifier = { id: SafeId<"property"> };
 // bounded per workspace (LIMITS.propertiesCount) and content/tool are JSONB, so
 // the shape checks run in app code. Null when the workspace has no classifier.
 export const resolveDocTypeClassifier = async (
-  tx: Transaction,
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">,
   workspaceId: SafeId<"workspace">,
 ): Promise<DocTypeClassifier | null> => {
   const candidates = await tx
@@ -163,7 +164,7 @@ export const resolveDocTypeGate = async ({
   organizationId,
   documentTypeKey,
 }: {
-  tx: Transaction;
+  tx: MaterializePlaybookRunArgs["tx"];
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   documentTypeKey: string;
@@ -209,7 +210,7 @@ export const resolveScopedGate = async ({
   organizationId,
   scope,
 }: {
-  tx: Transaction;
+  tx: MaterializePlaybookRunArgs["tx"];
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   scope: PlaybookScope | null;
@@ -248,7 +249,11 @@ export type MaterializePlaybookRunResult =
     };
 
 type MaterializePlaybookRunArgs = {
-  tx: Transaction;
+  tx: Pick<
+    PgAsyncDatabase<PgQueryResultHKT>,
+    "select" | "insert" | "delete" | "execute" | "$count"
+  > &
+    Pick<Transaction, "query">;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   playbookId: SafeId<"playbookDefinition">;
