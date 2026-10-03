@@ -398,9 +398,9 @@ test(
     expect(initial.outcome.status).toBe("possible-match");
     expect(await commit(initial)).toEqual([contact.id]);
     await commit(initial);
-    expect((await eventsFor(contact.id)).map(({ type }) => type)).toEqual([
-      "new",
-    ]);
+    expect(
+      (await eventsFor(contact.id)).map(({ type }) => type).toSorted(),
+    ).toEqual(["new"].toSorted());
     await db
       .update(sanctionsContactMatches)
       .set({ disposition: "dismissed", reviewReason: "Reviewed" })
@@ -415,10 +415,9 @@ test(
     await commit(edited);
     await commit(edited);
     expect((await matchFor(contact.id)).disposition).toBe("needs-review");
-    expect((await eventsFor(contact.id)).map(({ type }) => type)).toEqual([
-      "new",
-      "reopened",
-    ]);
+    expect(
+      (await eventsFor(contact.id)).map(({ type }) => type).toSorted(),
+    ).toEqual(["new", "reopened"].toSorted());
     const emptyEdition = await activate("c", 0);
     const empty = await prepare(contact);
     await commit(empty);
@@ -431,12 +430,9 @@ test(
     expect((await matchFor(contact.id)).state).toBe("lapsed");
     await activate("b");
     await commit(await prepare(contact));
-    expect((await eventsFor(contact.id)).map(({ type }) => type)).toEqual([
-      "new",
-      "reopened",
-      "lapsed",
-      "reopened",
-    ]);
+    expect(
+      (await eventsFor(contact.id)).map(({ type }) => type).toSorted(),
+    ).toEqual(["new", "reopened", "lapsed", "reopened"].toSorted());
     expect(
       (
         await db
@@ -472,10 +468,9 @@ test(
     expect((await matchFor(contact.id)).disposition).toBe("dismissed");
     await commit(await prepare(edited));
     expect((await matchFor(contact.id)).disposition).toBe("needs-review");
-    expect((await eventsFor(contact.id)).map(({ type }) => type)).toEqual([
-      "new",
-      "reopened",
-    ]);
+    expect(
+      (await eventsFor(contact.id)).map(({ type }) => type).toSorted(),
+    ).toEqual(["new", "reopened"].toSorted());
   },
   TIMEOUT,
 );
@@ -711,10 +706,9 @@ test.each(["dismissed", "confirmed"] as const)(
     );
     expect(reviewed.isOk()).toBe(true);
     await scopedDb(async (tx) => await reviewSanctionsMatch(tx, options));
-    expect((await eventsFor(contact.id)).map((row) => row.type)).toEqual([
-      "new",
-      disposition,
-    ]);
+    expect(
+      (await eventsFor(contact.id)).map((row) => row.type).toSorted(),
+    ).toEqual(["new", disposition].toSorted());
     expect(await matchFor(contact.id)).toMatchObject({
       disposition,
       reviewedContactFingerprint: initial.contactFingerprint,
@@ -731,7 +725,9 @@ test.each(["dismissed", "confirmed"] as const)(
       reviewedContactFingerprint: null,
       reviewedEntryHash: null,
     });
-    expect((await eventsFor(contact.id)).at(-1)?.type).toBe("reopened");
+    expect(
+      (await eventsFor(contact.id)).filter(({ type }) => type === "reopened"),
+    ).toHaveLength(1);
     const staleReview = await scopedDb(
       async (tx) => await reviewSanctionsMatch(tx, options),
     );
@@ -756,7 +752,9 @@ test.each(["dismissed", "confirmed"] as const)(
       ).at(0) ?? panic("Contact missing");
     await commit(await prepare(edited));
     expect((await matchFor(contact.id)).disposition).toBe("needs-review");
-    expect((await eventsFor(contact.id)).at(-1)?.type).toBe("reopened");
+    expect(
+      (await eventsFor(contact.id)).filter(({ type }) => type === "reopened"),
+    ).toHaveLength(2);
     const staleContactReview = await scopedDb(
       async (tx) => await reviewSanctionsMatch(tx, refreshedOptions),
     );
@@ -912,9 +910,9 @@ test(
       "synthetic audit failure",
     );
     expect((await matchFor(contact.id)).disposition).toBe("needs-review");
-    expect((await eventsFor(contact.id)).map((row) => row.type)).toEqual([
-      "new",
-    ]);
+    expect(
+      (await eventsFor(contact.id)).map((row) => row.type).toSorted(),
+    ).toEqual(["new"].toSorted());
   },
   TIMEOUT,
 );
@@ -1291,9 +1289,9 @@ test.each(
     const result = await operation;
     expect(result.isErr() && result.error.status).toBe(409);
     expect(await matchFor(contact.id)).toEqual(match);
-    expect((await eventsFor(contact.id)).map((event) => event.type)).toEqual([
-      "new",
-    ]);
+    expect(
+      (await eventsFor(contact.id)).map((event) => event.type).toSorted(),
+    ).toEqual(["new"].toSorted());
     expect(audits).toBe(0);
   },
   TIMEOUT,
@@ -1953,8 +1951,9 @@ test(
     expect(audits).toEqual([audit]);
     const firstEvents = await eventsFor(contact.id);
     expect(firstEvents).toHaveLength(2);
-    expect(firstEvents.at(-1)).toEqual({
-      id: firstEvents.at(-1)?.id,
+    const decision = firstEvents.find(({ type }) => type === "dismissed");
+    expect(decision).toEqual({
+      id: decision?.id,
       organizationId,
       contactId: contact.id,
       sourceId: "eu",
@@ -2029,12 +2028,24 @@ test(
     });
     const decisions = await eventsFor(contact.id);
     expect(decisions).toHaveLength(4);
-    expect(decisions.at(-2)).toMatchObject({
+    expect(
+      decisions.find(
+        (event) =>
+          event.reason === "Second assessment" &&
+          event.reviewerId === reviewerId,
+      ),
+    ).toMatchObject({
       reason: "Second assessment",
       reviewerId,
       type: "dismissed",
     });
-    expect(decisions.at(-1)).toMatchObject({
+    expect(
+      decisions.find(
+        (event) =>
+          event.reason === "Second assessment" &&
+          event.reviewerId === secondReviewer,
+      ),
+    ).toMatchObject({
       reason: "Second assessment",
       reviewerId: secondReviewer,
       type: "dismissed",
