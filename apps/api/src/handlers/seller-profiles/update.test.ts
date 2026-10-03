@@ -5,6 +5,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import updateSellerProfile from "./update";
@@ -44,7 +45,7 @@ describe("seller profile updates", () => {
       session: {
         activeOrganizationId: toSafeId<"organization">("org_test"),
       },
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       user: { id: toSafeId<"user">("user_test") },
       recordAuditEvent,
     });
@@ -103,7 +104,7 @@ describe("seller profile updates", () => {
       session: {
         activeOrganizationId: toSafeId<"organization">("org_test"),
       },
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       user: { id: toSafeId<"user">("user_test") },
       recordAuditEvent,
     });

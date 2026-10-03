@@ -101,6 +101,47 @@ describe("API environment", () => {
     }
   });
 
+  test("configured access is off by default and requires its enforcement settings", () => {
+    const defaults = spawnApiEnvironment(
+      baseEnv,
+      `import { env } from ${JSON.stringify(envModuleUrl)}; console.log(String(env.FEATURE_CONFIGURED_ACCESS));`,
+    );
+    expect(defaults.exitCode, defaults.stderr.toString()).toBe(0);
+    expect(defaults.stdout.toString().trim()).toBe("false");
+    const configured = {
+      ...baseEnv,
+      FEATURE_CONFIGURED_ACCESS: "true",
+      FEATURE_ORG_ACCESS_STATE: "true",
+      FEATURE_ORG_SERVICE_BUDGETS: "true",
+      FEATURE_ACTION_ADMISSION: "true",
+      FEATURE_USAGE: "true",
+      PAYMENT_RETRY_WINDOW_MS: "13000",
+      ORG_EVALUATION_PERIOD_DAYS: "11",
+    };
+    expect(bootApiEnvironment(configured).exitCode).toBe(0);
+    for (const setting of [
+      "FEATURE_ORG_ACCESS_STATE",
+      "FEATURE_ORG_SERVICE_BUDGETS",
+      "FEATURE_USAGE",
+      "PAYMENT_RETRY_WINDOW_MS",
+    ] as const) {
+      const result = bootApiEnvironment({
+        ...configured,
+        [setting]: undefined,
+      });
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr.toString()).toContain(
+        "FEATURE_CONFIGURED_ACCESS requires",
+      );
+    }
+    for (const duration of ["0", "-1", "1.5", "NaN"]) {
+      expect(
+        bootApiEnvironment({ ...configured, PAYMENT_RETRY_WINDOW_MS: duration })
+          .exitCode,
+      ).not.toBe(0);
+    }
+  });
+
   test("infers SMTP provider from complete SMTP settings", () => {
     expect(
       readEnvProvider({

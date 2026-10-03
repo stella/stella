@@ -806,7 +806,7 @@ export const RowActions = ({
 
   const handleChatAbout = () => {
     const mentions = bulkTargets.map((target) =>
-      buildEntityMentionOption({ entity: target }),
+      buildEntityMentionOption({ entity: target, matterId: workspaceId }),
     );
     requestChatAbout(mentions);
   };

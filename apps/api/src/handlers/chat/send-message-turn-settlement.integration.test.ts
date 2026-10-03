@@ -26,6 +26,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -87,9 +88,12 @@ const streamChatMock = mock<StreamResponse>(async ({ onFinish }) => {
         .then(resolve);
     }, 0);
   });
-  return new Response("stream started", {
-    headers: { "Content-Type": "text/event-stream" },
-  });
+  return {
+    type: "streaming",
+    response: new Response("stream started", {
+      headers: { "Content-Type": "text/event-stream" },
+    }),
+  };
 });
 const loadExternalMcpToolsForTest = async () => {
   const close = async () => undefined;
@@ -200,7 +204,7 @@ const createContext = ({
     ],
     getActiveWorkspaceIds: async () => [ids.wsA1, ids.wsA2],
     getWorkspaceAccess: async () => null,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu" as const,
@@ -274,7 +278,10 @@ describe("settling a refusal before streaming", () => {
         payload: { message: "Cannot start this turn" },
         status,
       });
-      streamChatMock.mockImplementationOnce(async () => rejection);
+      streamChatMock.mockImplementationOnce(async () => ({
+        type: "refused",
+        response: rejection,
+      }));
       const result = await sendMessage.handler(
         createContext({
           message: {
