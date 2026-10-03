@@ -26,6 +26,8 @@ runs:
       shell: bash
       run: |
         cp apps/api/.env.example apps/api/.env
+        # The route baseline measures the enabled usage endpoint's query budget.
+        echo 'FEATURE_USAGE=true' >> apps/api/.env
         cp apps/web/.env.example apps/web/.env
 
     - name: Start docker stack and API server

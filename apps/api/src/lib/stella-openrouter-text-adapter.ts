@@ -9,15 +9,20 @@ import type {
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { checkManagedOpenRouterModel } from "@/api/lib/chat/managed-provider-checks";
 import type { ManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import {
+  assertManagedOpenRouterModel,
   fetchManagedOpenRouterCompletion,
   managedProviderUnavailable,
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   PROVIDER_DATA_POLICY,
+  withoutModelVariant,
 } from "@/api/lib/chat/provider-data-policy";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withOptionalsNullable } from "@/api/lib/json-schema/null-optionals";
 import {
   readEvidence,
@@ -135,6 +140,62 @@ const isManagedRoutingRefusal = (error: unknown): boolean => {
   return true;
 };
 
+const checkManagedOpenRouterRequest = (
+  options: OpenRouterTextOptions,
+  residency: ManagedAIResidency,
+): Result<void, HandlerError<503>> => {
+  const selection = assertManagedOpenRouterModel(options.model);
+  if (Result.isError(selection)) {
+    return selection;
+  }
+  return checkManagedOpenRouterModel(
+    withoutModelVariant(options.model),
+    residency,
+  );
+};
+
+type ManagedRoutingOptions = {
+  stream: AsyncIterable<AdapterYieldChunk>;
+  options: OpenRouterTextOptions;
+  managedAIResidency: ManagedAIResidency;
+};
+
+const withManagedRequestEligibility = async function* ({
+  stream,
+  options,
+  managedAIResidency,
+}: ManagedRoutingOptions): AsyncGenerator<AdapterYieldChunk> {
+  const eligibility = checkManagedOpenRouterRequest(
+    options,
+    managedAIResidency,
+  );
+  if (Result.isError(eligibility)) {
+    yield {
+      type: EventType.RUN_STARTED,
+      runId: Bun.randomUUIDv7(),
+      threadId: options.threadId ?? Bun.randomUUIDv7(),
+      model: options.model,
+      timestamp: Temporal.Now.instant().epochMilliseconds,
+      ...(options.parentRunId === undefined
+        ? {}
+        : { parentRunId: options.parentRunId }),
+    };
+    yield {
+      type: EventType.RUN_ERROR,
+      model: options.model,
+      timestamp: Temporal.Now.instant().epochMilliseconds,
+      message: eligibility.error.message,
+      code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+      error: {
+        message: eligibility.error.message,
+        code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+      },
+    };
+    return;
+  }
+  yield* withManagedProviderErrors(stream, isManagedRoutingRefusal);
+};
+
 const withManagedProviderErrors = async function* (
   stream: AsyncIterable<AdapterYieldChunk>,
   isUnavailable: (error: unknown) => boolean,
@@ -162,11 +223,6 @@ const withManagedProviderErrors = async function* (
       },
     };
   }
-};
-
-const withoutModelVariant = (model: string): string => {
-  const variantStart = model.indexOf(":", model.lastIndexOf("/") + 1);
-  return variantStart === -1 ? model : model.slice(0, variantStart);
 };
 
 const INSTANCE_DEBUG_LOGGER = {
@@ -322,20 +378,29 @@ class ManagedOpenRouterTextAdapter extends InstanceOpenRouterTextAdapter {
     this.residency = managedAIResidency;
   }
   override chatStream(options: OpenRouterTextOptions) {
-    return withManagedProviderErrors(
-      super.chatStream(options),
-      isManagedRoutingRefusal,
-    );
+    return withManagedRequestEligibility({
+      stream: super.chatStream(options),
+      options,
+      managedAIResidency: this.residency,
+    });
   }
 
   override structuredOutputStream(options: OpenRouterStructuredOptions) {
-    return withManagedProviderErrors(
-      super.structuredOutputStream(options),
-      isManagedRoutingRefusal,
-    );
+    return withManagedRequestEligibility({
+      stream: super.structuredOutputStream(options),
+      options: options.chatOptions,
+      managedAIResidency: this.residency,
+    });
   }
 
   override async structuredOutput(options: OpenRouterStructuredOptions) {
+    const eligibility = checkManagedOpenRouterRequest(
+      options.chatOptions,
+      this.residency,
+    );
+    if (Result.isError(eligibility)) {
+      throw eligibility.error;
+    }
     const result = await Result.tryPromise({
       try: async () => await super.structuredOutput(options),
       catch: (error) =>
@@ -351,10 +416,6 @@ class ManagedOpenRouterTextAdapter extends InstanceOpenRouterTextAdapter {
 
   protected override mapOptionsToRequest(options: OpenRouterTextOptions) {
     const model = withoutModelVariant(options.model);
-    const availability = checkManagedOpenRouterModel(model, this.residency);
-    if (Result.isError(availability)) {
-      throw availability.error;
-    }
     const {
       plugins: _plugins,
       variant: _variant,
@@ -383,42 +444,38 @@ type ManagedOpenRouterTextOptions = {
   | { credential: ManagedOpenRouterCredential; apiKey?: never }
 );
 
+type ManagedOpenRouterTextResult = Result<
+  StellaOpenRouterTextAdapter,
+  HandlerError<503>
+>;
+
 export const createManagedOpenRouterText = (
   options: ManagedOpenRouterTextOptions,
-): StellaOpenRouterTextAdapter => {
+): ManagedOpenRouterTextResult => {
+  const eligibility = assertManagedOpenRouterModel(options.model);
+  if (Result.isError(eligibility)) {
+    return eligibility;
+  }
   const credential = options.credential ?? {
     type: "static" as const,
     apiKey: options.apiKey,
   };
-  return new ManagedOpenRouterTextAdapter(
-    {
-      apiKey: credential.apiKey,
-      retryConfig: OPENROUTER_RETRY,
-      serverURL:
-        PROVIDER_DATA_POLICY.customer.openrouter.serverURLs[
-          options.managedAIResidency
-        ],
-    },
-    {
-      model: options.model,
-      managedAIResidency: options.managedAIResidency,
-      credential,
-    },
-  );
-};
-
-export const createInstanceOpenRouterText = (
-  model: OpenRouterModel,
-  credential: string | ManagedOpenRouterCredential,
-): StellaOpenRouterTextAdapter => {
-  const resolved =
-    typeof credential === "string"
-      ? { type: "static" as const, apiKey: credential }
-      : credential;
-  return new InstanceOpenRouterTextAdapter(
-    { apiKey: resolved.apiKey, retryConfig: OPENROUTER_RETRY },
-    model,
-    resolved,
+  return Result.ok(
+    new ManagedOpenRouterTextAdapter(
+      {
+        apiKey: credential.apiKey,
+        retryConfig: OPENROUTER_RETRY,
+        serverURL:
+          PROVIDER_DATA_POLICY.customer.openrouter.serverURLs[
+            options.managedAIResidency
+          ],
+      },
+      {
+        model: options.model,
+        managedAIResidency: options.managedAIResidency,
+        credential,
+      },
+    ),
   );
 };
 

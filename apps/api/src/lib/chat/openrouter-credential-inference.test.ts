@@ -318,7 +318,7 @@ describe("federated OpenRouter 401 recovery at the inference boundary", () => {
         { policy: managedPolicy("us"), host: "us.openrouter.ai" },
         {
           policy: { dataClass: "public_corpus" } as const,
-          host: "openrouter.ai",
+          host: "eu.openrouter.ai",
         },
       ]) {
         for (const path of [

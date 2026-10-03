@@ -601,6 +601,42 @@ describe("the Postgres search path", () => {
     return panic("the search never reached its last page");
   };
 
+  test("an issued Postgres cursor is bound to its query and filters", async () => {
+    const body = { query: "smlouva", jurisdiction: "CZE", limit: 1 };
+    const page = await searchLegislationHandler(
+      body,
+      legislationDb,
+      "unobserved",
+      searchDependencies,
+    );
+    if (!("items" in page) || page.nextCursor === null) {
+      panic("the fixture did not issue a Postgres cursor");
+    }
+    const control = await searchLegislationHandler(
+      { ...body, cursor: page.nextCursor },
+      legislationDb,
+      "unobserved",
+      searchDependencies,
+    );
+    if (!("items" in control)) {
+      panic("the search refused its own cursor");
+    }
+    expect(control.items.length).toBeGreaterThan(0);
+    for (const change of [{ query: "náhrada" }, { language: "cs" }]) {
+      // db-await-in-loop: each replay changes an independent request field
+      const response = await searchLegislationHandler(
+        { ...body, ...change, cursor: page.nextCursor },
+        legislationDb,
+        "unobserved",
+        searchDependencies,
+      );
+      expect(response).toMatchObject({
+        code: 400,
+        response: { message: "Invalid cursor" },
+      });
+    }
+  });
+
   test("shows each act once, as its current version, across pages", async () => {
     const pages = await allPages("smlouva", 2);
     const shown = pages.flat().map((hit) => hit.documentId);

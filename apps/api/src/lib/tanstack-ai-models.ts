@@ -54,15 +54,18 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type {
   AIDataClass,
   AIRequestPolicy,
+  ManagedAIResidency,
 } from "@/api/lib/chat/ai-data-policy";
 import {
   getManagedOpenRouterConfiguration,
   type ManagedOpenRouterCredential,
 } from "@/api/lib/chat/openrouter-credential";
 import {
+  assertManagedOpenRouterModel,
   checkManagedProviderAvailable,
   isManagedProviderAvailable,
   managedProviderUnavailable,
+  PROVIDER_DATA_POLICY,
 } from "@/api/lib/chat/provider-data-policy";
 import { withProviderImageInput } from "@/api/lib/chat/provider-image-input";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
@@ -70,7 +73,6 @@ import { validateDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import {
-  createInstanceOpenRouterText,
   createManagedOpenRouterText,
   createStellaOpenRouterText,
 } from "@/api/lib/stella-openrouter-text-adapter";
@@ -591,50 +593,46 @@ const createExtendedOpenAIAdapter = (
 
 type OpenRouterAdapterOptions = { modelId: string } & (
   | { keySource: "byok"; apiKey: string }
-  | { keySource: "public_corpus"; credential: ManagedOpenRouterCredential }
-  | ({
+  | {
       keySource: "instance";
       credential: ManagedOpenRouterCredential;
-    } & Extract<AIRequestPolicy, { dataClass: "customer" }>)
+      managedAIResidency: ManagedAIResidency;
+    }
 );
 
 const createExtendedOpenRouterAdapter = ({
   modelId,
   ...policy
 }: OpenRouterAdapterOptions): AnyTextAdapter => {
-  let createText;
-  switch (policy.keySource) {
-    case "instance":
-      createText = (
-        model: Parameters<typeof createStellaOpenRouterText>[0],
-        _key: string,
-      ) =>
-        createManagedOpenRouterText({
-          model,
-          credential: policy.credential,
-          managedAIResidency: policy.managedAIResidency,
-        });
-      break;
-    case "public_corpus":
-      createText = (
-        model: Parameters<typeof createInstanceOpenRouterText>[0],
-        _key: string,
-      ) => createInstanceOpenRouterText(model, policy.credential);
-      break;
-    case "byok":
-      createText = createStellaOpenRouterText;
-      break;
-    default:
-      policy satisfies never;
-      return panic("Unknown OpenRouter key source.");
-  }
-  const openrouter = extendAdapter(createText, [
-    createModel(modelId, {
-      input: ["text", "image", "document"] as const,
-      features: ["structured_outputs"] as const,
-      modelOptions: OPENROUTER_CHAT_MODEL_OPTIONS,
-    }),
-  ]);
+  const openrouter = extendAdapter(
+    (model: Parameters<typeof createStellaOpenRouterText>[0], key: string) => {
+      switch (policy.keySource) {
+        case "byok":
+          return createStellaOpenRouterText(model, key);
+        case "instance": {
+          const adapter = createManagedOpenRouterText({
+            model,
+            credential: policy.credential,
+            managedAIResidency: policy.managedAIResidency,
+          });
+          if (Result.isError(adapter)) {
+            throw adapter.error;
+          }
+          return adapter.value;
+        }
+        default:
+          policy satisfies never;
+          return panic("Unhandled OpenRouter key source");
+      }
+    },
+    [
+      createModel(modelId, {
+        input: ["text", "image", "document"] as const,
+        features: ["structured_outputs"] as const,
+        modelOptions: OPENROUTER_CHAT_MODEL_OPTIONS,
+      }),
+    ],
+  );
   return openrouter(
     modelId,
     policy.keySource === "byok" ? policy.apiKey : policy.credential.apiKey,
@@ -932,21 +930,15 @@ const createProviderTextAdapterFactory = (
         staticKey === undefined && managedCredential !== undefined
           ? managedCredential
           : { type: "static" as const, apiKey: key };
-      if (options.dataClass === "public_corpus") {
-        return (modelId) =>
-          createExtendedOpenRouterAdapter({
-            modelId,
-            credential,
-            keySource: "public_corpus",
-          });
-      }
       return (modelId) =>
         createExtendedOpenRouterAdapter({
           modelId,
           credential,
           keySource: "instance",
-          dataClass: options.dataClass,
-          managedAIResidency: options.managedAIResidency,
+          managedAIResidency:
+            options.dataClass === "public_corpus"
+              ? PROVIDER_DATA_POLICY.public_corpus.managedAIResidency
+              : options.managedAIResidency,
         });
     }
     case "mistral": {
@@ -1983,6 +1975,12 @@ const resolveInstanceTextModel = ({
   }
   const supportedProvider = resolveTanStackTextProvider({ provider });
   assertTanStackProviderRoleSupport(supportedProvider, role);
+  if (supportedProvider === "openrouter") {
+    const eligibility = assertManagedOpenRouterModel(modelId);
+    if (Result.isError(eligibility)) {
+      throw eligibility.error;
+    }
+  }
   assertInstanceModelRated(modelId);
 
   return buildResolvedTextModel({
@@ -2080,6 +2078,12 @@ export const getTanStackTextModelInfoForRole = (
   const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
   // Metadata must agree with dispatch: never advertise an instance
   // model that resolveInstanceTextModel would refuse as unrated.
+  if (supportedProvider === "openrouter") {
+    const eligibility = assertManagedOpenRouterModel(modelId);
+    if (Result.isError(eligibility)) {
+      throw eligibility.error;
+    }
+  }
   assertInstanceModelRated(modelId);
   return {
     availability:
@@ -2150,6 +2154,12 @@ export const getTanStackTextModelInfoById = (
   }
 
   const provider = override.provider ?? getActiveProvider();
+  if (provider === "openrouter") {
+    const eligibility = assertManagedOpenRouterModel(override.modelId);
+    if (Result.isError(eligibility)) {
+      throw eligibility.error;
+    }
+  }
   return {
     availability:
       isMockTextAdapterActive() ||
@@ -2205,6 +2215,12 @@ export const getTanStackTextModelById = (
   const supportedProvider = resolveTanStackTextProvider({ provider });
   const resolvedModelId = override.modelId;
   if (override.provider) {
+    if (supportedProvider === "openrouter") {
+      const eligibility = assertManagedOpenRouterModel(resolvedModelId);
+      if (Result.isError(eligibility)) {
+        throw eligibility.error;
+      }
+    }
     assertInstanceModelRated(resolvedModelId);
     const factory = createTanStackTextAdapterFactory({
       ...options,
