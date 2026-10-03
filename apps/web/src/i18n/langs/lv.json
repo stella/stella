@@ -1566,6 +1566,7 @@
       "socialSecurityNumber": "Sociālās apdrošināšanas numurs",
       "taxIdentificationNumber": "Nodokļu maksātāja numurs"
     },
+    "approve": "Apstiprināt",
     "archive": "Arhivēt",
     "ask": "Jautāt",
     "askAI": "Jautāt AI",

@@ -1566,6 +1566,7 @@
       "socialSecurityNumber": "Número de la seguridad social",
       "taxIdentificationNumber": "NIF / CIF"
     },
+    "approve": "Aprobar",
     "archive": "Archivar",
     "ask": "Preguntar",
     "askAI": "Preguntar a la IA",

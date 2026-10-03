@@ -1566,6 +1566,7 @@
       "socialSecurityNumber": "Numéro de sécurité sociale",
       "taxIdentificationNumber": "Numéro fiscal"
     },
+    "approve": "Approuver",
     "archive": "Archiver",
     "ask": "Demander",
     "askAI": "Demander à l’IA",

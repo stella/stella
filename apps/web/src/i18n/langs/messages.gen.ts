@@ -1569,6 +1569,7 @@ type Messages = {
       "socialSecurityNumber": "Social security number";
       "taxIdentificationNumber": "Tax identification number";
     };
+    "approve": "Approve";
     "archive": "Archive";
     "ask": "Ask";
     "askAI": "Ask AI";

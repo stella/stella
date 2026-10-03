@@ -1566,6 +1566,7 @@
       "socialSecurityNumber": "Numer ubezpieczenia społecznego",
       "taxIdentificationNumber": "NIP"
     },
+    "approve": "Zatwierdź",
     "archive": "Archiwizuj",
     "ask": "Zapytaj",
     "askAI": "Zapytaj AI",

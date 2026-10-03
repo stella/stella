@@ -1566,6 +1566,7 @@
       "socialSecurityNumber": "Číslo sociálneho poistenia",
       "taxIdentificationNumber": "DIČ"
     },
+    "approve": "Schváliť",
     "archive": "Archivovať",
     "ask": "Opýtať sa",
     "askAI": "Opýtať sa AI",

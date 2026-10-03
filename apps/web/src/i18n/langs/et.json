@@ -1566,6 +1566,7 @@
       "socialSecurityNumber": "Sotsiaalkindlustuse number",
       "taxIdentificationNumber": "Maksukohustuslase number"
     },
+    "approve": "Kiida heaks",
     "archive": "Arhiveeri",
     "ask": "Küsi",
     "askAI": "Küsi AI-lt",

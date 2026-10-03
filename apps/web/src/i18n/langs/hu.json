@@ -1566,6 +1566,7 @@
       "socialSecurityNumber": "Társadalombiztosítási szám",
       "taxIdentificationNumber": "Adóazonosító"
     },
+    "approve": "Jóváhagyás",
     "archive": "Archiválás",
     "ask": "Kérdezés",
     "askAI": "AI megkérdezése",

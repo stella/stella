@@ -1566,6 +1566,7 @@
       "socialSecurityNumber": "Socialinio draudimo numeris",
       "taxIdentificationNumber": "Mokesčių mokėtojo kodas"
     },
+    "approve": "Patvirtinti",
     "archive": "Archyvuoti",
     "ask": "Klausti",
     "askAI": "Klausti DI",

@@ -1566,6 +1566,7 @@
       "socialSecurityNumber": "Número de seguro social",
       "taxIdentificationNumber": "CPF / CNPJ"
     },
+    "approve": "Aprovar",
     "archive": "Arquivar",
     "ask": "Perguntar",
     "askAI": "Perguntar à IA",

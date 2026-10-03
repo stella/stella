@@ -1566,6 +1566,7 @@
       "socialSecurityNumber": "Sozialversicherungsnummer",
       "taxIdentificationNumber": "Steuer-Identifikationsnummer"
     },
+    "approve": "Genehmigen",
     "archive": "Archivieren",
     "ask": "Fragen",
     "askAI": "KI fragen",

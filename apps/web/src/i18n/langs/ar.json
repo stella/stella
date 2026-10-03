@@ -1566,6 +1566,7 @@
       "socialSecurityNumber": "رقم الضمان الاجتماعي",
       "taxIdentificationNumber": "الرقم الضريبي"
     },
+    "approve": "موافقة",
     "archive": "أرشفة",
     "ask": "اسأل",
     "askAI": "اسأل الذكاء الاصطناعي",
