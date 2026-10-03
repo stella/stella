@@ -26,7 +26,7 @@ const TABLES = [
 ] as const;
 const indexMigration = readFileSync(
   new URL(
-    "../../../../drizzle/20261003124700_registration_retention_indexes/migration.sql",
+    "../../../../drizzle/20261003124900_registration_retention_indexes/migration.sql",
     import.meta.url,
   ),
   "utf-8",

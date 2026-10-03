@@ -1,4 +1,4 @@
--- requires: 20261003124600_registration_retention
+-- requires: 20261003124800_registration_retention
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 -- squawk-ignore transaction-nesting
