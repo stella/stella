@@ -475,6 +475,60 @@ const spendLeafBudget = (tokens: readonly TokenLeaves[]): BudgetedToken[] => {
 
 const SLOVAK_LEGACY_STEM_FIELDS = new Set(["text_stem", "headnote_stem"]);
 
+export type CorpusContentGroupMatch =
+  | { type: "all" }
+  | { type: "atLeast"; count: number };
+
+type CorpusContentGroupQueryOptions = {
+  /** Trusted, prebuilt engine clauses; alternatives within a clause count once. */
+  clauses: readonly string[];
+  match?: CorpusContentGroupMatch;
+};
+
+/**
+ * ES content query, independent of required scopes in the caller's outer bool.
+ * Each should child represents one whole content group, including its OR
+ * alternatives. The query-string transport cannot express k-of-n matching.
+ */
+export const corpusContentGroupQuery = ({
+  clauses,
+  match = { type: "all" },
+}: CorpusContentGroupQueryOptions) => {
+  switch (match.type) {
+    case "all":
+      if (clauses.length === 0) {
+        return null;
+      }
+      return {
+        query_string: {
+          query: `(${clauses.join(" AND ")})`,
+          default_operator: "AND" as const,
+        },
+      };
+    case "atLeast":
+      if (
+        !Number.isInteger(match.count) ||
+        match.count < 1 ||
+        match.count > clauses.length
+      ) {
+        return panic(
+          `Content group minimum_should_match requires an integer from 1 to ${clauses.length}`,
+        );
+      }
+      return {
+        bool: {
+          should: clauses.map((query) => ({
+            query_string: { query, default_operator: "AND" as const },
+          })),
+          minimum_should_match: match.count,
+        },
+      };
+    default:
+      match satisfies never;
+      return panic(`Unhandled content group match mode: ${String(match)}`);
+  }
+};
+
 export type CorpusFreeTextOptions = {
   /** Whether content tokens are all required or ranked by coverage. */
   match?: "all" | "any" | undefined;

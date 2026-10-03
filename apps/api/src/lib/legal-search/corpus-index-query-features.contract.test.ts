@@ -7,7 +7,10 @@ import {
   expect,
   test,
 } from "bun:test";
+import fc from "fast-check";
 import * as v from "valibot";
+
+import { assertProperty } from "@stll/property-testing";
 
 import { envBase } from "@/api/env-base";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
@@ -16,6 +19,11 @@ import {
   corpusIndexConfigFromManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { foldCorpusTerm } from "@/api/lib/legal-search/corpus-passage-highlight";
+import {
+  corpusContentGroupQuery,
+  corpusFreeTextClause,
+  quoteCorpusValue,
+} from "@/api/lib/legal-search/corpus-query";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
 
@@ -531,6 +539,119 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
     });
     expect(keys(result)).toEqual([13, 15, 16, 17]);
   });
+
+  test(
+    "content group builder agrees with all and any while required scopes stay required",
+    async () => {
+      await assertProperty(
+        "content group builder agrees with all and any while required scopes stay required",
+        fc.asyncProperty(
+          fc.uniqueArray(fc.constantFrom("alpha", "beta", "gamma"), {
+            minLength: 1,
+            maxLength: 3,
+          }),
+          async (terms) => {
+            const clauses = terms.map(quoteCorpusValue);
+            const required = {
+              query_string: {
+                query: "+family:features +decision_key:[10 TO 21]",
+              },
+            };
+            const allQuery =
+              corpusContentGroupQuery({ clauses }) ??
+              panic("nonempty content group missing");
+            const all = await search({
+              query: { bool: { must: [required, allQuery] } },
+            });
+            const everyGroup =
+              corpusContentGroupQuery({
+                clauses,
+                match: { type: "atLeast", count: clauses.length },
+              }) ?? panic("nonempty content group missing");
+            const exact = await search({
+              query: { bool: { must: [required, everyGroup] } },
+            });
+            expect(keys(exact)).toEqual(keys(all));
+            const anyGroup =
+              corpusContentGroupQuery({
+                clauses,
+                match: { type: "atLeast", count: 1 },
+              }) ?? panic("nonempty content group missing");
+            const relaxed = await search({
+              query: { bool: { must: [required, anyGroup] } },
+            });
+            const any = await search({
+              query: {
+                bool: {
+                  must: [
+                    required,
+                    {
+                      query_string: {
+                        query: corpusFreeTextClause(terms.join(" "), {
+                          match: "any",
+                        }),
+                        default_operator: "AND",
+                      },
+                    },
+                  ],
+                },
+              },
+            });
+            expect(keys(relaxed)).toEqual(keys(any));
+            expect(keys(exact)).not.toContain(21);
+            expect(keys(relaxed)).not.toContain(21);
+          },
+        ),
+        { numRuns: 12 },
+      );
+      const alphaStem = stemCorpusText("alpha", "sk");
+      expect(alphaStem).not.toBe("alpha");
+      const overlappingLeaves = await search({
+        query: {
+          bool: {
+            must: [
+              {
+                query_string: {
+                  query: "+family:features +decision_key:[10 TO 21]",
+                },
+              },
+              {
+                query_string: {
+                  query: `text:"alpha" AND text_stem:${quoteCorpusValue(alphaStem)}`,
+                },
+              },
+            ],
+          },
+        },
+      });
+      expect(keys(overlappingLeaves)).toContain(20);
+      const alternatives =
+        corpusContentGroupQuery({
+          clauses: [
+            `(text:"alpha" OR text_stem:${quoteCorpusValue(alphaStem)})`,
+            'text:"beta"',
+            'text:"gamma"',
+          ],
+          match: { type: "atLeast", count: 2 },
+        }) ?? panic("nonempty alternative groups missing");
+      const result = await search({
+        query: {
+          bool: {
+            must: [
+              {
+                query_string: {
+                  query: "+family:features +decision_key:[10 TO 21]",
+                },
+              },
+              alternatives,
+            ],
+          },
+        },
+      });
+      expect(keys(result)).toEqual([13, 15, 16, 17]);
+    },
+    TIMEOUT_MS,
+  );
 
   test("phrase slop respects gap boundaries, folding and precomputed stem positions", async () => {
     const expectedBySlop = [[30], [30, 31], [30, 31, 32, 33]];

@@ -10,6 +10,8 @@ import {
   type CorpusStemming,
   type CorpusFreeTextOptions,
   corpusFreeTextClause,
+  corpusContentGroupQuery,
+  type CorpusContentGroupMatch,
   type CorpusTermExpander,
   quoteCorpusValue,
   tokenizeCorpusFreeText,
@@ -883,4 +885,72 @@ test("Slovak query scope enables compatibility even without an index jurisdictio
       }),
     ).toBe(`${baseline} AND jurisdiction:"SVK"`);
   }
+});
+
+test("content group all mode preserves the existing free-text query bytes", () => {
+  const clauses = ['"alpha"', '"beta"', '"gamma"'] as const;
+  const expected = {
+    query_string: {
+      query: corpusFreeTextClause("alpha beta gamma"),
+      default_operator: "AND",
+    },
+  };
+  expect(corpusContentGroupQuery({ clauses })).toEqual(expected);
+  expect(corpusContentGroupQuery({ clauses, match: { type: "all" } })).toEqual(
+    expected,
+  );
+  expect(corpusContentGroupQuery({ clauses: [] })).toBeNull();
+});
+
+test("minimum_should_match counts whole alternative groups without changing their clauses", () => {
+  const clauses = [
+    '(text:"alpha" OR text_stem:"alpha")',
+    'text:"beta"',
+  ] as const;
+  const match = {
+    type: "atLeast",
+    count: 1,
+  } as const satisfies CorpusContentGroupMatch;
+  expect(corpusContentGroupQuery({ clauses, match })).toEqual({
+    bool: {
+      should: clauses.map((query) => ({
+        query_string: { query, default_operator: "AND" },
+      })),
+      minimum_should_match: 1,
+    },
+  });
+  expect(clauses).toEqual([
+    '(text:"alpha" OR text_stem:"alpha")',
+    'text:"beta"',
+  ]);
+});
+
+test.each([
+  0,
+  -1,
+  1.5,
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+  Number.NEGATIVE_INFINITY,
+  3,
+])("minimum_should_match rejects invalid count %s", (count) => {
+  expect(() =>
+    corpusContentGroupQuery({
+      clauses: ['"alpha"', '"beta"'],
+      match: { type: "atLeast", count },
+    }),
+  ).toThrow(
+    "Content group minimum_should_match requires an integer from 1 to 2",
+  );
+});
+
+test("minimum_should_match rejects an empty group before it can become an unrestricted query", () => {
+  expect(() =>
+    corpusContentGroupQuery({
+      clauses: [],
+      match: { type: "atLeast", count: 1 },
+    }),
+  ).toThrow(
+    "Content group minimum_should_match requires an integer from 1 to 0",
+  );
 });
