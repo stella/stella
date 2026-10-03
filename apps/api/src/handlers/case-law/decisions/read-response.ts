@@ -155,11 +155,7 @@ export const readDecisionSuccessResponseSchema = t.Object({
   ecli: nullableBoundedString(DECISION_READER_TEXT_BYTES.ecli),
   identifiers: t.Array(
     t.Object({
-      type: t.Union(
-        Object.values(DECISION_IDENTIFIER_TYPES).map((value) =>
-          t.Literal(value),
-        ),
-      ),
+      type: t.Enum(DECISION_IDENTIFIER_TYPES),
       value: boundedString(DECISION_IDENTIFIER_MAX_LENGTH * 4),
     }),
     { minItems: 1, maxItems: DECISION_IDENTIFIER_MAX_COUNT },

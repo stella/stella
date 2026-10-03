@@ -494,7 +494,6 @@ export const publicCaseLawRoute = new Elysia({
   })
   .get("/judges/:judgeId/portrait", readJudgePortrait.handler, {
     params: readJudgePortrait.config.params,
-    response: readJudgePortrait.config.response,
   })
   .get("/provisions/citing-decisions", listCitingDecisions.handler, {
     query: listCitingDecisions.config.query,

@@ -324,9 +324,7 @@ const measurement = {
   storedAsOf: boundedString(128),
   reported: t.Number(),
   reportedAsOf: boundedString(128),
-  reportedBy: t.Union(
-    Object.values(CASE_LAW_TOTAL_REPORTER).map((value) => t.Literal(value)),
-  ),
+  reportedBy: t.Enum(CASE_LAW_TOTAL_REPORTER),
 };
 const sourceCompleteness = t.Union([
   t.Object(
@@ -347,10 +345,13 @@ const sourceCompleteness = t.Union([
   ),
 ]);
 const countryCoverage = {
-  country: t.Union(CASE_LAW_JURISDICTIONS.map((country) => t.Literal(country))),
-  health: t.Union(
-    Object.values(CASE_LAW_COVERAGE_HEALTH).map((value) => t.Literal(value)),
+  // An enum record keeps the literal union; a mapped array would widen it.
+  country: t.Enum(
+    Object.fromEntries(
+      CASE_LAW_JURISDICTIONS.map((country) => [country, country]),
+    ),
   ),
+  health: t.Enum(CASE_LAW_COVERAGE_HEALTH),
   stored,
   addedLastWeek: numberOrNull,
   completeness,
@@ -360,11 +361,7 @@ const countryCoverage = {
         adapterKey: boundedString(512),
         name: boundedString(2048),
         publicHomeUrl: boundedString(8192),
-        health: t.Union(
-          Object.values(CASE_LAW_COVERAGE_HEALTH).map((value) =>
-            t.Literal(value),
-          ),
-        ),
+        health: t.Enum(CASE_LAW_COVERAGE_HEALTH),
         lastSyncAt: date,
         completeness: sourceCompleteness,
         addedLastWeek: numberOrNull,

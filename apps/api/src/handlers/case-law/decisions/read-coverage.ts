@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { status } from "elysia";
+import type { ElysiaCustomStatusResponse, Static } from "elysia";
 
 import { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import { coverageResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
@@ -7,7 +8,10 @@ import {
   safePublicHandlerResponseSchemasWithStatusText,
   createSafeBoundedPublicHandler,
 } from "@/api/lib/api-handlers";
-import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
+import type {
+  PublicHandlerConfig,
+  SafeHandlerGenerator,
+} from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { projectResponseText } from "@/api/lib/search/project-response-text";
 import { preventPublicCaching } from "@/api/lib/security-headers";
@@ -26,7 +30,12 @@ const config = {
 /** The corpus's own coverage, every country in one answer. */
 const readCaseLawCoverage = createSafeBoundedPublicHandler(
   config,
-  async function* ({ set }) {
+  async function* ({
+    set,
+  }): SafeHandlerGenerator<
+    | Static<typeof coverageResponseSchema>
+    | ElysiaCustomStatusResponse<503, { message: string }>
+  > {
     const response = yield* Result.await(
       Result.tryPromise(
         async () => await readCaseLawCoverageHandler(caseLawPublicReadDb),
