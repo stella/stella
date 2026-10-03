@@ -184,7 +184,12 @@ test("a failed later page replays ready rows gathered before the failure", async
       return rows.slice(start, start + limit);
     },
   });
-  await expect(scan(20)).rejects.toThrow("page read failed");
+  const rejection: unknown = await scan(20).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(rejection).toBeInstanceOf(TypeError);
+  expect(String(rejection)).toContain("page read failed");
   const result = await scan(20);
   expect(result.type).toBe("rows");
   if (result.type === "rows") {
