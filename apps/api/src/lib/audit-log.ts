@@ -16,11 +16,20 @@ import {
   auditChangesForResource,
   auditMetadataForResource,
 } from "./audit-log-details";
+import type {
+  ChatAuditChanges,
+  ChatAuditResourceType,
+  NonChatAuditResourceType,
+} from "./audit-log-details";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "./audit-log.constants";
 import type { AuditAction, AuditResourceType } from "./audit-log.constants";
 
 export { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "./audit-log.constants";
 export type { AuditAction, AuditResourceType } from "./audit-log.constants";
+export type {
+  ChatAuditChanges,
+  NonChatAuditResourceType,
+} from "./audit-log-details";
 
 type ServerLike = {
   requestIP: (request: Request) => { address: string } | null;
@@ -82,11 +91,9 @@ export type AuditExecutionContext = {
       };
 };
 
-export type AuditEvent = {
+type AuditEventFields = {
   action: AuditAction;
-  resourceType: AuditResourceType;
   resourceId: string;
-  changes?: FieldDiffs | null;
   // Merged onto the base request metadata (IP, UA, forwardedFor).
   // Use for non-diff context (download s3Key, fileName, etc.).
   metadata?: AuditMetadata;
@@ -95,6 +102,27 @@ export type AuditEvent = {
   // workspace other than ctx.workspaceId.
   workspaceId?: SafeId<"workspace"> | null;
 };
+
+/** Chat entries carry only the change fields their resource type lists. */
+type ChatAuditEvent = {
+  [T in ChatAuditResourceType]: AuditEventFields & {
+    resourceType: T;
+    changes?: ChatAuditChanges[T] | null;
+  };
+}[ChatAuditResourceType];
+
+export type AuditEvent =
+  | ChatAuditEvent
+  | (AuditEventFields & {
+      resourceType: NonChatAuditResourceType;
+      changes?: FieldDiffs | null;
+    })
+  // Any resource without a change payload, for helpers that take the
+  // resource type as a parameter.
+  | (AuditEventFields & {
+      resourceType: AuditResourceType;
+      changes?: null;
+    });
 
 export type AuditRecorder = (
   tx: Transaction,
@@ -179,15 +207,20 @@ const executionColumns = (
   };
 };
 
+/** An event's change payload read as plain field diffs, whatever its resource. */
+export const auditEventChanges = (
+  event: AuditEvent,
+): FieldDiffs | null | undefined => event.changes;
+
 const entityActivityCategory = (event: AuditEvent): AuditActivityCategory => {
-  const createdEntity = event.changes?.["created"]?.new;
+  const createdEntity = auditEventChanges(event)?.["created"]?.new;
   const createdKind =
     typeof createdEntity === "object" &&
     createdEntity !== null &&
     "kind" in createdEntity
       ? createdEntity.kind
       : null;
-  const deletedEntity = event.changes?.["deleted"]?.old;
+  const deletedEntity = auditEventChanges(event)?.["deleted"]?.old;
   const deletedKind =
     typeof deletedEntity === "object" &&
     deletedEntity !== null &&
@@ -210,8 +243,8 @@ const playbookActivityCategory = (event: AuditEvent): AuditActivityCategory =>
   event.action === AUDIT_ACTION.EXECUTE ? "automation" : "other";
 
 const workspaceActivityCategory = (event: AuditEvent): AuditActivityCategory =>
-  event.changes?.["membersAdded"] !== undefined ||
-  event.changes?.["membersRemoved"] !== undefined
+  auditEventChanges(event)?.["membersAdded"] !== undefined ||
+  auditEventChanges(event)?.["membersRemoved"] !== undefined
     ? "team"
     : "matter";
 

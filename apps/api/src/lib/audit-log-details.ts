@@ -1,32 +1,70 @@
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log.constants";
+import type { AuditResourceType } from "@/api/lib/audit-log.constants";
 
-type ChatAuditResourceType =
+export type ChatAuditResourceType =
   | typeof AUDIT_RESOURCE_TYPE.CHAT_THREAD
   | typeof AUDIT_RESOURCE_TYPE.CHAT_MESSAGE
   | typeof AUDIT_RESOURCE_TYPE.CHAT_FILE;
 
+export type NonChatAuditResourceType = Exclude<
+  AuditResourceType,
+  ChatAuditResourceType
+>;
+
+/** Settings and identifiers of a chat thread; `created`/`deleted` snapshot them. */
+const CHAT_THREAD_SETTING_FIELDS = [
+  "chatModel",
+  "chatReasoningEffort",
+  "contextMatterIds",
+  "dataWorkspaceIds",
+  "titleChanged",
+  "titleSource",
+  "webSearchEnabled",
+  "workspaceId",
+] as const;
+
+const CHAT_SNAPSHOT_FIELDS = ["created", "deleted"] as const;
+
+const CHAT_MESSAGE_CHANGE_FIELDS = ["createDocumentDestination"] as const;
+
 /**
  * Change fields an audit entry about a chat resource may carry. Chat payloads
  * come from conversations, so only settings and identifiers are listed here:
- * free text (titles, names, message content) never enters `changes`, whatever
- * key a writer uses. A field that is not listed is dropped when the entry is
- * written and again when it is read, so older rows follow the same projection.
- * `created` and `deleted` hold snapshots that are projected with the same list.
+ * free text (titles, names, message content) never enters `changes`. Writers
+ * are held to these lists by {@link ChatAuditChanges}; entries are also
+ * projected onto them when written and when read, so older rows follow the
+ * same shape. Snapshots are projected with the same list.
  */
 const CHAT_CHANGE_FIELDS = {
-  [AUDIT_RESOURCE_TYPE.CHAT_THREAD]: new Set([
-    "chatModel",
-    "chatReasoningEffort",
-    "contextMatterIds",
-    "created",
-    "deleted",
-    "titleChanged",
-    "titleSource",
-    "webSearchEnabled",
+  [AUDIT_RESOURCE_TYPE.CHAT_THREAD]: new Set<string>([
+    ...CHAT_THREAD_SETTING_FIELDS,
+    ...CHAT_SNAPSHOT_FIELDS,
   ]),
-  [AUDIT_RESOURCE_TYPE.CHAT_MESSAGE]: new Set<string>(),
+  [AUDIT_RESOURCE_TYPE.CHAT_MESSAGE]: new Set<string>(
+    CHAT_MESSAGE_CHANGE_FIELDS,
+  ),
   [AUDIT_RESOURCE_TYPE.CHAT_FILE]: new Set<string>(),
 } as const satisfies Record<ChatAuditResourceType, ReadonlySet<string>>;
+
+type AuditDiff = { old: unknown; new: unknown };
+
+type ChatThreadSettings = Partial<
+  Record<(typeof CHAT_THREAD_SETTING_FIELDS)[number], unknown>
+>;
+
+/** The `changes` each chat resource type accepts. */
+export type ChatAuditChanges = {
+  [AUDIT_RESOURCE_TYPE.CHAT_THREAD]: Partial<
+    Record<(typeof CHAT_THREAD_SETTING_FIELDS)[number], AuditDiff>
+  > & {
+    created?: { old: null; new: ChatThreadSettings };
+    deleted?: { old: ChatThreadSettings; new: null };
+  };
+  [AUDIT_RESOURCE_TYPE.CHAT_MESSAGE]: Partial<
+    Record<(typeof CHAT_MESSAGE_CHANGE_FIELDS)[number], AuditDiff>
+  >;
+  [AUDIT_RESOURCE_TYPE.CHAT_FILE]: Record<string, never>;
+};
 
 const isChatResourceType = (
   resourceType: string,

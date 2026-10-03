@@ -19,9 +19,11 @@ import {
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
+import type { ChatAuditResourceType } from "@/api/lib/audit-log-details";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { expandThreadDataScopeOnTx } from "@/api/lib/chat/data-scope";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -43,6 +45,7 @@ let testDb: TestDatabase;
 let ids: TestIds;
 let matterId: SafeId<"workspace">;
 const seededThreadIds: SafeId<"chatThread">[] = [];
+const seededResourceIds: string[] = [];
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
@@ -63,10 +66,13 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (seededThreadIds.length > 0) {
+  const auditedIds = [...seededThreadIds, ...seededResourceIds];
+  if (auditedIds.length > 0) {
     await testDb
       .delete(auditLogs)
-      .where(inArray(auditLogs.resourceId, seededThreadIds));
+      .where(inArray(auditLogs.resourceId, auditedIds));
+  }
+  if (seededThreadIds.length > 0) {
     await testDb
       .delete(chatThreads)
       .where(inArray(chatThreads.id, seededThreadIds));
@@ -140,7 +146,11 @@ const rename = async (threadId: SafeId<"chatThread">, title: string) => {
   expect(result).toEqual({ title });
 };
 
-const readEntries = async (reader: SafeDb, threadId: SafeId<"chatThread">) => {
+const readEntries = async (
+  reader: SafeDb,
+  resourceId: string,
+  resourceType: ChatAuditResourceType = AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+) => {
   const result = await Result.gen(() =>
     queryAuditLogPage({
       safeDb: reader,
@@ -148,8 +158,8 @@ const readEntries = async (reader: SafeDb, threadId: SafeId<"chatThread">) => {
       recordAuditEvent: noopAuditRecorder,
       query: {
         limit: 50,
-        resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-        resourceId: threadId,
+        resourceType,
+        resourceId,
       },
     }),
   );
@@ -161,15 +171,13 @@ const readEntries = async (reader: SafeDb, threadId: SafeId<"chatThread">) => {
 
 const exportEntries = async (
   reader: SafeDb,
-  threadId: SafeId<"chatThread">,
+  resourceId: string,
+  resourceType: ChatAuditResourceType = AUDIT_RESOURCE_TYPE.CHAT_THREAD,
 ) => {
   const result = await exportAuditLogs.handler(
     asTestRaw<ExportContext>({
       memberRole: sessionMemberRole("owner"),
-      query: {
-        resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-        resourceId: threadId,
-      },
+      query: { resourceType, resourceId },
       recordAuditEvent: noopAuditRecorder,
       request: new Request("http://localhost/v1/audit-logs/export"),
       route: "/v1/audit-logs/export",
@@ -267,5 +275,107 @@ describe("audit entries for chat titles follow thread visibility", () => {
     ]);
     const csv = await exportEntries(organizationReaderDb(), threadId);
     expect(csv).not.toContain(marker);
+  });
+});
+
+const ownerRecorder = () =>
+  createBackgroundAuditRecorder({
+    organizationId: ids.orgA,
+    workspaceId: null,
+    userId: ids.userA1,
+    execution: {
+      performer: { type: "user", id: ids.userA1 },
+      trigger: { type: "direct" },
+    },
+  });
+
+/** Records one event the way its writer does, then reads it back both ways. */
+const recordAndRead = async (event: AuditEvent, reader: SafeDb) => {
+  seededResourceIds.push(event.resourceId);
+  await ownerRecorder()(asTestRaw<Transaction>(testDb), event);
+  const resourceType = asTestRaw<ChatAuditResourceType>(event.resourceType);
+  const entries = await readEntries(reader, event.resourceId, resourceType);
+  const csv = await exportEntries(reader, event.resourceId, resourceType);
+  return { entries, csv };
+};
+
+describe("chat setting entries keep their listed fields", () => {
+  test("a data scope change keeps its matter ids", async () => {
+    const threadId = await seedOrganizationThread([]);
+    await expandThreadDataScopeOnTx({
+      newWorkspaceIds: [matterId],
+      recordAuditEvent: ownerRecorder(),
+      threadId,
+      threadWorkspaceId: null,
+      tx: asTestRaw<Transaction>(testDb),
+    });
+
+    const entries = await readEntries(organizationReaderDb(), threadId);
+    expect(entries.map((entry) => entry.changes)).toEqual([
+      { dataWorkspaceIds: { old: [], new: [matterId] } },
+    ]);
+    const csv = await exportEntries(organizationReaderDb(), threadId);
+    expect(csv).toContain("dataWorkspaceIds");
+    expect(csv).toContain(matterId);
+  });
+
+  test("a thread moved into a matter keeps its matter change", async () => {
+    const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    const { entries, csv } = await recordAndRead(
+      {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+        resourceId: threadId,
+        workspaceId: matterId,
+        changes: { workspaceId: { old: null, new: matterId } },
+      },
+      matterReaderDb(),
+    );
+    expect(entries.map((entry) => entry.changes)).toEqual([
+      { workspaceId: { old: null, new: matterId } },
+    ]);
+    expect(csv).toContain("workspaceId");
+  });
+
+  test("a message destination change keeps its destination", async () => {
+    const messageId = Bun.randomUUIDv7();
+    const { entries, csv } = await recordAndRead(
+      {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+        resourceId: messageId,
+        workspaceId: matterId,
+        changes: {
+          createDocumentDestination: { old: "draft", new: "matter" },
+        },
+      },
+      matterReaderDb(),
+    );
+    expect(entries.map((entry) => entry.changes)).toEqual([
+      { createDocumentDestination: { old: "draft", new: "matter" } },
+    ]);
+    expect(csv).toContain("createDocumentDestination");
+  });
+
+  test("model, reasoning, web search and pinned matter changes keep their values", async () => {
+    const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    const changes = {
+      chatModel: { old: "model-a", new: "model-b" },
+      chatReasoningEffort: { old: "low", new: "high" },
+      contextMatterIds: { old: [], new: [matterId] },
+      webSearchEnabled: { old: false, new: true },
+      created: { old: null, new: { chatModel: "model-a" } },
+    };
+    const { entries } = await recordAndRead(
+      {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+        resourceId: threadId,
+        workspaceId: null,
+        changes,
+      },
+      organizationReaderDb(),
+    );
+    expect(entries.map((entry) => entry.changes)).toEqual([changes]);
   });
 });
