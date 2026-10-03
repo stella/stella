@@ -314,6 +314,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-unjustified-double-assertion.fixture.ts", [
     "no-unjustified-double-assertion/no-unjustified-double-assertion",
   ]),
+  fixtureRuleOverride("no-forged-plain-text.fixture.ts", [
+    "no-forged-plain-text/no-forged-plain-text",
+  ]),
   fixtureRuleOverride("no-untranslated-jsx-literal.fixture.tsx", [
     "no-untranslated-jsx-literal/no-untranslated-jsx-literal",
   ]),
@@ -990,6 +993,7 @@ export default defineConfig({
     "no-raw-date-input/no-raw-date-input": "error",
     "no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast": "error",
     "no-unjustified-double-assertion/no-unjustified-double-assertion": "error",
+    "no-forged-plain-text/no-forged-plain-text": "error",
     "no-partial-record-satisfies/no-partial-record-satisfies": "error",
     "require-contained-handler/no-portal-under-interactive-ancestor": "error",
     "require-contained-handler/require-contained-handler": "error",
@@ -1244,6 +1248,7 @@ export default defineConfig({
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
     "./.oxlint-plugins/no-unjustified-double-assertion.ts",
+    "./.oxlint-plugins/no-forged-plain-text.ts",
     "./.oxlint-plugins/no-raw-user-id-schema.ts",
     "./.oxlint-plugins/no-offset-pagination.ts",
     "./.oxlint-plugins/require-query-limit.ts",

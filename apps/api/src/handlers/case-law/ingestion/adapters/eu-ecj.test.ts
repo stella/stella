@@ -258,12 +258,12 @@ describe("euEcjAdapter.fetchPage", () => {
       if (!first) {
         throw new Error("No decisions");
       }
-      expect(first.caseNumber).toBe("C-128/21");
-      expect(first.ecli).toBe("ECLI:EU:C:2024:49");
-      expect(first.court).toBe("Court of Justice");
+      expect(first.caseNumber === "C-128/21").toBe(true);
+      expect(first.ecli === "ECLI:EU:C:2024:49").toBe(true);
+      expect(first.court === "Court of Justice").toBe(true);
       expect(first.language).toBe("en");
       expect(first.decisionDate).toBe("2024-01-18");
-      expect(first.decisionType).toBe("judgment");
+      expect(first.decisionType === "judgment").toBe(true);
       expect(first.documentUrl).toBe(
         `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}`,
       );
@@ -282,7 +282,7 @@ describe("euEcjAdapter.fetchPage", () => {
       });
       expect(first.fulltext?.length).toBeGreaterThan(100);
       expect(first.rawHash).toHaveLength(64);
-      expect(page.decisions[2]?.decisionType).toBe("order");
+      expect(page.decisions[2]?.decisionType === "order").toBe(true);
 
       // Every response fetched for the variant is kept under its own name, so
       // a parser change can be replayed without re-crawling and a reader of
@@ -1097,7 +1097,7 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
     if (outcome.type !== "built") {
       throw new TypeError(`Expected built, got ${outcome.type}`);
     }
-    expect(outcome.decision.caseNumber).toBe("C-128/21");
+    expect(outcome.decision.caseNumber === "C-128/21").toBe(true);
     expect(outcome.decision.language).toBe("fr");
     expect(outcome.decision.documentUrl).toContain(FR_MANIFESTATION_ID);
   });

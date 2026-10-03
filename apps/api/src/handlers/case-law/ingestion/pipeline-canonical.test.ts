@@ -36,6 +36,7 @@ import {
   sanitizeResult,
   partialObservationFromMetadata,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -171,7 +172,7 @@ afterEach(() => {
   putPacksMock.mockClear();
 });
 
-const decision: IngestionResult = {
+const decision: IngestionResult = plainTextIngestionResult({
   caseNumber: "X/1/2026",
   court: "Test Court",
   country: "SVK",
@@ -181,7 +182,7 @@ const decision: IngestionResult = {
   textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
   rawHash: "raw-hash",
   documentAst: {},
-};
+});
 
 /**
  * The object-keyed write a row settled before packs existed, and the content
@@ -494,7 +495,7 @@ describe("processDecision — canonical storage mode", () => {
     };
 
     const outcome = await processDecision({
-      input: {
+      input: plainTextIngestionResult({
         ...decision,
         fulltext: undefined,
         isListingOnly: true,
@@ -502,7 +503,7 @@ describe("processDecision — canonical storage mode", () => {
         rawHash: "listing-only-replay-hash",
         sourceRaw: "<tr>listing only</tr>",
         sourceRawContentType: "text/html",
-      },
+      }),
       observationOrder: 2n,
       sourceId: createSafeId<"caseLawSource">(),
       scopedDb,
@@ -617,7 +618,7 @@ describe("processDecision — canonical storage mode", () => {
       // A metadata-first observation: identity fields only, the empty-AST
       // placeholder, no fulltext — the shape a deferred-document adapter
       // returns for every listing row.
-      input: { ...decision, fulltext: undefined },
+      input: plainTextIngestionResult({ ...decision, fulltext: undefined }),
       observationOrder: 1n,
       sourceId: createSafeId<"caseLawSource">(),
       scopedDb,
@@ -741,7 +742,7 @@ describe("processDecision — canonical storage mode", () => {
       sourceRawS3Key: null,
       sourceRawContentType: null,
     };
-    const moved = { ...decision, country: "CZE" };
+    const moved = plainTextIngestionResult({ ...decision, country: "CZE" });
     // Not vacuous: the payload is the one the row records.
     expect(
       realCorpusStorage.corpusContentHash(
@@ -912,7 +913,10 @@ describe("processDecision — a refresh whose raw-source write failed", () => {
     };
 
     const outcome = await processDecision({
-      input: { ...decision, sourceRaw: "<html></html>" },
+      input: plainTextIngestionResult({
+        ...decision,
+        sourceRaw: "<html></html>",
+      }),
       observationOrder: 1n,
       sourceId: createSafeId<"caseLawSource">(),
       scopedDb,

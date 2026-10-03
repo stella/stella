@@ -67,6 +67,8 @@ import {
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
 import { defineSourceAdapter } from "@/api/lib/legal-search/ingestion-types";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -83,16 +85,17 @@ const insertedValues = () =>
 
 const baseResult = (
   documentAst: IngestionResult["documentAst"],
-): IngestionResult => ({
-  caseNumber: "X/1/2026",
-  court: "Test Court",
-  country: "SK",
-  language: "sk",
-  metadata: {},
-  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  rawHash: "hash",
-  documentAst,
-});
+): IngestionResult =>
+  plainTextIngestionResult({
+    caseNumber: "X/1/2026",
+    court: "Test Court",
+    country: "SK",
+    language: "sk",
+    metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash: "hash",
+    documentAst,
+  });
 
 const astMetadata = {
   caseNumber: "X/1/2026",
@@ -171,12 +174,14 @@ describe("publisher document role persistence", () => {
         },
       };
       const stored = sanitizeResult(input);
-      expect(stored.metadata[DECISION_DOCUMENT_ROLE_METADATA_KEY]).toBe(
-        documentRole,
-      );
+      expect(
+        stored.metadata[DECISION_DOCUMENT_ROLE_METADATA_KEY] === documentRole,
+      ).toBe(true);
       expect(stored.documentRole).toBe(documentRole);
-      expect(stored.decisionType).toBe(input.decisionType);
-      expect(stored.metadata["decisionType"]).toBe(input.metadata.decisionType);
+      expect(stored.decisionType === input.decisionType).toBe(true);
+      expect(
+        stored.metadata["decisionType"] === input.metadata.decisionType,
+      ).toBe(true);
       expect(input.metadata[DECISION_DOCUMENT_ROLE_METADATA_KEY]).toBe(
         "untrusted",
       );
@@ -197,7 +202,7 @@ describe("publisher document role persistence", () => {
     expect(
       Object.hasOwn(stored.metadata, DECISION_DOCUMENT_ROLE_METADATA_KEY),
     ).toBe(false);
-    expect(stored.decisionType).toBe(input.decisionType);
+    expect(stored.decisionType === input.decisionType).toBe(true);
     expect(sanitizeResult(stored)).toEqual(stored);
   });
 });
@@ -212,10 +217,13 @@ describe("sanitizeResult — decision text fields", () => {
       },
     });
 
-    expect(sanitized.metadata["summary"]).toBe("Published summary");
-    expect(sanitized.textFields.summary).toEqual(
-      presentTextField("Published summary"),
-    );
+    expect(sanitized.metadata["summary"] === "Published summary").toBe(true);
+    expect(
+      Bun.deepEquals(
+        sanitized.textFields.summary,
+        presentTextField("Published summary"),
+      ),
+    ).toBe(true);
   });
 
   test("keeps text keys nullable while retaining every declared absence", () => {
@@ -302,13 +310,14 @@ describe("sanitizeResult — decision identifiers", () => {
 });
 
 describe("sanitizeResult — docket grammar", () => {
-  const observed = (country: string, caseNumber: string): IngestionResult => ({
-    ...baseResult(EMPTY_AST),
-    country,
-    caseNumber,
-    sourceDocumentId: "publisher-document",
-    metadata: { caseNumber },
-  });
+  const observed = (country: string, caseNumber: string): IngestionResult =>
+    plainTextIngestionResult({
+      ...baseResult(EMPTY_AST),
+      country,
+      caseNumber,
+      sourceDocumentId: "publisher-document",
+      metadata: { caseNumber },
+    });
 
   test.each([
     ["CZE", "33 Cdo 1751/2023- II.", "33 Cdo 1751/2023"],
@@ -323,8 +332,8 @@ describe("sanitizeResult — docket grammar", () => {
       removed: raw.slice(raw.indexOf(caseNumber) + caseNumber.length),
     });
     const sanitized = sanitizeResult(input);
-    expect(sanitized.caseNumber).toBe(caseNumber);
-    expect(sanitized.metadata["caseNumber"]).toBe(raw);
+    expect(sanitized.caseNumber === caseNumber).toBe(true);
+    expect(sanitized.metadata["caseNumber"] === raw).toBe(true);
   });
 
   test.each([
@@ -337,16 +346,18 @@ describe("sanitizeResult — docket grammar", () => {
   });
 
   test("a docket keyed row keeps its tail and is reported unkeyed", () => {
-    const input = {
+    const input = plainTextIngestionResult({
       ...observed("CZE", "33 Cdo 1751/2023- II."),
       sourceDocumentId: undefined,
-    };
+    });
     expect(observedDocketOf(input)).toEqual({
       type: "unkeyed",
       caseNumber: "33 Cdo 1751/2023",
       removed: "- II.",
     });
-    expect(sanitizeResult(input).caseNumber).toBe("33 Cdo 1751/2023- II.");
+    expect(sanitizeResult(input).caseNumber === "33 Cdo 1751/2023- II.").toBe(
+      true,
+    );
   });
 
   test.each<[string, string, ObservedDocket["type"]]>([
@@ -357,25 +368,27 @@ describe("sanitizeResult — docket grammar", () => {
   ])("%s: %s is stored as written (%s)", (country, raw, type) => {
     const input = observed(country, raw);
     expect(observedDocketOf(input).type).toBe(type);
-    expect(sanitizeResult(input).caseNumber).toBe(raw);
+    expect(sanitizeResult(input).caseNumber === raw).toBe(true);
   });
 
   test("a placeholder docket is never read against the grammar", () => {
     expect(
-      observedDocketOf({
-        ...observed("CZE", "NALUS record 7301"),
-        caseNumberIsPlaceholder: true,
-      }),
+      observedDocketOf(
+        plainTextIngestionResult({
+          ...observed("CZE", "NALUS record 7301"),
+          caseNumberIsPlaceholder: true,
+        }),
+      ),
     ).toEqual({ type: "kept" });
   });
 
   test("a primary reference other than a docket is never read against the grammar", () => {
-    const input = {
+    const input = plainTextIngestionResult({
       ...observed("USA", "347 U.S. 483."),
       caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-    };
+    });
     expect(observedDocketOf(input)).toEqual({ type: "kept" });
-    expect(sanitizeResult(input).caseNumber).toBe("347 U.S. 483.");
+    expect(sanitizeResult(input).caseNumber === "347 U.S. 483.").toBe(true);
   });
 });
 
@@ -912,7 +925,11 @@ describe("runIngestionPipeline — failure records", () => {
     czNsAdapter.fetchPage = async () =>
       Result.ok({
         decisions: [
-          { ...baseResult({}), caseNumber, language: "sk-SK-x-long" },
+          plainTextIngestionResult({
+            ...baseResult({}),
+            caseNumber,
+            language: "sk-SK-x-long",
+          }),
         ],
         itemBuildFailures: { type: "item_build_failed", count: 2 },
         nextCursor: "cursor-2",
@@ -1363,7 +1380,7 @@ describe("processDecision — corpus storage off", () => {
     };
 
     const outcome = await processDecision({
-      input: {
+      input: plainTextIngestionResult({
         caseNumber: "X/1/2026",
         court: "Test Court",
         country: "SVK",
@@ -1373,7 +1390,7 @@ describe("processDecision — corpus storage off", () => {
         textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
-      },
+      }),
       observationOrder: 1n,
       sourceId,
       scopedDb,
@@ -1400,7 +1417,7 @@ describe("processDecision — the decision's judges", () => {
   };
 
   type RefreshOptions = {
-    judges?: IngestionResult["judges"];
+    judges?: RawIngestionResult["judges"];
   };
 
   const refreshWithJudges = async ({
@@ -1461,11 +1478,11 @@ describe("processDecision — the decision's judges", () => {
     };
 
     await processDecision({
-      input: {
+      input: plainTextIngestionResult({
         ...baseResult(EMPTY_AST),
         fulltext: "Ústavní soud rozhodl o návrhu.",
         ...(judges === undefined ? {} : { judges }),
-      },
+      }),
       judges: {
         replace: async (_tx, { decisionId, judges: written }) => {
           replaced.push({ decisionId, judges: written, inTransaction });
@@ -1510,7 +1527,7 @@ describe("processDecision — fields on an existing row", () => {
   type RefreshedDecisionOptions = {
     decisionDate?: string | undefined;
     storedMetadata?: Record<string, unknown> | undefined;
-    textFields?: IngestionResult["textFields"] | undefined;
+    textFields?: RawIngestionResult["textFields"] | undefined;
   };
 
   const refreshedDecision = async ({
@@ -1604,7 +1621,7 @@ describe("processDecision — fields on an existing row", () => {
     };
 
     await processDecision({
-      input: {
+      input: plainTextIngestionResult({
         caseNumber: "X/1/2026",
         court: "Test Court",
         country: "SVK",
@@ -1615,7 +1632,7 @@ describe("processDecision — fields on an existing row", () => {
         textFields,
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
-      },
+      }),
       observationOrder: 1n,
       sourceId,
       scopedDb,
@@ -1722,7 +1739,7 @@ describe("processDecision — source raw upload failure", () => {
     };
 
     const outcome = await processDecision({
-      input: {
+      input: plainTextIngestionResult({
         caseNumber: "X/2/2026",
         court: "Test Court",
         country: "SVK",
@@ -1733,7 +1750,7 @@ describe("processDecision — source raw upload failure", () => {
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
         sourceRaw,
-      },
+      }),
       observationOrder: 1n,
       sourceId,
       scopedDb,
@@ -1803,7 +1820,7 @@ describe("processDecision — source raw upload failure", () => {
     };
 
     await processDecision({
-      input: {
+      input: plainTextIngestionResult({
         caseNumber: "X/3/2026",
         court: "Test Court",
         country: "SVK",
@@ -1814,7 +1831,7 @@ describe("processDecision — source raw upload failure", () => {
         rawHash: "new-hash",
         documentAst: EMPTY_AST,
         sourceRaw: "<html></html>",
-      },
+      }),
       observationOrder: 1n,
       sourceId: createSafeId<"caseLawSource">(),
       scopedDb,

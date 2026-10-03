@@ -138,7 +138,7 @@ describe("case-law adapter nullish optionals", () => {
 
     expect(result.isOk()).toBe(true);
     const decision = result.unwrap().decisions[0];
-    expect(decision?.caseNumber).toBe("1 Ob 2/24d");
+    expect(decision?.caseNumber === "1 Ob 2/24d").toBe(true);
     expect(decision?.metadata).toMatchObject({ statutes: [] });
     // A branch element the publisher serves empty states nothing, so the row
     // carries no key for it rather than a list with nothing in it.
@@ -199,7 +199,7 @@ describe("case-law adapter nullish optionals", () => {
 
     expect(result.isOk()).toBe(true);
     const decision = result.unwrap().decisions[0];
-    expect(decision?.caseNumber).toBe("15 Co 1/2024");
+    expect(decision?.caseNumber === "15 Co 1/2024").toBe(true);
     expect(decision?.fulltext).toContain("Vyrok");
     // Both responses are kept as named parts, so the payload a later parser
     // reads is the document itself rather than the whole stored blob.
@@ -242,11 +242,12 @@ describe("case-law adapter nullish optionals", () => {
 
     expect(result.isOk()).toBe(true);
     const decisions = result.unwrap().decisions;
-    expect(decisions.map(({ caseNumber }) => caseNumber)).toEqual([
-      "15 Co 2/2024",
-      "15 Co 3/2024",
-      "15 Co 4/2024",
-    ]);
+    expect(
+      Bun.deepEquals(
+        decisions.map(({ caseNumber }) => caseNumber),
+        ["15 Co 2/2024", "15 Co 3/2024", "15 Co 4/2024"],
+      ),
+    ).toBe(true);
     expect(decisions.every(({ sourceUrl }) => sourceUrl === undefined)).toBe(
       true,
     );
@@ -324,9 +325,9 @@ describe("case-law adapter nullish optionals", () => {
 
     expect(result.isOk()).toBe(true);
     const decision = result.unwrap().decisions[0];
-    expect(decision?.caseNumber).toBe("II AKa 10/24");
-    expect(decision?.court).toBe("Sąd Apelacyjny w Krakowie");
-    expect(decision?.decisionType).toBe("wyrok");
+    expect(decision?.caseNumber === "II AKa 10/24").toBe(true);
+    expect(decision?.court === "Sąd Apelacyjny w Krakowie").toBe(true);
+    expect(decision?.decisionType === "wyrok").toBe(true);
     // The stated year is not one a judgment can carry and this record's
     // upstream id spells no date, so the row states none: the document's own
     // prose says "2 stycznia 2024", and reading it would put the date of a
@@ -378,8 +379,8 @@ describe("case-law adapter nullish optionals", () => {
 
     expect(result.isOk()).toBe(true);
     const decision = result.unwrap().decisions[0];
-    expect(decision?.court).toBe("Trybunał Konstytucyjny");
-    expect(decision?.decisionType).toBe("postanowienie");
+    expect(decision?.court === "Trybunał Konstytucyjny").toBe(true);
+    expect(decision?.decisionType === "postanowienie").toBe(true);
   });
 
   test("PL Courts falls back to the dump item when a detail request times out", async () => {
@@ -431,9 +432,9 @@ describe("case-law adapter nullish optionals", () => {
 
     expect(result.isOk()).toBe(true);
     const decision = result.unwrap().decisions[0];
-    expect(decision?.caseNumber).toBe("III K 3/24");
-    expect(decision?.court).toBe("Sąd powszechny");
-    expect(decision?.decisionType).toBe("postanowienie");
+    expect(decision?.caseNumber === "III K 3/24").toBe(true);
+    expect(decision?.court === "Sąd powszechny").toBe(true);
+    expect(decision?.decisionType === "postanowienie").toBe(true);
     // No detail came back, so the envelope holds the listing row alone
     // rather than a part standing for the response that never arrived.
     expect(
@@ -488,9 +489,9 @@ describe("case-law adapter nullish optionals", () => {
 
     expect(result.isOk()).toBe(true);
     const decision = result.unwrap().decisions[0];
-    expect(decision?.caseNumber).toBe("IV Ka 4/24");
-    expect(decision?.court).toBe("Sąd Okręgowy w Gliwicach");
-    expect(decision?.decisionType).toBe("postanowienie");
+    expect(decision?.caseNumber === "IV Ka 4/24").toBe(true);
+    expect(decision?.court === "Sąd Okręgowy w Gliwicach").toBe(true);
+    expect(decision?.decisionType === "postanowienie").toBe(true);
     expect(decision?.metadata).toMatchObject({
       courtCases: [{ caseNumber: "IV Ka 4/24" }],
       keywords: ["dump-keyword"],
@@ -641,7 +642,7 @@ describe("case-law adapter nullish optionals", () => {
 
     expect(result.isOk()).toBe(true);
     const decision = result.unwrap().decisions[0];
-    expect(decision?.caseNumber).toBe("VI K 6/24");
+    expect(decision?.caseNumber === "VI K 6/24").toBe(true);
     expect(
       Object.keys(decodeSourceRawEnvelope(decision?.sourceRaw ?? "") ?? {}),
     ).toEqual(["listing-dump"]);
@@ -762,8 +763,8 @@ describe("case-law adapter nullish optionals", () => {
 
     expect(result.isOk()).toBe(true);
     const decision = result.unwrap().decisions[0];
-    expect(decision?.caseNumber).toBe("1Cdo/1/2024");
-    expect(decision?.ecli).toBe("ECLI:SK:TEST");
+    expect(decision?.caseNumber === "1Cdo/1/2024").toBe(true);
+    expect(decision?.ecli === "ECLI:SK:TEST").toBe(true);
   });
 
   test("SK Courts skips items missing required court data", async () => {

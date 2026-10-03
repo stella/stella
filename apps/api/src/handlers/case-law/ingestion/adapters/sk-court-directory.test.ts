@@ -2,7 +2,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { getSkCourtSuccessionEdges } from "@stll/api-contract/sk-court-succession";
 
-import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -18,6 +17,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@/api/lib/legal-search/ingestion-constants";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const originalFetch = globalThis.fetch;
@@ -62,12 +65,14 @@ describe("court registry enrichment", () => {
           )
           .map(({ id }) => id);
         expect(edgeIds.length > 0).toBe(name === item.sud.nazov);
-        expect(decision?.court).toBe(name);
-        expect(decision?.metadata["courtSuccession"]).toEqual({
-          eli: "eli/sk/zz/2004/371",
-          version: "2023-06-01",
-          edgeIds,
-        });
+        expect(decision?.court === name).toBe(true);
+        expect(
+          Bun.deepEquals(decision?.metadata["courtSuccession"], {
+            eli: "eli/sk/zz/2004/371",
+            version: "2023-06-01",
+            edgeIds,
+          }),
+        ).toBe(true);
         expect(decision).not.toBeNull();
         if (decision === null) {
           continue;
@@ -93,7 +98,7 @@ describe("court registry enrichment", () => {
         expect(replay.result.parserVersion).toBe(
           PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
         );
-        expect(replay.result.court).toBe(name);
+        expect(replay.result.court === name).toBe(true);
         expect(replay.result.metadata).toEqual(decision.metadata);
         expect(replay.result.rawHash).toBe(decision.rawHash);
       }
@@ -114,7 +119,7 @@ describe("court registry enrichment", () => {
         )
         .map(({ id }) => id);
     expect(idsFor(record.nazov).length).toBeGreaterThan(0);
-    expect(decision?.court).toBe(item.sud.nazov);
+    expect(decision?.court === item.sud.nazov).toBe(true);
     expect(decision?.metadata["courtSuccession"]).toMatchObject({
       edgeIds: [
         ...new Set([...idsFor(item.sud.nazov), ...idsFor(record.nazov)]),
@@ -122,7 +127,7 @@ describe("court registry enrichment", () => {
     });
   });
 
-  test("keeps every stated name and derives only identity-backed aliases", () => {
+  test("normalizes stated labels and derives only identity-backed aliases", () => {
     for (const name of [
       item.sud.nazov,
       registry.nazov,
@@ -133,23 +138,28 @@ describe("court registry enrichment", () => {
         detail: null,
         courtRegistry: { status: "available", record: registry },
       });
-      expect(result?.court).toBe(name);
+      expect(result?.court === name.trim()).toBe(true);
       expect(result?.metadata["courtRegistry"]).toMatchObject(registry);
-      expect(result?.metadata["courtClassification"]).toEqual({
-        status: "classified",
-        level: "first-instance",
-        jurisdiction: "general",
-      });
-      expect(result?.metadata["courtAlias"]).toEqual(
-        name === registry.nazov
-          ? undefined
-          : {
-              type: "same-registry-id",
-              registreGuid: registry.registreGuid,
-              statedName: name,
-              registryName: registry.nazov,
-            },
-      );
+      expect(
+        Bun.deepEquals(result?.metadata["courtClassification"], {
+          status: "classified",
+          level: "first-instance",
+          jurisdiction: "general",
+        }),
+      ).toBe(true);
+      expect(
+        Bun.deepEquals(
+          result?.metadata["courtAlias"],
+          name === registry.nazov
+            ? undefined
+            : {
+                type: "same-registry-id",
+                registreGuid: registry.registreGuid,
+                statedName: name.trim(),
+                registryName: registry.nazov,
+              },
+        ),
+      ).toBe(true);
     }
   });
 
@@ -279,7 +289,7 @@ describe("court registry enrichment", () => {
         continue;
       }
       const decision = retried.value.decisions.at(0);
-      expect(decision?.court).toBe(name);
+      expect(decision?.court === name).toBe(true);
       expect(decision?.metadata["courtSuccession"]).toEqual(
         assembleSkCourtsDecision({ item: listedItem, detail: null })?.metadata[
           "courtSuccession"
@@ -376,13 +386,15 @@ describe("court registry enrichment", () => {
         continue;
       }
       const decision = page.value.decisions.at(0);
-      expect(decision?.caseNumber).toBe(item.spisovaZnacka);
-      expect(decision?.court).toBe(item.sud.nazov);
-      expect(decision?.metadata["courtRegistry"]).toEqual({
-        status: "unavailable",
-        httpStatus: status,
-        reason,
-      });
+      expect(decision?.caseNumber === item.spisovaZnacka).toBe(true);
+      expect(decision?.court === item.sud.nazov).toBe(true);
+      expect(
+        Bun.deepEquals(decision?.metadata["courtRegistry"], {
+          status: "unavailable",
+          httpStatus: status,
+          reason,
+        }),
+      ).toBe(true);
       expect(decision?.metadata["courtSuccession"]).toEqual(
         assembleSkCourtsDecision({ item, detail: null })?.metadata[
           "courtSuccession"
@@ -494,7 +506,9 @@ describe("court registry enrichment", () => {
     if (outcome?.type !== "parsed") {
       return;
     }
-    expect(outcome.result.metadata["courtRegistry"]).toEqual(observation);
+    expect(
+      Bun.deepEquals(outcome.result.metadata["courtRegistry"], observation),
+    ).toBe(true);
     expect(outcome.result.metadata["courtSuccession"]).toMatchObject({
       eli: "eli/sk/zz/2004/371",
       edgeIds: expect.arrayContaining([expect.any(String)]),

@@ -33,6 +33,7 @@ import {
   INGESTION_CHECKPOINT_STATUS,
 } from "@/api/lib/corpus-ingestion-checkpoint";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
@@ -379,7 +380,7 @@ describe("case-law source ingestion lease", () => {
       expect(cursor).toBeNull();
       return Result.ok({
         decisions: [
-          {
+          plainTextIngestionResult({
             caseNumber: "lifecycle/1/2026",
             sourceDocumentId: "lifecycle-document-1",
             court: "Lifecycle Court",
@@ -392,7 +393,7 @@ describe("case-law source ingestion lease", () => {
             ),
             rawHash: "lifecycle-hash-1",
             documentAst: EMPTY_AST,
-          },
+          }),
         ],
         nextCursor: "lifecycle-page-2",
       });

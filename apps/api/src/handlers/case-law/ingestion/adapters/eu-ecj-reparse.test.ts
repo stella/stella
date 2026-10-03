@@ -167,13 +167,15 @@ describe("eu-ecj reparseStoredRaw", () => {
       return;
     }
     expect(outcome.result.metadata["summary"]).toBeUndefined();
-    expect(outcome.result.textFields).toEqual({
-      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      summary: {
-        type: TEXT_FIELD_TYPE.PRESENT,
-        text: "Published summary",
-      },
-    });
+    expect(
+      Bun.deepEquals(outcome.result.textFields, {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        summary: {
+          type: TEXT_FIELD_TYPE.PRESENT,
+          text: "Published summary",
+        },
+      }),
+    ).toBe(true);
   });
 
   test("rejects a payload stored under a media type it does not parse", async () => {

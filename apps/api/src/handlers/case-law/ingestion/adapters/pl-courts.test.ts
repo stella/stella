@@ -204,9 +204,11 @@ describe("pl-courts reads what SAOS serves", () => {
     expect(namesInRole(decision, DECISION_JUDGE_ROLE.PANEL_MEMBER)).toEqual([
       "Dariusz Świecki",
     ]);
-    expect(decision.metadata["dissentingOpinions"]).toEqual([
-      { textContent: "Zdanie odrębne.", authors: ["Dariusz Świecki"] },
-    ]);
+    expect(
+      Bun.deepEquals(decision.metadata["dissentingOpinions"], [
+        { textContent: "Zdanie odrębne.", authors: ["Dariusz Świecki"] },
+      ]),
+    ).toBe(true);
   });
 
   test("each response is kept as its own envelope part", async () => {

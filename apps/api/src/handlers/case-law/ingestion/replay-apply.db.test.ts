@@ -63,6 +63,7 @@ import {
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -158,7 +159,7 @@ const stubAdapter = (
 /** Stands in for a parser that draws different text out of the payload. */
 const textChangingAdapter = stubAdapter((stored) => ({
   type: "parsed",
-  result: {
+  result: plainTextIngestionResult({
     caseNumber: stored.caseNumber,
     court: stored.court,
     country: "EU",
@@ -168,7 +169,7 @@ const textChangingAdapter = stubAdapter((stored) => ({
     rawHash: "hash-from-the-new-parser",
     fulltext: NEW_PARSER_TEXT,
     documentAst: EMPTY_AST,
-  },
+  }),
 }));
 
 test("a writing replay goes through the pipeline, and replaying again converges", async () => {
@@ -385,7 +386,7 @@ test("a restructure the flattened text does not show is still applied", async ()
   // version. Only the structure moved.
   const restructuringAdapter = stubAdapter((stored) => ({
     type: "parsed",
-    result: {
+    result: plainTextIngestionResult({
       caseNumber: stored.caseNumber,
       court: stored.court,
       country: "EU",
@@ -397,7 +398,7 @@ test("a restructure the flattened text does not show is still applied", async ()
       sections: STORED_SECTIONS,
       documentAst: STRUCTURED_AST,
       parserVersion: 3,
-    },
+    }),
   }));
 
   const run = await replayCaseLawSource({
@@ -743,7 +744,7 @@ const replayConvergenceFixture = async (text: string) => {
     adapterKey: `replay-convergence-${sourceId}`,
     name: "replay convergence fixture",
   });
-  const result = {
+  const result = plainTextIngestionResult({
     caseNumber: "C-10/26",
     court: "Court of Justice",
     country: "EU",
@@ -755,7 +756,7 @@ const replayConvergenceFixture = async (text: string) => {
     sections: [{ index: 0, type: "unknown" as const, title: null, text }],
     documentAst: astWithBlocks([paragraph("b1", text)]),
     parserVersion: 4,
-  };
+  });
   const sanitized = sanitizeResult(result);
   const payload = caseLawCanonicalPayload(sanitized);
   await db.insert(caseLawDecisions).values({
@@ -796,11 +797,11 @@ test("replay persists a newly derived reasons role and converges without changin
     .update(caseLawDecisions)
     .set({ decisionType: statedType })
     .where(eq(caseLawDecisions.id, fixture.id));
-  const result = {
+  const result = plainTextIngestionResult({
     ...fixture.result,
     decisionType: statedType,
     documentRole: DECISION_DOCUMENT_ROLE.REASONS,
-  };
+  });
   const sourceLease = await acquireCaseLawSourceIngestionLease({
     scopedDb,
     sourceId: fixture.sourceId,
@@ -1045,7 +1046,10 @@ test("a version bump that changes only a described column goes through the pipel
   const run = await replayCaseLawSource({
     adapter: stubAdapter(() => ({
       type: "parsed",
-      result: { ...fixture.result, decisionType: "judgment" },
+      result: plainTextIngestionResult({
+        ...fixture.result,
+        decisionType: "judgment",
+      }),
     })),
     scopedDb,
     sourceId: fixture.sourceId,

@@ -43,6 +43,7 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   PublisherPageError,
   validatePublisherPage,
@@ -82,6 +83,7 @@ import type { UnpersistableDecisionField } from "@/api/lib/errors/tagged-errors"
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { restrictCzRegionalFinaldocUrl } from "@/api/lib/legal-search/cz-regional-finaldoc-url";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1024,7 +1026,7 @@ export const assembleCzRegionalDecision = ({
 
   return {
     type: "built",
-    decision: {
+    decision: plainTextIngestionResult({
       caseNumber,
       sheetNumber,
       ecli,
@@ -1091,7 +1093,7 @@ export const assembleCzRegionalDecision = ({
       documentAst: parsed?.documentAst ?? EMPTY_AST,
       sourceRaw,
       sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-    },
+    }),
   };
 };
 
@@ -1913,6 +1915,181 @@ const nextCzRegionalListingCursor = ({
     : makeCursor({ date: today, page: 0, emptyDays: 0 });
 };
 
+type BuildCzRegionalPageItemsOptions = {
+  items: readonly CzRegionalApiItem[];
+  cursor: string | null;
+  initialFailures: number;
+  readBudgetSpent: () => boolean;
+  effectiveSignal: AbortSignal;
+  signal?: AbortSignal | undefined;
+};
+
+const buildCzRegionalPageItems = async ({
+  items,
+  cursor,
+  initialFailures,
+  readBudgetSpent,
+  effectiveSignal,
+  signal,
+}: BuildCzRegionalPageItemsOptions) => {
+  let refused = initialFailures;
+  // One document fetch per listed row, in batches of
+  // FINALDOC_CONCURRENCY, then the row and its document are assembled
+  // together: the envelope has to hold both, so the listing row cannot
+  // be turned into a decision before its document is in hand.
+  //
+  // Once the page's read budget passes, every row not yet read (the
+  // rows of the batch it interrupts and of every batch after it) is
+  // stored listing-only with no request, the reconciliation asks for
+  // their documents, and the cursor moves on.
+  const decisions: IngestionResult[] = [];
+  let deferred = 0;
+  const recordUnkeyableRow = (item: CzRegionalApiItem): void => {
+    refused += 1;
+    observeItemBuildFailure(
+      new AdapterFetchError({
+        adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+        cursor,
+        message: "Listing row has no decision identity",
+      }),
+      item.jednaciCislo ?? undefined,
+    );
+  };
+  const pushListingRow = async (item: CzRegionalApiItem): Promise<void> => {
+    const attempted = await buildPlainTextItem({
+      decisionOf: (value) => {
+        switch (value.type) {
+          case "built":
+          case "detail-unavailable":
+            return value.decision;
+          case "unkeyable":
+            return undefined;
+          default:
+            value satisfies never;
+            return panic("Unhandled source build outcome");
+        }
+      },
+      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+
+      rawListing: JSON.stringify(item),
+      build: async () =>
+        await Promise.resolve(
+          assembleCzRegionalDecision({ item, document: null, chain: null }),
+        ),
+    });
+    if (attempted.type === "item_build_failed") {
+      refused++;
+      decisions.push(attempted.decision);
+      return;
+    }
+    const listed = attempted.value;
+    if (listed.type === "unkeyable") {
+      recordUnkeyableRow(item);
+      return;
+    }
+    decisions.push(listed.decision);
+  };
+  for (let i = 0; i < items.length; i += FINALDOC_CONCURRENCY) {
+    const batch = items.slice(i, i + FINALDOC_CONCURRENCY);
+    if (readBudgetSpent()) {
+      deferred += batch.length;
+      for (const item of batch) {
+        await pushListingRow(item);
+      }
+      continue;
+    }
+    const built = await Promise.all(
+      batch.map(async (item) => ({
+        item,
+        attempt: await Result.tryPromise({
+          try: async () => {
+            const attempted = await buildPlainTextItem({
+              decisionOf: (value) => {
+                switch (value.type) {
+                  case "built":
+                  case "detail-unavailable":
+                    return value.decision;
+                  case "unkeyable":
+                    return undefined;
+                  default:
+                    value satisfies never;
+                    return panic("Unhandled source build outcome");
+                }
+              },
+              adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+
+              rawListing: JSON.stringify(item),
+              build: async () =>
+                await buildCzRegionalDecision(item, effectiveSignal),
+            });
+            return attempted.type === "item_build_failed"
+              ? attempted
+              : attempted.value;
+          },
+          // The adapter's own refusal and a read the budget cut short
+          // are recovered from below. The caller's cancellation ends
+          // the page as a cancelled listing request does, and any other
+          // failure halts the page.
+          catch: (cause) => {
+            if (
+              cause instanceof UnpersistableDecisionFieldError ||
+              cause instanceof AdapterFetchError
+            ) {
+              return cause;
+            }
+            if (effectiveSignal.aborted) {
+              return new DOMException("Page read ended", "AbortError");
+            }
+            return panic("CZ regional decision assembly failed", cause);
+          },
+        }),
+      })),
+    );
+    signal?.throwIfAborted();
+    for (const { item, attempt } of built) {
+      if (Result.isError(attempt) && attempt.error instanceof DOMException) {
+        deferred += 1;
+        await pushListingRow(item);
+        continue;
+      }
+      if (Result.isError(attempt)) {
+        if (
+          attempt.error instanceof AdapterFetchError &&
+          !(attempt.error instanceof PublisherPageError)
+        ) {
+          throw attempt.error;
+        }
+        // One row the adapter refuses must not fail the page and pin the
+        // cursor on it. The listing is stored as a listing-only row, so
+        // the identity is held and the reconciliation asks for the
+        // document again (and parks the refusal) instead of losing it.
+        const failureCountBeforeFallback = refused;
+        observeItemBuildFailure(attempt.error, item.jednaciCislo ?? undefined);
+        await pushListingRow(item);
+        if (refused === failureCountBeforeFallback) {
+          refused++;
+        }
+        continue;
+      }
+      const outcome = attempt.value;
+      if (outcome.type === "item_build_failed") {
+        refused++;
+        decisions.push(outcome.decision);
+        continue;
+      }
+      // A crawl keeps a listed row whose document did not answer: the
+      // observation is durable and `isListingOnly` keeps the document
+      // in what a later reconciliation asks for again.
+      if (outcome.type === "unkeyable") {
+        recordUnkeyableRow(item);
+        continue;
+      }
+      decisions.push(outcome.decision);
+    }
+  }
+  return { decisions, refused, deferred };
+};
+
 export const czRegionalAdapter = defineSourceAdapter({
   documentStage: "inline",
   key: ADAPTER_KEYS.CZ_REGIONAL,
@@ -2114,116 +2291,17 @@ export const czRegionalAdapter = defineSourceAdapter({
           });
         }
         const { items, failures } = readCzRegionalListingItems(json.items);
-        let refused = failures;
 
-        // One document fetch per listed row, in batches of
-        // FINALDOC_CONCURRENCY, then the row and its document are assembled
-        // together: the envelope has to hold both, so the listing row cannot
-        // be turned into a decision before its document is in hand.
-        //
-        // Once the page's read budget passes, every row not yet read (the
-        // rows of the batch it interrupts and of every batch after it) is
-        // stored listing-only with no request, the reconciliation asks for
-        // their documents, and the cursor moves on.
-        const decisions: IngestionResult[] = [];
-        let deferred = 0;
-        const recordUnkeyableRow = (item: CzRegionalApiItem): void => {
-          refused += 1;
-          observeItemBuildFailure(
-            new AdapterFetchError({
-              adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-              cursor,
-              message: "Listing row has no decision identity",
-            }),
-            item.jednaciCislo ?? undefined,
-          );
-        };
-        const pushListingRow = (item: CzRegionalApiItem): void => {
-          const listed = assembleCzRegionalDecision({
-            item,
-            document: null,
-            chain: null,
-          });
-          if (listed.type === "unkeyable") {
-            recordUnkeyableRow(item);
-            return;
-          }
-          decisions.push(listed.decision);
-        };
-        for (let i = 0; i < items.length; i += FINALDOC_CONCURRENCY) {
-          const batch = items.slice(i, i + FINALDOC_CONCURRENCY);
-          if (readBudgetSpent()) {
-            deferred += batch.length;
-            for (const item of batch) {
-              pushListingRow(item);
-            }
-            continue;
-          }
-          const built = await Promise.all(
-            batch.map(async (item) => ({
-              item,
-              attempt: await Result.tryPromise({
-                try: async () =>
-                  await buildCzRegionalDecision(item, effectiveSignal),
-                // The adapter's own refusal and a read the budget cut short
-                // are recovered from below. The caller's cancellation ends
-                // the page as a cancelled listing request does, and any other
-                // failure halts the page.
-                catch: (cause) => {
-                  if (
-                    cause instanceof UnpersistableDecisionFieldError ||
-                    cause instanceof AdapterFetchError
-                  ) {
-                    return cause;
-                  }
-                  if (effectiveSignal.aborted) {
-                    return new DOMException("Page read ended", "AbortError");
-                  }
-                  return panic("CZ regional decision assembly failed", cause);
-                },
-              }),
-            })),
-          );
-          signal?.throwIfAborted();
-          for (const { item, attempt } of built) {
-            if (
-              Result.isError(attempt) &&
-              attempt.error instanceof DOMException
-            ) {
-              deferred += 1;
-              pushListingRow(item);
-              continue;
-            }
-            if (Result.isError(attempt)) {
-              if (
-                attempt.error instanceof AdapterFetchError &&
-                !(attempt.error instanceof PublisherPageError)
-              ) {
-                throw attempt.error;
-              }
-              // One row the adapter refuses must not fail the page and pin the
-              // cursor on it. The listing is stored as a listing-only row, so
-              // the identity is held and the reconciliation asks for the
-              // document again (and parks the refusal) instead of losing it.
-              refused += 1;
-              observeItemBuildFailure(
-                attempt.error,
-                item.jednaciCislo ?? undefined,
-              );
-              pushListingRow(item);
-              continue;
-            }
-            const outcome = attempt.value;
-            // A crawl keeps a listed row whose document did not answer: the
-            // observation is durable and `isListingOnly` keeps the document
-            // in what a later reconciliation asks for again.
-            if (outcome.type === "unkeyable") {
-              recordUnkeyableRow(item);
-              continue;
-            }
-            decisions.push(outcome.decision);
-          }
-        }
+        const { decisions, refused, deferred } = await buildCzRegionalPageItems(
+          {
+            items,
+            cursor,
+            initialFailures: failures,
+            readBudgetSpent,
+            effectiveSignal,
+            signal,
+          },
+        );
         if (deferred > 0) {
           logger.warn("case_law.ingestion.document_budget_exhausted", {
             adapterKey: ADAPTER_KEYS.CZ_REGIONAL,

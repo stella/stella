@@ -42,6 +42,7 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import {
   fetchPublisher,
@@ -95,6 +96,7 @@ import {
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -1451,7 +1453,7 @@ const ecjDecisionFromParts = ({
   const judges = facts === undefined ? [] : noticeJudges(facts);
   const converterVersion = ecjConverterVersion(html);
 
-  return {
+  return plainTextIngestionResult({
     caseNumber,
     sourceDocumentId: ecjSourceDocumentId(celex, language),
     // What every row this adapter wrote before it stated an id was stored
@@ -1510,7 +1512,7 @@ const ecjDecisionFromParts = ({
     // in the row would lead a replay back to.
     sourceRaw: encodeSourceRawEnvelope(parts),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 /**
@@ -2951,6 +2953,7 @@ export const euEcjAdapter = defineSourceAdapter({
         });
 
         const decisions: IngestionResult[] = [];
+        let failed = 0;
         const completedVariants = new Set<string>();
 
         // 2. Fetch and parse each language variant
@@ -2965,7 +2968,20 @@ export const euEcjAdapter = defineSourceAdapter({
             continue;
           }
 
-          const decision = await buildDecision(binding, abortSignal);
+          const attempted = await buildPlainTextItem({
+            decisionOf: (value) => value,
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+
+            rawListing: JSON.stringify(binding),
+            build: async () => await buildDecision(binding, abortSignal),
+          });
+          if (attempted.type === "item_build_failed") {
+            failed++;
+            decisions.push(attempted.decision);
+            completedVariants.add(variantKey);
+            continue;
+          }
+          const decision = attempted.value;
           if (!decision) {
             continue;
           }
@@ -2977,7 +2993,11 @@ export const euEcjAdapter = defineSourceAdapter({
         // If the page was aborted mid-iteration, retry
         // the same day on the next run instead of skipping it.
         if (abortSignal.aborted) {
-          return { decisions, nextCursor: dateFrom };
+          return {
+            decisions,
+            nextCursor: dateFrom,
+            itemBuildFailures: { type: "item_build_failed", count: failed },
+          };
         }
 
         // Advance cursor to next day; stop if
@@ -2989,7 +3009,11 @@ export const euEcjAdapter = defineSourceAdapter({
         // a full historical re-scan).
         const nextCursor = nextDate <= today ? nextDate : today;
 
-        return { decisions, nextCursor };
+        return {
+          decisions,
+          nextCursor,
+          itemBuildFailures: { type: "item_build_failed", count: failed },
+        };
       },
       catch: (cause) => {
         const error = adapterCatch(ADAPTER_KEYS.EU_ECJ, cursor)(cause);

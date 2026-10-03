@@ -47,6 +47,7 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   createPagePaginatedFetch,
   defineWalkKind,
@@ -79,6 +80,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1542,7 +1544,7 @@ export const buildPlDecision = ({
     .map((referenced) => referenced.caseNumber?.trim() ?? "")
     .filter((caseNo) => caseNo.length > 0);
 
-  return {
+  return plainTextIngestionResult({
     caseNumber,
     ...(firstPublisherIdentifier === undefined
       ? {}
@@ -1636,7 +1638,7 @@ export const buildPlDecision = ({
     documentAst,
     sourceRaw: encodeSourceRawEnvelope(rawParts),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 /**
@@ -1716,12 +1718,37 @@ const parseItemWithDetail = async (
   // Without a detail record the decision is built from the dump row at the
   // `dump` source tier, public wherever the dump carries its text; a later
   // read of the detail upgrades the row (see refresh-policy.ts).
-  return buildPlItem({
-    listingItem,
-    detail: fetched.type === "detail" ? fetched.detail : null,
-    rawParts: rawPartsOf(RAW_PART.LISTING_DUMP, raw, fetched),
-    detailReadState: detailReadStateOf(fetched),
+  const outcome = await buildPlainTextItem({
+    adapterKey: ADAPTER_KEYS.PL_COURTS,
+
+    rawListing: JSON.stringify(raw),
+    decisionOf: (item) => {
+      if (item === null) {
+        return undefined;
+      }
+      switch (item.type) {
+        case "decision":
+          return item.decision;
+        case "supplement":
+          return item.supplement.document;
+        default:
+          item satisfies never;
+          return panic("Unhandled PL courts ingestion item");
+      }
+    },
+    build: async () =>
+      await Promise.resolve(
+        buildPlItem({
+          listingItem,
+          detail: fetched.type === "detail" ? fetched.detail : null,
+          rawParts: rawPartsOf(RAW_PART.LISTING_DUMP, raw, fetched),
+          detailReadState: detailReadStateOf(fetched),
+        }),
+      ),
   });
+  return outcome.type === "built"
+    ? outcome.value
+    : { type: "decision", decision: outcome.decision };
 };
 
 /**

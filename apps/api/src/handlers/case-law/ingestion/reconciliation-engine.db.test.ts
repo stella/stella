@@ -56,6 +56,7 @@ import type {
   ReconciliationSlicePageOptions,
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
@@ -1422,17 +1423,19 @@ test("a settled slice inside the recheck window is left alone", async () => {
  * both disagreed with the column, and the test would prove nothing.
  */
 const storedMetadata = (isListingOnly: boolean): Record<string, unknown> =>
-  sanitizeResult({
-    caseNumber: FIXTURE_CASE_NUMBERS[0],
-    court: FIXTURE_COURT,
-    country: "CZE",
-    language: FIXTURE_LANGUAGE,
-    isListingOnly,
-    metadata: {},
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    rawHash: "0".repeat(64),
-    documentAst: EMPTY_AST,
-  } satisfies IngestionResult).metadata;
+  sanitizeResult(
+    plainTextIngestionResult({
+      caseNumber: FIXTURE_CASE_NUMBERS[0],
+      court: FIXTURE_COURT,
+      country: "CZE",
+      language: FIXTURE_LANGUAGE,
+      isListingOnly,
+      metadata: {},
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      rawHash: "0".repeat(64),
+      documentAst: EMPTY_AST,
+    }) satisfies IngestionResult,
+  ).metadata;
 
 type SeedDecisionInput = {
   sourceId: SafeId<"caseLawSource">;
@@ -2020,17 +2023,18 @@ test("a row stating a declared reason for holding no document is held on that re
 });
 
 /** A decision with no document, as an adapter hands one over. */
-const plainDecision = (sourceDocumentId: string): IngestionResult => ({
-  caseNumber: sourceDocumentId,
-  sourceDocumentId,
-  court: FIXTURE_COURT,
-  country: "CZE",
-  language: FIXTURE_LANGUAGE,
-  metadata: {},
-  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  rawHash: sourceDocumentId.padEnd(64, "0").slice(0, 64),
-  documentAst: EMPTY_AST,
-});
+const plainDecision = (sourceDocumentId: string): IngestionResult =>
+  plainTextIngestionResult({
+    caseNumber: sourceDocumentId,
+    sourceDocumentId,
+    court: FIXTURE_COURT,
+    country: "CZE",
+    language: FIXTURE_LANGUAGE,
+    metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash: sourceDocumentId.padEnd(64, "0").slice(0, 64),
+    documentAst: EMPTY_AST,
+  });
 
 test("a held row stating a recheck value is asked for again, and what its page adds is written beside it", async () => {
   // The competition authority attaches the court rulings on a decision's

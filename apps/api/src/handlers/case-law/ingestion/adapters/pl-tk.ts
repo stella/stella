@@ -1,5 +1,6 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+import { panic, Result } from "better-result";
 /**
  * Polish Constitutional Tribunal (Trybunał Konstytucyjny) adapter.
  *
@@ -41,8 +42,6 @@
  * are the keys a SAOS row and a row from this portal share when they describe
  * the same ruling, stored as `rulingKeys` on the rows of both.
  */
-
-import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
@@ -80,6 +79,7 @@ import type {
   StoredRawReparseOutcome,
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   PL_TK_RULING_FAMILY,
   plConstitutionalTribunalRulingKeys,
@@ -111,6 +111,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -966,7 +967,7 @@ export const assemblePlTkDecision = ({
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
   const hasText = document !== null && deciding.type === "stated";
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
     ...(statedCaseNumber === undefined
       ? { caseNumberIsPlaceholder: true }
@@ -1019,7 +1020,7 @@ export const assemblePlTkDecision = ({
     documentAst,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
   return hasText
     ? { type: "built", decision }
     : { type: "detail-unavailable", decision };
@@ -1420,6 +1421,7 @@ const plTkFetchPage = async (
     return listed;
   }
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   const pageCache = new Map<string, string>();
   let consumed = 0;
   for (let offset = window.from; offset >= window.to; offset -= 1) {
@@ -1435,13 +1437,42 @@ const plTkFetchPage = async (
         ),
       );
     }
-    const built = await buildPlTkDecision({
-      cursor: label,
-      pageCache,
-      row,
-      session: listing.value.session,
-      signal,
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_TK,
+
+      rawListing: JSON.stringify(row),
+      decisionOf: (result) => {
+        if (result.isErr()) {
+          return undefined;
+        }
+        const outcome = result.value;
+        switch (outcome.type) {
+          case "built":
+          case "detail-unavailable":
+            return outcome.decision;
+          case "unkeyable":
+            return undefined;
+          default:
+            outcome satisfies never;
+            return panic("Unhandled pl-tk decision projection");
+        }
+      },
+      build: async () =>
+        await buildPlTkDecision({
+          cursor: label,
+          pageCache,
+          row,
+          session: listing.value.session,
+          signal,
+        }),
     });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      consumed += 1;
+      continue;
+    }
+    const built = captured.value;
     if (Result.isError(built)) {
       return built;
     }
@@ -1467,6 +1498,14 @@ const plTkFetchPage = async (
 
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: listed.value.url,
     nextCursor: encodePlTkCursor({
       stage,

@@ -42,6 +42,7 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -66,6 +67,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -667,7 +669,7 @@ const buildCzNsDecisionFromPages = ({
   });
   const publishedSummary = summaryOfLabels(meta);
 
-  return {
+  return plainTextIngestionResult({
     caseNumber,
     ...(firstPublisherIdentifier === undefined
       ? {}
@@ -727,7 +729,7 @@ const buildCzNsDecisionFromPages = ({
       [CZ_NS_RAW_PART.PRINT]: printHtml,
     }),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 /**
@@ -1469,7 +1471,31 @@ export const czNsAdapter = defineSourceAdapter({
           const caseNumber = entryField(entry, "znacka") ?? "";
 
           try {
-            const built = await buildCzNsDecision({ caseNumber, unid }, signal);
+            const attempted = await buildPlainTextItem({
+              decisionOf: (value) => {
+                switch (value.type) {
+                  case "built":
+                    return value.decision;
+                  case "unkeyable":
+                  case "detail-unavailable":
+                    return undefined;
+                  default:
+                    value satisfies never;
+                    return panic("Unhandled source build outcome");
+                }
+              },
+              adapterKey: ADAPTER_KEYS.CZ_NS,
+
+              rawListing: JSON.stringify(entry),
+              build: async () =>
+                await buildCzNsDecision({ caseNumber, unid }, signal),
+            });
+            if (attempted.type === "item_build_failed") {
+              refused++;
+              decisions.push(attempted.decision);
+              continue;
+            }
+            const built = attempted.value;
 
             switch (built.type) {
               case "built": {

@@ -32,6 +32,7 @@ import {
 import type {
   EmptyAst,
   IngestionResult,
+  SyncPage,
   ListingIdentity,
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
@@ -49,6 +50,7 @@ import {
   NalusRateLimitedError,
   type NalusRequestInit,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   adapterCatch,
   hashContent,
@@ -73,7 +75,11 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
+import type {
+  RawIngestionResult,
+  DecisionJudgeInput,
+} from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1045,7 +1051,7 @@ const parseDecisionPage = ({
   // across parser changes. Matches NSS adapter pattern.
   const raw = `${sourceDocumentId}|${parsed.caseNumber}|${parsed.decisionDate ?? ""}`;
 
-  return {
+  return plainTextIngestionResult({
     caseNumber: parsed.caseNumber,
     sourceDocumentId,
     sourceDocumentIdAliases: nalusIdentities({
@@ -1104,7 +1110,7 @@ const parseDecisionPage = ({
     documentAst,
     sourceRaw: html,
     sourceRawContentType: "text/html",
-  };
+  });
 };
 
 type HistoricalCursor = {
@@ -2111,7 +2117,7 @@ export const buildCzUsDecision = ({
     recordCard.type === CZ_US_RECORD_CARD_STATE.READ
       ? recordCard.html
       : undefined;
-  const decision = parseDecisionPage({
+  const decision: RawIngestionResult | null = parseDecisionPage({
     html: textHtml,
     recordCard: parsedRecordCard(recordCard),
     sourceUrl: listed.sourceUrl,
@@ -2160,7 +2166,7 @@ export const buildCzUsDecision = ({
       abstractHtml,
     }),
   );
-  return decision;
+  return plainTextIngestionResult(decision);
 };
 
 /** A page beside the document that the court did not answer for. */
@@ -2361,7 +2367,7 @@ const listedOnlyDecision = (
     publisherCourt: CZ_US_PUBLISHER_COURT,
     sourceDocumentId: listed.sourceDocumentId,
   });
-  return {
+  return plainTextIngestionResult({
     caseNumber: listed.caseNumber,
     caseNumberIsPlaceholder: listed.listingDocketMissing === true,
     isListingOnly: true,
@@ -2413,33 +2419,52 @@ const listedOnlyDecision = (
       encodeSourceRawEnvelope({ listing: listed.listingHtml }),
     sourceRawContentType:
       rawSource?.sourceRawContentType ?? SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
+};
+
+type CzUsPageItems = {
+  decisions: IngestionResult[];
+  itemBuildFailures: NonNullable<SyncPage["itemBuildFailures"]>;
 };
 
 const fetchListedDecisions = async (
   listed: readonly ListedDecision[],
   session: NalusSession,
   signal: AbortSignal | undefined,
-): Promise<IngestionResult[]> => {
+): Promise<CzUsPageItems> => {
   const decisions: IngestionResult[] = [];
+  let failed = 0;
   for (let start = 0; start < listed.length; start += DOCUMENT_CONCURRENCY) {
     const batch = listed.slice(start, start + DOCUMENT_CONCURRENCY);
-    decisions.push(
-      // The crawl keeps a listing-only row for a record NALUS serves no text
-      // for: its cursor moves past that record either way, so the observation
-      // is worth more than nothing. Only the reconciliation refuses it.
-      ...(await Promise.all(
-        batch.map(
-          async (item) =>
-            (await fetchListedDecision(item, session, signal)).decision,
-        ),
-      )),
+    const built = await Promise.all(
+      batch.map(
+        async (item) =>
+          await buildPlainTextItem({
+            decisionOf: (value) => value,
+            adapterKey: ADAPTER_KEYS.CZ_US,
+
+            rawListing: item.listingHtml,
+            build: async () =>
+              (await fetchListedDecision(item, session, signal)).decision,
+          }),
+      ),
     );
+    for (const item of built) {
+      if (item.type === "item_build_failed") {
+        failed++;
+        decisions.push(item.decision);
+        continue;
+      }
+      decisions.push(item.value);
+    }
     if (start + DOCUMENT_CONCURRENCY < listed.length) {
       await Bun.sleep(100);
     }
   }
-  return decisions;
+  return {
+    decisions,
+    itemBuildFailures: { type: "item_build_failed", count: failed },
+  };
 };
 
 // ── Reconciliation ───────────────────────────────────────
@@ -2695,7 +2720,7 @@ const reparseStoredRaw = (
   const nalusRecordId = stored.metadata["nalusRecordId"];
   const nalusSz = stored.metadata["nalusSz"];
   const detailHtml = parts?.["detail"];
-  const decision = parseDecisionPage({
+  const decision: RawIngestionResult | null = parseDecisionPage({
     html: documentHtml,
     recordCard: parsedRecordCard(
       detailHtml === undefined
@@ -2744,7 +2769,7 @@ const reparseStoredRaw = (
   }
   decision.sourceRaw = raw;
   decision.sourceRawContentType = stored.contentType ?? "text/html";
-  return { type: "parsed", result: decision };
+  return { type: "parsed", result: plainTextIngestionResult(decision) };
 };
 
 // ── Adapter ──────────────────────────────────────────────
@@ -3046,7 +3071,7 @@ export const czUsAdapter = defineSourceAdapter({
           };
         }
 
-        const decisions = await fetchListedDecisions(
+        const { decisions, itemBuildFailures } = await fetchListedDecisions(
           page.listed,
           page.session,
           signal,
@@ -3054,6 +3079,7 @@ export const czUsAdapter = defineSourceAdapter({
         if (sliceComplete) {
           return {
             decisions,
+            itemBuildFailures,
             nextCursor: makeCursor({
               ...state,
               pass: CRAWL_PASS.VERIFY,
@@ -3066,6 +3092,7 @@ export const czUsAdapter = defineSourceAdapter({
         }
         return {
           decisions,
+          itemBuildFailures,
           nextCursor: makeCursor({
             ...state,
             page: state.page + 1,

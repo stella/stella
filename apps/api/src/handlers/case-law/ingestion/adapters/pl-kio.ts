@@ -1,5 +1,6 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+import { Result, panic } from "better-result";
 /**
  * Polish public-procurement rulings from the UZP decision database.
  *
@@ -35,8 +36,6 @@
  * separate id spaces; {@link plProcurementRulingKeys} is the relationship
  * between their rows, and nothing here merges or deletes either side.
  */
-
-import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
 
 import {
@@ -84,6 +83,7 @@ import type {
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -99,6 +99,8 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -712,7 +714,7 @@ export const normalizeProcurementDocket = (docket: string): string => {
 
 /** What the ruling key is read from: stored columns only. */
 type ProcurementRulingKeyInput = Pick<
-  IngestionResult,
+  RawIngestionResult,
   "caseNumber" | "identifiers" | "court" | "decisionDate" | "decisionType"
 >;
 
@@ -979,7 +981,7 @@ export const assemblePlKioDecision = ({
     decisionType,
   };
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     ...keyed,
     ...(statedCaseNumber === undefined
       ? { caseNumberIsPlaceholder: true }
@@ -1032,7 +1034,7 @@ export const assemblePlKioDecision = ({
     documentAst,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 
   return listingOnly
     ? { type: "detail-unavailable", decision }
@@ -1461,7 +1463,11 @@ const advanceToPopulatedMonth = async (
     : Result.ok(last);
 };
 
-type Built = { decisions: IngestionResult[]; aborted: boolean };
+type Built = {
+  decisions: IngestionResult[];
+  itemBuildFailures: number;
+  aborted: boolean;
+};
 
 const buildRows = async (
   rows: readonly PlKioListingItem[],
@@ -1469,11 +1475,25 @@ const buildRows = async (
   signal?: AbortSignal,
 ): Promise<Result<Built, AdapterFetchError>> => {
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   for (const item of rows) {
     if (signal?.aborted) {
-      return Result.ok({ decisions, aborted: true });
+      return Result.ok({ decisions, itemBuildFailures, aborted: true });
     }
-    const attempted = await fetchPlKioDecision({ cursor, item, signal });
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_KIO,
+
+      rawListing: JSON.stringify(item),
+      decisionOf: (result) =>
+        result.isOk() ? result.value.decision : undefined,
+      build: async () => await fetchPlKioDecision({ cursor, item, signal }),
+    });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      continue;
+    }
+    const attempted = captured.value;
     if (Result.isError(attempted)) {
       return attempted;
     }
@@ -1489,7 +1509,7 @@ const buildRows = async (
       }
     }
   }
-  return Result.ok({ decisions, aborted: false });
+  return Result.ok({ decisions, itemBuildFailures, aborted: false });
 };
 
 /**
@@ -1528,9 +1548,17 @@ const fetchTailPage = async (
   if (Result.isError(built)) {
     return built;
   }
-  const { decisions, aborted } = built.value;
+  const { decisions, itemBuildFailures, aborted } = built.value;
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: listed.value.url,
     nextCursor: aborted
       ? cursor
@@ -1558,11 +1586,19 @@ const plKioFetchPage = async (
   if (Result.isError(built)) {
     return built;
   }
-  const { decisions, aborted } = built.value;
+  const { decisions, itemBuildFailures, aborted } = built.value;
   if (aborted) {
     // Replay the page rather than checkpoint past rows never reached.
     return Result.ok({
       decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
       sourceUrl: listed.url,
       nextCursor: encodePlKioCursor(cursor),
     });
@@ -1571,6 +1607,14 @@ const plKioFetchPage = async (
   if (reached < listed.total) {
     return Result.ok({
       decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
       sourceUrl: listed.url,
       nextCursor: encodePlKioCursor({ ...cursor, offset: reached }),
     });
@@ -1578,6 +1622,14 @@ const plKioFetchPage = async (
   const next = monthAfter(cursor.month);
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: listed.url,
     nextCursor: encodePlKioCursor(
       next === null
