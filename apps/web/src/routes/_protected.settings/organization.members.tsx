@@ -37,6 +37,7 @@ import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { useLocale } from "@/i18n/formatting-context";
 import { roleOptions } from "@/lib/auth-queries";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   useCancelInvitation,
   useInviteMember,
@@ -350,11 +351,11 @@ function Members() {
                                       type: "success",
                                     });
                                   },
-                                  onError: () => {
-                                    stellaToast.add({
-                                      title: t("errors.actionFailed"),
-                                      type: "error",
-                                    });
+                                  onError: (error) => {
+                                    notifyUserError(
+                                      error,
+                                      t("errors.actionFailed"),
+                                    );
                                   },
                                 },
                               );

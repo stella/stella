@@ -567,6 +567,19 @@ export const LIMITS = {
   legislationListPageSizeDefault: 20,
   legislationListPageSizeMax: 100,
   publicStatuteSearchPageSizeMax: PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX,
+  legislationSearchTextBytes: {
+    documentId: 36,
+    eli: 512 * 4,
+    slug: 256 * 4,
+    title: 4096,
+    country: 3 * 4,
+    language: 8 * 4,
+    documentType: 128 * 4,
+    status: 32 * 4,
+    effectiveDate: 32,
+    sourceUrl: 2048 * 4,
+    headline: 4096,
+  },
   /** Rows per list on the law home's legislation shelf. */
   legislationShelfPerList: 5,
   /** Days either side of today the legislation shelf looks at. */

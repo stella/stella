@@ -4,6 +4,8 @@ export type ScanFinding = {
   rule: string;
   severity: ScanVerdict;
   message: string;
+  /** See `Match.failure`. */
+  failure?: unknown;
 };
 
 export type ScanResult = {

@@ -53,6 +53,8 @@
 // Lift: gh variable delete STELLA_MERGE_HOLD --repo stella/stella
 
 import { panic, Result, TaggedError } from "better-result";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { findMigrationIdentityViolation } from "./check-migration-order";
@@ -804,10 +806,25 @@ const selectorVariables = (jobs: readonly FastRequiredJob[]): string[] => [
   ),
 ];
 
-const ratchetFreshnessFailure = (
-  definitions: unknown,
-  changedPaths: ReadonlySet<string>,
-): string | null => {
+export class RatchetRecheckError extends TaggedError("RatchetRecheckError")<{
+  message: string;
+}> {}
+
+type RatchetFreshnessFailureOptions = {
+  definitions: unknown;
+  changedPaths: ReadonlySet<string>;
+  pullFiles: readonly string[];
+  pullRequest: PullRequestSnapshot;
+  recheckRatchet: CheckGreenResultFreshnessOptions["recheckRatchet"];
+};
+
+const ratchetFreshnessFailure = ({
+  definitions,
+  changedPaths,
+  pullFiles,
+  pullRequest: { headSha, baseRefName },
+  recheckRatchet,
+}: RatchetFreshnessFailureOptions): string | null => {
   if (
     !Array.isArray(definitions) ||
     definitions.length === 0 ||
@@ -818,10 +835,24 @@ const ratchetFreshnessFailure = (
   const ratchetChanges = definitions.filter((filename) =>
     changedPaths.has(filename),
   );
-  if (ratchetChanges.length > 0) {
-    return `main changed the ratchet since the green run: ${ratchetChanges.join(", ")}`;
+  if (ratchetChanges.length === 0) {
+    return null;
   }
-  return null;
+  // The recheck runs the base's checker; a PR that edits the checker itself
+  // needs CI, which runs the merged one.
+  if (pullFiles.some((filename) => definitions.includes(filename))) {
+    return `main changed the ratchet since the green run (${ratchetChanges.join(", ")}) and this PR changes it too`;
+  }
+  const recheck = recheckRatchet({ headSha, baseRefName });
+  if (recheck.isOk()) {
+    return null;
+  }
+  return (
+    `main changed the ratchet since the green run (${ratchetChanges.join(", ")}) ` +
+    `and the ratchet does not pass on ${baseRefName} merged with this head: ${
+      recheck.error.message
+    }`
+  );
 };
 
 type CheckGreenResultFreshnessOptions = {
@@ -844,6 +875,13 @@ type CheckGreenResultFreshnessOptions = {
   // main changed one applied different rules than the merge queue will. Read
   // from the base branch: an older checkout's copy may miss a newer helper.
   readRatchetDefinitionPaths: (baseRefName: string) => unknown;
+  // Measures the ratchet on the base branch tip merged with this head, as the
+  // merge queue will, with the base's checker: a definition change on main
+  // costs one local ratchet run instead of a full CI re-run.
+  recheckRatchet: (input: {
+    headSha: string;
+    baseRefName: string;
+  }) => Result<void, RatchetRecheckError>;
 };
 
 export const checkGreenResultFreshness = ({
@@ -857,6 +895,7 @@ export const checkGreenResultFreshness = ({
   runSelector,
   readRunJobs,
   readRatchetDefinitionPaths,
+  recheckRatchet,
 }: CheckGreenResultFreshnessOptions) => {
   if (jump || isReleasePullRequest(pullRequest)) {
     return Result.ok();
@@ -941,14 +980,17 @@ export const checkGreenResultFreshness = ({
       changedPaths.add(file["previous_filename"]);
     }
   }
-  const ratchetFailure = ratchetFreshnessFailure(
-    readRatchetDefinitionPaths(pullRequest.baseRefName),
+  const pullFiles = readPullFiles();
+  const ratchetFailure = ratchetFreshnessFailure({
+    definitions: readRatchetDefinitionPaths(pullRequest.baseRefName),
     changedPaths,
-  );
+    pullFiles,
+    pullRequest,
+    recheckRatchet,
+  });
   if (ratchetFailure !== null) {
     return refuse(ratchetFailure);
   }
-  const pullFiles = readPullFiles();
   const overlap = pullFiles.filter((filename) => changedPaths.has(filename));
   if (overlap.length > 0) {
     return refuse(
@@ -1268,19 +1310,16 @@ type GitHubGateway = {
   readRatchetDefinitionPaths: (baseRefName: string) => unknown;
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
-  // Both writes pin the head every gate was evaluated against, so GitHub
+  // Writes pin the head every gate was evaluated against, so GitHub
   // rejects them server-side if it moved since: the head-stability assertion
   // is enforced by the write itself, not by the gap between the last read and
-  // it. `merge` returns the squash commit; `armMergeWhenReady` returns what
-  // GitHub did: enabled auto-merge, or added the pull request to the queue.
+  // it. Queue handoffs share one mutation-and-verification boundary.
   merge: (input: { expectedHeadSha: string }) => string;
-  armMergeWhenReady: (input: { expectedHeadSha: string }) => string;
-  // Preserve the mutation's jump receipt while the fresh queue listing
-  // catches up. Only `readMergeQueue` can confirm first place.
-  enqueueWithJump: (input: {
-    pullRequestId: string;
-    expectedHeadSha: string;
-  }) => EnqueuedMergeQueueEntry;
+  readArmState: () => unknown;
+  mutateHandoff: (
+    query: string,
+    variables: { id: string; sha: string },
+  ) => unknown;
   readMergeQueue: (branch: string) => readonly MergeQueueEntrySnapshot[];
   readMergeQueueRemovals: () => readonly MergeQueueRemoval[];
   readMergeGroup: (groupSha: string) => MergeGroupRecord;
@@ -1356,7 +1395,6 @@ export type MergeWhenReadyAction =
   // back, which is the opposite of a jump. `armedSince` is set when an
   // auto-merge armed earlier will do exactly that.
   | { kind: "jump-waits-for-checks"; armedSince: string | null }
-  | { kind: "already-armed"; enabledAt: string }
   // `verifyFront`: a jump was wanted, so the place it already holds must be
   // the front of the queue.
   | { kind: "already-queued"; entryId: string; verifyFront: boolean };
@@ -1391,9 +1429,6 @@ export const mergeWhenReadyAction = ({
           armedSince: handoff.status === "armed" ? handoff.enabledAt : null,
         };
   }
-  if (handoff.status === "armed") {
-    return { kind: "already-armed", enabledAt: handoff.enabledAt };
-  }
   return { kind: "arm" };
 };
 
@@ -1408,6 +1443,259 @@ type EnqueuedMergeQueueEntry = Pick<
   MergeQueueEntrySnapshot,
   "position" | "jump" | "state"
 >;
+
+export class ArmVerificationError extends TaggedError("ArmVerificationError")<{
+  message: string;
+}> {}
+
+const armState = (value: unknown) => {
+  const raw = readRecord(value, "arm verification pull request");
+  return {
+    id: readString(raw, "id"),
+    headSha: readString(raw, "headRefOid"),
+    updatedAt: readTimestamp(raw, "updatedAt"),
+    autoMerge:
+      raw["autoMergeRequest"] === null
+        ? null
+        : {
+            enabledAt: readTimestamp(
+              readRecord(raw["autoMergeRequest"], "autoMergeRequest"),
+              "enabledAt",
+            ),
+          },
+    queue:
+      raw["mergeQueueEntry"] === null
+        ? null
+        : readRecord(raw["mergeQueueEntry"], "mergeQueueEntry"),
+  };
+};
+const queueReceipt = (
+  raw: Record<string, unknown>,
+  expectedHeadSha: string,
+) => {
+  if (readOptionalOid(raw["headCommit"], "queue head") !== expectedHeadSha) {
+    return null;
+  }
+  const position = raw["position"];
+  if (
+    typeof position !== "number" ||
+    !Number.isSafeInteger(position) ||
+    position < 1
+  ) {
+    return panic("Expected positive merge queue position");
+  }
+  return {
+    position,
+    jump: readBoolean(raw, "jump"),
+    state: readString(raw, "state"),
+  };
+};
+type ArmAndVerifyOptions = {
+  pullRequestId: string;
+  expectedHeadSha: string;
+  jump: boolean;
+  checksSucceeded: boolean;
+  readState: () => unknown;
+  readRemovals: () => readonly MergeQueueRemoval[];
+  mutate: GitHubGateway["mutateHandoff"];
+};
+
+type VerifyArmReceiptOptions = {
+  receipt: ReturnType<typeof armState>;
+  after: ReturnType<typeof armState>;
+  pullRequestId: string;
+  expectedHeadSha: string;
+  invalidatedAt: number;
+  mode: "existing" | "refreshed";
+};
+const refuseArm = (reason: string) =>
+  Result.err(new ArmVerificationError({ message: `NOT ARMED: ${reason}` }));
+const verifyArmReceipt = ({
+  receipt,
+  after,
+  pullRequestId,
+  expectedHeadSha,
+  invalidatedAt,
+  mode,
+}: VerifyArmReceiptOptions) => {
+  if (
+    receipt.id !== pullRequestId ||
+    receipt.headSha !== expectedHeadSha ||
+    after.id !== pullRequestId ||
+    after.headSha !== expectedHeadSha
+  ) {
+    return refuseArm("HEAD_MOVED_DURING_ARMING");
+  }
+  if (after.queue !== null) {
+    const entry = queueReceipt(after.queue, expectedHeadSha);
+    return entry === null
+      ? refuseArm("QUEUE_HEAD_MISMATCH")
+      : Result.ok({ kind: "queued", entry } as const);
+  }
+  const staleReason =
+    mode === "existing"
+      ? "AUTO_MERGE_STALE_DURING_VERIFICATION"
+      : "AUTO_MERGE_STALE_AFTER_ENABLE";
+  if (receipt.autoMerge === null || after.autoMerge === null) {
+    return refuseArm(
+      mode === "existing" ? staleReason : "AUTO_MERGE_ABSENT_AFTER_ENABLE",
+    );
+  }
+  const enabledAt = Date.parse(after.autoMerge.enabledAt);
+  const stale =
+    mode === "existing"
+      ? enabledAt <= Math.max(invalidatedAt, Date.parse(after.updatedAt))
+      : enabledAt < invalidatedAt;
+  if (after.autoMerge.enabledAt !== receipt.autoMerge.enabledAt || stale) {
+    return refuseArm(staleReason);
+  }
+  return Result.ok({
+    kind: "armed",
+    enabledAt: after.autoMerge.enabledAt,
+  } as const);
+};
+
+// This is the sole owner of auto-merge and enqueue mutations. A pre-existing
+// field predating a head update or queue removal is never evidence of arming.
+// Verify a trusted request or refresh it against one new read. PR updatedAt
+// conservatively bounds the latest head push;
+// commit dates cannot establish when a commit was actually pushed.
+export const armAndVerify = ({
+  pullRequestId,
+  expectedHeadSha,
+  jump,
+  checksSucceeded,
+  readState,
+  readRemovals,
+  mutate,
+}: ArmAndVerifyOptions) =>
+  Result.try(() => {
+    const before = armState(readState());
+    if (before.id !== pullRequestId || before.headSha !== expectedHeadSha) {
+      return refuseArm("HEAD_MOVED_DURING_ARMING");
+    }
+    if (before.queue !== null) {
+      const entry = queueReceipt(before.queue, expectedHeadSha);
+      return entry === null
+        ? refuseArm("QUEUE_HEAD_MISMATCH")
+        : Result.ok({ kind: "queued", entry } as const);
+    }
+    let lastRemoval = 0;
+    for (const removal of readRemovals()) {
+      lastRemoval = Math.max(
+        lastRemoval,
+        Date.parse(
+          readTimestamp({ removedAt: removal.removedAt }, "removedAt"),
+        ),
+      );
+    }
+    const invalidatedAt = Math.max(Date.parse(before.updatedAt), lastRemoval);
+    if (
+      !jump &&
+      before.autoMerge !== null &&
+      Date.parse(before.autoMerge.enabledAt) > invalidatedAt
+    ) {
+      return verifyArmReceipt({
+        receipt: before,
+        after: armState(readState()),
+        pullRequestId,
+        expectedHeadSha,
+        invalidatedAt,
+        mode: "existing",
+      });
+    }
+    if (jump || checksSucceeded) {
+      const result = readRecord(
+        mutate(
+          `mutation($id:ID!, $sha:GitObjectID!) {
+        enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$sha,jump:${jump ? "true" : "false"}}) {
+          mergeQueueEntry { id position jump state headCommit { oid } }
+        }
+      }`,
+          { id: pullRequestId, sha: expectedHeadSha },
+        ),
+        "enqueue response",
+      );
+      const receipt = queueReceipt(
+        readRecord(
+          readRecord(
+            readRecord(result["data"], "data")["enqueuePullRequest"],
+            "enqueue result",
+          )["mergeQueueEntry"],
+          "enqueue entry",
+        ),
+        expectedHeadSha,
+      );
+      const after = armState(readState());
+      if (after.id !== pullRequestId || after.headSha !== expectedHeadSha) {
+        return refuseArm("HEAD_MOVED_DURING_ARMING");
+      }
+      if (
+        receipt === null ||
+        (after.queue !== null &&
+          queueReceipt(after.queue, expectedHeadSha) === null)
+      ) {
+        return refuseArm("QUEUE_HEAD_MISMATCH");
+      }
+      if (!jump && after.queue === null) {
+        return refuseArm("QUEUE_ENTRY_ABSENT_AFTER_ENQUEUE");
+      }
+      return Result.ok({ kind: "queued", entry: receipt } as const);
+    }
+    if (before.autoMerge !== null) {
+      const disabled = readRecord(
+        mutate(
+          `mutation($id:ID!) { disablePullRequestAutoMerge(input:{pullRequestId:$id}) { pullRequest { id headRefOid autoMergeRequest { enabledAt } } } }`,
+          { id: pullRequestId, sha: expectedHeadSha },
+        ),
+        "disable response",
+      );
+      const cleared = readRecord(
+        readRecord(
+          readRecord(disabled["data"], "data")["disablePullRequestAutoMerge"],
+          "disable result",
+        )["pullRequest"],
+        "disabled pull request",
+      );
+      if (
+        cleared["id"] !== pullRequestId ||
+        cleared["headRefOid"] !== expectedHeadSha ||
+        cleared["autoMergeRequest"] !== null
+      ) {
+        return refuseArm("AUTO_MERGE_NOT_CLEARED");
+      }
+    }
+    const result = readRecord(
+      mutate(
+        `mutation($id:ID!, $sha:GitObjectID!) {
+      enablePullRequestAutoMerge(input:{pullRequestId:$id,expectedHeadOid:$sha,mergeMethod:SQUASH}) {
+        pullRequest { id headRefOid updatedAt autoMergeRequest { enabledAt } mergeQueueEntry { id position jump state headCommit { oid } } }
+      }
+    }`,
+        { id: pullRequestId, sha: expectedHeadSha },
+      ),
+      "enable response",
+    );
+    const receipt = armState(
+      readRecord(
+        readRecord(result["data"], "data")["enablePullRequestAutoMerge"],
+        "enable result",
+      )["pullRequest"],
+    );
+    return verifyArmReceipt({
+      receipt,
+      after: armState(readState()),
+      pullRequestId,
+      expectedHeadSha,
+      invalidatedAt,
+      mode: "refreshed",
+    });
+  })
+    .mapError(
+      (error) =>
+        new ArmVerificationError({ message: `NOT ARMED: ${error.message}` }),
+    )
+    .andThen((result) => result);
 
 export type QueuePlacement =
   | { status: "front"; position: number }
@@ -1624,6 +1912,125 @@ const readReleaseRecognition = (repo: string, pullNumber: number) => {
 };
 
 const runGhJson = (args: readonly string[]): unknown => JSON.parse(runGh(args));
+
+type RecheckRatchetOptions = {
+  repositoryRoot: string;
+  repo: string;
+  baseSha: string;
+  headSha: string;
+};
+
+/**
+ * Runs the base's own `ratchet.ts --check` against the base merged with the
+ * head. The pull request's tree is only measured as data (`--head` exports
+ * it), so none of its code runs; the checker runs from a worktree of the base
+ * commit under the ignored `.cache`, where it resolves this checkout's
+ * installed dependencies, with no credentials in its environment. The merge
+ * is built with plumbing, so no hook runs and no ref moves.
+ */
+const recheckRatchetOnBase = ({
+  repositoryRoot,
+  repo,
+  baseSha,
+  headSha,
+}: RecheckRatchetOptions): Result<void, RatchetRecheckError> => {
+  const git = (args: readonly string[], env?: Record<string, string>) =>
+    Bun.spawnSync(["git", ...args], {
+      cwd: repositoryRoot,
+      env: { ...process.env, ...env },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+  const fail = (step: string, result: { stderr: Buffer; stdout: Buffer }) =>
+    Result.err(
+      new RatchetRecheckError({
+        message: `${step} failed: ${(result.stderr.toString() || result.stdout.toString()).trim()}`,
+      }),
+    );
+  const fetched = git([
+    "fetch",
+    "--no-tags",
+    "--quiet",
+    `https://github.com/${repo}.git`,
+    baseSha,
+    headSha,
+  ]);
+  if (fetched.exitCode !== 0) {
+    return fail("fetching the base and head", fetched);
+  }
+  const merged = git(["merge-tree", "--write-tree", baseSha, headSha]);
+  const tree = /^([0-9a-f]{40})$/mu.exec(merged.stdout.toString())?.[1];
+  if (merged.exitCode !== 0 || tree === undefined) {
+    return fail("merging the base into the head", merged);
+  }
+  const committed = git(
+    [
+      "-c",
+      "commit.gpgSign=false",
+      "commit-tree",
+      tree,
+      "-p",
+      baseSha,
+      "-p",
+      headSha,
+      "-m",
+      "merge-bar ratchet recheck",
+    ],
+    {
+      GIT_AUTHOR_NAME: "merge-bar",
+      GIT_AUTHOR_EMAIL: "merge-bar@localhost",
+      GIT_COMMITTER_NAME: "merge-bar",
+      GIT_COMMITTER_EMAIL: "merge-bar@localhost",
+    },
+  );
+  if (committed.exitCode !== 0) {
+    return fail("committing the merged tree", committed);
+  }
+  const cacheDirectory = path.join(repositoryRoot, ".cache");
+  mkdirSync(cacheDirectory, { recursive: true });
+  const worktree = mkdtempSync(path.join(cacheDirectory, "merge-bar-ratchet-"));
+  const added = git([
+    "worktree",
+    "add",
+    "--detach",
+    "--quiet",
+    worktree,
+    baseSha,
+  ]);
+  if (added.exitCode !== 0) {
+    rmSync(worktree, { recursive: true, force: true });
+    return fail("creating the base worktree", added);
+  }
+  try {
+    const checked = Bun.spawnSync(
+      [
+        "bun",
+        "scripts/ratchet.ts",
+        "--check",
+        "--base",
+        baseSha,
+        "--head",
+        committed.stdout.toString().trim(),
+      ],
+      {
+        cwd: worktree,
+        env: {
+          PATH: process.env["PATH"] ?? "",
+          HOME: process.env["HOME"] ?? "",
+          TMPDIR: process.env["TMPDIR"] ?? "",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    if (checked.exitCode !== 0) {
+      return fail("ratchet --check", checked);
+    }
+    return Result.ok();
+  } finally {
+    git(["worktree", "remove", "--force", worktree]);
+  }
+};
 
 const readLiveRepositoryPolicy = (
   repo: string,
@@ -2091,67 +2498,49 @@ const createGhGateway = ({
       );
     },
 
-    // `gh` picks the operation the queue accepts for the pull request's
-    // current state: auto-merge while required checks are still running,
-    // a direct enqueue once they have passed (GitHub refuses auto-merge on
-    // an already-clean pull request). Both carry the head pin.
-    armMergeWhenReady: ({ expectedHeadSha }) =>
-      runGh(
-        [
-          "pr",
-          "merge",
-          ...prArgs,
-          "--squash",
-          "--auto",
-          "--match-head-commit",
-          expectedHeadSha,
-        ],
-        "write",
-      ).trim(),
-
-    enqueueWithJump: ({ pullRequestId, expectedHeadSha }) => {
+    readArmState: () => {
       const response = readRecord(
-        JSON.parse(
-          runGh(
-            [
-              "api",
-              "graphql",
-              "-f",
-              `query=mutation($id:ID!, $sha:GitObjectID!) {
-                enqueuePullRequest(input:{
-                  pullRequestId:$id, expectedHeadOid:$sha, jump:true
-                }) { mergeQueueEntry { id position jump state } }
-              }`,
-              "-f",
-              `id=${pullRequestId}`,
-              "-f",
-              `sha=${expectedHeadSha}`,
-            ],
-            "write",
-          ),
-        ),
-        "enqueue response",
+        runGhJson([
+          "api",
+          "graphql",
+          "-f",
+          `query=query($owner:String!, $name:String!, $number:Int!) {
+          repository(owner:$owner,name:$name) { pullRequest(number:$number) {
+            id headRefOid updatedAt autoMergeRequest { enabledAt }
+            mergeQueueEntry { id position jump state headCommit { oid } }
+          } }
+        }`,
+          "-f",
+          `owner=${owner}`,
+          "-f",
+          `name=${name}`,
+          "-F",
+          `number=${pullNumber}`,
+        ]),
+        "arm state response",
       );
-      const entry = readRecord(
-        readRecord(
-          readRecord(response["data"], "data")["enqueuePullRequest"],
-          "enqueuePullRequest",
-        )["mergeQueueEntry"],
-        "mergeQueueEntry",
-      );
-      const position = entry["position"];
-      if (typeof position !== "number") {
-        return panic("Expected numeric merge queue position");
-      }
-      return {
-        position,
-        jump:
-          entry["jump"] === undefined || entry["jump"] === null
-            ? false
-            : readBoolean(entry, "jump"),
-        state: readString(entry, "state"),
-      };
+      return readRecord(
+        readRecord(response["data"], "data")["repository"],
+        "repository",
+      )["pullRequest"];
     },
+
+    mutateHandoff: (query, { id, sha }) =>
+      JSON.parse(
+        runGh(
+          [
+            "api",
+            "graphql",
+            "-f",
+            `query=${query}`,
+            "-f",
+            `id=${id}`,
+            "-f",
+            `sha=${sha}`,
+          ],
+          "write",
+        ),
+      ),
 
     readMergeQueue: (branch) => {
       const response = readRecord(
@@ -2481,6 +2870,13 @@ if (import.meta.main) {
       }),
     readRunJobs: gateway.readRunJobs,
     readRatchetDefinitionPaths: gateway.readRatchetDefinitionPaths,
+    recheckRatchet: ({ headSha, baseRefName }) =>
+      recheckRatchetOnBase({
+        repositoryRoot: fileURLToPath(new URL("..", import.meta.url)),
+        repo: options.repo,
+        baseSha: gateway.readBranchTip(baseRefName).sha,
+        headSha,
+      }),
   });
   if (freshness.isErr()) {
     console.error(freshness.error.message);
@@ -2558,29 +2954,42 @@ if (import.meta.main) {
           }
           console.log(`\nverdict: QUEUED — ${action.entryId}`);
           break;
-        case "already-armed":
-          console.log(
-            `\nverdict: ARMED — merge when ready has been on since ${action.enabledAt}`,
-          );
-          break;
-        case "enqueue-jump": {
-          const reported = gateway.enqueueWithJump({
+        case "enqueue-jump":
+        case "arm": {
+          const handoff = armAndVerify({
             pullRequestId: pullRequest.id,
             expectedHeadSha: snapshot.headShaBeforeMerge,
+            jump: action.kind === "enqueue-jump",
+            checksSucceeded: requiredChecksSucceeded({
+              checkRuns: snapshot.checkRuns,
+              requiredCheckRuns: snapshot.requiredCheckRuns,
+            }),
+            readState: gateway.readArmState,
+            readRemovals: gateway.readMergeQueueRemovals,
+            mutate: gateway.mutateHandoff,
           });
-          requireFrontOfQueue(
-            `${snapshot.headShaBeforeMerge} was enqueued after requesting a jump ` +
-              `(GitHub reported position ${reported.position})`,
-            reported,
-          );
-          break;
-        }
-        case "arm": {
-          const outcome = gateway.armMergeWhenReady({
-            expectedHeadSha: snapshot.headShaBeforeMerge,
-          });
+          if (handoff.isErr()) {
+            console.error(handoff.error.message);
+            process.exit(1);
+          }
+          if (action.kind === "enqueue-jump") {
+            if (handoff.value.kind !== "queued") {
+              panic("Jump must return a queue receipt");
+            }
+            requireFrontOfQueue(
+              `${snapshot.headShaBeforeMerge} was enqueued after requesting a jump (GitHub reported position ${handoff.value.entry.position})`,
+              handoff.value.entry,
+            );
+            break;
+          }
+          if (handoff.value.kind === "queued") {
+            console.log(
+              `\nverdict: QUEUED — verified entry for ${snapshot.headShaBeforeMerge}`,
+            );
+            break;
+          }
           console.log(
-            `\nverdict: ARMED — ${outcome}; the queue merges ${snapshot.headShaBeforeMerge} once its checks pass`,
+            `\nverdict: ARMED — verified auto-merge for ${snapshot.headShaBeforeMerge}, enabled at ${handoff.value.enabledAt}`,
           );
           break;
         }

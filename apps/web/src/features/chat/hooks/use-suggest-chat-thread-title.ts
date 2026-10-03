@@ -3,12 +3,11 @@ import { useState } from "react";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/toast";
-
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
 /**
@@ -40,7 +39,7 @@ export const useSuggestChatThreadTitle = (threadRef: ChatThreadRef) => {
 
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error);
-      stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
+      notifyUserError(result.error, t("common.somethingWentWrong"));
       return null;
     }
 

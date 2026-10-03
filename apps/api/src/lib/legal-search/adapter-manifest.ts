@@ -1,4 +1,4 @@
-// parser-output-unchanged: NSS dash declarations already match the generic filler policy; parsed text is unchanged for every adapter.
+// parser-output-unchanged: document scheduling declarations only; parsed decision output is unchanged.
 import {
   type CaseLawJurisdiction,
   isCaseLawJurisdiction,
@@ -53,6 +53,7 @@ type AdapterJurisdictionDeclaration = {
 
 type AdapterManifest<TKey extends string> = {
   readonly key: TKey;
+  readonly documentStage: "inline" | "deferred";
   /** The feed's English label, for operators and logs. */
   readonly name: string;
   /**
@@ -145,6 +146,7 @@ export const decisionDocketGrammarForCountry = (
 export const ADAPTER_MANIFESTS = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
     key: ADAPTER_KEYS.CZ_REGIONAL,
+    documentStage: "inline",
     name: "Czech Regional Courts",
     publisher: "Okresní, krajské a vrchní soudy",
     publicHomeUrl: "https://rozhodnuti.justice.cz",
@@ -159,6 +161,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.CZ_NS]: {
     key: ADAPTER_KEYS.CZ_NS,
+    documentStage: "inline",
     name: "Czech Supreme Court",
     publisher: "Nejvyšší soud",
     publicHomeUrl: "https://rozhodnuti.nsoud.cz",
@@ -173,6 +176,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.CZ_NSS]: {
     key: ADAPTER_KEYS.CZ_NSS,
+    documentStage: "inline",
     name: "Czech Supreme Administrative Court",
     publisher: "Nejvyšší správní soud",
     publicHomeUrl: "https://vyhledavac.nssoud.cz",
@@ -192,6 +196,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.CZ_US]: {
     key: ADAPTER_KEYS.CZ_US,
+    documentStage: "inline",
     name: "Czech Constitutional Court",
     publisher: "Ústavní soud",
     publicHomeUrl: "https://nalus.usoud.cz",
@@ -209,6 +214,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.SK_COURTS]: {
     key: ADAPTER_KEYS.SK_COURTS,
+    documentStage: "deferred",
     name: "Slovak Courts",
     publisher: "Súdy Slovenskej republiky",
     publicHomeUrl: "https://obcan.justice.sk",
@@ -223,6 +229,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.SK_US]: {
     key: ADAPTER_KEYS.SK_US,
+    documentStage: "inline",
     name: "Slovak Constitutional Court",
     publisher: "Ústavný súd Slovenskej republiky",
     publicHomeUrl: "https://www.ustavnysud.sk",
@@ -237,6 +244,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_COURTS]: {
     key: ADAPTER_KEYS.PL_COURTS,
+    documentStage: "inline",
     name: "Polish Courts (SAOS)",
     publisher: "Sądy powszechne (SAOS)",
     publicHomeUrl: "https://www.saos.org.pl",
@@ -251,6 +259,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_SN]: {
     key: ADAPTER_KEYS.PL_SN,
+    documentStage: "inline",
     name: "Polish Supreme Court (Sąd Najwyższy)",
     publisher: "Sąd Najwyższy",
     publicHomeUrl: "https://sn.pl/pl/wyszukiwarka-orzeczen",
@@ -272,6 +281,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_KIO]: {
     key: ADAPTER_KEYS.PL_KIO,
+    documentStage: "inline",
     name: "Polish Procurement Appeals (UZP)",
     publisher: "Urząd Zamówień Publicznych",
     publicHomeUrl: "https://orzeczenia.uzp.gov.pl",
@@ -289,6 +299,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_TK]: {
     key: ADAPTER_KEYS.PL_TK,
+    documentStage: "inline",
     name: "Polish Constitutional Tribunal (Trybunał Konstytucyjny)",
     publisher: "Trybunał Konstytucyjny",
     publicHomeUrl: "https://ipo.trybunal.gov.pl/ipo/",
@@ -304,6 +315,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_NSA]: {
     key: ADAPTER_KEYS.PL_NSA,
+    documentStage: "inline",
     name: "Polish Administrative Courts (Hugging Face dataset)",
     publisher:
       "Naczelny Sąd Administracyjny i wojewódzkie sądy administracyjne",
@@ -323,6 +335,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
     key: ADAPTER_KEYS.PL_NCOURT,
+    documentStage: "inline",
     name: "Polish Common Courts (Ministry of Justice)",
     publisher: "Ministerstwo Sprawiedliwości",
     publicHomeUrl: "https://orzeczenia.ms.gov.pl",
@@ -338,6 +351,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_COURTS]: {
     key: ADAPTER_KEYS.AT_COURTS,
+    documentStage: "inline",
     name: "Austrian Courts (RIS Justiz)",
     publisher: "Gerichte (RIS Justiz)",
     publicHomeUrl: "https://www.ris.bka.gv.at",
@@ -352,6 +366,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_VFGH]: {
     key: ADAPTER_KEYS.AT_VFGH,
+    documentStage: "inline",
     name: "Austrian Constitutional Court (RIS VfGH)",
     publisher: "Verfassungsgerichtshof",
     publicHomeUrl: "https://www.ris.bka.gv.at",
@@ -366,6 +381,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_VWGH]: {
     key: ADAPTER_KEYS.AT_VWGH,
+    documentStage: "inline",
     name: "Austrian Administrative Court (RIS VwGH)",
     publisher: "Verwaltungsgerichtshof",
     publicHomeUrl: "https://www.ris.bka.gv.at",
@@ -380,6 +396,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_BVWG]: {
     key: ADAPTER_KEYS.AT_BVWG,
+    documentStage: "inline",
     name: "Austrian Federal Administrative Court (RIS BVwG)",
     publisher: "Bundesverwaltungsgericht",
     publicHomeUrl: "https://www.ris.bka.gv.at",
@@ -394,6 +411,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_LVWG]: {
     key: ADAPTER_KEYS.AT_LVWG,
+    documentStage: "inline",
     name: "Austrian State Administrative Courts (RIS LVwG)",
     publisher: "Landesverwaltungsgerichte",
     publicHomeUrl: "https://www.ris.bka.gv.at",
@@ -408,6 +426,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_ASYLGH]: {
     key: ADAPTER_KEYS.AT_ASYLGH,
+    documentStage: "inline",
     name: "Austrian Asylum Court (RIS AsylGH)",
     publisher: "Asylgerichtshof",
     publicHomeUrl: "https://www.ris.bka.gv.at",
@@ -422,6 +441,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_UBAS]: {
     key: ADAPTER_KEYS.AT_UBAS,
+    documentStage: "inline",
     name: "Austrian Federal Asylum Senate (RIS UBAS)",
     publisher: "Unabhängiger Bundesasylsenat",
     publicHomeUrl: "https://www.ris.bka.gv.at",
@@ -436,6 +456,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_UVS]: {
     key: ADAPTER_KEYS.AT_UVS,
+    documentStage: "inline",
     name: "Austrian Independent Administrative Senates (RIS UVS)",
     publisher: "Unabhängige Verwaltungssenate",
     publicHomeUrl: "https://www.ris.bka.gv.at",
@@ -450,6 +471,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_VERG]: {
     key: ADAPTER_KEYS.AT_VERG,
+    documentStage: "inline",
     name: "Austrian Procurement Review Bodies (RIS Verg)",
     publisher: "Vergabekontrollbehörden",
     publicHomeUrl: "https://www.ris.bka.gv.at",
@@ -464,6 +486,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_UMSE]: {
     key: ADAPTER_KEYS.AT_UMSE,
+    documentStage: "inline",
     name: "Austrian Environmental Senate (RIS Umweltsenat)",
     publisher: "Umweltsenat",
     publicHomeUrl: "https://www.ris.bka.gv.at",
@@ -478,6 +501,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_BKS]: {
     key: ADAPTER_KEYS.AT_BKS,
+    documentStage: "inline",
     name: "Austrian Federal Communications Senate (RIS BKS)",
     publisher: "Bundeskommunikationssenat",
     publicHomeUrl: "https://www.ris.bka.gv.at",
@@ -492,6 +516,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.AT_FINDOK]: {
     key: ADAPTER_KEYS.AT_FINDOK,
+    documentStage: "inline",
     name: "Austrian Fiscal Courts (Findok BFG and UFS)",
     publisher: "Bundesfinanzgericht und UFS (Findok)",
     publicHomeUrl: "https://findok.bmf.gv.at",
@@ -506,6 +531,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.HU_BHGY]: {
     key: ADAPTER_KEYS.HU_BHGY,
+    documentStage: "inline",
     name: "Hungarian Courts (Bírósági Határozatok Gyűjteménye)",
     publisher: "Bírósági Határozatok Gyűjteménye",
     publicHomeUrl: "https://eakta.birosag.hu/anonimizalt-hatarozatok",
@@ -526,6 +552,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_KIS]: {
     key: ADAPTER_KEYS.PL_KIS,
+    documentStage: "inline",
     name: "Polish Tax Interpretations and Rulings (EUREKA)",
     publisher: "System Informacji Skarbowej EUREKA",
     publicHomeUrl: "https://eureka.mf.gov.pl",
@@ -542,6 +569,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_UODO]: {
     key: ADAPTER_KEYS.PL_UODO,
+    documentStage: "inline",
     name: "Polish Data Protection Authority (Prezes UODO)",
     publisher: "Prezes Urzędu Ochrony Danych Osobowych",
     publicHomeUrl: "https://orzeczenia.uodo.gov.pl",
@@ -560,6 +588,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.PL_UOKIK]: {
     key: ADAPTER_KEYS.PL_UOKIK,
+    documentStage: "inline",
     name: "Polish Competition and Consumer Protection Authority (Prezes UOKiK)",
     publisher: "Prezes Urzędu Ochrony Konkurencji i Konsumentów",
     publicHomeUrl: "https://decyzje.uokik.gov.pl",
@@ -576,6 +605,7 @@ export const ADAPTER_MANIFESTS = {
   },
   [ADAPTER_KEYS.EU_ECJ]: {
     key: ADAPTER_KEYS.EU_ECJ,
+    documentStage: "inline",
     name: "Court of Justice of the EU (CJEU)",
     publisher: "Court of Justice of the European Union",
     publicHomeUrl: "https://eur-lex.europa.eu",
@@ -594,6 +624,7 @@ export const ADAPTER_MANIFESTS = {
 export const IMPORT_SOURCE_MANIFESTS = {
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: {
     key: IMPORT_SOURCE_KEYS.COURTLISTENER,
+    documentStage: "inline",
     name: "CourtListener bulk opinion records",
     publisher: "Free Law Project, CourtListener",
     publicHomeUrl: "https://www.courtlistener.com",
@@ -604,3 +635,11 @@ export const IMPORT_SOURCE_MANIFESTS = {
 } as const satisfies {
   readonly [TKey in ImportSourceKey]: Omit<AdapterManifest<TKey>, "dateRange">;
 };
+
+export type DeferredDocumentAdapterKey = {
+  [
+    TKey in keyof typeof ADAPTER_MANIFESTS
+  ]: (typeof ADAPTER_MANIFESTS)[TKey]["documentStage"] extends "deferred"
+    ? TKey
+    : never;
+}[keyof typeof ADAPTER_MANIFESTS];

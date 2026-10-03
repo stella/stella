@@ -102,6 +102,7 @@ const stubDb = (fileName: string) =>
         }),
       },
       businessRegistryCredentials: { findMany: async () => [] },
+      templateClauses: { findMany: async () => [] },
     },
   });
 
@@ -269,4 +270,40 @@ describe("fillByIdLogic required fields", () => {
       fakeS3.stop();
     }
   });
+});
+
+test("stored-template download preserves the typed clause refusal", async () => {
+  const docx = await makeDocx(WRAP(P('{{ clause("Terms") }}')));
+  const fakeS3 = startFakeS3();
+  try {
+    fakeS3.put("stella", s3Key, new Uint8Array(docx.bytes));
+    const { safeDb, scopedDb } = stubDb("terms.docx");
+    const result = await Result.gen(() =>
+      fillByIdLogic({
+        safeDb,
+        scopedDb,
+        organizationId,
+        userId,
+        templateId,
+        body: {
+          values: {},
+          clauseOverrides: {
+            "@clause:Terms": [{ text: "{% else %}", isDirective: true }],
+          },
+        },
+        query: {},
+        recordAuditEvent,
+      }),
+    );
+    expect(Result.isError(result)).toBe(true);
+    if (!Result.isError(result) || !HandlerError.is(result.error)) {
+      throw new TypeError("expected typed clause refusal");
+    }
+    expect(result.error.status).toBe(422);
+    expect(result.error.code).toBe("clause_directives_invalid");
+    expect(result.error.retryable).toBe(false);
+    expect(result.error.message).toContain("@clause:Terms");
+  } finally {
+    fakeS3.stop();
+  }
 });

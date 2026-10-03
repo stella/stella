@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from "react";
 /**
  * Inspector facet — workspace-scoped anonymization vocabulary.
  *
@@ -10,8 +11,6 @@
  *
  * Downloads scan the saved file and apply the vocabulary and exclusions.
  */
-
-import { useLayoutEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -65,6 +64,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { UnsupportedAnonymizedExportError } from "@/lib/pdf/anonymized-export-errors";
 import { toSafeId } from "@/lib/safe-id";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
@@ -388,10 +388,7 @@ export const AnonymizationFacet = ({
       });
     } catch (error) {
       analytics.captureError(error);
-      stellaToast.add({
-        title: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     }
   };
   const submitTerm = async () => {
@@ -491,12 +488,12 @@ export const AnonymizationFacet = ({
     setDownloadStatus("idle");
     if (download.isErr()) {
       analytics.captureError(download.error);
-      stellaToast.add({
-        title: UnsupportedAnonymizedExportError.is(download.error)
+      notifyUserError(
+        download.error,
+        UnsupportedAnonymizedExportError.is(download.error)
           ? t("inspector.anonymization.unsupportedVisualContent")
           : userErrorFromThrown(download.error, t("errors.actionFailed")),
-        type: "error",
-      });
+      );
     }
   };
 
