@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 
 import {
@@ -553,4 +554,57 @@ describe("error predicates", () => {
     expect(isUnauthorizedError(authError)).toBe(true);
     expect(isUnauthorizedError(forbidden)).toBe(false);
   });
+});
+
+test("clause directive refusal is localized and never retried", () => {
+  const error = toAPIError({
+    status: 422,
+    value: {
+      code: CLAUSE_DIRECTIVES_INVALID_CODE,
+      message: "Clause slot @clause:Terms has invalid directives.",
+    },
+  });
+  expect(error.code).toBe(CLAUSE_DIRECTIVES_INVALID_CODE);
+  expect(error.message).toBe(
+    "A linked clause has invalid directives. Correct the clause before filling the template.",
+  );
+  expect(error.rawMessage).toContain("@clause:Terms");
+  expect(shouldRetryAPIRequest(0, error)).toBe(false);
+});
+
+test("clause directive refusal names the slot and linked clause", () => {
+  const error = toAPIError({
+    status: 422,
+    value: {
+      code: CLAUSE_DIRECTIVES_INVALID_CODE,
+      message: "Invalid clause directives",
+      clause: { slotKey: "@clause:Terms", id: "cl_1", name: "Payment terms" },
+      hint: "Open the clause editor and correct paragraph 2.",
+      retryable: false,
+    },
+  });
+  expect(error.message).toBe(
+    "Clause Payment terms in slot @clause:Terms has invalid directives. Open the clause editor, correct the named paragraphs, and fill the template again.",
+  );
+  expect(shouldRetryAPIRequest(0, error)).toBe(false);
+});
+
+test("a fill override refusal points to the current override without an empty identifier", () => {
+  const error = toAPIError({
+    status: 422,
+    value: {
+      code: CLAUSE_DIRECTIVES_INVALID_CODE,
+      message: "Invalid clause directives",
+      clause: {
+        slotKey: "@clause:Terms",
+        name: "Payment terms",
+        resolution: "override",
+      },
+    },
+  });
+  expect(error.message).toBe(
+    "The override for clause Payment terms in slot @clause:Terms has invalid directives. Correct this fill’s override before filling again.",
+  );
+  expect(error.message).not.toContain("()");
+  expect(shouldRetryAPIRequest(0, error)).toBe(false);
 });

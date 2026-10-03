@@ -106,11 +106,12 @@ test("dispatch SHA validation accepts only existing commits already on main", ()
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }
-});
+}, 30_000);
 
 test("main SHA checks finish before any checkout in the validation job", () => {
   const names = validationSteps.map(({ name }) => name);
-  expect(names.slice(0, 3)).toEqual([
+  expect(names).toEqual([
+    "Validate merge queue depth",
     "Validate SHA format",
     "Fetch main history",
     "Verify main ancestry",

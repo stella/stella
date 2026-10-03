@@ -16,7 +16,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import { WORK_OBLIGATION_TRANSITIONS } from "@/api/lib/work-obligations/transitions";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 const TASK_FEATURES_ENABLED = {
   governedWorkflow: true,
@@ -111,9 +114,10 @@ describe("updateTaskHandler feature compatibility", () => {
     };
     const { safeDb } = createScopedDbMock({
       select: () => ({
-        from: () => ({
-          where: () => ({ limit: () => ({ for: async () => [workflow] }) }),
-        }),
+        from: (table: unknown) =>
+          createSelectQueryMock(
+            table === workObligations ? [workflow] : [],
+          ).from(),
       }),
       update: (table: unknown) => ({
         set: (values: Record<string, unknown>) => {
@@ -164,9 +168,10 @@ describe("updateTaskHandler feature compatibility", () => {
     };
     const { safeDb } = createScopedDbMock({
       select: () => ({
-        from: () => ({
-          where: () => ({ limit: () => ({ for: async () => [workflow] }) }),
-        }),
+        from: (table: unknown) =>
+          createSelectQueryMock(
+            table === workObligations ? [workflow] : [],
+          ).from(),
       }),
       update: () => {
         throw new Error("database should not be updated");
@@ -213,13 +218,10 @@ describe("updateTaskHandler legacy deadline compatibility", () => {
     };
     const { safeDb } = createScopedDbMock({
       select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: () => ({
-              for: async () => [workflow],
-            }),
-          }),
-        }),
+        from: (table: unknown) =>
+          createSelectQueryMock(
+            table === workObligations ? [workflow] : [],
+          ).from(),
       }),
       update: (table: unknown) => ({
         set: (values: Record<string, unknown>) => {
@@ -314,9 +316,10 @@ const runStatusWrite = async ({
   };
   const { safeDb } = createScopedDbMock({
     select: () => ({
-      from: () => ({
-        where: () => ({ limit: () => ({ for: async () => [workflow] }) }),
-      }),
+      from: (table: unknown) =>
+        createSelectQueryMock(
+          table === workObligations ? [workflow] : [],
+        ).from(),
     }),
     update: (table: unknown) => ({
       set: (values: Record<string, unknown>) => {

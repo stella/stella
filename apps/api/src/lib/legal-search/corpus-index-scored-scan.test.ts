@@ -8,6 +8,7 @@ import {
   readCorpusIndexSearchPage,
   type SearchCursor,
 } from "@/api/lib/legal-search/corpus-index-pagination";
+import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import {
   type CorpusSearchOrder,
   RELEVANCE_ORDER,
@@ -331,8 +332,16 @@ const readFixturePage = async (
     unseenScoreUpperBound: (next) => stableBlendUpperBound(next, BLEND_WEIGHT),
     rankCandidates: async (candidates) => ({
       context: null,
+      groups: candidates.map((candidate) =>
+        corpusSearchGroupToken(candidate.id),
+      ),
       ranked: blendStableCitationAuthority({
-        candidates,
+        candidates: candidates.filter(
+          (candidate) =>
+            !parsedCursor?.excludedGroups?.includes(
+              corpusSearchGroupToken(candidate.id),
+            ),
+        ),
         authorityById: fixture.authorityById,
         signals: [courtTierSignal(fixture.tierById)],
       }),
