@@ -35,6 +35,7 @@ import {
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
 import {
+  type CorpusIndexRankingMode,
   corpusQueryRankingMode,
   corpusRankingCursorTarget,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
@@ -174,12 +175,14 @@ type RankCorpusIndexProviderCandidatesOptions = {
   candidates: readonly ScoredCandidate[];
   /** Groups earlier pages emitted (`SearchCursor.excludedGroups`). */
   excludedGroups: readonly string[] | undefined;
+  rankingMode: CorpusIndexRankingMode;
 };
 
 const rankCorpusIndexProviderCandidates = async ({
   generation,
   candidates,
   excludedGroups,
+  rankingMode,
 }: RankCorpusIndexProviderCandidatesOptions) => {
   const ids = candidates.map((candidate) =>
     toSafeId<"caseLawDecision">(candidate.id),
@@ -216,6 +219,7 @@ const rankCorpusIndexProviderCandidates = async ({
         : [],
     ),
     ranked: blendStableCitationAuthority({
+      rankingMode,
       candidates: rendered.filter(
         (candidate) => !excluded.has(corpusSearchGroupToken(candidate.id)),
       ),
@@ -362,7 +366,7 @@ const searchResult = async (
     rankingMode,
     fallbackScanTransport: { type: "native" },
     scanTransport:
-      rankingMode === "bm25-ratio"
+      rankingMode !== "off"
         ? { type: "scored", fields: ["document_id"] }
         : { type: "native" },
     snippetFields: ["text"],
@@ -389,10 +393,11 @@ const searchResult = async (
     // no unseen candidate could out-blend the page cursor. Saturated
     // authority is bounded by 1, so the bound reads nothing from the corpus.
     unseenScoreUpperBound: stableBlendUpperBound,
-    rankCandidates: async (candidates) =>
+    rankCandidates: async (candidates, effectiveRankingMode) =>
       await rankCorpusIndexProviderCandidates({
         generation,
         candidates,
+        rankingMode: effectiveRankingMode,
         excludedGroups: parsedCursor?.excludedGroups,
       }),
   });

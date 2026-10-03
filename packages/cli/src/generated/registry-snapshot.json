@@ -21,7 +21,7 @@
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 9784,
+          "maxLength": 9795,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -198,7 +198,7 @@
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 12450,
+          "maxLength": 12476,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
@@ -928,7 +928,7 @@
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 5364,
+          "maxLength": 5368,
           "description": "Opaque cursor from a previous search_legislation call"
         }
       }

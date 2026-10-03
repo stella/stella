@@ -17,6 +17,8 @@
 
 import { panic } from "better-result";
 
+import type { CorpusIndexRankingMode } from "@/api/lib/legal-search/corpus-ranking-policy";
+
 export type ScoredCandidate = {
   id: string;
   /** Lexical relevance (BM25, or a fused RRF score). Higher is better. */
@@ -37,6 +39,23 @@ const DEFAULT_RRF_K = 60;
  * ranking paths blend in SQL and must not retype it.
  */
 export const DEFAULT_AUTHORITY_WEIGHT = 0.3;
+// Lane-only full matches have a conservative lexical score of zero. The
+// experiment lets authority exceed the lexical maximum (one); adoption
+// requires relevance and latency measurements.
+export const CORPUS_EXPERIMENTAL_AUTHORITY_WEIGHT = 1.5;
+
+export const corpusAuthorityWeight = (mode: CorpusIndexRankingMode): number => {
+  switch (mode) {
+    case "off":
+    case "bm25-ratio":
+      return DEFAULT_AUTHORITY_WEIGHT;
+    case "authority-rank":
+      return CORPUS_EXPERIMENTAL_AUTHORITY_WEIGHT;
+    default:
+      mode satisfies never;
+      return panic("Unknown corpus ranking mode");
+  }
+};
 
 /**
  * Half-saturation point of the log-scaled citation authority: the authority
@@ -266,6 +285,7 @@ type StableBlendOptions = {
   authorityById: ReadonlyMap<string, number>;
   /** How much citation authority moves results vs lexical relevance. */
   weight?: number;
+  rankingMode?: CorpusIndexRankingMode;
   /** Additive signals the caller blends alongside citation authority. */
   signals?: readonly BlendSignal[];
 };
@@ -310,7 +330,8 @@ export const stableBlendUpperBound = (
 export const blendStableCitationAuthority = ({
   candidates,
   authorityById,
-  weight = DEFAULT_AUTHORITY_WEIGHT,
+  rankingMode = "off",
+  weight = corpusAuthorityWeight(rankingMode),
   signals = [],
 }: StableBlendOptions): RankedHit[] => {
   const blended = stableBlendSignals(authorityById, weight, signals);

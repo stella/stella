@@ -9,16 +9,17 @@ import type { RegistryRequestObservation } from "@stll/business-registries/share
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
-import type {
-  CorpusIndexError,
-  CorpusIndexHit,
-  CorpusIndexScoredSearchResponse,
+import {
+  type CorpusIndexHit,
+  type CorpusIndexScoredSearchResponse,
+  type CorpusIndexError,
+  getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
-import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import {
   CORPUS_BM25_PASSAGE_LIMIT,
   CORPUS_BM25_RATIO_POWER,
+  CORPUS_AUTHORITY_LEXICAL_RANK_DECAY,
   type CorpusIndexRankingMode,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
@@ -42,8 +43,8 @@ import { LIMITS } from "@/api/lib/limits";
  * engine refused, which no retry fixes and 502 reports. Mapping matches
  * `catalogueUpstreamStatus`, the same translation for the skill catalogue.
  */
-const corpusIndexSearchFailure = (error: CorpusIndexError): HandlerError =>
-  new HandlerError({
+const failCorpusIndexSearch = (error: CorpusIndexError): never => {
+  throw new HandlerError({
     status:
       error.status === undefined || error.status === 429 || error.status >= 500
         ? 503
@@ -51,6 +52,7 @@ const corpusIndexSearchFailure = (error: CorpusIndexError): HandlerError =>
     message: "Search is temporarily unavailable",
     cause: error,
   });
+};
 
 /**
  * A page boundary as the scan means it. `corpus-search-cursor` owns how it
@@ -142,7 +144,7 @@ type CorpusIndexSearchPageInput<TContext> = {
    * the order, so a caller that did not choose one cannot page correctly.
    */
   order: CorpusSearchOrder;
-  /** Fixed-window BM25 experiment; the default preserves the position scan. */
+  /** Fixed-window ranking experiment; the default preserves the position scan. */
   rankingMode?: CorpusIndexRankingMode;
   /** Main transport to restore when the experiment falls back. */
   fallbackScanTransport?: CorpusIndexScanTransport;
@@ -172,6 +174,7 @@ type CorpusIndexSearchPageInput<TContext> = {
   unseenScoreUpperBound: (nextLexicalScore: number) => number;
   rankCandidates: (
     candidates: readonly ScoredCandidate[],
+    rankingMode: CorpusIndexRankingMode,
   ) => Promise<CorpusIndexRanking<TContext>>;
 };
 
@@ -370,7 +373,7 @@ const readPageSnippets = async ({
   });
   const indexMs = performance.now() - startedAt;
   if (result.isErr()) {
-    throw corpusIndexSearchFailure(result.error);
+    return failCorpusIndexSearch(result.error);
   }
 
   // Best-first, so the first snippet a document gets is its best-scoring
@@ -426,8 +429,21 @@ export const isAfterSearchCursor = (
  * across the whole list, which is the intended definition: the engine's order
  * is the primary key and the blend re-orders a bounded window of it.
  */
-export const corpusIndexLexicalScore = (globalIndex: number): number =>
-  Math.exp(-globalIndex / LIMITS.corpusIndexLexicalRankDecay);
+export const corpusIndexLexicalScore = (
+  globalIndex: number,
+  mode: CorpusIndexRankingMode = "off",
+): number => {
+  switch (mode) {
+    case "off":
+    case "bm25-ratio":
+      return Math.exp(-globalIndex / LIMITS.corpusIndexLexicalRankDecay);
+    case "authority-rank":
+      return Math.exp(-globalIndex / CORPUS_AUTHORITY_LEXICAL_RANK_DECAY);
+    default:
+      mode satisfies never;
+      return panic("Unknown corpus ranking mode");
+  }
+};
 
 type ScanRound = {
   numHits: number;
@@ -473,7 +489,7 @@ const readScanRound = async ({
         sortBy: corpusEngineSortBy(order),
       });
       if (result.isErr()) {
-        throw corpusIndexSearchFailure(result.error);
+        return failCorpusIndexSearch(result.error);
       }
       return {
         numHits: result.value.numHits,
@@ -581,7 +597,7 @@ const readScoredScanRound = async ({
     requiredFields: fields,
   });
   if (result.isErr()) {
-    throw corpusIndexSearchFailure(result.error);
+    return failCorpusIndexSearch(result.error);
   }
   return result.value;
 };
@@ -869,7 +885,7 @@ const readPositionSearchPage = async <TContext>({
 
     startOffset += hits.length;
     scanned += hits.length;
-    ranking = await rankCandidates(candidates);
+    ranking = await rankCandidates(candidates, "off");
     windowed = windowAfterCursor(ranking.ranked, parsedCursor);
     if (windowed.length > limit) {
       const cursorScore = windowed.at(limit - 1)?.score ?? 0;
@@ -884,7 +900,7 @@ const readPositionSearchPage = async <TContext>({
   }
 
   if (ranking === null) {
-    ranking = await rankCandidates(candidates);
+    ranking = await rankCandidates(candidates, "off");
     windowed = windowAfterCursor(ranking.ranked, parsedCursor);
   }
   const hasMoreInWindow = windowed.length > limit;
@@ -986,9 +1002,34 @@ const bm25TopScore = (hits: readonly ScoredPassage[]): number | null => {
   return topScore;
 };
 
+type ExperimentalLexicalScoreOptions = {
+  mode: Exclude<CorpusIndexRankingMode, "off">;
+  rank: number;
+  score: number;
+  topScore: number;
+};
+
+const experimentalLexicalScore = ({
+  mode,
+  rank,
+  score,
+  topScore,
+}: ExperimentalLexicalScoreOptions) => {
+  switch (mode) {
+    case "authority-rank":
+      return corpusIndexLexicalScore(rank, mode);
+    case "bm25-ratio":
+      return topScore === 0 ? 0 : (score / topScore) ** CORPUS_BM25_RATIO_POWER;
+    default:
+      mode satisfies never;
+      return panic("Unknown corpus ranking mode");
+  }
+};
+
 /** A bounded candidate universe, replayed whole before grouping and paging. */
-const readBm25SearchPage = async <TContext>(
+const readExperimentalSearchPage = async <TContext>(
   options: CorpusIndexSearchPageInput<TContext>,
+  mode: Exclude<CorpusIndexRankingMode, "off">,
 ): Promise<CorpusIndexSearchPageResult<TContext>> => {
   const {
     observer,
@@ -1009,7 +1050,9 @@ const readBm25SearchPage = async <TContext>(
     scanTransport?.type !== "scored" ||
     (parsedCursor !== null && parsedCursor.windowStart !== 0)
   ) {
-    panic("BM25 ranking requires a scored relevance scan in window zero");
+    panic(
+      `${mode === "bm25-ratio" ? "BM25" : "Authority"} ranking requires a scored relevance scan in window zero`,
+    );
   }
   const startedAt = performance.now();
   const round = await readScoredScanRound({
@@ -1055,7 +1098,7 @@ const readBm25SearchPage = async <TContext>(
   const passageClauseById = new Map<string, string>();
   const anchorIdById = new Map<string, string>();
   const passageCountById = new Map<string, number>();
-  for (const { fields: hit, score } of hits) {
+  for (const [rank, { fields: hit, score }] of hits.entries()) {
     if (topScore === null) {
       panic("A nonempty BM25 universe requires a top score");
     }
@@ -1073,7 +1116,7 @@ const readBm25SearchPage = async <TContext>(
     // Filter-only matches can have no lexical signal (all scores zero).
     candidates.push({
       id,
-      score: topScore === 0 ? 0 : (score / topScore) ** CORPUS_BM25_RATIO_POWER,
+      score: experimentalLexicalScore({ mode, rank, score, topScore }),
     });
     bestScoreById.set(id, score);
     const clause = passageClause(hit);
@@ -1085,7 +1128,10 @@ const readBm25SearchPage = async <TContext>(
       anchorIdById.set(id, anchor);
     }
   }
-  const ranking = await rankCandidates(candidates);
+  // The serving passage index has no citation_authority field. Authority is
+  // hydrated by rankCandidates from Postgres over this finite lexical universe.
+  // Replay the whole universe before blending, grouping, and cursor filtering.
+  const ranking = await rankCandidates(candidates, mode);
   const windowed = windowAfterCursor(ranking.ranked, parsedCursor);
   const pageRanked = windowed.slice(0, limit);
   const last = pageRanked.at(-1);
@@ -1099,7 +1145,7 @@ const readBm25SearchPage = async <TContext>(
             id: last.id,
             sort: order.type,
             windowStart: 0,
-            rankingMode: "bm25-ratio",
+            rankingMode: mode,
           },
           parsedCursor?.excludedGroups,
         )
@@ -1149,8 +1195,9 @@ export const readCorpusIndexSearchPage = async <TContext>(
 ): Promise<CorpusIndexSearchPageResult<TContext>> => {
   const cursorMode = options.parsedCursor?.rankingMode;
   if (
-    cursorMode === "bm25-ratio" &&
-    (options.rankingMode !== "bm25-ratio" ||
+    cursorMode !== undefined &&
+    cursorMode !== "off" &&
+    (options.rankingMode !== cursorMode ||
       options.parsedCursor?.windowStart !== 0)
   ) {
     throw new HandlerError({ status: 400, message: "Invalid cursor" });
@@ -1161,7 +1208,8 @@ export const readCorpusIndexSearchPage = async <TContext>(
       : (options.parsedCursor.rankingMode ?? "off");
   switch (mode) {
     case "bm25-ratio":
-      return await readBm25SearchPage(options);
+    case "authority-rank":
+      return await readExperimentalSearchPage(options, mode);
     case "off": {
       const page = await readPositionSearchPage({
         ...options,
@@ -1169,7 +1217,7 @@ export const readCorpusIndexSearchPage = async <TContext>(
       });
       if (
         page.nextCursor !== null &&
-        (options.rankingMode === "bm25-ratio" ||
+        ((options.rankingMode !== undefined && options.rankingMode !== "off") ||
           options.parsedCursor?.rankingMode === "off")
       ) {
         page.nextCursor = { ...page.nextCursor, rankingMode: "off" };

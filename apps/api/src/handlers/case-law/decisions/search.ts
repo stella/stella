@@ -168,6 +168,7 @@ import {
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
 import {
+  type CorpusIndexRankingMode,
   corpusQueryRankingMode,
   corpusRankingCursorTarget,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
@@ -1371,6 +1372,7 @@ type RehydrateCaseLawCandidatesOptions = {
   hydrated?: HydratedDecisionRows | undefined;
   timeDbRead?: TimeDbRead | undefined;
   excludedGroups?: ReadonlySet<string> | undefined;
+  rankingMode?: CorpusIndexRankingMode;
 };
 
 /**
@@ -1422,6 +1424,7 @@ type RankCaseLawCandidatesOptions = {
   candidates: readonly ScoredCandidate[];
   courtTierById: ReadonlyMap<string, number>;
   sort: SearchSort;
+  rankingMode: CorpusIndexRankingMode;
 };
 
 /**
@@ -1436,10 +1439,12 @@ const rankCaseLawCandidates = ({
   candidates,
   courtTierById,
   sort,
+  rankingMode,
 }: RankCaseLawCandidatesOptions): RankedHit[] => {
   switch (sort) {
     case "relevance":
       return blendStableCitationAuthority({
+        rankingMode,
         candidates,
         authorityById,
         signals: caseLawBlendSignals(courtTierById),
@@ -1471,6 +1476,7 @@ export const rehydrateCaseLawCandidates = async ({
   hydrated = new Map(),
   timeDbRead = untimedDbRead,
   excludedGroups = new Set(),
+  rankingMode = "off",
 }: RehydrateCaseLawCandidatesOptions) => {
   const ids = candidates
     .filter((candidate) => !hydrated.has(candidate.id))
@@ -1519,6 +1525,7 @@ export const rehydrateCaseLawCandidates = async ({
   // scan's early-stop bound guarantees no unseen version could out-blend an
   // emitted page, so the representative is the same on every rescan.
   const ranked = rankCaseLawCandidates({
+    rankingMode,
     authorityById,
     candidates: candidates.filter((candidate) => byId.has(candidate.id)),
     courtTierById,
@@ -2217,8 +2224,9 @@ export const searchCorpusIndexDecisions = async (
         tokens: excerptTokens,
       }),
     unseenScoreUpperBound: caseLawUnseenScoreUpperBound(sort),
-    rankCandidates: async (candidates) =>
+    rankCandidates: async (candidates, effectiveRankingMode) =>
       await rehydrateCaseLawCandidates({
+        rankingMode: effectiveRankingMode,
         body,
         candidates,
         caseLawDb,

@@ -2,8 +2,13 @@
 import { createHash } from "node:crypto";
 
 import type { SearchSort } from "@/api/lib/legal-search/corpus-search-order";
+import { CORPUS_EXPERIMENTAL_AUTHORITY_WEIGHT } from "@/api/lib/legal-search/rerank";
 
-export const CORPUS_INDEX_RANKING_MODES = ["off", "bm25-ratio"] as const;
+export const CORPUS_INDEX_RANKING_MODES = [
+  "off",
+  "bm25-ratio",
+  "authority-rank",
+] as const;
 
 export type CorpusIndexRankingMode =
   (typeof CORPUS_INDEX_RANKING_MODES)[number];
@@ -12,6 +17,8 @@ export type CorpusIndexRankingMode =
 // enabling it. One projected read stays below the engine's 10,000 offset cap.
 export const CORPUS_BM25_PASSAGE_LIMIT = 7000;
 export const CORPUS_BM25_RATIO_POWER = 0.25;
+// Authority is hydrated after the bounded lexical scan.
+export const CORPUS_AUTHORITY_LEXICAL_RANK_DECAY = 1200;
 
 export const corpusRankingCursorTarget = (
   target: string | null,
@@ -26,6 +33,12 @@ export const corpusRankingCursorTarget = (
             mode,
             CORPUS_BM25_PASSAGE_LIMIT,
             CORPUS_BM25_RATIO_POWER,
+            ...(mode === "authority-rank"
+              ? [
+                  CORPUS_AUTHORITY_LEXICAL_RANK_DECAY,
+                  CORPUS_EXPERIMENTAL_AUTHORITY_WEIGHT,
+                ]
+              : []),
           ]),
         )
         .digest("hex")
