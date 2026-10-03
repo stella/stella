@@ -32,7 +32,8 @@ test("entitlement observers and imperative prefetches respect usage availability
   expect(await queryClient.fetchQuery(options)).toEqual(response);
   queryClient.clear();
   await queryClient.prefetchQuery(options);
-  expect(queryClient.getQueryData(options.queryKey)).toEqual(response);
+  const cachedResponse = queryClient.getQueryData(options.queryKey);
+  expect(cachedResponse).toEqual(response);
   expect(paths).toEqual(
     env.VITE_FEATURE_USAGE
       ? ["/v1/usage/entitlement", "/v1/usage/entitlement"]
@@ -53,7 +54,8 @@ test("lane observers and imperative prefetches respect usage availability", asyn
   expect(await queryClient.fetchQuery(options)).toEqual(response);
   queryClient.clear();
   await queryClient.prefetchQuery(options);
-  expect(queryClient.getQueryData(options.queryKey)).toEqual(response);
+  const cachedResponse = queryClient.getQueryData(options.queryKey);
+  expect(cachedResponse).toEqual(response);
   expect(paths).toEqual(
     env.VITE_FEATURE_USAGE ? ["/v1/usage/lane", "/v1/usage/lane"] : [],
   );
