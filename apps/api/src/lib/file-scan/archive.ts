@@ -354,6 +354,7 @@ type InspectArchiveOptions = {
   budget: ArchiveInspectionBudget;
   now: () => number;
   guard: Scanner;
+  now?: () => number;
 };
 
 const inspectArchive = async ({

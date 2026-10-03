@@ -97,6 +97,15 @@ const SEEDS: readonly Seed[] = [
 
 let testDb: TestDatabase;
 let scopedDb: ScopedDb;
+const claimFor = async (id: SafeId<"caseLawDecision">) => {
+  const claim = await claimDocumentFetch(id, scopedDb);
+  expect(claim.status).toBe("claimed");
+  if (claim.status !== "claimed") {
+    throw new Error("expected claimed snapshot");
+  }
+  return claim.decision;
+};
+
 let sourceId: SafeId<"caseLawSource">;
 /** Whether this file inserted the source, and so must remove it. */
 let sourceOwnership: "created" | "borrowed" = "borrowed";
@@ -231,8 +240,7 @@ test("parking takes a decision out of the walk at once and keeps it pending", as
 
   expect(
     await parkDocumentFetch({
-      claimedSourceHash: null,
-      decisionId: idFor("to-park"),
+      decision: await claimFor(idFor("to-park")),
       scopedDb,
     }),
   ).toBe("parked");
@@ -287,16 +295,7 @@ type FetchSeededOptions = {
 const fetchSeeded = async ({ answer, label, observe }: FetchSeededOptions) =>
   await fetchDecisionDocument({
     onDocumentObservation: observe,
-    decision: {
-      id: idFor(label),
-      caseNumber: `parking-${suffix}-${label}`,
-      ecli: null,
-      court: "Okresný súd",
-      country: "SVK",
-      decisionDate: "2026-05-01",
-      decisionType: null,
-      documentUrl: PUBLISHER_URL,
-    },
+    decisionId: idFor(label),
     fetchDocument: async () =>
       await observePublisherDocumentFetch({
         source: ADAPTER_KEYS.SK_COURTS,
@@ -483,7 +482,7 @@ describe("a stale claim", () => {
       expect(buffered.caseNumber).not.toBe(metadata.caseNumber);
       const urls: string[] = [];
       const outcome = await fetchDecisionDocument({
-        decision: buffered,
+        decisionId: buffered.id,
         fetchDocument: async (url) => {
           urls.push(url.href);
           return url.href === currentUrl
@@ -551,18 +550,24 @@ describe("a stale claim", () => {
     for (const claimed of VERSIONS) {
       for (const current of VERSIONS) {
         const label = `stale-${claimed ?? "none"}-${current ?? "none"}`;
-        await insertFetchable(`${label}-park`, current ?? undefined);
-        await insertFetchable(`${label}-mark`, current ?? undefined);
+        await insertFetchable(`${label}-park`, claimed ?? undefined);
+        await insertFetchable(`${label}-mark`, claimed ?? undefined);
+        const parkDecision = await claimFor(idFor(`${label}-park`));
+        const markDecision = await claimFor(idFor(`${label}-mark`));
+        await testDb
+          .update(caseLawDecisions)
+          .set({ sourceHash: current })
+          .where(
+            inArray(caseLawDecisions.id, [parkDecision.id, markDecision.id]),
+          );
         const applies = claimed === current;
 
         const parked = await parkDocumentFetch({
-          claimedSourceHash: claimed,
-          decisionId: idFor(`${label}-park`),
+          decision: parkDecision,
           scopedDb,
         });
         await markDocumentUnavailable({
-          claimedSourceHash: claimed,
-          decisionId: idFor(`${label}-mark`),
+          decision: markDecision,
           scopedDb,
         });
 
@@ -576,9 +581,9 @@ describe("a stale claim", () => {
           parked: applies ? "parked" : "superseded",
           park: {
             fulltext: null,
-            documentFetchAttempts: applies ? MAX_DOCUMENT_FETCH_ATTEMPTS : 0,
+            documentFetchAttempts: applies ? MAX_DOCUMENT_FETCH_ATTEMPTS : 1,
           },
-          mark: { fulltext: applies ? "" : null, documentFetchAttempts: 0 },
+          mark: { fulltext: applies ? "" : null, documentFetchAttempts: 1 },
         });
       }
     }

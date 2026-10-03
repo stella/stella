@@ -87,6 +87,15 @@ export const envApiServerSchema = {
   /** Optional GitHub API token used only for curated catalogue traversal. */
   GITHUB_TOKEN: v.optional(v.string()),
   OPENROUTER_API_KEY: v.optional(v.string()),
+  OPENROUTER_WIF_POLICY_ID: v.optional(
+    v.pipe(v.string(), v.trim(), v.minLength(1)),
+  ),
+  OPENROUTER_WIF_AUDIENCE: v.optional(
+    v.pipe(v.string(), v.trim(), v.minLength(1)),
+  ),
+  OPENROUTER_WIF_STS_REGION: v.optional(
+    v.pipe(v.string(), v.trim(), v.regex(/^[a-z]+(?:-[a-z]+)+-\d+$/u)),
+  ),
   /** Checks the regional model catalog before accepting managed requests. */
   FEATURE_MANAGED_PROVIDER_CHECKS: featureFlagSchema,
   MANAGED_PROVIDER_CHECK_INTERVAL_MS: v.optional(
@@ -773,6 +782,9 @@ type EnvApiInvariantInput = {
   MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS?: number | undefined;
   OPENROUTER_API_KEY?: string | undefined;
+  OPENROUTER_WIF_POLICY_ID?: string | undefined;
+  OPENROUTER_WIF_AUDIENCE?: string | undefined;
+  OPENROUTER_WIF_STS_REGION?: string | undefined;
   BETTER_AUTH_URL: string;
   DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
   E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
@@ -808,6 +820,9 @@ type ManagedProviderCheckInvariantInput = Pick<
   | "MANAGED_PROVIDER_CHECK_INTERVAL_MS"
   | "MANAGED_PROVIDER_CHECK_TIMEOUT_MS"
   | "OPENROUTER_API_KEY"
+  | "OPENROUTER_WIF_POLICY_ID"
+  | "OPENROUTER_WIF_AUDIENCE"
+  | "OPENROUTER_WIF_STS_REGION"
 >;
 
 const managedProviderCheckInvariantViolation = ({
@@ -816,13 +831,24 @@ const managedProviderCheckInvariantViolation = ({
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
   OPENROUTER_API_KEY,
+  OPENROUTER_WIF_POLICY_ID,
+  OPENROUTER_WIF_AUDIENCE,
+  OPENROUTER_WIF_STS_REGION,
 }: ManagedProviderCheckInvariantInput): string | null => {
+  const configuredWifFields = [
+    OPENROUTER_WIF_POLICY_ID,
+    OPENROUTER_WIF_AUDIENCE,
+    OPENROUTER_WIF_STS_REGION,
+  ].filter((value) => value !== undefined).length;
+  if (configuredWifFields !== 0 && configuredWifFields !== 3) {
+    return "OPENROUTER_WIF_POLICY_ID, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
   if (FEATURE_MANAGED_PROVIDER_CHECKS) {
     if (AI_PROVIDER !== "openrouter") {
       return "FEATURE_MANAGED_PROVIDER_CHECKS requires AI_PROVIDER=openrouter.";
     }
-    if (!OPENROUTER_API_KEY) {
-      return "FEATURE_MANAGED_PROVIDER_CHECKS requires OPENROUTER_API_KEY.";
+    if (!OPENROUTER_API_KEY?.trim() && configuredWifFields !== 3) {
+      return "FEATURE_MANAGED_PROVIDER_CHECKS requires OPENROUTER_API_KEY or complete OpenRouter WIF configuration.";
     }
     if (
       MANAGED_PROVIDER_CHECK_INTERVAL_MS === undefined ||
@@ -841,6 +867,9 @@ export const envApiInvariantViolation = ({
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
   OPENROUTER_API_KEY,
+  OPENROUTER_WIF_POLICY_ID,
+  OPENROUTER_WIF_AUDIENCE,
+  OPENROUTER_WIF_STS_REGION,
   BETTER_AUTH_URL,
   DEV_PUBLIC_LAW_CONNECT_COMMAND,
   E2E_DISABLE_AUTH_RATE_LIMIT,
@@ -885,6 +914,9 @@ export const envApiInvariantViolation = ({
     MANAGED_PROVIDER_CHECK_INTERVAL_MS,
     MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
     OPENROUTER_API_KEY,
+    OPENROUTER_WIF_POLICY_ID,
+    OPENROUTER_WIF_AUDIENCE,
+    OPENROUTER_WIF_STS_REGION,
   });
   if (managedViolation !== null) {
     return managedViolation;
