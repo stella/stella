@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
@@ -34,6 +36,43 @@ describe("publisher labels cross one structural text boundary", () => {
     ).toBe(true);
     expect(result.plainTextOutcome.type).toBe("accepted");
     expect(plainTextIngestionResult(result)).toEqual(result);
+  });
+
+  test("optional labels, judges, citations and every present text field cross the same boundary", () => {
+    const encoded = "&amp;lt;b&amp;gt;Value&amp;lt;/b&amp;gt;";
+    const result = toPlainTextIngestionResult({
+      ...rawDecision,
+      sheetNumber: encoded,
+      ecli: encoded,
+      legacyEcli: encoded,
+      decisionType: encoded,
+      judges: [{ role: "rapporteur", nameAsPrinted: encoded }],
+      publisherCitedCases: [encoded],
+      identifiers: [
+        { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: encoded },
+      ],
+      textFields: {
+        abstract: presentTextField(encoded),
+        headnote: presentTextField(encoded),
+        legalSentence: presentTextField(encoded),
+        summary: presentTextField(encoded),
+      },
+    }).unwrap();
+    for (const label of [
+      result.sheetNumber,
+      result.ecli,
+      result.legacyEcli,
+      result.decisionType,
+      result.judges?.at(0)?.nameAsPrinted,
+      result.publisherCitedCases?.at(0),
+      result.identifiers?.at(0)?.value,
+    ]) {
+      expect(label?.toString()).toBe("Value");
+    }
+    for (const field of Object.values(result.textFields)) {
+      expect(field).toMatchObject({ type: "present", text: "Value" });
+    }
+    expect(toPlainTextIngestionResult(result).unwrap()).toEqual(result);
   });
 
   test("markup alone cannot turn published text into a present empty field", () => {

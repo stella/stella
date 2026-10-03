@@ -101,6 +101,8 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
+import type { CommonCourtRulingKeyInput } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import {
   PL_COURTS_RULING_DECISION_TYPES,
   PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
@@ -131,7 +133,6 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
-import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
@@ -767,43 +768,6 @@ export const plNcourtDecisionType = (
     : undefined;
 };
 
-/** Where a signature's parts differ only in spacing, one spelling. */
-const normalizeSignature = (signature: string): string =>
-  collapse(signature).toLocaleUpperCase("pl-PL");
-
-/** What a ruling key is read from: stored columns only. */
-type CommonCourtRulingKeyInput = Pick<
-  RawIngestionResult,
-  "caseNumber" | "court" | "decisionDate" | "decisionType"
->;
-
-/**
- * The key under which a stored common-court judgment meets its copy in the
- * other source: court, signature, judgment date and decision type.
- *
- * Both this adapter and `pl-courts` store the same judgment under their own
- * ids; the one here is also the `source.judgmentId` SAOS keeps. Two rows
- * sharing a key are one judgment, and this API is the one SAOS imports from.
- * Empty for a row missing the date or the type: a signature alone does not
- * name a judgment, since a ruling and a later order share it.
- */
-export const plCommonCourtRulingKeys = ({
-  caseNumber,
-  court,
-  decisionDate,
-  decisionType,
-}: CommonCourtRulingKeyInput): string[] =>
-  decisionDate === undefined || decisionType === undefined
-    ? []
-    : [
-        [
-          collapse(court).toLocaleLowerCase("pl-PL"),
-          normalizeSignature(caseNumber),
-          decisionDate,
-          decisionType.toLocaleLowerCase("pl-PL"),
-        ].join("|"),
-      ];
-
 const COURT_ID = /^15\d{6}$/u;
 
 type CourtName = { name: string; known: boolean };
@@ -1215,6 +1179,9 @@ export const assemblePlNcourtDecision = ({
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   });
+  if (decision.plainTextOutcome.type === "item_build_failed") {
+    return { type: "built", decision };
+  }
   return standaloneReasons
     ? {
         type: "supplement",
@@ -2060,6 +2027,7 @@ const buildRows = async (
           case "built":
             return outcome.decision;
           case "supplement":
+            return outcome.supplement.document;
           case "unkeyable":
             return undefined;
           default:

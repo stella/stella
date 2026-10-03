@@ -17,6 +17,7 @@ import {
 
 import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import {
   buildPlDecision,
   normalizeSaosDumpItem,
@@ -29,7 +30,6 @@ import {
   normalizePlNcourtListingRow,
   parsePlNcourtCursor,
   PL_NCOURT_WINDOW,
-  plCommonCourtRulingKeys,
   plNcourtAdapter,
   plNcourtCensus,
   plNcourtComponents,
@@ -429,6 +429,76 @@ describe("building a judgment", () => {
     ).toEqual([REASONS]);
   });
 
+  test("rejected standalone reasons are counted and kept as a raw quarantine decision", async () => {
+    const detailXml = (
+      await fixture(`pl-ncourt-detail-${REASONS}.xml`)
+    ).replace(
+      "</judgement>",
+      "<publisherLabel>\\rtf1 rejected</publisherLabel></judgement>",
+    );
+    const contentXml = await fixture(`pl-ncourt-content-${REASONS}.xml.gz`);
+    const detail = readPlNcourtDetail(detailXml);
+    const fields =
+      detail?.type === "record" ? detail.fields : panic("no reasons record");
+    const reasonsRow = rowXml({
+      id: REASONS,
+      signature: fields.get("signature") ?? "",
+      date: fields.get("date") ?? "",
+      publicationDate: "2026-09-20 18:40:07.0 CEST",
+      courtId: fields.get("courtId") ?? "",
+      type: fields.get("type") ?? "",
+    });
+    const assembled = assemblePlNcourtDecision({
+      listingXml: reasonsRow,
+      detailXml,
+      contentXml,
+    });
+    const document =
+      assembled.type === "supplement"
+        ? assembled.supplement.document
+        : built(assembled);
+    // The fixture reaches the plain-text failure before routing is asserted.
+    expect(document.plainTextOutcome.type).toBe("item_build_failed");
+    expect(assembled.type).toBe("built");
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = urlOf(input);
+      if (url.pathname.endsWith("/judgement/details")) {
+        return await Promise.resolve(xml(detailXml));
+      }
+      if (url.pathname.endsWith("/judgement/content")) {
+        return await Promise.resolve(xml(contentXml));
+      }
+      return await Promise.resolve(
+        xml(
+          `<judgements total="1" results="1" offset="0" limit="200">${reasonsRow}</judgements>`,
+        ),
+      );
+    });
+    const page = await fetchPage(
+      encodePlNcourtCursor({
+        lane: "walk",
+        since: "2026-09-23",
+        offset: 0,
+        window: PL_NCOURT_WINDOW,
+        anchor: "",
+      }),
+    );
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
+    expect(page.supplements ?? []).toHaveLength(0);
+    expect(page.decisions).toHaveLength(1);
+    const quarantine = page.decisions.at(0) ?? panic("missing quarantine");
+    expect(quarantine.sourceDocumentId).toBe(REASONS);
+    expect(quarantine.plainTextOutcome.type).toBe("item_build_failed");
+    expect(quarantine.isListingOnly).toBe(true);
+    const raw = decodeSourceRawEnvelope(quarantine.sourceRaw ?? "");
+    expect(Object.values(raw ?? {})).toContain(reasonsRow);
+    expect(Object.values(raw ?? {})).toContain(detailXml);
+    expect(Object.values(raw ?? {})).toContain(contentXml);
+  });
+
   test("a thesis the record states is the judgment's headnote", async () => {
     const detailXml = await fixture(`pl-ncourt-detail-${THESIS}.xml`);
     const detail = readPlNcourtDetail(detailXml);
@@ -758,17 +828,6 @@ describe("the SAOS copy of a judgment", () => {
     expect(Bun.deepEquals(official.metadata["rulingKeys"], saosKeys)).toBe(
       true,
     );
-  });
-
-  test("a key needs the date and the type: a signature alone names no judgment", () => {
-    expect(
-      plCommonCourtRulingKeys({
-        caseNumber: "II Ca 236/18",
-        court: "Sąd Okręgowy w Świdnicy",
-        decisionDate: undefined,
-        decisionType: "postanowienie",
-      }),
-    ).toEqual([]);
   });
 });
 
