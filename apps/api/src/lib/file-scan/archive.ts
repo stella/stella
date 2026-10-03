@@ -272,7 +272,9 @@ const scanStream = async ({
   };
 
   for await (const chunk of chunks) {
-    if (!consumeBytes(chunk.length)) {return refused("inflatedLimit");}
+    if (!consumeBytes(chunk.length)) {
+      return refused("inflatedLimit");
+    }
     produced += chunk.length;
     if (produced > declaredBytes) {
       return refused("corrupt");
