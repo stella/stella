@@ -52,6 +52,11 @@
     "takenOverTitle": "Modification déplacée vers un autre appareil"
   },
   "dialog": {
+    "accountWindowTitle": "Connecter un compte",
+    "accountTitle": "Connecter ce compte ?",
+    "accountSubtitle": "Connectez stella desktop à ce compte et à cette organisation.",
+    "accountEmail": "Compte",
+    "organizationName": "Organisation",
     "allow": "Autoriser",
     "apiUrl": "URL de l’API",
     "cancel": "Annuler",

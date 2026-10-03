@@ -20,6 +20,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -193,7 +194,7 @@ const readActivityOfWorkspaceA1 = async (
 ): Promise<ActivityItem[]> => {
   const result = await readOverviewActivity.handler(
     asTestRaw<Parameters<typeof readOverviewActivity.handler>[0]>({
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       query,
       safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
       session: { activeOrganizationId: ids.orgA },
@@ -264,7 +265,7 @@ describe("matter overview activity", () => {
 
   test("exports one bounded workspace-scoped download", async () => {
     const context = {
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       recordAuditEvent: async () => undefined,
       safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
       session: { activeOrganizationId: ids.orgA },
@@ -404,7 +405,7 @@ describe("matter overview activity", () => {
     try {
       const result = await readOverviewActivityActors.handler(
         asTestRaw<Parameters<typeof readOverviewActivityActors.handler>[0]>({
-          memberRole: { role: "owner" },
+          memberRole: sessionMemberRole("owner"),
           query: {},
           safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
           session: { activeOrganizationId: ids.orgA },

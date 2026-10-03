@@ -323,19 +323,25 @@ const applyNullAsAbsent = (value: unknown, plan: NullAsAbsentPlan): unknown => {
       if (!isRecord(value)) {
         return value;
       }
-      const normalized: Record<string, unknown> = {};
-      for (const [key, entry] of Object.entries(value)) {
-        const placeholders = plan.absentWhen.get(key);
-        if (
-          placeholders?.some((placeholder) => isPlaceholder(entry, placeholder))
-        ) {
-          continue;
-        }
-        const nested = plan.properties.get(key);
-        normalized[key] =
-          nested === undefined ? entry : applyNullAsAbsent(entry, nested);
-      }
-      return normalized;
+      return Object.fromEntries(
+        Object.entries(value).flatMap(([key, entry]) => {
+          const placeholders = plan.absentWhen.get(key);
+          if (
+            placeholders?.some((placeholder) =>
+              isPlaceholder(entry, placeholder),
+            )
+          ) {
+            return [];
+          }
+          const nested = plan.properties.get(key);
+          return [
+            [
+              key,
+              nested === undefined ? entry : applyNullAsAbsent(entry, nested),
+            ] as const,
+          ];
+        }),
+      );
     }
     default:
       return panic(`Unhandled null-as-absent plan: ${JSON.stringify(plan)}`);
@@ -729,6 +735,10 @@ export const internalFailureResult = (
         // the envelope carries the same `issues[].path` detail a schema
         // rejection does instead of collapsing to one line of prose.
         issues: error.issues,
+        // The handler's own next step for input it refused: authored text
+        // about the call, never internal detail. Other refusals keep the
+        // envelope's default hint.
+        ...(code === "validation_error" && { hint: error.hint }),
       });
     }
   }

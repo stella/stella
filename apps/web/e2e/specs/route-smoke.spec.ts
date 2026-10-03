@@ -222,10 +222,6 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: () => `/verify/${NONEXISTENT_VERIFICATION_CODE}`,
   },
   {
-    template: "/workspaces/$workspaceId/correspondence",
-    path: (world) => `/workspaces/${world.workspace.id}/correspondence`,
-  },
-  {
     template: "/workspaces/$workspaceId/correspondence/$correspondenceId",
     path: (world) =>
       `/workspaces/${world.workspace.id}/correspondence/${world.correspondenceId}`,
@@ -233,6 +229,9 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/time"),
   staticRoute("/settings/organization/time-policy"),
   staticRoute("/settings/organization/vat-rates", {
+    expectation: { kind: "settles" },
+  }),
+  staticRoute("/settings/organization/number-series", {
     expectation: { kind: "settles" },
   }),
 ];
@@ -753,13 +752,6 @@ const assertNoRouteBoundary = async (page: Page, routeTemplate: string) => {
 };
 
 const assertRouteContentVisible = async (page: Page, routeTemplate: string) => {
-  if (routeTemplate === "/workspaces/$workspaceId/correspondence") {
-    await expect(
-      page.getByRole("link", { name: CORRESPONDENCE_SMOKE_SUBJECT }),
-      "the correspondence list renders the persisted message",
-    ).toBeVisible();
-    return;
-  }
   if (
     routeTemplate ===
     "/workspaces/$workspaceId/correspondence/$correspondenceId"

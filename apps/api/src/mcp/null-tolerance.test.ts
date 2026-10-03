@@ -100,8 +100,14 @@ const loadOrgSettingsMock = mock(async () => ({
   promptCachingEnabled: false,
 }));
 const { handleMcpToolCall } = await import("@/api/mcp/tools");
-const capabilityCatalog = (await import("@stll/cli/capability-catalog.json"))
-  .default;
+const { readCapabilityCatalog } =
+  await import("@stll/cli/capability-catalog-data");
+const { parseCapabilityCatalog } =
+  await import("../../../../packages/cli/src/capability-catalog-load");
+const capabilityCatalog = parseCapabilityCatalog(readCapabilityCatalog());
+if (capabilityCatalog === null) {
+  throw new TypeError("Invalid capability catalog");
+}
 
 type ToolResult = Awaited<ReturnType<typeof handleMcpToolCall>>;
 
@@ -192,10 +198,10 @@ describe("null-tolerance premise", () => {
       }
       for (const part of ["body", "params", "query"] as const) {
         const partSchema = schema[part];
-        if (!isRecord(partSchema) || !isRecord(partSchema.properties)) {
+        if (!isRecord(partSchema) || !isRecord(partSchema["properties"])) {
           continue;
         }
-        for (const prop of Object.values(partSchema.properties)) {
+        for (const prop of Object.values(partSchema["properties"])) {
           const json = JSON.stringify(prop);
           if (json.includes('"type":"null"')) {
             nullableFields += 1;

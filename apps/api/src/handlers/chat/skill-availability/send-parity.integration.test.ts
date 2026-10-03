@@ -35,6 +35,7 @@ import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { createChatStreamMock } from "@/api/tests/helpers/chat-stream-mock";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
@@ -195,7 +196,7 @@ const callerContext = () => ({
   getActiveWorkspaceIds: async () => [ids.wsA1, ids.wsA2],
   getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
     workspaces().find(({ id }) => id === workspaceId) ?? null,
-  memberRole: { role: "owner" as const },
+  memberRole: sessionMemberRole("owner"),
   orgAIConfig,
   safeDb,
   scopedDb,

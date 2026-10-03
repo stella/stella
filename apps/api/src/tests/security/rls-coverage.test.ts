@@ -112,6 +112,8 @@ describe("policy coverage", () => {
     // The entry timer projection has member reads and truth-bound owner/admin
     // INSERT/UPDATE, with identity immutability enforced by its trigger.
     "time_entry_timer_states",
+    // Owner/admin targets have a dedicated policy assertion and no DELETE grant.
+    "time_daily_targets",
     // AI memory is multi-scope (org OR user OR workspace in one table)
     // and archive-only (no permissive DELETE). The generic workspace /
     // org loops can't express either shape; the dedicated test below
@@ -469,6 +471,21 @@ describe("policy coverage", () => {
         expect(expr).toContain("organization_id");
         expect(expr).toContain(SETTING_ORGANIZATION_ID);
       }
+    }
+  });
+
+  test("daily targets require the active organization and owner or organization management", async () => {
+    const policies = (await fetchStellaPolicies(testDb)).filter(
+      (policy) => policy.table_name === "time_daily_targets",
+    );
+    expect(policies).toHaveLength(1);
+    const policy = policies.at(0);
+    expect(policy?.command).toBe("*");
+    for (const expression of [policy?.using_expr, policy?.check_expr]) {
+      expect(expression).toContain(SETTING_ORGANIZATION_ID);
+      expect(expression).toContain(SETTING_USER_ID);
+      expect(expression).toContain("owner");
+      expect(expression).toContain("admin");
     }
   });
 

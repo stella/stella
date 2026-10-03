@@ -12,6 +12,7 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 import type { FirstPageNumber } from "./pagination";
@@ -35,7 +36,7 @@ const makeFixture = (items: TestItem[], total: number) =>
 
 const itemToDecision = (item: TestItem): IngestionItem => ({
   type: "decision",
-  decision: {
+  decision: plainTextIngestionResult({
     caseNumber: `CASE-${item.id}`,
     court: "Test Court",
     country: "TST",
@@ -44,7 +45,7 @@ const itemToDecision = (item: TestItem): IngestionItem => ({
     metadata: {},
     documentAst: {},
     rawHash: `hash-${item.id}`,
-  },
+  }),
 });
 
 const createTestFetch = (opts?: {
@@ -160,7 +161,7 @@ describe("createPagePaginatedFetch", () => {
 
     const page = result.unwrap();
     expect(page.decisions).toHaveLength(3);
-    expect(page.decisions[0]?.caseNumber).toBe("CASE-1");
+    expect(page.decisions[0]?.caseNumber === "CASE-1").toBe(true);
     expect(page.nextCursor).toBe("offset:3");
   });
 
@@ -311,8 +312,47 @@ describe("createPagePaginatedFetch", () => {
     const result = await fetchPage(null, {});
     const page = result.unwrap();
     expect(page.decisions).toHaveLength(2);
-    expect(page.decisions[0]?.caseNumber).toBe("CASE-1");
-    expect(page.decisions[1]?.caseNumber).toBe("CASE-3");
+    expect(page.decisions[0]?.caseNumber === "CASE-1").toBe(true);
+    expect(page.decisions[1]?.caseNumber === "CASE-3").toBe(true);
+    expect(page.nextCursor).toBe("offset:3");
+    expect(page.itemBuildFailures).toBeUndefined();
+  });
+
+  test("counts explicit item failures while progressing past intentional skips", async () => {
+    const items = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    await saveFixture(FIXTURE_NAME, makeFixture(items, 10));
+    restore = await mockFetchWithFixtures([
+      { pattern: "/test-api", fixture: FIXTURE_NAME },
+    ]);
+    const fetchPage = createPagePaginatedFetch<TestResponse>({
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
+      pageSize: 3,
+      firstPage: 1,
+      buildRequest: (page) => ({
+        url: `https://example.com/test-api?page=${page}`,
+      }),
+      parseResponse: async (response) =>
+        Result.ok(await readTestJson<TestResponse>(response)),
+      extractItems: (data) => ({ items: data.results, total: data.total }),
+      parseItem: async (raw) => {
+        const item = asTestRaw<TestItem>(raw);
+        if (item.id === 2) {
+          return { type: "item_build_failed", decision: null };
+        }
+        return item.id === 3 ? null : itemToDecision(item);
+      },
+    });
+    const page = (await fetchPage(null, {})).unwrap();
+    expect(
+      Bun.deepEquals(
+        page.decisions.map(({ caseNumber }) => caseNumber),
+        ["CASE-1"],
+      ),
+    ).toBe(true);
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
     expect(page.nextCursor).toBe("offset:3");
   });
 
@@ -370,8 +410,8 @@ describe("createPagePaginatedFetch", () => {
 
     expect(mockedFetch.requestedPages).toEqual([0, 1, 2, 0]);
     expect(page.decisions).toHaveLength(40);
-    expect(page.decisions[0]?.caseNumber).toBe("CASE-61");
-    expect(page.decisions.at(-1)?.caseNumber).toBe("CASE-100");
+    expect(page.decisions[0]?.caseNumber === "CASE-61").toBe(true);
+    expect(page.decisions.at(-1)?.caseNumber === "CASE-100").toBe(true);
     expect(page.nextCursor).toBe("offset:100");
   });
 
@@ -416,8 +456,8 @@ describe("createPagePaginatedFetch", () => {
     // Second chunk (items 4-6) aborts mid-flight; results discarded so
     // the next cycle re-fetches and re-processes it.
     expect(page.decisions).toHaveLength(3);
-    expect(page.decisions[0]?.caseNumber).toBe("CASE-1");
-    expect(page.decisions.at(-1)?.caseNumber).toBe("CASE-3");
+    expect(page.decisions[0]?.caseNumber === "CASE-1").toBe(true);
+    expect(page.decisions.at(-1)?.caseNumber === "CASE-3").toBe(true);
     expect(page.nextCursor).toBe("offset:3");
   });
 });
@@ -604,7 +644,9 @@ describe("an offset names the same items whatever the publisher numbers from", (
       // The cursor is an item offset, so the first decision it yields is the
       // item at that offset — the property a wrong page origin breaks while
       // every count in the response still adds up.
-      expect(page.decisions.at(0)?.caseNumber).toBe(`CASE-${offset + 1}`);
+      expect(page.decisions.at(0)?.caseNumber === `CASE-${offset + 1}`).toBe(
+        true,
+      );
       expect(page.decisions).toHaveLength(PAGE_SIZE);
       expect(page.nextCursor).toBe(encodeOffsetCursor(offset + PAGE_SIZE));
     }

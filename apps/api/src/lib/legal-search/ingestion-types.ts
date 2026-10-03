@@ -1,22 +1,44 @@
+// parser-output-unchanged: observer wiring returns the adapter’s same normalized SyncPage.
 // parser-output-unchanged: replay outcome type gains an optional legacy docket; no parser output changes.
+// parser-output-unchanged: The required reconciliation revision projection changes retry bookkeeping, not parsed decision output.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type {
   DecisionTextFieldKey,
+  TextField,
   ReadDecisionTextFields,
+} from "@stll/api-contract/case-law-text-field";
+import {
+  DECISION_TEXT_FIELD,
+  TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
 import type {
   DecisionIdentifiers,
   DecisionPrimaryReferenceType,
 } from "@stll/legal-ast/decision-identifier";
+import type {
+  DocumentStage,
+  DocumentStageObserver,
+} from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
+import {
+  toPlainText,
+  PlainTextError,
+  toPlainTextMetadata,
+  type PlainText,
+  type PlainTextMetadataValue,
+} from "@/api/lib/case-law/plain-text";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
+import {
+  withDocumentStageWindow,
+  type DocumentStagePageOptions,
+} from "@/api/lib/legal-search/document-stage-observation";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type {
   DecisionSection,
@@ -73,7 +95,7 @@ export type CitationOpinionScope = {
 };
 
 /** Result of parsing a single court decision from a source. */
-export type IngestionResult = {
+export type RawIngestionResult = {
   /**
    * The decision's primary citable reference: the docket, unless
    * `caseNumberType` says otherwise.
@@ -237,6 +259,193 @@ export type IngestionResult = {
   sourceRawContentType?: string | undefined;
 };
 
+/** All publisher labels cross the shared structural text boundary before ingestion. */
+type PlainTextResultFields = {
+  caseNumber: PlainText;
+  sheetNumber?: PlainText | undefined;
+  ecli?: PlainText | undefined;
+  legacyEcli?: PlainText | undefined;
+  court: PlainText;
+  decisionType?: PlainText | undefined;
+  metadata: Record<string, PlainTextMetadataValue>;
+  judges?:
+    | readonly (Omit<DecisionJudgeInput, "nameAsPrinted"> & {
+        nameAsPrinted: PlainText;
+      })[]
+    | undefined;
+  textFields: Readonly<
+    Record<
+      DecisionTextFieldKey,
+      | Extract<TextField, { type: typeof TEXT_FIELD_TYPE.ABSENT }>
+      | {
+          readonly type: typeof TEXT_FIELD_TYPE.PRESENT;
+          readonly text: PlainText;
+        }
+    >
+  >;
+  publisherCitedCases?: readonly PlainText[] | undefined;
+  identifiers?:
+    | readonly [
+        Omit<DecisionIdentifiers[0], "value"> & { value: PlainText },
+        ...(Omit<DecisionIdentifiers[0], "value"> & { value: PlainText })[],
+      ]
+    | undefined;
+};
+
+type PlainTextOutcome =
+  | { type: "accepted" }
+  | { type: "item_build_failed"; error: PlainTextError };
+
+export type IngestionResult = Omit<
+  RawIngestionResult,
+  keyof PlainTextResultFields
+> &
+  PlainTextResultFields & { plainTextOutcome: PlainTextOutcome };
+
+/** Total over the fields whose source text cannot reach ingestion unbranded. */
+export const PLAIN_TEXT_RESULT_FIELDS = {
+  caseNumber: true,
+  sheetNumber: true,
+  ecli: true,
+  legacyEcli: true,
+  court: true,
+  decisionType: true,
+  metadata: true,
+  judges: true,
+  textFields: true,
+  publisherCitedCases: true,
+  identifiers: true,
+} as const satisfies Record<keyof PlainTextResultFields, true>;
+
+/** All source registrations share the branded result contract; no field debt is allowed. */
+export const PLAIN_TEXT_FIELD_DEBT = {} as const satisfies Record<
+  string,
+  never
+>;
+
+const plainTextField = (
+  field: TextField,
+): Result<
+  IngestionResult["textFields"][DecisionTextFieldKey],
+  PlainTextError
+> => {
+  switch (field.type) {
+    case TEXT_FIELD_TYPE.ABSENT:
+      return Result.ok(field);
+    case TEXT_FIELD_TYPE.PRESENT:
+      return toPlainText(field.text).andThen((text) =>
+        text.length === 0
+          ? Result.err(
+              new PlainTextError({
+                message: "Published text contains no plain-text content",
+                reason: "empty-present-text",
+              }),
+            )
+          : Result.ok({ type: field.type, text }),
+      );
+    default:
+      field satisfies never;
+      return panic(`Unhandled decision text field: ${String(field)}`);
+  }
+};
+
+const requiredLabel = (raw: string) =>
+  toPlainText(raw).andThen((plain) =>
+    raw.trim().length > 0 && plain.length === 0
+      ? Result.err(
+          new PlainTextError({
+            message: "Published label contains no plain-text content",
+            reason: "empty-present-text",
+          }),
+        )
+      : Result.ok(plain),
+  );
+
+const optionalPlainText = (raw: string | undefined) =>
+  raw === undefined ? Result.ok(undefined) : toPlainText(raw);
+
+/** Source identifiers, URLs, sourceRaw and AST structure retain their separate contracts. */
+export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
+  raw: T,
+): Result<
+  IngestionResult & Omit<T, keyof PlainTextResultFields | "plainTextOutcome">,
+  PlainTextError
+> =>
+  Result.gen(function* () {
+    if (
+      "plainTextOutcome" in raw &&
+      isRecord(raw.plainTextOutcome) &&
+      raw.plainTextOutcome["type"] === "item_build_failed" &&
+      raw.plainTextOutcome["error"] instanceof PlainTextError
+    ) {
+      return Result.err(raw.plainTextOutcome["error"]);
+    }
+    const identifiers = raw.identifiers;
+    const plainIdentifiers =
+      identifiers === undefined
+        ? undefined
+        : ([
+            {
+              type: identifiers[0].type,
+              value: yield* toPlainText(identifiers[0].value),
+            },
+            ...(yield* Result.all(
+              identifiers
+                .slice(1)
+                .map(({ type, value }) =>
+                  toPlainText(value).map((plain) => ({ type, value: plain })),
+                ),
+            )),
+          ] as const);
+    return Result.ok({
+      ...raw,
+      plainTextOutcome: { type: "accepted" as const },
+      caseNumber: yield* requiredLabel(raw.caseNumber),
+      sheetNumber: yield* optionalPlainText(raw.sheetNumber),
+      ecli: yield* optionalPlainText(raw.ecli),
+      legacyEcli: yield* optionalPlainText(raw.legacyEcli),
+      court: yield* requiredLabel(raw.court),
+      decisionType: yield* optionalPlainText(raw.decisionType),
+      metadata: Object.fromEntries(
+        yield* Result.all(
+          Object.entries(raw.metadata).map(([key, value]) =>
+            toPlainTextMetadata(value).map((plain) => [key, plain] as const),
+          ),
+        ),
+      ),
+      judges:
+        raw.judges === undefined
+          ? undefined
+          : yield* Result.all(
+              raw.judges.map(({ role, nameAsPrinted }) =>
+                toPlainText(nameAsPrinted).map((plain) => ({
+                  role,
+                  nameAsPrinted: plain,
+                })),
+              ),
+            ),
+      textFields: {
+        [DECISION_TEXT_FIELD.ABSTRACT]: yield* plainTextField(
+          raw.textFields.abstract,
+        ),
+        [DECISION_TEXT_FIELD.HEADNOTE]: yield* plainTextField(
+          raw.textFields.headnote,
+        ),
+        [DECISION_TEXT_FIELD.LEGAL_SENTENCE]: yield* plainTextField(
+          raw.textFields.legalSentence,
+        ),
+        [DECISION_TEXT_FIELD.SUMMARY]: yield* plainTextField(
+          raw.textFields.summary,
+        ),
+      },
+      publisherCitedCases:
+        raw.publisherCitedCases === undefined
+          ? undefined
+          : yield* Result.all(raw.publisherCitedCases.map(toPlainText)),
+      identifiers: plainIdentifiers,
+    });
+  });
+
 /**
  * Which decision a supplement belongs to, beyond the court, docket and
  * language it shares with that decision.
@@ -360,6 +569,8 @@ export type SliceCoverage = {
 /** A page of ingestion results with an optional cursor. */
 export type SyncPage = {
   decisions: IngestionResult[];
+  /** Failed item builds retained as listing-only rows for reconciliation. */
+  itemBuildFailures?: { type: "item_build_failed"; count: number } | undefined;
   /**
    * Supplements read off the same page. The pipeline processes them after
    * the page's decisions, so a judgment and the reasons listed beside it are
@@ -1058,6 +1269,11 @@ export type HeldRowRules = {
  */
 export type SourceReconciliation = SourceSliceWalk & {
   /**
+   * Per-record content/identity signal, excluding listing coordinates and corpus-wide revisions.
+   * Classify each new payload field as content/identity (include it) or traversal/repair metadata (exclude it).
+   */
+  revisionOf: (payload: unknown) => unknown;
+  /**
    * Whether a stored row counts as held only when it carries the document,
    * and not when it carries the listing metadata alone.
    *
@@ -1404,6 +1620,10 @@ export type SourceFieldInventory = {
  */
 export type SourceAdapter = {
   key: AdapterKey;
+  documentStage: DocumentStage;
+  observeDocumentStage: (
+    options: Omit<DocumentStagePageOptions, "source">,
+  ) => Promise<Result<SyncPage, AdapterFetchError>>;
   /** An opt-in annotation source; never a second decision-producing adapter. */
   collectionEnrichment?: SkCollectionConnector | undefined;
   name: string;
@@ -1420,6 +1640,7 @@ export type SourceAdapter = {
     cursor: string | null,
     config: Record<string, unknown>,
     signal?: AbortSignal,
+    onDocumentObservation?: DocumentStageObserver,
   ) => Promise<Result<SyncPage, AdapterFetchError>>;
   /** Minimum ms between requests to respect rate limits. */
   minRequestIntervalMs: number;
@@ -1498,14 +1719,25 @@ export type SourceAdapter = {
 
 type SourceAdapterDefinition<TKey extends AdapterKey> = Omit<
   SourceAdapter,
-  "country" | "key" | "name"
+  "country" | "key" | "name" | "observeDocumentStage"
 > & { readonly key: TKey };
 
 /** Build an adapter from the source facts declared for its registry key. */
 export const defineSourceAdapter = <const TKey extends AdapterKey>(
   adapter: SourceAdapterDefinition<TKey>,
-): SourceAdapter & { readonly key: TKey } => ({
-  ...adapter,
-  country: ADAPTER_MANIFESTS[adapter.key].country,
-  name: ADAPTER_MANIFESTS[adapter.key].name,
-});
+): SourceAdapter & { readonly key: TKey } => {
+  const observeDocumentStage = async (
+    options: Omit<DocumentStagePageOptions, "source">,
+  ) => await withDocumentStageWindow({ ...options, source: adapter.key });
+  return {
+    ...adapter,
+    observeDocumentStage,
+    country: ADAPTER_MANIFESTS[adapter.key].country,
+    name: ADAPTER_MANIFESTS[adapter.key].name,
+    fetchPage: async (cursor, config, signal, onDocumentObservation) =>
+      await observeDocumentStage({
+        fetchPage: async () => await adapter.fetchPage(cursor, config, signal),
+        observe: onDocumentObservation,
+      }),
+  };
+};

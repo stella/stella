@@ -1098,7 +1098,7 @@ describe("help surfaces --input for inputOnly tools", () => {
     expect(result.stdout).not.toContain('"action":"create_document"');
   });
 
-  test("clause save --help documents both --input-only fields", async () => {
+  test("clause save --help documents its --input-only fields", async () => {
     const server = startMockServer(() => ({ toolPayload: {} }));
     const result = await runCli({
       args: ["clause", "save", "--help"],
@@ -1109,6 +1109,7 @@ describe("help surfaces --input for inputOnly tools", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("--input");
     expect(result.stdout).toContain("body");
+    expect(result.stdout).toContain("expected_body");
     expect(result.stdout).toContain("metadata");
   });
 });

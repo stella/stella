@@ -1,5 +1,6 @@
 import { CHAT_TRANSPORT_ERROR_CODE } from "@stll/anonymize-chat";
 
+import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { emitAnonymizationRefusalMetric } from "@/api/lib/observability/request-metrics";
 import type {
@@ -8,6 +9,14 @@ import type {
 } from "@/api/lib/observability/request-metrics";
 
 type AnonymizationRefusalStatus = 422 | 500;
+const BOUNDARY_REFUSAL_FAILURE_CODE =
+  "boundary-refusal" satisfies ChatTurnFailureCode;
+
+export type AnonymizationRefusal<
+  TStatus extends AnonymizationRefusalStatus = AnonymizationRefusalStatus,
+> = HandlerError<TStatus> & {
+  readonly failureCode: typeof BOUNDARY_REFUSAL_FAILURE_CODE;
+};
 
 /**
  * The error a refused crossing of the anonymized boundary returns, counted as
@@ -34,14 +43,17 @@ export const refuseAnonymizedCrossing = <
   reason: AnonymizationRefusalReason;
   site: AnonymizationRefusalSite;
   status: TStatus;
-}): HandlerError<TStatus> => {
+}): AnonymizationRefusal<TStatus> => {
   emitAnonymizationRefusalMetric({ reason, site });
-  return new HandlerError({
-    ...(offerRawRetry
-      ? { code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal }
-      : {}),
-    ...(cause === undefined ? {} : { cause }),
-    message,
-    status,
-  });
+  return Object.assign(
+    new HandlerError({
+      ...(offerRawRetry
+        ? { code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal }
+        : {}),
+      ...(cause === undefined ? {} : { cause }),
+      message,
+      status,
+    }),
+    { failureCode: BOUNDARY_REFUSAL_FAILURE_CODE } as const,
+  );
 };

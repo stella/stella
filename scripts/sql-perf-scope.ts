@@ -2,7 +2,12 @@
 // baseline counter both read these lists, so a file the rule reports is a file
 // the baseline counts, and the reverse.
 
-const ROOTS = ["apps/api/src/", "packages/"] as const;
+const ROOTS = [
+  "apps/api/src/",
+  "apps/api/scripts/",
+  "apps/legal-atlas-runner/",
+  "packages/",
+] as const;
 const EXCLUDED_DIRECTORIES = [
   "__tests__",
   "tests",

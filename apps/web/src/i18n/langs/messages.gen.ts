@@ -545,6 +545,29 @@ type Messages = {
     "noActiveTimer": "No active timer";
     "noEntries": "No time entries for this period";
     "nonBillable": "Non-billable";
+    "numberSeries": {
+      "add": "Add number series";
+      "advance": "Advance";
+      "archiveConfirm": "Archive this number series? It will no longer be available for new documents.";
+      "creditNote": "Credit note";
+      "default": "Default series";
+      "description": "Manage numbering for invoices, advances and credit notes.";
+      "documentType": "Document type";
+      "edit": "Edit number series";
+      "editRestriction": "The template and sequence digits cannot change after a number has been allocated.";
+      "empty": "No number series.";
+      "invoice": "Invoice";
+      "issueDate": "Issue date";
+      "name": "Series name";
+      "padding": "Sequence digits";
+      "pattern": "Number template";
+      "patternHelp": "Use a sequence token with optional year or month tokens to set the period.";
+      "preview": "Next number";
+      "previewAllocated": "This number is already allocated.";
+      "previewHelp": "The preview uses the saved template and does not reserve a number.";
+      "setDefault": "Make default series";
+      "title": "Number series";
+    };
     "quickEntry": {
       "entrySaved": "Time entry saved";
       "expenseSaved": "Expense saved";
@@ -1443,7 +1466,9 @@ type Messages = {
     "importResult": "{created, plural, one {# created} other {# created}}, {skipped, plural, one {# skipped} other {# skipped}}";
     "importSuccess": "{count, plural, one {# clause imported} other {# clauses imported}}";
     "importing": "Importing…";
+    "keepMyText": "Keep my text";
     "languagePlaceholder": "e.g. en";
+    "leaveAndDiscard": "Leave and discard unsaved changes";
     "leaveWithoutVersion": "Leave without a version";
     "limitReached": "Clause limit reached";
     "linkClause": "Link clause";
@@ -1461,8 +1486,13 @@ type Messages = {
     "renameSlot": "Rename slot";
     "renameSlotInvalid": "Slot names must be unique and can't contain spaces, colons, or braces.";
     "restoreVersion": "Restore this version";
+    "reviewBeforeBodyAction": "Finish reviewing the suggested changes before restoring or promoting a clause.";
+    "reviewBeforeLeaving": "The reviewed text has not been saved yet. You can keep editing or leave and discard unsaved changes.";
     "saveAsVersion": "Save as new version";
+    "saveConflictDescription": "Choose which text to keep. Your edits are still here.";
+    "saveConflictTitle": "This clause changed elsewhere";
     "saveFailed": "Failed to save";
+    "saveFailedLeaveDescription": "Your changes could not be saved. Keep editing or leave and discard them.";
     "saveVersionAndLeave": "Save version & leave";
     "searchClauses": "Search clauses...";
     "searchPlaceholder": "Search clauses...";
@@ -1478,6 +1508,7 @@ type Messages = {
     "syncVersion": "Sync to latest";
     "synced": "Synced to latest version";
     "syncedAllResult": "{count, plural, =0 {Already up to date} one {# clause synced} other {# clauses synced}}";
+    "takeTheirText": "Use the saved text";
     "titleLabel": "Title";
     "titlePlaceholder": "e.g. Confidentiality clause";
     "unlinkClause": "Unlink";
@@ -1502,6 +1533,7 @@ type Messages = {
     "variantUpdated": "Variant updated";
     "variants": "Variants";
     "versionCount": "{count, plural, one {# version} other {# versions}}";
+    "versionLimitReached": "Version limit reached for this clause";
     "versionRestored": "Version restored";
   };
   "common": {
@@ -4237,7 +4269,6 @@ type Messages = {
       "deleteAccountWarningExplanation": "We will send a verification code to your email address to confirm this request. Completed workspace history remains attributed to your deleted account.";
       "desktop": "Desktop";
       "desktopAppDescription": "Recall anything you copy, and open stella documents in the desktop apps you already use.";
-      "desktopAutoConnectHint": "Open stella desktop after installing. It connects to this account on its own.";
       "desktopClipboardDescription": "Open, search, organize, and reuse copied text from any app.";
       "desktopClipboardTitle": "Searchable clipboard history";
       "desktopConnectFailed": "Could not connect stella desktop.";
@@ -5244,6 +5275,10 @@ type Messages = {
       "noOtherMatters": "No other Matters available";
       "operation": "Operation";
       "rootFolder": "(Root folder)";
+      "sourceChanged": "The item changed while it was being moved. Try again.";
+      "sourceInUse": "The item is currently in use. Finish processing, editing, collaboration, or signing, then try again.";
+      "sourceReferenced": "This item is linked to time entries or expenses and cannot be moved.";
+      "sourceVersionLimit": "This item has too many versions or field values to move.";
       "targetFolder": "Target folder (optional)";
       "targetMatter": "Target Matter";
       "title": "Copy to Matter";
