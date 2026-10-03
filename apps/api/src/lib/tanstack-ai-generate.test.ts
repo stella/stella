@@ -18,6 +18,7 @@ import {
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   managedProviderUnavailable,
 } from "@/api/lib/chat/provider-data-policy";
+import { PROVIDER_CALL_ERROR_MESSAGE } from "@/api/lib/errors/provider-call-error";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
@@ -459,13 +460,10 @@ describe("TanStack AI structured output generation", () => {
       expect(caught).toMatchObject({
         status: 503,
         code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
-        message: refusal.message,
+        message: PROVIDER_CALL_ERROR_MESSAGE,
       });
       expect(classifyAIError(caught)).toBe("model_unavailable");
       expect(providerRequests).toHaveLength(1);
-      if (path === "object-stream") {
-        expect(caught).toBe(refusal);
-      }
     });
   }
 
@@ -1040,9 +1038,10 @@ describe("TanStack AI structured output generation", () => {
       (error: unknown) => error,
     );
 
-    // The engine hands the caller a wrapper, so the provider's own error is
-    // reachable through `cause` rather than by identity.
-    expect(caught).toHaveProperty("cause", apiError);
+    expect(caught).toMatchObject({
+      message: PROVIDER_CALL_ERROR_MESSAGE,
+      providerStatus: 400,
+    });
     expect(providerRequests).toHaveLength(1);
   });
 
@@ -1108,13 +1107,10 @@ describe("TanStack AI structured output generation", () => {
       (error: unknown) => error,
     );
 
-    // Nothing names this failure, so the engine's own wrapper stands rather
-    // than being replaced by a 502 that would claim a status it never had.
-    // The wrapper carries no status at all, which is what separates it from a
-    // recovery that fired: a `HandlerError` would answer 502 while classifying
-    // as `unknown` just the same, and would keep this same cause.
-    expect(caught).not.toHaveProperty("status");
-    expect(caught).toHaveProperty("cause", providerError);
+    expect(caught).toMatchObject({
+      status: 500,
+      message: PROVIDER_CALL_ERROR_MESSAGE,
+    });
     expect(classifyAIError(caught)).toBe("unknown");
   });
 
@@ -1619,7 +1615,7 @@ describe("TanStack AI text generation", () => {
 
     expect(caught).toMatchObject({
       code: "invalid_request_error",
-      message: "OpenAI rejected the request.",
+      message: PROVIDER_CALL_ERROR_MESSAGE,
       status: 502,
     });
   });
@@ -1740,7 +1736,7 @@ describe("TanStack AI text generation", () => {
 
     expect(caught).toMatchObject({
       code: "rate_limit_exceeded",
-      message: "OpenAI rate limit exceeded.",
+      message: PROVIDER_CALL_ERROR_MESSAGE,
       status: 502,
     });
   });

@@ -1751,7 +1751,8 @@ const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
   const kind = classifyRunErrorChunk(chunk);
   reportStreamFailure(error, kind);
   return {
-    ...chunk,
+    type: EventType.RUN_ERROR,
+    timestamp: chunk.timestamp,
     message: kind,
     code: kind,
   };

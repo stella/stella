@@ -56,6 +56,10 @@ import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
+import {
+  ProviderCallError,
+  PROVIDER_CALL_ERROR_MESSAGE,
+} from "@/api/lib/errors/provider-call-error";
 import { createFileKey } from "@/api/lib/files/utils";
 import {
   cancelFlowRun,
@@ -69,7 +73,7 @@ import type { notifyFlowRunActorOfCompletion } from "@/api/lib/flows/flow-run-co
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
 import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
 import { startFlowRun } from "@/api/lib/flows/start-flow-run";
-import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -78,7 +82,16 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
-import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import {
+  instanceWireErrorModel,
+  providerCallErrorCassettes,
+  providerCallErrorSentinel,
+} from "@/api/tests/helpers/provider-call-error-wire";
+import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -1585,6 +1598,131 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
     });
     expect(finished?.status).toBe("completed");
   });
+
+  test.each(providerCallErrorCassettes())(
+    "provider failure settles a flow with $scenario/$variant",
+    async (cassette) => {
+      const definitionId = createSafeId<"flowDefinition">();
+      await testDb.insert(flowDefinitions).values({
+        id: definitionId,
+        organizationId,
+        name: "Provider failure flow",
+        steps: [AI_STEP],
+        trigger: MANUAL_TRIGGER,
+        enabled: true,
+        createdByUserId: userId,
+      });
+      const safeDb = asTestRaw<SafeDb>(
+        createSafeDb(testDb, [workspaceId], organizationId, userId),
+      );
+      const started = await startFlowRun({
+        safeDb,
+        organizationId,
+        workspaceId,
+        definitionId,
+        triggerSource: { type: "manual", userId },
+        inputEntityIds: [],
+        enqueueStep: enqueueFlowStepMock,
+      });
+      if (Result.isError(started)) {
+        throw started.error;
+      }
+      const { runId } = started.value;
+      const job = { runId, stepIndex: 0 };
+      const replay = installProviderWireReplay({ retryAfterMs: 1 });
+      const analytics = installRecordingAnalytics();
+      const logs = installRecordingLogger();
+      const previousMockAI = env.USE_MOCK_AI;
+      env.USE_MOCK_AI = false;
+      try {
+        replay.serve(cassette);
+        const model = instanceWireErrorModel(cassette.model);
+        const failure = await Result.tryPromise(async () =>
+          executeFlowStep(job, new AbortController().signal, {
+            database: flowDatabase,
+            makeScopedDb,
+            makeSafeDb,
+            enqueueStep: enqueueFlowStepMock,
+            broadcastUpdate,
+            loadAIConfig: async () => Result.ok(null),
+            generateTextForRole: async (options) =>
+              generateTanStackTextForRole({
+                ...options,
+                resolveTextModel: async () => model,
+              }),
+          }),
+        );
+        expect(Result.isError(failure)).toBe(true);
+        if (Result.isOk(failure)) {
+          throw new TypeError("The provider fixture fails the step");
+        }
+        const error = failure.error.cause;
+        expect(error).toBeInstanceOf(ProviderCallError);
+        if (!(error instanceof ProviderCallError)) {
+          throw new TypeError("The step returns a provider failure");
+        }
+        // The executor throws this message to the queue's retry contract.
+        expect(error.message).toBe(PROVIDER_CALL_ERROR_MESSAGE);
+        const exchange = cassette.exchanges.at(0);
+        if (exchange === undefined) {
+          throw new TypeError("The fixture has an exchange");
+        }
+        expect(error.providerStatus).toBe(exchange.response.status);
+        expect(error.provider).toBe("openrouter");
+        expect(error.keySource).toBe("instance");
+        expect(error.requestId).toBe(exchange.response.headers["x-request-id"]);
+        if (cassette.expect.outcome !== "error") {
+          throw new TypeError("The fixture has an error outcome");
+        }
+        expect(error.kind).toBe(cassette.expect.errorKind);
+        await failFlowRunFromWorker(job, error, {
+          database:
+            asTestRaw<Parameters<typeof failFlowRunFromWorker>[2]["database"]>(
+              testDb,
+            ),
+          makeScopedDb,
+          broadcastUpdate,
+        });
+        const run = await testDb.query.flowRuns.findFirst({
+          where: { id: { eq: runId } },
+          columns: { error: true, status: true },
+        });
+        const step = await testDb.query.flowRunSteps.findFirst({
+          where: { runId: { eq: runId }, index: { eq: 0 } },
+          columns: { error: true, status: true },
+        });
+        expect(run).toEqual({
+          status: "failed",
+          error: PROVIDER_CALL_ERROR_MESSAGE,
+        });
+        expect(step).toEqual({
+          status: "failed",
+          error: PROVIDER_CALL_ERROR_MESSAGE,
+        });
+        expect(replay.requests().length).toBeGreaterThan(0);
+        expect(replay.takeFindings()).toEqual({
+          unconsumed: [],
+          unexpected: [],
+        });
+        expect(logs.records.length).toBeGreaterThan(0);
+        expect(analytics.exceptions()).toEqual([]);
+        expect(
+          JSON.stringify({
+            error,
+            run,
+            step,
+            logs: logs.records,
+            analytics: analytics.events,
+          }),
+        ).not.toContain(providerCallErrorSentinel(cassette));
+      } finally {
+        env.USE_MOCK_AI = previousMockAI;
+        logs.restore();
+        analytics.restore();
+        replay.restore();
+      }
+    },
+  );
 
   // An automated run whose author was deleted mid-flight has no actor to
   // scope a write to. The worker still finalizes it, on the connection the

@@ -16,6 +16,10 @@ import {
 } from "@/api/tests/helpers/chat-approval-harness";
 import { createPromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
 import {
+  providerCallErrorCassettes,
+  providerCallErrorSentinel,
+} from "@/api/tests/helpers/provider-call-error-wire";
+import {
   cassetteFor,
   loadProviderWireCassettes,
   PROVIDER_WIRE_PROVIDERS,
@@ -31,6 +35,10 @@ import {
 } from "@/api/tests/helpers/provider-wire-contract";
 import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { replayedHarnessModel } from "@/api/tests/helpers/replayed-harness-model";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -201,6 +209,52 @@ describe("a replayed provider through the chat pipeline", () => {
   test("offers the wire tool under the harness's approval tool name", () => {
     expect(WIRE_TOOL_NAME).toBe(APPROVAL_TOOL_NAME);
   });
+
+  test.each(providerCallErrorCassettes())(
+    "provider failure persists and streams its kind with $scenario/$variant",
+    async (cassette) => {
+      const { client, harness, threadId } = await openThread(cassette);
+      const analytics = installRecordingAnalytics();
+      const logs = installRecordingLogger();
+      try {
+        const recording = harness.recordThread(threadId);
+        replay.serve(cassette);
+        await client.sendUserMessage(Bun.randomUUIDv7(), "Draft a memo");
+        const violations = await harness.checkWebClient({
+          client,
+          expected: { runFailure: true },
+          threadId,
+        });
+        expect(violations).toEqual([]);
+        const stored = await harness.readThreadMessages(threadId);
+        const assistant = await harness.lastAssistant(threadId);
+        if (cassette.expect.outcome !== "error") {
+          throw new TypeError("The fixture has an error outcome");
+        }
+        expect(JSON.stringify(assistant)).toContain(cassette.expect.errorKind);
+        expect(recording).toHaveLength(1);
+        expect(recording.at(0)?.response.body).toContain(
+          cassette.expect.errorKind,
+        );
+        expect(logs.records.length).toBeGreaterThan(0);
+        expect(analytics.exceptions()).toEqual([]);
+        expect(
+          JSON.stringify({
+            stored,
+            recording,
+            logs: logs.records,
+            analytics: analytics.events,
+          }),
+        ).not.toContain(providerCallErrorSentinel(cassette));
+      } finally {
+        logs.restore();
+        analytics.restore();
+        client.dispose();
+        await harness.close();
+      }
+    },
+    RETRY_TIMEOUT_MS,
+  );
 
   for (const provider of PROVIDER_WIRE_PROVIDERS) {
     test(

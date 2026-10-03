@@ -14,6 +14,7 @@ import type { FailureReason } from "@stll/errors";
 
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import { INCOMPLETE_STREAM_CODE } from "@/api/lib/chat/provider-stream-contract";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
@@ -177,6 +178,9 @@ const classifyAIErrorInternal = (
   error: unknown,
   seen: Set<object>,
 ): AIErrorKind => {
+  if (error instanceof ProviderCallError) {
+    return error.kind;
+  }
   if (isRecord(error)) {
     if (seen.has(error)) {
       return "unknown";
@@ -495,7 +499,20 @@ export const aiHandlerError = (
   fallback: AIHandlerErrorFallback,
 ): HandlerError => {
   const kind = classifyAIBoundaryFailure(error);
-  const handlerError = aiKindHandlerError(kind, error, fallback);
+  const mapped = aiKindHandlerError(kind, error, fallback);
+  const handlerError =
+    error instanceof ProviderCallError
+      ? new ProviderCallError({
+          model: { provider: error.provider, keySource: error.keySource },
+          status: mapped.status,
+          kind: error.kind,
+          requestId: error.requestId,
+          facts:
+            error.providerStatus === undefined
+              ? undefined
+              : { status: error.providerStatus },
+        })
+      : mapped;
   return kind === "unknown"
     ? handlerError
     : classifyFailure(handlerError, AI_ERROR_KIND_FAILURE_REASON[kind]);
