@@ -6,19 +6,16 @@ import { DAY_IN_MS } from "@stll/time";
 import type { REGISTRATION_BUDGET_KINDS } from "@/api/db/registration-budget-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-export const REGISTRATION_DAILY_LIMITS = {
-  agent: 10_000,
-  "open-client": 10_000,
-} as const satisfies Record<(typeof REGISTRATION_BUDGET_KINDS)[number], number>;
-
 type ReserveRegistrationOptions = {
-  kind: keyof typeof REGISTRATION_DAILY_LIMITS;
+  kind: (typeof REGISTRATION_BUDGET_KINDS)[number];
+  limit: number;
   now: Date;
   execute: (query: SQL) => PromiseLike<{ length: number }>;
 };
 
 export const reserveRegistration = async ({
   kind,
+  limit,
   now,
   execute,
 }: ReserveRegistrationOptions) => {
@@ -30,7 +27,7 @@ export const reserveRegistration = async ({
       values (${day.toISOString()}::timestamptz, ${kind}, 1)
       on conflict (day, kind) do update
       set count = registration_daily_budget.count + 1
-      where registration_daily_budget.count < ${REGISTRATION_DAILY_LIMITS[kind]}
+      where registration_daily_budget.count < ${limit}
       returning count
     `),
     catch: (cause) =>

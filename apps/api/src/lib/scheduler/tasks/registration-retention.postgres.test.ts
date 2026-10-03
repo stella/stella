@@ -2,7 +2,9 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { readFileSync } from "node:fs";
+import * as v from "valibot";
 
+import { envApiServerSchema } from "@/api/env-schema";
 import {
   REGISTRATION_RETENTION_BATCH_SIZE,
   registrationRetentionClientCandidates,
@@ -109,10 +111,16 @@ describe.skipIf(!enabled)(
           const selectedRegistrations = await db.execute<{ client_id: string }>(
             registrationStatement,
           );
-          const statement = registrationRetentionClientCandidates(
-            new Date("2026-10-03T12:00:00Z"),
-            selectedRegistrations.map(({ client_id }) => client_id),
-          );
+          const statement = registrationRetentionClientCandidates({
+            now: new Date("2026-10-03T12:00:00Z"),
+            retentionDays: v.parse(
+              envApiServerSchema.UNUSED_CLIENT_RETENTION_DAYS,
+              undefined,
+            ),
+            registrationClientIds: selectedRegistrations.map(
+              ({ client_id }) => client_id,
+            ),
+          });
           const plan = explainRoot(
             await db.execute(
               sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${statement}`,

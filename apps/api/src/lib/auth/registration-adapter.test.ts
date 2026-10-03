@@ -4,7 +4,9 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
+import { envApiServerSchema } from "@/api/env-schema";
 import {
   admitOpenClient,
   REGISTRATION_RETENTION_SCHEMA_PLUGIN,
@@ -38,6 +40,10 @@ describe("auth persistence retention", () => {
             admitClient: async () => {
               admissions += 1;
               await admitOpenClient({
+                limit: v.parse(
+                  envApiServerSchema.OPEN_CLIENT_REGISTRATION_DAILY_LIMIT,
+                  "5",
+                ),
                 now: new Date("2026-01-01T12:00:00Z"),
                 execute: async () => ({ length: 0 }),
               });
@@ -232,6 +238,10 @@ describe("auth persistence retention", () => {
             admitClient: async () => {
               admissions += 1;
               await admitOpenClient({
+                limit: v.parse(
+                  envApiServerSchema.OPEN_CLIENT_REGISTRATION_DAILY_LIMIT,
+                  "5",
+                ),
                 now: new Date("2026-01-01T12:00:00Z"),
                 execute: async () => ({ length: admitted ? 1 : 0 }),
               });

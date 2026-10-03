@@ -1040,6 +1040,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       adapter: rawAuthAdapter(options),
       admitClient: async () =>
         await admitOpenClient({
+          limit: env.OPEN_CLIENT_REGISTRATION_DAILY_LIMIT,
           now: new Date(),
           execute: async (query) => await rootDb.execute(query),
         }),

@@ -325,6 +325,7 @@ export const startServiceAuthRegistration = async (
 ): Promise<Result<ServiceAuthCeremony, HandlerError>> => {
   const admission = await reserveRegistration({
     kind: "agent",
+    limit: env.AGENT_REGISTRATION_DAILY_LIMIT,
     now: new Date(),
     execute: async (query) => await rootDb.execute(query),
   });
@@ -384,6 +385,7 @@ export const startAnonymousRegistration = async (): Promise<
 > => {
   const admission = await reserveRegistration({
     kind: "agent",
+    limit: env.AGENT_REGISTRATION_DAILY_LIMIT,
     now: new Date(),
     execute: async (query) => await rootDb.execute(query),
   });

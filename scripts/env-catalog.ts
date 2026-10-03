@@ -55,6 +55,9 @@ export type EnvCatalogEntry = {
 type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
+  "UNUSED_CLIENT_RETENTION_DAYS",
+  "AGENT_REGISTRATION_DAILY_LIMIT",
+  "OPEN_CLIENT_REGISTRATION_DAILY_LIMIT",
   "ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY",
   "ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY",
   "ACTION_ADMISSION_LEASE_MS",
@@ -268,6 +271,12 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  UNUSED_CLIENT_RETENTION_DAYS:
+    "Age in days before unused client registrations expire (1–365; default 30).",
+  AGENT_REGISTRATION_DAILY_LIMIT:
+    "Maximum agent registrations per UTC day (1–1000000; default 10000).",
+  OPEN_CLIENT_REGISTRATION_DAILY_LIMIT:
+    "Maximum open client registrations per UTC day (1–1000000; default 10000).",
   AGENT_CLIENT_STORAGE_V1_ENABLED:
     "Enable the shared agent client storage format.",
   ACTION_LIMIT_CONTACT_URL:

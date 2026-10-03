@@ -29,7 +29,6 @@ import {
   agentAuthConfirmRoute,
   agentAuthRoute,
 } from "@/api/handlers/agent-auth/routes";
-import { REGISTRATION_DAILY_LIMITS } from "@/api/lib/auth/registration-budget";
 import {
   getMcpResourceUrl,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
@@ -143,10 +142,10 @@ describe("agent registration configuration", () => {
     ).at(0);
     await rootDb
       .insert(registrationDailyBudget)
-      .values({ day, kind: "agent", count: REGISTRATION_DAILY_LIMITS.agent })
+      .values({ day, kind: "agent", count: env.AGENT_REGISTRATION_DAILY_LIMIT })
       .onConflictDoUpdate({
         target: [registrationDailyBudget.day, registrationDailyBudget.kind],
-        set: { count: REGISTRATION_DAILY_LIMITS.agent },
+        set: { count: env.AGENT_REGISTRATION_DAILY_LIMIT },
       });
     const before = await rootDb
       .select({ count: count() })

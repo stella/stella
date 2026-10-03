@@ -403,6 +403,7 @@ export const apikey = pgTable(
 );
 
 export const OAUTH_CLIENT_REGISTRATION_ORIGINS = [
+  "historical",
   "managed",
   "open-client",
   "agent",
@@ -473,7 +474,7 @@ export const oauthClient = pgTable(
     index("oauth_client_registration_retention_idx")
       .on(table.updatedAt, table.clientId)
       .where(
-        sql`registration_origin IN ('open-client', 'agent') OR client_discovery_id IS NOT NULL`,
+        sql`registration_origin IN ('historical', 'open-client', 'agent')`,
       ),
     check(
       "oauth_client_registration_origin_check",

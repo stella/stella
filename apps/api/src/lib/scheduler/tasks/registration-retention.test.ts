@@ -2,6 +2,8 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { eq, sql, type SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
+import { readFileSync } from "node:fs";
+import * as v from "valibot";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -19,19 +21,21 @@ import {
   user,
 } from "@/api/db/auth-schema";
 import { registrationDailyBudget } from "@/api/db/registration-budget-schema";
+import { envApiServerSchema } from "@/api/env-schema";
 import {
   REGISTRATION_RETENTION_BATCH_SIZE,
-  UNUSED_CLIENT_RETENTION_DAYS,
   sweepRegistrations,
 } from "@/api/lib/scheduler/tasks/registration-retention";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-const NOW = new Date("2026-10-03T12:00:00Z");
-const OLD = new Date(
-  NOW.getTime() - (UNUSED_CLIENT_RETENTION_DAYS + 1) * DAY_IN_MS,
+const retentionDays = v.parse(
+  envApiServerSchema.UNUSED_CLIENT_RETENTION_DAYS,
+  "7",
 );
+const NOW = new Date("2026-10-03T12:00:00Z");
+const OLD = new Date(NOW.getTime() - (retentionDays + 1) * DAY_IN_MS);
 const FUTURE = new Date(NOW.getTime() + DAY_IN_MS);
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -54,7 +58,7 @@ beforeEach(async () => {
 const addClient = async (
   clientId: string,
   options: {
-    registrationOrigin?: "managed" | "open-client" | "agent";
+    registrationOrigin?: typeof oauthClient.$inferInsert.registrationOrigin;
     createdAt?: Date;
     updatedAt?: Date;
     clientDiscoveryId?: string;
@@ -118,6 +122,7 @@ const sweep = async (activityClientId?: string) =>
         ),
     }),
     now: NOW,
+    retentionDays,
   });
 const remaining = async () =>
   (await db.select({ clientId: oauthClient.clientId }).from(oauthClient))
@@ -131,11 +136,16 @@ test("expires unclaimed registrations and unused clients at a fixed point", asyn
   await addClient("unused");
   await addClient("unused-agent", { registrationOrigin: "agent" });
   await addClient("document", {
-    registrationOrigin: "managed",
+    registrationOrigin: "open-client",
     clientDiscoveryId: "metadata",
   });
   await addClient("current", { createdAt: NOW });
   await addClient("managed", { registrationOrigin: "managed" });
+  await addClient("managed-document", {
+    registrationOrigin: "managed",
+    clientDiscoveryId: "metadata",
+  });
+  await addClient("historical", { registrationOrigin: "historical" });
   await addClient("pending", { registrationOrigin: "agent" });
   await addRegistration("pending", { expiresAt: FUTURE });
   await addClient("claimed", { registrationOrigin: "agent" });
@@ -152,7 +162,7 @@ test("expires unclaimed registrations and unused clients at a fixed point", asyn
     assertionsDeleted: 0,
     replaysDeleted: 0,
     registrationsDeleted: 2,
-    clientsDeleted: 4,
+    clientsDeleted: 5,
     budgetsDeleted: 1,
     hasMore: false,
   });
@@ -160,6 +170,7 @@ test("expires unclaimed registrations and unused clients at a fixed point", asyn
     "claimed",
     "current",
     "managed",
+    "managed-document",
     "pending",
   ]);
   expect(await sweep()).toEqual({
@@ -190,6 +201,12 @@ test("keeps clients with any consent or token and active authorization", async (
   ]) {
     await addClient(name);
   }
+  await addClient("historical-consent", { registrationOrigin: "historical" });
+  await db.insert(oauthConsent).values({
+    id: "historical-consent",
+    clientId: "historical-consent",
+    scopes: [],
+  });
   await db
     .insert(oauthConsent)
     .values({ id: "consent", clientId: "consent", scopes: [] });
@@ -239,10 +256,11 @@ test("keeps clients with any consent or token and active authorization", async (
     "access",
     "authorization",
     "consent",
+    "historical-consent",
     "refresh",
   ]);
   expect((await db.select().from(agentRegistration)).length).toBe(0);
-  expect((await db.select().from(oauthConsent)).length).toBe(1);
+  expect((await db.select().from(oauthConsent)).length).toBe(2);
   expect((await db.select().from(oauthAccessToken)).length).toBe(1);
   expect((await db.select().from(oauthRefreshToken)).length).toBe(1);
   expect((await db.select().from(verification)).length).toBe(2);
@@ -269,9 +287,7 @@ test("bounds each committed batch and drains the persisted remainder", async () 
 
 test("holds recent registrations at the retention boundary", async () => {
   await addClient("boundary", {
-    createdAt: new Date(
-      NOW.getTime() - UNUSED_CLIENT_RETENTION_DAYS * DAY_IN_MS,
-    ),
+    createdAt: new Date(NOW.getTime() - retentionDays * DAY_IN_MS),
   });
   expect((await sweep()).clientsDeleted).toBe(0);
   expect(
@@ -340,4 +356,45 @@ test("rechecks client activity after selecting a batch", async () => {
   await addClient("active");
   expect((await sweep("active")).clientsDeleted).toBe(0);
   expect(await remaining()).toEqual(["active"]);
+});
+
+test("assigns existing and new client registration origins during migration", async () => {
+  const migration = readFileSync(
+    new URL(
+      "../../../../drizzle/20261003124800_registration_retention/migration.sql",
+      import.meta.url,
+    ),
+    "utf-8",
+  );
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`CREATE SCHEMA registration_origin_test`);
+    await tx.execute(sql`SET LOCAL search_path TO registration_origin_test`);
+    await tx.execute(
+      sql`CREATE TABLE oauth_client (client_id text PRIMARY KEY)`,
+    );
+    await tx.execute(sql`CREATE TABLE scheduler_jobs (
+      id text PRIMARY KEY, task text, description text, schedule jsonb,
+      enabled boolean, next_run_at timestamptz
+    )`);
+    await tx.execute(
+      sql`INSERT INTO oauth_client (client_id) VALUES ('existing')`,
+    );
+    for (const statement of migration.split("--> statement-breakpoint")) {
+      if (statement.trim()) {
+        await tx.execute(sql.raw(statement));
+      }
+    }
+    await tx.execute(sql`INSERT INTO oauth_client (client_id) VALUES ('new')`);
+    expect(
+      (
+        await tx.execute(
+          sql`SELECT client_id, registration_origin FROM oauth_client ORDER BY client_id`,
+        )
+      ).rows,
+    ).toEqual([
+      { client_id: "existing", registration_origin: "historical" },
+      { client_id: "new", registration_origin: "managed" },
+    ]);
+    await tx.execute(sql`DROP SCHEMA registration_origin_test CASCADE`);
+  });
 });

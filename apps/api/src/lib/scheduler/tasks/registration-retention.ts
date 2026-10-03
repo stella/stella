@@ -5,7 +5,6 @@ import { DAY_IN_MS } from "@stll/time";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const SWEEP_REGISTRATIONS_TASK = "auth.sweepRegistrations" as const;
-export const UNUSED_CLIENT_RETENTION_DAYS = 30;
 export const REGISTRATION_RETENTION_BATCH_SIZE = 100;
 
 // sql-perf-allow: index verification_expires_at_idx restricts malformed-value inspection to unexpired verification rows
@@ -35,12 +34,19 @@ export const registrationRetentionRegistrationCandidates = (now: Date) => sql`
   FOR UPDATE SKIP LOCKED
 `;
 
-export const registrationRetentionClientCandidates = (
-  now: Date,
-  registrationClientIds: string[] = [],
-) => {
+type RegistrationRetentionClientCandidatesOptions = {
+  now: Date;
+  retentionDays: number;
+  registrationClientIds?: string[];
+};
+
+export const registrationRetentionClientCandidates = ({
+  now,
+  retentionDays,
+  registrationClientIds = [],
+}: RegistrationRetentionClientCandidatesOptions) => {
   const cutoff = new Date(
-    now.getTime() - UNUSED_CLIENT_RETENTION_DAYS * DAY_IN_MS,
+    now.getTime() - retentionDays * DAY_IN_MS,
   ).toISOString();
   const registrationIds = sql`ARRAY[${sql.join(
     registrationClientIds.map((id) => sql`${id}`),
@@ -51,7 +57,7 @@ export const registrationRetentionClientCandidates = (
       SELECT unnest(${registrationIds})
       UNION ALL
       (SELECT c.client_id FROM oauth_client c
-      WHERE (c.registration_origin IN ('open-client', 'agent') OR c.client_discovery_id IS NOT NULL)
+      WHERE c.registration_origin IN ('historical', 'open-client', 'agent')
       AND c.created_at < ${cutoff}::timestamptz AND c.updated_at < ${cutoff}::timestamptz
       AND NOT EXISTS (SELECT 1 FROM agent_registration r WHERE r.client_id = c.client_id)
       AND ${unusedClient(now)}
@@ -65,11 +71,13 @@ export const registrationRetentionClientCandidates = (
 type SweepRegistrationsOptions = {
   db: SchedulerDb;
   now: Date;
+  retentionDays: number;
 };
 
 export const sweepRegistrations = async ({
   db,
   now,
+  retentionDays,
 }: SweepRegistrationsOptions) =>
   await db.transaction(async (tx) => {
     // Ceremony locks hold claim transitions; client locks serialize usage writes.
@@ -78,10 +86,13 @@ export const sweepRegistrations = async ({
       client_id: string;
     }>(registrationRetentionRegistrationCandidates(now));
     const clients = await tx.execute<{ client_id: string }>(
-      registrationRetentionClientCandidates(
+      registrationRetentionClientCandidates({
         now,
-        selectedRegistrations.map(({ client_id }) => client_id),
-      ),
+        retentionDays,
+        registrationClientIds: selectedRegistrations.map(
+          ({ client_id }) => client_id,
+        ),
+      }),
     );
     const clientIds = clients.map(({ client_id }) => client_id);
     const clientIdArray = sql`ARRAY[${sql.join(
@@ -125,14 +136,15 @@ export const sweepRegistrations = async ({
       sql`, `,
     )}]::text[]`;
     const cutoff = new Date(
-      now.getTime() - UNUSED_CLIENT_RETENTION_DAYS * DAY_IN_MS,
+      now.getTime() - retentionDays * DAY_IN_MS,
     ).toISOString();
     const deletedClients = await tx.execute(sql`
       DELETE FROM oauth_client c
       WHERE c.client_id = ANY(${clientIdArray})
+      AND c.registration_origin <> 'managed'
       AND ${unusedClient(now)}
       AND (c.client_id = ANY(${expiredClientIds}) OR (
-        (c.registration_origin IN ('open-client', 'agent') OR c.client_discovery_id IS NOT NULL)
+        c.registration_origin IN ('historical', 'open-client', 'agent')
         AND c.created_at < ${cutoff}::timestamptz AND c.updated_at < ${cutoff}::timestamptz
       ))
       AND NOT EXISTS (SELECT 1 FROM agent_registration r WHERE r.client_id = c.client_id)
@@ -173,7 +185,12 @@ export const sweepRegistrationRecords: SchedulerTask = async ({
   if (signal.aborted) {
     return;
   }
-  const result = await sweepRegistrations({ db, now: new Date() });
+  const { env } = await import("@/api/env");
+  const result = await sweepRegistrations({
+    db,
+    now: new Date(),
+    retentionDays: env.UNUSED_CLIENT_RETENTION_DAYS,
+  });
   logger.info("scheduler.registration_retention", result);
   if (result.hasMore && !signal.aborted) {
     scheduleContinuation(new Date());

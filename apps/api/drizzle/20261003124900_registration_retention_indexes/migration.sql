@@ -11,7 +11,7 @@ SET lock_timeout = 0;
 DROP INDEX CONCURRENTLY IF EXISTS "oauth_client_registration_retention_idx";
 --> statement-breakpoint
 -- squawk-ignore prefer-robust-stmts
-CREATE INDEX CONCURRENTLY "oauth_client_registration_retention_idx" ON "oauth_client" ("updated_at", "client_id") WHERE registration_origin IN ('open-client', 'agent') OR client_discovery_id IS NOT NULL;
+CREATE INDEX CONCURRENTLY "oauth_client_registration_retention_idx" ON "oauth_client" ("updated_at", "client_id") WHERE registration_origin IN ('historical', 'open-client', 'agent');
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "verification_expires_at_idx";
 --> statement-breakpoint

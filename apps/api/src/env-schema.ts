@@ -441,6 +441,39 @@ export const envApiServerSchema = {
   FEATURE_ACTION_COST_RECORDS: featureFlagSchema,
   ACTION_COST_ESTIMATES: v.optional(v.string()),
   ACTION_COST_CALL_RATES: v.optional(v.string()),
+  UNUSED_CLIENT_RETENTION_DAYS: v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(365),
+    ),
+    "30",
+  ),
+  AGENT_REGISTRATION_DAILY_LIMIT: v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(1_000_000),
+    ),
+    "10000",
+  ),
+  OPEN_CLIENT_REGISTRATION_DAILY_LIMIT: v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(1_000_000),
+    ),
+    "10000",
+  ),
   ACTION_COST_RETENTION_DAYS: v.optional(
     v.pipe(
       v.string(),

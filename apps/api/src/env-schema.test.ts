@@ -218,3 +218,31 @@ test("Microsoft claim configuration defaults to disabled", () => {
   expect(v.parse(schema, "true")).toBe(true);
   expect(v.safeParse(schema, "invalid").success).toBe(false);
 });
+
+test("registration settings supply bounded operator defaults", () => {
+  for (const { schema, defaultValue, maximum } of [
+    {
+      schema: envApiServerSchema.UNUSED_CLIENT_RETENTION_DAYS,
+      defaultValue: 30,
+      maximum: 365,
+    },
+    {
+      schema: envApiServerSchema.AGENT_REGISTRATION_DAILY_LIMIT,
+      defaultValue: 10_000,
+      maximum: 1_000_000,
+    },
+    {
+      schema: envApiServerSchema.OPEN_CLIENT_REGISTRATION_DAILY_LIMIT,
+      defaultValue: 10_000,
+      maximum: 1_000_000,
+    },
+  ]) {
+    expect(v.parse(schema, undefined)).toBe(defaultValue);
+    for (const valid of [1, 7, maximum]) {
+      expect(v.parse(schema, String(valid))).toBe(valid);
+    }
+    for (const invalid of ["0", "-1", "1.2", "text", String(maximum + 1)]) {
+      expect(v.safeParse(schema, invalid).success).toBe(false);
+    }
+  }
+});
