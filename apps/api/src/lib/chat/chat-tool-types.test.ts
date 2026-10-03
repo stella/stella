@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import type { ChatTool } from "@/api/lib/chat/chat-tool-types";
-import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
+import {
+  chatToolMapToArray,
+  registeredChatTool,
+} from "@/api/lib/chat/chat-tool-types";
 
 const tool = (name: string): ChatTool => ({
   name,
@@ -26,5 +29,15 @@ describe("chat tool maps", () => {
     ).toThrow(
       'Chat tool map key "lookup" does not match TanStack tool name "search".',
     );
+  });
+
+  test("resolves only a tool registered under the name", () => {
+    const lookup = tool("lookup");
+    const tools = { lookup };
+
+    expect(registeredChatTool(tools, "lookup")).toBe(lookup);
+    for (const inherited of ["__proto__", "constructor", "toString"]) {
+      expect(registeredChatTool(tools, inherited)).toBeUndefined();
+    }
   });
 });

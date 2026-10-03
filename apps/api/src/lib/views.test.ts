@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { getDefaultViews, normalizeDefaultViewLayout } from "@/api/lib/views";
+import {
+  getDefaultViews,
+  localizeDefaultViewName,
+  normalizeDefaultViewLayout,
+} from "@/api/lib/views";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { convertLayout } from "@/api/lib/views/utils";
 
@@ -131,6 +135,36 @@ describe("getDefaultViews", () => {
         name: "Lists",
       }),
     ).toBe(layout);
+  });
+
+  test("seeds one correspondence view, placed last", () => {
+    const views = getDefaultViews("en");
+    const correspondence = views.filter(
+      (view) => view.layout.type === "correspondence",
+    );
+
+    expect(correspondence).toHaveLength(1);
+    expect(views.at(-1)?.layout.type).toBe("correspondence");
+    expect(correspondence.map((view) => view.position)).toEqual([
+      Math.max(...views.map((view) => view.position)),
+    ]);
+  });
+
+  test("re-localizes an un-renamed correspondence view and keeps a renamed one", () => {
+    expect(
+      localizeDefaultViewName({
+        lang: "cs",
+        layoutType: "correspondence",
+        name: "Correspondence",
+      }),
+    ).toBe("Korespondence");
+    expect(
+      localizeDefaultViewName({
+        lang: "cs",
+        layoutType: "correspondence",
+        name: "Client mail",
+      }),
+    ).toBe("Client mail");
   });
 
   test("seeds Todos as a task-scoped view while Legal Lists are disabled", () => {

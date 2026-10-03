@@ -8,7 +8,10 @@ import {
 import { DESKTOP_ACCOUNT_PERMISSION } from "@/api/lib/business-registries/desktop/config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import {
+  hasMemberPermission,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
 
@@ -53,7 +56,8 @@ export const authorizeDesktopLinkGrant = async (input: unknown) => {
     !member.value ||
     !isMemberRole(member.value.role) ||
     !hasMemberPermission(
-      { role: member.value.role },
+      // The desktop account acts with the person's own live role.
+      sessionMemberRole(member.value.role),
       DESKTOP_ACCOUNT_PERMISSION,
     )
   ) {

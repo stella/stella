@@ -4,6 +4,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { CreateStoredTemplateOptions } from "@/api/lib/templates/create-template";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -60,7 +61,7 @@ const createContext = (
     workspaceId,
     user: { id: userId },
     session: { activeOrganizationId: organizationId },
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     body: { key },
     request: recorderBindings.request,
     route: "/v1/workspaces/:workspaceId/reports/templates/clone-builtin",

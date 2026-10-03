@@ -2,8 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import { BILLING_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import deleteExpense from "./delete";
 
@@ -25,7 +29,7 @@ const createContext = ({
     safeDb,
     scopedDb,
     workspaceId: toSafeId<"workspace">("workspace_test"),
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     session: {
       activeOrganizationId: toSafeId<"organization">("org_test"),
     },
@@ -36,18 +40,17 @@ const createContext = ({
 describe("deleteExpense", () => {
   test("rejects deleting a billed expense", async () => {
     const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
-      query: {
-        expenses: {
-          findFirst: async () => ({
+      select: () =>
+        createSelectQueryMock([
+          {
             status: BILLING_STATUS.BILLED,
             amount: 10_000,
             currency: "USD",
             category: "filing",
             matterId: toSafeId<"entity">("matter_test"),
             dateIncurred: "2026-06-14",
-          }),
-        },
-      },
+          },
+        ]),
       delete: () => {
         throw new Error("delete should not be called for billed expenses");
       },

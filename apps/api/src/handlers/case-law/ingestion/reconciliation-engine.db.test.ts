@@ -56,6 +56,7 @@ import type {
   ReconciliationSlicePageOptions,
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
@@ -171,6 +172,7 @@ afterEach(() => {
 });
 
 const stubReconciliation: SourceReconciliation = {
+  revisionOf: (payload) => payload,
   firstSlice: OWED_SLICE,
   sliceOf: toUtcDateString,
   nextSlice: (slice) => {
@@ -786,6 +788,7 @@ const seedItem = async (
     status: (typeof RECONCILIATION_ITEM_STATUS)[keyof typeof RECONCILIATION_ITEM_STATUS];
     attempts: number;
     nextAttemptAt: Date | null;
+    payload?: unknown;
   },
 ): Promise<void> => {
   await db.insert(caseLawReconciliationItems).values({
@@ -793,12 +796,12 @@ const seedItem = async (
     sourceId,
     slice: OWED_SLICE,
     identityKey,
-    payload: {},
     ...row,
+    payload: row.payload ?? {},
   });
 };
 
-test("a walk leaves already-tracked identities to the retry path", async () => {
+test("a walk leaves unchanged tracked payloads to the retry path", async () => {
   // The widening backoff is the whole reason a park exists. A tip slice is
   // re-walked daily, so a walk that re-fetched everything it found missing
   // would serve none of that schedule — and would drag terminal items back
@@ -820,11 +823,13 @@ test("a walk leaves already-tracked identities to the retry path", async () => {
   await seedItem(sourceId, parkedKey, {
     status: RECONCILIATION_ITEM_STATUS.PARKED,
     attempts: 2,
+    payload: LISTING_ITEMS[0],
     nextAttemptAt: new Date(NOW.getTime() + 60 * 60 * 1000),
   });
   await seedItem(sourceId, terminalKey, {
     status: RECONCILIATION_ITEM_STATUS.TERMINAL,
     attempts: 6,
+    payload: LISTING_ITEMS[1],
     nextAttemptAt: null,
   });
 
@@ -1418,17 +1423,19 @@ test("a settled slice inside the recheck window is left alone", async () => {
  * both disagreed with the column, and the test would prove nothing.
  */
 const storedMetadata = (isListingOnly: boolean): Record<string, unknown> =>
-  sanitizeResult({
-    caseNumber: FIXTURE_CASE_NUMBERS[0],
-    court: FIXTURE_COURT,
-    country: "CZE",
-    language: FIXTURE_LANGUAGE,
-    isListingOnly,
-    metadata: {},
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    rawHash: "0".repeat(64),
-    documentAst: EMPTY_AST,
-  } satisfies IngestionResult).metadata;
+  sanitizeResult(
+    plainTextIngestionResult({
+      caseNumber: FIXTURE_CASE_NUMBERS[0],
+      court: FIXTURE_COURT,
+      country: "CZE",
+      language: FIXTURE_LANGUAGE,
+      isListingOnly,
+      metadata: {},
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      rawHash: "0".repeat(64),
+      documentAst: EMPTY_AST,
+    }) satisfies IngestionResult,
+  ).metadata;
 
 type SeedDecisionInput = {
   sourceId: SafeId<"caseLawSource">;
@@ -1506,6 +1513,45 @@ const seedDocumentIdentityRows = async (
     });
   }
 };
+
+test("due held identities resolve without fetching while listing-only identities retry", async () => {
+  const sourceId = await seedSource();
+  await seedFreshTip(sourceId);
+  await seedDocumentIdentityRows(sourceId);
+  for (const [index, identityKey] of DOCUMENT_KEYS.entries()) {
+    await seedItem(sourceId, identityKey, {
+      status: RECONCILIATION_ITEM_STATUS.PARKED,
+      attempts: 5,
+      nextAttemptAt: new Date(NOW.getTime() - 1),
+      payload: LISTING_ITEMS[index],
+    });
+  }
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    heldRequiresDetail: true,
+  });
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { unit: "parked-retries", keyable: 2, heldBefore: 1, terminal: 1 },
+  });
+  expect(builds).toEqual([LISTING_ITEMS[0]]);
+  expect(listed).toEqual([]);
+  const remaining = await db
+    .select({
+      identityKey: caseLawReconciliationItems.identityKey,
+      status: caseLawReconciliationItems.status,
+      attempts: caseLawReconciliationItems.attempts,
+    })
+    .from(caseLawReconciliationItems)
+    .where(eq(caseLawReconciliationItems.sourceId, sourceId));
+  expect(remaining).toEqual([
+    {
+      identityKey: DOCUMENT_KEYS[0] ?? "",
+      status: RECONCILIATION_ITEM_STATUS.TERMINAL,
+      attempts: 6,
+    },
+  ]);
+});
 
 test("a listing-only row is not held where the source requires detail", async () => {
   // Such a row exists because a document fetch failed: the identity is stored
@@ -1977,17 +2023,18 @@ test("a row stating a declared reason for holding no document is held on that re
 });
 
 /** A decision with no document, as an adapter hands one over. */
-const plainDecision = (sourceDocumentId: string): IngestionResult => ({
-  caseNumber: sourceDocumentId,
-  sourceDocumentId,
-  court: FIXTURE_COURT,
-  country: "CZE",
-  language: FIXTURE_LANGUAGE,
-  metadata: {},
-  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  rawHash: sourceDocumentId.padEnd(64, "0").slice(0, 64),
-  documentAst: EMPTY_AST,
-});
+const plainDecision = (sourceDocumentId: string): IngestionResult =>
+  plainTextIngestionResult({
+    caseNumber: sourceDocumentId,
+    sourceDocumentId,
+    court: FIXTURE_COURT,
+    country: "CZE",
+    language: FIXTURE_LANGUAGE,
+    metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash: sourceDocumentId.padEnd(64, "0").slice(0, 64),
+    documentAst: EMPTY_AST,
+  });
 
 test("a held row stating a recheck value is asked for again, and what its page adds is written beside it", async () => {
   // The competition authority attaches the court rulings on a decision's

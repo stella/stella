@@ -10,21 +10,7 @@ const webRoot = fileURLToPath(new URL("..", import.meta.url));
 // The Start plugin resolves both paths under `srcDirectory`; so does this.
 const srcRoot = path.join(webRoot, ROUTE_TREE_OPTIONS.srcDirectory);
 const output = path.join(srcRoot, ROUTE_TREE_OPTIONS.generatedRouteTree);
-const check = process.argv.slice(2).includes("--check");
-
-if (process.argv.slice(2).some((arg) => arg !== "--check")) {
-  panic("Usage: bun scripts/generate-route-tree.ts [--check]");
-}
-
-// Keep the output beside the committed tree so generated import paths match.
-const checkDirectory = check
-  ? await mkdtemp(path.join(srcRoot, ".route-tree-check-"))
-  : undefined;
-const generatedRouteTree = checkDirectory
-  ? path.join(srcRoot, `${path.basename(checkDirectory)}.ts`)
-  : output;
-
-try {
+const generate = async (generatedRouteTree: string) => {
   const config = getConfig(
     {
       routesDirectory: path.join(srcRoot, ROUTE_TREE_OPTIONS.routesDirectory),
@@ -33,21 +19,48 @@ try {
     webRoot,
   );
   await new Generator({ config, root: webRoot }).run();
+};
 
-  if (check) {
+export const checkRouteTreeDeterminism = async (
+  sourceDirectory: string,
+  generateTree: (generatedRouteTree: string) => Promise<void>,
+) => {
+  // Keep both fresh outputs beside the real tree so relative imports match.
+  const checkDirectory = await mkdtemp(
+    path.join(sourceDirectory, ".route-tree-check-"),
+  );
+  const first = `${checkDirectory}-first.ts`;
+  const second = `${checkDirectory}-second.ts`;
+
+  try {
+    await generateTree(first);
+    await generateTree(second);
     const [actual, expected] = await Promise.all([
-      readFile(output),
-      readFile(generatedRouteTree),
+      readFile(first),
+      readFile(second),
     ]);
     if (!actual.equals(expected)) {
       panic(
-        "apps/web/src/routeTree.gen.ts is stale; regenerate with bun --filter @stll/web generate:route-tree",
+        "Route tree generation is nondeterministic: two fresh outputs differ",
       );
     }
-  }
-} finally {
-  if (checkDirectory) {
-    await rm(generatedRouteTree, { force: true });
+  } finally {
+    await Promise.all([
+      rm(first, { force: true }),
+      rm(second, { force: true }),
+    ]);
     await rm(checkDirectory, { recursive: true, force: true });
+  }
+};
+
+if (import.meta.main) {
+  const args = process.argv.slice(2);
+  if (args.some((arg) => arg !== "--check")) {
+    panic("Usage: bun scripts/generate-route-tree.ts [--check]");
+  }
+  if (args.includes("--check")) {
+    await checkRouteTreeDeterminism(srcRoot, generate);
+  } else {
+    await generate(output);
   }
 }

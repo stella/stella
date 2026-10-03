@@ -202,6 +202,8 @@ const MERGE_BAR_REASONS = {
   requiredCheckIncomplete: "REQUIRED_CHECK_INCOMPLETE",
   requiredCheckNotSuccessful: "REQUIRED_CHECK_NOT_SUCCESSFUL",
   ciPlanSkipped: "CI_PLAN_SKIPPED",
+  claUnsigned: "CLA_UNSIGNED",
+  claUnlinkedAuthor: "CLA_UNLINKED_AUTHOR",
   unresolvedReviewThreads: "UNRESOLVED_REVIEW_THREADS",
   migrationIdentity: "MIGRATION_IDENTITY_VIOLATION",
   headMoved: "HEAD_MOVED_DURING_CHECKS",
@@ -230,6 +232,7 @@ type CheckRunSnapshot = {
   name: string;
   status: string;
   conclusion: string | null;
+  outputTitle?: string;
 };
 
 type ReviewThreadSnapshot = { id: string; isResolved: boolean };
@@ -345,6 +348,60 @@ export const requiredChecksSucceeded = ({
   });
 };
 
+const evaluateContributorSignatureCheck = (
+  latestByName: ReadonlyMap<string, CheckRunSnapshot>,
+  pullNumber: number,
+): GateVerdict | undefined => {
+  const contributorCheck = latestByName.get("cla");
+  const openerCheck = latestByName.get(`cla/pr-${pullNumber}`);
+  const cla = [contributorCheck, openerCheck].find(
+    (check) => check?.status === "completed" && check.conclusion === "failure",
+  );
+  if (
+    (cla?.outputTitle === "CLA_UNSIGNED" ||
+      cla?.outputTitle === "CLA_UNLINKED_AUTHOR") &&
+    !(cla.status === "completed" && cla.conclusion === "success")
+  ) {
+    return {
+      gate: "required-check",
+      status: "fail",
+      reason:
+        cla.outputTitle === "CLA_UNLINKED_AUTHOR"
+          ? MERGE_BAR_REASONS.claUnlinkedAuthor
+          : MERGE_BAR_REASONS.claUnsigned,
+      detail:
+        cla.outputTitle === "CLA_UNLINKED_AUTHOR"
+          ? "Link every commit author to a GitHub account and rerun the cla check."
+          : "Read https://github.com/stella/cla/blob/main/CLA.md and post exactly: I have read the CLA Document and I hereby sign the CLA",
+    };
+  }
+  if (cla?.status === "completed" && cla.conclusion === "failure") {
+    return {
+      gate: "required-check",
+      status: "fail",
+      reason: MERGE_BAR_REASONS.requiredCheckNotSuccessful,
+      detail:
+        "cla verification failed; inspect the check output and rerun after fixing it.",
+    };
+  }
+  if (
+    contributorCheck?.status === "completed" &&
+    contributorCheck.conclusion === "success" &&
+    !(
+      openerCheck?.status === "completed" &&
+      openerCheck.conclusion === "success"
+    )
+  ) {
+    return {
+      gate: "required-check",
+      status: "fail",
+      reason: MERGE_BAR_REASONS.requiredCheckNotSuccessful,
+      detail: `The exact pull request check cla/pr-${pullNumber} must succeed before landing.`,
+    };
+  }
+  return undefined;
+};
+
 // A direct merge needs every required check to have SUCCEEDED on the head:
 // the write is final. "Merge when ready" needs only that none has FAILED: a
 // check still running, or not yet created for a fresh push, is what GitHub
@@ -355,7 +412,9 @@ const evaluateRequiredCheck = ({
   headSha,
   landing,
   requiredCheckRuns,
+  pullNumber,
 }: {
+  pullNumber: number;
   checkRuns: readonly CheckRunSnapshot[];
   checkRunsHeadSha: string;
   headSha: string;
@@ -372,6 +431,13 @@ const evaluateRequiredCheck = ({
   }
 
   const latestByName = latestRunByName(checkRuns);
+  const claVerdict = evaluateContributorSignatureCheck(
+    latestByName,
+    pullNumber,
+  );
+  if (claVerdict) {
+    return claVerdict;
+  }
   const required = requiredCheckRuns.flatMap((name) => {
     const run = latestByName.get(name);
     return run === undefined ? [] : [run];
@@ -552,6 +618,7 @@ export const evaluateMergeBar = (
     evaluatePullRequestState(snapshot.pullRequest),
     evaluateMergeable(snapshot.pullRequest),
     evaluateRequiredCheck({
+      pullNumber: snapshot.pullRequest.number,
       checkRuns: snapshot.checkRuns,
       checkRunsHeadSha: snapshot.checkRunsHeadSha,
       headSha: snapshot.pullRequest.headSha,
@@ -737,6 +804,26 @@ const selectorVariables = (jobs: readonly FastRequiredJob[]): string[] => [
   ),
 ];
 
+const ratchetFreshnessFailure = (
+  definitions: unknown,
+  changedPaths: ReadonlySet<string>,
+): string | null => {
+  if (
+    !Array.isArray(definitions) ||
+    definitions.length === 0 ||
+    !definitions.every((entry) => typeof entry === "string")
+  ) {
+    return "cannot read the ratchet definition paths from the base";
+  }
+  const ratchetChanges = definitions.filter((filename) =>
+    changedPaths.has(filename),
+  );
+  if (ratchetChanges.length > 0) {
+    return `main changed the ratchet since the green run: ${ratchetChanges.join(", ")}`;
+  }
+  return null;
+};
+
 type CheckGreenResultFreshnessOptions = {
   pullRequest: PullRequestSnapshot;
   jump: boolean;
@@ -753,6 +840,10 @@ type CheckGreenResultFreshnessOptions = {
     title: string;
   }) => Result<ReadonlyMap<string, boolean>, PlanSelectorError>;
   readRunJobs: (runId: number) => readonly RunJob[];
+  // The ratchet judges a PR with these sources, so a green run from before
+  // main changed one applied different rules than the merge queue will. Read
+  // from the base branch: an older checkout's copy may miss a newer helper.
+  readRatchetDefinitionPaths: (baseRefName: string) => unknown;
 };
 
 export const checkGreenResultFreshness = ({
@@ -765,6 +856,7 @@ export const checkGreenResultFreshness = ({
   readBaseWorkflow,
   runSelector,
   readRunJobs,
+  readRatchetDefinitionPaths,
 }: CheckGreenResultFreshnessOptions) => {
   if (jump || isReleasePullRequest(pullRequest)) {
     return Result.ok();
@@ -848,6 +940,13 @@ export const checkGreenResultFreshness = ({
     if (typeof file["previous_filename"] === "string") {
       changedPaths.add(file["previous_filename"]);
     }
+  }
+  const ratchetFailure = ratchetFreshnessFailure(
+    readRatchetDefinitionPaths(pullRequest.baseRefName),
+    changedPaths,
+  );
+  if (ratchetFailure !== null) {
+    return refuse(ratchetFailure);
   }
   const pullFiles = readPullFiles();
   const overlap = pullFiles.filter((filename) => changedPaths.has(filename));
@@ -1166,6 +1265,7 @@ type GitHubGateway = {
   readPullFiles: () => readonly string[];
   readBaseWorkflow: (ref: string) => string | null;
   readRunJobs: (runId: number) => readonly RunJob[];
+  readRatchetDefinitionPaths: (baseRefName: string) => unknown;
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
   // Both writes pin the head every gate was evaluated against, so GitHub
@@ -1711,14 +1811,15 @@ const createGhGateway = ({
         "--paginate",
         `repos/${repo}/commits/${headSha}/check-runs`,
         "--jq",
-        '.check_runs[] | [.id, .name, .status, (.conclusion // "")] | @tsv',
+        '.check_runs[] | [.id, .name, .status, (.conclusion // ""), (.output.title // "")] | @tsv',
       ])
         .split("\n")
         .filter(Boolean);
 
       const runs: CheckRunSnapshot[] = [];
       for (const line of lines) {
-        const [rawId, runName, status, conclusion] = line.split("\t");
+        const [rawId, runName, status, conclusion, outputTitle] =
+          line.split("\t");
         const id = Number(rawId);
         if (
           !Number.isSafeInteger(id) ||
@@ -1733,6 +1834,7 @@ const createGhGateway = ({
           status,
           conclusion:
             conclusion === undefined || conclusion === "" ? null : conclusion,
+          outputTitle: outputTitle ?? "",
         });
       }
       return runs;
@@ -1818,6 +1920,14 @@ const createGhGateway = ({
               conclusion === undefined || conclusion === "" ? null : conclusion,
           };
         }),
+
+    readRatchetDefinitionPaths: (baseRefName) =>
+      runGhJson([
+        "api",
+        "-H",
+        "Accept: application/vnd.github.raw+json",
+        `repos/${repo}/contents/scripts/ratchet-definition-paths.json?ref=${encodeURIComponent(baseRefName)}`,
+      ]),
 
     readReviewThreads: () => {
       const threads: ReviewThreadSnapshot[] = [];
@@ -2370,6 +2480,7 @@ if (import.meta.main) {
         cwd: fileURLToPath(new URL("..", import.meta.url)),
       }),
     readRunJobs: gateway.readRunJobs,
+    readRatchetDefinitionPaths: gateway.readRatchetDefinitionPaths,
   });
   if (freshness.isErr()) {
     console.error(freshness.error.message);

@@ -1,8 +1,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { isOrganizationManagementRole } from "@stll/permissions";
-
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
   dailyTargetBody,
@@ -10,6 +8,7 @@ import {
 } from "@/api/lib/billing/daily-target";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
 
 const updateMemberDailyTarget = createSafeRootHandler(
   {
@@ -33,7 +32,11 @@ const updateMemberDailyTarget = createSafeRootHandler(
     body,
     recordAuditEvent,
   }) {
-    if (!isOrganizationManagementRole(memberRole.role)) {
+    if (
+      !hasManagementPermission(memberRole, {
+        organizationSettings: ["update"],
+      })
+    ) {
       return Result.err(
         new HandlerError({
           status: 403,

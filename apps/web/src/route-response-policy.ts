@@ -85,7 +85,6 @@ export const ROUTE_CACHE_CLASSES = {
   "/settings/organization/time-policy": "private-no-store",
   "/settings/organization/usage": "private-no-store",
   "/settings/organization/vat-rates": "private-no-store",
-  "/workspaces/$workspaceId/correspondence": "private-no-store",
   "/workspaces/$workspaceId/expenses": "private-no-store",
   "/workspaces/$workspaceId/invoices": "private-no-store",
   "/workspaces/$workspaceId/lists": "private-no-store",
