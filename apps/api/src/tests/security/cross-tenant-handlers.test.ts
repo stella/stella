@@ -382,9 +382,12 @@ const chatOrgAIConfig = {
 // the stream has passed every tenant boundary on the way.
 const streamChatStub = mock(
   async () =>
-    new Response("stream started", {
-      headers: { "Content-Type": "text/event-stream" },
-    }),
+    ({
+      type: "streaming",
+      response: new Response("stream started", {
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    }) as const,
 );
 
 const sendChatMessage = createSendMessage({

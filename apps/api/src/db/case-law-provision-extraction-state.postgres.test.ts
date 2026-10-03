@@ -144,6 +144,7 @@ if (!databaseUrl || !runPostgresTests) {
             const write = insertDecision(writer.sql, fixture, language);
             await waitUntilBlocked(observer, pid);
             release.resolve(undefined);
+            // swallow-ok: deliberate activation rollback is distinguished by the scope and decision-state assertions below
             await transition.catch(() => undefined);
             const id = await write;
             const [scope] = await observer`
@@ -161,6 +162,7 @@ if (!databaseUrl || !runPostgresTests) {
             }
           } finally {
             release.resolve(undefined);
+            // swallow-ok: final drain of the released activation transaction preserves any earlier assertion failure
             await transition.catch(() => undefined);
           }
         });
@@ -402,6 +404,7 @@ if (!databaseUrl || !runPostgresTests) {
           });
         } finally {
           release.resolve(undefined);
+          // swallow-ok: finally drains the row-lock holder after the repair result has been asserted
           await holding.catch(() => undefined);
         }
       });
@@ -463,6 +466,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(await stateOf(observer, id)).toBeUndefined();
         } finally {
           release.resolve(undefined);
+          // swallow-ok: finally drains the released holder after the obsolete transition state has been asserted
           await holding.catch(() => undefined);
         }
       });

@@ -37,6 +37,7 @@ describe("entity version upload completion", () => {
     });
 
     expect(operation).rejects.toThrow("S3 rejected upload (503)");
+    // swallow-ok: drains the upload after the named storage-rejection assertion above
     await operation.catch(() => undefined);
     expect(events).toEqual(["put", "abort"]);
   });
@@ -57,6 +58,7 @@ describe("entity version upload completion", () => {
     });
 
     expect(operation).rejects.toThrow("network unavailable");
+    // swallow-ok: drains the upload after the named network-error assertion above
     await operation.catch(() => undefined);
     expect(events).toEqual(["put", "abort"]);
   });

@@ -500,7 +500,7 @@ describe("detect-e2e-changes", () => {
     for (const stepName of [
       "Release changelog guard",
       "Release CLI coupling guard",
-      "Release marketing freshness warning",
+      "Release marketing staleness warning",
     ]) {
       expectPullRequestAndMergeGroup(workflowStep(ciChecks, stepName));
     }
@@ -538,7 +538,7 @@ describe("detect-e2e-changes", () => {
 
     const driftGuard = workflowStep(
       workflowJob("ci-checks-rest"),
-      "Model catalog snapshot drift guard",
+      "Model catalog snapshot drift check",
     );
     expect(driftGuard).toContain(
       "needs.ci-plan.outputs.model_catalog_drift_required == 'true'",
@@ -549,7 +549,13 @@ describe("detect-e2e-changes", () => {
     expect(driftGuard).toContain(
       "bun --filter @stll/ai-catalog gen:capabilities --check",
     );
-    expect(driftGuard).not.toContain("package_checks_required");
+    // Path-scoped: the drift output is a required operand, never one of
+    // several alternatives. The package-checks operand only ties the step to
+    // the dependency install its generators import from.
+    expect(driftGuard).toMatch(
+      /if: >-\n\s+needs\.ci-plan\.outputs\.package_checks_required == 'true'\n\s+&& needs\.ci-plan\.outputs\.model_catalog_drift_required == 'true'\n/u,
+    );
+    expect(driftGuard).not.toContain("||");
   });
 
   test("checks shipped product screenshots on planned releases", () => {

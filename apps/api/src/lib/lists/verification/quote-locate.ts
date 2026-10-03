@@ -66,12 +66,6 @@ export const locateQuote = (
   if (trimmed.length === 0) {
     return null;
   }
-  const exact = text.indexOf(trimmed, from);
-  const exactAnywhere = exact === -1 ? text.indexOf(trimmed) : exact;
-  if (exactAnywhere !== -1) {
-    return { start: exactAnywhere, end: exactAnywhere + trimmed.length };
-  }
-
   const haystack = fold(text);
   const needle = fold(trimmed).folded.trim();
   const foldedFrom = haystack.origin.findIndex((index) => index >= from);

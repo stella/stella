@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 /**
  * Polish data-protection authority (Prezes UODO) adapter.
  *
@@ -976,6 +977,7 @@ const search = async ({
     url,
     { headers: { Accept: "application/json" }, redirect: "error" },
     {
+      fetchStage: "listing",
       adapterKey: ADAPTER_KEYS.PL_UODO,
       signal,
       timeoutMs: ADAPTER_TIMEOUT.LIST,
@@ -1170,6 +1172,7 @@ const fetchBody = async ({
         target.toString(),
         { headers: { Accept: "application/xml" }, redirect: "error" },
         {
+          fetchStage: "document",
           adapterKey: ADAPTER_KEYS.PL_UODO,
           signal,
           timeoutMs: ADAPTER_TIMEOUT.PAGE,
@@ -2456,6 +2459,7 @@ const plUodoFetchPage = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const plUodoAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_UODO,
   language: PL_UODO_LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,

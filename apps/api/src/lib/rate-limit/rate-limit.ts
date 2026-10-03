@@ -178,6 +178,16 @@ type RateLimitApplicationPhase = "before_handler" | "early_failure";
 
 const DEFAULT_RATE_LIMIT_ERROR_RESPONSE = "rate-limit reached";
 
+/**
+ * Before-handle hooks `rateLimit` installed. The composed-route census asserts
+ * every `/v1` route carries one, which a hook's name cannot guarantee.
+ */
+const rateLimitHooks = new WeakSet<object>();
+
+/** Whether a mounted route's before-handle hook came out of `rateLimit`. */
+export const isRateLimitHook = (hook: unknown): boolean =>
+  typeof hook === "function" && rateLimitHooks.has(hook);
+
 const writeRateLimitHeaders = ({
   max,
   remaining,
@@ -292,16 +302,23 @@ export const rateLimit = ({
     return undefined;
   };
 
-  plugin.onBeforeHandle(
-    { as: "scoped" },
-    async ({ request, server, set }) =>
-      await applyRateLimit({
-        phase: "before_handler",
-        request,
-        server,
-        set,
-      }),
-  );
+  const beforeHandle = async ({
+    request,
+    server,
+    set,
+  }: {
+    request: Request;
+    server: RequestIpServer | null;
+    set: RateLimitResponseSet;
+  }) =>
+    await applyRateLimit({
+      phase: "before_handler",
+      request,
+      server,
+      set,
+    });
+  rateLimitHooks.add(beforeHandle);
+  plugin.onBeforeHandle({ as: "scoped" }, beforeHandle);
 
   plugin.onError(
     { as: "scoped" },

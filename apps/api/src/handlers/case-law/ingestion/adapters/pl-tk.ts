@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 /**
  * Polish Constitutional Tribunal (Trybunał Konstytucyjny) adapter.
  *
@@ -45,6 +46,7 @@ import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
 import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
@@ -218,10 +220,12 @@ type TkResponse = {
  */
 const requestTk = async ({
   cookie,
+  fetchStage,
   path,
   signal,
 }: {
   cookie: string | undefined;
+  fetchStage: DocumentFetchStage;
   path: string;
   signal: AbortSignal | undefined;
 }): Promise<Result<TkResponse, AdapterFetchError>> => {
@@ -245,6 +249,7 @@ const requestTk = async ({
           },
         },
         {
+          fetchStage,
           adapterKey: ADAPTER_KEYS.PL_TK,
           signal,
           timeoutMs: REQUEST_TIMEOUT_MS,
@@ -325,6 +330,7 @@ const openSession = async (
 ): Promise<Result<Session, AdapterFetchError>> => {
   const landed = await requestTk({
     cookie: undefined,
+    fetchStage: "listing",
     path: "/",
     signal,
   });
@@ -359,6 +365,7 @@ const selectStage = async (
 ): Promise<Result<void, AdapterFetchError>> => {
   const searched = await requestTk({
     cookie: sessionCookie(session, stage),
+    fetchStage: "listing",
     path: "/Szukaj?cid=1",
     signal,
   });
@@ -593,6 +600,7 @@ const readListingPage = async (
   }
   const requested = await requestTk({
     cookie: sessionCookie(listing.session, listing.stage),
+    fetchStage: "listing",
     path: `/SzukajDrukuj?cid=1&page=${index}`,
     signal: listing.signal,
   });
@@ -1065,6 +1073,7 @@ const buildPlTkDecision = async ({
   if (casePage === undefined) {
     const first = await requestTk({
       cookie: sessionCookie(session),
+      fetchStage: "document",
       path,
       signal,
     });
@@ -1083,6 +1092,7 @@ const buildPlTkDecision = async ({
       session.sessionId = reopened.value.sessionId;
       const retried = await requestTk({
         cookie: sessionCookie(session),
+        fetchStage: "document",
         path,
         signal,
       });
@@ -1646,6 +1656,7 @@ const buildPlTkFromPayload = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const plTkAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_TK,
   language: PL_TK_LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,

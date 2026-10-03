@@ -43,6 +43,16 @@
       }
     ]
   },
+  "case-law.outstanding-document-probe": {
+    "scans": [
+      {
+        "position": "root/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_document_outstanding_idx"
+      }
+    ]
+  },
   "case-law.docket-family-key-identity": {
     "scans": [
       {

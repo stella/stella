@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import { makeClaim, supported } from "@/features/avt/avt.test-fixtures";
 import type { VerificationRun } from "@/features/avt/types";
@@ -57,6 +60,94 @@ describe("spanPresentation", () => {
 });
 
 describe("stored statement text", () => {
+  test("claim presentation preserves every claim exactly once across anchors and overlaps", () => {
+    assertProperty(
+      "claim presentation preserves every claim exactly once across anchors and overlaps",
+      fc.property(
+        fc.array(
+          fc.constantFrom(
+            "a",
+            "😀",
+            "עברית",
+            "العربية",
+            "e\u0301",
+            "\n",
+            "\u00a0",
+          ),
+          { minLength: 1, maxLength: 30 },
+        ),
+        fc.array(
+          fc.record({
+            block: fc.integer({ min: 0, max: 3 }),
+            start: fc.integer({ min: 0, max: 9 }),
+            length: fc.integer({ min: 1, max: 10 }),
+          }),
+          { maxLength: 25 },
+        ),
+        (parts, spans) => {
+          const text = `😀עברית العربية e\u0301\n0123456789${parts.join("")}`;
+          const blocks = [
+            {
+              ordinal: 2,
+              kind: "docx-block",
+              blockId: "b2",
+              pageNumber: null,
+              text,
+            },
+            {
+              ordinal: 1,
+              kind: "pdf-page",
+              blockId: "P2",
+              pageNumber: 2,
+              text,
+            },
+            {
+              ordinal: 0,
+              kind: "docx-block",
+              blockId: "b0",
+              pageNumber: null,
+              text,
+            },
+          ] satisfies VerificationRun["blocks"];
+          const claims = spans.map(({ block, start, length }, index) =>
+            makeClaim({
+              suffix: index + 1,
+              verdict: supported(),
+              anchor:
+                block === 1
+                  ? {
+                      type: "pdf-page",
+                      pageNumber: 2,
+                      start,
+                      end: start + length,
+                    }
+                  : {
+                      type: "docx-block",
+                      blockId: block === 3 ? "missing" : `b${String(block)}`,
+                      start,
+                      end: start + length,
+                    },
+            }),
+          );
+          const input = claims.toReversed();
+          const inputOrder = input.map((claim) => claim.id);
+          const presentation = selectClaimPresentation(blocks, input);
+          expect(presentation.readingOrder.toSorted()).toEqual(
+            inputOrder.toSorted(),
+          );
+          expect(new Set(presentation.readingOrder).size).toBe(claims.length);
+          for (const block of segmentProse(blocks, input)) {
+            expect(block.segments.map((segment) => segment.text).join("")).toBe(
+              text,
+            );
+          }
+          expect(input.map((claim) => claim.id)).toEqual(inputOrder);
+          expect(blocks.map((block) => block.ordinal)).toEqual([2, 1, 0]);
+        },
+      ),
+    );
+  });
+
   const block = {
     ordinal: 0,
     blockId: "p1",

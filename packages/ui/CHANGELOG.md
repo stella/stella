@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.40.1
+
+### Patch Changes
+
+- [#4500](https://github.com/stella/stella/pull/4500) [`986bac7`](https://github.com/stella/stella/commit/986bac7ed65df97e8ecb980733a36763807e8bbb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `typedCharacter` (`@stll/ui/typed-character`), which returns the character a keystroke typed across keyboard layouts.
+
 ## 0.40.0
 
 ### Minor Changes
