@@ -93,7 +93,7 @@ const callbackContext = (
     review?: {
       status: "needs_reapproval" | "approved";
       approvedIssuer: string | null;
-      approvedEndpointOrigins?: string[];
+      approvedEndpointOrigins?: readonly string[];
     };
   },
 ): CallbackCtx =>
