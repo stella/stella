@@ -1573,6 +1573,15 @@ const ecjDecisionFromParts = ({
       decisionDate,
       decisionType,
       fulltext,
+      // Refused secondary reads carry less detail than a complete observation.
+      // Derive quality from the envelope so stored replay preserves the same
+      // pipeline protection; authoritative absence remains a full observation.
+      isListingOnly:
+        (noticeXml === undefined &&
+          parts[RAW_PART.NOTICE_STATE]?.startsWith("notice:refused:") ===
+            true) ||
+        (formexXml === undefined &&
+          parts[RAW_PART.FORMEX_STATE]?.startsWith("formex:refused:") === true),
       sourceUrl,
       documentUrl,
       // Absent, not empty, where no notice was read: an empty list is a
@@ -1864,7 +1873,9 @@ export const refreshEcjStoredFormex = async ({
   }
 
   const nextRaw = encodeSourceRawEnvelope({
-    ...parts,
+    ...Object.fromEntries(
+      Object.entries(parts).filter(([key]) => key !== RAW_PART.FORMEX_STATE),
+    ),
     [RAW_PART.FORMEX]: fetched.formex,
   });
   const reparsed = reparseStoredRaw({
