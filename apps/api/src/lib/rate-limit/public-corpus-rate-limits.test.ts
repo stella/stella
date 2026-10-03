@@ -62,8 +62,8 @@ const createBindings = () => {
         decrement: (key) => context.decrement(key),
         kill: () => context.kill(),
       },
-      generator: (incoming, server) =>
-        generator(incoming, peers.get(incoming) ?? server),
+      generator: async (incoming, server) =>
+        await generator(incoming, peers.get(incoming) ?? server),
     };
   };
   return {
@@ -193,8 +193,8 @@ describe("public corpus fleet request budgets", () => {
           .get("/law/statutes/facets", work)
           .get("/law/sitemap/shards", work),
       );
-      const running = Array.from({ length: capacity }, (_, index) =>
-        bindings.send({
+      const running = Array.from({ length: capacity }, async (_, index) =>
+        await bindings.send({
           app,
           incoming: request(path, method),
           address: `192.0.2.${index + 1}`,
@@ -255,7 +255,9 @@ describe("public corpus fleet request budgets", () => {
     };
     const bindings = createBindings();
     const lines: string[] = [];
-    setMetricLineSinkForTesting((line) => lines.push(line));
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
     try {
       env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX = 3;
       env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = 3;
