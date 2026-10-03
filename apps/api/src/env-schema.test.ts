@@ -79,7 +79,28 @@ test("managed checks require an explicit supported provider and bounded configur
   };
   expect(
     envApiInvariantViolation({ ...supported, OPENROUTER_API_KEY: undefined }),
-  ).toContain("requires OPENROUTER_API_KEY");
+  ).toContain("requires OPENROUTER_API_KEY or complete OpenRouter WIF");
+  expect(
+    envApiInvariantViolation({ ...supported, OPENROUTER_API_KEY: "  " }),
+  ).toContain("requires OPENROUTER_API_KEY or complete OpenRouter WIF");
+  const wif = {
+    OPENROUTER_WIF_POLICY_ID: "fixture-policy",
+    OPENROUTER_WIF_AUDIENCE: "fixture-audience",
+    OPENROUTER_WIF_STS_REGION: "eu-west-1",
+  } satisfies Pick<
+    Parameters<typeof envApiInvariantViolation>[0],
+    | "OPENROUTER_WIF_POLICY_ID"
+    | "OPENROUTER_WIF_AUDIENCE"
+    | "OPENROUTER_WIF_STS_REGION"
+  >;
+  expect(
+    envApiInvariantViolation({
+      ...supported,
+      OPENROUTER_API_KEY: undefined,
+      ...wif,
+    }),
+  ).toBeNull();
+  expect(envApiInvariantViolation({ ...supported, ...wif })).toBeNull();
   for (const settings of [
     { MANAGED_PROVIDER_CHECK_INTERVAL_MS: undefined },
     { MANAGED_PROVIDER_CHECK_TIMEOUT_MS: undefined },
@@ -101,6 +122,76 @@ test("managed checks require an explicit supported provider and bounded configur
       expect(v.safeParse(schema, invalid).success).toBe(false);
     }
     expect(v.parse(schema, "17")).toBe(17);
+  }
+});
+
+test("OpenRouter WIF settings are nonblank and configured as a complete set", () => {
+  const wifSchemas = [
+    envApiServerSchema.OPENROUTER_WIF_POLICY_ID,
+    envApiServerSchema.OPENROUTER_WIF_AUDIENCE,
+    envApiServerSchema.OPENROUTER_WIF_STS_REGION,
+  ];
+  for (const schema of wifSchemas) {
+    for (const invalid of ["", "   "]) {
+      expect(v.safeParse(schema, invalid).success).toBe(false);
+    }
+  }
+  for (const invalid of ["aws-global", "https://sts.amazonaws.com", "region"]) {
+    expect(
+      v.safeParse(envApiServerSchema.OPENROUTER_WIF_STS_REGION, invalid)
+        .success,
+    ).toBe(false);
+  }
+
+  const wif = {
+    OPENROUTER_WIF_POLICY_ID: "fixture-policy",
+    OPENROUTER_WIF_AUDIENCE: "fixture-audience",
+    OPENROUTER_WIF_STS_REGION: "eu-west-1",
+  } satisfies Pick<
+    Parameters<typeof envApiInvariantViolation>[0],
+    | "OPENROUTER_WIF_POLICY_ID"
+    | "OPENROUTER_WIF_AUDIENCE"
+    | "OPENROUTER_WIF_STS_REGION"
+  >;
+  const partialConfigurations = [
+    { OPENROUTER_WIF_POLICY_ID: wif.OPENROUTER_WIF_POLICY_ID },
+    { OPENROUTER_WIF_AUDIENCE: wif.OPENROUTER_WIF_AUDIENCE },
+    { OPENROUTER_WIF_STS_REGION: wif.OPENROUTER_WIF_STS_REGION },
+    {
+      OPENROUTER_WIF_POLICY_ID: wif.OPENROUTER_WIF_POLICY_ID,
+      OPENROUTER_WIF_AUDIENCE: wif.OPENROUTER_WIF_AUDIENCE,
+    },
+    {
+      OPENROUTER_WIF_POLICY_ID: wif.OPENROUTER_WIF_POLICY_ID,
+      OPENROUTER_WIF_STS_REGION: wif.OPENROUTER_WIF_STS_REGION,
+    },
+    {
+      OPENROUTER_WIF_AUDIENCE: wif.OPENROUTER_WIF_AUDIENCE,
+      OPENROUTER_WIF_STS_REGION: wif.OPENROUTER_WIF_STS_REGION,
+    },
+  ] satisfies Pick<
+    Parameters<typeof envApiInvariantViolation>[0],
+    | "OPENROUTER_WIF_POLICY_ID"
+    | "OPENROUTER_WIF_AUDIENCE"
+    | "OPENROUTER_WIF_STS_REGION"
+  >[];
+  const base = {
+    ...environment,
+    AI_PROVIDER: "openrouter",
+    FEATURE_MANAGED_PROVIDER_CHECKS: false,
+    OPENROUTER_API_KEY: "fixture-key",
+  } satisfies Parameters<typeof envApiInvariantViolation>[0];
+  for (const partial of partialConfigurations) {
+    expect(envApiInvariantViolation({ ...base, ...partial })).toContain(
+      "must be configured together",
+    );
+    expect(
+      envApiInvariantViolation({
+        ...base,
+        FEATURE_MANAGED_PROVIDER_CHECKS: true,
+        ...partial,
+      }),
+    ).toContain("must be configured together");
   }
 });
 
