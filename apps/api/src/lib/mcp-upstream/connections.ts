@@ -23,7 +23,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
-import { recordMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
+import {
+  recordMcpAuthorizationReview,
+  resolveMcpIssuerBinding,
+} from "@/api/lib/mcp-upstream/authorization-review";
 import {
   decryptMcpSecret,
   encryptMcpSecret,
@@ -37,7 +40,11 @@ import {
   refreshOAuthToken,
   tokenExpiresAt,
 } from "@/api/lib/mcp-upstream/oauth";
-import type { BoundOAuthMetadata } from "@/api/lib/mcp-upstream/oauth";
+import type {
+  ApprovedMcpIssuerBinding,
+  BoundOAuthMetadata,
+  McpIssuerBinding,
+} from "@/api/lib/mcp-upstream/oauth";
 import { mcpResourceMatchesConnector } from "@/api/lib/mcp-upstream/url-safety";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -157,8 +164,10 @@ type RawConnectionRow = {
   oauthClientSecretIv: Buffer | null;
   oauthResourceUrl: string | null;
   oauthAuthorizationServerUrl: string | null;
-  oauthApprovedIssuer: string | null;
-  oauthConfirmedEndpointOrigins: string[] | null;
+  oauthConnectorIssuer: string | null;
+  oauthConnectorConfirmedEndpointOrigins: string[] | null;
+  oauthReviewApprovedIssuer: string | null;
+  oauthReviewApprovedEndpointOrigins: string[] | null;
   refreshTokenEncrypted: Buffer | null;
   refreshTokenIv: Buffer | null;
   slug: string;
@@ -190,8 +199,7 @@ export type LoadedMcpConnection =
       accessTokenIv: Buffer;
       expiresAt: Date | null;
       oauthAuthorizationServerUrl: string;
-      oauthApprovedIssuer: string | null;
-      oauthConfirmedEndpointOrigins: string[];
+      oauthIssuerBinding: McpIssuerBinding;
       oauthClientId: string;
       oauthClientSecretEncrypted: Buffer | null;
       oauthClientSecretIv: Buffer | null;
@@ -249,12 +257,12 @@ const selectConnectionFields = {
   expiresAt: mcpUserConnections.expiresAt,
   oauthResourceUrl: mcpUserConnections.resourceUrl,
   oauthAuthorizationServerUrl: mcpUserConnections.authorizationServerUrl,
-  oauthApprovedIssuer: sql<
-    string | null
-  >`coalesce(${mcpConnectorAuthorizationReviews.approvedIssuer}, ${mcpConnectors.oauthIssuer})`,
-  oauthConfirmedEndpointOrigins: sql<
-    string[] | null
-  >`coalesce(${mcpConnectorAuthorizationReviews.approvedEndpointOrigins}, ${mcpConnectors.oauthConfirmedEndpointOrigins})`,
+  oauthConnectorIssuer: mcpConnectors.oauthIssuer,
+  oauthConnectorConfirmedEndpointOrigins:
+    mcpConnectors.oauthConfirmedEndpointOrigins,
+  oauthReviewApprovedIssuer: mcpConnectorAuthorizationReviews.approvedIssuer,
+  oauthReviewApprovedEndpointOrigins:
+    mcpConnectorAuthorizationReviews.approvedEndpointOrigins,
   oauthClientId: mcpOAuthClients.clientId,
   oauthClientSecretEncrypted: mcpOAuthClients.clientSecretEncrypted,
   oauthClientSecretIv: mcpOAuthClients.clientSecretIv,
@@ -1084,17 +1092,28 @@ const requestUnconfiguredIssuerReview = async ({
   }
 };
 
-/** True when the stored connection cannot be used under its approved issuer. */
-const blockUnapprovedStoredMcpIssuer = async (
+/**
+ * The approved issuer the stored connection may use, or null when it cannot
+ * be used: its connector awaits review or it was authorized by another issuer.
+ */
+const approvedStoredMcpIssuer = async (
   options: ResolveOAuthAuthorizationTokenOptions,
-): Promise<boolean> => {
+): Promise<ApprovedMcpIssuerBinding | null> => {
   const { organizationId, row, safeDb, userId } = options;
-  if (row.oauthApprovedIssuer === null) {
-    await requestUnconfiguredIssuerReview(options);
-    return true;
+  const binding = row.oauthIssuerBinding;
+  switch (binding.type) {
+    case "unconfigured":
+      await requestUnconfiguredIssuerReview(options);
+      return null;
+    case "approved":
+      break;
+    default: {
+      binding satisfies never;
+      return panic("Unhandled MCP issuer binding");
+    }
   }
-  if (row.oauthApprovedIssuer === row.oauthAuthorizationServerUrl) {
-    return false;
+  if (binding.issuer === row.oauthAuthorizationServerUrl) {
+    return binding;
   }
   await markConnectionsStatus({
     connectionIds: [row.userConnectionId],
@@ -1103,7 +1122,7 @@ const blockUnapprovedStoredMcpIssuer = async (
     status: "needs_approval",
     userId,
   });
-  return true;
+  return null;
 };
 
 type ResolveMcpTokenDuringRefreshOptions =
@@ -1165,13 +1184,13 @@ const resolveMcpTokenDuringRefresh = async ({
       return panic("Expected an OAuth connection after binding");
     }
     if (
-      await blockUnapprovedStoredMcpIssuer({
+      (await approvedStoredMcpIssuer({
         dependencies,
         organizationId,
         row: bound.value,
         safeDb,
         userId,
-      })
+      })) === null
     ) {
       return { type: "skip" };
     }
@@ -1192,6 +1211,7 @@ const resolveMcpTokenDuringRefresh = async ({
 
 type DiscoverMcpRefreshMetadataOptions =
   ResolveOAuthAuthorizationTokenOptions & {
+    issuerBinding: ApprovedMcpIssuerBinding;
     leaseExpiresAt: Date;
     deferRefresh: () => Promise<void>;
   };
@@ -1202,13 +1222,14 @@ const discoverMcpRefreshMetadata = async ({
   row,
   safeDb,
   userId,
+  issuerBinding,
   leaseExpiresAt,
   deferRefresh,
 }: DiscoverMcpRefreshMetadataOptions): Promise<BoundOAuthMetadata | null> => {
   const metadata = await dependencies.discoverOAuthMetadata(
     row.url,
     undefined,
-    row.oauthConfirmedEndpointOrigins,
+    issuerBinding.endpointOrigins,
   );
   const recordAuditEvent = mcpAuthorizationReviewRecorder({
     organizationId,
@@ -1264,7 +1285,7 @@ const discoverMcpRefreshMetadata = async ({
     }
     return null;
   }
-  if (metadata.value.authorizationServer.issuer !== row.oauthApprovedIssuer) {
+  if (metadata.value.authorizationServer.issuer !== issuerBinding.issuer) {
     const review = await recordMcpAuthorizationReview({
       safeDb,
       organizationId,
@@ -1295,15 +1316,14 @@ const resolveOAuthAuthorizationToken = async ({
   safeDb,
   userId,
 }: ResolveOAuthAuthorizationTokenOptions): Promise<ResolvedAuthorizationToken> => {
-  if (
-    await blockUnapprovedStoredMcpIssuer({
-      dependencies,
-      organizationId,
-      row,
-      safeDb,
-      userId,
-    })
-  ) {
+  const issuerBinding = await approvedStoredMcpIssuer({
+    dependencies,
+    organizationId,
+    row,
+    safeDb,
+    userId,
+  });
+  if (issuerBinding === null) {
     return { type: "skip" };
   }
   const now =
@@ -1372,6 +1392,7 @@ const resolveOAuthAuthorizationToken = async ({
     row,
     safeDb,
     userId,
+    issuerBinding,
     leaseExpiresAt,
     deferRefresh,
   });
@@ -1527,11 +1548,15 @@ const normalizeMcpConnectionRow = (
       accessTokenIv: rawRow.accessTokenIv,
       expiresAt: rawRow.expiresAt,
       oauthAuthorizationServerUrl: rawRow.oauthAuthorizationServerUrl,
-      oauthApprovedIssuer: rawRow.oauthApprovedIssuer,
-      oauthConfirmedEndpointOrigins:
-        rawRow.oauthConfirmedEndpointOrigins ??
-        getCuratedMcpOAuthApproval(rawRow.url)?.endpointOrigins ??
-        [],
+      oauthIssuerBinding: resolveMcpIssuerBinding({
+        curatedApproval: getCuratedMcpOAuthApproval(rawRow.url),
+        connectorIssuer: rawRow.oauthConnectorIssuer,
+        connectorConfirmedEndpointOrigins:
+          rawRow.oauthConnectorConfirmedEndpointOrigins,
+        reviewApprovedIssuer: rawRow.oauthReviewApprovedIssuer,
+        reviewApprovedEndpointOrigins:
+          rawRow.oauthReviewApprovedEndpointOrigins,
+      }),
       oauthClientId: rawRow.oauthClientId,
       oauthClientSecretEncrypted: rawRow.oauthClientSecretEncrypted,
       oauthClientSecretIv: rawRow.oauthClientSecretIv,
