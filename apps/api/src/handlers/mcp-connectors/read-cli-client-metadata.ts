@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import { getCliClientMetadataDocument } from "@/api/lib/auth/oauth-own-client-documents";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { getCliClientMetadataDocument } from "@/api/lib/oauth-own-client-documents";
 
 const readCliClientMetadata = createSafePublicHandler(
   {

@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { getVerifiedOAuthOrigins } from "@/api/lib/oauth-consent-info";
+import { getVerifiedOAuthOrigins } from "@/api/lib/auth/oauth-consent-info";
 import {
   grantableScopes,
   OAUTH_REGISTRATION_SCOPE_POLICY,
   OPEN_REGISTRATION_SCOPES,
-} from "@/api/lib/oauth-registration-policy";
+} from "@/api/lib/auth/oauth-registration-policy";
 
 const ALL_SCOPES = Object.keys(OAUTH_REGISTRATION_SCOPE_POLICY);
 const ELEVATED = ALL_SCOPES.filter(

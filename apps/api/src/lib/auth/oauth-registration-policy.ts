@@ -12,7 +12,7 @@ import { panic } from "better-result";
 
 import type { McpOAuthScope } from "@stll/api-contract";
 
-import { isVerifiedClientMetadataDocument } from "@/api/lib/oauth-consent-info";
+import { isVerifiedClientMetadataDocument } from "@/api/lib/auth/oauth-consent-info";
 import { OAUTH_CLIENT_REGISTRATION_PATH } from "@/api/lib/oauth-loopback-registration";
 import { isRecord } from "@/api/lib/type-guards";
 

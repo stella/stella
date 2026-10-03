@@ -11,7 +11,7 @@ import {
   OAUTH_SCOPE_POLICY_PATHS,
   OPEN_REGISTRATION_SCOPES,
   OAUTH_REGISTRATION_SCOPE_POLICY,
-} from "@/api/lib/oauth-registration-policy";
+} from "@/api/lib/auth/oauth-registration-policy";
 import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,

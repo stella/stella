@@ -78,6 +78,15 @@ import {
   createDemoSessionFilter,
   warnDemoAccountConfiguration,
 } from "@/api/lib/auth/demo-account-policy";
+import {
+  createOAuthConsentInfoPlugin,
+  getVerifiedOAuthOrigins,
+} from "@/api/lib/auth/oauth-consent-info";
+import { withOwnClientDocuments } from "@/api/lib/auth/oauth-own-client-documents";
+import {
+  createStellaOAuthProvider,
+  OAUTH_DISABLED_PATHS,
+} from "@/api/lib/auth/oauth-registration-policy";
 import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import {
   createSessionLifetime,
@@ -128,16 +137,7 @@ import {
   mapMembershipInvariantError,
   ownerRequiredError,
 } from "@/api/lib/membership-role-invariants";
-import {
-  createOAuthConsentInfoPlugin,
-  getVerifiedOAuthOrigins,
-} from "@/api/lib/oauth-consent-info";
 import { resolveLoopbackClientRegistrationOverride } from "@/api/lib/oauth-loopback-registration";
-import { withOwnClientDocuments } from "@/api/lib/oauth-own-client-documents";
-import {
-  createStellaOAuthProvider,
-  OAUTH_DISABLED_PATHS,
-} from "@/api/lib/oauth-registration-policy";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
 import { failureSink } from "@/api/lib/observability/failure";

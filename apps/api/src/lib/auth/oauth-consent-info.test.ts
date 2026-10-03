@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   getOAuthConsentInfo,
   getVerifiedOAuthOrigins,
-} from "@/api/lib/oauth-consent-info";
+} from "@/api/lib/auth/oauth-consent-info";
 
 const origins = getVerifiedOAuthOrigins([
   "https://stella.example",

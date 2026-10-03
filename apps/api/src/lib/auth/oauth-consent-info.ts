@@ -1,7 +1,7 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { SchemaClient } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin } from "better-auth";
-import { APIError, sessionMiddleware } from "better-auth/api";
+import { sessionMiddleware } from "better-auth/api";
 import * as v from "valibot";
 
 import {
@@ -191,7 +191,13 @@ export const createOAuthConsentInfoPlugin = (
             where: [{ field: "clientId", value: ctx.query.client_id }],
           });
           if (!client || client.disabled) {
-            throw new APIError("NOT_FOUND", { message: "Client not found" });
+            return ctx.json(
+              { message: "Client not found" },
+              {
+                status: 404,
+                headers: { [CACHE_CONTROL_HEADER]: PRIVATE_CACHE_CONTROL },
+              },
+            );
           }
           ctx.setHeader(CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL);
           return ctx.json(
