@@ -16,6 +16,8 @@ import {
 
 const RULE_NAME = "no-direct-legislation-revision-write";
 const OWNER_PATH = "apps/api/src/handlers/legislation/ingestion.ts";
+const FIXTURE_FILE_SUFFIX =
+  ".oxlint-plugins/__fixtures__/no-direct-legislation-revision-write.fixture.ts";
 export const LEGISLATION_PARTIAL_WRITERS = {
   "apps/api/src/handlers/legislation/withdrawal.ts": [
     "windowDisposition",
@@ -89,9 +91,10 @@ export default eslintCompatPlugin({
                 filename.endsWith(owner),
               )?.[1] ?? [];
             return (
-              filename.includes("apps/api/src/") &&
-              !filename.endsWith(OWNER_PATH) &&
-              !isTestFile(filename)
+              filename.endsWith(FIXTURE_FILE_SUFFIX) ||
+              (filename.includes("apps/api/src/") &&
+                !filename.endsWith(OWNER_PATH) &&
+                !isTestFile(filename))
             );
           },
           CallExpression(node) {

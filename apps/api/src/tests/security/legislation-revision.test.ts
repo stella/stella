@@ -36,9 +36,10 @@ test("revision writers reject separately assembled metadata and body", async () 
     rawHash: "second",
   });
   const mixedRevision = {
-    ...first,
-    ...first.values(sourceRaw),
-    ...second.payload,
+    input: first.input,
+    window: first.window,
+    payload: second.payload,
+    contentHash: first.contentHash,
   };
   expectTypeOf(mixedRevision).not.toExtend<LegislationRevision>();
   expect(mixedRevision).not.toBeInstanceOf(LegislationRevision);
