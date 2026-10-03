@@ -1604,7 +1604,9 @@ describe("the sk-us steady-state frontier", () => {
                 start <= poisonOffset && poisonOffset < start + pageSize,
             )
           ) {
-            if (pageSize === 1) {confirmations++;}
+            if (pageSize === 1) {
+              confirmations++;
+            }
             return { type: "status", status: 204 };
           }
           return {
