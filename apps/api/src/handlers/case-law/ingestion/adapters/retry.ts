@@ -461,12 +461,14 @@ export const retryPublisherRequest = async (
     const fetched = await Result.tryPromise({
       try: async () => await runtime.request(url, requestInit),
       catch: (cause) =>
-        new AdapterFetchError({
-          message: "Publisher request failed",
-          adapterKey: init.adapterKey,
-          cursor: null,
-          cause,
-        }),
+        cause instanceof AdapterFetchError
+          ? cause
+          : new AdapterFetchError({
+              message: "Publisher request failed",
+              adapterKey: init.adapterKey,
+              cursor: null,
+              cause,
+            }),
     });
     init.signal?.throwIfAborted();
     if (Result.isError(fetched) && !isPublisherTimeout(fetched.error.cause)) {

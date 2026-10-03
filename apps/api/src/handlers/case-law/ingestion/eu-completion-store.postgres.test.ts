@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { initialBatchState } from "@stll/db-load-gate/health";
 import { DAY_IN_MS } from "@stll/time";
 
 import {
@@ -539,6 +540,48 @@ if (!databaseUrl || !enabled) {
         "unchanged",
       );
     });
+    test.each(["fresh", "oversized-source-hold"] as const)(
+      "publisher refusal caps a huge Retry-After with %s state at one day",
+      async (priorHold) => {
+        const state = await fixture();
+        const oversizedDeadline = state.currentTime() + 315_360_000 * 1000;
+        const maximumDeadline =
+          state.currentTime() + EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs;
+        expect(oversizedDeadline).toBeGreaterThan(maximumDeadline);
+        expect(await state.store.pickup(state.receipt.id)).toBe("ready");
+        if (priorHold === "oversized-source-hold") {
+          const batch = {
+            ...initialBatchState(),
+            holdUntil: oversizedDeadline,
+          };
+          await db
+            .insert(euCompletionControls)
+            .values({
+              key: `source:${state.sourceId}`,
+              sourceId: state.sourceId,
+              batch,
+            })
+            .onConflictDoUpdate({
+              target: euCompletionControls.key,
+              set: { batch },
+            });
+        }
+        const settled = await state.store.finish({
+          id: state.receipt.id,
+          status: "publisher-refused",
+          retryAt: new Date(oversizedDeadline),
+        });
+        expect(settled?.retryAt?.getTime()).toBe(maximumDeadline);
+        expect(settled?.refusalHoldUntil?.getTime()).toBe(maximumDeadline);
+        expect(settled?.completedAt).toBeNull();
+        expect(settled?.attempts).toBe(0);
+        expect(
+          (await state.store.loadSourceGateState(state.sourceId)).holdUntil,
+        ).toBe(maximumDeadline);
+        state.advance(EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs);
+        expect(await state.store.pickup(state.receipt.id)).toBe("ready");
+      },
+    );
     test("publisher refusal without Retry-After escalates to a day without exhausting systemic attempts", async () => {
       const state = await fixture();
       for (const hours of [1, 2, 4, 8, 16, 24, 24]) {

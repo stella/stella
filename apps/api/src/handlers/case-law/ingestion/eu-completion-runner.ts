@@ -57,6 +57,7 @@ import {
 } from "./eu-completion-protection";
 import {
   CompletionPayloadTooLarge,
+  EU_COMPLETION_STORE_LIMITS,
   euCompletionDecisionNotWithdrawn,
 } from "./eu-completion-store";
 import type {
@@ -415,7 +416,11 @@ const fetchCompletionCandidate = (
           type: "unchanged",
         } satisfies EuCompletionRowOutcome);
       case "rate-limited":
-        state.refusal = refreshed.cooldownUntilEpochMs;
+        state.refusal = Math.min(
+          refreshed.cooldownUntilEpochMs,
+          Temporal.Now.instant().epochMilliseconds +
+            EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs,
+        );
         return Result.err(
           new EuCompletionStop({
             message: "Publisher refused completion",
@@ -1172,7 +1177,11 @@ const runControlledCompletionRow = (
               chargeRequest: async () =>
                 rememberStop(await chargeCompletionRequest(context)),
               onRefusal: (deadline) => {
-                state.refusal = deadline;
+                state.refusal = Math.min(
+                  deadline,
+                  Temporal.Now.instant().epochMilliseconds +
+                    EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs,
+                );
               },
               onFailure: (error) => {
                 state.publisherFailure = {

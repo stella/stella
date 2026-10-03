@@ -464,11 +464,15 @@ const holdPublisherRefusalTx = async (
       ? initialBatchState()
       : decodeCheckpoint({ cursor: control.cursor, batch: control.batch })
           .batch;
+  const currentTime = now();
   const held = {
     ...batch,
     holdCause: "other" as const,
-    heldSince: batch.heldSince ?? now(),
-    holdUntil: Math.max(batch.holdUntil ?? 0, retryAt.getTime()),
+    heldSince: batch.heldSince ?? currentTime,
+    holdUntil: Math.min(
+      currentTime + EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs,
+      Math.max(batch.holdUntil ?? 0, retryAt.getTime()),
+    ),
     holdCount: batch.holdCount + 1,
   };
   // audit: skip — public case-law corpus bookkeeping, no workspace data
@@ -517,6 +521,7 @@ const preparePublisherRefusalTx = async (
   // Only publisher success after the latest refusal can isolate this document.
   const baseline = receipt.refusalProgress;
   const count = receipt.refusalCount + 1;
+  const currentTime = now();
   const delay = Math.min(
     EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs,
     EU_COMPLETION_STORE_LIMITS.refusalMinHoldMs *
@@ -532,7 +537,10 @@ const preparePublisherRefusalTx = async (
     count,
     progress,
     until: new Date(
-      Math.max(now() + delay, retryAt.getTime(), batch.holdUntil ?? 0),
+      Math.min(
+        currentTime + EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs,
+        Math.max(currentTime + delay, retryAt.getTime(), batch.holdUntil ?? 0),
+      ),
     ),
   };
 };

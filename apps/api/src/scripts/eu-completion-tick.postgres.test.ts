@@ -31,7 +31,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { ecjCompletionFingerprint } from "@/api/handlers/case-law/ingestion/eu-completion-protection";
-import { createEuCompletionStore } from "@/api/handlers/case-law/ingestion/eu-completion-store";
+import {
+  createEuCompletionStore,
+  EU_COMPLETION_STORE_LIMITS,
+} from "@/api/handlers/case-law/ingestion/eu-completion-store";
 import { parseFormexBibliography } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-bibliography";
 import { parseEcjNotice } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-notice";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -570,9 +573,14 @@ if (!databaseUrl || !enabled) {
       });
     }, 30_000);
 
-    test.each([429, 403])(
-      "actual completion treats HTTP %s as a one-request stopped publisher refusal",
-      async (status) => {
+    test.each([
+      { status: 429, retryAfter: "60" },
+      { status: 403, retryAfter: "60" },
+      { status: 429, retryAfter: "315360000" },
+      { status: 403, retryAfter: "315360000" },
+    ])(
+      "actual completion treats HTTP $status with Retry-After $retryAfter as a bounded one-request stopped publisher refusal",
+      async ({ status, retryAfter }) => {
         await withSource(async (sourceId) => {
           const { row, store, receipt } = await fetchedApprovedFixture(
             sourceId,
@@ -581,8 +589,12 @@ if (!databaseUrl || !enabled) {
           const gate = fixtureGate();
           await withPublisher({
             respond: async () =>
-              new Response(null, { status, headers: { "Retry-After": "60" } }),
+              new Response(null, {
+                status,
+                headers: { "Retry-After": retryAfter },
+              }),
             run: async (sent) => {
+              const startedAt = Temporal.Now.instant().epochMilliseconds;
               const report = await withPublisherGateFixture(
                 gate.dependencies,
                 async () =>
@@ -608,6 +620,28 @@ if (!databaseUrl || !enabled) {
               expect(
                 (await store.loadSourceGateState(sourceId)).holdUntil,
               ).toBeGreaterThan(Temporal.Now.instant().epochMilliseconds);
+              const finishedAt = Temporal.Now.instant().epochMilliseconds;
+              const refused = await store.getReceipt(receipt.id);
+              const sourceHold = await store.loadSourceGateState(sourceId);
+              if (
+                refused.retryAt === null ||
+                refused.refusalHoldUntil === null
+              ) {
+                panic("Expected durable publisher refusal deadline");
+              }
+              expect(refused.retryAt.getTime()).toBeLessThanOrEqual(
+                finishedAt + EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs,
+              );
+              expect(refused.refusalHoldUntil.getTime()).toBe(
+                refused.retryAt.getTime(),
+              );
+              expect(sourceHold.holdUntil).toBe(refused.retryAt.getTime());
+              if (retryAfter === "315360000") {
+                expect(refused.retryAt.getTime()).toBeGreaterThanOrEqual(
+                  startedAt + EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs,
+                );
+              }
+
               expect(
                 (
                   await db

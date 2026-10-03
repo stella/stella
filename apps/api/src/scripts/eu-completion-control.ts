@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { Temporal } from "@stll/time";
 
 import { createEuCompletionStore } from "@/api/handlers/case-law/ingestion/eu-completion-store";
-import { createCaseLawMaintenanceCleanupHandles } from "@/api/lib/case-law/maintenance-lane";
+import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { brandPersistedCaseLawSourceId } from "@/api/lib/safe-id-boundaries";
 
 const attribution = v.pipe(
@@ -117,15 +117,20 @@ type ControlStore = Pick<
   ReturnType<typeof createEuCompletionStore>,
   "setControl" | "approveSupervisedDryRun"
 >;
-const createOperatorStore = async () => {
-  const handles = await createCaseLawMaintenanceCleanupHandles({
-    timeoutMs: 30_000,
-    queryTimeoutMs: 5000,
-  });
-  return createEuCompletionStore({
-    db: handles.rootDb,
-    now: () => Temporal.Now.instant().epochMilliseconds,
-  });
+const withOperatorStore = async (
+  work: (store: ControlStore) => Promise<number>,
+) => {
+  const session = await enterCaseLawMaintenanceLane();
+  try {
+    return await work(
+      createEuCompletionStore({
+        db: session.rootDb,
+        now: () => Temporal.Now.instant().epochMilliseconds,
+      }),
+    );
+  } finally {
+    await session.release();
+  }
 };
 const controlFailureMessage = (error: unknown) => {
   if (error instanceof Error) {
@@ -144,7 +149,7 @@ type RunControlOptions = {
 };
 export const runEuCompletionControl = async ({
   args,
-  createStore = createOperatorStore,
+  createStore,
   write = (record) => process.stdout.write(`${JSON.stringify(record)}\n`),
   writeHelp = (usage) => process.stdout.write(usage),
 }: RunControlOptions) => {
@@ -155,80 +160,86 @@ export const runEuCompletionControl = async ({
   const attempted = await Result.tryPromise({
     try: async () => {
       const command = parseEuCompletionControlCommand(args);
-      const store = await createStore();
-      switch (command.command) {
-        case "global":
-          await store.setControl({
-            sourceId: null,
-            state: command.state,
-            changedBy: command.who,
-            changedAt: command.when,
-          });
-          write({
-            event: "case_law.eu_completion.control_changed",
-            scope: "global",
-            state: command.state,
-            operator: command.who,
-            at: command.when,
-          });
-          break;
-        case "source":
-          await store.setControl({
-            sourceId: command.source,
-            state: command.state,
-            changedBy: command.who,
-            changedAt: command.when,
-          });
-          write({
-            event: "case_law.eu_completion.control_changed",
-            scope: "source",
-            sourceId: command.source,
-            state: command.state,
-            operator: command.who,
-            at: command.when,
-          });
-          break;
-        case "approve": {
-          const approval = await store.approveSupervisedDryRun({
-            sourceId: command.source,
-            parserVersion: command["parser-version"],
-            supervisedReceiptId: command.receipt,
-            evidenceRef: command.evidence,
-            supervisedBy: command["supervised-by"],
-            supervisedAt: command["supervised-at"],
-            approvedBy: command.who,
-            approvedAt: command.when,
-            reviewedCounts: {
-              reviewed: command.reviewed,
-              accepted: command.accepted,
-              requiresReview: command["requires-review"],
-            },
-          });
-          if (approval.isErr()) {
-            write({
-              event: "case_law.eu_completion.control_failed",
-              code: approval.error.code,
-              message: approval.error.message,
+      const runWithStore =
+        createStore === undefined
+          ? withOperatorStore
+          : async (work: (store: ControlStore) => Promise<number>) =>
+              await work(await createStore());
+      return await runWithStore(async (store) => {
+        switch (command.command) {
+          case "global":
+            await store.setControl({
+              sourceId: null,
+              state: command.state,
+              changedBy: command.who,
+              changedAt: command.when,
             });
-            return 1;
+            write({
+              event: "case_law.eu_completion.control_changed",
+              scope: "global",
+              state: command.state,
+              operator: command.who,
+              at: command.when,
+            });
+            break;
+          case "source":
+            await store.setControl({
+              sourceId: command.source,
+              state: command.state,
+              changedBy: command.who,
+              changedAt: command.when,
+            });
+            write({
+              event: "case_law.eu_completion.control_changed",
+              scope: "source",
+              sourceId: command.source,
+              state: command.state,
+              operator: command.who,
+              at: command.when,
+            });
+            break;
+          case "approve": {
+            const approval = await store.approveSupervisedDryRun({
+              sourceId: command.source,
+              parserVersion: command["parser-version"],
+              supervisedReceiptId: command.receipt,
+              evidenceRef: command.evidence,
+              supervisedBy: command["supervised-by"],
+              supervisedAt: command["supervised-at"],
+              approvedBy: command.who,
+              approvedAt: command.when,
+              reviewedCounts: {
+                reviewed: command.reviewed,
+                accepted: command.accepted,
+                requiresReview: command["requires-review"],
+              },
+            });
+            if (approval.isErr()) {
+              write({
+                event: "case_law.eu_completion.control_failed",
+                code: approval.error.code,
+                message: approval.error.message,
+              });
+              return 1;
+            }
+            const approved = approval.value;
+            write({
+              event: "case_law.eu_completion.supervised_approval",
+              sourceId: approved.sourceId,
+              parserVersion: approved.parserVersion,
+              receiptId: approved.supervisedReceiptId,
+              operator: approved.approvedBy,
+              at: approved.approvedAt,
+              reviewedCounts: approved.reviewedCounts,
+            });
+            break;
           }
-          const approved = approval.value;
-          write({
-            event: "case_law.eu_completion.supervised_approval",
-            sourceId: approved.sourceId,
-            parserVersion: approved.parserVersion,
-            receiptId: approved.supervisedReceiptId,
-            operator: approved.approvedBy,
-            at: approved.approvedAt,
-            reviewedCounts: approved.reviewedCounts,
-          });
-          break;
+          default:
+            command satisfies never;
+            return panic("Unexpected completion operator command");
         }
-        default:
-          command satisfies never;
-          return panic("Unexpected completion operator command");
-      }
-      return 0;
+        return 0;
+      });
     },
     catch: (error) => error,
   });
