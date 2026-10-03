@@ -25,9 +25,13 @@ import { paragraph } from "@stll/folio-core/server";
 import { createRedisClient } from "@/api/lib/redis-client";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a type-only import still opens the owned surface and is rejected
 import type { createBullMqConnection } from "@/api/lib/redis-client";
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a pinned workspace handle is built only by its listed modules
+import { createRootSafeDb } from "@/api/lib/root-scoped-db";
 
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a relative specifier resolves to the owned module
 import { createRedisClient as relativeClient } from "../../apps/api/src/lib/redis-client.ts";
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a run actor is built only by a listed member-run queue
+import { createRootRunActor } from "../../apps/api/src/lib/root-scoped-db.ts";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a deep relative import of an owned package source file is rejected
 import { countryCodeFromAlpha3 } from "../../packages/country-codes/src/alpha3.ts";
 
@@ -87,4 +91,6 @@ void runChat;
 void toolDefinition;
 void relativeClient;
 void countryCodeFromAlpha3;
+void createRootSafeDb;
+void createRootRunActor;
 type _Connection = typeof createBullMqConnection;

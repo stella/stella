@@ -251,7 +251,7 @@ type ClaimedRun = {
 /** Conditional `queued -> running`: the loser of a double delivery updates
  *  nothing and stops. */
 const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
-  const rows = await actor.scopedDb(
+  const rows = await actor.writeDb(
     async (tx) =>
       // audit: skip — lifecycle bookkeeping on a run audited at creation.
       await tx
@@ -278,7 +278,7 @@ const setRunFailed = async (
   actor: RunActor,
   errorCode: VerificationRunErrorCode,
 ): Promise<void> => {
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     // audit: skip — failure bookkeeping on a run audited at creation.
     await tx
       .update(legalListVerificationRuns)
@@ -307,7 +307,7 @@ const resolvePinnedFile = async (
   run: ClaimedRun,
 ): Promise<Result<ResolvedFile, VerificationRunErrorCode>> => {
   const row = (
-    await actor.scopedDb(
+    await actor.writeDb(
       async (tx) =>
         await tx
           .select({ content: fields.content })
@@ -403,7 +403,7 @@ const executeRun = async (
 
   const configResult = await Result.tryPromise({
     try: async () => {
-      const settings = await actor.scopedDb(
+      const settings = await actor.writeDb(
         async (tx) => await loadOrgAISettings(tx, actor),
       );
       if (Result.isError(settings)) {
@@ -432,7 +432,7 @@ const executeRun = async (
     });
     return "ai_unavailable";
   }
-  await actor.scopedDb(
+  await actor.writeDb(
     async (tx) =>
       // audit: skip — records the model the run used, on a run audited at creation.
       await tx
@@ -457,7 +457,7 @@ const executeRun = async (
     usageMetering: {
       actionType: "doc_review",
       organizationId: actor.organizationId,
-      safeDb: actor.safeDb,
+      safeDb: actor.writeSafeDb,
       serviceTier: SERVICE_TIER,
       userId: actor.userId,
       workspaceId: actor.workspaceId,
@@ -497,7 +497,7 @@ const executeRun = async (
   }
 
   const rows = claimRows(actor, claims, graded.value.grades);
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     await completeVerificationRun({
       tx,
       runId: actor.runId,
