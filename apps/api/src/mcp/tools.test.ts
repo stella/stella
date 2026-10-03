@@ -8244,12 +8244,16 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("save_task completes cancelled work while governed enforcement is off", async () => {
     const { scopedDb, workflowUpdates } = createTaskStatusScopedDb();
+    // Local development opens governed workflow; strict mode lets the flag decide.
+    const restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: RUNTIME_MODE.strict,
+    });
 
     const result = await handleMcpToolCall({
       args: { task_id: "00000000-0000-4000-8000-00000007a001", status: "done" },
       context: createContext({ scopedDb }),
       toolName: "save_task",
-    });
+    }).finally(restoreRuntimeMode);
 
     expect(result).toEqual({
       content: [

@@ -12,7 +12,7 @@ declare const isDeploymentFeatureEnabled: (flag: string) => boolean;
 export const rawMember = env.FEATURE_LEGAL_LISTS;
 
 // MUST flag: optional and computed spellings are the same read.
-// oxlint-disable-next-line no-raw-deployment-feature-read/no-raw-deployment-feature-read -- fixture: optional raw flag reads go through the owner
+// oxlint-disable-next-line no-raw-deployment-feature-read/no-raw-deployment-feature-read, typescript/no-unnecessary-condition -- fixture: optional raw flag reads go through the owner
 export const rawOptional = env?.FEATURE_PUBLIC_LAW;
 
 // oxlint-disable-next-line no-raw-deployment-feature-read/no-raw-deployment-feature-read, typescript/dot-notation -- fixture: computed raw flag reads go through the owner
