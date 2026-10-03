@@ -216,11 +216,11 @@ const writerMembersOf = ({
     const dedupeFunction =
       (ts.isFunctionDeclaration(node) &&
         node.name !== undefined &&
-        /DedupeKey$/u.test(node.name.text) &&
+        node.name.text.endsWith("DedupeKey") &&
         node) ||
       (ts.isVariableDeclaration(node) &&
         ts.isIdentifier(node.name) &&
-        /DedupeKey$/u.test(node.name.text) &&
+        node.name.text.endsWith("DedupeKey") &&
         node.initializer !== undefined &&
         (ts.isArrowFunction(node.initializer) ||
           ts.isFunctionExpression(node.initializer)) &&
