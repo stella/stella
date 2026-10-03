@@ -33,6 +33,8 @@ import { isRecord } from "@/api/lib/type-guards";
 export type ArchiveInspectionBudget = {
   /** Bytes of entry content scanned per window. */
   windowBytes: number;
+  maxNestedEntryBytes: number;
+  maxTotalInflatedBytes: number;
   /** Bytes of pattern occurrences kept for rule evaluation. */
   maxEvidenceBytes: number;
   /** Wall-clock time for inspecting one archive. */
@@ -40,6 +42,16 @@ export type ArchiveInspectionBudget = {
 };
 
 const ARCHIVE_REFUSAL = {
+  inflatedLimit: {
+    rule: "archive-inflation-limit",
+    severity: "critical",
+    meta: { description: "Archive content exceeds the inspection size limit" },
+  },
+  nestedGuard: {
+    rule: "archive-nested-index-refused",
+    severity: "critical",
+    meta: { description: "A packaged archive does not meet the index limits" },
+  },
   nestedTooDeep: {
     rule: "archive-nesting-limit",
     severity: "critical",
@@ -225,6 +237,7 @@ type ScanStreamOptions = {
   evidence: Evidence;
   windowBytes: number;
   outOfTime: () => boolean;
+  consumeBytes: (size: number) => boolean;
 };
 
 /**
@@ -239,6 +252,7 @@ const scanStream = async ({
   evidence,
   windowBytes,
   outOfTime,
+  consumeBytes,
 }: ScanStreamOptions): Promise<Inspection> => {
   const overlap = rules.maxMatchBytes - 1;
   let pending: Buffer[] = [];
@@ -258,6 +272,7 @@ const scanStream = async ({
   };
 
   for await (const chunk of chunks) {
+    if (!consumeBytes(chunk.length)) {return refused("inflatedLimit");}
     produced += chunk.length;
     if (produced > declaredBytes) {
       return refused("corrupt");
@@ -352,15 +367,21 @@ const inspectArchive = async ({
   const outOfTime = () => now() > deadline;
   const evidence = createEvidence(rules, budget.maxEvidenceBytes);
   let stream = 0;
+  let remainingInflatedBytes = budget.maxTotalInflatedBytes;
+  const consumeInflatedBytes = (size: number) => {
+    remainingInflatedBytes -= size;
+    return remainingInflatedBytes >= 0;
+  };
 
   const scan = async (
-    chunks: AsyncIterable<Uint8Array> | Iterable<Uint8Array>,
-    declaredBytes: number,
+    options: Pick<
+      ScanStreamOptions,
+      "chunks" | "declaredBytes" | "consumeBytes"
+    >,
   ) =>
     await scanStream({
-      chunks,
+      ...options,
       stream: stream++,
-      declaredBytes,
       rules,
       evidence,
       windowBytes: budget.windowBytes,
@@ -374,7 +395,7 @@ const inspectArchive = async ({
       return refused("budget");
     }
     if (depth > 0 && (await guard.scan(archive)).length > 0) {
-      return refused("budget");
+      return refused("nestedGuard");
     }
     const zipIndex = readZipIndex(archive);
     if (zipIndex.type === "malformed") {
@@ -392,7 +413,11 @@ const inspectArchive = async ({
       if (unreadable !== null) {
         return refused(unreadable);
       }
-      const name = await scan([entry.name], entry.name.length);
+      const name = await scan({
+        chunks: [entry.name],
+        declaredBytes: entry.name.length,
+        consumeBytes: () => true,
+      });
       if (name.type === "refused") {
         return name;
       }
@@ -422,10 +447,20 @@ const inspectArchive = async ({
             await iterator.return();
             return refused("nestedTooDeep");
           }
+          if (entry.uncompressedSize > budget.maxNestedEntryBytes) {
+            await iterator.return();
+            return refused("inflatedLimit");
+          }
           const parts: Buffer[] = [];
           let size = 0;
           for await (const part of content) {
             size += part.length;
+            if (
+              size > budget.maxNestedEntryBytes ||
+              !consumeInflatedBytes(part.length)
+            ) {
+              return refused("inflatedLimit");
+            }
             if (size > entry.uncompressedSize) {
               return refused("corrupt");
             }
@@ -446,7 +481,11 @@ const inspectArchive = async ({
         case "xml":
         case "binary":
         case "cfb": {
-          const scanned = await scan(content, entry.uncompressedSize);
+          const scanned = await scan({
+            chunks: content,
+            declaredBytes: entry.uncompressedSize,
+            consumeBytes: consumeInflatedBytes,
+          });
           if (scanned.type === "refused") {
             return scanned;
           }

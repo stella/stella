@@ -36,7 +36,13 @@ const rules = {
 } satisfies WindowedRuleSet;
 const scanner = createArchiveContentScanner({
   rules,
-  budget: { windowBytes: 64, maxEvidenceBytes: 1024, timeBudgetMs: 60_000 },
+  budget: {
+    windowBytes: 64,
+    maxNestedEntryBytes: 1024 * 1024,
+    maxTotalInflatedBytes: 1024 * 1024 * 1024,
+    maxEvidenceBytes: 1024,
+    timeBudgetMs: 60_000,
+  },
   guard: { scan: async () => [] },
 });
 const packageOf = async (parts: readonly Buffer[]) => {
@@ -171,6 +177,8 @@ test("shares evidence limits between package levels", async () => {
     rules: { ...rules, countingRules: new Set(["sample_field"]) },
     budget: {
       windowBytes: 64,
+      maxNestedEntryBytes: 1024 * 1024,
+      maxTotalInflatedBytes: 1024 * 1024 * 1024,
       maxEvidenceBytes: MARKER.length,
       timeBudgetMs: 60_000,
     },
@@ -194,7 +202,13 @@ test("shares the deadline between package levels", async () => {
   let ticks = 0;
   const limited = createArchiveContentScanner({
     rules,
-    budget: { windowBytes: 64, maxEvidenceBytes: 1024, timeBudgetMs: 5 },
+    budget: {
+      windowBytes: 64,
+      maxNestedEntryBytes: 1024 * 1024,
+      maxTotalInflatedBytes: 1024 * 1024 * 1024,
+      maxEvidenceBytes: 1024,
+      timeBudgetMs: 5,
+    },
     guard: { scan: async () => [] },
     now: () => ticks++,
   });
@@ -202,4 +216,65 @@ test("shares the deadline between package levels", async () => {
   expect((await limited.scan(bytes)).map(({ rule }) => rule)).toEqual([
     "archive-inspection-budget",
   ]);
+});
+
+test("enforces the packaged entry size limit", async () => {
+  const inner = await packageOf([Buffer.from("<w:document/>")]);
+  const limited = createArchiveContentScanner({
+    rules,
+    budget: {
+      windowBytes: 64,
+      maxEvidenceBytes: 1024,
+      timeBudgetMs: 60_000,
+      maxNestedEntryBytes: inner.length - 1,
+      maxTotalInflatedBytes: 1024 * 1024,
+    },
+    guard: { scan: async () => [] },
+  });
+  expect(
+    (await limited.scan(await wrap(inner))).map(({ rule }) => rule),
+  ).toEqual(["archive-inflation-limit"]);
+});
+
+test("uses the index refusal for a packaged index outside its limits", async () => {
+  const outer = await wrap(await packageOf([Buffer.from("<w:document/>")]));
+  const limited = createArchiveContentScanner({
+    rules,
+    budget: {
+      windowBytes: 64,
+      maxEvidenceBytes: 1024,
+      timeBudgetMs: 60_000,
+      maxNestedEntryBytes: 1024 * 1024,
+      maxTotalInflatedBytes: 1024 * 1024,
+    },
+    guard: {
+      scan: async (bytes) =>
+        bytes === outer
+          ? []
+          : [{ rule: "sample_index_limit", severity: "critical" }],
+    },
+  });
+  expect((await limited.scan(outer)).map(({ rule }) => rule)).toEqual([
+    "archive-nested-index-refused",
+  ]);
+});
+
+test("shares the total inflated size limit between package levels", async () => {
+  const part = Buffer.from(`<w:document>${"a".repeat(128)}</w:document>`);
+  const inner = await packageOf([part]);
+  const limited = createArchiveContentScanner({
+    rules,
+    budget: {
+      windowBytes: 64,
+      maxEvidenceBytes: 1024,
+      timeBudgetMs: 60_000,
+      maxNestedEntryBytes: 1024 * 1024,
+      maxTotalInflatedBytes: inner.length + part.length - 1,
+    },
+    guard: { scan: async () => [] },
+  });
+  expect(await matchRules(await wrap(inner))).toEqual([]);
+  expect(
+    (await limited.scan(await wrap(inner))).map(({ rule }) => rule),
+  ).toEqual(["archive-inflation-limit"]);
 });
