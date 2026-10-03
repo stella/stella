@@ -133,18 +133,17 @@ describe("independent stored-total heartbeat refresh", () => {
   test("each failure episode is observed once, and an outage after recovery is observed again", async () => {
     let now = 0;
     const outcomes = ["fail", "fail", "ok", "fail", "fail"];
-    const failures = outcomes.map((_, minute) => new Error(`minute ${minute}`));
-    const warnings: unknown[] = [];
+    const warnings: string[] = [];
     const refresh = createIngestionHealthRefresh({
       clock: () => now,
       emitStoredTotalHeartbeat: async () => {
         const minute = now / 60_000;
-        if (outcomes[minute] === "fail") {
-          throw failures[minute];
+        if (outcomes.at(minute) === "fail") {
+          throw new Error(`minute ${minute}`);
         }
       },
       observeHeartbeatFailure: (error) => {
-        warnings.push(error);
+        warnings.push(error instanceof Error ? error.message : String(error));
       },
       refreshCredentials: async () => {},
     });
@@ -152,6 +151,6 @@ describe("independent stored-total heartbeat refresh", () => {
       now = minute * 60_000;
       await refresh();
     }
-    expect(warnings).toEqual([failures[0], failures[3]]);
+    expect(warnings).toEqual(["minute 0", "minute 3"]);
   });
 });
