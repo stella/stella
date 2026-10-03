@@ -1,3 +1,4 @@
+// parser-output-unchanged: Adds an optional observation-quality discriminator; publisher fields and document parsing are unchanged.
 // parser-output-unchanged: observer wiring returns the adapter’s same normalized SyncPage.
 // parser-output-unchanged: replay outcome type gains an optional legacy docket; no parser output changes.
 // parser-output-unchanged: The required reconciliation revision projection changes retry bookkeeping, not parsed decision output.
@@ -49,6 +50,7 @@ import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import type { ObservationDetail } from "@/api/lib/legal-search/partial-observation-sql";
 import type { SkCollectionConnector } from "@/api/lib/legal-search/sk-collection-enrichment";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -127,6 +129,8 @@ export type RawIngestionResult = {
    * that an earlier fetch or repair already recovered.
    */
   isListingOnly?: boolean | undefined;
+  /** Quality of document and secondary reads, independent of document presence. */
+  observationDetail?: ObservationDetail | undefined;
   /**
    * Absent means `inline`. An inline result that carries no document is
    * stored unpublished, exactly as a listing-only one is, and is repaired the

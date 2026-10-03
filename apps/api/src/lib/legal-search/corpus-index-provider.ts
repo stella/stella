@@ -35,6 +35,10 @@ import {
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
 import {
+  corpusQueryVariant,
+  corpusQueryVariantCursorTarget,
+} from "@/api/lib/legal-search/corpus-query-variant-policy";
+import {
   corpusQueryRankingMode,
   corpusRankingCursorTarget,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
@@ -267,9 +271,13 @@ const searchResult = async (
     sort: "relevance",
     textTokenCount: tokenizeCorpusFreeText(query.query).length,
   });
-  const cursorTarget = corpusRankingCursorTarget(
-    target.value.cursorTarget,
-    rankingMode,
+  const queryVariant = corpusQueryVariant({
+    configuredVariant: envBase.CORPUS_INDEX_QUERY_VARIANT,
+    verbatim: false,
+  });
+  const cursorTarget = corpusQueryVariantCursorTarget(
+    corpusRankingCursorTarget(target.value.cursorTarget, rankingMode),
+    queryVariant,
   );
   const generation = serving.generation;
 
@@ -292,6 +300,7 @@ const searchResult = async (
       caseLawCorpusQuery({
         jurisdiction: query.jurisdiction,
         text: query.query,
+        queryVariant,
         filters: {
           court: query.court,
           courtPartitions: courtPartitionsForCourtFilter(contract, query.court),
