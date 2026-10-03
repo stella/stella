@@ -31,6 +31,7 @@ import { hasMemberPermission } from "@/api/lib/permission-authorization";
 export const readFileEndpoint = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
     query: t.Object({
       purpose: t.UnionEnum(["download", "display", "native-display"]),
@@ -70,6 +71,7 @@ export const readFileEndpoint = createSafeHandler(
 export const readEmailHtmlPreviewEndpoint = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
   } satisfies WorkspaceHandlerConfig,
@@ -101,6 +103,7 @@ export const printPdfEndpoint = createSafeHandler(
   {
     accountAccess: "standard",
     permissions: { workspace: ["read"] },
+    access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
   } satisfies WorkspaceHandlerConfig,
@@ -132,6 +135,7 @@ export const stampedDownloadEndpoint = createSafeHandler(
   {
     accountAccess: "standard",
     permissions: { workspace: ["read"] },
+    access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
     query: t.Object({ metadata: t.UnionEnum(STAMPED_DOWNLOAD_METADATA) }),

@@ -22,6 +22,7 @@ import { authMacro, permissionMacro } from "@/api/lib/auth";
 export const searchEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    access: "read",
     mcp: { type: "tool", name: "search" },
     body: searchBodySchema,
   } satisfies HandlerConfig,
@@ -49,6 +50,7 @@ export const searchEndpoint = createSafeRootHandler(
 export const searchFacetsEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    access: "read",
     mcp: { type: "internal", reason: "search_ui" },
     body: searchFacetsBodySchema,
   } satisfies HandlerConfig,
@@ -75,6 +77,7 @@ export const searchFacetsEndpoint = createSafeRootHandler(
 export const refineSearchEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    access: "read",
     mcp: { type: "internal", reason: "search_ui" },
     body: refineSearchBodySchema,
     requiresUsage: { actionType: "chat", modelRole: "fast" },
