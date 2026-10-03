@@ -78,6 +78,7 @@ jobs:
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
       docker_checks_required: ${{ steps.changed-files.outputs.docker_checks_required }}
+      docker_checks_pr_required: ${{ steps.changed-files.outputs.docker_checks_pr_required }}
       # JSON matrix `include` list for api-image-smoke.
       api_image_platforms: ${{ steps.changed-files.outputs.api_image_platforms }}
       api_image_smoke_required: ${{ steps.changed-files.outputs.api_image_smoke_required }}
@@ -89,6 +90,7 @@ jobs:
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
+      legal_atlas_image_pr_required: ${{ steps.changed-files.outputs.legal_atlas_image_pr_required }}
       dependency_malware_required: ${{ steps.changed-files.outputs.dependency_malware_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
       marketing_screenshots_required: ${{ steps.marketing-release.outputs.required }}
@@ -359,6 +361,7 @@ jobs:
               echo "agent_sandbox_docker_required=true"
               echo "api_image_deps_required=true"
               echo "docker_checks_required=true"
+              echo "docker_checks_pr_required=true"
               echo 'api_image_platforms=[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]'
               echo "api_image_smoke_required=true"
               echo "postgres_suites_required=true"
@@ -374,6 +377,7 @@ jobs:
               echo "fix_tests_on_base_required=false"
               echo "landing_build_required=$landing_build_required"
               echo "legal_atlas_image_required=true"
+              echo "legal_atlas_image_pr_required=true"
               echo "dependency_malware_required=true"
               echo "lockfile_ages_required=false"
               echo "migration_rehearsal_required=true"
@@ -401,6 +405,7 @@ jobs:
               echo "agent_sandbox_docker_required=false"
               echo "api_image_deps_required=false"
               echo "docker_checks_required=false"
+              echo "docker_checks_pr_required=false"
               echo "api_image_platforms=[]"
               echo "api_image_smoke_required=false"
               echo "postgres_suites_required=$empty_api_suites"
@@ -416,6 +421,7 @@ jobs:
               echo "fix_tests_on_base_required=false"
               echo "landing_build_required=false"
               echo "legal_atlas_image_required=false"
+              echo "legal_atlas_image_pr_required=false"
               echo "dependency_malware_required=false"
               echo "lockfile_ages_required=false"
               echo "migration_rehearsal_required=false"
@@ -478,6 +484,7 @@ jobs:
           collab_redis_required=false
           landing_build_required=false
           legal_atlas_image_required=false
+          image_inputs_changed=false
           lockfile_ages_required=false
           migration_rehearsal_required=false
           mobile_build_required=false
@@ -577,8 +584,16 @@ jobs:
                 e2e_core_required=true
                 ;;
             esac
+            # Pull requests build the images only when their own inputs
+            # change: Dockerfiles, manifests, the runner and its packages.
+            # The merge queue keeps the broad selection above.
             case "$file" in
-              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/retry.sh|.github/workflows/ci.yml)
+              */Dockerfile|*.Dockerfile|*/package.json|package.json|bun.lock|bunfig.toml|.npmrc|patches/*|turbo.json|scripts/pull-base-images.sh|apps/legal-atlas-runner/*|packages/legal-atlas/*|packages/agent-engine/docker/*|.dockerignore)
+                image_inputs_changed=true
+                ;;
+            esac
+            case "$file" in
+              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml)
                 legal_atlas_image_required=true
                 ;;
             esac
@@ -667,6 +682,14 @@ jobs:
           if [[ "$agent_sandbox_docker_required" == "true" || "$api_image_deps_required" == "true" ]]; then
             docker_checks_required=true
           fi
+          docker_checks_pr_required=false
+          if [[ "$docker_checks_required" == "true" && "$image_inputs_changed" == "true" ]]; then
+            docker_checks_pr_required=true
+          fi
+          legal_atlas_image_pr_required=false
+          if [[ "$legal_atlas_image_required" == "true" && "$image_inputs_changed" == "true" ]]; then
+            legal_atlas_image_pr_required=true
+          fi
 
           # Full depth preserves the original broad folded-suite selection.
           if [[ "$SUITE_DEPTH" == full ]]; then
@@ -688,6 +711,7 @@ jobs:
             echo "agent_sandbox_docker_required=$agent_sandbox_docker_required"
             echo "api_image_deps_required=$api_image_deps_required"
             echo "docker_checks_required=$docker_checks_required"
+            echo "docker_checks_pr_required=$docker_checks_pr_required"
             echo "api_image_platforms=$api_image_platforms"
             echo "api_image_smoke_required=$api_image_smoke_required"
             echo "postgres_suites_required=$postgres_suites_required"
@@ -703,6 +727,7 @@ jobs:
             echo "fix_tests_on_base_required=$fix_tests_on_base_required"
             echo "landing_build_required=$landing_build_required"
             echo "legal_atlas_image_required=$legal_atlas_image_required"
+            echo "legal_atlas_image_pr_required=$legal_atlas_image_pr_required"
             echo "dependency_malware_required=$dependency_malware_required"
             echo "lockfile_ages_required=$lockfile_ages_required"
             echo "migration_rehearsal_required=$migration_rehearsal_required"
@@ -737,7 +762,9 @@ jobs:
       && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.docker_checks_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
+      && (needs.ci-plan.outputs.suite_depth == 'full'
+          || (needs.ci-plan.outputs.suite_depth == 'fast'
+              && needs.ci-plan.outputs.docker_checks_pr_required == 'true'))
       )
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -2829,6 +2856,25 @@ jobs:
             --retry-all-errors --retry-delay 1 --retry-max-time 60 --max-time 2 \
             http://127.0.0.1:7290/health/readyz
 
+      # The statute recall floor is raise-only against the target branch; the
+      # shallow checkout holds only HEAD, so fetch exactly the base commit.
+      - name: Select statute recall base from the target branch
+        if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
+        env:
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          base="${MERGE_GROUP_BASE_SHA:-${PULL_REQUEST_BASE_SHA:-$PUSH_BEFORE_SHA}}"
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            git fetch --no-tags --depth=1 origin main
+            base="$(git rev-parse FETCH_HEAD)"
+          else
+            git fetch --no-tags --depth=1 origin "$base"
+          fi
+          git cat-file -e "$base^{commit}"
+          echo "STATUTE_RECALL_BASE_REF=$base" >> "$GITHUB_ENV"
+
       - name: Run corpus engine suites
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         working-directory: apps/api
@@ -2839,6 +2885,7 @@ jobs:
           mapfile -t engine_tests < <(grep -rl --include='*.test.ts' STELLA_RUN_CORPUS_ENGINE_TESTS src | sort)
           # This suite is mandatory; retain dynamic discovery for the other engine contracts.
           printf '%s\n' "${engine_tests[@]}" | grep -Fx 'src/handlers/legislation/search-relaxed.contract.test.ts'
+          printf '%s\n' "${engine_tests[@]}" | grep -Fx 'src/handlers/legislation/statute-recall.contract.test.ts'
           test "${#engine_tests[@]}" -gt 0
           bun test --preload ./src/tests/setup-env.ts --reporter=junit --reporter-outfile=engine-tests.xml "${engine_tests[@]}"
           python3 -c 'import xml.etree.ElementTree as E; r=E.parse("engine-tests.xml").getroot(); n=len(list(r.iter("testcase"))); assert n > 0 and not any(list(r.iter(t)) for t in ("skipped", "failure", "error")) and not any(int(e.get(k, "0")) for e in r.iter() for k in ("skipped", "disabled", "failures", "errors")), "Engine tests must execute without skips or failures"; print(f"Executed {n} engine tests")'
@@ -4254,7 +4301,9 @@ jobs:
       && ((needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.legal_atlas_image_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
+      && (needs.ci-plan.outputs.suite_depth == 'full'
+          || (needs.ci-plan.outputs.suite_depth == 'fast'
+              && needs.ci-plan.outputs.legal_atlas_image_pr_required == 'true'))
       )
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -4690,9 +4739,9 @@ jobs:
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_JOB_SCOPES: >-
-            {"service-suites": "service_suites_pr_required"}
+            {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
           FAST_REQUIRED: >-
-            ["api-image-smoke", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "ci-tests", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "desktop-clippy", "e2e-production-shard", "fix-tests-on-base", "landing-build", "marketing-screenshots", "parser-version-guard", "release-typecheck", "route-smoke", "service-suites", "typecheck-baseline", "web-build", "web-image-smoke", "windows-scripts"]
+            ["api-image-smoke", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "ci-tests", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "desktop-clippy", "e2e-production-shard", "fix-tests-on-base", "landing-build", "marketing-screenshots", "parser-version-guard", "release-typecheck", "route-smoke", "service-suites", "typecheck-baseline", "web-build", "web-image-smoke", "windows-scripts", "docker-checks", "legal-atlas-image"]
         run: |
           if [[ "${HEAVY_ONLY:-false}" == true ]]; then
             # No main run may turn a cancellation into successful supersession.

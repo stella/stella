@@ -6,11 +6,11 @@ import { styleSets } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import {
   scanErrorForHandler,
   scanUploadForHandler,
-} from "@/api/lib/file-scan/scan-upload";
-import type { scanUpload } from "@/api/lib/file-scan/scan-upload";
+} from "@/api/lib/file-scan/scan-upload-handler";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   readStoredObject,
