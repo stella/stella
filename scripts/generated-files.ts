@@ -31,6 +31,41 @@ const MODEL_CATALOG_INPUTS = [
 
 export const GENERATORS = [
   {
+    id: "status-tables",
+    outputKind: "committed",
+    outputs: ["apps/api/src/lib/db/status-tables.gen.ts"],
+    inputs: [
+      "apps/api/src/db/schema/**",
+      "apps/api/src/db/auth-schema.ts",
+      "apps/api/src/db/agent-auth-schema.ts",
+      "apps/api/scripts/generate-status-tables.ts",
+    ],
+    write: ["bun", "apps/api/scripts/generate-status-tables.ts", "--write"],
+    check: ["bun", "apps/api/scripts/generate-status-tables.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "transition-triggers",
+    outputKind: "committed",
+    outputs: [
+      "apps/api/drizzle/20261003124600_flow_run_transitions/migration.sql",
+    ],
+    inputs: [
+      "apps/api/src/lib/db/flow-run-transition-spec.ts",
+      "apps/api/src/lib/db/transition-sql.ts",
+      "apps/api/scripts/generate-transition-triggers.ts",
+    ],
+    write: [
+      "bun",
+      "apps/api/scripts/generate-transition-triggers.ts",
+      "--write",
+    ],
+    check: ["bun", "apps/api/scripts/generate-transition-triggers.ts"],
+    autofix: false,
+    after: ["status-tables"],
+  },
+  {
     id: "capability-catalog",
     outputKind: "committed",
     outputs: [

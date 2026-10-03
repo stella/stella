@@ -32,11 +32,16 @@ type Action = "approved" | "rejected" | "cancel";
 type FlowReviewGateFixtureOptions = {
   intermediate: boolean;
   governed?: boolean;
+  initialRunStatus?: "pending" | "awaiting_review";
 };
 
 export const flowReviewGateFixture = async (
   db: GatedTestDb,
-  { intermediate, governed = false }: FlowReviewGateFixtureOptions,
+  {
+    intermediate,
+    governed = false,
+    initialRunStatus = "awaiting_review",
+  }: FlowReviewGateFixtureOptions,
 ) => {
   const organizationId = mintAuthProviderId<"organization">();
   const userId = mintAuthProviderId<"user">();
@@ -105,7 +110,7 @@ export const flowReviewGateFixture = async (
     await db.insert(flowRuns).values({
       id: runId,
       workspaceId,
-      status: "awaiting_review",
+      status: initialRunStatus,
       definitionSnapshot: { name: "Review flow", steps },
       triggerSource: { type: "manual", userId },
     });

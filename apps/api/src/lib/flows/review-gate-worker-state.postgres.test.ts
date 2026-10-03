@@ -150,6 +150,7 @@ if (!databaseUrl || !enabled) {
             const f = await flowReviewGateFixture(db, {
               intermediate: phase === "complete",
               governed: true,
+              initialRunStatus: "pending",
             });
             const workerPid = await backendPid(workerClient.db);
             const cancelPid = await backendPid(cancelClient.db);
@@ -378,6 +379,7 @@ if (!databaseUrl || !enabled) {
             const f = await flowReviewGateFixture(db, {
               intermediate: phase === "complete",
               governed: true,
+              initialRunStatus: "pending",
             });
             const workerPid = await backendPid(workerClient.db);
             const approvePid = await backendPid(approveClient.db);
@@ -516,6 +518,7 @@ if (!databaseUrl || !enabled) {
           const f = await flowReviewGateFixture(db, {
             intermediate: phase === "complete",
             governed: true,
+            initialRunStatus: "pending",
           });
           const worker = await pausedWorker({ db, f, phase });
           try {

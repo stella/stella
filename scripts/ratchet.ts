@@ -44,7 +44,10 @@ import {
   TRACKED_SUPPRESSION_RULES,
   type TrackedRule,
 } from "./lint-suppressions";
-import { ROOT_CONNECTION_DOORS } from "./ownership";
+import {
+  ROOT_CONNECTION_DOORS,
+  STATUS_TRANSITION_OWNERSHIP,
+} from "./ownership";
 import { memoizeRecent, parseSource, sourceDialect } from "./parse-memo";
 import {
   isResultConventionExcludedFile,
@@ -60,6 +63,10 @@ import {
   isExcludedSource,
   isExcludedTestInclusiveSource,
 } from "./source-globs";
+import {
+  unmanagedTransitionTables,
+  statusWriteCalls,
+} from "./status-write-shapes";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
@@ -2268,7 +2275,7 @@ type RepoMetricResult = {
 
 type RepoCounter = (context: ScanContext) => RepoMetricResult;
 
-export type RatchetMetric =
+export type RatchetMetric = (
   | ({
       readonly scope: "file";
       readonly id: string;
@@ -2300,7 +2307,10 @@ export type RatchetMetric =
       readonly id: string;
       readonly description: string;
       readonly count: RepoCounter;
-    };
+      /** Gate each measured member independently, including virtual file keys. */
+      readonly perFile?: true;
+    }
+) & { readonly growth?: "shrink-only" };
 
 // One decrease-only budget per tracked rule, derived from the single
 // tracked-rule table rather than hand-listed here: a rule added to that table
@@ -2889,6 +2899,46 @@ const RESULT_BOUNDARY_METRICS = [
 export const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     scope: "file",
+    id: "direct-status-writes",
+    description:
+      "lifecycle keys in direct Drizzle updates outside the transition owner; each file's debt can only shrink",
+    include: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.ts"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      STATUS_TRANSITION_OWNERSHIP.owner.some((owner) => file === owner),
+    perFile: true,
+    growth: "shrink-only",
+    count: (content, { file }) =>
+      statusWriteCalls({
+        content,
+        file,
+        columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
+      }).length,
+  },
+  {
+    scope: "repo",
+    id: "unmanaged-transition-specs",
+    description:
+      "reasoned unmanaged status-table entries, each table independently shrink-only; before specs exist, every inventoried status table is unmanaged",
+    perFile: true,
+    growth: "shrink-only",
+    count: (context) => {
+      const file = "apps/api/src/lib/db/transition-specs.ts";
+      const tables =
+        existsSync(path.join(context.root, file)) &&
+        (context.trackedFiles === undefined || context.trackedFiles.has(file))
+          ? unmanagedTransitionTables(readSource(context, file))
+          : Object.keys(STATUS_TRANSITION_OWNERSHIP.enforcement.columns);
+      return {
+        count: tables.length,
+        files: Object.fromEntries(
+          tables.map((table) => [`${file}#${table}`, 1]),
+        ),
+      };
+    },
+  },
+  {
+    scope: "file",
     id: "as-casts",
     description:
       "`as` type assertions in app source (excl. `as const`, import aliases, tests/gen/d.ts)",
@@ -3399,9 +3449,9 @@ const printReportOnlyMetrics = (context: ScanContext): void => {
 };
 
 const PER_FILE_METRIC_IDS: ReadonlySet<string> = new Set(
-  RATCHET_METRICS.filter(
-    (metric) => metric.scope === "file" && metric.perFile === true,
-  ).map(({ id }) => id),
+  RATCHET_METRICS.filter((metric) => metric.perFile === true).map(
+    ({ id }) => id,
+  ),
 );
 
 // How `--check` gates a metric: per file, and whether below-baseline files
@@ -3412,7 +3462,7 @@ const metricGate = (metric: RatchetMetric): DiffOptions =>
         perFile: metric.allowlist === undefined ? metric.perFile : true,
         allowlist: metric.allowlist === undefined ? undefined : true,
       }
-    : {};
+    : { perFile: metric.perFile };
 
 // --- Scanning ---------------------------------------------------------------
 
@@ -4060,6 +4110,12 @@ const parseAllowance = (filename: string, head: string): AllowanceParse => {
     };
   }
   const perFile = metricGate(metric).perFile === true;
+  if (metric.growth === "shrink-only") {
+    return {
+      type: "invalid",
+      message: `${filename}: shrink-only metric takes no allowances ${metric.id}`,
+    };
+  }
   const { file } = value;
   if (perFile && !isRepositoryPath(file)) {
     return {
@@ -4149,6 +4205,12 @@ const checkAllowances = ({
             ({ delta }) => delta > 0,
           );
     for (const { file, delta } of increases) {
+      if (metric.growth === "shrink-only") {
+        errors.push(
+          `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}; shrink-only metric takes no allowances. Use the transition owner and declare a managed transition spec.`,
+        );
+        continue;
+      }
       const key = allowanceKey({ metric: diff.id, file });
       const funded = funding.get(key);
       funding.delete(key);

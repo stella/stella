@@ -101,6 +101,13 @@ export const flowRuns = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    p.check(
+      "flow_runs_status_domain",
+      sql`${table.status} IN (${sql.join(
+        FLOW_RUN_STATUSES.map((status) => sql.raw(`'${status}'`)),
+        sql`, `,
+      )})`,
+    ),
     p
       .index("flow_runs_ws_created_idx")
       .on(table.workspaceId, table.createdAt.desc(), table.id),

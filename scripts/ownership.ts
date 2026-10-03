@@ -18,6 +18,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { STATUS_COLUMNS } from "../apps/api/src/lib/db/status-tables.gen.ts";
 // With its extension: oxlint.config.ts loads this file under Node's resolver.
 import { formattedLikeRepository } from "./generated-artifacts.ts";
 
@@ -30,6 +31,11 @@ export type AllowedFile = {
 
 export type OwnershipEnforcement =
   | { readonly kind: "none" }
+  | {
+      readonly kind: "status-set";
+      readonly columns: Readonly<Record<string, readonly string[]>>;
+      readonly allowed: readonly AllowedFile[];
+    }
   | {
       readonly kind: "import";
       readonly specifiers: readonly string[];
@@ -339,7 +345,17 @@ const MODEL_REQUEST_NAMES = [
   "streamTanStackTextForRole",
 ] as const;
 
+export const STATUS_TRANSITION_OWNERSHIP = {
+  id: "status-transition",
+  capability: "Changing a row's lifecycle state",
+  owner: ["apps/api/src/lib/db/transitions.ts"],
+  summary:
+    "The transition owner checks the expected state and optional fence in the update predicate, and returns Transitioned or Stale. Direct lifecycle writes report lint warnings while callers migrate; a per-file shrink-only ratchet forbids adding them. Unmanaged declarations can only shrink for each table independently. Dynamic payloads are outside the syntax detector's boundary.",
+  enforcement: { kind: "status-set", columns: STATUS_COLUMNS, allowed: [] },
+} as const satisfies OwnershipEntry;
+
 export const OWNERSHIP = [
+  STATUS_TRANSITION_OWNERSHIP,
   {
     id: "api-test-memory-planner",
     capability: "Measured API test memory and batch composition",
@@ -1587,6 +1603,9 @@ const enforcementCell = (enforcement: OwnershipEnforcement): string => {
     }
     case "member-call": {
       return `call \`.${enforcement.method}()\` in \`${enforcement.within.join("`, `")}\``;
+    }
+    case "status-set": {
+      return "lifecycle keys in `.update(table).set(...)`; warning plus per-file shrink-only ratchet";
     }
     default: {
       enforcement satisfies never;
