@@ -197,9 +197,22 @@ export const resolveDocTypeGate = async ({
   };
 };
 
-type ScopedGateResult =
-  | { ok: true; gate: DocTypeGate | null }
-  | { ok: false; status: 400; message: string };
+export const PLAYBOOK_RUN_FAILURE_CODE = {
+  PROPERTIES_LIMIT: "properties_limit_reached",
+  SCOPE_UNRESOLVED: "playbook_scope_unresolved",
+  FILE_PROPERTY_TYPE_IMMUTABLE: FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
+} as const;
+
+type ScopeRefusal = {
+  ok: false;
+  status: 400;
+  code: typeof PLAYBOOK_RUN_FAILURE_CODE.SCOPE_UNRESOLVED;
+  message: string;
+  hint: string;
+  retryable: false;
+};
+
+type ScopedGateResult = { ok: true; gate: DocTypeGate | null } | ScopeRefusal;
 
 // Resolves a playbook's document-type gate, rejecting a scoped playbook whose
 // classifier does not resolve (which would otherwise materialize ungated and
@@ -229,6 +242,9 @@ export const resolveScopedGate = async ({
     return {
       ok: false,
       status: 400,
+      code: PLAYBOOK_RUN_FAILURE_CODE.SCOPE_UNRESOLVED,
+      retryable: false,
+      hint: "Configure a matching Document Type classifier or change the playbook document-type scope before running it.",
       message:
         "This playbook is scoped to a document type, but the workspace has no matching Document Type classifier to gate on.",
     };
@@ -238,7 +254,13 @@ export const resolveScopedGate = async ({
 
 export type MaterializePlaybookRunResult =
   | { ok: true; materializedPropertyIds: SafeId<"property">[] }
-  | { ok: false; status: 400; message: string }
+  | ScopeRefusal
+  | {
+      ok: false;
+      status: 400;
+      code: typeof PLAYBOOK_RUN_FAILURE_CODE.PROPERTIES_LIMIT;
+      message: string;
+    }
   | {
       ok: false;
       status: 422;
@@ -253,7 +275,7 @@ type MaterializePlaybookRunArgs = {
     PgAsyncDatabase<PgQueryResultHKT>,
     "select" | "insert" | "delete" | "execute" | "$count"
   > &
-    Pick<Transaction, "query">;
+    Pick<Transaction, "query" | "rollback">;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   playbookId: SafeId<"playbookDefinition">;
@@ -545,7 +567,12 @@ export const materializePlaybookRun = async ({
   const retainedCount =
     existingCount - obsoleteVerdictIds.length - obsoleteAskIds.length;
   if (retainedCount + newCount > LIMITS.propertiesCount) {
-    return { ok: false, status: 400, message: "Properties limit reached" };
+    return {
+      ok: false,
+      status: 400,
+      code: PLAYBOOK_RUN_FAILURE_CODE.PROPERTIES_LIMIT,
+      message: "Properties limit reached",
+    };
   }
 
   // ASK rows first so the verdict rows' `askPropertyId` FK targets exist.

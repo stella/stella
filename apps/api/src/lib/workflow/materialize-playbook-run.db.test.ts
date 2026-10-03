@@ -4,9 +4,10 @@ import { eq } from "drizzle-orm";
 
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 
-import { playbookDefinitions, properties } from "@/api/db/schema";
+import { auditLogs, playbookDefinitions, properties } from "@/api/db/schema";
 import type { PropertyContent } from "@/api/db/schema-validators";
 import { createSafeDb } from "@/api/db/scoped";
+import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   createTestIds,
@@ -50,7 +51,17 @@ test.each([
       name: "Materialized column policy",
       positions: { version: 3, items: [] },
     });
-    let auditCount = 0;
+    const recordAuditEvent = createBackgroundAuditRecorder({
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      execution: {
+        performer: { type: "user", id: ids.userA1 },
+        trigger: { type: "direct" },
+      },
+    });
+    const countAuditEvents = async () =>
+      await db.$count(auditLogs, eq(auditLogs.resourceId, playbookId));
     type RunOptions = {
       content: PropertyContent;
       issue: string;
@@ -93,9 +104,7 @@ test.each([
             playbookId,
             positions,
             scope: null,
-            recordAuditEvent: async () => {
-              auditCount += 1;
-            },
+            recordAuditEvent,
           }),
       );
     };
@@ -139,7 +148,7 @@ test.each([
     expect(
       await db.$count(properties, eq(properties.workspaceId, ids.wsA1)),
     ).toBe(propertyCount);
-    expect(auditCount).toBe(1);
+    expect(await countAuditEvents()).toBe(1);
     const rerun = await run({ content: initial, issue: "Renamed column" });
     expect(rerun.isOk()).toBe(true);
     if (rerun.isErr()) {
@@ -154,6 +163,6 @@ test.each([
         where: { id: { eq: propertyId } },
       }),
     ).toMatchObject({ name: "Renamed column", content: initial });
-    expect(auditCount).toBe(2);
+    expect(await countAuditEvents()).toBe(2);
   },
 );
