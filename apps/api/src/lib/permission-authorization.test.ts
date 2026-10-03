@@ -88,9 +88,10 @@ describe("permission authorization", () => {
       credential: { type: "session" },
     });
 
-    expect(
-      readAuthorizedMemberRole({ memberRole: sessionMemberRole("owner") }),
-    ).toEqual(sessionMemberRole("owner"));
+    const sessionOwner = sessionMemberRole("owner");
+    expect(readAuthorizedMemberRole({ memberRole: sessionOwner })).toBe(
+      sessionOwner,
+    );
     expect(readAuthorizedMemberRole({})).toBeNull();
     expect(readAuthorizedMemberRole({ memberRole: null })).toBeNull();
     expect(readAuthorizedMemberRole(contextWithInheritedMemberRole)).toBeNull();

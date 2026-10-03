@@ -26,6 +26,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { templates } from "@/api/db/schema";
 import type { TemplateOrigin } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import { canInstallTemplatePacks } from "@/api/handlers/template-packs/catalogue";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -510,6 +511,18 @@ describe("template pack install", () => {
 });
 
 describe("template pack permission decisions", () => {
+  test("reports installability only with every install grant", () => {
+    const withoutRouteGrant = authorizedMemberRole({
+      role: "admin",
+      credential: {
+        type: "attenuated",
+        permissions: { organizationSettings: ["update"] },
+      },
+    });
+    expect(canInstallTemplatePacks(withoutRouteGrant)).toBe(false);
+    expect(canInstallTemplatePacks(sessionMemberRole("admin"))).toBe(true);
+  });
+
   test.each([
     {
       name: "admin route grant",

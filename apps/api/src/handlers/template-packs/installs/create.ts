@@ -22,6 +22,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import {
   canInstallTemplatePacks,
+  TEMPLATE_PACK_INSTALL_PERMISSIONS,
   getTemplatePackCatalogue,
 } from "../catalogue";
 import { templatePackParamsSchema } from "../get";
@@ -51,7 +52,7 @@ const config = {
     "from the same pack is reported as such and not copied again, so a " +
     "request that failed part way through can simply be repeated. Owners " +
     "and admins only.",
-  permissions: { template: ["create"] },
+  permissions: TEMPLATE_PACK_INSTALL_PERMISSIONS,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",
