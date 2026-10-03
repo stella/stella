@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useMatch } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -25,7 +25,6 @@ import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 
 export const PdfBreadcrumb = () => {
   const tCommon = useTranslations("common");
-  const queryClient = useQueryClient();
   const pdfMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId/$viewId/document",
     shouldThrow: false,
@@ -66,24 +65,7 @@ export const PdfBreadcrumb = () => {
       if (submission.type === "discard") {
         return;
       }
-      renameEntity.mutate(
-        { workspaceId, entityId, name: submission.name },
-        {
-          // The stored file name is renamed server-side to match, and it is
-          // what this crumb reads; refetch it so the crumb shows the name the
-          // server settled on (it sanitizes) rather than the draft. A failure
-          // leaves the cache alone, so the old name stays, and the mutation's
-          // own error toast reports it.
-          onSuccess: () => {
-            detached(
-              queryClient.invalidateQueries({
-                queryKey: fileMetadata.queryKey,
-              }),
-              "pdf-breadcrumb.invalidate-file-metadata",
-            );
-          },
-        },
-      );
+      renameEntity.mutate({ workspaceId, entityId, name: submission.name });
     },
   });
 
