@@ -176,10 +176,14 @@ const validatePendingOAuthMetadata = async ({
   return boundMetadata;
 };
 
-type PendingOAuthConnection = Pick<
-  typeof mcpOAuthState.$inferSelect,
-  "authorizationServerUrl" | "connectorId" | "organizationId" | "resourceUrl"
->;
+// The pending state fields the callback helpers use. The callback redirects;
+// it returns no stored row to the client.
+type PendingOAuthConnection = {
+  authorizationServerUrl: string;
+  connectorId: SafeId<"mcpConnector">;
+  organizationId: SafeId<"organization">;
+  resourceUrl: string;
+};
 
 type AuthorizePendingConnectionOptions = {
   safeDb: SafeDb;
