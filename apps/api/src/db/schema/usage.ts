@@ -1004,6 +1004,12 @@ export const hostedUsageWebhookEvents = p.pgTable(
     p
       .index("usage_provider_webhook_events_processed_at_idx")
       .on(table.processedAt),
+    p
+      .index("usage_provider_webhook_events_retention_idx")
+      .on(table.processedAt)
+      .where(
+        sql`result = 'ok' AND (payload <> '{}'::jsonb OR error_message IS NOT NULL)`,
+      ),
     // System table: written and read only by the webhook handler via
     // the root connection. Stella sessions have no business touching it.
     p.pgPolicy("usage_provider_webhook_events_no_stella_access", {

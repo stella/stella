@@ -1,5 +1,6 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
+import { OWNERSHIP } from "../../scripts/ownership.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 setDefaultTimeout(20_000);
@@ -35,6 +36,25 @@ const lint = async (sourcePath: string) =>
     ruleOptions: MEMBER_CALL_OPTIONS,
     sourcePath,
   });
+
+test("provider receipt persistence remains confined to its owner", async () => {
+  const entry = OWNERSHIP.find(({ id }) => id === "provider-event-records");
+  expect(entry).toBeDefined();
+  const source = 'import { hostedUsageWebhookEvents } from "@/api/db/schema";';
+  const options = { ruleOptions: { entries: [entry] } };
+  expect(
+    await lintSingleRule("confine-owner", source, {
+      ...options,
+      sourcePath: "apps/api/src/lib/receipt-writer.ts",
+    }),
+  ).toEqual([1]);
+  expect(
+    await lintSingleRule("confine-owner", source, {
+      ...options,
+      sourcePath: "apps/api/src/lib/hosted-usage-provider/webhook-store.ts",
+    }),
+  ).toEqual([]);
+});
 
 describe.serial("confine-owner member-call rows", () => {
   test("reports a call of the method inside the scoped paths", async () => {

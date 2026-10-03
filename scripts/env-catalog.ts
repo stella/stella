@@ -268,6 +268,8 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  HOSTED_USAGE_WEBHOOK_RETENTION_DAYS:
+    "Retention in days for completed provider event details; unset disables redaction.",
   AGENT_CLIENT_STORAGE_V1_ENABLED:
     "Enable the shared agent client storage format.",
   ACTION_LIMIT_CONTACT_URL:
