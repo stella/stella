@@ -359,9 +359,9 @@ test("a judgment whose detail read failed is read again by the reconciliation an
   expect(stored.status).toBe("complete");
   const before = await storedRow(sourceId);
   expect(before.fulltext).toContain("oddalić wniosek");
-  expect(partialObservationFromMetadata(before.metadata).isListingOnly).toBe(
-    false,
-  );
+  expect(
+    partialObservationFromMetadata(before.metadata).detail === "listing-only",
+  ).toBe(false);
   expect(before.metadata["detailReadState"]).toBe("failed");
 
   // The walk of the judgment's date: SAOS now answers the detail.
@@ -420,9 +420,9 @@ test("textless listing-only rows become due after seven days and publish recover
   const restored = await storedRow(sourceId);
   expect(restored.textlessDetailRecheckedAt).toEqual(NOW);
   expect(restored.fulltext).toContain("oddalić wniosek");
-  expect(partialObservationFromMetadata(restored.metadata).isListingOnly).toBe(
-    false,
-  );
+  expect(
+    partialObservationFromMetadata(restored.metadata).detail === "listing-only",
+  ).toBe(false);
   expect(getCaseLawIngestionMetadata(restored.metadata)?.sourceTier).toBe(
     "detail",
   );

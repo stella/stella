@@ -29,9 +29,9 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tallyDecisions } from "@/api/lib/document-review/decision-counts";
 import { resolvePlaybookStaleness } from "@/api/lib/document-review/playbook-staleness";
 import {
+  basisForReader,
   findingForReader,
   readableReferenceWorkspaces,
-  referencesForReader,
   referenceWorkspacesByPosition,
 } from "@/api/lib/document-review/reference-visibility";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
@@ -184,10 +184,7 @@ export const readDocumentReviewRunDetail = async function* ({
   return {
     run: {
       ...run,
-      basis: {
-        ...run.basis,
-        references: referencesForReader(run.basis.references, readable),
-      },
+      basis: basisForReader(run.basis, readable),
       createdAt: run.createdAt.toISOString(),
       startedAt: run.startedAt === null ? null : run.startedAt.toISOString(),
       finishedAt: run.finishedAt === null ? null : run.finishedAt.toISOString(),
