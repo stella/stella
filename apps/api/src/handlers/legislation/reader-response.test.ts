@@ -204,28 +204,48 @@ test("citation previews cap block count and serialize within their derived byte 
   );
 });
 
-test("provision previews preserve whole escaped entities at every cut", () => {
+test("reader plain text keeps literal markup and entities as text", () => {
   assertProperty(
-    "provision previews preserve whole escaped entities at every cut",
+    "reader plain text keeps literal markup and entities as text",
     fc.property(
-      fc.constantFrom("&amp;", "&#12345;", "&#x1f600;", "&quot;"),
-      fc.integer({ min: 0, max: 9 }),
-      (entity, remainder) => {
-        const prefix = "x".repeat(readerTextBytes.previewText - remainder);
-        const result = projectProvisionPreview({
+      fc.array(fc.constantFrom("<mark>", "</mark>", "&amp;", "x", "ř"), {
+        minLength: 1,
+        maxLength: 40,
+      }),
+      fc.integer({ min: 1, max: 4000 }),
+      (tokens, repeat) => {
+        const text = tokens.join("").repeat(repeat);
+        const preview = projectProvisionPreview({
           documentId: id,
           language: "cs",
           anchorId: "par_1",
           citedAnchorId: null,
           headings: [],
           heading: null,
-          blocks: [
-            { id: "1", anchorId: "par_1", text: prefix + entity.repeat(5) },
-          ],
-        });
-        expect(result.blocks.at(0)?.text).toBe(
-          prefix + entity.repeat(Math.floor(remainder / entity.length)),
-        );
+          blocks: [{ id: "1", anchorId: "par_1", text }],
+        }).blocks.at(0)?.text;
+        const history = projectProvisionHistoryItem({
+          documentId: id,
+          allowsDerivedAi: true,
+          versionValidFrom: null,
+          versionValidTo: null,
+          expressionKind: "consolidation",
+          windowDisposition: "effective",
+          windowDispositionBasis: null,
+          text,
+        }).text;
+        for (const [projected, maxBytes] of [
+          [preview, readerTextBytes.previewText],
+          [history, readerTextBytes.provisionText],
+        ] as const) {
+          expect(text.startsWith(projected ?? "")).toBe(true);
+          expect(Buffer.byteLength(projected ?? "")).toBeLessThanOrEqual(
+            maxBytes,
+          );
+          if (Buffer.byteLength(text) <= maxBytes) {
+            expect(projected).toBe(text);
+          }
+        }
       },
     ),
   );

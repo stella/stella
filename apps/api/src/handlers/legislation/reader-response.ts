@@ -21,7 +21,6 @@ import {
   nullableBoundedString,
   truncateTextBytes,
   nullableText,
-  truncateHeadlineBytes,
 } from "@/api/lib/search/response-text-bounds";
 
 // Database varchar limits admit four UTF-8 bytes per character; text columns
@@ -250,7 +249,7 @@ export const projectProvisionHistoryItem = (row: HistoryItem): HistoryItem => ({
     row.versionValidTo,
     readerTextBytes.versionValidTo,
   ),
-  text: truncateHeadlineBytes(row.text, readerTextBytes.provisionText),
+  text: truncateTextBytes(row.text, readerTextBytes.provisionText),
 });
 
 export const projectProvisionPreview = (preview: ProvisionPreview) => ({
@@ -261,7 +260,7 @@ export const projectProvisionPreview = (preview: ProvisionPreview) => ({
   headings: preview.headings.slice(0, PREVIEW_HEADING_MAX).map((heading) => ({
     level: heading.level,
     anchorId: truncateTextBytes(heading.anchorId, readerTextBytes.anchor),
-    text: truncateHeadlineBytes(heading.text, readerTextBytes.heading),
+    text: truncateTextBytes(heading.text, readerTextBytes.heading),
   })),
   heading:
     preview.heading === null
@@ -273,7 +272,7 @@ export const projectProvisionPreview = (preview: ProvisionPreview) => ({
             preview.heading.anchorId,
             readerTextBytes.anchor,
           ),
-          text: truncateHeadlineBytes(
+          text: truncateTextBytes(
             preview.heading.text,
             readerTextBytes.heading,
           ),
@@ -281,7 +280,7 @@ export const projectProvisionPreview = (preview: ProvisionPreview) => ({
   blocks: preview.blocks.slice(0, PREVIEW_BLOCK_MAX).map((block) => {
     const projected = {
       id: truncateTextBytes(block.id, readerTextBytes.blockId),
-      text: truncateHeadlineBytes(block.text, readerTextBytes.previewText),
+      text: truncateTextBytes(block.text, readerTextBytes.previewText),
     };
     if (block.anchorId === undefined) {
       return projected;
