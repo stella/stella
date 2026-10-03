@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { ELI_COLLECTION_BY_STATUTE_ACT_COLLECTION } from "@stll/api-contract/statute-acts";
+import {
+  ELI_COLLECTION_BY_STATUTE_ACT_COLLECTION,
+  STATUTE_ACTS,
+} from "@stll/api-contract/statute-acts";
 import {
   isStatuteQueryCountry,
   resolveStatuteAlias,
@@ -70,5 +73,25 @@ describe("statute box aliases and citation-reader profiles", () => {
       }
     }
     expect(divergences).toEqual(KNOWN_DIVERGENCES);
+  });
+
+  // A profile that restates a shared act's number by hand would drift from it
+  // silently; it must reference the shared identity instead.
+  test("name every shared act by its shared identity", () => {
+    const sharedWorks = Object.values(STATUTE_ACTS).flatMap((acts) =>
+      Object.values(acts).map(({ work }) => work),
+    );
+    const restated: string[] = [];
+    for (const profile of Object.values(PROVISION_CITATION_PROFILES)) {
+      for (const { identifier } of [...profile.aliases, ...profile.titles]) {
+        const shared = sharedWorks.find(
+          (work) => describeWork(work) === describeWork(identifier),
+        );
+        if (shared !== undefined && shared !== identifier) {
+          restated.push(`${profile.jurisdiction} ${describeWork(identifier)}`);
+        }
+      }
+    }
+    expect(restated).toEqual([]);
   });
 });
