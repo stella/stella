@@ -3,8 +3,6 @@ import { useCallback, useState } from "react";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/toast";
-
 import {
   memberKnowledgeActions,
   memberKnowledgeSource,
@@ -15,8 +13,9 @@ import type { StyleSelection } from "@/features/style-sets/style-set-picker-dial
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
+import { toAPIError, APIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { LeaveConfirmDialog } from "@/routes/knowledge/-components/leave-confirm-dialog";
 import { TemplateList } from "@/routes/knowledge/-components/template-list";
@@ -90,9 +89,7 @@ export function MemberTemplatesPage({
       );
       if (response.error) {
         setUploading(false);
-        stellaToast.add({
-          type: "error",
-          title: t("templates.saveFailed"),
+        notifyUserError(toAPIError(response.error), t("templates.saveFailed"), {
           description: userErrorMessage(
             response.error,
             t("common.unexpectedError"),
@@ -116,9 +113,7 @@ export function MemberTemplatesPage({
           ? await templateActions.createBlank(name)
           : await templateActions.createFromStyleSet(name, style.styleSetId);
       if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.saveFailed"),
+        notifyUserError(toAPIError(response.error), t("templates.saveFailed"), {
           description: userErrorMessage(
             response.error,
             t("common.unexpectedError"),

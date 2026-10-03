@@ -26,13 +26,21 @@ import type {
 } from "@/api/handlers/case-law/document-ast";
 import {
   inlinesToPlainText,
+  isExcludedHtmlTag,
+  ownTableRows,
+  visibleHtmlText,
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import {
   validateAndLog,
   type ValidationResult,
 } from "@/api/lib/legal-search/parsers/validate-ast";
-import { sanitizeUrl } from "@/api/lib/sanitize-url";
+import {
+  toMetadataUrl,
+  type MetadataUrlDefect,
+  type SafeHref,
+  sanitizeUrl,
+} from "@/api/lib/sanitize-url";
 
 export const PL_TK_ORIGIN = "https://ipo.trybunal.gov.pl";
 
@@ -97,9 +105,19 @@ const absoluteUrl = (href: string | undefined): string | undefined => {
     : url.toString();
 };
 
+const metadataUrlOf = (href: string | undefined) => {
+  if (href?.trim().length === 0) {
+    return undefined;
+  }
+  const resolved = absoluteUrl(href);
+  return resolved === undefined
+    ? undefined
+    : toMetadataUrl(resolved, "constructed");
+};
+
 // ── Page structure ───────────────────────────────────────
 
-export type PlTkLink = { text: string; url: string };
+export type PlTkLink = { text: string; url: SafeHref | MetadataUrlDefect };
 
 /** One line of `Miejsce publikacji`: the citation and the links beside it. */
 export type PlTkPublication = { text: string; links: PlTkLink[] };
@@ -149,7 +167,7 @@ export type PlTkRuling = {
   note: string | undefined;
   panel: PlTkPanelJudge[];
   /** The Word rendering the portal offers for download. */
-  wordDocumentUrl: string | undefined;
+  wordDocumentUrl: SafeHref | MetadataUrlDefect | undefined;
   /** Footnotes the text carries, publication annotations among them. */
   footnotes: string[];
   dissents: PlTkDissent[];
@@ -175,7 +193,7 @@ const byId = ($: Root, id: string): cheerio.Cheerio<AnyNode> =>
   $(`[id="${id}"]`);
 
 const propName = (prop: cheerio.Cheerio<AnyNode>): string | undefined => {
-  const name = collapse(prop.children(".name").first().text());
+  const name = collapse(visibleHtmlText(prop.children(".name").first()));
   return name.length === 0 ? undefined : name;
 };
 
@@ -205,7 +223,7 @@ const valueText = (
   if (value === undefined) {
     return undefined;
   }
-  const text = collapse(value.text());
+  const text = collapse(visibleHtmlText(value));
   return text.length === 0 ? undefined : text;
 };
 
@@ -218,7 +236,7 @@ const caseNumbersOf = (
     : value
         .find(".sygnatura")
         .toArray()
-        .map((element) => collapse($(element).text()))
+        .map((element) => collapse(visibleHtmlText($(element))))
         .filter((text) => text.length > 0);
 
 /** The panel whose title reads `title`, scoped to `container`. */
@@ -231,7 +249,9 @@ const panelContent = (
     .find(".ui-panel")
     .filter(
       (_, element) =>
-        collapse($(element).find(".ui-panel-title").first().text()) === title,
+        collapse(
+          visibleHtmlText($(element).find(".ui-panel-title").first()),
+        ) === title,
     )
     .first();
   return panel.length === 0 ? undefined : panel;
@@ -246,7 +266,7 @@ const listItemsOf = (
     : panel
         .find("li.ui-datalist-item")
         .toArray()
-        .map((element) => collapse($(element).text()))
+        .map((element) => collapse(visibleHtmlText($(element))))
         .filter((text) => text.length > 0);
 
 const treeOf = (
@@ -262,7 +282,9 @@ const treeOf = (
     .map((element) => {
       const node = $(element);
       const act = collapse(
-        node.children(".ui-treenode-content").find(".ui-treenode-label").text(),
+        visibleHtmlText(
+          node.children(".ui-treenode-content").find(".ui-treenode-label"),
+        ),
       );
       const provisions = node
         .children(".ui-treenode-children")
@@ -270,10 +292,11 @@ const treeOf = (
         .toArray()
         .map((child) =>
           collapse(
-            $(child)
-              .children(".ui-treenode-content")
-              .find(".ui-treenode-label")
-              .text(),
+            visibleHtmlText(
+              $(child)
+                .children(".ui-treenode-content")
+                .find(".ui-treenode-label"),
+            ),
           ),
         )
         .filter((text) => text.length > 0);
@@ -329,8 +352,8 @@ export const readPlTkCasePage = (html: string): PlTkCasePage | null => {
         .find("li a")
         .toArray()
         .flatMap((element) => {
-          const url = absoluteUrl($(element).attr("href"));
-          const text = collapse($(element).text());
+          const url = metadataUrlOf($(element).attr("href"));
+          const text = collapse(visibleHtmlText($(element)));
           return url === undefined ? [] : [{ text, url }];
         }),
     },
@@ -357,7 +380,7 @@ export const listPlTkPageFields = (html: string): string[] => {
   scope
     .find(".ui-panel-title, .ui-datatable-header, .ui-datalist-header")
     .each((_, element) => {
-      const name = collapse($(element).text());
+      const name = collapse(visibleHtmlText($(element)));
       if (name.length > 0) {
         names.add(name);
       }
@@ -385,16 +408,20 @@ const publicationsOf = (
         .find("a")
         .toArray()
         .flatMap((anchor) => {
-          const url = absoluteUrl($(anchor).attr("href"));
+          const url = metadataUrlOf($(anchor).attr("href"));
           return url === undefined
             ? []
-            : [{ text: collapse($(anchor).text()), url }];
+            : [{ text: collapse(visibleHtmlText($(anchor))), url }];
         });
       // The Dz.U./M.P. line prints its register links (ISAP, RCL) as cells
       // of their own; the citation is what the first cell says.
-      const first = cells.find("td").first();
-      const nested = first.find("td").first();
-      const text = collapse((nested.length > 0 ? nested : first).text());
+      const first = cells.children("td").first();
+      const nested = ownTableRows(first.find("table").first())
+        .children("td")
+        .first();
+      const text = collapse(
+        visibleHtmlText(nested.length > 0 ? nested : first),
+      );
       return { text, links };
     })
     .filter((entry) => entry.text.length > 0);
@@ -414,12 +441,12 @@ const panelOf = (
     .toArray()
     .flatMap((row) => {
       const cells = $(row).children("td");
-      const name = collapse(cells.eq(0).text());
+      const name = collapse(visibleHtmlText(cells.eq(0)));
       if (name.length === 0) {
         return [];
       }
       const href = cells.eq(0).find("a").attr("href") ?? "";
-      const functions = collapse(cells.eq(1).text())
+      const functions = collapse(visibleHtmlText(cells.eq(1)))
         .split(",")
         .map((part) => part.trim())
         .filter((part) => part.length > 0);
@@ -476,7 +503,7 @@ const dissentsOf = (
       const lines = $(element)
         .find(".wyrok_akapitNumerowany")
         .toArray()
-        .map((line) => collapse($(line).text()))
+        .map((line) => collapse(visibleHtmlText($(line))))
         .filter((line) => line.length > 0);
       const authorsAsPrinted =
         lines.find((line) => /^sędzi/iu.test(line)) ?? lines.at(0) ?? "";
@@ -491,7 +518,7 @@ const footnotesOf = ($: Root, text: cheerio.Cheerio<AnyNode>): string[] =>
     .find(".ui-tooltip-text")
     .toArray()
     .map((element) =>
-      collapse($(element).text())
+      collapse(visibleHtmlText($(element)))
         // The note's own mark: `*`, or a number where the text has several.
         .replace(/^(?:\*+|\d{1,3}\s)\s*/u, "")
         .trim(),
@@ -508,10 +535,16 @@ const cleanTextHtml = (
   text: cheerio.Cheerio<AnyNode>,
 ): string | undefined => {
   const copy = text.clone();
-  copy.find("script, .ui-tooltip").remove();
+  copy
+    .find("*")
+    .filter(
+      (_, node) => isTag(node) && isExcludedHtmlTag(node.tagName.toLowerCase()),
+    )
+    .remove();
+  copy.find(".ui-tooltip").remove();
   copy.find('a[id*="tooltip"]').remove();
   const html = copy.html();
-  return html === null || collapse($(copy).text()).length === 0
+  return html === null || collapse(visibleHtmlText($(copy))).length === 0
     ? undefined
     : html;
 };
@@ -559,11 +592,11 @@ const courtOf = (
       .first()
       .find("p, td, div")
       .toArray()
-      .map((element) => collapse($(element).text())),
+      .map((element) => collapse(visibleHtmlText($(element)))),
     ...front
       .find("p, td, div")
       .toArray()
-      .map((element) => collapse($(element).text())),
+      .map((element) => collapse(visibleHtmlText($(element)))),
   ];
   for (const line of candidates) {
     const court = benchCourt(line);
@@ -588,9 +621,9 @@ export const readPlTkRuling = (
   const panel = panelOf($, tab, documentId);
   const text = byId($, `tekst_${documentId}`);
   const note = collapse(
-    tab.find('div[style="margin:5px"] > span').first().text(),
+    visibleHtmlText(tab.find('div[style="margin:5px"] > span').first()),
   );
-  const word = absoluteUrl(
+  const word = metadataUrlOf(
     byId($, `sprawaForm:tabView:pobierzDoc${documentId}`).attr("href"),
   );
 
@@ -766,7 +799,7 @@ const footnoteOf = (
   }
   const body = node.clone();
   const mark = body.find(".wyrok_indeks_gorny").first();
-  const label = collapse(mark.text());
+  const label = collapse(visibleHtmlText(mark));
   mark.remove();
   const inlines = walkBlockInlines($, body);
   return inlines.length === 0
@@ -892,7 +925,7 @@ const buildBlocks = (textHtml: string): Block[] => {
       if (hasClass(node, "wyrok_akapitCaly")) {
         flush();
         const counted = collapse(
-          $(node).children(".wyrok_akapitNr").first().text(),
+          visibleHtmlText($(node).children(".wyrok_akapitNr").first()),
         );
         const body = $(node).clone();
         body.children(".wyrok_akapitNr").remove();

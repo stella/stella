@@ -18,7 +18,10 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { getLaneCounterMicroUnits } from "@/api/lib/usage/lane-budget";
 import { memberMayUseAI } from "@/api/lib/usage/member-capacity";
-import { isEntitlementConsumableAt } from "@/api/lib/usage/usage-ledger";
+import {
+  isEntitlementConsumableAt,
+  resolveUsageConsumption,
+} from "@/api/lib/usage/usage-ledger";
 
 export type UsageLaneDecision =
   | { lane: "allowance" }
@@ -77,8 +80,14 @@ export const decideChatUsageLane = async ({
 
   if (
     !entitlement ||
-    !isEntitlementConsumableAt(entitlement, asOf) ||
-    entitlement.dailyAllowanceMicroUnits === null
+    entitlement.dailyAllowanceMicroUnits === null ||
+    !(await resolveUsageConsumption({
+      tx,
+      organizationId,
+      originalAccess: isEntitlementConsumableAt(entitlement, asOf),
+      currentPeriodStart: entitlement.currentPeriodStart,
+      asOf,
+    }))
   ) {
     return "pool";
   }

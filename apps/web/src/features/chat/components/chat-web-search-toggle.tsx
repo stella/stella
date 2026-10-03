@@ -4,7 +4,6 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { GlobeIcon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -16,7 +15,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
 import { restoreChatWebSearchQuerySnapshots } from "./chat-web-search-toggle.logic";
@@ -85,10 +84,7 @@ export const useSetChatWebSearch = (
       if (context) {
         restoreChatWebSearchQuerySnapshots(queryClient, context.previous);
       }
-      stellaToast.add({
-        title: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     },
     // Reconcile against the server on both paths: confirm the optimistic flip
     // on success, or land the rolled-back truth after an error.

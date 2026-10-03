@@ -5,7 +5,11 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
-import { chatThreadCompactions, chatThreads } from "@/api/db/schema";
+import {
+  chatMessages,
+  chatThreadCompactions,
+  chatThreads,
+} from "@/api/db/schema";
 import { createCompactionSummaryMessage } from "@/api/handlers/chat/compaction";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import type {
@@ -13,6 +17,8 @@ import type {
   ChatMessage,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
+import type { TimestampIdCursor } from "@/api/lib/db-pagination";
 
 export type ChatThreadCompactionCheckpoint = {
   /**
@@ -29,6 +35,21 @@ export type ChatThreadCompactionCheckpoint = {
   /** Messages the whole chain has folded in, across every run. */
   totalSummarizedMessageCount: number;
 };
+
+/**
+ * Decode a checkpoint's stored delta cursor.
+ *
+ * Returns null both when there is no checkpoint and when its cursor is absent
+ * or unreadable (a chain written before the cursor column landed). Null means
+ * "read from the start of the thread", which the row cap keeps bounded and
+ * which the compactor repairs by writing a cursor on its next run.
+ */
+export const decodeChatCompactionDeltaCursor = (
+  checkpoint: ChatThreadCompactionCheckpoint | null,
+): TimestampIdCursor<SafeId<"chatMessage">> | null =>
+  checkpoint?.deltaCursor
+    ? chatMessageCursorCodec.decode(checkpoint.deltaCursor)
+    : null;
 
 type ReadLatestChatCompactionOnTxProps = {
   threadId: SafeId<"chatThread">;
@@ -118,36 +139,44 @@ export const applyChatCompactionCheckpoint = ({
   ];
 };
 
-type ShouldInvalidateChatCompactionCheckpointProps = {
-  deletedMessageCount: number;
-  persistencePlan: Pick<MessagePersistencePlan, "type">;
-};
-
-export const shouldInvalidateChatCompactionCheckpoint = ({
-  deletedMessageCount,
-  persistencePlan,
-}: ShouldInvalidateChatCompactionCheckpointProps): boolean => {
-  if (deletedMessageCount > 0) {
-    return true;
-  }
-
-  switch (persistencePlan.type) {
-    case "update":
-    case "replace-last-assistant":
-      return true;
-    case "insert":
-    case "none":
-      return false;
-    default: {
-      persistencePlan.type satisfies never;
-      return panic(`Unhandled type: ${String(persistencePlan.type)}`);
-    }
-  }
-};
-
 type InvalidateChatCompactionChainProps = {
   threadId: SafeId<"chatThread">;
   tx: Transaction;
+};
+
+/**
+ * Move the thread's compaction epoch, so a summary in flight that read rows a
+ * write changes is refused when it tries to install itself.
+ *
+ * Written as a statement so the bump does not drag `chat_threads`'
+ * `$onUpdate` columns (the list-ordering stamp and the rollback token) along
+ * with it. Its row lock is the one the compactor's advance takes, so the two
+ * serialize on the thread.
+ */
+const advanceChatCompactionEpochOnTx = async ({
+  threadId,
+  tx,
+}: InvalidateChatCompactionChainProps): Promise<void> => {
+  // audit: skip - derived compaction chain marker
+  await tx.execute(
+    sql`update ${chatThreads} set compaction_epoch = compaction_epoch + 1 where ${chatThreads.id} = ${threadId}`,
+  );
+};
+
+const retireActiveChatCompactionOnTx = async ({
+  threadId,
+  tx,
+}: InvalidateChatCompactionChainProps): Promise<void> => {
+  // audit: skip - derived compaction checkpoint cache; no user-authored state change
+  await tx
+    .update(chatThreadCompactions)
+    .set({ status: "stale" })
+    .where(
+      and(
+        eq(chatThreadCompactions.threadId, threadId),
+        eq(chatThreadCompactions.status, "active"),
+      ),
+    );
 };
 
 /**
@@ -164,21 +193,116 @@ export const invalidateChatCompactionChain = async ({
   threadId,
   tx,
 }: InvalidateChatCompactionChainProps): Promise<void> => {
-  // audit: skip - derived compaction checkpoint cache; no user-authored state change
-  await tx
-    .update(chatThreadCompactions)
-    .set({ status: "stale" })
+  await retireActiveChatCompactionOnTx({ threadId, tx });
+  await advanceChatCompactionEpochOnTx({ threadId, tx });
+};
+
+type IsKeptByChatCompactionOnTxProps = {
+  checkpoint: ChatThreadCompactionCheckpoint;
+  messageId: SafeId<"chatMessage">;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+};
+
+/**
+ * Whether a message of the thread lies after the checkpoint's cursor, outside
+ * everything its summary represents. A chain without a readable cursor has no
+ * boundary to prove that against, so none of its rows count as kept.
+ */
+const isKeptByChatCompactionOnTx = async ({
+  checkpoint,
+  messageId,
+  threadId,
+  tx,
+}: IsKeptByChatCompactionOnTxProps): Promise<boolean> => {
+  const cursor = decodeChatCompactionDeltaCursor(checkpoint);
+  const afterCursor =
+    cursor === null
+      ? undefined
+      : chatMessageCursorCodec.keysetAfter({
+          cursor,
+          direction: "ascending",
+          idColumn: chatMessages.id,
+        });
+  if (afterCursor === undefined) {
+    return false;
+  }
+  const kept = await tx
+    .select({ id: chatMessages.id })
+    .from(chatMessages)
     .where(
       and(
-        eq(chatThreadCompactions.threadId, threadId),
-        eq(chatThreadCompactions.status, "active"),
+        eq(chatMessages.threadId, threadId),
+        eq(chatMessages.id, messageId),
+        afterCursor,
       ),
-    );
+    )
+    .limit(1);
+  return kept.length === 1;
+};
 
-  // Written as a statement so the bump does not drag `chat_threads`'
-  // `$onUpdate` columns (the list-ordering stamp and the rollback token) along
-  // with it. audit: skip - derived compaction chain marker.
-  await tx.execute(
-    sql`update ${chatThreads} set compaction_epoch = compaction_epoch + 1 where ${chatThreads.id} = ${threadId}`,
-  );
+type ReconcileChatCompactionChainOnTxProps = {
+  /** The rows the write deletes. */
+  deletedMessageIds: readonly SafeId<"chatMessage">[];
+  persistencePlan: MessagePersistencePlan;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+};
+
+/**
+ * Keep a thread's compaction chain true to one history write, on the write's
+ * transaction.
+ *
+ * An append leaves the chain alone. Every other write moves the epoch, so no
+ * summary built from the rows it changes can land. The active checkpoint is
+ * retired only when the write reaches history the summary represents: a
+ * deletion, which can cross the boundary or remove the row the checkpoint is
+ * anchored on, or a rewrite of a row at or before the cursor. Rewriting a row
+ * after the cursor, as a continuation does when it stores its owning
+ * assistant message, leaves the summary true, so the turn it resumes and
+ * every later turn still read it.
+ */
+export const reconcileChatCompactionChainOnTx = async ({
+  deletedMessageIds,
+  persistencePlan,
+  threadId,
+  tx,
+}: ReconcileChatCompactionChainOnTxProps): Promise<void> => {
+  if (deletedMessageIds.length > 0) {
+    await invalidateChatCompactionChain({ threadId, tx });
+    return;
+  }
+
+  switch (persistencePlan.type) {
+    case "insert":
+    case "none":
+      return;
+    case "replace-last-assistant":
+      await invalidateChatCompactionChain({ threadId, tx });
+      return;
+    case "update": {
+      // Epoch first: its row lock orders the checkpoint read after any advance
+      // that committed, and any later advance after this write.
+      await advanceChatCompactionEpochOnTx({ threadId, tx });
+      const checkpoint = await readLatestChatCompactionOnTx({ threadId, tx });
+      if (
+        checkpoint === null ||
+        (await isKeptByChatCompactionOnTx({
+          checkpoint,
+          messageId: persistencePlan.messageId,
+          threadId,
+          tx,
+        }))
+      ) {
+        return;
+      }
+      await retireActiveChatCompactionOnTx({ threadId, tx });
+      return;
+    }
+    default:
+      persistencePlan satisfies never;
+      return panic(
+        `Unhandled persistence plan: ${JSON.stringify(persistencePlan)}`,
+      );
+  }
 };

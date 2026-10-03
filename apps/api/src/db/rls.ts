@@ -997,6 +997,32 @@ export const mcpOAuthStatePolicies = () => [
   }),
 ];
 
+// Organization-scoped like `orgPolicies`, with the update policy also
+// checking the written row so a review cannot move to another organization.
+export const mcpConnectorAuthorizationReviewPolicies = () => [
+  p.pgPolicy("organization_select", {
+    for: "select",
+    to: stella,
+    using: organizationCheck,
+  }),
+  p.pgPolicy("organization_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: organizationCheck,
+  }),
+  p.pgPolicy("organization_update", {
+    for: "update",
+    to: stella,
+    using: organizationCheck,
+    withCheck: organizationCheck,
+  }),
+  p.pgPolicy("organization_delete", {
+    for: "delete",
+    to: stella,
+    using: organizationCheck,
+  }),
+];
+
 // SharePoint (Microsoft Graph) delegated connections are per user+org, so
 // their rows are visible only to the owning user within the active org —
 // the same fail-closed shape as mcp_user_connections.

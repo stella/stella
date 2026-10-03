@@ -9,7 +9,11 @@ import {
 } from "@stll/runtime-mode";
 
 import { featureFlagSchema } from "@/api/env-base-schema";
-import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
+import {
+  AUTH_CLIENT_ADDRESS_HEADER,
+  ORIGIN_VERIFY_HEADER,
+  SIGNUP_RATE_LIMIT_IP_SOURCE,
+} from "@/api/lib/client-ip-config";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   DEFAULT_POLAR_API_VERSION,
@@ -31,7 +35,7 @@ type EmailProviderInput = {
 };
 
 // Keep retention cutoffs in positive ISO years supported by timestamptz.
-const MAX_ACTION_COST_RETENTION_DAYS = 365_000;
+const MAX_RETENTION_DAYS = 365_000;
 // Larger timer delays are clamped to one millisecond by the runtime.
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
 const MAX_MANAGED_PROVIDER_CHECK_TIMEOUT_MS = 30_000;
@@ -87,6 +91,15 @@ export const envApiServerSchema = {
   /** Optional GitHub API token used only for curated catalogue traversal. */
   GITHUB_TOKEN: v.optional(v.string()),
   OPENROUTER_API_KEY: v.optional(v.string()),
+  OPENROUTER_WIF_POLICY_ID: v.optional(
+    v.pipe(v.string(), v.trim(), v.minLength(1)),
+  ),
+  OPENROUTER_WIF_AUDIENCE: v.optional(
+    v.pipe(v.string(), v.trim(), v.minLength(1)),
+  ),
+  OPENROUTER_WIF_STS_REGION: v.optional(
+    v.pipe(v.string(), v.trim(), v.regex(/^[a-z]+(?:-[a-z]+)+-\d+$/u)),
+  ),
   /** Checks the regional model catalog before accepting managed requests. */
   FEATURE_MANAGED_PROVIDER_CHECKS: featureFlagSchema,
   MANAGED_PROVIDER_CHECK_INTERVAL_MS: v.optional(
@@ -180,6 +193,8 @@ export const envApiServerSchema = {
    * deployments only (see handlers/smoke/routes.ts).
    */
   SMOKE_SESSION_SECRET: v.optional(v.pipe(v.string(), v.minLength(32))),
+  SESSION_TOKEN_ROTATION_ENABLED: featureFlagSchema,
+  SESSION_LIFETIME_CAP_ENABLED: featureFlagSchema,
   /**
    * Deployment-owned bearer credential for collaboration snapshot transport.
    * Unset disables the service-only load/store routes.
@@ -324,6 +339,39 @@ export const envApiServerSchema = {
       v.trim(),
       v.toLowerCase(),
       v.regex(/^[a-z0-9-]+$/u, "must be a header name"),
+      v.check(
+        (name) =>
+          name !== AUTH_CLIENT_ADDRESS_HEADER && name !== ORIGIN_VERIFY_HEADER,
+        "must not be a header the API sets or verifies itself",
+      ),
+    ),
+  ),
+
+  /**
+   * How `STELLA_CLIENT_ADDRESS_HEADER` spells the address: `with-port` (as
+   * `cloudfront-viewer-address` does) or `bare`.
+   */
+  STELLA_CLIENT_ADDRESS_FORMAT: v.optional(
+    v.picklist(["with-port", "bare"]),
+    "with-port",
+  ),
+
+  /**
+   * Comma-separated values the edge sends in `x-stella-origin-verify` (current
+   * first, then the next one during a rotation). When set, the client address
+   * header is read only from requests carrying one of them.
+   */
+  STELLA_ORIGIN_VERIFY_SECRET: v.optional(
+    v.pipe(
+      v.string(),
+      v.check(
+        (value) =>
+          value
+            .split(",")
+            .map((part) => part.trim())
+            .every((part) => part.length >= 32),
+        "each value must be at least 32 characters",
+      ),
     ),
   ),
 
@@ -358,16 +406,9 @@ export const envApiServerSchema = {
   MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: featureFlagSchema,
 
   // Launch feature flags. Keep default-off; deployment must opt in.
-  FEATURE_CHAT: featureFlagSchema,
   CHAT_RUN_LOG_SHADOW: v.optional(v.pipe(v.string(), v.parseBoolean())),
   FEATURE_USAGE: featureFlagSchema,
-  FEATURE_KNOWLEDGE_TEMPLATES: featureFlagSchema,
-  FEATURE_CASE_LAW: featureFlagSchema,
   FEATURE_PUBLIC_LAW: featureFlagSchema,
-  FEATURE_CONTACTS: featureFlagSchema,
-  FEATURE_CALENDAR: featureFlagSchema,
-  FEATURE_TODOS: featureFlagSchema,
-  FEATURE_MCP: featureFlagSchema,
   FEATURE_ACTION_ADMISSION: featureFlagSchema,
   FEATURE_MCP_READ_FENCE: featureFlagSchema,
   MCP_READ_WINDOW_MS: v.optional(
@@ -430,13 +471,55 @@ export const envApiServerSchema = {
   FEATURE_ACTION_COST_RECORDS: featureFlagSchema,
   ACTION_COST_ESTIMATES: v.optional(v.string()),
   ACTION_COST_CALL_RATES: v.optional(v.string()),
+  UNUSED_CLIENT_RETENTION_DAYS: v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(365),
+    ),
+    "30",
+  ),
+  AGENT_REGISTRATION_DAILY_LIMIT: v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(1_000_000),
+    ),
+    "10000",
+  ),
+  OPEN_CLIENT_REGISTRATION_DAILY_LIMIT: v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(1_000_000),
+    ),
+    "10000",
+  ),
   ACTION_COST_RETENTION_DAYS: v.optional(
     v.pipe(
       v.string(),
       v.toNumber(),
       v.integer(),
       v.minValue(1),
-      v.maxValue(MAX_ACTION_COST_RETENTION_DAYS),
+      v.maxValue(MAX_RETENTION_DAYS),
+    ),
+  ),
+  HOSTED_USAGE_WEBHOOK_RETENTION_DAYS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MAX_RETENTION_DAYS),
     ),
   ),
   ACTION_REQUEST_MAX_BYTES: v.optional(
@@ -467,6 +550,16 @@ export const envApiServerSchema = {
     ),
   ),
   FEATURE_ORG_SERVICE_BUDGETS: featureFlagSchema,
+  FEATURE_CONFIGURED_ACCESS: featureFlagSchema,
+  PAYMENT_RETRY_WINDOW_MS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
   SERVICE_ACTIONS_EVALUATION_PERIOD_ACTIONS: v.optional(
     v.pipe(
       v.string(),
@@ -521,7 +614,6 @@ export const envApiServerSchema = {
       v.maxValue(Number.MAX_SAFE_INTEGER),
     ),
   ),
-  FEATURE_DESKTOP_EDITING: featureFlagSchema,
   FEATURE_TIME_BILLING: featureFlagSchema,
   /** Dark-launch tenant-scoped AI memory until product and performance review. */
   FEATURE_AI_MEMORY: featureFlagSchema,
@@ -761,6 +853,9 @@ type EnvApiInvariantInput = {
   MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS?: number | undefined;
   OPENROUTER_API_KEY?: string | undefined;
+  OPENROUTER_WIF_POLICY_ID?: string | undefined;
+  OPENROUTER_WIF_AUDIENCE?: string | undefined;
+  OPENROUTER_WIF_STS_REGION?: string | undefined;
   BETTER_AUTH_URL: string;
   DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
   E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
@@ -768,6 +863,9 @@ type EnvApiInvariantInput = {
   FEATURE_ACTION_ADMISSION?: boolean | undefined;
   FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
   FEATURE_ORG_SERVICE_BUDGETS?: boolean | undefined;
+  FEATURE_CONFIGURED_ACCESS?: boolean | undefined;
+  FEATURE_USAGE?: boolean | undefined;
+  PAYMENT_RETRY_WINDOW_MS?: number | undefined;
   FRONTEND_URL: string;
   GOTENBERG_URL: string;
   MICROSOFT_AUTH_CLIENT_ID?: string | undefined;
@@ -793,6 +891,9 @@ type ManagedProviderCheckInvariantInput = Pick<
   | "MANAGED_PROVIDER_CHECK_INTERVAL_MS"
   | "MANAGED_PROVIDER_CHECK_TIMEOUT_MS"
   | "OPENROUTER_API_KEY"
+  | "OPENROUTER_WIF_POLICY_ID"
+  | "OPENROUTER_WIF_AUDIENCE"
+  | "OPENROUTER_WIF_STS_REGION"
 >;
 
 const managedProviderCheckInvariantViolation = ({
@@ -801,13 +902,24 @@ const managedProviderCheckInvariantViolation = ({
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
   OPENROUTER_API_KEY,
+  OPENROUTER_WIF_POLICY_ID,
+  OPENROUTER_WIF_AUDIENCE,
+  OPENROUTER_WIF_STS_REGION,
 }: ManagedProviderCheckInvariantInput): string | null => {
+  const configuredWifFields = [
+    OPENROUTER_WIF_POLICY_ID,
+    OPENROUTER_WIF_AUDIENCE,
+    OPENROUTER_WIF_STS_REGION,
+  ].filter((value) => value !== undefined).length;
+  if (configuredWifFields !== 0 && configuredWifFields !== 3) {
+    return "OPENROUTER_WIF_POLICY_ID, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
   if (FEATURE_MANAGED_PROVIDER_CHECKS) {
     if (AI_PROVIDER !== "openrouter") {
       return "FEATURE_MANAGED_PROVIDER_CHECKS requires AI_PROVIDER=openrouter.";
     }
-    if (!OPENROUTER_API_KEY) {
-      return "FEATURE_MANAGED_PROVIDER_CHECKS requires OPENROUTER_API_KEY.";
+    if (!OPENROUTER_API_KEY?.trim() && configuredWifFields !== 3) {
+      return "FEATURE_MANAGED_PROVIDER_CHECKS requires OPENROUTER_API_KEY or complete OpenRouter WIF configuration.";
     }
     if (
       MANAGED_PROVIDER_CHECK_INTERVAL_MS === undefined ||
@@ -826,6 +938,9 @@ export const envApiInvariantViolation = ({
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
   OPENROUTER_API_KEY,
+  OPENROUTER_WIF_POLICY_ID,
+  OPENROUTER_WIF_AUDIENCE,
+  OPENROUTER_WIF_STS_REGION,
   BETTER_AUTH_URL,
   DEV_PUBLIC_LAW_CONNECT_COMMAND,
   E2E_DISABLE_AUTH_RATE_LIMIT,
@@ -833,6 +948,9 @@ export const envApiInvariantViolation = ({
   FEATURE_ACTION_ADMISSION,
   FEATURE_ORG_ACCESS_STATE,
   FEATURE_ORG_SERVICE_BUDGETS,
+  FEATURE_CONFIGURED_ACCESS,
+  FEATURE_USAGE,
+  PAYMENT_RETRY_WINDOW_MS,
   FRONTEND_URL,
   GOTENBERG_URL,
   MICROSOFT_AUTH_CLIENT_ID,
@@ -850,12 +968,26 @@ export const envApiInvariantViolation = ({
   nodeEnv,
   runtimeMode,
 }: EnvApiInvariantInput): string | null => {
+  if (
+    FEATURE_CONFIGURED_ACCESS &&
+    ![
+      FEATURE_ORG_ACCESS_STATE,
+      FEATURE_ORG_SERVICE_BUDGETS,
+      FEATURE_USAGE,
+      PAYMENT_RETRY_WINDOW_MS !== undefined,
+    ].every(Boolean)
+  ) {
+    return "FEATURE_CONFIGURED_ACCESS requires FEATURE_ORG_ACCESS_STATE, FEATURE_ORG_SERVICE_BUDGETS, FEATURE_USAGE and PAYMENT_RETRY_WINDOW_MS.";
+  }
   const managedViolation = managedProviderCheckInvariantViolation({
     AI_PROVIDER,
     FEATURE_MANAGED_PROVIDER_CHECKS,
     MANAGED_PROVIDER_CHECK_INTERVAL_MS,
     MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
     OPENROUTER_API_KEY,
+    OPENROUTER_WIF_POLICY_ID,
+    OPENROUTER_WIF_AUDIENCE,
+    OPENROUTER_WIF_STS_REGION,
   });
   if (managedViolation !== null) {
     return managedViolation;

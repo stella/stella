@@ -23,7 +23,6 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
-import { stellaToast } from "@stll/ui/toast";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -31,6 +30,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { downloadFile } from "@/lib/utils";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
@@ -146,13 +146,12 @@ function AuditLogsPage() {
     setExporting(false);
 
     if (Result.isError(result)) {
-      stellaToast.add({
-        title:
-          APIError.is(result.error) && result.error.status === 413
-            ? t("settings.organization.auditLogsExportTooLarge")
-            : t("settings.organization.auditLogsExportFailed"),
-        type: "error",
-      });
+      notifyUserError(
+        result.error,
+        APIError.is(result.error) && result.error.status === 413
+          ? t("settings.organization.auditLogsExportTooLarge")
+          : t("settings.organization.auditLogsExportFailed"),
+      );
       return;
     }
 
@@ -168,10 +167,10 @@ function AuditLogsPage() {
     detached(
       handleExport().catch((error: unknown) => {
         getAnalytics().captureError(error);
-        stellaToast.add({
-          title: t("settings.organization.auditLogsExportFailed"),
-          type: "error",
-        });
+        notifyUserError(
+          error,
+          t("settings.organization.auditLogsExportFailed"),
+        );
       }),
       "settings-organization-audit-logs.export",
     );

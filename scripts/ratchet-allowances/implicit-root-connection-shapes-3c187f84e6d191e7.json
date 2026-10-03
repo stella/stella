@@ -1,0 +1,6 @@
+{
+  "metric": "implicit-root-connection-shapes",
+  "file": "apps/api/src/lib/root-scoped-db.ts",
+  "delta": 1,
+  "reason": "A dedicated public read connection restricts anonymous sanctions reads to the public corpus."
+}

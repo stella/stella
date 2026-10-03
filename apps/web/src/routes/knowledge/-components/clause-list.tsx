@@ -17,7 +17,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@stll/ui/menu";
-import { stellaToast } from "@stll/ui/toast";
 
 import {
   ResponsiveActionToolbar,
@@ -27,7 +26,9 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { downloadFile } from "@/lib/utils";
 import {
   CategoryFormDialog,
@@ -113,9 +114,7 @@ export const ClauseList = ({
     });
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.exportFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.exportFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),

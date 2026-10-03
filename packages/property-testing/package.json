@@ -9,7 +9,8 @@
   ],
   "exports": {
     ".": "./src/index.ts",
-    "./preload": "./src/preload.ts"
+    "./preload": "./src/preload.ts",
+    "./rejection": "./src/rejection.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

@@ -1,7 +1,13 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { createFormatter } from "use-intl/core";
+
+import { FACET_COUNT_TYPE } from "@stll/api-contract/search";
+import type { FacetCountType } from "@stll/api-contract/search";
 
 import {
   facetSectionView,
+  formatFacetCount,
   type FacetSourceBucket,
 } from "@/components/public-law-table/public-law-facets.logic";
 
@@ -128,5 +134,47 @@ describe("keeping the reader's own choice reachable", () => {
     expect(view.items.filter((item) => item.value === "court-1")).toHaveLength(
       1,
     );
+  });
+});
+
+describe("source counts retain their bounds in the visible section", () => {
+  test("formats exact, capped and estimated counts using the reader's numbering system", () => {
+    for (const locale of ["en-US", "ar-u-nu-arab"]) {
+      const format = createFormatter({ locale });
+      const displays = {
+        [FACET_COUNT_TYPE.EXACT]: format.number(1000),
+        [FACET_COUNT_TYPE.AT_LEAST]: `${format.number(1000)}+`,
+        [FACET_COUNT_TYPE.ESTIMATE]: `~${format.number(1000)}`,
+      } as const satisfies Record<FacetCountType, string>;
+      for (const countType of Object.values(FACET_COUNT_TYPE)) {
+        const view = facetSectionView({
+          buckets: [{ value: "cz-nss", label: "NSS", count: 1000, countType }],
+          expanded: false,
+          limit: 8,
+          selectedValue: "cz-nss",
+        });
+        const item =
+          view.items.at(0) ?? panic("The selected source is missing");
+        expect(item).toEqual({
+          value: "cz-nss",
+          label: "NSS",
+          count: 1000,
+          countType,
+        });
+        expect(formatFacetCount(item, format.number)).toBe(displays[countType]);
+      }
+      expect(
+        formatFacetCount(
+          { value: "2024", label: "2024", count: 1000 },
+          format.number,
+        ),
+      ).toBe(format.number(1000));
+      expect(
+        formatFacetCount(
+          { value: "missing", label: "missing", count: null },
+          format.number,
+        ),
+      ).toBeNull();
+    }
   });
 });

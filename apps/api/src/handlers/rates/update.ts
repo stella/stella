@@ -66,11 +66,41 @@ const updateRateTable = createSafeHandler(
       updatedAt: new Date(),
     };
 
-    // Prevent unsetting isDefault if no other default exists
-    if (body.isDefault === false) {
-      const otherDefaultRows = yield* Result.await(
-        safeDb((tx) =>
-          tx
+    const outcome = yield* Result.await(
+      safeDb(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
+        );
+        // The currency the rates are currently stored in, read under a row
+        // lock BEFORE anything is written. The `existing` read above happened
+        // outside this transaction, so a currency change that landed in
+        // between would leave this one scaling from a code the table no longer
+        // carries; the lock also serializes two concurrent currency changes,
+        // which would otherwise both scale from the same starting point.
+        const lockedRows = await tx
+          .select({
+            currency: rateTables.currency,
+            name: rateTables.name,
+            isDefault: rateTables.isDefault,
+          })
+          .from(rateTables)
+          .where(
+            and(
+              eq(rateTables.id, body.id),
+              eq(rateTables.workspaceId, workspaceId),
+            ),
+          )
+          .for("update");
+        const locked = lockedRows.at(0);
+        if (!locked) {
+          return { status: "rate-not-found" as const };
+        }
+        const sourceCurrency = locked.currency;
+
+        // Read under the matter lock that creating and updating a table take,
+        // so a default seen here is not cleared before this write commits.
+        if (body.isDefault === false) {
+          const otherDefault = await tx
             .select({ id: rateTables.id })
             .from(rateTables)
             .where(
@@ -80,40 +110,11 @@ const updateRateTable = createSafeHandler(
                 ne(rateTables.id, body.id),
               ),
             )
-            .limit(1),
-        ),
-      );
-      const otherDefault = otherDefaultRows.at(0);
-
-      if (!otherDefault) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Cannot unset default: no other default rate table exists",
-          }),
-        );
-      }
-    }
-
-    const outcome = yield* Result.await(
-      safeDb(async (tx) => {
-        // The currency the rates are currently stored in, read under a row
-        // lock BEFORE anything is written. The `existing` read above happened
-        // outside this transaction, so a currency change that landed in
-        // between would leave this one scaling from a code the table no longer
-        // carries; the lock also serializes two concurrent currency changes,
-        // which would otherwise both scale from the same starting point.
-        const lockedRows = await tx
-          .select({ currency: rateTables.currency })
-          .from(rateTables)
-          .where(
-            and(
-              eq(rateTables.id, body.id),
-              eq(rateTables.workspaceId, workspaceId),
-            ),
-          )
-          .for("update");
-        const sourceCurrency = lockedRows.at(0)?.currency ?? existing.currency;
+            .limit(1);
+          if (otherDefault.length === 0) {
+            return { status: "no-other-default" as const };
+          }
+        }
 
         const nextCurrency = changedFields.currency;
         const exponentShift =
@@ -198,10 +199,9 @@ const updateRateTable = createSafeHandler(
         for (const field of ["name", "currency", "isDefault"] as const) {
           const next = changedFields[field];
           if (next !== undefined) {
-            // The currency's old value comes from the locked row, so the
-            // audit trail records what was actually replaced.
+            // Every old value comes from the same locked snapshot as the write.
             changes[field] = {
-              old: field === "currency" ? sourceCurrency : existing[field],
+              old: locked[field],
               new: next,
             };
           }
@@ -234,6 +234,19 @@ const updateRateTable = createSafeHandler(
       }),
     );
 
+    if (outcome.status === "rate-not-found") {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Rate table not found" }),
+      );
+    }
+    if (outcome.status === "no-other-default") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Cannot unset default: no other default rate table exists",
+        }),
+      );
+    }
     if (outcome.status === "rate-out-of-range") {
       return Result.err(
         new HandlerError({

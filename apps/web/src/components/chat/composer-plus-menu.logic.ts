@@ -81,16 +81,12 @@ export const shouldDrainSkillPages = ({
   open && query.trim() !== "" && hasNextPage && !isFetchingNextPage;
 
 type ResolveComposerMenuShortcutOptions = {
-  altKey: boolean;
   /** From {@link charBeforeCaret}. */
   charBeforeCaret: string | null;
-  ctrlKey: boolean;
+  /** The keystroke's `typedCharacter` (`@stll/ui/typed-character`). */
+  character: string | null;
   hasContext: boolean;
   hasSkills: boolean;
-  isAltGraph: boolean;
-  isComposing: boolean;
-  key: string;
-  metaKey: boolean;
 };
 
 /** A trigger starts a word at the start of a block or after whitespace, so
@@ -99,28 +95,60 @@ const startsWord = (charBefore: string | null): boolean =>
   charBefore === null || /^\s$/u.test(charBefore);
 
 export const resolveComposerMenuShortcut = ({
-  altKey,
   charBeforeCaret: charBefore,
-  ctrlKey,
+  character,
   hasContext,
   hasSkills,
-  isAltGraph,
-  isComposing,
-  key,
-  metaKey,
 }: ResolveComposerMenuShortcutOptions): ComposerMenuShortcut | null => {
-  const hasBlockingModifier = metaKey || (!isAltGraph && (altKey || ctrlKey));
-  if (isComposing || hasBlockingModifier) {
-    return null;
-  }
   if (!startsWord(charBefore)) {
     return null;
   }
-  if (hasSkills && key === COMPOSER_MENU_SHORTCUT_CHAR.skills) {
+  if (hasSkills && character === COMPOSER_MENU_SHORTCUT_CHAR.skills) {
     return COMPOSER_MENU_SHORTCUT.skills;
   }
-  if (hasContext && key === COMPOSER_MENU_SHORTCUT_CHAR.context) {
+  if (hasContext && character === COMPOSER_MENU_SHORTCUT_CHAR.context) {
     return COMPOSER_MENU_SHORTCUT.context;
   }
   return null;
+};
+
+export const SHORTCUT_POPUP_SIDE = {
+  above: "top",
+  below: "bottom",
+} as const;
+
+export type ShortcutPopupSide =
+  (typeof SHORTCUT_POPUP_SIDE)[keyof typeof SHORTCUT_POPUP_SIDE];
+
+/** Room a shortcut popup needs above the caret to show its search field and
+ *  a handful of rows before the list has to scroll. */
+export const SHORTCUT_POPUP_COMFORT_HEIGHT = 320;
+
+type ChooseShortcutPopupSideOptions = {
+  caretBottom: number;
+  caretTop: number;
+  viewportHeight: number;
+};
+
+/**
+ * The side of the caret a shortcut popup opens on, decided once from the room
+ * around the caret when it opens. The popup keeps that side while open and
+ * scrolls within the room it has: a side re-evaluated against the list's
+ * height flips the popup across the caret whenever results load or the query
+ * changes, landing it under a resting pointer whose hover then takes focus
+ * from the search field. Above is preferred, like the composer's other menus;
+ * below only when above is short of the comfortable height and below has
+ * more room.
+ */
+export const chooseShortcutPopupSide = ({
+  caretBottom,
+  caretTop,
+  viewportHeight,
+}: ChooseShortcutPopupSideOptions): ShortcutPopupSide => {
+  const roomAbove = caretTop;
+  const roomBelow = viewportHeight - caretBottom;
+  if (roomAbove >= SHORTCUT_POPUP_COMFORT_HEIGHT || roomAbove >= roomBelow) {
+    return SHORTCUT_POPUP_SIDE.above;
+  }
+  return SHORTCUT_POPUP_SIDE.below;
 };

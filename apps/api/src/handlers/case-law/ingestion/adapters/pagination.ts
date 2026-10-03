@@ -1,4 +1,4 @@
-// parser-output-unchanged: Existing decision and supplement branches retain their output; the new failure branch and page counters only expose item failures.
+// parser-output-unchanged: listing-stage labels preserve the fetched response and parsed page.
 /**
  * Shared pagination helpers for case-law adapters.
  *
@@ -800,6 +800,7 @@ export const createPagePaginatedFetch = <TResponse>(
         try {
           // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- page URLs come from the adapter's own buildRequest over its fixed publisher base
           response = await fetchWithRetry(url, init, {
+            fetchStage: "listing",
             maxRetries: SERVER_ERROR_RETRIES,
             timeoutMs: listTimeout,
             signal,
@@ -896,6 +897,7 @@ export const createPagePaginatedFetch = <TResponse>(
             });
             // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- retries the page URL from the adapter's own buildRequest over its fixed publisher base
             const retryResponse = await fetchWithRetry(url, init, {
+              fetchStage: "listing",
               maxRetries: 1,
               timeoutMs: listTimeout,
               signal,

@@ -36,6 +36,7 @@ const MenuPopup = ({
   alignOffset,
   side = "bottom",
   anchor,
+  collisionAvoidance,
   ...props
 }: MenuPrimitive.Popup.Props & {
   align?: MenuPrimitive.Positioner.Props["align"];
@@ -43,12 +44,14 @@ const MenuPopup = ({
   alignOffset?: MenuPrimitive.Positioner.Props["alignOffset"];
   side?: MenuPrimitive.Positioner.Props["side"];
   anchor?: MenuPrimitive.Positioner.Props["anchor"];
+  collisionAvoidance?: MenuPrimitive.Positioner.Props["collisionAvoidance"];
 }) => (
   <MenuPrimitive.Portal>
     <MenuPrimitive.Positioner
       align={align ?? (anchor ? "start" : "center")}
       alignOffset={alignOffset}
       anchor={anchor}
+      collisionAvoidance={collisionAvoidance}
       className={OVERLAY_LAYER_CLASS_NAMES.popup}
       data-slot="menu-positioner"
       side={side}

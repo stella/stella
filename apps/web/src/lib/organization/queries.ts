@@ -1,8 +1,9 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
+
 import { authClient } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { ORGANIZATION_MEMBERS_LIMIT } from "@/lib/organization/consts";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { organizationQueryRoot } from "@/lib/resource-query-roots.logic";
 
@@ -46,7 +47,7 @@ export const organizationOptions = (organizationId: string) =>
     queryFn: async () => {
       const result = await authClient.organization.getFullOrganization({
         query: {
-          membersLimit: ORGANIZATION_MEMBERS_LIMIT,
+          membersLimit: BETTER_AUTH_ORGANIZATION_OPTIONS.membershipLimit,
         },
       });
 

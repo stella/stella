@@ -1,3 +1,4 @@
+import { useState } from "react";
 /**
  * The organization's question columns on a decision table: which of them this
  * search draws, and what the reader can add, edit, remove and run.
@@ -6,8 +7,6 @@
  * headers and the toolbar's controls — and a controller passed between them is
  * cheaper than a context nobody else reads.
  */
-
-import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -60,6 +59,7 @@ import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 type QuestionColumnsInput = {
   /**
@@ -181,7 +181,7 @@ export const useQuestionColumns = ({
 
   const reportFailure = (error: unknown) => {
     analytics.captureError(error);
-    stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
+    notifyUserError(error, t("common.somethingWentWrong"));
   };
 
   const invalidateColumns = async () => {

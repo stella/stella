@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "@hocuspocus/provider": "^4.7.0",
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:"
   },

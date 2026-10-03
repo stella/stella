@@ -101,6 +101,51 @@ describe("cents() brand constructor", () => {
 });
 
 describe("prorateHourlyCents invariants", () => {
+  test("keeps the rounding boundary exact when the intermediate sum exceeds safe integers", () => {
+    const rate = cents(9_007_199_254_740_989);
+    const expected = cents(150_119_987_579_016);
+    expect(Math.floor((rate + 30) / 60)).not.toBe(expected);
+    expect(
+      prorateHourlyCents({ billedMinutes: 1, hourlyRateCents: rate }),
+    ).toBe(expected);
+    expect(
+      prorateHourlyCents({
+        billedMinutes: 60,
+        hourlyRateCents: cents(Number.MAX_SAFE_INTEGER),
+      }),
+    ).toBe(cents(Number.MAX_SAFE_INTEGER));
+  });
+
+  test("INVARIANT: full-range safe rates satisfy the integer rounding interval", () => {
+    const rand = makePrng(6_220_035);
+    for (let n = 0; n < 5000; n++) {
+      const billedMinutes = 1 + Math.floor(rand() * 60);
+      const hourlyRateCents = cents(
+        Math.floor(rand() * Number.MAX_SAFE_INTEGER),
+      );
+      const result = prorateHourlyCents({ billedMinutes, hourlyRateCents });
+      const residual =
+        BigInt(billedMinutes) * BigInt(hourlyRateCents) - 60n * BigInt(result);
+      expect(residual >= -30n && residual < 30n).toBe(true);
+      expect(Number.isSafeInteger(result)).toBe(true);
+    }
+  });
+
+  test("refuses unsafe inputs and outputs instead of returning rounded money", () => {
+    expect(() =>
+      prorateHourlyCents({
+        billedMinutes: Number.MAX_SAFE_INTEGER + 1,
+        hourlyRateCents: cents(0),
+      }),
+    ).toThrow("within the safe range");
+    expect(() =>
+      prorateHourlyCents({
+        billedMinutes: 61,
+        hourlyRateCents: cents(Number.MAX_SAFE_INTEGER),
+      }),
+    ).toThrow("safe integer minor units");
+  });
+
   test("zero minutes or zero rate yields zero", () => {
     expect(
       prorateHourlyCents({ billedMinutes: 0, hourlyRateCents: cents(500) }),
@@ -188,6 +233,55 @@ describe("prorateHourlyCents invariants", () => {
 });
 
 describe("applyMarkupCents invariants", () => {
+  test("zero markup preserves full-range minor units despite a product above safe integers", () => {
+    expect(
+      applyMarkupCents({
+        amountCents: cents(Number.MAX_SAFE_INTEGER),
+        markupPercent: 0,
+      }),
+    ).toBe(cents(Number.MAX_SAFE_INTEGER));
+    expect(
+      applyMarkupCents({
+        amountCents: cents(Number.MAX_SAFE_INTEGER - 1),
+        markupPercent: 0,
+      }),
+    ).toBe(cents(Number.MAX_SAFE_INTEGER - 1));
+  });
+
+  test("INVARIANT: large marked-up amounts satisfy the exact integer rounding interval", () => {
+    const rand = makePrng(6_220_036);
+    for (let n = 0; n < 5000; n++) {
+      const markupPercent = Math.floor(rand() * 300);
+      // The amount is bounded so the final marked-up result remains safely representable.
+      const ceiling = Number(
+        (BigInt(Number.MAX_SAFE_INTEGER) * 100n) /
+          (100n + BigInt(markupPercent)),
+      );
+      const amountCents = cents(Math.floor(rand() * ceiling));
+      const result = applyMarkupCents({ amountCents, markupPercent });
+      const residual =
+        BigInt(amountCents) * (100n + BigInt(markupPercent)) -
+        100n * BigInt(result);
+      expect(residual >= -50n && residual < 50n).toBe(true);
+      expect(Number.isSafeInteger(result)).toBe(true);
+    }
+  });
+
+  test("refuses unsafe markup inputs and overflowing results", () => {
+    expect(() =>
+      applyMarkupCents({
+        amountCents: cents(0),
+        markupPercent: Number.MAX_SAFE_INTEGER + 1,
+      }),
+    ).toThrow("within the safe range");
+    expect(() =>
+      applyMarkupCents({
+        amountCents: cents(Number.MAX_SAFE_INTEGER),
+        markupPercent: 1,
+      }),
+    ).toThrow("safe integer minor units");
+  });
+
   test("IDENTITY: zero markup returns the amount unchanged", () => {
     const rand = makePrng(1_959_802);
     for (let n = 0; n < 1000; n++) {

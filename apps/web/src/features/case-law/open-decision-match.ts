@@ -27,6 +27,7 @@ import {
 } from "@/features/case-law/queries/decisions";
 import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-preference";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
+import { toSafeId } from "@/lib/safe-id";
 
 /** What a case-law URL says about the corpus slice the reader is looking at. */
 export type CaseLawSearchScope = CaseLawIndexSearch;
@@ -67,6 +68,7 @@ export const createDecisionFiltersFromSearch = (
     lang,
     q,
     sort,
+    sourceId,
     strict,
     to,
     type,
@@ -87,6 +89,7 @@ export const createDecisionFiltersFromSearch = (
     country: scope,
     excerpt,
     ...(court ? { court } : {}),
+    ...(sourceId ? { sourceId: toSafeId<"caseLawSource">(sourceId) } : {}),
     ...(range.from === undefined ? {} : { dateFrom: range.from }),
     ...(range.to === undefined ? {} : { dateTo: range.to }),
     ...(type ? { decisionType: type } : {}),

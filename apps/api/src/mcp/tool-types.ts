@@ -4,7 +4,9 @@ import type {
 } from "@modelcontextprotocol/server";
 import type * as v from "valibot";
 
-import type { env } from "@/api/env";
+import type { SearchPaginationOutcome } from "@stll/api-contract/search";
+
+import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -60,16 +62,6 @@ export type RuntimeMcpToolOutputContract = Omit<
 >;
 
 export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
-
-/**
- * Deployment feature flag that gates a tool's backing surface. Derived
- * structurally from the `FEATURE_*` keys of the API env schema, so a tool can
- * only name a flag that actually exists: a typo or a removed flag fails
- * typecheck. A tool tagged with a flag is advertised and dispatchable only when
- * that flag is on (or the deployment is running in dev); see
- * `isMcpToolFeatureEnabled` in `gateway/list-tools.ts`.
- */
-export type McpToolFeatureFlag = Extract<keyof typeof env, `FEATURE_${string}`>;
 
 /**
  * Closed set of reasons a tool is kept off the anonymized surface. No
@@ -250,10 +242,11 @@ export type McpToolDefinition = McpToolAccessBranch &
     description: string;
     /**
      * Deployment feature flag gating this tool. When set, the tool is dropped
-     * from the advertised list and its dispatch is rejected unless the flag is on
-     * (or the deployment runs in dev). Omitted for always-available tools.
+     * from the advertised list and its dispatch is rejected unless
+     * `isDeploymentFeatureEnabled` holds for it. Omitted for always-available
+     * tools.
      */
-    feature?: McpToolFeatureFlag;
+    feature?: DeploymentFeatureFlag;
     inputSchema: McpToolInputSchema;
     /**
      * Optional session-member visibility predicate, enforced centrally for both
@@ -528,6 +521,7 @@ export type InternalToolResult<TData = unknown> =
 export type McpEgressPlan<TPayload = unknown> =
   | {
       egress: "compatSearch";
+      paginationOutcome?: SearchPaginationOutcome;
       nextCursor: string | null | undefined;
       results: readonly McpCompatSearchResult[];
     }

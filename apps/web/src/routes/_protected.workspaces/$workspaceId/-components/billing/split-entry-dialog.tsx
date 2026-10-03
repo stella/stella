@@ -7,10 +7,10 @@ import { Dialog, DialogFooter, DialogPopup } from "@stll/ui/dialog";
 import { PlusIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { MatterCombobox } from "@/components/billing/matter-combobox";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { useSplitTimeEntry } from "@/lib/workspaces/mutations/time-entries";
 
 type SplitLine = {
@@ -46,19 +46,13 @@ export const SplitEntryDialog = ({
 
   const handleSubmit = () => {
     if (totalPercentage !== 100) {
-      stellaToast.add({
-        title: t("billing.split.totalMustBe100"),
-        type: "error",
-      });
+      notifyUserError(undefined, t("billing.split.totalMustBe100"));
       return;
     }
 
     const invalidMatter = splits.some((s) => !s.matterId);
     if (invalidMatter) {
-      stellaToast.add({
-        title: t("billing.matterRequired"),
-        type: "error",
-      });
+      notifyUserError(undefined, t("billing.matterRequired"));
       return;
     }
 
@@ -73,11 +67,8 @@ export const SplitEntryDialog = ({
       },
       {
         onSuccess: () => onOpenChange(false),
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );

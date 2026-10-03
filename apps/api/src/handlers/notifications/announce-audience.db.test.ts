@@ -22,6 +22,7 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { listAnnouncementRecipients } from "@/api/lib/notifications";
 import type { NewNotification } from "@/api/lib/notifications";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -189,7 +190,7 @@ describe("announcement endpoint", () => {
         getAccessibleWorkspaces: async () => [],
         getActiveWorkspaceIds: async () => [],
         getWorkspaceAccess: async () => null,
-        memberRole: { role: "member" },
+        memberRole: sessionMemberRole("member"),
         orgAIConfig: null,
         orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
         managedAIResidency: "eu" as const,

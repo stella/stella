@@ -1,5 +1,6 @@
-import "./chat-editor.css";
 import { useCallback, useRef } from "react";
+
+import "./chat-editor.css";
 import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -15,7 +16,6 @@ import {
   COMPOSER_LEADING_GROUP_CLASS,
   COMPOSER_PLACEHOLDER_CLASS,
 } from "@stll/ui/composer";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -36,12 +36,14 @@ import {
   type ComposerContextMenuProps,
 } from "@/components/chat/composer-plus-menu";
 import { PromptEditorContent } from "@/components/prompt-editor";
+import { ReferenceRenderScope } from "@/components/references/reference-chip";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { ComposerSkillChatContext } from "@/lib/prompts/chat-skill-availability.logic";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 
@@ -176,10 +178,7 @@ export const ChatInputSurface = ({
         return;
       }
       getAnalytics().captureError(error);
-      stellaToast.add({
-        title: t("common.somethingWentWrong"),
-        type: "error",
-      });
+      notifyUserError(error, t("common.somethingWentWrong"));
     },
     [t],
   );
@@ -265,20 +264,28 @@ export const ChatInputSurface = ({
               }}
               role="presentation"
             >
-              <PromptEditorContent
-                // Compact: default to a single text line and grow with content
-                // (drop the provider's `min-h-10`), matching the inspector and
-                // file-chat bars. Large: hold ~3 text lines (`text-sm` at
-                // `leading-5` = 20px per line) so the hero box keeps its
-                // stature while empty.
-                className={cn(
-                  variant === "large"
-                    ? "[&_.ProseMirror]:min-h-15"
-                    : "[&_.ProseMirror]:min-h-0",
-                  inputDisabled && "pointer-events-none",
-                )}
-                editor={editor}
-              />
+              <ReferenceRenderScope
+                workspaceId={
+                  context?.threadRef.scope === "workspace"
+                    ? context.threadRef.workspaceId
+                    : undefined
+                }
+              >
+                <PromptEditorContent
+                  // Compact: default to a single text line and grow with
+                  // content (drop the provider's `min-h-10`), matching the
+                  // inspector and file-chat bars. Large: hold ~3 text lines
+                  // (`text-sm` at `leading-5` = 20px per line) so the hero box
+                  // keeps its stature while empty.
+                  className={cn(
+                    variant === "large"
+                      ? "[&_.ProseMirror]:min-h-15"
+                      : "[&_.ProseMirror]:min-h-0",
+                    inputDisabled && "pointer-events-none",
+                  )}
+                  editor={editor}
+                />
+              </ReferenceRenderScope>
               {isBlank && (
                 <span
                   aria-hidden="true"

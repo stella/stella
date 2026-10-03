@@ -17,7 +17,6 @@ import {
   justifications,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { env } from "@/api/env";
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -26,6 +25,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { acquireCellLocks } from "@/api/lib/cell-lock";
 import { chunked } from "@/api/lib/chunked";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { recordTableRunVerdicts } from "@/api/lib/document-review/table-run-findings";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -171,7 +171,9 @@ const queues = new Map<WorkflowQueueClass, WorkflowEntityQueue>();
 let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
 
 const getQueueConnection = () => {
-  queueConnection ??= createBullMqConnection();
+  queueConnection ??= createBullMqConnection({
+    storeClass: "durable-coordination",
+  });
   return queueConnection;
 };
 
@@ -729,7 +731,7 @@ export const startWorkflow = async ({
       },
       signal,
     );
-  if (!env.FEATURE_ACTION_ADMISSION) {
+  if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
     return await planAndEnqueue();
   }
   const started = await Result.tryPromise({
@@ -1170,7 +1172,9 @@ const createWorkflowWorker = (
       await processWorkflowJob(job, extractionRuns);
     },
     {
-      connection: createBullMqConnection(),
+      connection: createBullMqConnection({
+        storeClass: "durable-coordination",
+      }),
       concurrency,
       lockDuration: LOCK_DURATION_MS,
       stalledInterval: STALLED_INTERVAL_MS,

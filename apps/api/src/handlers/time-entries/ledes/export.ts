@@ -245,6 +245,7 @@ export const exportLedesHandler = async ({
 };
 
 const config = {
+  accountAccess: "standard",
   description:
     "Export a matter's client time entries as a LEDES 1998B e-billing file. Only " +
     "billable, charged, not-written-off entries are included, so the " +

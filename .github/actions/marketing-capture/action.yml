@@ -150,16 +150,17 @@ runs:
         path: apps/web/dist
 
     - name: Validate production web build
-      # An artifact is only handed over by PR CI, which captures the triggering
-      # commit, so the build must be for exactly that commit.
+      # The artifact must match the checked-out commit, including a historical
+      # main commit selected by a reusable caller.
       if: inputs.web-build-artifact != ''
       shell: bash
       run: |
+        expected_sha=$(git rev-parse HEAD)
         for side in client server; do
           manifest="apps/web/dist/$side/version.json"
           commit=$(jq -r '.commit' "$manifest")
-          if [[ "$commit" != "$GITHUB_SHA" ]]; then
-            echo "::error::$side build is for $commit, expected $GITHUB_SHA"
+          if [[ "$commit" != "$expected_sha" ]]; then
+            echo "::error::$side build is for $commit, expected $expected_sha"
             exit 1
           fi
         done

@@ -21,13 +21,13 @@ import {
   templateVersions,
 } from "@/api/db/schema";
 import type { TemplateKind, TemplateOrigin } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -114,7 +114,9 @@ export const createStoredTemplate = async function* ({
   const s3Key = buildTemplateS3Key(organizationId, templateId);
   const writeObject = async () =>
     await writeScannedObject({ file, key: s3Key });
-  const { object: stored } = env.FEATURE_FILE_USAGE_LIMITS
+  const { object: stored } = isDeploymentFeatureEnabled(
+    "FEATURE_FILE_USAGE_LIMITS",
+  )
     ? yield* Result.await(
         writeOrganizationFile({
           organizationId,
@@ -231,7 +233,9 @@ export const createStoredTemplate = async function* ({
   // (limit reached, or a lost race for the last slot) leaves an unreferenced
   // object behind. Best-effort delete it so failed creates don't accrue S3 junk.
   if (!txResult.ok) {
-    const deleteCandidate = env.FEATURE_FILE_USAGE_LIMITS
+    const deleteCandidate = isDeploymentFeatureEnabled(
+      "FEATURE_FILE_USAGE_LIMITS",
+    )
       ? deleteOrganizationFileWithSignal(s3Key, AbortSignal.timeout(10_000))
       : getS3().delete(s3Key);
     deleteCandidate
@@ -255,7 +259,9 @@ export const createStoredTemplate = async function* ({
     );
   }
   if (!txResult.row) {
-    const deleteCandidate = env.FEATURE_FILE_USAGE_LIMITS
+    const deleteCandidate = isDeploymentFeatureEnabled(
+      "FEATURE_FILE_USAGE_LIMITS",
+    )
       ? deleteOrganizationFileWithSignal(s3Key, AbortSignal.timeout(10_000))
       : getS3().delete(s3Key);
     deleteCandidate
