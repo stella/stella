@@ -535,8 +535,10 @@ export const OWNERSHIP = [
     capability: "Valkey/Redis connections for ephemeral coordination",
     owner: ["apps/api/src/lib/redis-client.ts"],
     summary:
-      "One module builds every Valkey client, so the uncapped reconnect ladder, " +
-      "the error classification, and the connection options hold for all of them. " +
+      "The API factory requires a storage class for every client and owns the " +
+      "reconnect ladder, error classification, and connection options. " +
+      "Shared policy inspection covers durable coordination; the construction " +
+      "guard checks both the API and collaboration factories. " +
       "Valkey may carry only ephemeral coordination, and each allowed consumer " +
       "states the degraded path it takes during an outage.",
     enforcement: {
