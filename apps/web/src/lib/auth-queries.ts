@@ -1,11 +1,9 @@
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
 
+import { rootKeys } from "@/lib/auth-query-options";
 import { STALE_TIME } from "@/lib/consts";
 
-export const rootKeys = {
-  session: ["session"],
-  role: ["role"],
-};
+export { rootKeys, sessionOptions } from "@/lib/auth-query-options";
 
 /**
  * The shell blocks on these two, so their worst case is what a user stares
@@ -18,24 +16,19 @@ export const rootKeys = {
  */
 const BOOT_QUERY_RETRY = false;
 
-export const sessionOptions = queryOptions({
-  retry: BOOT_QUERY_RETRY,
-  queryKey: rootKeys.session,
-  queryFn: async () => {
-    const [{ authClient }, { toAuthClientError }] = await Promise.all([
-      import("@/lib/auth-client"),
-      import("@/lib/errors/auth"),
-    ]);
-    const result = await authClient.getSession();
+export const fetchSession = async () => {
+  const [{ authClient }, { toAuthClientError }] = await Promise.all([
+    import("@/lib/auth-client"),
+    import("@/lib/errors/auth"),
+  ]);
+  const result = await authClient.getSession();
 
-    if (result.error) {
-      throw toAuthClientError(result.error);
-    }
+  if (result.error) {
+    throw toAuthClientError(result.error);
+  }
 
-    return result.data;
-  },
-  staleTime: STALE_TIME.FIVE.MINUTES,
-});
+  return result.data;
+};
 
 export const roleOptions = queryOptions({
   retry: BOOT_QUERY_RETRY,

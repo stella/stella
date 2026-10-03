@@ -20,6 +20,7 @@ const { act, cleanup, render, waitFor } =
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { roleOptions } = await import("@/lib/auth-queries");
+const { organizationAccessOptions } = await import("@/lib/usage-queries");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
@@ -44,7 +45,7 @@ const paymentRetry = (endsAt: string) => ({
   paymentRetry: { status: "payment_retry", endsAt },
 });
 
-const none = { paymentRetry: { status: "none" } };
+const none = { paymentRetry: { status: "none" } } as const;
 
 const renderBanner = (queryClient: InstanceType<typeof QueryClient>) => {
   if (queryClient.getQueryData(roleOptions.queryKey) === undefined) {
@@ -79,11 +80,14 @@ const renderBanner = (queryClient: InstanceType<typeof QueryClient>) => {
     React.createElement(
       QueryClientProvider,
       { client: queryClient },
-      React.createElement(
-        IntlProvider,
-        { locale: "en", messages, timeZone: "UTC" },
-        React.createElement(BannerForOrganization, { organizationId: "org-a" }),
-      ),
+      React.createElement(IntlProvider, {
+        locale: "en",
+        messages,
+        timeZone: "UTC",
+        children: React.createElement(BannerForOrganization, {
+          organizationId: "org-a",
+        }),
+      }),
     ),
   );
   return {
@@ -93,11 +97,14 @@ const renderBanner = (queryClient: InstanceType<typeof QueryClient>) => {
         React.createElement(
           QueryClientProvider,
           { client: queryClient },
-          React.createElement(
-            IntlProvider,
-            { locale: "en", messages, timeZone: "UTC" },
-            React.createElement(BannerForOrganization, { organizationId }),
-          ),
+          React.createElement(IntlProvider, {
+            locale: "en",
+            messages,
+            timeZone: "UTC",
+            children: React.createElement(BannerForOrganization, {
+              organizationId,
+            }),
+          }),
         ),
       ),
   };
@@ -109,7 +116,7 @@ test("a delayed access response stays in its organization cache and retry copy e
   let accessRequestCount = 0;
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
+      const url = input instanceof Request ? input.url : String(input);
       expect(url).toContain("/v1/usage/access");
       const signal = input instanceof Request ? input.signal : init?.signal;
       expect(signal).toBeInstanceOf(AbortSignal);
@@ -140,11 +147,16 @@ test("a delayed access response stays in its organization cache and retry copy e
     expect(queryKeys).toContainEqual(["usage", "access", "org-b"]);
 
     newResponse.resolve(Response.json(none));
-    await waitFor(() =>
-      expect(queryClient.getQueryData(["usage", "access", "org-b"])).toEqual(
-        none,
-      ),
-    );
+    await waitFor(() => {
+      expect(
+        Bun.deepEquals(
+          queryClient.getQueryData(
+            organizationAccessOptions({ organizationId: "org-b" }).queryKey,
+          ),
+          none,
+        ),
+      ).toBe(true);
+    });
     await act(async () => {
       oldResponse.resolve(
         Response.json(
@@ -159,9 +171,14 @@ test("a delayed access response stays in its organization cache and retry copy e
       await Promise.resolve();
     });
     expect(view.queryByRole("status")).toBeNull();
-    expect(queryClient.getQueryData(["usage", "access", "org-b"])).toEqual(
-      none,
-    );
+    expect(
+      Bun.deepEquals(
+        queryClient.getQueryData(
+          organizationAccessOptions({ organizationId: "org-b" }).queryKey,
+        ),
+        none,
+      ),
+    ).toBe(true);
 
     const expiryResponse = Promise.withResolvers<Response>();
     globalThis.fetch = Object.assign(
@@ -173,9 +190,9 @@ test("a delayed access response stays in its organization cache and retry copy e
     });
     const endsAt = new Date(Date.now() + 1500).toISOString();
     expiryResponse.resolve(Response.json(paymentRetry(endsAt)));
-    await waitFor(() =>
-      expect(view.getByRole("status").textContent).toContain("Payment issue"),
-    );
+    await waitFor(() => {
+      expect(view.getByRole("status").textContent).toContain("Payment issue");
+    });
     await waitFor(() => expect(view.queryByRole("status")).toBeNull(), {
       timeout: 3000,
     });
