@@ -16,6 +16,7 @@ import {
   EMPTY_AST,
   type IngestionResult,
   type SyncPage,
+  toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
@@ -26,17 +27,18 @@ import {
 } from "./document-stage-observation";
 import { SkDocumentNonPdfError } from "./sk-document-fetch-diagnostics";
 
-const decision = (fulltext: string): IngestionResult => ({
-  caseNumber: "fixture",
-  court: "fixture",
-  country: "CZE",
-  language: "cs",
-  fulltext,
-  metadata: {},
-  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  rawHash: "fixture",
-  documentAst: EMPTY_AST,
-});
+const decision = (fulltext: string): IngestionResult =>
+  toPlainTextIngestionResult({
+    caseNumber: "fixture",
+    court: "fixture",
+    country: "CZE",
+    language: "cs",
+    fulltext,
+    metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash: "fixture",
+    documentAst: EMPTY_AST,
+  }).unwrap("document-stage fixture decision must be valid plain text");
 
 describe("document-stage observation windows", () => {
   test("recovered attempts remain failed attempts but leave no terminal backlog", async () => {
