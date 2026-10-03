@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 
 import { chatThreads, docxSuggestions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -36,6 +37,7 @@ const CREATE_OUTCOME = {
 const createDocxSuggestions = createSafeHandler(
   {
     permissions: { entity: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "document_processing" },
     params: workspaceParams({ entityId: tSafeId("entity") }),
     body: tCreateDocxSuggestionsBody,

@@ -4,6 +4,7 @@ import { t } from "elysia";
 import { createStoredStyleSet } from "@/api/handlers/style-sets/storage";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import {
@@ -24,6 +25,7 @@ const config = {
     "style-sets.from-editor.create to build one from explicit settings " +
     "instead of a file.",
   permissions: { styleSet: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

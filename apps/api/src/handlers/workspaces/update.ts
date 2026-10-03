@@ -20,6 +20,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -64,6 +65,7 @@ const config = {
     "clientId on a personal matter, and any attempt to re-promote a matter " +
     "that already has a client, are refused.",
   permissions: { workspace: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "save_matter" },
   body: updateWorkspaceBodySchema,
 } satisfies WorkspaceHandlerConfig;

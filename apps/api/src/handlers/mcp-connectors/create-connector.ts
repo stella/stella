@@ -22,6 +22,7 @@ import type {
 } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -40,6 +41,7 @@ const requestBody = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "mcp_transport" },
   body: requestBody,
 } satisfies HandlerConfig;

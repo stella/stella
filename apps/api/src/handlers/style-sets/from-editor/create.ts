@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { createStoredStyleSet } from "@/api/handlers/style-sets/storage";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createStellaStyleEditorPreset,
@@ -20,6 +21,7 @@ const config = {
     "to the built-in stella preset, with no DOCX involved. Returns the new " +
     "style set's id, name, and updatedAt.",
   permissions: { styleSet: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

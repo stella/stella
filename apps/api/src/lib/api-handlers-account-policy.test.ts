@@ -3,11 +3,15 @@ import { describe, expect, mock, test } from "bun:test";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
+import {
+  checkDemoAccountAccess,
+  ACCOUNT_ACCESS,
+} from "@/api/lib/auth/demo-account-policy";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 
 const config = {
   permissions: { integration: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "mcp_transport" },
 } satisfies HandlerConfig;
 
@@ -61,6 +65,7 @@ test("allows sandbox matter mutations without an account growth check", async ()
     const checkAccountOperation = mock(() => Result.ok());
     const matterConfig = {
       permissions: { workspace: [operation] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "mcp_transport" },
     } as const satisfies HandlerConfig;
     const definition = createSafeRootHandler(
@@ -82,7 +87,7 @@ test("applies declared account access alongside resource permissions", async () 
   const definition = createSafeRootHandler(
     {
       permissions: { workspace: ["read"] },
-      accountAccess: "standard",
+      accountAccess: ACCOUNT_ACCESS.standard,
       mcp: { type: "internal", reason: "mcp_transport" },
     },
     async function* () {

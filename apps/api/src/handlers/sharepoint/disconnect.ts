@@ -5,9 +5,11 @@ import { sharepointConnections } from "@/api/db/schema";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 
 const config = {
   permissions: { integration: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "provider_secret" },
 } satisfies HandlerConfig;
 

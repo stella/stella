@@ -9,6 +9,7 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   discoverOAuthMetadataForApproval,
@@ -17,6 +18,7 @@ import {
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "mcp_transport" },
   params: t.Object({ slug: t.String({ minLength: 1, maxLength: 80 }) }),
   body: t.Object({

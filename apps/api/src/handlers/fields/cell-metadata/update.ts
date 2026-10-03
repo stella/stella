@@ -12,6 +12,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { acquireCellLock } from "@/api/lib/cell-lock";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -34,6 +35,7 @@ const config = {
   permissions: {
     entity: ["update"],
   },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

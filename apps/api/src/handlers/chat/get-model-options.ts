@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   getConfiguredChatModelOptions,
   getDefaultChatModelValue,
@@ -12,6 +13,7 @@ const config = {
   // response carries only model identifiers, never key material, so this
   // does not require admin scope (mirrors read-ai-availability.ts).
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
 } satisfies HandlerConfig;
 

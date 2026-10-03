@@ -8,6 +8,7 @@ import type {
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tDefaultVarchar,
@@ -79,6 +80,7 @@ const config = {
     "Read the marker grammar from the template-markers reference resource " +
     "when unsure. Returns the template id and field count.",
   permissions: { template: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "create_template" },
   transport: {
     type: "file-input",

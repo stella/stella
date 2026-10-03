@@ -2,6 +2,7 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 
 import { listVariantsHandler } from "../variants";
@@ -16,6 +17,7 @@ const config = {
     "and position. A clause that does not belong to this organization is a " +
     "404.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "list_clauses" },
   access: "read",
   params: listVariantsParamsSchema,

@@ -7,6 +7,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 
 const config = {
@@ -15,6 +16,7 @@ const config = {
     "counterpart of matters.archive: a matter that is not archived is " +
     "left exactly as it is.",
   permissions: { workspace: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "save_matter" },
 } satisfies WorkspaceHandlerConfig;
 

@@ -8,6 +8,7 @@ import type {
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
@@ -114,6 +115,7 @@ const config = {
     "enter the template. Any upload whose file name ends in .docx is " +
     "accepted whatever media type it declares.",
   permissions: { template: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

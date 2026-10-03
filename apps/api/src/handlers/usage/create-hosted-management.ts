@@ -5,6 +5,7 @@ import { usageEntitlements } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createHostedManagementSession } from "@/api/lib/hosted-usage-provider/client";
 import { getApiCredentials } from "@/api/lib/hosted-usage-provider/config";
@@ -13,6 +14,7 @@ import { getApiCredentials } from "@/api/lib/hosted-usage-provider/config";
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "hosted_billing" },
 } satisfies HandlerConfig;
 

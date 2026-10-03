@@ -6,6 +6,7 @@ import { ENTITY_KINDS } from "@stll/api-contract";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { tFind } from "@/api/lib/entities/find-schema";
@@ -64,6 +65,7 @@ const readKanbanGroupBodySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   access: "read",
   body: readKanbanGroupBodySchema,

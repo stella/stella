@@ -4,6 +4,7 @@ import { infoSoudTrackedCases } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   buildInfoSoudAgendaItems,
@@ -20,6 +21,7 @@ import {
 const config = {
   body: infosoudLookupBodySchema,
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "native_tool_ui" },
 } satisfies WorkspaceHandlerConfig;
 

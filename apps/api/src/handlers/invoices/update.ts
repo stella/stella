@@ -19,6 +19,7 @@ import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -237,6 +238,7 @@ const updateInvoice = createSafeHandler(
       "require an eligible original in the same matter. Currency cannot change while " +
       "the invoice has lines or attached entries.",
     permissions: { invoice: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",

@@ -3,6 +3,7 @@ import { t } from "elysia";
 import { readReportExportHistory } from "@/api/handlers/reports/export-history";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tPaginationCursor, workspaceParams } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -10,6 +11,7 @@ const config = {
   description:
     "List report exports requested by the current user in a matter, newest first with cursor pagination.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

@@ -18,6 +18,7 @@ import {
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { CaseLawResearchColumnContent } from "@/api/lib/case-law/research-answers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -27,6 +28,7 @@ const config = {
     "question, answer type or option list invalidates every answer the " +
     "column holds; the cells empty until the next run.",
   permissions: { caseLawResearch: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
   params: researchColumnParamsSchema,
   body: updateResearchColumnBodySchema,

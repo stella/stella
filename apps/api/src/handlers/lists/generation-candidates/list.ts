@@ -8,6 +8,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tPaginationCursor,
@@ -45,6 +46,7 @@ const config = {
     "it was accepted as when it has one, and the sources it cites. The run's " +
     "own status is returned alongside the page.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",

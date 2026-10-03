@@ -5,6 +5,7 @@ import { decisionHeadnoteLine } from "@stll/api-contract/case-law-text-field";
 import { suggestResearchColumnPromptBodySchema } from "@/api/handlers/case-law/research/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readPublicDecisionSummaries } from "@/api/lib/case-law/decision-summaries";
 import { suggestColumnPrompt } from "@/api/lib/properties/column-prompt-suggestion";
@@ -21,6 +22,7 @@ const config = {
   // The grant the column itself carries: one capability, one AI spend, and a
   // reader who may not author a column has no draft to write.
   permissions: { caseLawResearch: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
   body: suggestResearchColumnPromptBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },

@@ -28,6 +28,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isAllowedBYOKModelForRole } from "@/api/lib/tanstack-ai-models";
@@ -71,6 +72,7 @@ const updateAIConfigBody = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "provider_secret" },
   body: updateAIConfigBody,
 } satisfies HandlerConfig;

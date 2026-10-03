@@ -18,10 +18,12 @@ import { searchBodySchema, searchHandler } from "@/api/handlers/search/search";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 
 const searchEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "search" },
     body: searchBodySchema,
   } satisfies HandlerConfig,
@@ -49,6 +51,7 @@ const searchEndpoint = createSafeRootHandler(
 const searchFacetsEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "search_ui" },
     body: searchFacetsBodySchema,
   } satisfies HandlerConfig,
@@ -75,6 +78,7 @@ const searchFacetsEndpoint = createSafeRootHandler(
 const refineSearchEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "search_ui" },
     body: refineSearchBodySchema,
     requiresUsage: { actionType: "chat", modelRole: "fast" },
@@ -114,6 +118,7 @@ const refineSearchEndpoint = createSafeRootHandler(
 const summarizeSearchEndpoint = createSafeRootHandler(
   {
     permissions: { chat: ["create"], workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "search_ui" },
     body: summarizeSearchBodySchema,
     requiresUsage: { actionType: "chat", modelRole: "fast" },
@@ -158,6 +163,7 @@ const summarizeSearchEndpoint = createSafeRootHandler(
 const searchSummaryChatEndpoint = createSafeRootHandler(
   {
     permissions: { chat: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "search_ui" },
     body: searchSummaryChatBodySchema,
   } satisfies HandlerConfig,

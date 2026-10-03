@@ -14,6 +14,7 @@ import {
   AUDIT_RESOURCE_TYPE,
   createAuditRecorder,
 } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -117,6 +118,7 @@ const buildDesktopEditHandoffDeepLink = ({
 const createConfig = {
   body: createDesktopEditHandoffBodySchema,
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
 } satisfies WorkspaceHandlerConfig;
 
@@ -183,6 +185,7 @@ export const createDesktopEditHandoff = createSafeHandler(
 const statusConfig = {
   params: desktopEditHandoffStatusParamsSchema,
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
 } satisfies WorkspaceHandlerConfig;
 

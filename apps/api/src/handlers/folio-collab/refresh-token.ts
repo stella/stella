@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   recordFolioCollabContribution,
@@ -12,6 +13,7 @@ import { permissiveBodySchema } from "@/api/lib/permissive-route-schema";
 import { authorizeFolioCollabCredentials } from "./room-credentials";
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: permissiveBodySchema({ keys: ["roomId", "token"] }),
 } satisfies TokenHandlerConfig;

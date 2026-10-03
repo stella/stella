@@ -8,6 +8,7 @@ import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
 import { loadLatestSkillRevision } from "@/api/lib/agent-skills/revisions";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -22,6 +23,7 @@ const config = {
     "reports whether a proposal still branches from the skill's newest " +
     "revision.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",

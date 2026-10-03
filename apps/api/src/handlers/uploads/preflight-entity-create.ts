@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { validateEntityCreateCapacity } from "@/api/lib/uploads/entity-create";
@@ -17,6 +18,7 @@ const bodySchema = t.Object({
 // that upload spends rather than the baseline every role holds.
 const config = {
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },
   access: "read",
   body: bodySchema,

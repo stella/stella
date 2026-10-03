@@ -1,5 +1,6 @@
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 
 import { listCategoriesHandler } from "../categories";
 
@@ -9,6 +10,7 @@ const config = {
     "id, parent, name, description, and sort order. The taxonomy is capped " +
     "per organization and comes back whole; there is no pagination.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "list_clauses" },
   access: "read",
 } satisfies HandlerConfig;

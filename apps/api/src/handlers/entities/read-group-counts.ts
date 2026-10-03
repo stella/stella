@@ -12,6 +12,7 @@ import type { EntityKind } from "@/api/db/schema-validators";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { tFind } from "@/api/lib/entities/find-schema";
@@ -59,6 +60,7 @@ const readGroupCountsBodySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   access: "read",
   body: readGroupCountsBodySchema,

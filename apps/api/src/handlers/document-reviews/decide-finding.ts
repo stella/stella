@@ -22,6 +22,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
   DOCUMENT_REVIEW_APPLICATION_STATUS,
@@ -37,6 +38,7 @@ const config = {
   // edit to the reviewed document; workspace:read alone would let a member
   // with no document-processing grant record and apply review decisions.
   permissions: { workspace: ["read"], entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   // A disposition is a durable judgment on the workspace's review record, so
   // it must never be reachable through a read-only consent even though the
   // permission gate fronting the review surface is a workspace read.

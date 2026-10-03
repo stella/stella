@@ -12,6 +12,7 @@ import {
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
@@ -33,6 +34,7 @@ const config = {
   description:
     "Start a background document translation and save only the completed output as a new document.",
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

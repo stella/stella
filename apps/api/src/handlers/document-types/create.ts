@@ -10,6 +10,7 @@ import { createDocumentTypeBodySchema } from "@/api/handlers/document-types/sche
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -20,6 +21,7 @@ const config = {
     "the type is appended at the end of the display order. Refused once the " +
     "organization holds the maximum number of document types.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

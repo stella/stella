@@ -7,6 +7,7 @@ import {
 } from "@stll/api-contract";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   BUSINESS_REGISTRY_SLUGS,
   LOOKUP_DETAIL_DESCRIPTION,
@@ -49,6 +50,7 @@ const businessRegistriesLookup = createSafeRootHandler(
       "identifier (company/registration number, VAT number) for an exact " +
       "match, or a company name to search where the register supports it.",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "lookup_business_registry" },
     access: "read",
     query: querySchema,

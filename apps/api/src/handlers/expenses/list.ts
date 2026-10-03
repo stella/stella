@@ -10,6 +10,7 @@ import {
 import { expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor, tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -46,6 +47,7 @@ const config = {
     "item carries the amount in minor currency units, currency, category, " +
     "markup percentage, status, and the recording user's name.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

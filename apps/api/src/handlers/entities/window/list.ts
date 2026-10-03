@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import { entityQueryWindowBodySchema } from "@/api/lib/entities/query-window-schema";
 import {
@@ -21,6 +22,7 @@ const config = {
     "(200 rows by default). Prefer entities.list unless you are filling a " +
     "table viewport.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "read_content_across_matters" },
   access: "read",
   body: entityQueryWindowBodySchema,

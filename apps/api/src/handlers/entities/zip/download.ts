@@ -23,6 +23,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -319,7 +320,7 @@ const downloadZipHandler = async function* ({
 };
 
 const config = {
-  accountAccess: "standard",
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "Stream one folder of a matter, with every descendant folder and every " +
     "document file below it, as a ZIP archive named after the folder. Empty " +

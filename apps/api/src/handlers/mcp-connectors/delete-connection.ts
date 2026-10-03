@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { mcpUserConnections } from "@/api/db/schema";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -14,6 +15,7 @@ const routeParams = t.Object({
 
 const config = {
   permissions: { integration: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "mcp_transport" },
   params: routeParams,
 } satisfies HandlerConfig;

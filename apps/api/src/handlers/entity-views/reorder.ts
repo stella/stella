@@ -5,6 +5,7 @@ import { entityViews } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
@@ -15,6 +16,7 @@ const config = {
   description:
     "Reorder every personal cross-matter view. Supply each of the user's view IDs exactly once.",
   permissions: { view: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

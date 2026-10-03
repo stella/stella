@@ -22,6 +22,7 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -36,6 +37,7 @@ const config = {
   // cannot rename cannot spend metered model calls proposing a title they
   // have no way to apply.
   permissions: { chat: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({ workspaceId: t.Optional(tSafeId("workspace")) }),

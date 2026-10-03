@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { timeTimers } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   lockTimerOwner,
   ownedTimers,
@@ -21,6 +22,7 @@ const updateTimer = createSafeRootHandler(
     description:
       "Set your timer's description or matter. Pass null to clear either field. Confirm requires a matter and any narrative required by the organization.",
     permissions: { timeEntry: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",

@@ -7,13 +7,14 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { STYLE_SET_DOWNLOAD_TTL_SECONDS } from "@/api/lib/style-sets";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const config = {
-  accountAccess: "standard",
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "Mint a short-lived download URL for one organization style set's stored " +
     "DOCX package, recording the download in the audit trail. A style set " +

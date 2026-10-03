@@ -12,6 +12,7 @@ import {
   createSafeBoundedPublicHandler,
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
@@ -37,6 +38,7 @@ const config = {
   // by the public-law route hook, neither of
   // which the generic invoke path can honor. Agents read provision text
   // through `read_statute_provisions`, which is where the MCP contract lives.
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "public_indexing" },
   params: t.Object({
     documentId: tSafeId("legislationDocument"),

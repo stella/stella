@@ -6,11 +6,12 @@ import { env } from "@/api/env";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
-  accountAccess: "standard",
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "Rotate a matter's inbound address; the previous address stops accepting mail immediately.",
   permissions: { workspace: ["update"] },

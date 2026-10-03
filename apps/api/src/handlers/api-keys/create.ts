@@ -13,6 +13,7 @@ import {
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 
 const createApiKeyBody = t.Object({
   name: machineApiKeyNameSchema,
@@ -27,6 +28,7 @@ const config = {
   // an organization-configuration act, and this is the same statement the other
   // org-scoped secret endpoints (AI provider config, DeepL key) are gated on.
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   // Secret material must never transit an agent surface: the response carries
   // the plaintext credential, and an agent able to mint credentials could grant
   // itself durable access outside the consent flow that granted it its own.

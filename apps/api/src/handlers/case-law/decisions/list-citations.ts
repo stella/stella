@@ -8,6 +8,7 @@ import { createSafePublicSubjectHandler } from "@/api/handlers/case-law/decision
 import { citationsResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
 import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { projectResponseText } from "@/api/lib/search/project-response-text";
@@ -17,6 +18,7 @@ const config = {
   response: safePublicHandlerResponseSchemasWithStatusText(
     citationsResponseSchema,
   ),
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "public_indexing" },
   params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
   query: listDecisionCitationsQuerySchema,

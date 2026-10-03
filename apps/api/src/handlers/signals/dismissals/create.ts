@@ -12,6 +12,7 @@ import {
 } from "@/api/handlers/signals/transition";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   canTriageSignals,
   loadVisibleSignal,
@@ -23,6 +24,7 @@ const config = {
     "Dismiss an inbox signal with an optional reason; the reason is kept " +
     "for tuning the producer that emitted it.",
   permissions: { signal: ["resolve"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

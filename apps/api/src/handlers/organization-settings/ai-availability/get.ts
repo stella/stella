@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   hasTanStackInstanceProvider,
   isDeferredServiceTierAvailableForRole,
@@ -20,6 +21,7 @@ const config = {
   // Any org member needs to know whether AI is usable; the answer
   // is just two booleans, so it does not require admin scope.
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

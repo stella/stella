@@ -23,6 +23,7 @@ import {
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   authorizeDesktopAccount,
   authorizeDesktopRegistry,
@@ -33,6 +34,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const registry = t.UnionEnum(BUSINESS_REGISTRY_SLUGS);
 const config = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },
   body: t.Union([

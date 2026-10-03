@@ -2,6 +2,7 @@ import { createPlaybookDefinitionHandler } from "@/api/handlers/playbooks/create
 import { playbookDefinitionBodySchema } from "@/api/handlers/playbooks/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 
 const config = {
   description:
@@ -11,6 +12,7 @@ const config = {
     "derived from their tier rules before storage. It starts as a draft: " +
     "approve it with playbooks.approve before runs will use it.",
   permissions: { playbook: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "save_playbook" },
   body: playbookDefinitionBodySchema,
 } satisfies HandlerConfig;

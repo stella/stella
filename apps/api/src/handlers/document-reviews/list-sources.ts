@@ -6,6 +6,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import {
@@ -134,6 +135,7 @@ const listSourcesHandler = async function* ({
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
   query: listSourcesQuerySchema,

@@ -21,6 +21,7 @@ import type {
   HandlerConfig,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { corpusMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
@@ -45,6 +46,7 @@ const config = {
   // The grant AI chat carries: one AI spend, withheld from roles that may
   // not start a chat.
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
   body: t.Object({
     query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),

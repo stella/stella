@@ -15,6 +15,7 @@ import {
 import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/export-query";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -245,7 +246,7 @@ export const exportLedesHandler = async ({
 };
 
 const config = {
-  accountAccess: "standard",
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "Export a matter's client time entries as a LEDES 1998B e-billing file. Only " +
     "billable, charged, not-written-off entries are included, so the " +

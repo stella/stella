@@ -12,6 +12,7 @@ import type { BusinessRegistryCredentialSlug } from "@stll/api-contract";
 import { businessRegistryCredentials } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   bindRegistryCredential,
   encryptRegistryCredential,
@@ -34,6 +35,7 @@ const credentialRegistrySchema = t.UnionEnum(
 export const readBusinessRegistryCredentials = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     access: "read",
     mcp: { type: "internal", reason: "provider_secret" },
   },
@@ -68,6 +70,7 @@ const CREDENTIAL_PROBE_QUERIES = {
 export const saveBusinessRegistryCredential = createSafeRootHandler(
   {
     permissions: { organizationSettings: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.standard,
     mcp: { type: "internal", reason: "provider_secret" },
     body: t.Object(
       {
@@ -154,6 +157,7 @@ export const saveBusinessRegistryCredential = createSafeRootHandler(
 export const deleteBusinessRegistryCredential = createSafeRootHandler(
   {
     permissions: { organizationSettings: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.standard,
     mcp: { type: "internal", reason: "provider_secret" },
     query: t.Object({ registry: credentialRegistrySchema }),
   },

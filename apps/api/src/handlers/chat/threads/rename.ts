@@ -9,6 +9,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
@@ -20,6 +21,7 @@ const config = {
     "afterwards. A thread that does not exist in the requested scope is a " +
     "404: this never creates one.",
   permissions: { chat: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "chat_thread_ui",

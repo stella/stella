@@ -7,6 +7,7 @@ import { renderMatterReference } from "@stll/api-contract";
 import type { SafeDb } from "@/api/db/safe-db";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { toScopeKey, validatePattern } from "@/api/lib/matter-reference";
@@ -72,6 +73,7 @@ const config = {
     "is read, and the rendered reference is returned with the sequence value " +
     "it would take. Nothing is stored and no counter is advanced.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   access: "read",
   mcp: {
     type: "capability",

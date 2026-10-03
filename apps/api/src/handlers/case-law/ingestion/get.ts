@@ -17,6 +17,7 @@ import type { SourceTotalOrigin } from "@/api/db/schema";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 import {
@@ -517,6 +518,7 @@ const config = {
   // REST route and the generic `invoke_capability` path, so neither bypasses the
   // gate. Keep this as the single source of the role check for this endpoint.
   permissions: { auditLog: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "public",

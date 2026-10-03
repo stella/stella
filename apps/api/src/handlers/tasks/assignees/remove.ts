@@ -8,6 +8,7 @@ import { taskAssignees } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -90,6 +91,7 @@ const removeAssignee = createSafeHandler(
       "assigned still succeeds, and nothing stops a task from ending up with " +
       "no assignee; a read-only task is refused.",
     permissions: { entity: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "save_task" },
     body: removeAssigneeBodySchema,
   },

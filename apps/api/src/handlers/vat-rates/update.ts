@@ -9,6 +9,7 @@ import {
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   checkVatRateOverlap,
   lockVatRateOrganization,
@@ -20,6 +21,7 @@ const config = {
   description:
     "Update an active VAT rate validity period without overlapping another period for its code.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: vatRateParams,
   body: updateVatRateBody,

@@ -19,6 +19,7 @@ import {
   resolveMeteringContext,
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import {
@@ -47,6 +48,7 @@ describe("createSafeHandler workspace audit binding", () => {
     const endpoint = createSafeHandler(
       {
         permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "health_infra" },
       },
       async function* ({ recordAuditEvent }) {
@@ -138,6 +140,7 @@ describe("createSafeRootHandler usage preflight", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
           requiresUsage: { actionType: "chat" },
         },
@@ -176,6 +179,7 @@ describe("createSafeRootHandler usage preflight", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
           requiresUsage: { actionType: "chat" },
         },
@@ -210,6 +214,7 @@ describe("createSafeRootHandler usage preflight", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
           requiresUsage: { actionType: "chat", modelRole: "fast" },
         },
@@ -305,6 +310,7 @@ describe("createSafeRootHandler member AI access", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
           requiresUsage: { actionType: "chat", laneRouting: true },
         },
@@ -338,6 +344,7 @@ describe("createSafeRootHandler member AI access", () => {
     const endpoint = createSafeRootHandler(
       {
         permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "health_infra" },
       },
       async function* () {
@@ -361,6 +368,7 @@ describe("createSafeRootHandler permission gate", () => {
     const endpoint = createSafeRootHandler(
       {
         permissions: { organization: ["delete"] },
+        accountAccess: ACCOUNT_ACCESS.standard,
         mcp: { type: "internal", reason: "health_infra" },
       },
       async function* () {
@@ -393,6 +401,7 @@ describe("createSafeRootHandler permission gate", () => {
     const endpoint = createSafeRootHandler(
       {
         permissions: { organization: ["delete"] },
+        accountAccess: ACCOUNT_ACCESS.standard,
         mcp: { type: "internal", reason: "health_infra" },
       },
       async function* () {
@@ -420,6 +429,7 @@ describe("request.failed severity", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
         },
         async function* () {
@@ -508,6 +518,7 @@ describe("a mapped status survives the transport wrapper", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
         },
         body,

@@ -18,6 +18,7 @@ import {
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -38,6 +39,7 @@ const deleteInvoiceLine = createSafeHandler(
       "entry or expense line returns its entry to approved, unbilled status, " +
       "so it can be billed again. Only draft invoices can be edited.",
     permissions: { invoice: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",

@@ -4,6 +4,7 @@ import { and, desc, eq, isNotNull, or } from "drizzle-orm";
 import { AGENT_SKILL_SCOPES, agentSkills } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 
 // Returns the subset of skills that carry a slash-command handle,
 // shaped for the chat composer's slash menu. Distinct from the
@@ -22,6 +23,7 @@ const config = {
     "full instruction body to insert on pick. Capped at 250 rows and not " +
     "paginated; use skills.list for the whole catalogue.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",

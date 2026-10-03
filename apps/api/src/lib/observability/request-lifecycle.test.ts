@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/analytics/client";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -54,6 +55,7 @@ import type {
 } from "@/api/tests/helpers/recording-telemetry";
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "health_infra" },
   cache: { kind: "none" },
 } satisfies PublicHandlerConfig;

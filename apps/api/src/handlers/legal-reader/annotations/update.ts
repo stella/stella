@@ -16,11 +16,13 @@ import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotati
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { legalReaderAnnotation: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   description:
     "Change one of the caller's highlights or comments: its words, colour, style, or visibility.",
   mcp: { type: "tool", name: "update_reader_annotation" },

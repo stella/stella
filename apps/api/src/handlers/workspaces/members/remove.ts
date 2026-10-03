@@ -22,6 +22,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUserId, workspaceParams } from "@/api/lib/custom-schema";
@@ -40,6 +41,7 @@ const config = {
     "matter's last member, when a timer of theirs is still running, or when " +
     "they own more work obligations than one call may unassign at once.",
   permissions: { workspace: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "manage_organization" },
   params: workspaceParams({ userId: tUserId }),
 } satisfies WorkspaceHandlerConfig;

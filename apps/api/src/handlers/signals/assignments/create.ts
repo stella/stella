@@ -12,6 +12,7 @@ import {
 } from "@/api/handlers/signals/transition";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   canTriageSignals,
@@ -24,6 +25,7 @@ const config = {
     "Assign an open inbox signal to an organization member, or clear the " +
     "assignment with null.",
   permissions: { signal: ["resolve"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

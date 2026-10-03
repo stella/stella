@@ -4,6 +4,7 @@ import { asc } from "drizzle-orm";
 import { entityViews } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { LIMITS } from "@/api/lib/limits";
 
 import { response, viewOwner } from "./shared";
@@ -12,6 +13,7 @@ const config = {
   description:
     "List the current user's saved cross-matter views in tab order. The complete list is bounded by the per-user creation limit.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",

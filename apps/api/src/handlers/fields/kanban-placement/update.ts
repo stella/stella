@@ -10,6 +10,7 @@ import {
 } from "@/api/handlers/fields/upsert";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FlowRunCompletionNotice } from "@/api/lib/flows/flow-run-actor";
@@ -34,6 +35,7 @@ const updateKanbanPlacement = createSafeHandler(
       "Move one entity across writable Kanban axes in one transaction. " +
       "The request may change a task status, up to two property values, or both.",
     permissions: { entity: ["create", "update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "workspace_schema",

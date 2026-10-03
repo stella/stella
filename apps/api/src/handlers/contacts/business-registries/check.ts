@@ -6,6 +6,7 @@ import { isCountryCode } from "@stll/country-codes";
 
 import { nationalityCodesSchema } from "@/api/handlers/contacts/person-details";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import {
   COUNTERPARTY_CHECK_KINDS,
@@ -170,6 +171,7 @@ const businessRegistriesCheck = createSafeRootHandler(
       "or unavailable) with the edition screened, and is clear only when " +
       "every list is.",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "check_counterparty" },
     access: "read",
     body: bodySchema,

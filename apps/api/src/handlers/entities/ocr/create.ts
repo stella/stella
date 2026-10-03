@@ -10,6 +10,7 @@ import type {
   WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import type {
@@ -35,6 +36,7 @@ const config = {
     "recognition batch. Returns the durable run and reports when that source " +
     "was already processed.",
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "document_processing",

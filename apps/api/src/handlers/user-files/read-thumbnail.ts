@@ -6,6 +6,7 @@ import { chatThreads, userFiles } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
@@ -14,6 +15,7 @@ import { createUserFileKey } from "@/api/lib/files/utils";
 const readUserFileThumbnail = createSafeRootHandler(
   {
     permissions: { chat: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: t.Object({ fileId: tSafeId("userFile") }),
   },

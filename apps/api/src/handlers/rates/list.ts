@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { rateEntries, rateTables } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -33,6 +34,7 @@ const readRateTables = createSafeHandler(
       "and rates.resolve for the rate that actually applies to a user on a " +
       "date.",
     permissions: { rate: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       readClass: "tenant",

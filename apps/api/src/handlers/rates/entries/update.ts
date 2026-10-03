@@ -6,6 +6,7 @@ import { rateEntries } from "@/api/db/schema";
 import { loadRateEntry } from "@/api/handlers/rates/existing-rate-entry";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   tMinorUnitAmount,
   tSafeId,
@@ -34,6 +35,7 @@ const updateRateEntry = createSafeHandler(
       "lines for the same person, role, or table default and is refused on a conflict; the selector a line " +
       "applies to cannot be changed here.",
     permissions: { rate: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",

@@ -9,6 +9,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -131,6 +132,7 @@ const config = {
     "versions, date, type, citation count and headnote preview. Returns the " +
     "whole set up to the per-matter link cap; there is no pagination.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "both",

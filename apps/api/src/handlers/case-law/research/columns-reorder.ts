@@ -10,6 +10,7 @@ import { reorderResearchColumnsBodySchema } from "@/api/handlers/case-law/resear
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
@@ -18,6 +19,7 @@ const config = {
     "Set the order of the organization's question columns. The list must " +
     "name every column the organization keeps, exactly once.",
   permissions: { caseLawResearch: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
   body: reorderResearchColumnsBodySchema,
 } satisfies HandlerConfig;

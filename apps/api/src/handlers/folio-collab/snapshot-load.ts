@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { loadFolioCollabSnapshot } from "@/api/lib/folio-collab-rooms";
@@ -15,6 +16,7 @@ import {
 import { authorizeFolioCollabService } from "./service-credentials";
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: permissiveBodySchema({ keys: ["roomId"] }),
 } satisfies TokenHandlerConfig;

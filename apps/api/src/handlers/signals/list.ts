@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { listSignalsQuerySchema } from "@/api/handlers/signals/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { canTriageSignals, listSignalsHandler } from "@/api/lib/signals/read";
@@ -12,6 +13,7 @@ const config = {
     "List inbox signals visible to the caller: open by default, or snoozed " +
     "or resolved via `view`; filter by matter, origin, severity, or assignment.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

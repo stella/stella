@@ -8,6 +8,7 @@ import {
 
 import { createSafeSessionHandler } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { patchUserGuideProgress } from "@/api/lib/guide-progress";
 
@@ -20,6 +21,7 @@ const requestBody = t.Object(
 );
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   body: requestBody,
 } satisfies SessionHandlerConfig;

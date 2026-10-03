@@ -26,6 +26,7 @@ import {
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   detectReviewParties,
@@ -45,6 +46,7 @@ const config = {
   description:
     "Detect a target document's parties ahead of any position proposal, so the review launcher can show which side the reviewer acts for before choosing references.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
   body: documentReviewPartiesBodySchema,

@@ -8,6 +8,7 @@ import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-review
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
 
 const TIMEOUT_MS = 120_000;
@@ -16,6 +17,7 @@ const config = {
   description:
     "Propose review positions from one or more reference documents: one reviewable term each, with its kind, its severity, what the term is for and what to compare, and the reference passages that state the standard for it, plus what was read and deliberately not compared.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
   body: proposeReviewPositionsBodySchema,

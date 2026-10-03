@@ -13,6 +13,7 @@ import { workspaceViews } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { legalListsDeployed } from "@/api/lib/lists/deployment";
@@ -34,6 +35,7 @@ const config = {
     "the layout the view already has, is refused. Use views.update to change " +
     "a view's name or the details of its current layout.",
   permissions: { view: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

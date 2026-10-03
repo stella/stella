@@ -6,6 +6,7 @@ import { t } from "elysia";
 import { aiMemories } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -20,6 +21,7 @@ const config = {
   // Row visibility (firm / own / accessible matters) is enforced by RLS,
   // so firm memory still reads org-wide for any chat-capable member.
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   query: t.Object({
     scope: t.Optional(

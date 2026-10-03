@@ -16,6 +16,7 @@ import { FEEDBACK_REQUEST_ID_PATTERN } from "@/api/handlers/feedback/sanitize-re
 import { submitFeedbackReport } from "@/api/handlers/feedback/submit";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /** A person files a handful of reports at most; above this it is a script. */
@@ -27,7 +28,7 @@ const optionalCapped = (maxLength: number) =>
   t.Optional(t.String({ maxLength }));
 
 const config = {
-  accountAccess: "standard",
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "File a feedback report from the signed-in web app. The content is " +
     "sanitized server-side, stored, and delivered to every channel the " +

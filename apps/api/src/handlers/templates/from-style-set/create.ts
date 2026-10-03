@@ -8,6 +8,7 @@ import type {
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
@@ -69,6 +70,7 @@ const config = {
     "name and an optional category. Like templates.blank.create it carries " +
     "no fields until a document is saved onto it.",
   permissions: { template: ["create"], styleSet: ["use"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

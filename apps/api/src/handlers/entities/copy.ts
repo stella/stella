@@ -30,6 +30,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
@@ -703,6 +704,7 @@ const config = {
     "are dropped rather than remapped, so a move can lose column values; " +
     "read-only entities are refused.",
   permissions: { entity: ["create", "delete"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "document_processing",

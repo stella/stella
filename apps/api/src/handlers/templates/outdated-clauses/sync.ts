@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { syncAllClausesHandler } from "@/api/lib/template-clause-links";
@@ -18,6 +19,7 @@ const config = {
     "had been synced on its own. Links already on the current version are " +
     "left untouched.",
   permissions: { template: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

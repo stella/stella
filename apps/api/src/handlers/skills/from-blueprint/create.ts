@@ -7,6 +7,7 @@ import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { skillTextSha256 } from "@/api/lib/agent-skills/content-hash";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   authorizeSkillInstallScope,
@@ -31,6 +32,7 @@ const config = {
     "used more than once, and stays fully editable afterwards. Team scope " +
     "requires admin or owner.",
   permissions: { agentSkill: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

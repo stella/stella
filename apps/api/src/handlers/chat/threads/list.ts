@@ -26,6 +26,7 @@ import {
 import type { ChatThreadContext } from "@/api/handlers/chat/threads/list-context";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -58,6 +59,7 @@ const config = {
     "title, the matter it lives in, or a matter pinned to it; paginate with " +
     "limit and cursor.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",

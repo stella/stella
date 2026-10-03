@@ -13,6 +13,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -380,6 +381,7 @@ const config = {
     "limit. Pass expectedBody from your last read to require the working " +
     "copy still matches; a changed body returns a conflict without writing.",
   permissions: { clause: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "save_clause" },
   params: updateClauseParamsSchema,
   body: updateClauseBodySchema,

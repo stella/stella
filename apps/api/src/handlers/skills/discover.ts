@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { discoverSkillPackagesFromUrl } from "@/api/lib/skills/skill-package";
 
 const discoverSkillUrlBodySchema = t.Object({
@@ -13,6 +14,7 @@ const config = {
   description:
     "Discover importable skills from a GitHub repository or SKILL.md URL.",
   permissions: { agentSkill: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

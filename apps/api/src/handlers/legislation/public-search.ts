@@ -9,6 +9,7 @@ import {
   searchLegislationResponseSchema,
 } from "@/api/handlers/legislation/search-schema";
 import { createSafeBoundedPublicHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tPaginationLimit } from "@/api/lib/custom-schema";
 import {
   readPublicLawCountry,
@@ -31,6 +32,7 @@ export const publicStatuteSearchQuerySchema = t.Object(
 export const createPublicStatuteSearch = (search = searchLegislationHandler) =>
   createSafeBoundedPublicHandler(
     {
+      accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
       cache: { kind: "none" },
       query: publicStatuteSearchQuerySchema,

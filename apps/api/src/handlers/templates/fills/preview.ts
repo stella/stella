@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tJsonObject, tSafeId } from "@/api/lib/custom-schema";
 import { fillPreviewLogic } from "@/api/lib/templates/fill-preview-logic";
 
@@ -27,6 +28,7 @@ const config = {
   // substitution pipeline (rendering filled paragraphs and consuming AI-fill
   // usage), so a read-only role must not reach it.
   permissions: { template: ["use"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "covered", by: "fill_template", readClass: "tenant" },
   params: fillPreviewParamsSchema,

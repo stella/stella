@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import { timeTimers } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   lockTimerOwner,
   pauseRunningTimers,
@@ -17,6 +18,7 @@ const startTimer = createSafeRootHandler(
     description:
       "Start your timer in the active organization, optionally assigning a matter and description. Automatically pauses your running timer. Returns its ID for pause, resume, update, confirm or discard.",
     permissions: { timeEntry: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",

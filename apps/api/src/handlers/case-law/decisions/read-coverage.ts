@@ -8,6 +8,7 @@ import {
   createSafeBoundedPublicHandler,
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { projectResponseText } from "@/api/lib/search/project-response-text";
 import { boundedString } from "@/api/lib/search/response-text-bounds";
@@ -26,6 +27,7 @@ const config = {
   // Not a capability: it takes no input, opts into shared response caching,
   // and is gated by the public-law route hook, none of which the generic
   // invoke path can honor.
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "public_indexing" },
 } satisfies PublicHandlerConfig;
 

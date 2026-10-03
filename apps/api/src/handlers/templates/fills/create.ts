@@ -10,6 +10,7 @@ import {
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import { tJsonObject, tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
@@ -72,6 +73,7 @@ const config = {
     ".docx extension is appended when missing) and a parent folder; the " +
     "created entity is returned.",
   permissions: { template: ["use"], entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: { type: "covered", by: "save_filled_template" },
   params: fillToWorkspaceParamsSchema,

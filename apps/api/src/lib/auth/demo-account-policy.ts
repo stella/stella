@@ -2,8 +2,6 @@ import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { Result } from "better-result";
 
-import type { statements } from "@stll/permissions";
-
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export type DemoAccountConfig = {
@@ -102,49 +100,17 @@ export const createDemoSessionFilter = (config: DemoAccountConfig) =>
     },
   }) satisfies BetterAuthPlugin;
 
-const ACCOUNT_PERMISSION_POLICY = {
-  organization: "restricted",
-  member: "restricted",
-  invitation: "restricted",
-  team: "restricted",
-  ac: "restricted",
-  workspace: "sandbox",
-  organizationSettings: "restricted",
-  integration: "restricted",
-  contact: "sandbox",
-  invoice: "sandbox",
-  template: "sandbox",
-  styleSet: "sandbox",
-  clause: "sandbox",
-  entity: "sandbox",
-  timeEntry: "sandbox",
-  expense: "sandbox",
-  view: "sandbox",
-  property: "sandbox",
-  playbook: "sandbox",
-  flow: "sandbox",
-  signal: "sandbox",
-  billingCode: "sandbox",
-  rate: "sandbox",
-  chat: "sandbox",
-  auditLog: "sandbox",
-  agentSkill: "sandbox",
-  firmMemory: "sandbox",
-  caseLawResearch: "sandbox",
-  legalReaderAnnotation: "sandbox",
-  savedSearch: "sandbox",
-} as const satisfies Record<keyof typeof statements, "restricted" | "sandbox">;
+/**
+ * Whether the configured demo account may call a handler. Every handler config
+ * declares one: `standard` refuses the demo account, `sandbox` admits it.
+ */
+export const ACCOUNT_ACCESS = {
+  standard: "standard",
+  sandbox: "sandbox",
+} as const;
 
-export const requiresStandardAccount = (
-  permissions: Partial<Record<keyof typeof statements, readonly string[]>>,
-  accountAccess?: "standard",
-) =>
-  accountAccess === "standard" ||
-  Object.entries(ACCOUNT_PERMISSION_POLICY).some(
-    ([resource, policy]) =>
-      policy === "restricted" &&
-      Object.entries(permissions).some(
-        ([name, actions]) =>
-          name === resource && actions.some((action) => action !== "read"),
-      ),
-  );
+export type AccountAccess =
+  (typeof ACCOUNT_ACCESS)[keyof typeof ACCOUNT_ACCESS];
+
+export const requiresStandardAccount = (accountAccess: AccountAccess) =>
+  accountAccess === ACCOUNT_ACCESS.standard;

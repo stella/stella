@@ -10,6 +10,7 @@ import { BILLING_STATUS, expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   tCurrencyCode,
   tMinorUnitAmount,
@@ -46,6 +47,7 @@ const config = {
     "written-off expense is refused; use expenses.delete to write off an " +
     "unbilled one.",
   permissions: { expense: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: updateExpenseBodySchema,
 } satisfies WorkspaceHandlerConfig;

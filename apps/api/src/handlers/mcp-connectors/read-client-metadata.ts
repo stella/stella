@@ -6,6 +6,7 @@ import {
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { buildMcpClientMetadataDocument } from "@/api/lib/mcp-upstream/oauth";
 import type { McpClientMetadataDocument } from "@/api/lib/mcp-upstream/oauth";
 
@@ -44,6 +45,7 @@ true satisfies ExactShape<
 const readClientMetadata = createSafeBoundedPublicHandler(
   {
     cache: { kind: "public", maxAge: 3600 },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },
     response: safePublicHandlerResponseSchemasWithStatusText(
       clientMetadataResponseSchema,

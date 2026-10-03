@@ -9,6 +9,7 @@ import {
   createSafeHandler,
   type WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
@@ -32,6 +33,7 @@ const config = {
   description:
     "Save one attachment from an email into an accessible matter as a document. Returns the created entity and file field identifiers.",
   permissions: { workspace: ["read"], entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   params: workspaceParams({
     fieldId: tSafeId("field"),

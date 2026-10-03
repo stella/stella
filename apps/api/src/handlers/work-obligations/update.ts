@@ -17,6 +17,7 @@ import type { WorkObligationSource } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
@@ -149,6 +150,7 @@ const updateWorkObligation = createSafeHandler(
     description:
       "Update accountable ownership, dates, type, or provenance for a governed task or deadline.",
     permissions: { entity: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "workflow_orchestration",

@@ -5,6 +5,7 @@ import { prepareTemplateFromDocument } from "@/api/handlers/templates/prepare-te
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { scanTemplateUpload } from "@/api/lib/templates/scan-template-upload";
@@ -27,6 +28,7 @@ const config = {
   // docx), so it needs `template: ["create"]` like `/create`, not bare workspace
   // read; this also keeps a read-only role from spending org AI here.
   permissions: { template: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

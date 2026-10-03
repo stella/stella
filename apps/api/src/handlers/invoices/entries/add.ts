@@ -24,6 +24,7 @@ import {
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
@@ -302,6 +303,7 @@ const addEntries = createSafeHandler(
       "fails with a retryable conflict rather than attaching part of the " +
       "set.",
     permissions: { invoice: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",

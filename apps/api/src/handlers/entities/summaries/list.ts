@@ -6,6 +6,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -112,6 +113,7 @@ const config = {
     "entities.summaries.count for the total and entities.list when you " +
     "need column values or filtering.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "list_documents" },
   access: "read",
   query: readEntitySummariesQuerySchema,

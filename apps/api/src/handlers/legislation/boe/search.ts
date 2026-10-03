@@ -9,6 +9,7 @@ import {
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const querySchema = t.Object({
@@ -86,6 +87,7 @@ const boeSearch = createSafeRootHandler(
       "BOE service live; use the search_legislation tool to search the " +
       "stella legislation corpus instead.",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "search_boe_legislation" },
     access: "read",
     query: querySchema,

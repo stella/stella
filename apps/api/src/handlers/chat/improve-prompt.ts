@@ -10,12 +10,14 @@ import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const config = {
   actionAdmission: { type: "handler", actionKind: "chat.improve-prompt" },
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   body: t.Object({
     prompt: t.String({ minLength: 1, maxLength: 12_000 }),

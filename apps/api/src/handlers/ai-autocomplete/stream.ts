@@ -5,6 +5,7 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sseResponse } from "@/api/lib/sse";
 import { streamTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
@@ -23,6 +24,7 @@ const requestBody = t.Object({
 
 const config = {
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "realtime_stream" },
   body: requestBody,
 } satisfies HandlerConfig;

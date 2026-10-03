@@ -8,6 +8,7 @@ import { desktopEditSessions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import { liveOwnDesktopEditSessionTargetPredicates } from "@/api/lib/desktop-edit-session-predicates";
@@ -16,6 +17,7 @@ import { broadcastSessionEvent } from "@/api/lib/sse";
 
 const config = {
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: t.Object({
     entityId: tSafeId("entity"),

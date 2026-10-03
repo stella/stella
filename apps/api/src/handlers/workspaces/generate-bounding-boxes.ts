@@ -9,6 +9,7 @@ import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { generateBBoxes } from "@/api/lib/bbox/generate-b-boxes";
 import { generateBBoxesMock } from "@/api/lib/bbox/generate-b-boxes-mock";
 import { prepareJustificationData } from "@/api/lib/bbox/generate-b-boxes-shared";
@@ -17,6 +18,7 @@ import { mockAnswersForOrganization } from "@/api/lib/tanstack-ai-models";
 
 const config = {
   permissions: { workspace: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   body: t.Object({
     justificationId: tSafeId("justification"),

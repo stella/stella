@@ -31,6 +31,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { hasPersistedGeneratedDocumentActiveDraftContext } from "@/api/lib/chat/active-draft-context";
@@ -1291,6 +1292,7 @@ const config = {
     "cannot send multipart: use uploads.create with purpose entity_create " +
     "and then uploads.update.",
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "document_processing",
@@ -1331,6 +1333,7 @@ const uploadEntity = createSafeHandler(
 
 const generatedDocumentConfig = {
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   body: uploadGeneratedDocumentBodySchema,
 } satisfies WorkspaceHandlerConfig;

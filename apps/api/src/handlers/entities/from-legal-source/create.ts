@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { legalSourceToDocx } from "@/api/lib/docx-authoring/from-legal-source";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
@@ -38,6 +39,7 @@ export default createSafeHandler(
       "exceeds the document size limit or the matter is at its entity limit.",
     body: createFromLegalSourceBodySchema,
     permissions: { entity: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "document_processing",

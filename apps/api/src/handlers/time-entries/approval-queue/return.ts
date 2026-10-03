@@ -7,6 +7,7 @@ import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { BILLING_STATUS, timeEntries, workspaces } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { lockTimePolicy } from "@/api/lib/billing-time";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { timeApprovalRefusal } from "@/api/lib/billing/time-entry-approval";
@@ -23,6 +24,7 @@ const returnTimeEntry = createSafeRootHandler(
     description:
       "Return one draft or approved time entry to draft with a required comment (up to 2000 characters). Only its assigned approver or an organization owner/admin may return it. Running timers and locked periods are refused. The owner keeps seeing the last comment while editing; re-approval clears it. Billed or written-off entries cannot be returned.",
     permissions: { timeEntry: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",

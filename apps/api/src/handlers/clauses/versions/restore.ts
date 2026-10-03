@@ -10,6 +10,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import { clauseExpectedBodySchema } from "@/api/lib/clauses/body-schema";
 import { inspectLegacyClauseDirectives } from "@/api/lib/clauses/clause-directives";
@@ -34,6 +35,7 @@ const config = {
     "when the clause is at its version limit. Optionally pass expectedBody " +
     "from your last read to require the head still matches before restoring.",
   permissions: { clause: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "knowledge_library_admin",

@@ -17,6 +17,7 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import { resolveClauseSlotTexts } from "@/api/lib/docx/resolve-clause-slots";
@@ -38,6 +39,7 @@ const config = {
     "document. Slots that are unlinked, or whose target version cannot be " +
     "resolved, are left out and keep their marker visible.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

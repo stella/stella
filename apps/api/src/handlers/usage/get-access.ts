@@ -6,6 +6,7 @@ import {
   type HandlerConfig,
   type SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import {
   CONFIGURED_ACCESS_STATE,
   configuredPaymentRetry,
@@ -16,6 +17,7 @@ const config = {
   description:
     "Read the organization's current access notification and its deadline.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "hosted_billing" },
 } satisfies HandlerConfig;

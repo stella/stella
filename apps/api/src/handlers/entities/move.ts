@@ -12,6 +12,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
@@ -286,6 +287,7 @@ const config = {
     "must be a folder in this matter, a folder may not be moved into itself " +
     "or into one of its own descendants, and a read-only entity is refused.",
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "save_document" },
   body: moveEntityBodySchema,
 } satisfies WorkspaceHandlerConfig;

@@ -16,6 +16,7 @@ import {
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { legalListsDeployed } from "@/api/lib/lists/deployment";
@@ -47,6 +48,7 @@ const config = {
     "overview view and one correspondence view, and a fixed maximum of " +
     "views in total.",
   permissions: { view: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

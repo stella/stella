@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { maskWebSearchKey } from "@/api/lib/web-search/keys";
@@ -20,6 +21,7 @@ const config = {
   // Anything that leaks bytes of a stored key (even masked) is gated
   // behind organizationSettings:update, mirroring read-deepl-config.
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "provider_secret" },
 } satisfies HandlerConfig;
 

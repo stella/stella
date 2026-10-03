@@ -18,6 +18,7 @@ import {
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { createSafePublicSubjectHandler } from "@/api/handlers/case-law/decisions/public-subject";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
@@ -162,6 +163,7 @@ const app = () => {
   const byId = createSafePublicSubjectHandler({
     config: {
       cache: { kind: "none" },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
       params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
     } satisfies PublicHandlerConfig,
@@ -172,6 +174,7 @@ const app = () => {
   const bySlug = createSafePublicSubjectHandler({
     config: {
       cache: { kind: "none" },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
       params: t.Object({ slug: t.String() }),
       query: t.Object({

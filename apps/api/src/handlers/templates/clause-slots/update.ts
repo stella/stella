@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { updateClauseSlotHandler } from "@/api/lib/template-clause-links";
@@ -22,6 +23,7 @@ const config = {
     "the assignment by passing null. The clause, its pinned version, and its " +
     "variant are untouched: only which slot the link fills changes.",
   permissions: { template: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

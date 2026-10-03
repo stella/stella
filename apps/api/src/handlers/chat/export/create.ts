@@ -44,6 +44,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { markdownToStellaDocument } from "@/api/lib/docx-authoring/from-markdown";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -91,7 +92,7 @@ const onlySourceDocumentTitle = (
 };
 
 const config = {
-  accountAccess: "standard",
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "Export one assistant chat message as a DOCX document with the selected " +
     "citation style. Returns a short-lived download URL.",

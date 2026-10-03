@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { createSafeSessionHandler } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { createConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
 import { sendOTPEmail } from "@/api/lib/email/email";
@@ -11,6 +12,7 @@ import { getUserEmailAndTwoFactorEnabled } from "@/api/lib/two-factor";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "account_lifecycle" },
 } satisfies SessionHandlerConfig;
 

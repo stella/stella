@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { resolveRate } from "@/api/lib/billing/rates";
 import { tUserId, withDescription } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -25,6 +26,7 @@ const resolveRateHandler = createSafeHandler(
       "minor currency units (e.g. cents) and the currency, or nulls when no " +
       "rate applies.",
     permissions: { rate: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "resolve_rate" },
     access: "read",
     query: resolveRateQuerySchema,

@@ -4,6 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { notifications } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import { notificationParamsSchema, readUnreadCount } from "./read-model";
@@ -16,6 +17,7 @@ const config = {
   // permissions-exempt: the write touches only the caller's own notification
   // rows (user-scoped RLS); workspace:read is the access floor.
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "native_tool_ui" },
   access: "write",
   params: notificationParamsSchema,

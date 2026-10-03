@@ -6,6 +6,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { usageEntitlements, usagePolicies } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   GET_USAGE_ENTITLED_PROJECTION,
@@ -26,6 +27,7 @@ const config = {
   // hosted setup/management endpoints and the other organization-settings
   // reads. Non-managers have no settings UI for it and cannot manage it.
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   access: "read",
   mcp: { type: "tool", name: "get_usage" },
 } satisfies HandlerConfig;
