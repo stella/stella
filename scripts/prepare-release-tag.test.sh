@@ -124,8 +124,13 @@ chmod +x "$fixture/bin/git"
 export RUNNER_TEMP="$fixture" RELEASE_HEALTH_TOKEN=fixture
 cp "$script_dir/check-release-main-health.sh" "$RUNNER_TEMP/check-release-main-health.sh"
 export TAG=v1.2.3 RELEASE_SHA="$TEST_CANDIDATE" GH_TOKEN=fixture GITHUB_REPOSITORY=stella/stella
-sed -n '/GH_TOKEN=.*bash.*check-release-main-health/,$p' "$workflow" | sed 's/^          //' > "$fixture/push.sh"
+# The run block ends at the first line outside its indentation; later jobs are
+# YAML, not shell.
+awk '/GH_TOKEN=.*bash.*check-release-main-health/ { block = 1 }
+  block && !/^          / { exit }
+  block { sub(/^          /, ""); print }' "$workflow" > "$fixture/push.sh"
 [[ -s "$fixture/push.sh" ]]
+grep -q '^git push ' "$fixture/push.sh"
 export TEST_INCIDENTS='[[{"number":1}]]'
 if bash -e "$fixture/push.sh" > "$fixture/output" 2> "$fixture/error"; then
   echo 'FAIL incident appeared before tag push' >&2; exit 1
