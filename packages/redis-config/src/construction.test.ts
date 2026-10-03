@@ -15,6 +15,15 @@ const factoryNames = new Set([
 ]);
 
 const inspectConstruction = (source: string, file: string) => {
+  // Escaped source is always parsed, so a module or binding written with
+  // Unicode escapes cannot bypass the fast path.
+  if (
+    !/\b(?:RedisClient|createBunRedisClient|createRedisClient|createBullMqConnection|createCollabRedisClient|Bun|ioredis|bullmq)\b|["'](?:bun|redis)["']|\\/u.test(
+      source,
+    )
+  ) {
+    return { violations: [], declarations: [], uses: 0 };
+  }
   const tree = ts.createSourceFile(
     file,
     source,
@@ -28,6 +37,26 @@ const inspectConstruction = (source: string, file: string) => {
     storeClass: "durable-coordination" | "cache";
     factory: string;
   }[] = [];
+  const queueConstructors = new Set([
+    "Queue",
+    "Worker",
+    "QueueEvents",
+    "FlowProducer",
+    "JobScheduler",
+  ]);
+  const queueAliases = new Map<string, string>();
+  const variables = new Map<string, ts.Expression>();
+  const resolveVariable = (expression: ts.Expression) => {
+    const seen = new Set<string>();
+    let resolved = expression;
+    while (ts.isIdentifier(resolved) && !seen.has(resolved.text)) {
+      seen.add(resolved.text);
+      const initializer = variables.get(resolved.text);
+      if (initializer === undefined) {return resolved;}
+      resolved = initializer;
+    }
+    return resolved;
+  };
   const names = new Map([...factoryNames].map((name) => [name, name]));
   const factoryName = (expression: ts.Expression) => {
     if (ts.isIdentifier(expression)) {
@@ -96,6 +125,9 @@ const inspectConstruction = (source: string, file: string) => {
               continue;
             }
             const imported = (binding.propertyName ?? binding.name).text;
+            if (module === "bullmq" && queueConstructors.has(imported)) {
+              queueAliases.set(binding.name.text, imported);
+            }
             if (factoryNames.has(imported)) {
               names.set(binding.name.text, imported);
             }
@@ -147,9 +179,11 @@ const inspectConstruction = (source: string, file: string) => {
   const inspectCall = (node: ts.CallExpression) => {
     const expression = node.expression;
     let name: string | undefined;
-    if (ts.isIdentifier(expression)) {name = expression.text;}
-    else if (ts.isPropertyAccessExpression(expression))
-      {name = expression.name.text;}
+    if (ts.isIdentifier(expression)) {
+      name = expression.text;
+    } else if (ts.isPropertyAccessExpression(expression)) {
+      name = expression.name.text;
+    }
     if (
       (expression.kind === ts.SyntaxKind.ImportKeyword || name === "require") &&
       !owner
@@ -224,10 +258,48 @@ const inspectConstruction = (source: string, file: string) => {
       }
     }
   };
+  const inspectQueueConstruction = (node: ts.NewExpression) => {
+    if (owner || !ts.isIdentifier(node.expression)) {
+      return;
+    }
+    const constructor = queueAliases.get(node.expression.text);
+    if (constructor === undefined) {
+      return;
+    }
+    const argument = node.arguments?.at(constructor === "Worker" ? 2 : 1);
+    const options =
+      argument === undefined ? undefined : resolveVariable(argument);
+    const connection =
+      options !== undefined && ts.isObjectLiteralExpression(options)
+        ? options.properties.find(
+            (property) =>
+              (ts.isPropertyAssignment(property) ||
+                ts.isShorthandPropertyAssignment(property)) &&
+              property.name.getText(tree) === "connection",
+          )
+        : undefined;
+    if (
+      connection === undefined ||
+      !(
+        ts.isPropertyAssignment(connection) ||
+        ts.isShorthandPropertyAssignment(connection)
+      ) ||
+      ts.isObjectLiteralExpression(
+        resolveVariable(
+          ts.isShorthandPropertyAssignment(connection)
+            ? connection.name
+            : connection.initializer,
+        ),
+      )
+    ) {
+      violations.push("unclassified-queue-connection");
+    }
+  };
   const visit = (node: ts.Node) => {
     if (ts.isVariableDeclaration(node)) {
       registerBindings(node.name);
       if (node.initializer !== undefined && ts.isIdentifier(node.name)) {
+        variables.set(node.name.text, node.initializer);
         const canonical = factoryName(node.initializer);
         if (canonical !== undefined) {
           names.set(node.name.text, canonical);
@@ -245,7 +317,12 @@ const inspectConstruction = (source: string, file: string) => {
       }
     }
     inspectImports(node);
-    if (ts.isCallExpression(node)) {inspectCall(node);}
+    if (ts.isCallExpression(node)) {
+      inspectCall(node);
+    }
+    if (ts.isNewExpression(node)) {
+      inspectQueueConstruction(node);
+    }
     ts.forEachChild(node, visit);
   };
   visit(tree);
@@ -280,7 +357,7 @@ test("application clients declare their class through configured factories", () 
   expect(new Set(inventory.map(({ storeClass }) => storeClass))).toEqual(
     new Set(["cache", "durable-coordination"]),
   );
-});
+}, 30_000);
 
 for (const source of [
   'import { RedisClient as Client } from "bun"; new Client();',
@@ -290,10 +367,17 @@ for (const source of [
   'const driver = require("ioredis"); new driver();',
   'const driver = await import("bullmq"); driver.createBunRedisClient();',
   'export { RedisClient } from "bun";',
+  'import Driver from "\\x69oredis"; new Driver();',
+
   "new Bun.RedisClient();",
   'import { createRedisClient as create } from "@/api/lib/redis-client"; create();',
   'const factory = await import("@/api/lib/redis-client"); factory.createRedisClient({});',
   'createBullMqConnection({ storeClass: "cache" });',
+  'import { Queue } from "bullmq"; new Queue("example", { connection: { host: "localhost" } });',
+  'import { Queue } from "bullmq"; const connection = { host: "localhost" }; const options = { connection }; new Queue("example", options);',
+
+  'import { Worker as Processor } from "bullmq"; new Processor("example", async () => {}, { connection: {} });',
+
   'createRedisClient({ storeClass: "other" });',
   'const { createRedisClient: make } = await import("@/api/lib/redis-client"); make();',
   "const make = createRedisClient; make();",
