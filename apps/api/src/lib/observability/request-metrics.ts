@@ -29,6 +29,23 @@ const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
 
+export const emitAdmissionStorePolicyMetric = (refused: boolean): void => {
+  const name = "AdmissionStoreEvictionPolicyRefused";
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [[]],
+          Metrics: [{ Name: name, Unit: "Count" }],
+        },
+      ],
+    },
+    [name]: refused ? 1 : 0,
+  });
+};
+
 // Test seam, like the logger's: when set, every EMF line goes here instead of
 // stdout, whatever the environment, so a test reads the line CloudWatch would
 // have parsed.

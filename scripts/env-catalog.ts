@@ -195,6 +195,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS",
   "STELLA_API_PORT",
   "STELLA_API_URL",
+  "STELLA_CLIENT_ADDRESS_FORMAT",
   "STELLA_CLIENT_ADDRESS_HEADER",
   "STELLA_COLLAB_MODE",
   "STELLA_COLLAB_PORT",
@@ -270,6 +271,8 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  HOSTED_USAGE_WEBHOOK_RETENTION_DAYS:
+    "Retention in days for completed provider event details; unset disables redaction.",
   AGENT_CLIENT_STORAGE_V1_ENABLED:
     "Enable the shared agent client storage format.",
   ACTION_LIMIT_CONTACT_URL:
@@ -431,7 +434,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Leave on unless the endpoint presents a certificate no trust anchor can " +
     "validate and the private network is the boundary instead.",
   REDIS_URL:
-    "Valkey or Redis URL used for cross-instance broadcasts and rate limits. Treated as secret because it may contain credentials.",
+    "Valkey or Redis URL used for cross-instance broadcasts and rate limits. Set maxmemory-policy noeviction on the server for admission, reservations, and fences. Treated as secret because it may contain credentials.",
   S3_ACCESS_KEY_ID:
     'S3 access-key ID. Required with S3_CREDENTIALS_PROVIDER="env"; otherwise omit it with the secret to use the selected provider.',
   S3_BUCKET: "S3 bucket for uploaded files.",
@@ -472,7 +475,11 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
   STELLA_CLIENT_ADDRESS_HEADER:
-    "Header the edge sets to the viewer address with its port (e.g. cloudfront-viewer-address). Read only from STELLA_TRUSTED_PROXY_CIDRS peers; set only when every route to the API adds it.",
+    "Header the edge sets to the viewer address (e.g. cloudfront-viewer-address; see STELLA_CLIENT_ADDRESS_FORMAT). Read only from STELLA_TRUSTED_PROXY_CIDRS peers; set only when every route to the API adds it.",
+  STELLA_CLIENT_ADDRESS_FORMAT:
+    "How STELLA_CLIENT_ADDRESS_HEADER spells the address: with-port (default, e.g. cloudfront-viewer-address) or bare.",
+  STELLA_ORIGIN_VERIFY_SECRET:
+    "Comma-separated values the edge sends in x-stella-origin-verify (current, then next during a rotation). When set, the client address header is read only from requests carrying one of them.",
   STELLA_TRUSTED_PROXY_CIDRS:
     "Comma-separated CIDRs for proxies directly in front of the API. Never trust public client ranges.",
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS:
@@ -674,6 +681,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   HOSTED_USAGE_PROVIDER_API_KEY: ENV_CREDENTIAL_KIND.credential,
   HOSTED_USAGE_PROVIDER_API_VERSION: ENV_CREDENTIAL_KIND.notCredential,
   HOSTED_USAGE_PROVIDER_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  HOSTED_USAGE_WEBHOOK_RETENTION_DAYS: ENV_CREDENTIAL_KIND.notCredential,
   HOSTED_USAGE_WEBHOOK_SECRET: ENV_CREDENTIAL_KIND.credential,
   HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS: ENV_CREDENTIAL_KIND.credential,
   HUGGINGFACE_API_KEY: ENV_CREDENTIAL_KIND.credential,
@@ -756,6 +764,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_API_PORT: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_API_URL: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_CLIENT_ADDRESS_FORMAT: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_CLIENT_ADDRESS_HEADER: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_COLLAB_MODE: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_COLLAB_PORT: ENV_CREDENTIAL_KIND.notCredential,
@@ -763,6 +772,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_COLLAB_SERVICE_TOKEN: ENV_CREDENTIAL_KIND.credential,
   STELLA_COMMIT_SHA: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_OCR_PDF_FONT_PATH: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_ORIGIN_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_TRUSTED_PROXY_CIDRS: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_USAGE_POLICY_SEEDS: ENV_CREDENTIAL_KIND.notCredential,

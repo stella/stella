@@ -17,7 +17,7 @@ import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard
 export const memoriesRoute = new Elysia({
   prefix: "/v1/memories",
 })
-  .use(deploymentFeatureGate(env.FEATURE_AI_MEMORY))
+  .use(deploymentFeatureGate(() => env.FEATURE_AI_MEMORY))
   .use(rateLimit(createStandardApiRateLimitOptions()))
   .use(authMacro)
   .use(permissionMacro)
