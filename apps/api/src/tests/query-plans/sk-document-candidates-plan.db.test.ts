@@ -151,7 +151,7 @@ test("outstanding candidate pages bound cooldown-heavy first, middle and NULL-ta
         }
         const rows = await query;
         expect(rows).toHaveLength(DOCUMENT_SCAN_PAGE_LIMIT);
-        expect(rows.every(({ ready }) => ready === false)).toBe(true);
+        expect(rows.every(({ ready }) => !ready)).toBe(true);
       }
       // A readiness WHERE with LIMIT looks bounded in estimated plans but
       // walks the entire cooled prefix before finding the oldest due row.
