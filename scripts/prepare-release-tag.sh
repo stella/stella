@@ -2,6 +2,7 @@
 # Resolve a release candidate without changing the checkout or creating a tag.
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo=""
 sha=""
 while [[ $# -gt 0 ]]; do
@@ -60,6 +61,7 @@ if [[ "$state" != "success" ]]; then
   echo "::error::Release SHA $sha carries staging/verified = $state; success is required" >&2
   exit 1
 fi
+bash "$script_dir/check-release-main-health.sh" "$repo" "$sha"
 changesets=$(git ls-tree -r --name-only "$sha" -- '.changeset/*.md' '.changeset')
 if [[ -n "$(printf '%s\n' "$changesets" | sed -n '/^\.changeset\/[^/]*\.md$/ { /\/README\.md$/d; p; }')" ]]; then
   echo "::warning::Release SHA carries unconsumed changesets; their notes will appear in a later release." >&2
