@@ -134,9 +134,14 @@ describe("OAuth client ID metadata documents", () => {
       ...(scope === null ? {} : { scope }),
     });
     const authorized = await getAuth().handler(
-      new Request(`${getAuthEndpointUrl("oauth2/authorize")}?${parameters}`, {
-        headers: { "x-forwarded-for": `198.51.100.${String(requestsIssued)}` },
-      }),
+      new Request(
+        `${getAuthEndpointUrl("oauth2/authorize")}?${parameters.toString()}`,
+        {
+          headers: {
+            "x-forwarded-for": `198.51.100.${String(requestsIssued)}`,
+          },
+        },
+      ),
     );
     expect(authorized.status).toBe(302);
     const location = v.parse(v.string(), authorized.headers.get("location"));

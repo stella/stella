@@ -130,8 +130,7 @@ export const isVerifiedClientMetadataDocument = (
 ): boolean => {
   const url = URL.parse(clientId);
   return (
-    url !== null &&
-    url.username === "" &&
+    url?.username === "" &&
     url.password === "" &&
     (verifiedOrigins.includes(url.origin) || isVerifiedThirdPartyClientId(url))
   );

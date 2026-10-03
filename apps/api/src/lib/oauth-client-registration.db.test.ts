@@ -212,7 +212,7 @@ describe("OAuth dynamic client registration", () => {
       );
       const redirectUris = v.parse(
         v.array(v.string()),
-        fixture.body["redirect_uris"],
+        fixture.body.redirect_uris,
       );
       const redirectUri = v.parse(v.string(), redirectUris.at(0));
       const browser = await signInHuman(
@@ -240,7 +240,9 @@ describe("OAuth dynamic client registration", () => {
       const authorizeUrl = getAuthEndpointUrl("oauth2/authorize");
       const authorized = await getAuth().handler(
         new Request(
-          method === "GET" ? `${authorizeUrl}?${query}` : authorizeUrl,
+          method === "GET"
+            ? `${authorizeUrl}?${query.toString()}`
+            : authorizeUrl,
           {
             method,
             headers: {
@@ -333,12 +335,15 @@ describe("OAuth dynamic client registration", () => {
       scope: MCP_OAUTH_SCOPES.join(" "),
     });
     const authorized = await getAuth().handler(
-      new Request(`${getAuthEndpointUrl("oauth2/authorize")}?${query}`, {
-        headers: {
-          cookie: browser.cookieHeader(),
-          "x-forwarded-for": `198.51.100.${String(registrationsIssued)}`,
+      new Request(
+        `${getAuthEndpointUrl("oauth2/authorize")}?${query.toString()}`,
+        {
+          headers: {
+            cookie: browser.cookieHeader(),
+            "x-forwarded-for": `198.51.100.${String(registrationsIssued)}`,
+          },
         },
-      }),
+      ),
     );
     expect(authorized.status).toBe(302);
     const location = new URL(

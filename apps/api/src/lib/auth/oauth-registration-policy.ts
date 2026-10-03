@@ -159,6 +159,9 @@ const readsAuthorizationBody = (ctx: {
   );
 };
 
+/** A hook result that leaves the request as it is. */
+const UNCHANGED = { context: {} };
+
 const createScopePolicyMiddleware = (
   policy: OAuthScopePolicyContext,
   discoveries: readonly ClientDiscovery[],
@@ -167,7 +170,7 @@ const createScopePolicyMiddleware = (
     if (ctx.path === OAUTH_CLIENT_REGISTRATION_PATH) {
       const body: unknown = ctx.body;
       if (!isRecord(body) || typeof body["scope"] !== "string") {
-        return;
+        return UNCHANGED;
       }
       const downscopedScope = body["scope"]
         .split(" ")
@@ -176,18 +179,18 @@ const createScopePolicyMiddleware = (
       return { context: { body: { scope: downscopedScope } } };
     }
     if (ctx.path !== OAUTH_AUTHORIZATION_PATH) {
-      return;
+      return UNCHANGED;
     }
     const fromBody = readsAuthorizationBody(ctx);
     const parameters: unknown = fromBody ? ctx.body : ctx.query;
     if (!isRecord(parameters) || typeof parameters["client_id"] !== "string") {
-      return;
+      return UNCHANGED;
     }
     const clientId = parameters["client_id"];
     const scope = parameters["scope"];
     if (scope !== undefined && typeof scope !== "string") {
       // The provider refuses a non-string scope outright.
-      return;
+      return UNCHANGED;
     }
     const requested =
       scope === undefined
@@ -202,7 +205,7 @@ const createScopePolicyMiddleware = (
     if (!stored && requested === undefined) {
       // A client not stored yet is resolved by a discovery, which applies
       // the same policy to the scope list the provider falls back to.
-      return;
+      return UNCHANGED;
     }
     const client: OAuthScopeClient = stored ?? {
       clientId,
@@ -213,7 +216,7 @@ const createScopePolicyMiddleware = (
     };
     const grantable = grantableScopes(client, requested, policy).join(" ");
     if (grantable === scope) {
-      return;
+      return UNCHANGED;
     }
     return fromBody
       ? { context: { body: { scope: grantable } } }
@@ -250,6 +253,7 @@ const extensionsWithScopePolicy = (
     };
   });
 
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- keeps the caller's option types on the returned plugin
 export const createStellaOAuthProvider = <O extends OAuthOptions<Scope[]>>(
   options: O,
   { verifiedOrigins }: { verifiedOrigins: readonly string[] },

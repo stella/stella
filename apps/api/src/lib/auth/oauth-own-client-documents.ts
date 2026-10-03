@@ -26,10 +26,10 @@ export const getCliClientMetadataDocument = ():
  */
 export const withOwnClientDocuments =
   (fetchResource: ClientMetadataResourceFetch): ClientMetadataResourceFetch =>
-  (input, init) => {
+  async (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
     const own = getCliClientMetadataDocument();
     return own?.client_id === url
       ? Response.json(own)
-      : fetchResource(input, init);
+      : await fetchResource(input, init);
   };

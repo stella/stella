@@ -48,7 +48,7 @@ const serveInProcess = async (
   init?: RequestInit,
 ): Promise<Response> => {
   const source = input instanceof Request ? input : undefined;
-  const url = new URL(source ? source.url : input.toString());
+  const url = new URL(input instanceof Request ? input.url : input);
   const body = init?.body ?? (source ? await source.text() : undefined);
   const local = new Request(
     new URL(`${url.pathname}${url.search}`, LOCAL_URL).toString(),
@@ -171,7 +171,9 @@ beforeAll(async () => {
 afterAll(async () => {
   fetchSpy.mockRestore();
   await Promise.all(
-    configDirs.map((dir) => rm(dir, { force: true, recursive: true })),
+    configDirs.map(async (dir) => {
+      await rm(dir, { force: true, recursive: true });
+    }),
   );
   await releaseAgentAuthTestDb();
 });
