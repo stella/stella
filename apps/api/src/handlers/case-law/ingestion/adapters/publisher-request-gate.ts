@@ -1,5 +1,5 @@
-// parser-output-unchanged: publisher scheduling only; response parsing is unchanged.
-import { TaggedError } from "better-result";
+// parser-output-unchanged: immediate gate checks bound connection and reservation work; response parsing and stored output are unchanged.
+import { Result, TaggedError } from "better-result";
 
 import { Temporal } from "@stll/time";
 
@@ -8,6 +8,17 @@ import { withTimeout } from "@/api/lib/with-timeout";
 import { isLocalDevOpen, isLocalTestRun } from "@/api/runtime-mode";
 
 const PUBLISHER_GATE_COMMAND_TIMEOUT_MS = 5000;
+
+const TRY_RESERVE_SLOT_SCRIPT = `
+local clock = redis.call("TIME")
+local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
+local reserved = tonumber(redis.call("GET", KEYS[1])) or now
+local cooldown = KEYS[2] and tonumber(redis.call("GET", KEYS[2])) or now
+if math.max(reserved, cooldown) > now then return 0 end
+local interval = tonumber(ARGV[1])
+redis.call("PSETEX", KEYS[1], interval * 2, tostring(now + interval))
+return 1
+`;
 
 const RESERVE_SLOT_SCRIPT = `
 local clock = redis.call("TIME")
@@ -160,6 +171,7 @@ const deployedGateClient = connectedGateClient(async () => {
 
 const defaultDependencies = (
   intervalMs: number,
+  cooldown: PublisherRequestGateConfig["cooldown"],
 ): PublisherRequestGateDependencies => {
   let localNextRequestAt = 0;
   let localCooldownUntil = 0;
@@ -181,7 +193,15 @@ const defaultDependencies = (
           ? Math.max(0, localCooldownUntil - now)
           : Math.max(now, localCooldownUntil);
       }
-      const slot = Math.max(now, localNextRequestAt, localCooldownUntil);
+      const cooldownUntil = cooldown === "shared" ? localCooldownUntil : 0;
+      if (args[0] === TRY_RESERVE_SLOT_SCRIPT) {
+        if (Math.max(localNextRequestAt, cooldownUntil) > now) {
+          return 0;
+        }
+        localNextRequestAt = now + intervalMs;
+        return 1;
+      }
+      const slot = Math.max(now, localNextRequestAt, cooldownUntil);
       localNextRequestAt = slot + intervalMs;
       return slot - now;
     },
@@ -217,35 +237,99 @@ class PublisherGateReplyError extends TaggedError("PublisherGateReplyError")<{
   message: string;
 }> {}
 
+export class PublisherPacingStopped extends TaggedError(
+  "PublisherPacingStopped",
+)<{
+  message: string;
+  status: "pacing-deferred" | "pacing-unavailable";
+  cause?: unknown;
+}> {}
+
 export const createPublisherRequestSlot = (
   { intervalMs, key: slot, publisher, cooldown }: PublisherRequestGateConfig,
-  dependencies = defaultDependencies(intervalMs),
+  dependencies = defaultDependencies(intervalMs, cooldown),
 ) => {
   const { key, cooldownKey } = publisherGateKeys(slot);
-  const commandWait = async (args: string[], signal?: AbortSignal) => {
-    const redis = await dependencies.redis();
-    const rawWait = await withTimeout(
-      async () => await redis.send("EVAL", args),
-      {
-        label: `${publisher} publisher gate reservation`,
-        signal,
-        timeoutMs: PUBLISHER_GATE_COMMAND_TIMEOUT_MS,
-      },
-    );
-    const waitMs = Number(rawWait);
-    if (!Number.isFinite(waitMs) || waitMs < 0) {
-      throw new PublisherGateReplyError({
+  type CommandWaitOptions = {
+    signal?: AbortSignal | undefined;
+    replies?: readonly number[];
+    mode?: "immediate";
+  };
+  const commandResult = async (
+    args: string[],
+    { signal, replies, mode }: CommandWaitOptions,
+  ) => {
+    const response = await Result.tryPromise({
+      try: async () =>
+        await withTimeout(
+          async () => {
+            const redis = await dependencies.redis();
+            return await redis.send("EVAL", args);
+          },
+          {
+            label: `${publisher} publisher gate reservation`,
+            signal,
+            timeoutMs: PUBLISHER_GATE_COMMAND_TIMEOUT_MS,
+          },
+        ),
+      catch: (error) => error,
+    });
+    if (Result.isError(response)) {
+      return Result.err(
+        mode === "immediate"
+          ? new PublisherPacingStopped({
+              message: "Publisher pacing unavailable",
+              status: "pacing-unavailable",
+              cause: response.error,
+            })
+          : response.error,
+      );
+    }
+    const waitMs = Number(response.value);
+    if (
+      !Number.isFinite(waitMs) ||
+      waitMs < 0 ||
+      (replies !== undefined && !replies.includes(waitMs))
+    ) {
+      const error = new PublisherGateReplyError({
         message: `${publisher} publisher gate returned an invalid wait`,
       });
+      return Result.err(
+        mode === "immediate"
+          ? new PublisherPacingStopped({
+              message: "Publisher pacing unavailable",
+              status: "pacing-unavailable",
+              cause: error,
+            })
+          : error,
+      );
     }
-    return waitMs;
+    if (mode === "immediate" && waitMs === 0) {
+      return Result.err(
+        new PublisherPacingStopped({
+          message: "Publisher pacing deferred",
+          status: "pacing-deferred",
+        }),
+      );
+    }
+    return Result.ok(waitMs);
+  };
+  const commandWait = async (
+    args: string[],
+    options: CommandWaitOptions = {},
+  ) => {
+    const result = await commandResult(args, options);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    return result.value;
   };
   const reserve = async (signal?: AbortSignal) => {
     while (true) {
       const keys = cooldown === "shared" ? [key, cooldownKey] : [key];
       const waitMs = await commandWait(
         [RESERVE_SLOT_SCRIPT, String(keys.length), ...keys, String(intervalMs)],
-        signal,
+        { signal },
       );
       await dependencies.sleep(waitMs, signal);
       if (cooldown !== "shared") {
@@ -253,17 +337,36 @@ export const createPublisherRequestSlot = (
       }
       // Recheck reservations already sleeping when another worker backs off.
       // Re-reserving after the cooldown preserves spacing between those workers.
-      const remaining = await commandWait(
-        [COOLDOWN_SCRIPT, "1", cooldownKey],
+      const remaining = await commandWait([COOLDOWN_SCRIPT, "1", cooldownKey], {
         signal,
-      );
+      });
       if (remaining === 0) {
         return;
       }
       await dependencies.sleep(remaining, signal);
     }
   };
+  const tryReserve = async ({
+    signal,
+    mode,
+  }: Pick<CommandWaitOptions, "signal" | "mode"> = {}): Promise<boolean> => {
+    const keys = cooldown === "shared" ? [key, cooldownKey] : [key];
+    const reply = await commandWait(
+      [
+        TRY_RESERVE_SLOT_SCRIPT,
+        String(keys.length),
+        ...keys,
+        String(intervalMs),
+      ],
+      { signal, replies: [0, 1], ...(mode === undefined ? {} : { mode }) },
+    );
+    return reply === 1;
+  };
   return Object.assign(reserve, {
+    tryReserve: async (signal?: AbortSignal) => await tryReserve({ signal }),
+    reserveImmediately: async (signal?: AbortSignal): Promise<void> => {
+      await tryReserve({ signal, mode: "immediate" });
+    },
     readCooldown: async (): Promise<number | null> => {
       const deadline = await commandWait([
         READ_COOLDOWN_SCRIPT,
@@ -275,7 +378,7 @@ export const createPublisherRequestSlot = (
     defer: async (durationMs: number, signal?: AbortSignal) =>
       await commandWait(
         [COOLDOWN_SCRIPT, "1", cooldownKey, String(durationMs)],
-        signal,
+        { signal },
       ),
   });
 };
