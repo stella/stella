@@ -13,7 +13,6 @@ import { useTranslations } from "use-intl";
 import type { DocxCompatibility } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, GitCommitHorizontalIcon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import type { FileChatOverlayActivation } from "@/components/ai-suggestions/file-viewer-with-ai-config";
@@ -60,6 +59,7 @@ import { PeekSuspenseFallback } from "@/components/pdf/peek/peek-pdf-viewer";
 import { env } from "@/env";
 import type { getDesktopEditFileType } from "@/lib/desktop-edit-formats";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
 
 type FileTabPanelProps = {
@@ -306,10 +306,7 @@ export const FileTabPanel = ({
   });
 
   const handleViewerError = () => {
-    stellaToast.add({
-      title: t("errors.actionFailed"),
-      type: "error",
-    });
+    notifyUserError(undefined, t("errors.actionFailed"));
   };
 
   const docxEditor = useDocxEditorBindings({

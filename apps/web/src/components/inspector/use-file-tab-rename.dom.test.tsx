@@ -5,8 +5,10 @@ import { createStore } from "zustand";
 import type { StoreApi } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
+import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { stellaToast } from "@stll/ui/toast";
 
+import type { DownloadVariant } from "@/components/inspector/file-download-service.logic";
 import type { FileTab } from "@/components/inspector/inspector-store-types";
 import englishMessages from "@/i18n/langs/en.json";
 
@@ -754,4 +756,39 @@ describe("confirmed file rename state", () => {
     click.mockRestore();
     stopBroadcast();
   });
+});
+
+test("download errors preserve every admission refusal for all renditions", async () => {
+  const { actionAdmissionOutcome } =
+    await import("@/lib/errors/action-admission");
+  const variants = {
+    original: "original",
+    pdf: "pdf",
+    reference: "reference",
+    "reference-scrubbed": "reference-scrubbed",
+    scrubbed: "scrubbed",
+  } as const satisfies Record<DownloadVariant, DownloadVariant>;
+  for (const variant of Object.values(variants)) {
+    for (const [code, refusal] of Object.entries(ACTION_ADMISSION_REFUSALS)) {
+      const fetch = spyOn(globalThis, "fetch").mockResolvedValue(
+        Response.json({ code, message: "Refused" }, { status: refusal.status }),
+      );
+      const errors: unknown[] = [];
+      try {
+        await downloadTabFile({
+          fieldId: "field-refused",
+          fileName: "refused.docx",
+          workspaceId: "matter",
+          variant,
+          onError: (_message, error) => {
+            errors.push(error);
+          },
+        });
+        expect(errors).toHaveLength(1);
+        expect(actionAdmissionOutcome(errors.at(0))?.code).toBe(code);
+      } finally {
+        fetch.mockRestore();
+      }
+    }
+  }
 });

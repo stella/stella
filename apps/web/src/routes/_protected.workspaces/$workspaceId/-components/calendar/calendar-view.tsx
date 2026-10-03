@@ -19,7 +19,8 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
@@ -118,10 +119,10 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
 
     const entityId = taskData?.entityId;
     if (taskError || !entityId) {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(
+        taskError ? toAPIError(taskError) : undefined,
+        t("errors.actionFailed"),
+      );
       return;
     }
 
@@ -450,10 +451,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
           );
           if (Result.isError(requested)) {
             getAnalytics().captureError(requested.error);
-            stellaToast.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
+            notifyUserError(requested.error, t("errors.actionFailed"));
           }
           detached(
             invalidateCalendarTasks(),
@@ -478,10 +476,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
           );
           if (Result.isError(requested)) {
             getAnalytics().captureError(requested.error);
-            stellaToast.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
+            notifyUserError(requested.error, t("errors.actionFailed"));
           }
           detached(
             invalidateCalendarTasks(),

@@ -3,12 +3,11 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/toast";
-
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -66,11 +65,7 @@ export const useSkillHistoryActions = ({
   };
 
   const report = (error: Parameters<typeof toAPIError>[0]) => {
-    stellaToast.add({
-      title: t("common.unexpectedError"),
-      description: toAPIError(error).message,
-      type: "error",
-    });
+    notifyUserError(toAPIError(error), t("common.unexpectedError"));
   };
 
   const invalidateComments = () => {

@@ -47,6 +47,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { downloadFile } from "@/lib/utils";
 
 const TOTP_LENGTH = 6;
@@ -228,13 +229,10 @@ const showManagementMutationError = (
   if (error.status === HTTP_TOO_MANY_REQUESTS) {
     return;
   }
-  stellaToast.add({
-    title:
-      error.status === HTTP_BAD_REQUEST
-        ? invalidCodeMessage
-        : toAuthClientError(error).message,
-    type: "error",
-  });
+  notifyUserError(
+    error.status === HTTP_BAD_REQUEST ? undefined : toAuthClientError(error),
+    invalidCodeMessage,
+  );
 };
 
 const getTotpSecret = (totpURI: string): string | null => {
@@ -259,7 +257,7 @@ const BackupCodesList = ({ codes }: { codes: readonly string[] }) => {
     const copied = await copyToClipboard(codes.join("\n"));
     if (Result.isError(copied)) {
       getAnalytics().captureError(copied.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(copied.error, t("errors.actionFailed"));
       return;
     }
     stellaToast.add({ title: t("common.copied"), type: "success" });
@@ -346,10 +344,7 @@ const EnableTwoFactorDialog = ({
       });
     },
     onError: (error) => {
-      stellaToast.add({
-        title: error.message || t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
       analytics.captureError(error);
     },
   });
@@ -410,13 +405,12 @@ const EnableTwoFactorDialog = ({
 
       if (error) {
         setCode("");
-        stellaToast.add({
-          title:
-            error.code === "INVALID_CODE"
-              ? t("auth.twoFactor.invalidCode")
-              : t("errors.actionFailed"),
-          type: "error",
-        });
+        notifyUserError(
+          error,
+          error.code === "INVALID_CODE"
+            ? t("auth.twoFactor.invalidCode")
+            : t("errors.actionFailed"),
+        );
         throw toAuthClientError(error);
       }
     },
@@ -672,10 +666,7 @@ const DisableTwoFactorDialog = ({
       });
     },
     onError: (error) => {
-      stellaToast.add({
-        title: error.message || t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
       analytics.captureError(error);
     },
   });
@@ -854,10 +845,7 @@ const RegenerateBackupCodesDialog = ({
       });
     },
     onError: (error) => {
-      stellaToast.add({
-        title: error.message || t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
       analytics.captureError(error);
     },
   });

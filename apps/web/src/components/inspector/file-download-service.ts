@@ -29,7 +29,7 @@ type DownloadTabFileProps = {
   /** Which copy to hand over; `getDownloadRenditions` lists the alternatives. */
   variant: DownloadVariant;
   workspaceId: string;
-  onError: (message: string) => void;
+  onError: (message: string, error: unknown) => void;
 };
 
 /**
@@ -39,9 +39,7 @@ type DownloadTabFileProps = {
  * which text-decodes every non-JSON body except `application/octet-stream` and
  * would mangle the DOCX.
  *
- * Returns null on every failure: the endpoint refuses a file it cannot build
- * (encrypted, too large, no reference on the version) the same way it refuses
- * a transport error, and no caller acts differently on the reason.
+ * Preserves typed API refusals and transport errors for the notification owner.
  */
 const fetchBuiltFile = async ({
   fieldId,
@@ -51,7 +49,7 @@ const fetchBuiltFile = async ({
   fieldId: string;
   rendition: BuiltRendition;
   workspaceId: string;
-}): Promise<Blob | null> => {
+}) => {
   const request = BUILT_RENDITION_REQUEST[rendition];
   const responseResult = await Result.tryPromise(
     async () =>
@@ -62,14 +60,25 @@ const fetchBuiltFile = async ({
         { credentials: "include", timeoutMs: DOWNLOAD_TIMEOUT_MS },
       ),
   );
-  if (Result.isError(responseResult) || !responseResult.value.ok) {
-    return null;
+  if (Result.isError(responseResult)) {
+    return responseResult;
+  }
+  if (!responseResult.value.ok) {
+    const body = await Result.tryPromise(
+      async () => await responseResult.value.json(),
+    );
+    return Result.err(
+      toAPIError({
+        status: responseResult.value.status,
+        value: Result.isError(body) ? undefined : body.value,
+      }),
+    );
   }
 
   const blobResult = await Result.tryPromise(
     async () => await responseResult.value.blob(),
   );
-  return Result.isError(blobResult) ? null : blobResult.value;
+  return blobResult;
 };
 
 const isBuiltRendition = (
@@ -96,12 +105,12 @@ export const downloadTabFile = async ({
   const t = getTranslator();
 
   if (isBuiltRendition(variant)) {
-    const blob = await fetchBuiltFile({
+    const blobResult = await fetchBuiltFile({
       fieldId,
       rendition: variant,
       workspaceId,
     });
-    if (blob === null) {
+    if (Result.isError(blobResult)) {
       // The scrubbed copy fails for its own reason — the file kept metadata
       // the server could not remove — and the user's next step differs.
       onError(
@@ -110,10 +119,11 @@ export const downloadTabFile = async ({
             ? "workspaces.files.scrubFailed"
             : "workspaces.files.downloadFailed",
         ),
+        blobResult.error,
       );
       return;
     }
-    downloadFile(blob, fileName);
+    downloadFile(blobResult.value, fileName);
     return;
   }
 
@@ -125,7 +135,7 @@ export const downloadTabFile = async ({
     .get({ query: { purpose: asPdf ? "display" : "download" } });
 
   if (response.error) {
-    onError(toAPIError(response.error).message);
+    onError(downloadFailed, toAPIError(response.error));
     return;
   }
 
@@ -137,7 +147,10 @@ export const downloadTabFile = async ({
   });
 
   if (Result.isError(downloaded) || downloaded.value === null) {
-    onError(downloadFailed);
+    onError(
+      downloadFailed,
+      Result.isError(downloaded) ? downloaded.error : undefined,
+    );
     return;
   }
 

@@ -251,6 +251,12 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-public-law-seo.fixture.ts", [
     "no-raw-public-law-seo/no-raw-public-law-seo",
   ]),
+  fixtureRuleOverride("no-discarded-toast-error.fixture.ts", [
+    "no-discarded-toast-error/no-discarded-toast-error",
+  ]),
+  fixtureRuleOverride("no-direct-error-toast.fixture.ts", [
+    "no-direct-error-toast/no-direct-error-toast",
+  ]),
   fixtureRuleOverride("no-raw-router-invalidation.fixture.ts", [
     "no-raw-router-invalidation/no-raw-router-invalidation",
   ]),
@@ -1246,6 +1252,8 @@ export default defineConfig({
     "./.oxlint-plugins/require-loader-prefetch.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
+    "./.oxlint-plugins/no-discarded-toast-error.ts",
+    "./.oxlint-plugins/no-direct-error-toast.ts",
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
     "./.oxlint-plugins/no-beforeload-redirect.ts",
@@ -3035,6 +3043,8 @@ export default defineConfig({
         ],
         "require-router-select/require-router-select": "error",
         "no-optional-mutation-command/no-optional-mutation-command": "error",
+        "no-discarded-toast-error/no-discarded-toast-error": "error",
+        "no-direct-error-toast/no-direct-error-toast": "error",
         "no-raw-router-invalidation/no-raw-router-invalidation": "error",
         "require-matter-affordance/require-matter-affordance": "error",
         "security-guards/no-unsanitized-href": "error",

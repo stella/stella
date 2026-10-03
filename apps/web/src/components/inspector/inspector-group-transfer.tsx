@@ -14,7 +14,6 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { stellaToast } from "@stll/ui/toast";
 
 import { openEntityFileFieldInInspector } from "@/components/chat/entity-open";
 import { planInspectorGroupTransfer } from "@/components/inspector/inspector-group-transfer.logic";
@@ -26,6 +25,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -198,7 +198,7 @@ export const useInspectorGroupTransfer = (
         getAnalytics().captureError(result.error);
         submittingRef.current = false;
         if (isCurrentScope(requestScope)) {
-          stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+          notifyUserError(result.error, t("errors.actionFailed"));
           setIsSubmitting(false);
         }
         return;
@@ -224,7 +224,7 @@ export const useInspectorGroupTransfer = (
             message: "Copied Inspector file field was not returned",
           }),
         );
-        stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+        notifyUserError(undefined, t("errors.actionFailed"));
         submittingRef.current = false;
         setIsSubmitting(false);
         return;
@@ -239,14 +239,14 @@ export const useInspectorGroupTransfer = (
         getAnalytics().captureError(invalidation.error);
         submittingRef.current = false;
         if (isCurrentScope(requestScope)) {
-          stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+          notifyUserError(invalidation.error, t("errors.actionFailed"));
           setIsSubmitting(false);
         }
         return;
       }
     }
     if (copiedFile.fieldId === null) {
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(invalidation.error, t("errors.actionFailed"));
       submittingRef.current = false;
       setIsSubmitting(false);
       return;
@@ -282,7 +282,7 @@ export const useInspectorGroupTransfer = (
       getAnalytics().captureError(openResult.error);
       submittingRef.current = false;
       if (isCurrentScope(requestScope)) {
-        stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+        notifyUserError(openResult.error, t("errors.actionFailed"));
         setIsSubmitting(false);
       }
       return;
@@ -303,7 +303,7 @@ export const useInspectorGroupTransfer = (
           candidate.type === "pdf" && candidate.id === copiedFieldId,
       );
     if (!opened || copiedTab?.type !== "pdf") {
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(undefined, t("errors.actionFailed"));
       submittingRef.current = false;
       setIsSubmitting(false);
       return;

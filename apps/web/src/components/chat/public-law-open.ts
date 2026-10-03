@@ -5,7 +5,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { isPublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 type OpenPublicLawLinkOptions<Resolved> = {
   /** What the link names, or null when nothing answers to it. */
@@ -39,14 +39,11 @@ export const openPublicLawLink = async <Resolved>({
 
   if (Result.isError(result)) {
     getAnalytics().captureError(result.error.cause);
-    stellaToast.add({
-      title: userErrorFromThrown(result.error.cause, t("errors.actionFailed")),
-      type: "error",
-    });
+    notifyUserError(result.error.cause, t("errors.actionFailed"));
     return;
   }
 
   if (!result.value) {
-    stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+    notifyUserError(result.error.cause, t("errors.actionFailed"));
   }
 };

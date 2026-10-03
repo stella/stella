@@ -1,16 +1,35 @@
 import { stellaToast } from "@stll/ui/toast";
 
-import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+import { notifyActionAdmissionRefusal } from "@/components/action-admission-outcome";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
-export const notifyUserError = (error: unknown, fallback: string): boolean => {
-  // The response observer owns the refusal toast, including its contact link.
-  if (actionAdmissionOutcome(error)) {
+type UserErrorToastOptions = Omit<
+  Parameters<typeof stellaToast.add>[0],
+  "title" | "type"
+> & { toastId?: string };
+
+export const notifyUserError = (
+  error: unknown,
+  fallback: string,
+  { toastId, ...options }: UserErrorToastOptions = {},
+): boolean => {
+  // The stable refusal id coalesces Eden's observer and local error handlers;
+  // raw fetch and SDK errors also need to emit the same notice here.
+  if (notifyActionAdmissionRefusal(error)) {
+    if (toastId !== undefined) {
+      stellaToast.close(toastId);
+    }
     return false;
   }
-  stellaToast.add({
+  const toast = {
+    ...options,
     title: userErrorFromThrown(error, fallback),
     type: "error",
-  });
+  } as const;
+  if (toastId !== undefined) {
+    stellaToast.update(toastId, toast);
+    return true;
+  }
+  stellaToast.add(toast);
   return true;
 };

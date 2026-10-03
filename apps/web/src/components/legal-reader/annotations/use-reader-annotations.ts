@@ -41,6 +41,7 @@ import { optionalArray } from "@/lib/arrays";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
 /** A mark not yet acknowledged by the server, keyed so it can be told apart. */
@@ -191,7 +192,7 @@ export const useReaderAnnotations = (
         queryClient.setQueryData(queryKey, context.previous);
       }
       getAnalytics().captureError(error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(error, t("errors.actionFailed"));
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey });
@@ -294,7 +295,7 @@ export const useReaderAnnotations = (
                 operation: "legal-reader.guest-annotation.migrate",
                 type: "detached",
               });
-              return false;
+              return migrated;
             }
             const removed = removeGuestAnnotation(storage, item.requestId);
             if (Result.isError(removed)) {
@@ -302,20 +303,21 @@ export const useReaderAnnotations = (
                 operation: "legal-reader.guest-annotation.migrate",
                 type: "detached",
               });
-              return false;
+              return removed;
             }
-            return true;
+            return Result.ok(undefined);
           },
         });
         setStore(readGuestAnnotationStore(storage));
         await queryClient.invalidateQueries({
           queryKey: readerAnnotationKeys.all,
         });
-        if (results.some((saved) => !saved)) {
-          stellaToast.add({
-            title: t("legalReader.annotations.guestMigrationFailed"),
-            type: "error",
-          });
+        const failed = results.find(Result.isError);
+        if (failed) {
+          notifyUserError(
+            failed.error,
+            t("legalReader.annotations.guestMigrationFailed"),
+          );
           return;
         }
         stellaToast.add({
@@ -345,10 +347,10 @@ export const useReaderAnnotations = (
     action: "create" | "delete" | "update",
   ) => {
     if (storage === null) {
-      stellaToast.add({
-        title: t("legalReader.annotations.guestStorageUnavailable"),
-        type: "error",
-      });
+      notifyUserError(
+        undefined,
+        t("legalReader.annotations.guestStorageUnavailable"),
+      );
       return;
     }
     const stored = writeGuestAnnotationStore(storage, next);
@@ -357,10 +359,10 @@ export const useReaderAnnotations = (
         operation: `legal-reader.guest-annotation.${action}`,
         type: "detached",
       });
-      stellaToast.add({
-        title: t("legalReader.annotations.guestStorageUnavailable"),
-        type: "error",
-      });
+      notifyUserError(
+        stored.error,
+        t("legalReader.annotations.guestStorageUnavailable"),
+      );
       return;
     }
     setStore(next);
@@ -375,12 +377,12 @@ export const useReaderAnnotations = (
     controller: {
       create: (input: CreateAnnotationInput) => {
         if (guestStore.items.length >= GUEST_ANNOTATIONS_MAX_ITEMS) {
-          stellaToast.add({
-            title: t("legalReader.annotations.guestLimitReached", {
+          notifyUserError(
+            undefined,
+            t("legalReader.annotations.guestLimitReached", {
               count: String(GUEST_ANNOTATIONS_MAX_ITEMS),
             }),
-            type: "error",
-          });
+          );
           return;
         }
         commit(

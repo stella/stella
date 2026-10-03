@@ -2,10 +2,10 @@ import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
@@ -14,7 +14,9 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   FLOW_PICKER_LIMIT,
   flowDetailOptions,
@@ -134,19 +136,23 @@ function RouteComponent() {
     // another user's concurrent edits to name/description/steps/trigger. A
     // dedicated enabled-only mutation (see the PR follow-ups) would remove the
     // full-body replay entirely; this closes the stale-cache window.
-    const detail = await queryClient
-      .query({
+    const detailResult = await Result.tryPromise(() =>
+      queryClient.query({
         ...flowDetailOptions(organizationId, flow.id),
         staleTime: 0,
-      })
-      .catch((error: unknown) => {
-        getAnalytics().captureError(error);
-        return null;
-      });
+      }),
+    );
+    if (Result.isError(detailResult)) {
+      setTogglingId(null);
+      getAnalytics().captureError(detailResult.error);
+      notifyUserError(detailResult.error, t("flows.saveFailed"));
+      return;
+    }
+    const detail = detailResult.value;
 
     if (!detail || !("steps" in detail)) {
       setTogglingId(null);
-      stellaToast.add({ type: "error", title: t("flows.saveFailed") });
+      notifyUserError(undefined, t("flows.saveFailed"));
       return;
     }
 
@@ -160,9 +166,7 @@ function RouteComponent() {
     setTogglingId(null);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("flows.saveFailed"),
+      notifyUserError(toAPIError(response.error), t("flows.saveFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),

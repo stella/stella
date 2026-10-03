@@ -43,6 +43,7 @@ import { BoundedSet } from "@/lib/bounded-set";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { PDFPage } from "@/lib/pdf/pdf-page";
@@ -317,11 +318,7 @@ const GenericExternalReferencePanel = ({
           const toastKey = `${tab.url}|${error.status}`;
           if (!toastedPreviewFailures.has(toastKey)) {
             toastedPreviewFailures.add(toastKey);
-            stellaToast.add({
-              title: previewErrorTitle,
-              description: error.message,
-              type: "error",
-            });
+            notifyUserError(toAPIError(response.error), previewErrorTitle);
           }
         }
         throw error;
@@ -437,7 +434,7 @@ const GenericExternalReferencePanel = ({
     const copied = await copyToClipboard(confirmHref);
     if (Result.isError(copied)) {
       getAnalytics().captureError(copied.error);
-      stellaToast.error(t("common.error"));
+      notifyUserError(copied.error, t("common.error"));
       return;
     }
     stellaToast.success(t("common.copied"));

@@ -18,6 +18,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 type RegistryCredentialSetupProps = {
   registry: BusinessRegistryCredentialSlug;
@@ -69,7 +70,7 @@ export const RegistryCredentialSetup = ({
       stellaToast.success(t("search.registryCredentialSaved"));
       await refresh();
     },
-    onError: () => stellaToast.error(t("common.somethingWentWrong")),
+    onError: (error) => notifyUserError(error, t("common.somethingWentWrong")),
     onSettled: () => {
       save.reset();
     },
@@ -88,7 +89,7 @@ export const RegistryCredentialSetup = ({
         ),
       ),
     onSuccess: refresh,
-    onError: () => stellaToast.error(t("common.somethingWentWrong")),
+    onError: (error) => notifyUserError(error, t("common.somethingWentWrong")),
   });
 
   if (!canConfigure) {

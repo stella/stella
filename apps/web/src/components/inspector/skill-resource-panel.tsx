@@ -20,6 +20,7 @@ import { api } from "@/lib/api";
 import { PDF_MIME, isMarkdownFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
 import { BUILT_IN_SKILL_ORIGIN, skillLabel } from "./inspector-store-types";
@@ -166,12 +167,7 @@ const InstalledSkillResourcePanel = ({
           });
     setSaving(false);
     if (response.error) {
-      const apiError = toAPIError(response.error);
-      stellaToast.add({
-        title: t("common.unexpectedError"),
-        description: apiError.message,
-        type: "error",
-      });
+      notifyUserError(toAPIError(response.error), t("common.unexpectedError"));
       return;
     }
     updateSkillResourceTabContent(tab.id, nextContent);
@@ -230,11 +226,10 @@ const InstalledSkillResourcePanel = ({
         if (next !== null) {
           continue;
         }
-        stellaToast.add({
-          title: t("common.unexpectedError"),
-          description: toAPIError(response.error).message,
-          type: "error",
-        });
+        notifyUserError(
+          toAPIError(response.error),
+          t("common.unexpectedError"),
+        );
         break;
       }
       updateSkillResourceTabContent(tabId, stored);
