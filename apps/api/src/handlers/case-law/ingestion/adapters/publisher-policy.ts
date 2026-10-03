@@ -458,12 +458,8 @@ export const withPublisherRequestRateLimit = async <T>({
 export const reservePublisherSlot = async (
   adapterKey: AdapterKey,
   signal?: AbortSignal,
-): Promise<Result<void, PublisherPacingStopped>> => 
-  await reservePublisherGateSlot(
-    ADAPTER_PUBLISHER_GATES[adapterKey],
-    signal,
-  )
-;
+): Promise<Result<void, PublisherPacingStopped>> =>
+  await reservePublisherGateSlot(ADAPTER_PUBLISHER_GATES[adapterKey], signal);
 
 export const reservePublisherGateSlot = async (
   gateId: PublisherGateId,
