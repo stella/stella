@@ -2246,6 +2246,28 @@ const processPersistenceChunk = ({
   return { type: "chunk", chunk, lifecycle };
 };
 
+type FailedRunDetailsOptions = {
+  chunk: PublicStreamChunk;
+  sourceChunk: PublicStreamChunk;
+};
+
+const failedRunDetails = ({ chunk, sourceChunk }: FailedRunDetailsOptions) => {
+  if (
+    chunk.type !== EventType.RUN_ERROR ||
+    sourceChunk.type !== EventType.RUN_ERROR
+  ) {
+    panic("Unhandled TanStack failed stream event");
+  }
+  return {
+    chunk,
+    usage: tokenUsageFromTerminalChunk(chunk),
+    outcome: {
+      type: "failed",
+      error: classifyRunErrorChunk(sourceChunk),
+    } as const satisfies ChatTurnOutcome,
+  };
+};
+
 export const processServerChatStream = async function* ({
   abortSignal,
   runSignal = abortSignal,
@@ -2370,22 +2392,14 @@ export const processServerChatStream = async function* ({
       }
       const { chunk, lifecycle } = processed;
       if (lifecycle === "failed") {
-        if (
-          chunk.type !== EventType.RUN_ERROR ||
-          sourceChunk.type !== EventType.RUN_ERROR
-        ) {
-          panic("Unhandled TanStack failed stream event");
-        }
-        usage = tokenUsageFromTerminalChunk(chunk) ?? usage;
+        const failure = failedRunDetails({ chunk, sourceChunk });
+        usage = failure.usage ?? usage;
         await terminalize({
           flushProcessor: true,
-          outcome: {
-            type: "failed",
-            error: classifyRunErrorChunk(sourceChunk),
-          },
+          outcome: failure.outcome,
         });
         yield* announceBeforeFailure();
-        yield chunk;
+        yield failure.chunk;
         return;
       }
       yield chunk;

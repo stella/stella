@@ -94,18 +94,18 @@ const SAFE_USAGE_SCALAR_KEYS = {
 const safeCounts = <TKey extends string>(
   keys: Record<TKey, true>,
   values: Partial<Record<NoInfer<TKey>, number>> | undefined,
-): Partial<Record<TKey, number>> => {
-  const projected: Partial<Record<TKey, number>> = {};
+) => {
+  const projected = new Map<TKey, number>();
   for (const key in keys) {
     if (!Object.hasOwn(keys, key)) {
       continue;
     }
     const value = values?.[key];
     if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
-      projected[key] = value;
+      projected.set(key, value);
     }
   }
-  return projected;
+  return Object.fromEntries(projected);
 };
 
 export const safeTokenUsageFromTerminalChunk = (
@@ -127,9 +127,9 @@ export const safeTokenUsageFromTerminalChunk = (
   );
   return {
     ...counts,
-    promptTokens: counts.promptTokens ?? 0,
-    completionTokens: counts.completionTokens ?? 0,
-    totalTokens: counts.totalTokens ?? 0,
+    promptTokens: counts["promptTokens"] ?? 0,
+    completionTokens: counts["completionTokens"] ?? 0,
+    totalTokens: counts["totalTokens"] ?? 0,
     ...(promptTokensDetails === undefined ? {} : { promptTokensDetails }),
     ...(completionTokensDetails === undefined
       ? {}
