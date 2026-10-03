@@ -43,7 +43,7 @@ import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   aiAvailabilityOptions,
   aiConfigOptions,
@@ -84,10 +84,7 @@ export const AIAvailabilityProvider = ({ children }: PropsWithChildren) => {
         getAnalytics().captureError(error);
         // Callers read `false` as "do not proceed" and stop there, so without
         // this the action the user just triggered would appear to do nothing.
-        stellaToast.add({
-          title: tErrors("actionFailed"),
-          type: "error",
-        });
+        notifyUserError(error, tErrors("actionFailed"));
         return null;
       });
 
@@ -381,10 +378,7 @@ export const AIKeyRequiredDialog = ({
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: userErrorFromThrown(error, tErrors("actionFailed")),
-        type: "error",
-      });
+      notifyUserError(error, tErrors("actionFailed"));
     },
   });
 

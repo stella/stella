@@ -8,6 +8,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -49,10 +50,7 @@ export const useCreateTask = () => {
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };
@@ -109,10 +107,7 @@ export const useAddTaskAssignee = (workspaceId: string) => {
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };
@@ -138,10 +133,7 @@ export const useRemoveTaskAssignee = (workspaceId: string) => {
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };
@@ -183,10 +175,7 @@ export const useMoveTaskAssignee = (workspaceId: string) => {
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };

@@ -25,7 +25,7 @@ import { authClient, type Role } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { installCatalogueEntry } from "@/lib/catalogue-install";
 import { detached } from "@/lib/detached";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { publicToolInstallPath } from "@/lib/knowledge/public-tools-path";
 import {
   catalogueKeys,
@@ -122,11 +122,7 @@ export const AddToStella = ({
       });
     },
     onError: (error) => {
-      stellaToast.add({
-        title: t("catalogue.installFailed"),
-        description: userErrorFromThrown(error, t("common.unexpectedError")),
-        type: "error",
-      });
+      notifyUserError(error, t("catalogue.installFailed"));
     },
   });
 
