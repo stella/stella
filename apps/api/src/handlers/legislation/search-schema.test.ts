@@ -2,7 +2,10 @@ import { Value } from "@sinclair/typebox/value";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import type { Static } from "elysia";
 
-import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
+import {
+  SEARCH_PAGINATION_COMPLETE,
+  SEARCH_TOTAL_NOT_COUNTED,
+} from "@stll/api-contract/search";
 
 import type { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import { searchLegislationSuccessResponseSchema } from "@/api/handlers/legislation/search-schema";
@@ -31,6 +34,7 @@ const validResponse = {
     },
   ],
   nextCursor: null,
+  paginationOutcome: SEARCH_PAGINATION_COMPLETE,
   total: SEARCH_TOTAL_NOT_COUNTED,
 } satisfies Static<typeof searchLegislationSuccessResponseSchema>;
 

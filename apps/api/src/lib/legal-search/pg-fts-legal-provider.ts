@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { SEARCH_PAGINATION_COMPLETE } from "@stll/api-contract/search";
+
 import {
   caseLawPublicReadDb,
   type CaseLawPublicReadTransaction,
@@ -331,7 +333,13 @@ const searchResult = async (
         language: mapFacet(languageRaw),
       };
 
-  return { hits, facets, nextCursor, limit };
+  return {
+    hits,
+    facets,
+    nextCursor,
+    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+    limit,
+  };
 };
 
 const search = async (query: LegalSearchQuery) => {
