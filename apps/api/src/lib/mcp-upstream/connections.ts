@@ -830,17 +830,21 @@ type RefreshLeaseFence =
     }
   | { type: "held"; leaseExpiresAt: Date };
 
-type RefreshLeaseWriteValues = Pick<
-  typeof mcpUserConnections.$inferInsert,
-  | "accessTokenEncrypted"
-  | "accessTokenIv"
-  | "expiresAt"
-  | "refreshLeaseExpiresAt"
-  | "refreshRetryAfter"
-  | "refreshTokenEncrypted"
-  | "refreshTokenIv"
-  | "status"
-  | "updatedAt"
+// An update sets only the columns its write changes: a lease claim or release
+// leaves the connection status as it is.
+type RefreshLeaseWriteValues = Partial<
+  Pick<
+    typeof mcpUserConnections.$inferInsert,
+    | "accessTokenEncrypted"
+    | "accessTokenIv"
+    | "expiresAt"
+    | "refreshLeaseExpiresAt"
+    | "refreshRetryAfter"
+    | "refreshTokenEncrypted"
+    | "refreshTokenIv"
+    | "status"
+    | "updatedAt"
+  >
 >;
 
 type WriteUnderRefreshLeaseOptions = {
