@@ -25,6 +25,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DocumentReviewRunBasis } from "@/api/lib/document-review/run-contract";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -139,7 +140,7 @@ const readerOf = (extra: SafeId<"workspace">[]): SafeDb =>
   );
 
 const handlerContext = (safeDb: SafeDb, rest: Record<string, unknown>) => ({
-  memberRole: { role: "member" },
+  memberRole: sessionMemberRole("member"),
   recordAuditEvent: async () => undefined,
   safeDb,
   session: { activeOrganizationId: ids.orgA },
