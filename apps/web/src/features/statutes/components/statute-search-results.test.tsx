@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
+import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
 
 import {
@@ -65,11 +66,12 @@ describe("public statute section results", () => {
         const markup = renderToStaticMarkup(
           <StatuteSearchSnippet headline={headline} />,
         );
-        // React's own text serialization is the oracle; the decoder must consume
-        // exactly one entity layer and keep publisher angle brackets inert.
-        expect(markup.replaceAll(/<[^>]*>/gu, "")).toBe(
-          renderToStaticMarkup(decoded),
-        );
+        // A real HTML parser is the oracle; the decoder must consume exactly one
+        // entity layer and keep publisher angle brackets inert.
+        const container = new Window().document.createElement("div");
+        // safe-html: markup is React's renderToStaticMarkup output for this test's own component, parsed in a detached happy-dom document.
+        container.innerHTML = markup;
+        expect(container.textContent).toBe(decoded);
         expect(markup.match(/<mark(?:\s|>)/gu)?.length ?? 0).toBe(
           highlighted ? 1 : 0,
         );
