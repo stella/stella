@@ -1158,7 +1158,7 @@ if (!databaseUrl || !enabled) {
           await store.completeBatch(reserved.batch, applied(reserved.batch)),
         ).toBe("blocked");
       }
-      expect(completed).toEqual(ids);
+      expect(completed).toEqual([...ids]);
       expect(await store.reserveBatch(source, "2026-10-01", verdict())).toEqual(
         { type: "empty" },
       );
