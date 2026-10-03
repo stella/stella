@@ -422,8 +422,8 @@ type SandboxAccountAccess = {
 export type SessionHandlerConfig = InputSchema &
   CapabilityDescription &
   CapabilityAccess &
-  CapabilityTransportDisposition &
-  SandboxAccountAccess & {
+  CapabilityTransportDisposition & {
+    accountAccess: AccountAccess;
     mcp: McpExposure;
   };
 
@@ -1534,14 +1534,34 @@ export const createSafeHandler = <
     return handler(ctx);
   });
 
+type SessionHandlerDependencies = {
+  checkAccountOperation?: typeof checkDemoAccountOperation;
+};
+
 export const createSafeSessionHandler = <
   TConfig extends SessionHandlerConfig,
   TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
   handler: SafeHandlerFn<SessionHandlerContext<TConfig>, TResult>,
-): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> =>
-  createSafeDirectHandler(config, handler);
+  {
+    checkAccountOperation = checkDemoAccountOperation,
+  }: SessionHandlerDependencies = {},
+): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> => ({
+  config,
+  handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
+    if (requiresStandardAccount(config.accountAccess)) {
+      const accountAccess = checkAccountOperation(ctx.user.email);
+      if (Result.isError(accountAccess)) {
+        return toSafeStatusResponse(403, {
+          code: "account_access_unavailable",
+          message: "This operation is unavailable for this account.",
+        });
+      }
+    }
+    return await runSafeHandler(ctx, handler);
+  },
+});
 
 /**
  * Config for self-authorizing (token) routes. The `body`, `query`, and
