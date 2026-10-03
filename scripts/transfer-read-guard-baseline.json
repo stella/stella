@@ -281,13 +281,6 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts",
-    "function": "module/fetchPage",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts",
     "function": "module/getTotalCount",
     "kind": "numeric-timeout",
     "count": 1,
@@ -1027,6 +1020,13 @@
     "kind": "constant-limit",
     "count": 1,
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
+  },
+  {
+    "file": "apps/api/src/handlers/hosted-usage-webhook/replay.ts",
+    "function": "module/replayReceiptInTx",
+    "kind": "constant-limit",
+    "count": 1,
+    "reason": "Related-receipt overflow probe: reads MAX_RELATED_RECEIPTS + 1 and reports selectionStatus \"truncated\" with the first MAX ids; migrate when readBounded can return the kept rows on overflow."
   },
   {
     "file": "apps/api/src/handlers/invoices/invoice-lines.ts",

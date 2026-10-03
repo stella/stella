@@ -109,7 +109,14 @@ describe("complete bounded reads", () => {
       },
     };
 
-    await expect(readBounded(query, cap)).rejects.toBeInstanceOf(Panic);
+    // bun-types declares `.rejects.toBeInstanceOf` as void, so awaiting it
+    // trips type-aware lint; capture the rejection explicitly instead.
+    const rejection: unknown = await readBounded(query, cap).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(Panic);
     expect(queried).toBe(false);
   });
 });

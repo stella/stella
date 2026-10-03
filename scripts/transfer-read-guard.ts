@@ -94,9 +94,39 @@ const bindingNames = (name: ts.BindingName): string[] => {
   );
 };
 
+/**
+ * Finds a `name` variable declared directly in a block or source file. The
+ * wrapper distinguishes "declared without a const initializer" from "absent".
+ */
+const declarationIn = (
+  scope: ts.Node,
+  name: string,
+): { initializer: ts.Expression | undefined } | undefined => {
+  if (!ts.isBlock(scope) && !ts.isSourceFile(scope)) {
+    return undefined;
+  }
+  for (const statement of scope.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && declaration.name.text === name) {
+        return {
+          initializer:
+            statement.declarationList.getFirstToken()?.kind ===
+            ts.SyntaxKind.ConstKeyword
+              ? declaration.initializer
+              : undefined,
+        };
+      }
+    }
+  }
+  return undefined;
+};
+
 const bindingOf = (from: ts.Node, name: string): ts.Expression | undefined => {
-  let scope: ts.Node | undefined = from.parent;
-  while (scope !== undefined) {
+  let scope = from.parent;
+  while (!ts.isSourceFile(scope)) {
     if (
       isFunction(scope) &&
       scope.parameters.some((parameter) =>
@@ -105,27 +135,13 @@ const bindingOf = (from: ts.Node, name: string): ts.Expression | undefined => {
     ) {
       return undefined;
     }
-    if (ts.isBlock(scope) || ts.isSourceFile(scope)) {
-      for (const statement of scope.statements) {
-        if (!ts.isVariableStatement(statement)) {
-          continue;
-        }
-        for (const declaration of statement.declarationList.declarations) {
-          if (
-            ts.isIdentifier(declaration.name) &&
-            declaration.name.text === name
-          ) {
-            return statement.declarationList.getFirstToken()?.kind ===
-              ts.SyntaxKind.ConstKeyword
-              ? declaration.initializer
-              : undefined;
-          }
-        }
-      }
+    const declared = declarationIn(scope, name);
+    if (declared !== undefined) {
+      return declared.initializer;
     }
     scope = scope.parent;
   }
-  return undefined;
+  return declarationIn(scope, name)?.initializer;
 };
 
 const resolve = (node: ts.Expression, depth = 0): ts.Expression => {
@@ -683,7 +699,9 @@ export const findTransferReads = (
   const findings: ReadFinding[] = [];
   const scanScope = (root: ts.Node, name: string) => {
     const totalTimeouts: ts.Node[] = [];
-    let readsBody = false;
+    // A mutable record: `visit` sets this from a closure, which control-flow
+    // narrowing of a plain `let` would not see after `visit(root)` returns.
+    const body = { read: false };
     const record = (kind: FindingKind, node: ts.Node) =>
       findings.push({
         file,
@@ -704,7 +722,7 @@ export const findTransferReads = (
         return;
       }
       if (isBodyAccess(node)) {
-        readsBody = true;
+        body.read = true;
       }
       if (ts.isCallExpression(node)) {
         const resolvedCall = resolve(node.expression);
@@ -727,7 +745,7 @@ export const findTransferReads = (
             "getReader",
           ].includes(called)
         ) {
-          readsBody = true;
+          body.read = true;
         }
         if (
           called === "timeout" &&
@@ -763,7 +781,7 @@ export const findTransferReads = (
     };
     visit(root);
     if (
-      readsBody &&
+      body.read &&
       !(
         file === "packages/fetch/src/index.ts" &&
         name === "module/executeFetchWithTimeout"
@@ -932,9 +950,7 @@ const writeBaseline = async () => {
       LEDGER_REL,
     ).filter((entry) => !before.has(entry));
     if (added.length > 0) {
-      return panic(
-        `Cannot grow the transfer/read baseline: ${added.join(", ")}`,
-      );
+      panic(`Cannot grow the transfer/read baseline: ${added.join(", ")}`);
     }
   }
   writeFileSync(
