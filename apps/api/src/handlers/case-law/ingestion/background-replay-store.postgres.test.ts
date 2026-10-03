@@ -2296,7 +2296,13 @@ if (!databaseUrl || !enabled) {
       if (reserved.type !== "reserved") {
         throw new TypeError("Expected receipt fixture");
       }
-      await store.completeBatch(reserved.batch, applied(reserved.batch));
+      await db
+        .update(caseLawDecisions)
+        .set({ parserVersion: reserved.batch.targetParserVersion })
+        .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
+      expect(
+        await store.completeBatch(reserved.batch, applied(reserved.batch)),
+      ).toBe("applied");
       await db
         .update(caseLawReplayBatches)
         .set({ completedAt: new Date(Date.UTC(2025, 0, 1)) })
