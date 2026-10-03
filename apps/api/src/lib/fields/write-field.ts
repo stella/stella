@@ -319,7 +319,7 @@ export const writeFieldValue = async function* ({
         return { status: "entity-read-only" as const };
       }
       if (!entity.currentVersionId) {
-        panic("Entity has no current version");
+        return { status: "entity-without-version" as const };
       }
 
       const entityVersionId = entity.currentVersionId;
@@ -406,6 +406,14 @@ export const writeFieldValue = async function* ({
       new HandlerError({
         status: 404,
         message: "Entity not found in workspace",
+      }),
+    );
+  }
+  if (writeResult.status === "entity-without-version") {
+    return Result.err(
+      new HandlerError({
+        status: 404,
+        message: "Entity has no current version",
       }),
     );
   }

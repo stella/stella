@@ -236,6 +236,29 @@ const comparableMetadata = (metadata: CellMetadata | undefined) => {
 };
 
 describe("writing a field value", () => {
+  test("refuses an entity without a current version as not found", async () => {
+    await db
+      .update(entities)
+      .set({ currentVersionId: null })
+      .where(eq(entities.id, entityId));
+    const refusal = await writeOverChat({
+      authority: editor,
+      propertyId: chatPropertyId,
+      value: "Acme",
+    });
+    await db
+      .update(entities)
+      .set({ currentVersionId: entityVersionId })
+      .where(eq(entities.id, entityId));
+
+    expect(ChatToolError.is(refusal) && refusal.kind).toBe("not-found");
+    expect(await cellState(chatPropertyId)).toEqual({
+      field: undefined,
+      metadata: undefined,
+      audits: [],
+    });
+  });
+
   test("refuses a member whose role does not allow editing documents", async () => {
     const refusal = await writeOverChat({
       authority: intern,
