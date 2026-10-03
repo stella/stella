@@ -1,7 +1,7 @@
 import type { Static } from "@sinclair/typebox";
 import { t } from "elysia";
 
-import { LEGISLATION_WINDOW_DISPOSITION_BASES } from "@stll/api-contract/legislation-expression";
+import { LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES } from "@stll/api-contract/legislation-expression";
 
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -39,11 +39,7 @@ export const publicInconsistentVersionsSchema = t.Array(
         PUBLIC_ERROR_TEXT_BYTES.versionDate,
       ),
       basis: t.Union([
-        t.Union(
-          Object.values(LEGISLATION_WINDOW_DISPOSITION_BASES)
-            .flat()
-            .map((basis) => t.Literal(basis)),
-        ),
+        t.UnionEnum(LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES),
         t.Null(),
       ]),
     },
@@ -139,9 +135,9 @@ export const projectPublicErrorBody = (
               PUBLIC_ERROR_TEXT_BYTES.versionDate,
             ) ?? null,
           basis:
-            Object.values(LEGISLATION_WINDOW_DISPOSITION_BASES)
-              .flat()
-              .find((basis) => basis === version["basis"]) ?? null,
+            LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES.find(
+              (basis) => basis === version["basis"],
+            ) ?? null,
         }))
     : undefined;
   const code = optionalText(value["code"], PUBLIC_ERROR_TEXT_BYTES.code);
