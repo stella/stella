@@ -369,11 +369,9 @@ export const envApiServerSchema = {
   MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: featureFlagSchema,
 
   // Launch feature flags. Keep default-off; deployment must opt in.
-  FEATURE_CHAT: featureFlagSchema,
   CHAT_RUN_LOG_SHADOW: v.optional(v.pipe(v.string(), v.parseBoolean())),
   FEATURE_USAGE: featureFlagSchema,
   FEATURE_PUBLIC_LAW: featureFlagSchema,
-  FEATURE_MCP: featureFlagSchema,
   FEATURE_ACTION_ADMISSION: featureFlagSchema,
   FEATURE_MCP_READ_FENCE: featureFlagSchema,
   MCP_READ_WINDOW_MS: v.optional(

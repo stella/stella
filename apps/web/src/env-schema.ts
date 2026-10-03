@@ -53,7 +53,6 @@ export const envWebClientSchema = {
   // Off by default so the hosted SaaS, where customers don't
   // upgrade themselves, never shows it.
   VITE_SELFHOST: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
-  VITE_FEATURE_CHAT: featureFlagSchema,
   VITE_FEATURE_USAGE: featureFlagSchema,
   VITE_PUBLIC_LAW_ENABLED: featureFlagSchema,
   VITE_PUBLIC_LAW_INDEXING_ENABLED: featureFlagSchema,
@@ -66,7 +65,6 @@ export const envWebClientSchema = {
   // serve sitemaps for verification while staying non-indexable.
   VITE_SEO_INDEXABLE: featureFlagSchema,
   VITE_WORKFLOWS_ENABLED: featureFlagSchema,
-  VITE_FEATURE_MCP: featureFlagSchema,
   VITE_FEATURE_TIME_BILLING: featureFlagSchema,
   VITE_FEATURE_FOLIO_COLLAB: featureFlagSchema,
   VITE_FEATURE_AI_MEMORY: featureFlagSchema,

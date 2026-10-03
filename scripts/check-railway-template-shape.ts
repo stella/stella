@@ -586,7 +586,6 @@ for (const [serviceName, variables] of templateVariableSets) {
 const apiDockerfile = readText(API_DOCKERFILE_PATH);
 for (const requiredText of [
   "ENV NODE_ENV=production",
-  "ENV FEATURE_CHAT=true",
   "ENV REQUIRE_PERSONAL_AI_KEY=true",
 ]) {
   expect(
@@ -596,10 +595,7 @@ for (const requiredText of [
 }
 
 const webDockerfile = readText(WEB_DOCKERFILE_PATH);
-for (const requiredText of [
-  "ARG VITE_FEATURE_CHAT=true",
-  "ARG VITE_SELFHOST=true",
-]) {
+for (const requiredText of ["ARG VITE_SELFHOST=true"]) {
   expect(
     webDockerfile.includes(requiredText),
     `web Dockerfile must define Railway self-host default ${requiredText}`,
