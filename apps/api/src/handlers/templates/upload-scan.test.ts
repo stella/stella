@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
@@ -40,13 +41,20 @@ const makeAttachedTemplateDocx = async (): Promise<File> => {
   return new File([bytes], "linked.docx", { type: DOCX_MIME_TYPE });
 };
 
-type RejectionBody = { code?: string; issues?: { code: string }[] };
+type RejectionBody = {
+  code?: string | undefined;
+  issues?: unknown[] | undefined;
+};
 
 const expectSecurityRejection = (body: RejectionBody): void => {
   expect(body.code).toBe(API_FILE_SECURITY_REJECTED_ERROR_CODE);
-  expect(body.issues?.map(({ code }) => code)).toContain(
-    "ooxml_attached_template",
-  );
+  expect(
+    body.issues?.map((issue) =>
+      typeof issue === "object" && issue !== null && "code" in issue
+        ? issue.code
+        : undefined,
+    ),
+  ).toContain("ooxml_attached_template");
 };
 
 const expectHandlerRejection = (result: unknown): void => {
@@ -106,11 +114,11 @@ describe("template uploads are scanned", () => {
       body: { file: await makeAttachedTemplateDocx() },
     });
 
-    if (!(response instanceof Response)) {
-      throw new Error("expected a Response");
+    expect(Result.isError(response)).toBe(true);
+    if (Result.isError(response)) {
+      expect(response.error.status).toBe(422);
+      expectSecurityRejection(response.error);
     }
-    expect(response.status).toBe(422);
-    expectSecurityRejection(await readTestJson<RejectionBody>(response));
   });
 
   test("fill refuses a DOCX the scan rejects", async () => {

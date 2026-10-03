@@ -16,6 +16,7 @@ import {
   readTimePolicy,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
+import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { resolveRate } from "@/api/lib/billing/rates";
 import {
@@ -349,6 +350,7 @@ export const updateTimeEntryHandler = async function* ({
         resourceId: body.id,
         changes: buildTimeEntryDiff(existing, updates),
       });
+      await recordBillingCapCrossings(tx, { workspaceId, recordAuditEvent });
       return true;
     }),
   );

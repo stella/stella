@@ -29,19 +29,24 @@ import {
   type PublicCountryUnavailable,
 } from "@stll/api-contract/public-country-capability";
 
+import { PUBLIC_ERROR_TEXT_BYTES } from "@/api/lib/search/public-error-response";
+import { boundedString } from "@/api/lib/search/response-text-bounds";
+
 const unavailableFields = publicCountryUnavailableSchema.entries;
 export const tPublicCountryUnavailable = t.Object(
   {
     code: t.Literal(unavailableFields.code.literal),
     status: t.Literal(unavailableFields.status.literal),
-    country: t.Union(
-      unavailableFields.country.options.map((country) => t.Literal(country)),
+    country: t.Enum(
+      Object.fromEntries(
+        unavailableFields.country.options.map(
+          (country) => [country, country] as const,
+        ),
+      ),
     ),
-    reason: t.Union(
-      unavailableFields.reason.options.map((reason) => t.Literal(reason)),
-    ),
-    message: t.String(),
-    hint: t.String(),
+    reason: t.UnionEnum(unavailableFields.reason.options),
+    message: boundedString(PUBLIC_ERROR_TEXT_BYTES.message),
+    hint: boundedString(PUBLIC_ERROR_TEXT_BYTES.hint),
   } satisfies Record<keyof typeof unavailableFields, TSchema>,
   { additionalProperties: false },
 );

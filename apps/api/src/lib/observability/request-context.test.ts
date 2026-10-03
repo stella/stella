@@ -2,13 +2,14 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
 
+import { REQUEST_ID_HEADER } from "@stll/api-contract";
+
 import {
   enrichRequestContext,
   getCurrentRequestId,
   getRequestContext,
   getRequestId,
   initRequestContext,
-  REQUEST_ID_HEADER,
   runWithRequestId,
 } from "@/api/lib/observability/request-context";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";

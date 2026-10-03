@@ -21,7 +21,7 @@ import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import { jsonb, timestamptz } from "@/api/db/columns";
+import { bytea, jsonb, timestamptz } from "@/api/db/columns";
 import {
   agentSkillChildPolicies,
   agentSkillRevisionPolicies,
@@ -46,6 +46,7 @@ import {
   globalCaseLawPolicies,
   publicCaseLawReaderPolicies,
   publicLawReaderPolicies,
+  mcpConnectorAuthorizationReviewPolicies,
   mcpConnectorPolicies,
   mcpOAuthStatePolicies,
   mcpOAuthClientPolicies,
@@ -345,23 +346,6 @@ export const tsvector = customType<{ data: string }>({
   dataType: () => "tsvector",
 });
 
-export const bytea = customType<{ data: Buffer }>({
-  dataType: () => "bytea",
-  fromDriver: (value) => {
-    if (Buffer.isBuffer(value)) {
-      return value;
-    }
-    if (value instanceof Uint8Array) {
-      return Buffer.from(value);
-    }
-    if (typeof value === "string") {
-      const hex = value.startsWith("\\x") ? value.slice(2) : value;
-      return Buffer.from(hex, "hex");
-    }
-    return panic(`Unexpected bytea driver value: ${typeof value}`);
-  },
-});
-
 export const safeWorkspaceId = (name: string) =>
   p.uuid(name).$type<SafeId<"workspace">>();
 
@@ -518,6 +502,7 @@ export const CHAT_COMPACTION_MEMORY_EXTRACTABLE = {
 // -- Contacts --
 
 export {
+  bytea,
   defineRelations,
   isNotNull,
   isNull,
@@ -556,6 +541,7 @@ export {
   globalCaseLawPolicies,
   publicCaseLawReaderPolicies,
   publicLawReaderPolicies,
+  mcpConnectorAuthorizationReviewPolicies,
   mcpConnectorPolicies,
   mcpOAuthClientPolicies,
   mcpOAuthStatePolicies,

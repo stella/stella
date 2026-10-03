@@ -478,3 +478,23 @@ describe("provision state backfill", () => {
     expect(commits).toBe(1);
   });
 });
+
+test.each(["scope-bootstrap", "state-seed"] as const)(
+  "a delayed %s unit preserves a cursor already completed by another worker",
+  async (name) => {
+    await completeStep(name);
+    const before = await rows(
+      `SELECT * FROM case_law_provision_repair_cursors WHERE name = '${name}'`,
+    );
+    expect((await stepNamed(name).readCompletion(connection)).type).toBe(
+      "complete",
+    );
+    const result = await stepNamed(name).advance(connection);
+    expect(result.isOk()).toBe(true);
+    expect(
+      await rows(
+        `SELECT * FROM case_law_provision_repair_cursors WHERE name = '${name}'`,
+      ),
+    ).toEqual(before);
+  },
+);

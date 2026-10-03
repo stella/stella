@@ -7,6 +7,7 @@ import { mapWithConcurrency } from "@stll/concurrency";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { extractProvisionText } from "@/api/handlers/legislation/provision-text";
+import { projectProvisionHistoryItem } from "@/api/handlers/legislation/reader-response";
 import {
   selectWorkKey,
   workKeyConditions,
@@ -199,7 +200,7 @@ export const readProvisionHistoryHandler = async ({
   });
 
   const items = page.items.flatMap(({ text, ...item }) =>
-    text === null ? [] : [{ ...item, text }],
+    text === null ? [] : [projectProvisionHistoryItem({ ...item, text })],
   );
 
   // Only a first page can establish that no consolidation of the Work carries

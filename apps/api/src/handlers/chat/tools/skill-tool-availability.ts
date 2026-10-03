@@ -12,7 +12,8 @@ import {
   type ChatToolScope,
 } from "@/api/handlers/chat/tools/tool-scope";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
-import type { MemberRole } from "@/api/lib/member-roles";
+import { roleForDisplay } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 
@@ -23,7 +24,7 @@ import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
  */
 const isRegistryToolUsable = (
   toolName: string,
-  memberRole: MemberRole,
+  memberRole: AuthorizedMemberRole,
 ): boolean => {
   const definition = getStaticMcpToolDefinition(toolName);
   if (definition === undefined) {
@@ -31,7 +32,7 @@ const isRegistryToolUsable = (
   }
   return (
     isMcpToolFeatureEnabled(definition.feature) &&
-    (definition.isVisibleToMemberRole?.(memberRole) ?? true)
+    (definition.isVisibleToMemberRole?.(roleForDisplay(memberRole)) ?? true)
   );
 };
 
@@ -45,7 +46,7 @@ const chatOfferedToolNames = ({
   memberRole,
   tools,
 }: {
-  memberRole: MemberRole;
+  memberRole: AuthorizedMemberRole;
   tools: ChatToolMap;
 }): ReadonlySet<string> => {
   const names = Object.entries(tools).flatMap(([name, tool]) =>

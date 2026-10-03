@@ -16,6 +16,7 @@ import { cn } from "@stll/ui/utils";
 
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { updateMemory as updateMemoryRequest } from "@/lib/memory-api";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { invalidateMemories } from "@/routes/_protected.settings/-queries/memories";
@@ -75,7 +76,7 @@ export const MemoryRow = ({
     },
     onError: (error: unknown) => {
       analytics.captureError(error);
-      stellaToast.add({ title: tErrors("actionFailed"), type: "error" });
+      notifyUserError(error, tErrors("actionFailed"));
     },
   });
 

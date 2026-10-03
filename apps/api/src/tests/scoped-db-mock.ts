@@ -57,14 +57,17 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
       for: async () => await Promise.resolve(selected),
     });
   };
+  // oxlint-disable-next-line typescript-eslint/promise-function-async -- async would wrap the query promise and discard its query methods
+  const where = () =>
+    Object.assign(Promise.resolve(rows), {
+      limit,
+      for: async () => await Promise.resolve(rows),
+      orderBy: () => ({ limit }),
+    });
   return {
     from: () => ({
-      // oxlint-disable-next-line typescript-eslint/promise-function-async -- async would wrap the query promise and discard its limit and orderBy methods
-      where: () =>
-        Object.assign(Promise.resolve(rows), {
-          limit,
-          orderBy: () => ({ limit }),
-        }),
+      where,
+      innerJoin: () => ({ where }),
     }),
   };
 };

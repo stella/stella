@@ -11,7 +11,6 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   AUDIT_ACTION,
@@ -21,6 +20,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import {
@@ -126,7 +126,7 @@ export const finalizeDesktopEditSessionHandler = async ({
     const result = Result.flatten(
       await Result.tryPromise({
         try: async () => {
-          if (env.FEATURE_FILE_USAGE_LIMITS) {
+          if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
             return await deleteOrganizationFileWithSignal(
               checkpointKey,
               AbortSignal.timeout(10_000),
@@ -157,7 +157,7 @@ export const finalizeDesktopEditSessionHandler = async ({
     const result = Result.flatten(
       await Result.tryPromise({
         try: async () => {
-          if (env.FEATURE_FILE_USAGE_LIMITS) {
+          if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
             return await deleteOrganizationFileWithSignal(
               uploadedKey,
               AbortSignal.timeout(10_000),
@@ -509,7 +509,7 @@ export const finalizeDesktopEditSessionHandler = async ({
       });
       uploadedKeys.push(sourceKey);
 
-      if (!env.FEATURE_FILE_USAGE_LIMITS) {
+      if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
         await writeS3ObjectWithRetry({
           contentType: canonicalMimeType,
           data: storedBytes,

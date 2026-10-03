@@ -16,12 +16,11 @@ import type {
   ReferenceImpact,
   ReviewPerspective,
 } from "@/api/lib/document-review/contract";
-import type { ReaderReference } from "@/api/lib/document-review/reference-visibility";
+import type { ReaderBasis } from "@/api/lib/document-review/reference-visibility";
 import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
 import type {
   DocumentReviewDecision,
   DocumentReviewFindingPayload,
-  DocumentReviewRunBasis,
 } from "@/api/lib/document-review/run-contract";
 import {
   documentToDocx,
@@ -301,11 +300,6 @@ const findingRow = ({
       decision: DECISION_LABEL[decision],
     },
   };
-};
-
-/** The run basis as one reader sees it (`referencesForReader`). */
-type ReaderBasis = Omit<DocumentReviewRunBasis, "references"> & {
-  references: readonly ReaderReference[];
 };
 
 type BuildIssuesTableRowsArgs = {

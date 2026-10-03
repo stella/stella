@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
@@ -35,6 +35,10 @@ const createRateTable = createSafeHandler(
   async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
     const txResult = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
+        // Row locks cannot serialize the first table in an empty matter.
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
+        );
         // Lock rows then count to serialize concurrent adds.
         // PG rejects FOR UPDATE with aggregate functions.
         const lockedRows = await tx

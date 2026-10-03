@@ -6,6 +6,7 @@ import {
   LEGISLATION_WINDOW_DISPOSITION_BASES,
 } from "@stll/api-contract/legislation-expression";
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
+import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 
 import { DEFAULT_PUBLIC_LAW_PAGE_SIZE } from "@/components/public-law-table/public-law-pagination.logic";
 import type { PublicLawPageSize } from "@/components/public-law-table/public-law-pagination.logic";
@@ -147,6 +148,49 @@ export const statutesInfiniteOptions = (
         pageSize,
         signal,
       }),
+    initialPageParam: nullableStringCursorSeed(),
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+/** Public section search stays bounded independently of the Work list. */
+const PUBLIC_STATUTE_SEARCH_PAGE_SIZE = PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX;
+
+export type StatuteSearchFilters = {
+  country: string;
+  query: string;
+  documentType?: string;
+};
+
+const readStatuteSearchPage = async ({
+  cursor,
+  filters,
+  signal,
+}: {
+  cursor: string | null;
+  filters: StatuteSearchFilters;
+  signal: AbortSignal;
+}) => {
+  const response = await api.law.statutes.search.get({
+    query: {
+      ...filters,
+      limit: PUBLIC_STATUTE_SEARCH_PAGE_SIZE,
+      ...(cursor === null ? {} : { cursor }),
+    },
+    fetch: { signal },
+  });
+  return unwrapPublicLawEden(response, "searchPublicStatutes");
+};
+
+export type StatuteSearchHit = Awaited<
+  ReturnType<typeof readStatuteSearchPage>
+>["items"][number];
+
+export const statuteSearchInfiniteOptions = (filters: StatuteSearchFilters) =>
+  infiniteQueryOptions({
+    queryKey: [...statuteKeys.all, "full-text", filters],
+    queryFn: async ({ pageParam, signal }) =>
+      await readStatuteSearchPage({ cursor: pageParam, filters, signal }),
     initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,

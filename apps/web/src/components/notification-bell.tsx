@@ -24,7 +24,6 @@ import {
   PopoverTrigger,
 } from "@stll/ui/popover";
 import { Separator } from "@stll/ui/separator";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -35,6 +34,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   notificationsOptions,
   refetchFirstNotificationsPage,
@@ -90,16 +90,11 @@ export const NotificationBell = () => {
       return;
     }
     analytics.captureError(listError);
-    stellaToast.error(
-      userErrorFromThrown(listError, t("common.unexpectedError")),
-    );
+    notifyUserError(listError, t("common.unexpectedError"));
   }, [analytics, listError, t]);
 
   const reportFailure = (error: unknown) => {
-    stellaToast.add({
-      title: userErrorFromThrown(error, t("errors.actionFailed")),
-      type: "error",
-    });
+    notifyUserError(error, t("errors.actionFailed"));
   };
 
   const markRead = async (notification: Notification) => {

@@ -8,7 +8,6 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 
 import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -17,6 +16,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import type { UsageEntitlement } from "@/lib/usage-queries";
@@ -218,10 +218,8 @@ function ManageUsageButton() {
     },
     onError: (error: unknown) => {
       setPending(false);
-      stellaToast.add({
-        title: t("settings.organization.usageManageError"),
+      notifyUserError(error, t("settings.organization.usageManageError"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
       });
     },
   });

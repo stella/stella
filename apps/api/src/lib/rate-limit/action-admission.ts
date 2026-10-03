@@ -5,7 +5,15 @@ import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
+import {
+  createAdmissionRedis,
+  resolveAdmissionRedisClient,
+  sendAdmissionRedisCommand,
+  type AdmissionRedisClient,
+  type AdmissionRedisReady,
+} from "@/api/lib/admission-redis";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   ActionAdmissionError,
   actionAdmissionRefusal as configuredActionAdmissionRefusal,
@@ -28,10 +36,6 @@ import {
   type ActionPeriodPolicy,
 } from "@/api/lib/rate-limit/action-period-budget";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
-import {
-  createLazyRedisClient,
-  createRedisClient,
-} from "@/api/lib/redis-client";
 import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
 import {
   runObservedAction,
@@ -47,9 +51,7 @@ import {
   type OrganizationActionBudgetConfig,
 } from "@/api/lib/usage/organization-action-budget";
 
-type RedisCommands = {
-  send: (command: string, args: string[]) => Promise<unknown>;
-};
+type RedisCommands = AdmissionRedisClient;
 
 const REDIS_COMMAND_TIMEOUT_MS = 500;
 const RENEW_FAILURE = failureSink({
@@ -60,14 +62,15 @@ const RELEASE_FAILURE = failureSink({
   event: "action_admission.release_failed",
   expected: [],
 });
-const admissionRedis = createLazyRedisClient(() =>
-  createRedisClient({
-    connectionTimeout: REDIS_COMMAND_TIMEOUT_MS,
-    enableOfflineQueue: false,
-  }),
-);
+const admissionRedis = createAdmissionRedis();
 
 export const closeActionAdmissionRedis = () => admissionRedis.close();
+export const startActionAdmissionRedis = async () => {
+  const connection = await admissionRedis.ready();
+  if (Result.isError(connection)) {
+    await Promise.reject(connection.error);
+  }
+};
 
 export { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 
@@ -209,7 +212,7 @@ type ActionAdmissionOptions<T = unknown> = {
   readOrganizationState?: OrganizationStateReader;
   budgetNow?: () => number;
   redis?: RedisCommands | undefined;
-  redisReady?: () => Promise<RedisCommands>;
+  redisReady?: AdmissionRedisReady;
   createId?: () => string;
   timing?: AdmissionTiming;
   costRecorder?: ActionCostRecorder | null;
@@ -279,7 +282,7 @@ type AdmissionExecutorOptions = {
   organizationId: SafeId<"organization">;
   periodIdentity: AdmittedActionIdentity | undefined;
   redis: RedisCommands | undefined;
-  redisReady: () => Promise<RedisCommands>;
+  redisReady: AdmissionRedisReady;
 };
 
 const createAdmissionExecutor = ({
@@ -301,13 +304,24 @@ const createAdmissionExecutor = ({
   const execute = async (script: string, args: string[]) => {
     const outcome = await Result.tryPromise({
       try: async () => {
-        const client: RedisCommands =
-          redis ??
-          (await withCommandTimeout({
-            command: redisReady(),
-            commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
-            label: "action-admission-redis-connect",
-          }));
+        const connected =
+          redis === undefined
+            ? await withCommandTimeout({
+                command: resolveAdmissionRedisClient(redisReady),
+                commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
+                label: "action-admission-redis-connect",
+              })
+            : Result.ok(redis);
+        if (Result.isError(connected)) {
+          return Result.err(
+            new ActionAdmissionError({
+              message: "Action admission is unavailable",
+              reason: "unavailable",
+              cause: connected.error,
+            }),
+          );
+        }
+        const client = connected.value;
         const send = async (
           window: ActionPeriodBudget | null,
           commandArgs: string[],
@@ -319,7 +333,7 @@ const createAdmissionExecutor = ({
               ? [keys.organization, keys.user, window.key]
               : [keys.organization, keys.user];
           return await withCommandTimeout({
-            command: client.send("EVAL", [
+            command: sendAdmissionRedisCommand(client, [
               script,
               String(scriptKeys.length),
               ...scriptKeys,
@@ -334,7 +348,19 @@ const createAdmissionExecutor = ({
             label: "action-admission-redis-command",
           });
         };
-        const reply = await send(budget, args);
+        const commandResult = await send(budget, args);
+        if (Result.isError(commandResult)) {
+          return Result.err(
+            ActionAdmissionError.is(commandResult.error)
+              ? commandResult.error
+              : new ActionAdmissionError({
+                  message: "Action admission is unavailable",
+                  reason: "unavailable",
+                  cause: commandResult.error,
+                }),
+          );
+        }
+        const reply = commandResult.value;
         const storeNow =
           script === ACQUIRE_SCRIPT || script === RESERVE_PERIOD_SCRIPT
             ? staleActionPeriodTime(reply)
@@ -366,19 +392,28 @@ const createAdmissionExecutor = ({
         if (refreshed.value === null) {
           return Result.ok(-2);
         }
-        return Result.ok(
-          await send(refreshed.value, [
-            ...args.slice(0, 4),
-            ...actionPeriodArguments(refreshed.value),
-          ]),
+        const retried = await send(refreshed.value, [
+          ...args.slice(0, 4),
+          ...actionPeriodArguments(refreshed.value),
+        ]);
+        return retried.mapError((cause) =>
+          ActionAdmissionError.is(cause)
+            ? cause
+            : new ActionAdmissionError({
+                message: "Action admission is unavailable",
+                reason: "unavailable",
+                cause,
+              }),
         );
       },
       catch: (error: unknown) =>
-        new ActionAdmissionError({
-          message: "Action admission is unavailable",
-          reason: "unavailable",
-          cause: error,
-        }),
+        ActionAdmissionError.is(error)
+          ? error
+          : new ActionAdmissionError({
+              message: "Action admission is unavailable",
+              reason: "unavailable",
+              cause: error,
+            }),
     });
 
     return Result.isError(outcome) ? outcome : outcome.value;
@@ -769,7 +804,7 @@ const createPeriodReservationScope = ({
 };
 
 export const reserveQueuedKickoffPeriod = async () => {
-  if (!env.FEATURE_ACTION_ADMISSION) {
+  if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
     return Result.ok(undefined);
   }
   const scope = admissionScope.getStore();
@@ -806,7 +841,7 @@ type InheritedQueuedAdmissionOptions<T> = {
   periodIdentity: AdmittedActionIdentity | undefined;
   periodReservation: ActionAdmissionOptions["periodReservation"];
   redis: RedisCommands | undefined;
-  redisReady: () => Promise<RedisCommands>;
+  redisReady: AdmissionRedisReady;
   run: ActionAdmissionOptions<T>["run"];
 };
 
@@ -1127,7 +1162,9 @@ export const withActionAdmission = async <T>(
     costRecorder: options.costRecorder,
     run: options.run,
   });
-  if (!(options.enabled ?? env.FEATURE_ACTION_ADMISSION)) {
+  if (
+    !(options.enabled ?? isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION"))
+  ) {
     return await Result.tryPromise({
       try: async () =>
         await observedRun(new AbortController().signal, disabledControl),
@@ -1143,7 +1180,8 @@ export const withActionAdmission = async <T>(
       periodIdentity: options.periodIdentity,
       periodPolicy: options.periodPolicy,
       serviceBudgetsEnabled:
-        options.serviceBudgetsEnabled ?? env.FEATURE_ORG_SERVICE_BUDGETS,
+        options.serviceBudgetsEnabled ??
+        isDeploymentFeatureEnabled("FEATURE_ORG_SERVICE_BUDGETS"),
       serviceBudgetConfig:
         options.serviceBudgetConfig ?? configuredServiceBudgets(),
       organizationStateDb: options.organizationStateDb,

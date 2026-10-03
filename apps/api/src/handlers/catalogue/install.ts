@@ -7,6 +7,7 @@ import type { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { installSkill, preflightSkillInstall } from "@/api/lib/skills/install";
 
@@ -58,7 +59,7 @@ const installBundledSkill = createSafeRootHandler(
   }) {
     const entry = findCatalogueEntry("skill", body.slug);
     if (
-      !env.FEATURE_PUBLIC_TOOLS &&
+      !isDeploymentFeatureEnabled("FEATURE_PUBLIC_TOOLS") &&
       entry !== undefined &&
       isGithubSkillEntry(entry)
     ) {
