@@ -218,3 +218,11 @@ test("Microsoft claim configuration defaults to disabled", () => {
   expect(v.parse(schema, "true")).toBe(true);
   expect(v.safeParse(schema, "invalid").success).toBe(false);
 });
+
+test("the client address header cannot reuse a header the API owns", () => {
+  const schema = envApiServerSchema.STELLA_CLIENT_ADDRESS_HEADER;
+  for (const name of ["x-stella-client-address", "X-Stella-Origin-Verify"]) {
+    expect(v.safeParse(schema, name).success).toBe(false);
+  }
+  expect(v.safeParse(schema, "x-stella-viewer-address").success).toBe(true);
+});

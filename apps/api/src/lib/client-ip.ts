@@ -26,6 +26,8 @@ import { BlockList, isIP, isIPv4, isIPv6 } from "node:net";
 
 import { env } from "@/api/env";
 import {
+  AUTH_CLIENT_ADDRESS_HEADER,
+  ORIGIN_VERIFY_HEADER,
   SIGNUP_RATE_LIMIT_IP_SOURCE,
   type SignupRateLimitIpSource,
 } from "@/api/lib/client-ip-config";
@@ -36,14 +38,14 @@ import { logger } from "@/api/lib/observability/logger";
  * replacing any incoming value, so Better Auth and other readers of request
  * headers see the same address as stella.
  */
-export const AUTH_CLIENT_ADDRESS_HEADER = "x-stella-client-address";
+export { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip-config";
 
 /**
  * The header the edge adds to prove a request came through it. When
  * `STELLA_ORIGIN_VERIFY_SECRET` is set, the edge address header is read only
  * from requests that carry one of its values here.
  */
-export const ORIGIN_VERIFY_HEADER = "x-stella-origin-verify";
+export { ORIGIN_VERIFY_HEADER } from "@/api/lib/client-ip-config";
 
 export const EDGE_ADDRESS_FORMAT = {
   withPort: "with-port",
