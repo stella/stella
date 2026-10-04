@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { createFeatureAccessGrantsEnvSchema } from "@/api/lib/auth/feature-access/grants";
-import type { FeatureRegistry } from "@/api/lib/auth/feature-access/registry";
+import { createFeatureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
+import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 
 const registry = {
   "fixture-invitation": { enrolment: "invitation" },

@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { FEATURE_REGISTRY } from "@/api/lib/auth/feature-access/registry";
-import type { FeatureRegistry } from "@/api/lib/auth/feature-access/registry";
+import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
+import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -57,7 +57,7 @@ export const createFeatureAccessGrantsEnvSchema = (registry: FeatureRegistry) =>
           addIssue({
             input: "[redacted]",
             message:
-              "FEATURE_ACCESS_GRANTS must be a JSON object of registered feature grants",
+              "API_FEATURE_ACCESS_GRANTS must be a JSON object of registered feature grants",
           });
           return NEVER;
         }

@@ -213,7 +213,7 @@ describe("feature access safe-handler admission", () => {
     ["user_1", "org_1", true],
   ])("principal %s %s grant %s", async (userId, organizationId, invited) => {
     let executions = 0;
-    let reads = 0;
+    const database = createScopedDbMock({});
     const endpoint = createSafeRootHandler(
       asTestRaw<HandlerConfig>({
         permissions: { workspace: ["read"] },
@@ -237,10 +237,7 @@ describe("feature access safe-handler admission", () => {
           },
           memberRole: sessionMemberRole("owner"),
           featureAccessSnapshot: snapshot(userId, organizationId, invited),
-          safeDb: async () => {
-            reads += 1;
-            return Result.ok(undefined);
-          },
+          safeDb: database.safeDb,
         }),
       ),
     );
@@ -249,7 +246,7 @@ describe("feature access safe-handler admission", () => {
       userId === "user_1" && organizationId === "org_1" && invited;
     expect(response.status).toBe(enabled ? 200 : 404);
     expect(executions).toBe(enabled ? 1 : 0);
-    expect(reads).toBe(0);
+    expect(database.getCallCount()).toBe(0);
     if (!enabled) {
       expect(await response.json()).toMatchObject({ message: "Not found" });
     }

@@ -13,13 +13,15 @@ test("agent client storage format requires explicit enablement", () => {
 });
 
 test("feature access grants default to empty and unknown production feature ids reject startup", () => {
-  expect(v.parse(envApiServerSchema.FEATURE_ACCESS_GRANTS, undefined)).toEqual(
+  expect(
+    v.parse(envApiServerSchema.API_FEATURE_ACCESS_GRANTS, undefined),
+  ).toEqual({});
+  expect(v.parse(envApiServerSchema.API_FEATURE_ACCESS_GRANTS, "{}")).toEqual(
     {},
   );
-  expect(v.parse(envApiServerSchema.FEATURE_ACCESS_GRANTS, "{}")).toEqual({});
   expect(
     v.safeParse(
-      envApiServerSchema.FEATURE_ACCESS_GRANTS,
+      envApiServerSchema.API_FEATURE_ACCESS_GRANTS,
       '{"unknown-feature":[{"type":"member","organizationId":"org-a","email":"member@example.test"}]}',
     ).success,
   ).toBe(false);

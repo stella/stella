@@ -53,7 +53,6 @@ import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
-import { FEATURE_REGISTRY } from "@/api/lib/auth/feature-access/registry";
 import type { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -68,6 +67,7 @@ import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
+import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";

@@ -53,7 +53,10 @@ const deriveCliAnnotation = (
   tool: McpToolDefinition & { name: StaticMcpToolDefinition["name"] },
 ): McpCliToolAnnotation => {
   const declared = DEFAULT_MCP_CLI_ANNOTATIONS[tool.name];
-  const annotation = { ...declared, featureId: tool.featureId };
+  const annotation = {
+    ...declared,
+    ...(tool.featureId === undefined ? {} : { featureId: tool.featureId }),
+  };
   const behavior =
     "destructiveBehavior" in tool ? tool.destructiveBehavior : undefined;
   if (behavior === undefined || behavior.type === "always") {

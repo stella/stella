@@ -10,8 +10,8 @@ import {
 } from "@stll/api-contract";
 
 import { envBase } from "@/api/env-base";
-import type { FeatureId } from "@/api/lib/auth/feature-access/registry";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
+import type { FeatureId } from "@/api/lib/feature-access/registry";
 import documentUploadAppHtml from "@/api/mcp/apps/document-upload/generated/app.html.txt" with { type: "text" };
 import fileComparisonAppHtml from "@/api/mcp/apps/file-comparison/generated/app.html.txt" with { type: "text" };
 import type { McpMode } from "@/api/mcp/constants";

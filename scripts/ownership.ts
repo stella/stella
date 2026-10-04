@@ -371,7 +371,7 @@ export const OWNERSHIP = [
     owner: [
       "apps/api/src/lib/auth/feature-access/policy.ts",
       "apps/api/src/lib/auth/feature-access/context.ts",
-      "apps/api/src/lib/auth/feature-access/registry.ts",
+      "apps/api/src/lib/feature-access/registry.ts",
       "apps/api/src/mcp/feature-access.ts",
     ],
     summary:

@@ -50,12 +50,12 @@ import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-cat
 import { expandSchemaDefs } from "../../../packages/cli/src/expand-schema-defs";
 import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
 import type { RouteNode } from "../../../packages/cli/src/route-types";
-import { FEATURE_REGISTRY } from "../src/lib/auth/feature-access/registry";
 import type { CapabilityTransport } from "../src/lib/capability-transport";
 import {
   isTransportInvocable,
   transportFileResponse,
 } from "../src/lib/capability-transport";
+import { FEATURE_REGISTRY } from "../src/lib/feature-access/registry";
 import {
   VALIDATED_INPUT_SERVICE_CLASSIFICATION,
   type CatalogServiceClassification,

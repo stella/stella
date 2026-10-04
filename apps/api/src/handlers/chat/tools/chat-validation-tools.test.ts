@@ -352,7 +352,7 @@ test("pending feature-bound write approvals use current caller access for valida
   const toolName = "save_matter";
   const grantedEmail = "standard@example.test";
   const run = buildRunScenarios().find(
-    (scenario) => scenario.memberRole === "owner",
+    (scenario) => roleForDisplay(scenario.memberRole) === "owner",
   );
   if (run === undefined) {
     throw new Error("Expected owner tool scenario");

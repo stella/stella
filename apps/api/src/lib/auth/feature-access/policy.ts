@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 
-import type { FeatureAccessGrants } from "@/api/lib/auth/feature-access/grants";
-import type { FeatureRegistry } from "@/api/lib/auth/feature-access/registry";
+import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
+import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 
 const featureAccessProof = Symbol("featureAccessProof");
 

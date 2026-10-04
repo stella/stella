@@ -15,26 +15,24 @@ type RunChatScriptReadProps = {
   read: () => ReturnType<typeof runRegistryReadTool>;
 };
 
-// Code mode consumes reads through a Promise rejection contract. Preserve the
-// tagged error so the SDK can turn it into a script failure rather than a value.
+// Keep the result intact until the code-mode surface raises failures for the SDK.
 export const runChatScriptRead = async ({
   toolName,
   args,
   toolDefectMemo,
   read,
-}: RunChatScriptReadProps): Promise<unknown> => {
+}: RunChatScriptReadProps): ReturnType<typeof runRegistryReadTool> => {
   if (toolDefectMemo.isKnownDefect(toolName, args)) {
-    throw new ChatToolError({
-      kind: "server-defect",
-      message: knownDefectRefusalMessage(toolName),
-    });
+    return Result.err(
+      new ChatToolError({
+        kind: "server-defect",
+        message: knownDefectRefusalMessage(toolName),
+      }),
+    );
   }
   const result = await read();
-  if (Result.isError(result)) {
-    if (result.error.kind === "server-defect") {
-      toolDefectMemo.recordDefect(toolName, args);
-    }
-    throw result.error;
+  if (Result.isError(result) && result.error.kind === "server-defect") {
+    toolDefectMemo.recordDefect(toolName, args);
   }
-  return result.value;
+  return result;
 };

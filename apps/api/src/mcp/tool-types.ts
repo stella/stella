@@ -6,8 +6,8 @@ import type * as v from "valibot";
 
 import type { SearchPaginationOutcome } from "@stll/api-contract/search";
 
-import type { FeatureId } from "@/api/lib/auth/feature-access/registry";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
+import type { FeatureId } from "@/api/lib/feature-access/registry";
 import type {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,

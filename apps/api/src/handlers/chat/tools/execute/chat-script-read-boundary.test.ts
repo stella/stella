@@ -11,18 +11,19 @@ import { runChatScriptRead } from "./chat-script-read-boundary";
 
 test("script read successes preserve the registry payload", async () => {
   const payload = { matters: [] };
+  const result = Result.ok(payload);
   expect(
     await runChatScriptRead({
       toolName: "list_matters",
       args: {},
       toolDefectMemo: createChatToolDefectMemo(),
-      read: async () => Result.ok(payload),
+      read: async () => result,
     }),
-  ).toBe(payload);
+  ).toBe(result);
 });
 
 for (const kind of CHAT_TOOL_ERROR_KINDS) {
-  test(`${kind} is rejected with the registry error and its retry policy`, async () => {
+  test(`${kind} preserves the registry error and its retry policy`, async () => {
     const toolDefectMemo = createChatToolDefectMemo();
     const args = { query: "fixture" };
     const error = new ChatToolError({ kind, message: "Fixture read failure" });
@@ -33,18 +34,12 @@ for (const kind of CHAT_TOOL_ERROR_KINDS) {
       toolDefectMemo,
       read,
     } as const;
-    const firstRead = await Result.tryPromise({
-      try: async () => await runChatScriptRead(props),
-      catch: (cause) => cause,
-    });
+    const firstRead = await runChatScriptRead(props);
     expect(firstRead.isErr() && firstRead.error).toBe(error);
     expect(toolDefectMemo.isKnownDefect("list_matters", args)).toBe(
       kind === "server-defect",
     );
-    const repeatedRead = await Result.tryPromise({
-      try: async () => await runChatScriptRead(props),
-      catch: (cause) => cause,
-    });
+    const repeatedRead = await runChatScriptRead(props);
     expect(repeatedRead.isErr() && repeatedRead.error).toBeInstanceOf(
       ChatToolError,
     );

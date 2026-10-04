@@ -7,8 +7,8 @@ import {
   resolveFeatureAccess,
   resolveFeatureAccessSnapshot,
 } from "@/api/lib/auth/feature-access/context";
-import type { FeatureRegistry } from "@/api/lib/auth/feature-access/registry";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const registry = {

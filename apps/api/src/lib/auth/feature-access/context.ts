@@ -5,7 +5,6 @@ import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
-import type { FeatureAccessGrants } from "@/api/lib/auth/feature-access/grants";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
@@ -14,9 +13,10 @@ import type {
   FeatureAccessDecision,
   FeatureAccessSnapshot,
 } from "@/api/lib/auth/feature-access/policy";
-import { FEATURE_REGISTRY } from "@/api/lib/auth/feature-access/registry";
-import type { FeatureRegistry } from "@/api/lib/auth/feature-access/registry";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
+import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
+import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 
 type ResolveFeatureAccessSnapshotOptions = {
   tx: Pick<Transaction, "select">;
@@ -31,7 +31,7 @@ export const resolveFeatureAccessSnapshot = async ({
   organizationId,
   userId,
   registry = FEATURE_REGISTRY,
-  grants = env.FEATURE_ACCESS_GRANTS,
+  grants = env.API_FEATURE_ACCESS_GRANTS,
 }: ResolveFeatureAccessSnapshotOptions): Promise<FeatureAccessSnapshot> => {
   const featureIds = Object.keys(registry);
   const decisions = new Map<string, FeatureAccessDecision>();

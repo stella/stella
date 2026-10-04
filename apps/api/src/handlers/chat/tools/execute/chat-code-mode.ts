@@ -9,7 +9,7 @@ import {
   type CodeModeTool,
   type CreateCodeModeResult,
 } from "@tanstack/ai-code-mode";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
 import { listSkillMetadata, readDocumentedChatReads } from "@stll/skills";
@@ -41,6 +41,7 @@ import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import { renderProjectionShape } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import type { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   hasToolSchemaInputs,
   type WithToolSchemaInputs,

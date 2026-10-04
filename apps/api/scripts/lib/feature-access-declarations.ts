@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import path from "node:path";
 import ts from "typescript";
 
-import type { FeatureRegistry } from "../../src/lib/auth/feature-access/registry";
+import type { FeatureRegistry } from "../../src/lib/feature-access/registry";
 
 type DeclarationOptions = {
   registry: FeatureRegistry;
