@@ -265,9 +265,9 @@ describe("one document's download", () => {
       type: "too-large",
       limitBytes: MAX_DOCUMENT_PDF_BYTES,
     });
-    expect(result.type === "too-large" ? result.prefix.byteLength : 0).toBe(
-      1024,
-    );
+    expect(
+      result.type === "too-large" ? result.prefix?.byteLength : undefined,
+    ).toBe(1024);
     expect(pulledBytes).toBeLessThan(servedBytes);
   });
 
