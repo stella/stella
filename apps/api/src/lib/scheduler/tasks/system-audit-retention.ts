@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 
-import { DAY_IN_MS, Temporal } from "@stll/time";
+import type { Temporal } from "@stll/time";
+import { DAY_IN_MS } from "@stll/time";
 
 import { systemAuditRuns } from "@/api/db/schema";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
@@ -89,6 +90,7 @@ export const purgeSystemAuditRuns = async ({
 
 export const purgeSystemAuditRunsTask: SchedulerTask = async ({
   db,
+  dueAt,
   runId,
   scheduleContinuation,
   signal,
@@ -96,7 +98,7 @@ export const purgeSystemAuditRunsTask: SchedulerTask = async ({
   signal.throwIfAborted();
   const { deletedRuns, hasMore } = await purgeSystemAuditRuns({
     db,
-    now: Temporal.Now.instant(),
+    now: dueAt.instant,
     signal,
   });
   await recordSystemAudit(db, "system:audit-retention", {
@@ -104,6 +106,7 @@ export const purgeSystemAuditRunsTask: SchedulerTask = async ({
     counts: { deletedRuns },
   });
   if (hasMore && !signal.aborted) {
-    scheduleContinuation(new Date());
+    // The claim instant is already past, so the continuation is due at once.
+    scheduleContinuation(dueAt.claimedAtDate());
   }
 };
