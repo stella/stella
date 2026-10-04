@@ -17,11 +17,13 @@ Object.defineProperty(window.navigator, "userAgent", {
   value: "Macintosh; Mac OS X",
 });
 // happy-dom omits the legacy browser commands the EditContext polyfill wraps.
-document.execCommand = () => false;
-document.queryCommandEnabled = () => false;
-document.queryCommandSupported = () => false;
-document.queryCommandState = () => false;
-document.queryCommandValue = () => "";
+Object.assign(document, {
+  execCommand: () => false,
+  queryCommandEnabled: () => false,
+  queryCommandSupported: () => false,
+  queryCommandState: () => false,
+  queryCommandValue: () => "",
+});
 const React = await import("react");
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
@@ -35,6 +37,7 @@ const requests: {
   answer: ReturnType<typeof Promise.withResolvers<Response>>;
 }[] = [];
 let publishedText = "Server text";
+let storageFails = false;
 globalThis.fetch = Object.assign(
   async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
@@ -67,6 +70,9 @@ globalThis.fetch = Object.assign(
       });
     }
     if (url === "https://storage.example.test/markdown") {
+      if (storageFails) {
+        return new Response("Storage unavailable", { status: 503 });
+      }
       return new Response(publishedText);
     }
     throw new TypeError(`Unexpected transport: ${url}`);
@@ -196,7 +202,7 @@ const editorContext = (container: HTMLElement) => {
 };
 const edit = (container: HTMLElement, text: string) => {
   const context = editorContext(container);
-  act(() =>
+  act(() => {
     context.target.dispatchEvent(
       Object.assign(new Event("textupdate"), {
         text,
@@ -205,8 +211,8 @@ const edit = (container: HTMLElement, text: string) => {
         selectionStart: text.length,
         selectionEnd: text.length,
       }),
-    ),
-  );
+    );
+  });
 };
 const advance = async (ms: number) => {
   await act(async () => jest.advanceTimersByTime(ms));
@@ -249,6 +255,7 @@ afterEach(async () => {
   await act(async () => cleanup());
   requests.length = 0;
   publishedText = "Server text";
+  storageFails = false;
   useInspectorTabsStore.setState({ tabs: [], activeId: null });
   window.localStorage.clear();
 });
@@ -265,13 +272,13 @@ test("publication captures the displayed source inside the debounce interval", a
   edit(view.container, "Draft A");
   await advance(400);
   edit(view.container, "Draft B");
-  fireEvent.click(view.getByRole("button", { name: "Save", exact: true }));
+  fireEvent.click(view.getByRole("button", { name: "Save" }));
   await startTransport();
   jest.useRealTimers();
   expect(await requests.at(0)?.file.text()).toBe("Draft B");
   await publish();
   expect(view.container.textContent).toContain("Draft B");
-  expect(view.queryByRole("button", { name: "Save", exact: true })).toBeNull();
+  expect(view.queryByRole("button", { name: "Save" })).toBeNull();
 });
 
 test.each(["committed", "refused"] as const)(
@@ -280,16 +287,14 @@ test.each(["committed", "refused"] as const)(
     const view = await mount();
     edit(view.container, "Draft B");
     await advance(400);
-    fireEvent.click(view.getByRole("button", { name: "Save", exact: true }));
+    fireEvent.click(view.getByRole("button", { name: "Save" }));
     await startTransport();
     edit(view.container, "Draft C");
     await advance(400);
     expect(view.container.textContent).toContain("Draft B");
     expect(view.container.textContent).not.toContain("Draft C");
     expect(
-      view
-        .getByRole("button", { name: "Cancel", exact: true })
-        .hasAttribute("disabled"),
+      view.getByRole("button", { name: "Cancel" }).hasAttribute("disabled"),
     ).toBe(true);
     expect(view.container.querySelector(".md-readonly-toggle")).toBeNull();
     const editor = view.container.querySelector(".md-editor");
@@ -317,9 +322,7 @@ test.each(["committed", "refused"] as const)(
       );
       await waitFor(() =>
         expect(
-          view
-            .getByRole("button", { name: "Save", exact: true })
-            .hasAttribute("disabled"),
+          view.getByRole("button", { name: "Save" }).hasAttribute("disabled"),
         ).toBe(false),
       );
     }
@@ -328,9 +331,7 @@ test.each(["committed", "refused"] as const)(
     await advance(400);
     expect(view.container.textContent).toContain("Draft C");
     expect(
-      view
-        .getByRole("button", { name: "Save", exact: true })
-        .hasAttribute("disabled"),
+      view.getByRole("button", { name: "Save" }).hasAttribute("disabled"),
     ).toBe(false);
   },
 );
@@ -340,14 +341,14 @@ test("cancel restores the model and cancels a pending emission before later inpu
   edit(view.container, "Draft A");
   await advance(400);
   edit(view.container, "Cancelled B");
-  fireEvent.click(view.getByRole("button", { name: "Cancel", exact: true }));
+  fireEvent.click(view.getByRole("button", { name: "Cancel" }));
   expect(view.container.textContent).toContain("Server text");
   expect(view.container.textContent).not.toContain("Cancelled B");
   await advance(400);
-  expect(view.queryByRole("button", { name: "Save", exact: true })).toBeNull();
+  expect(view.queryByRole("button", { name: "Save" })).toBeNull();
   const context = editorContext(view.container);
   expect(context.text).toBe("Server text");
-  act(() =>
+  act(() => {
     context.target.dispatchEvent(
       Object.assign(new Event("textupdate"), {
         text: " appended",
@@ -356,13 +357,35 @@ test("cancel restores the model and cancels a pending emission before later inpu
         selectionStart: 20,
         selectionEnd: 20,
       }),
-    ),
-  );
+    );
+  });
   await advance(400);
-  fireEvent.click(view.getByRole("button", { name: "Save", exact: true }));
+  fireEvent.click(view.getByRole("button", { name: "Save" }));
   await startTransport();
   jest.useRealTimers();
   expect(await requests.at(0)?.file.text()).toBe("Server text appended");
+});
+
+test("a failed background refetch keeps the retained draft publishable", async () => {
+  const view = await mount();
+  edit(view.container, "Draft A");
+  await advance(400);
+  jest.useRealTimers();
+  storageFails = true;
+  await act(async () =>
+    view.client.refetchQueries({
+      queryKey: filesKeys.textByFieldId({
+        workspaceId: "matter",
+        fieldId: "field",
+      }),
+    }),
+  );
+  await waitFor(() =>
+    expect(view.container.querySelector(".md-editor")).toBeNull(),
+  );
+  fireEvent.click(view.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(requests).toHaveLength(1));
+  expect(await requests.at(0)?.file.text()).toBe("Draft A");
 });
 
 test("rename metadata owns the name used by subsequent publication", async () => {
@@ -370,14 +393,14 @@ test("rename metadata owns the name used by subsequent publication", async () =>
   edit(view.container, "Draft A");
   await advance(400);
   jest.useRealTimers();
-  fireEvent.click(view.getByRole("button", { name: "Rename", exact: true }));
+  fireEvent.click(view.getByRole("button", { name: "Rename" }));
   await waitFor(() =>
     expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
       fileName: "renamed.md",
       label: "renamed.md",
     }),
   );
-  fireEvent.click(view.getByRole("button", { name: "Save", exact: true }));
+  fireEvent.click(view.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(requests).toHaveLength(1));
   expect(requests.at(0)?.file.name).toBe("renamed.md");
   await publish();
@@ -392,10 +415,10 @@ test("publication settlement preserves metadata confirmed while it was pending",
   const view = await mount();
   edit(view.container, "Draft A");
   await advance(400);
-  fireEvent.click(view.getByRole("button", { name: "Save", exact: true }));
+  fireEvent.click(view.getByRole("button", { name: "Save" }));
   await startTransport();
   jest.useRealTimers();
-  fireEvent.click(view.getByRole("button", { name: "Rename", exact: true }));
+  fireEvent.click(view.getByRole("button", { name: "Rename" }));
   await waitFor(() =>
     expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
       label: "renamed.md",
@@ -424,7 +447,9 @@ test("editor resets are fixed points for source and pending notifications", asyn
               ref={handle}
               markdown="Server text"
               imagePolicy="data-only"
-              onMarkdownChange={(next) => changes.push(next)}
+              onMarkdownChange={(next) => {
+                changes.push(next);
+              }}
             />
           </IntlProvider>,
         );

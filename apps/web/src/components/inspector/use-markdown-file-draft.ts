@@ -156,7 +156,7 @@ export const useMarkdownFileDraft = ({
     setDraft(text);
   };
   const save = () => {
-    if (saveMutation.isPending || !editorRef.current) {
+    if (saveMutation.isPending) {
       return;
     }
     const currentTab = useInspectorTabsStore
@@ -175,7 +175,10 @@ export const useMarkdownFileDraft = ({
       fieldId: tab.id,
       fileName: currentTab.fileName,
       propertyId: filePropertyId,
-      text: editorRef.current.captureForSave(),
+      // A mounted editor is the source of truth (it may hold an edit inside
+      // the debounce window). When it is unmounted, e.g. while a failed
+      // refetch shows the error state, the retained draft is the source.
+      text: editorRef.current?.captureForSave() ?? draft,
       workspaceId: tab.workspaceId,
     });
   };
