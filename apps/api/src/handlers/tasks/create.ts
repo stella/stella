@@ -1,3 +1,4 @@
+import { taskCreateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
   createTaskBodySchema,
@@ -21,6 +22,7 @@ export const createTaskForFeatures = (features: TaskDeploymentFeatures) =>
         "tasks.update.",
       permissions: { entity: ["create"] },
       accountAccess: ACCOUNT_ACCESS.sandbox,
+      realtime: taskCreateRealtimeUpdates,
       mcp: { type: "tool", name: "save_task" },
       body: createTaskBodySchema,
     },

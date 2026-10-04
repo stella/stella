@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "The orphaned flow-schedule delete moved from runScheduledFlow into createScheduledFlowTask. The audit-mutation ledger keys rows by function and only shrinks, so its runScheduledFlow row is removed and the same scheduler bookkeeping write carries a reasoned skip instead."
+}

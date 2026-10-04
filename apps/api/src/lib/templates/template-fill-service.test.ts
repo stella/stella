@@ -14,6 +14,7 @@ import discoverEndpoint from "@/api/handlers/templates/discover";
 import { toSafeId } from "@/api/lib/branded-types";
 import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
+import { AI_FIELD_ADAPTATION_FAILURE_MESSAGE } from "@/api/lib/docx/adapt-ai-fields";
 import { CONDITION_RAW_VALUES } from "@/api/lib/docx/block-directives";
 import { fillTemplate } from "@/api/lib/docx/patch-template";
 import type { AiConditionDecider } from "@/api/lib/docx/resolve-ai-conditions";
@@ -28,6 +29,11 @@ import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+import {
+  decideTemplateFillCompletion,
+  fillDiagnosticsOf,
+  templateFillStatus,
+} from "./template-fill-completion";
 import {
   describeStoredTemplate,
   fillStoredTemplateDocx,
@@ -412,6 +418,45 @@ describe("fillTemplateDocx required-field rejection", () => {
     expect(result.unmatchedPlaceholders).toContain("governing_law");
   });
 
+  test("reports a field the model could not adapt, fills its stub and grades the fill partial", async () => {
+    const file = await makeConfiguredDocx([
+      {
+        path: "governing_law",
+        label: "Governing law",
+        inputType: "text",
+        aiAdapt: true,
+      },
+    ]);
+
+    const result = await fillTemplateDocx({
+      source: { name: "NDA", fileName: "nda.docx", file },
+      values: { governing_law: "czech" },
+      scopedDb: stubScopedDb(),
+      organizationId,
+      requiredFields: "enforce",
+      aiCollaborators: async () => ({ adaptAiValue: async () => undefined }),
+    });
+
+    if (!("file" in result)) {
+      throw new Error("expected a filled document");
+    }
+    // The stub still fills the marker, but nobody asked for that wording.
+    expect((await extractTexts(result.file)).join("")).toContain(
+      "Governed by czech law.",
+    );
+    expect(result.unmatchedPlaceholders).toEqual([]);
+    expect(result.aiFieldErrors).toEqual([
+      {
+        fieldPath: "governing_law",
+        valuePath: "governing_law",
+        itemIndex: null,
+        reason: "generation-failed",
+        message: AI_FIELD_ADAPTATION_FAILURE_MESSAGE,
+      },
+    ]);
+    expect(templateFillStatus(fillDiagnosticsOf(result))).toBe("partial");
+  });
+
   test("does not reject a required, source-bound field left unfilled", async () => {
     const file = await makeConfiguredDocx([
       {
@@ -723,6 +768,106 @@ describe("fillTemplateDocx condition decisions", () => {
     expect((await extractTexts(result.file)).join("")).not.toContain(
       "Consumer notice.",
     );
+  });
+});
+
+describe("fillTemplateDocx undecided AI conditions grade the fill", () => {
+  const conditionField: FieldMeta = {
+    path: "is_consumer",
+    label: "Consumer contract",
+    inputType: "boolean",
+    aiPrompt: "Is this a consumer contract?",
+  };
+
+  /** One block gated on the condition and one on its negation, around an
+   *  ungated paragraph: whichever way an unset condition renders, one block
+   *  goes and one stays without anyone deciding either. */
+  const negatedDocx = async (): Promise<ScannedFile> =>
+    await authorConditionTags(
+      await makeDocx(
+        WRAP(
+          [
+            P("Preamble."),
+            P("{% if is_consumer %}"),
+            P("Consumer notice."),
+            P("{% endif %}"),
+            P("{% if not is_consumer %}"),
+            P("Business terms."),
+            P("{% endif %}"),
+          ].join(""),
+        ),
+      ),
+      [conditionField],
+    );
+
+  const fill = async (decideAiCondition: AiConditionDecider | undefined) => {
+    const result = await fillTemplateDocx({
+      source: { name: "NDA", fileName: "nda.docx", file: await negatedDocx() },
+      values: {},
+      scopedDb: stubScopedDb(),
+      organizationId,
+      requiredFields: "enforce",
+      aiCollaborators: async () =>
+        decideAiCondition === undefined ? {} : { decideAiCondition },
+    });
+    if (!("file" in result)) {
+      throw new Error("expected a filled document");
+    }
+    return result;
+  };
+
+  const cases = [
+    { reason: "failed", decide: async () => undefined },
+    { reason: "no-backend", decide: undefined },
+  ] as const;
+
+  for (const { reason, decide } of cases) {
+    test(`a ${reason} condition makes the fill partial and is named with its reason`, async () => {
+      const result = await fill(decide);
+      const diagnostics = fillDiagnosticsOf(result);
+
+      expect(diagnostics.undecidedConditions).toEqual([
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          state: "undecided",
+          reason,
+        },
+      ]);
+      // Nothing else fell short: the undecided condition alone is why.
+      expect(result.unmatchedPlaceholders).toEqual([]);
+      expect(result.aiFieldErrors).toEqual([]);
+      expect(templateFillStatus(diagnostics)).toBe("partial");
+      const decision = decideTemplateFillCompletion({
+        mode: "require_complete",
+        diagnostics,
+      });
+      expect(decision.type).toBe("rejected_partial");
+      if (decision.type === "complete") {
+        throw new Error("expected a shortfall");
+      }
+      expect(decision.blockingKinds).toEqual(["undecidedConditions"]);
+
+      // The renderer still never picks a side for it: the unset condition
+      // reads as false, which the diagnostics above make visible.
+      const text = (await extractTexts(result.file)).join("");
+      expect(text).toContain("Preamble.");
+      expect(text).not.toContain("Consumer notice.");
+      expect(text).toContain("Business terms.");
+    });
+  }
+
+  test("a condition the model decides keeps the fill complete", async () => {
+    const result = await fill(async () => ({
+      decidedBy: "generative_model",
+      value: true,
+    }));
+    const diagnostics = fillDiagnosticsOf(result);
+    expect(diagnostics.undecidedConditions).toEqual([]);
+    expect(templateFillStatus(diagnostics)).toBe("success");
+    const text = (await extractTexts(result.file)).join("");
+    expect(text).toContain("Consumer notice.");
+    expect(text).not.toContain("Business terms.");
   });
 });
 

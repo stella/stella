@@ -10,6 +10,7 @@ import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
+import { startChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type {
@@ -347,7 +348,18 @@ export const createApprovalHarness = ({
       })),
     });
   });
+  /** Runs once, when the next send has read its thread and is about to
+   *  accept its turn. */
+  let nextAcceptanceRace: (() => Promise<void>) | undefined;
   const sendMessageDependencies = {
+    // Admission is the last step before acceptance: the thread and its
+    // history are read, and no turn is owned yet.
+    startAdmission: async (options) => {
+      const race = nextAcceptanceRace;
+      nextAcceptanceRace = undefined;
+      await race?.();
+      return await startChatExecutionAdmission(options);
+    },
     indexThread: async () => await Promise.resolve(undefined),
     // An approved write reads the member's role again when it runs; read it
     // from this test's database, not the shared pools.
@@ -1512,6 +1524,14 @@ export const createApprovalHarness = ({
     /** From now on, `threadId`'s responses reach the page whole again. */
     streamWhole: (threadId: SafeId<"chatThread">) => {
       liveThreads.delete(threadId);
+    },
+    /**
+     * Runs `race` once, when the next send has read its thread and is about
+     * to accept its turn: what `race` does to the thread there (another
+     * request, run to its end) lands between that send's read and its claim.
+     */
+    raceNextAcceptance: (race: () => Promise<void>) => {
+      nextAcceptanceRace = race;
     },
     /** A compaction checkpoint landed on `threadId`: its next model call
      *  starts from the summary rather than extending the calls before it. */

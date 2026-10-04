@@ -276,6 +276,7 @@
     "better-call@1.4.0": "patches/better-call@1.4.0.patch",
     "@better-auth/oauth-provider@1.7.5": "patches/@better-auth%2Foauth-provider@1.7.5.patch",
     "@tanstack/ai@0.61.0": "patches/@tanstack%2Fai@0.61.0.patch",
+    "@tanstack/ai-code-mode@0.4.16": "patches/@tanstack%2Fai-code-mode@0.4.16.patch",
     "@tanstack/openai-base@0.11.1": "patches/@tanstack%2Fopenai-base@0.11.1.patch",
     "@tanstack/ai-bedrock@0.3.15": "patches/@tanstack%2Fai-bedrock@0.3.15.patch",
     "@tanstack/ai-gemini@0.33.1": "patches/@tanstack%2Fai-gemini@0.33.1.patch",

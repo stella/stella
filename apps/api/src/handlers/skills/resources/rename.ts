@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { agentSkillResources } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { loadManagedSkill } from "@/api/handlers/skills/managed-skill";
 import {
   lockSkillForResourceWrite,
@@ -36,6 +37,7 @@ const config = {
     "a bundled skill are all refused.",
   permissions: { agentSkill: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

@@ -10,7 +10,8 @@ export const canPrepareExtractedTextFile = (file: ResolvedFile): boolean =>
   isOfficeDocumentMimeType(file.mimeType);
 
 export const isAISupportedFile = (file: ResolvedFile): boolean =>
-  (file.mimeType === PDF_MIME_TYPE && !file.encrypted) ||
-  file.pdfFileId !== null ||
-  file.mimeType === DOCX_MIME_TYPE ||
-  canPrepareExtractedTextFile(file);
+  !file.encrypted &&
+  (file.mimeType === PDF_MIME_TYPE ||
+    file.pdfFileId !== null ||
+    file.mimeType === DOCX_MIME_TYPE ||
+    canPrepareExtractedTextFile(file));

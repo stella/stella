@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Pievienot numuru sēriju",
       "advance": "Avanss",
+      "allSellers": "Visi pārdevēji",
       "archiveConfirm": "Arhivēt šo numuru sēriju? Tā vairs nebūs pieejama jauniem dokumentiem.",
       "creditNote": "Kredītrēķins",
       "default": "Noklusējuma sērija",
@@ -562,6 +563,9 @@
       "preview": "Nākamais numurs",
       "previewAllocated": "Šis numurs jau ir piešķirts.",
       "previewHelp": "Priekšskatījums izmanto saglabāto veidni un nerezervē numuru.",
+      "sellerProfile": "Pārdevēja profils",
+      "sellerUnavailable": "Pārdevējs ir arhivēts vai nav pieejams",
+      "sellerUnavailableHelp": "Šis pārdevējs ir arhivēts vai nav pieejams. Saglabājiet piesaisti vai izvēlieties citu pārdevēju.",
       "setDefault": "Iestatīt kā noklusējuma sēriju",
       "title": "Numuru sērijas"
     },
@@ -1165,6 +1169,7 @@
       "noSkills": "Prasmju vēl nav",
       "pinnedMatters": "Piespraustās lietas",
       "recentChats": "Nesenās tērzēšanas",
+      "skillEditedBy": "Rediģēja {name} · {time}",
       "skills": "Prasmes"
     },
     "loadEarlierMessages": "Ielādēt vecākus ziņojumus",
@@ -1296,6 +1301,9 @@
     },
     "tabToAsk": "→, lai jautātu: “{prompt}”",
     "thinking": "Strādāju ar kontekstu",
+    "threadFiles": {
+      "title": "Šīs tērzēšanas faili"
+    },
     "tool": {
       "add_comment": "Komentāra pievienošana",
       "apply-active-docx-edits": "Dokumenta izmaiņu sagatavošana",
@@ -1608,15 +1616,6 @@
     "currency": "Valūta",
     "currentPage": "Pašreizējā lapa",
     "date": "Datums",
-    "datePicker": {
-      "label": "Datuma atlasītājs",
-      "nextDecade": "Nākamā desmitgade",
-      "nextMonth": "Nākamais mēnesis",
-      "nextYear": "Nākamais gads",
-      "previousDecade": "Iepriekšējā desmitgade",
-      "previousMonth": "Iepriekšējais mēnesis",
-      "previousYear": "Iepriekšējais gads"
-    },
     "decisions": "Nolēmumi",
     "decline": "Noraidīt",
     "delete": "Dzēst",
@@ -2271,10 +2270,13 @@
       "deeplKeyRejected": "Saglabātā DeepL atslēga tika noraidīta. Aizstājiet to organizācijas iestatījumos.",
       "deeplQuotaExceeded": "Šīs organizācijas DeepL rakstzīmju kvota ir iztērēta.",
       "disposableEmailNotAllowed": "Pagaidu e-pasta adreses nav atļautas. Izmantojiet pastāvīgu e-pasta adresi.",
+      "encryptedContent": "Šifrēta dokumenta saturu nevar izgūt. Noņemiet failam paroli un mēģiniet vēlreiz.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
       "internalServerError": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "legalSourceEntityLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums, tāpēc dokumentu nevarēja izveidot.",
       "legalSourceFilePropertyMissing": "Šajā lietā trūkst faila rekvizīta, tāpēc dokumentu nevarēja izveidot.",
+      "matterContactCapacityExceeded": "Šajā lietā ir vairāk kontaktu, nekā iespējams parādīt. Noņemiet redzamās kontaktu piesaistes, lai parādītu pārējos kontaktus.",
+      "matterContactCapacityReached": "Šī lieta ir sasniegusi kontaktu skaita ierobežojumu. Pirms pievienojat vēl vienu kontaktu, noņemiet vienu kontakta piesaisti.",
       "mcpAuthorizationApprovalRequired": "Lai varētu izveidot savienojumu, administratoram šis savienotājs ir jāapstiprina.",
       "notOrganizationMember": "Jūs neesat šīs organizācijas dalībnieks.",
       "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",
@@ -4835,6 +4837,7 @@
     "addPart": "Pievienot daļu",
     "addTag": "Pievienot birku",
     "aiAdaptHint": "AI pielāgos šo formulējumu katrai dokumenta vietai, kur tas parādās.",
+    "aiConditionsUndecided": "AI neizdevās izlemt šos nosacījumus, tāpēc to sadaļas aizpildītas tā, it kā tie nebūtu spēkā: {list}",
     "aiDecidedConditions": "Izlemj AI",
     "aiFieldsNotDrafted": "AI neizdevās sagatavot šos laukus: {list}",
     "allTemplates": "Visas veidnes",
@@ -4926,6 +4929,7 @@
     "directiveFor": "Cikls: {expression}",
     "directiveIf": "Ja: {expression}",
     "discoveryFailed": "Neizdevās analizēt veidni",
+    "documentCreatedIncomplete": "Dokuments izveidots, bet aizpildījums nav pilnīgs",
     "downloadAnyway": "Tomēr lejupielādēt",
     "downloadDocx": "Lejupielādēt DOCX",
     "downloadPdf": "Lejupielādēt PDF",
@@ -5021,6 +5025,7 @@
     "saveFailed": "Neizdevās saglabāt veidni",
     "savedLookupFormats": "Saglabātie izvades formāti",
     "searchTemplates": "Meklēt veidnes…",
+    "structureErrorsInDocument": "Veidnes direktīvas, kuras neizdevās piemērot: {count}. Pārbaudiet dokumentu.",
     "structureWarningParagraph": "Rindkopa {paragraph, number}",
     "structureWarnings": "{count, plural, zero {# struktūras brīdinājumu} one {# struktūras brīdinājums} other {# struktūras brīdinājumi}}",
     "studio": {
