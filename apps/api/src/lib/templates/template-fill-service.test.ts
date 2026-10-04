@@ -4,6 +4,7 @@ import Elysia from "elysia";
 import fc from "fast-check";
 import JSZip from "jszip";
 
+import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
@@ -973,7 +974,7 @@ const clauseDirective = (text: string) => ({ text, isDirective: true });
 const fillLinkedClause = async (
   body: ClauseBody,
   values: TemplateData,
-  options: { templateBody?: string; override?: ClauseBody } = {},
+  options: { templateBody?: string; override?: ClauseBody | undefined } = {},
 ) => {
   const file = await makeDocx(
     WRAP(options.templateBody ?? P('{{ clause("Terms") }}')),
@@ -1932,5 +1933,417 @@ describe("clause fill boundaries", () => {
       );
       expect(result.unmatchedPlaceholders).toEqual(["buyer"]);
     },
+  );
+});
+
+describe("clause slot requiredness follows rendering", () => {
+  const nameRejection = (path: string) => ({
+    requiredFieldsRejection: [
+      { path, label: null, inputType: "text", options: null },
+    ],
+  });
+  const partyClause: ClauseBody = [{ text: "Party {{ name | required }}" }];
+  const branchTemplate =
+    P("{% if show %}") + P('{{ clause("Terms") }}') + P("{% endif %}");
+  /** The same body reached as the linked clause and as a per-fill override. */
+  const linkedAndOverride = (body: ClauseBody) => [
+    { name: "linked", body, override: undefined },
+    { name: "override", body: [{ text: "Stored" }], override: body },
+  ];
+
+  test.each(linkedAndOverride(partyClause))(
+    "a $name slot in a pruned branch requires none of its fields",
+    async ({ body, override }) => {
+      const result = await fillLinkedClause(
+        body,
+        { show: false },
+        { templateBody: branchTemplate + P("Tail"), override },
+      );
+      expect(await filledTexts(result)).toEqual(["Tail"]);
+    },
+  );
+
+  test("a slot in a taken branch requires its fields", async () => {
+    expect(
+      await fillLinkedClause(
+        partyClause,
+        { show: true },
+        { templateBody: branchTemplate },
+      ),
+    ).toEqual(nameRejection("name"));
+    expect(
+      await filledTexts(
+        await fillLinkedClause(
+          partyClause,
+          { show: true, name: "Acme" },
+          { templateBody: branchTemplate },
+        ),
+      ),
+    ).toEqual(["Party Acme"]);
+  });
+
+  test("an else branch and an inline branch prune the slot like any marker", async () => {
+    const elseTemplate =
+      P("{% if show %}") +
+      P("Shown") +
+      P("{% else %}") +
+      P('{{ clause("Terms") }}') +
+      P("{% endif %}");
+    expect(
+      await filledTexts(
+        await fillLinkedClause(
+          partyClause,
+          { show: true },
+          { templateBody: elseTemplate },
+        ),
+      ),
+    ).toEqual(["Shown"]);
+    expect(
+      await fillLinkedClause(
+        partyClause,
+        { show: false },
+        { templateBody: elseTemplate },
+      ),
+    ).toEqual(nameRejection("name"));
+
+    const inlineTemplate = P(
+      'Lead {% if show %}{{ clause("Terms") }}{% endif %}',
+    );
+    expect(
+      await filledTexts(
+        await fillLinkedClause(
+          partyClause,
+          { show: false },
+          { templateBody: inlineTemplate },
+        ),
+      ),
+    ).toEqual(["Lead "]);
+    expect(
+      await fillLinkedClause(
+        partyClause,
+        { show: true },
+        { templateBody: inlineTemplate },
+      ),
+    ).toEqual(nameRejection("name"));
+  });
+
+  test("a field the template renders itself stays required when the slot is pruned", async () => {
+    expect(
+      await fillLinkedClause(
+        partyClause,
+        { show: false },
+        { templateBody: P("Signed by {{ name }}") + branchTemplate },
+      ),
+    ).toEqual(nameRejection("name"));
+  });
+
+  const loopTemplate =
+    P("{% for p in persons %}") +
+    P('{{ clause("Terms") }}') +
+    P("{% endfor %}");
+  const greeting: ClauseBody = [
+    clauseDirective("{% if p.vip %}"),
+    {
+      text: "Dear {{ p.name | required }}",
+      runs: [{ text: "Dear {{ p.name | required }}", bold: true }],
+    },
+    clauseDirective("{% else %}"),
+    { text: "Hi {{ p.name | required }}" },
+    clauseDirective("{% endif %}"),
+    clauseDirective("{% if loop.last %}"),
+    { text: "Last" },
+    clauseDirective("{% endif %}"),
+  ];
+
+  test.each(linkedAndOverride(greeting))(
+    "a $name slot in a loop renders each iteration under its binding",
+    async ({ body, override }) => {
+      const result = await fillLinkedClause(
+        body,
+        {
+          persons: [
+            { name: "Ann", vip: true },
+            { name: "Bob", vip: false },
+          ],
+        },
+        { templateBody: loopTemplate, override },
+      );
+      expect(await filledTexts(result)).toEqual(["Dear Ann", "Hi Bob", "Last"]);
+      if (!("file" in result)) {
+        panic("expected filled document");
+      }
+      const zip = await JSZip.loadAsync(result.file.bytes);
+      expect(await zip.file("word/document.xml")?.async("string")).toContain(
+        "<w:b",
+      );
+      expect(result.unmatchedPlaceholders).toEqual([]);
+    },
+  );
+
+  test.each<{ persons: TemplateData[] }>([
+    { persons: [{ name: "Ann" }, {}] },
+    { persons: [{ name: "Ann" }, { name: "  " }] },
+    { persons: [{}, { name: "Bob" }] },
+  ])(
+    "a slot in a loop requires its fields in every iteration (%j)",
+    async ({ persons }) => {
+      expect(
+        await fillLinkedClause(
+          greeting,
+          { persons },
+          { templateBody: loopTemplate },
+        ),
+      ).toEqual(nameRejection("p.name"));
+    },
+  );
+
+  test("a slot in an empty loop renders and requires nothing", async () => {
+    expect(
+      await filledTexts(
+        await fillLinkedClause(
+          greeting,
+          { persons: [] },
+          { templateBody: loopTemplate + P("Tail") },
+        ),
+      ),
+    ).toEqual(["Tail"]);
+  });
+
+  /** A slot whose branch an AI-decided condition settles, so the submitted
+   *  values alone cannot say whether the slot renders. */
+  const fillAiGated = async ({
+    slotInYesBranch,
+    decided,
+    values = {},
+  }: {
+    slotInYesBranch: boolean;
+    decided: boolean;
+    values?: TemplateData;
+  }) => {
+    const slot = P('{{ clause("Terms") }}');
+    const other = P("Business terms");
+    const file = await authorConditionTags(
+      await makeDocx(
+        WRAP(
+          P("{% if is_consumer %}") +
+            (slotInYesBranch ? slot : other) +
+            P("{% else %}") +
+            (slotInYesBranch ? other : slot) +
+            P("{% endif %}"),
+        ),
+      ),
+      [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          inputType: "boolean",
+          aiPrompt: "Is this a consumer contract?",
+        },
+      ],
+    );
+    return fillTemplateDocx({
+      source: {
+        name: "Terms",
+        fileName: "terms.docx",
+        file,
+        templateId: toSafeId<"template">("tmpl_1"),
+      },
+      values,
+      scopedDb: stubScopedDb(partyClause),
+      organizationId,
+      requiredFields: "enforce",
+      useRecording: "caller",
+      aiCollaborators: async () => ({
+        decideAiCondition: async () => ({
+          decidedBy: "generative_model",
+          value: decided,
+        }),
+      }),
+    });
+  };
+
+  test.each([
+    { slotInYesBranch: true, decided: true, renders: true },
+    { slotInYesBranch: true, decided: false, renders: false },
+    { slotInYesBranch: false, decided: true, renders: false },
+    { slotInYesBranch: false, decided: false, renders: true },
+  ])(
+    "a slot gated by an AI decision is required exactly when the decision renders it (%j)",
+    async ({ slotInYesBranch, decided, renders }) => {
+      const result = await fillAiGated({ slotInYesBranch, decided });
+      if (renders) {
+        expect(result).toEqual(nameRejection("name"));
+        expect(
+          await filledTexts(
+            await fillAiGated({
+              slotInYesBranch,
+              decided,
+              values: { name: "Acme" },
+            }),
+          ),
+        ).toEqual(["Party Acme"]);
+      } else {
+        expect(await filledTexts(result)).toEqual(["Business terms"]);
+      }
+    },
+  );
+
+  test("a slot the submitted values settle is gated before any AI work", async () => {
+    let collaboratorCalls = 0;
+    const file = await authorFieldMarkers(
+      await makeDocx(WRAP(P("{{ summary }}") + branchTemplate)),
+      [{ path: "summary", inputType: "text", aiPrompt: "Summarize." }],
+    );
+    const result = await fillTemplateDocx({
+      source: {
+        name: "Terms",
+        fileName: "terms.docx",
+        file,
+        templateId: toSafeId<"template">("tmpl_1"),
+      },
+      values: { show: true },
+      scopedDb: stubScopedDb(partyClause),
+      organizationId,
+      requiredFields: "enforce",
+      useRecording: "caller",
+      aiCollaborators: async () => {
+        collaboratorCalls += 1;
+        return {};
+      },
+    });
+    expect(result).toEqual(nameRejection("name"));
+    expect(collaboratorCalls).toBe(0);
+  });
+});
+
+type RequiredTree =
+  | { kind: "text"; text: string }
+  | { kind: "field"; path: "f1" | "f2" }
+  | { kind: "condition"; yes: RequiredTree[]; no: RequiredTree[] }
+  | { kind: "loop"; children: RequiredTree[] };
+
+const requiredTreeArbitrary = (
+  depth: number,
+  inLoop = false,
+): fc.Arbitrary<RequiredTree> => {
+  const leaf = fc.oneof(
+    fc
+      .constantFrom("Alpha", "Beta")
+      .map((text): RequiredTree => ({ kind: "text", text })),
+    fc
+      .constantFrom("f1", "f2")
+      .map((path): RequiredTree => ({ kind: "field", path })),
+  );
+  if (depth === 0) {
+    return leaf;
+  }
+  const children = fc.array(requiredTreeArbitrary(depth - 1, inLoop), {
+    minLength: 1,
+    maxLength: 2,
+  });
+  const condition = fc.record({
+    kind: fc.constant("condition"),
+    yes: children,
+    no: children,
+  });
+  if (inLoop) {
+    return fc.oneof(leaf, condition);
+  }
+  return fc.oneof(
+    leaf,
+    condition,
+    fc.record({
+      kind: fc.constant("loop"),
+      children: fc.array(requiredTreeArbitrary(depth - 1, true), {
+        minLength: 1,
+        maxLength: 2,
+      }),
+    }),
+  );
+};
+
+const requiredTreeBody = (
+  nodes: RequiredTree[],
+  required: ReadonlySet<string>,
+): ClauseBody =>
+  nodes.flatMap((node) => {
+    const marker = (path: string) =>
+      required.has(path) ? `{{ ${path} | required }}` : `{{ ${path} }}`;
+    switch (node.kind) {
+      case "text":
+        return [{ text: node.text }];
+      case "field":
+        return [{ text: `${node.path}: ${marker(node.path)}` }];
+      case "condition":
+        return [
+          clauseDirective("{% if c %}"),
+          ...requiredTreeBody(node.yes, required),
+          clauseDirective("{% else %}"),
+          ...requiredTreeBody(node.no, required),
+          clauseDirective("{% endif %}"),
+        ];
+      case "loop":
+        return [
+          clauseDirective("{% for row in rows %}"),
+          { text: `Row ${marker("row.name")}` },
+          ...requiredTreeBody(node.children, required),
+          clauseDirective("{% endfor %}"),
+        ];
+      default:
+        node satisfies never;
+        throw new TypeError("Unhandled generated required tree");
+    }
+  });
+
+const fillOutcome = async (
+  result: Awaited<ReturnType<typeof fillLinkedClause>>,
+) => {
+  if ("requiredFieldsRejection" in result) {
+    return {
+      missing: result.requiredFieldsRejection
+        .map(({ path }) => path)
+        .toSorted(compareCodeUnit),
+    };
+  }
+  return { texts: await filledTexts(result) };
+};
+
+test("a clause body and the equivalent template body fill to the same text and required fields", async () => {
+  await assertProperty(
+    "a clause body and the equivalent template body fill to the same text and required fields",
+    fc.asyncProperty(
+      fc.array(requiredTreeArbitrary(2), { minLength: 1, maxLength: 3 }),
+      fc.subarray(["f1", "f2", "row.name"]),
+      fc.boolean(),
+      fc.dictionary(fc.constantFrom("f1", "f2"), fc.constantFrom("", " ", "v")),
+      fc.array(
+        fc.dictionary(fc.constant("name"), fc.constantFrom("", " ", "v")),
+        { maxLength: 2 },
+      ),
+      async (tree, requiredPaths, c, fields, rows) => {
+        const values: TemplateData = { ...fields, c, rows };
+        const body = requiredTreeBody(tree, new Set(requiredPaths));
+        const viaClause = await fillOutcome(
+          await fillLinkedClause(body, values),
+        );
+        const viaTemplate = await fillOutcome(
+          await fillTemplateDocx({
+            source: {
+              name: "Terms",
+              fileName: "terms.docx",
+              file: await makeDocx(
+                WRAP(body.map(({ text }) => P(text)).join("")),
+              ),
+            },
+            values,
+            scopedDb: stubScopedDb(),
+            organizationId,
+            requiredFields: "enforce",
+            useRecording: "caller",
+          }),
+        );
+        expect(viaClause).toEqual(viaTemplate);
+      },
+    ),
   );
 });

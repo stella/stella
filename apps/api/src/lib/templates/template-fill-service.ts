@@ -44,7 +44,11 @@ import {
 import { createDispatchLookupResolver } from "@/api/lib/docx/lookup-fields";
 import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
 import { applyManifestFillSteps } from "@/api/lib/docx/manifest-fill-steps";
-import { fillTemplate } from "@/api/lib/docx/patch-template";
+import {
+  fillTemplate,
+  renderedClauseSlotOccurrences,
+} from "@/api/lib/docx/patch-template";
+import type { ClauseSlotVisitor } from "@/api/lib/docx/patch-template";
 import {
   type AiConditionDecider,
   isAiConditionField,
@@ -103,6 +107,7 @@ import {
 import type {
   MissingRequiredField,
   RequiredFieldsPolicy,
+  ScopedRequiredFields,
 } from "./template-optional-defaults";
 
 export type { MissingRequiredField } from "./template-optional-defaults";
@@ -738,6 +743,235 @@ const validateAuthoredClauseOverrides = ({
   return Result.ok(undefined);
 };
 
+type RenderClauseSlotOptions = {
+  slot: ApplyClausePatchesOptions["slots"][number];
+  body: ClauseBody;
+  clause: ClauseProvenance;
+  values: TemplateData;
+  namedConditions: ApplyClausePatchesOptions["namedConditions"];
+};
+
+/** One clause slot rendered against the values in scope where it renders. */
+const renderClauseSlot = ({
+  slot,
+  body,
+  clause,
+  values,
+  namedConditions,
+}: RenderClauseSlotOptions) => {
+  const patch = clauseBodyToRichPatch(body, {
+    source: clause.resolution === "override" ? "authored" : "stored",
+    values,
+    slotKey: slot.patchKey,
+    namedConditions,
+  });
+  return Result.isError(patch)
+    ? Result.err(clauseDirectiveError({ error: patch.error, clause, slot }))
+    : patch;
+};
+
+type ClauseRequiredScopesOptions = {
+  file: ScannedFile;
+  discovered: DiscoveredTemplate;
+  values: TemplateData;
+  namedConditions: ApplyClausePatchesOptions["namedConditions"];
+};
+
+const clauseScopedPaths = (discovered: DiscoveredTemplate) =>
+  new Set(Object.values(discovered.clauseScopedFieldPaths ?? {}).flat());
+
+/**
+ * Where each clause slot's own fields render, read from the directive pass the
+ * fill renders with: a slot in a pruned branch contributes no scope and a slot
+ * in a loop contributes one per iteration, resolved against its bindings.
+ */
+const clauseRequiredScopes = async ({
+  file,
+  discovered,
+  values,
+  namedConditions,
+}: ClauseRequiredScopesOptions): Promise<ScopedRequiredFields> => {
+  const paths = clauseScopedPaths(discovered);
+  if (paths.size === 0) {
+    return { paths, scopes: [] };
+  }
+  const occurrences = await renderedClauseSlotOccurrences(
+    file,
+    values,
+    namedConditions,
+  );
+  return {
+    paths,
+    scopes: occurrences.flatMap(({ patchKey, loopScope }) => {
+      const slotPaths = discovered.clauseScopedFieldPaths?.[patchKey];
+      return slotPaths === undefined || slotPaths.length === 0
+        ? []
+        : [{ paths: new Set(slotPaths), values: loopScope ?? values }];
+    }),
+  };
+};
+
+const overlapsPath = (left: string, right: string) =>
+  left === right ||
+  left.startsWith(`${right}.`) ||
+  right.startsWith(`${left}.`);
+
+/**
+ * Whether the submitted values already decide where every clause slot renders:
+ * no condition or loop the template evaluates reads a value a later fill step
+ * derives or rewrites (formula, binding, lookup, AI draft or decision, date
+ * normalization). Otherwise the clause fields are gated once those steps ran.
+ */
+const clauseScopesSettledBeforeFillSteps = (
+  manifest: TemplateManifest,
+  discovered: DiscoveredTemplate,
+): boolean => {
+  const derived = manifest.fields
+    .filter(
+      (field) =>
+        field.formula !== undefined ||
+        field.condition !== undefined ||
+        field.conditionAst !== undefined ||
+        field.source !== undefined ||
+        field.lookup !== undefined ||
+        Boolean(field.aiPrompt) ||
+        (field.inputType === "date" && field.dateFormat !== undefined),
+    )
+    .map((field) => field.path);
+  const evaluated = [
+    ...discovered.conditionPaths,
+    ...discovered.fields
+      .filter((field) => field.kind === "array")
+      .map((field) => field.path),
+  ];
+  return !evaluated.some((path) =>
+    derived.some((derivedPath) => overlapsPath(path, derivedPath)),
+  );
+};
+
+type ClauseRequirementGateOptions = {
+  manifest: TemplateManifest;
+  discovered: DiscoveredTemplate;
+  requiredFields: RequiredFieldsPolicy;
+  namedConditions: ApplyClausePatchesOptions["namedConditions"];
+};
+
+/**
+ * A clause slot's own fields are required where the slot renders. `early`
+ * scopes the pre-AI gate when the submitted values already settle every slot;
+ * otherwise it defers them, and `late` gates them once every fill step ran.
+ */
+const clauseRequirementGate = ({
+  manifest,
+  discovered,
+  requiredFields,
+  namedConditions,
+}: ClauseRequirementGateOptions) => {
+  const paths = clauseScopedPaths(discovered);
+  const enforced = requiredFields === "enforce" && paths.size > 0;
+  const settled = clauseScopesSettledBeforeFillSteps(manifest, discovered);
+  return {
+    early: async (
+      file: ScannedFile,
+      values: FillValues,
+    ): Promise<ScopedRequiredFields> =>
+      enforced && settled && isTemplateData(values)
+        ? clauseRequiredScopes({ file, discovered, values, namedConditions })
+        : { paths, scopes: [] },
+    late: async (
+      file: ScannedFile,
+      values: TemplateData,
+    ): Promise<MissingRequiredField[]> =>
+      enforced && !settled
+        ? collectMissingRequiredFields({
+            fields: manifest.fields.filter((field) => paths.has(field.path)),
+            policy: requiredFields,
+            values,
+            scoped: await clauseRequiredScopes({
+              file,
+              discovered,
+              values,
+              namedConditions,
+            }),
+          })
+        : [],
+  };
+};
+
+/**
+ * Renders a slot inside a loop once per iteration under that iteration's
+ * bindings, exactly as the loop's own markers render. The first refusal is
+ * kept for the caller, which fails the fill with it.
+ */
+const loopClauseSlotRenderer = ({
+  slots,
+  bodies,
+  clauses,
+  namedConditions,
+}: Omit<ApplyClausePatchesOptions, "record">) => {
+  let refusal: HandlerError<422> | undefined;
+  const render: ClauseSlotVisitor = ({ patchKey, loopScope }) => {
+    const body = bodies[patchKey];
+    const slot = slots.find((candidate) => candidate.patchKey === patchKey);
+    if (
+      loopScope === undefined ||
+      body === undefined ||
+      slot === undefined ||
+      refusal !== undefined
+    ) {
+      return undefined;
+    }
+    if (!isTemplateData(loopScope)) {
+      return panic("Loop scope holds values outside the template data model");
+    }
+    const patch = renderClauseSlot({
+      slot,
+      body,
+      clause:
+        clauses[patchKey] ?? panic(`Missing clause provenance for ${patchKey}`),
+      values: loopScope,
+      namedConditions,
+    });
+    if (Result.isError(patch)) {
+      refusal = patch.error;
+      return undefined;
+    }
+    return patch.value;
+  };
+  return { render, error: () => refusal };
+};
+
+/**
+ * Patch every clause slot at document scope, then fill the template, letting
+ * the directive pass render each slot it keeps inside a loop per iteration.
+ */
+const fillWithClauseSlots = async ({
+  file,
+  ...options
+}: ApplyClausePatchesOptions & { file: ScannedFile }): Promise<
+  Result<
+    {
+      result: Awaited<ReturnType<typeof fillTemplate>>;
+      clauseWarnings: ClauseDirectiveWarning[];
+    },
+    HandlerError<422>
+  >
+> => {
+  const clauseWarnings = applyClausePatches(options);
+  if (Result.isError(clauseWarnings)) {
+    return clauseWarnings;
+  }
+  const loopClauses = loopClauseSlotRenderer(options);
+  const result = await fillTemplate(file, options.record, {
+    namedConditions: options.namedConditions,
+    clauseSlots: loopClauses.render,
+  });
+  const refusal = loopClauses.error();
+  return refusal === undefined
+    ? Result.ok({ result, clauseWarnings: clauseWarnings.value })
+    : Result.err(refusal);
+};
+
 const applyClausePatches = ({
   slots,
   bodies,
@@ -770,16 +1004,15 @@ const applyClausePatches = ({
         clauseWarnings.push(warning);
       }
     }
-    const patch = clauseBodyToRichPatch(body, {
-      source: clause.resolution === "override" ? "authored" : "stored",
+    const patch = renderClauseSlot({
+      slot,
+      body,
+      clause,
       values: record,
-      slotKey: slot.patchKey,
       namedConditions,
     });
     if (Result.isError(patch)) {
-      return Result.err(
-        clauseDirectiveError({ error: patch.error, clause, slot }),
-      );
+      return Result.err(patch.error);
     }
     record[slot.patchKey] = patch.value;
   }
@@ -992,6 +1225,13 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   }
 
   let record: FillValues = { ...values };
+  const namedConditions = manifestNamedConditions(manifest);
+  const clauseRequirements = clauseRequirementGate({
+    manifest,
+    discovered,
+    requiredFields,
+    namedConditions,
+  });
 
   // Reject missing user-entered fields before AI/lookup work. Every real fill
   // enforces this gate; the live preview explicitly permits partial inputs.
@@ -999,6 +1239,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     fields: manifest.fields,
     policy: requiredFields,
     values: record,
+    scoped: await clauseRequirements.early(loaded.file, record),
   });
   if (missingRequiredFields.length > 0) {
     return { requiredFieldsRejection: missingRequiredFields };
@@ -1112,22 +1353,26 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     };
   }
 
-  const namedConditions = manifestNamedConditions(manifest);
-  const patchedClauses = applyClausePatches({
+  const missingClauseFields = await clauseRequirements.late(fillSource, record);
+  if (missingClauseFields.length > 0) {
+    return { requiredFieldsRejection: missingClauseFields };
+  }
+
+  const rendered = await fillWithClauseSlots({
+    file: fillSource,
     slots,
     bodies,
     clauses,
     record,
     namedConditions,
   });
-  if (Result.isError(patchedClauses)) {
+  if (Result.isError(rendered)) {
     return {
-      error: patchedClauses.error.message,
-      storedTemplateError: patchedClauses.error,
+      error: rendered.error.message,
+      storedTemplateError: rendered.error,
     };
   }
-
-  const result = await fillTemplate(fillSource, record, { namedConditions });
+  const { result, clauseWarnings } = rendered.value;
 
   if (templateId !== undefined && useRecording === "after-fill") {
     await scopedDb(async (tx) => {
@@ -1153,7 +1398,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     structureErrors: result.structureErrors,
     aiFieldErrors,
     conditionDecisions: decidedConditions.conditions,
-    clauseWarnings: patchedClauses.value,
+    clauseWarnings,
   };
 };
 

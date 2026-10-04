@@ -1111,11 +1111,16 @@ export const discoverTemplate = async (
     err.source = "body";
   }
 
+  const templateFieldPaths = new Set(primary.fields.keys());
   const clauseFieldPaths = new Set<string>();
+  const clausePathsBySlot = new Map<string, Set<string>>();
   for (const { container, clause } of additionalContent) {
     const analysis = analyzeContainer(container);
+    const slotPaths = clausePathsBySlot.get(clause.slotKey) ?? new Set();
+    clausePathsBySlot.set(clause.slotKey, slotPaths);
     for (const path of analysis.fields.keys()) {
       clauseFieldPaths.add(path);
+      slotPaths.add(path);
     }
     for (const declaration of analysis.documentFilters.values()) {
       declaration.clause = clause;
@@ -1135,6 +1140,9 @@ export const discoverTemplate = async (
 
   // Scan headers and footers for additional fields
   const hfAnalysis = await analyzeHeadersAndFooters(zip, slots);
+  for (const path of hfAnalysis.fields.keys()) {
+    templateFieldPaths.add(path);
+  }
   mergeAnalysis(primary, hfAnalysis);
 
   const { fields, errors, placeholderCounts, fieldConditions } = primary;
@@ -1196,6 +1204,14 @@ export const discoverTemplate = async (
   return {
     clauseSlots: [...slots.values()],
     clauseFieldPaths: [...clauseFieldPaths],
+    clauseScopedFieldPaths: Object.fromEntries(
+      [...clausePathsBySlot].map(([slotKey, paths]) => [
+        slotKey,
+        [...paths]
+          .filter((path) => !templateFieldPaths.has(path))
+          .toSorted(compareCodeUnit),
+      ]),
+    ),
     placeholders,
     fields: discoveredFields,
     structureErrors: errors,
