@@ -350,9 +350,9 @@ describe("queue drain", () => {
       stoppedBecause: "aborted",
     });
     expect(received).toBe(1);
-    // The first delivery filed, but its delete was cancelled with the run:
-    // it is redelivered and converges as a duplicate.
-    expect(queue.remaining().map(({ id }) => id)).toEqual(ids);
+    // The first delivery filed and its acknowledgement outlives the abort;
+    // the unhandled rest stay on the queue.
+    expect(queue.remaining().map(({ id }) => id)).toEqual(ids.slice(1));
   });
 
   test("a failed delete is redelivered and acknowledged once it converges", async () => {

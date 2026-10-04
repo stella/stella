@@ -24,6 +24,7 @@ const RECEIVE_WAIT_SECONDS = 1;
 // read, authentication and persistence budgets. The lease must outlast the
 // batch so a later run cannot take a message that is still being filed.
 const VISIBILITY_TIMEOUT_SECONDS = 600;
+const DELETE_TIMEOUT_MS = 5000;
 
 // SES publishes this once when a receipt rule's topic is configured.
 const SES_SETUP_NOTIFICATION = "AMAZON_SES_SETUP_NOTIFICATION";
@@ -223,7 +224,9 @@ export const drainInboundMailQueue = async ({
             QueueUrl: queueUrl,
             ReceiptHandle: message.ReceiptHandle,
           }),
-          { abortSignal: signal },
+          // Not the run signal: once a delivery is terminal, an abort must
+          // not turn its acknowledgement into a redelivery.
+          { abortSignal: AbortSignal.timeout(DELETE_TIMEOUT_MS) },
         ),
       catch: (cause) => cause,
     });
