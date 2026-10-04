@@ -20,6 +20,7 @@ import { loadCapabilityEndpoint } from "@/api/mcp/capability-tools";
 import { MCP_MODES, type McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { listOfferedStaticMcpToolDefinitions } from "@/api/mcp/gateway/static-tool-visibility";
+import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -35,7 +36,6 @@ import {
   isCatalogTransportInvocable,
 } from "../../../../packages/cli/src/generate-capability-tree";
 import registrySnapshot from "../../../../packages/cli/src/generated/registry-snapshot.json" with { type: "json" };
-import { generatedToolAnnotations } from "../../../../packages/cli/src/generated/tool-annotations";
 import {
   EXIT_CODES,
   resolveMcpErrorCodeExit,
@@ -43,6 +43,7 @@ import {
 import type {
   RegistryToolListing,
   RouteNode,
+  ToolAnnotation,
 } from "../../../../packages/cli/src/route-types";
 
 // The role matrix for write tools. A write tool's expected outcome for a role
@@ -423,9 +424,17 @@ if (cliCatalogEntries === null) {
 }
 const catalogEntries = cliCatalogEntries;
 
+/**
+ * The API-owned CLI metadata the CLI's tool annotations are generated from.
+ * The generated module is a build output, so a plain typecheck of this
+ * package cannot rely on it.
+ */
+const cliAnnotations: Readonly<Record<string, ToolAnnotation>> =
+  DEFAULT_MCP_CLI_ANNOTATIONS;
+
 const cliTreeFor = (offered: ReadonlySet<string> | null): RouteNode =>
   buildCliRouteTree({
-    annotations: generatedToolAnnotations,
+    annotations: cliAnnotations,
     entries: catalogEntries,
     listings:
       offered === null
@@ -590,7 +599,7 @@ describe("write tool role matrix", () => {
 
 /** Write tools the CLI's tool annotations exclude from its command tree. */
 const isCliExcluded = (name: string): boolean =>
-  generatedToolAnnotations[name]?.excluded === true;
+  cliAnnotations[name]?.excluded === true;
 
 /**
  * How the CLI performs the operation of a write tool it excludes (an MCP App
