@@ -181,13 +181,18 @@ describe("court and courts combine as the search ANDs them", () => {
   test("a one-spelling court stays the court filter", () => {
     expect(
       combineCourtFilters({ court: ["Ústavný súd"], courts: undefined }),
-    ).toEqual({ court: "Ústavný súd", courts: undefined });
+    ).toEqual({
+      court: "Ústavný súd",
+      courts: undefined,
+      courtSpellings: ["Ústavný súd"],
+    });
   });
 
   test("a several-spelling court moves into courts", () => {
     expect(combineCourtFilters({ court: SUPREME, courts: undefined })).toEqual({
       court: undefined,
       courts: [...SUPREME],
+      courtSpellings: SUPREME,
     });
   });
 
@@ -197,19 +202,28 @@ describe("court and courts combine as the search ANDs them", () => {
         court: SUPREME,
         courts: ["Najvyšší súd", "Ústavný súd"],
       }),
-    ).toEqual({ court: undefined, courts: ["Najvyšší súd"] });
+    ).toEqual({
+      court: undefined,
+      courts: ["Najvyšší súd"],
+      courtSpellings: ["Najvyšší súd"],
+    });
   });
 
   test("a contradiction is sent as written", () => {
     expect(
       combineCourtFilters({ court: SUPREME, courts: ["Ústavný súd"] }),
-    ).toEqual({ court: "Najvyšší súd", courts: ["Ústavný súd"] });
+    ).toEqual({
+      court: "Najvyšší súd",
+      courts: ["Ústavný súd"],
+      courtSpellings: ["Najvyšší súd"],
+    });
   });
 
   test("a list that read as nothing is no list", () => {
     expect(combineCourtFilters({ court: undefined, courts: [] })).toEqual({
       court: undefined,
       courts: undefined,
+      courtSpellings: undefined,
     });
   });
 });

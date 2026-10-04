@@ -177,16 +177,34 @@ export const readCourtFilter = ({
   return {
     type: "court",
     courts: spellings,
-    warning:
-      spellings.length === 1 && spellings[0] === court
-        ? null
-        : filterReadWarning({ filter: "court", received, values: spellings }),
+    warning: courtReadWarning({ court, spellings }),
   };
 };
+
+/** The note for a court value read as these spellings; none when verbatim. */
+const courtReadWarning = ({
+  court,
+  spellings,
+}: {
+  court: string;
+  spellings: readonly [string, ...string[]];
+}): AgentCaseLawSearchWarning | null =>
+  spellings.length === 1 && spellings[0] === court
+    ? null
+    : filterReadWarning({
+        filter: "court",
+        received: JSON.stringify(court),
+        values: spellings,
+      });
 
 type CourtFilters = {
   court: string | undefined;
   courts: string[] | undefined;
+};
+
+type CombinedCourtFilters = CourtFilters & {
+  /** The spellings of `court` the combined filters search; its note's list. */
+  courtSpellings: readonly [string, ...string[]] | undefined;
 };
 
 /**
@@ -203,25 +221,51 @@ export const combineCourtFilters = ({
 }: {
   court: readonly [string, ...string[]] | undefined;
   courts: readonly string[] | undefined;
-}): CourtFilters => {
+}): CombinedCourtFilters => {
   const listed =
     courts === undefined || courts.length === 0
       ? undefined
       : [...new Set(courts)];
   if (court === undefined) {
-    return { court: undefined, courts: listed };
+    return { court: undefined, courts: listed, courtSpellings: undefined };
   }
   const [only, ...others] = court;
   if (others.length === 0) {
-    return { court: only, courts: listed };
+    return { court: only, courts: listed, courtSpellings: [only] };
   }
   if (listed === undefined) {
-    return { court: undefined, courts: [...court] };
+    return { court: undefined, courts: [...court], courtSpellings: court };
   }
-  const both = listed.filter((spelling) => court.includes(spelling));
-  return both.length > 0
-    ? { court: undefined, courts: both }
-    : { court: only, courts: listed };
+  const [first, ...rest] = listed.filter((spelling) =>
+    court.includes(spelling),
+  );
+  return first === undefined
+    ? { court: only, courts: listed, courtSpellings: [only] }
+    : {
+        court: undefined,
+        courts: [first, ...rest],
+        courtSpellings: [first, ...rest],
+      };
+};
+
+/** The `court` value's note, from the spellings the combined filters search. */
+const combinedCourtWarning = ({
+  court,
+  reading,
+  spellings,
+}: {
+  court: string;
+  reading: CourtFilterReading;
+  spellings: CombinedCourtFilters["courtSpellings"];
+}): AgentCaseLawSearchWarning | null => {
+  if (reading.type === "dropped") {
+    return reading.warning;
+  }
+  return courtReadWarning({
+    court,
+    spellings:
+      spellings ?? panic("A court reading combined into no court spellings"),
+  });
 };
 
 /**
@@ -248,23 +292,35 @@ export const resolveCourtFilter = async ({
     return { court, courts: requestedCourts, warnings: [] };
   }
   const identities = storedCourtIdentities(country, courts);
-  const warnings: AgentCaseLawSearchWarning[] = [];
-  const read = (value: string) => {
-    const reading = readCourtFilter({ court: value, identities });
-    if (reading.warning !== null) {
-      warnings.push(reading.warning);
-    }
-    return reading.type === "court" ? reading.courts : undefined;
-  };
-  return {
-    ...combineCourtFilters({
-      court: court === undefined ? undefined : read(court),
-      courts: requestedCourts?.flatMap((value) => {
-        const spellings = read(value);
-        return spellings === undefined ? [] : [...spellings];
-      }),
+  const listWarnings: AgentCaseLawSearchWarning[] = [];
+  const courtReading =
+    court === undefined ? undefined : readCourtFilter({ court, identities });
+  const combined = combineCourtFilters({
+    court: courtReading?.type === "court" ? courtReading.courts : undefined,
+    courts: requestedCourts?.flatMap((value) => {
+      const reading = readCourtFilter({ court: value, identities });
+      if (reading.warning !== null) {
+        listWarnings.push(reading.warning);
+      }
+      return reading.type === "court" ? [...reading.courts] : [];
     }),
-    warnings,
+  });
+  // A several-spelling `court` combined with `courts` searches only the
+  // spellings both allow, or its first spelling when they contradict, so its
+  // note is written from the combined filter, not from the reading alone.
+  const courtWarning =
+    court === undefined || courtReading === undefined
+      ? null
+      : combinedCourtWarning({
+          court,
+          reading: courtReading,
+          spellings: combined.courtSpellings,
+        });
+  return {
+    court: combined.court,
+    courts: combined.courts,
+    warnings:
+      courtWarning === null ? listWarnings : [courtWarning, ...listWarnings],
   };
 };
 

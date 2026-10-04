@@ -4613,6 +4613,42 @@ describe("OpenAI-compatible MCP tools", () => {
       );
     });
 
+    test("a several-spelling court the court list excludes notes only the spelling sent", async () => {
+      const baseContext = createContext();
+      const result = await handleMcpToolCall({
+        args: {
+          queries: ["náhrada škody"],
+          country: "CZE",
+          court: "NS",
+          courts: ["Ústavní soud"],
+        },
+        context: {
+          ...baseContext,
+          testDependencies: {
+            ...baseContext.testDependencies,
+            readCaseLawCourtNames: async () => [
+              "Nejvyšší soud",
+              "Nejvyšší soud České republiky",
+              "Ústavní soud",
+            ],
+          },
+        },
+        toolName: "search_case_law",
+      });
+
+      // The filters contradict, so they are sent as written: `court` carries
+      // one spelling, and the note names that one rather than both.
+      expect(searchedBody()["court"]).toBe("Nejvyšší soud");
+      expect(searchedBody()["courts"]).toEqual(["Ústavní soud"]);
+      expect(
+        searchWarnings(result).filter(({ code }) => code === "filter_read"),
+      ).toEqual([
+        expect.objectContaining({
+          message: 'Read court "NS" as "Nejvyšší soud".',
+        }),
+      ]);
+    });
+
     test.each([
       ["Česká republika", "Ústavní soud"],
       ["Krajský soud", "Krajský soud v Brně"],
