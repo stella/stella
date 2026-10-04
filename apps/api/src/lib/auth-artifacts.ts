@@ -1,16 +1,28 @@
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
 import {
   apikey,
+  member,
   oauthAccessToken,
   oauthConsent,
   oauthRefreshToken,
   session as sessionTable,
 } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import {
+  desktopEditHandoffs,
+  desktopEditSessions,
+  folioCollabRoomTokens,
+  mcpOAuthState,
+  mcpUserConnections,
+  pdfSigningSessions,
+  sharepointConnections,
+  sharepointOAuthState,
+  workspaces,
+} from "@/api/db/schema";
 import type { ApiKeyConfigId } from "@/api/lib/api-key-plugin-configs";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
@@ -55,6 +67,9 @@ type RevokeMemberCredentials = (
   tx: AuthArtifactTransaction,
   scope: MemberCredentialScope,
 ) => Promise<void>;
+
+const workspaceIdsForOrganization = (organizationId: SafeId<"organization">) =>
+  sql`(select ${workspaces.id} from ${workspaces} where ${workspaces.organizationId} = ${organizationId})`;
 
 /**
  * Which of a user's API keys belong to one organization, for every
@@ -166,6 +181,125 @@ const MEMBER_CREDENTIAL_REVOCATION = {
         ),
       );
   },
+  mcpUserConnection: async (
+    tx,
+    { organizationId, userId }: MemberCredentialScope,
+  ) => {
+    await tx
+      .delete(mcpUserConnections)
+      .where(
+        and(
+          eq(mcpUserConnections.organizationId, organizationId),
+          eq(mcpUserConnections.userId, userId),
+        ),
+      );
+  },
+  mcpOAuthState: async (
+    tx,
+    { organizationId, userId }: MemberCredentialScope,
+  ) => {
+    await tx
+      .delete(mcpOAuthState)
+      .where(
+        and(
+          eq(mcpOAuthState.organizationId, organizationId),
+          eq(mcpOAuthState.userId, userId),
+        ),
+      );
+  },
+  sharepointConnection: async (
+    tx,
+    { organizationId, userId }: MemberCredentialScope,
+  ) => {
+    await tx
+      .delete(sharepointConnections)
+      .where(
+        and(
+          eq(sharepointConnections.organizationId, organizationId),
+          eq(sharepointConnections.userId, userId),
+        ),
+      );
+  },
+  sharepointOAuthState: async (
+    tx,
+    { organizationId, userId }: MemberCredentialScope,
+  ) => {
+    await tx
+      .delete(sharepointOAuthState)
+      .where(
+        and(
+          eq(sharepointOAuthState.organizationId, organizationId),
+          eq(sharepointOAuthState.userId, userId),
+        ),
+      );
+  },
+  desktopEditHandoff: async (
+    tx,
+    { organizationId, userId }: MemberCredentialScope,
+  ) => {
+    await tx
+      .delete(desktopEditHandoffs)
+      .where(
+        and(
+          eq(desktopEditHandoffs.createdBy, userId),
+          inArray(
+            desktopEditHandoffs.workspaceId,
+            workspaceIdsForOrganization(organizationId),
+          ),
+        ),
+      );
+  },
+  desktopEditSession: async (
+    tx,
+    { organizationId, userId }: MemberCredentialScope,
+  ) => {
+    const now = new Date();
+    await tx
+      .update(desktopEditSessions)
+      .set({ closedAt: now, status: "expired", tokenExpiresAt: now })
+      .where(
+        and(
+          eq(desktopEditSessions.createdBy, userId),
+          eq(desktopEditSessions.status, "open"),
+          inArray(
+            desktopEditSessions.workspaceId,
+            workspaceIdsForOrganization(organizationId),
+          ),
+        ),
+      );
+  },
+  pdfSigningSession: async (
+    tx,
+    { organizationId, userId }: MemberCredentialScope,
+  ) => {
+    await tx
+      .delete(pdfSigningSessions)
+      .where(
+        and(
+          eq(pdfSigningSessions.createdBy, userId),
+          inArray(
+            pdfSigningSessions.workspaceId,
+            workspaceIdsForOrganization(organizationId),
+          ),
+        ),
+      );
+  },
+  folioCollabRoomToken: async (
+    tx,
+    { organizationId, userId }: MemberCredentialScope,
+  ) => {
+    await tx
+      .delete(folioCollabRoomTokens)
+      .where(
+        and(
+          eq(folioCollabRoomTokens.userId, userId),
+          inArray(
+            folioCollabRoomTokens.workspaceId,
+            workspaceIdsForOrganization(organizationId),
+          ),
+        ),
+      );
+  },
   // API keys the departing member holds *in this organization*, under every
   // registered configuration.
   //
@@ -212,6 +346,27 @@ export const revokeOrganizationMemberAuthArtifacts = async (
   for (const revoke of Object.values(MEMBER_CREDENTIAL_REVOCATION)) {
     await revoke(tx, scope);
   }
+};
+
+type RemoveOrganizationMemberScope = MemberCredentialScope & {
+  memberId: string;
+};
+
+/** The caller's transaction commits membership and credential cleanup together. */
+export const removeOrganizationMemberWithAuthArtifacts = async (
+  tx: AuthArtifactTransaction,
+  { memberId, organizationId, userId }: RemoveOrganizationMemberScope,
+): Promise<void> => {
+  await tx
+    .delete(member)
+    .where(
+      and(
+        eq(member.id, memberId),
+        eq(member.organizationId, organizationId),
+        eq(member.userId, userId),
+      ),
+    );
+  await revokeOrganizationMemberAuthArtifacts(tx, { organizationId, userId });
 };
 
 type RevokeOAuthClientAuthArtifactsOptions = {
@@ -265,6 +420,26 @@ export const revokeOAuthClientAuthArtifacts = async (
           ? eq(oauthRefreshToken.referenceId, referenceId)
           : isNull(oauthRefreshToken.referenceId),
       ),
+    );
+};
+
+type SessionRevocationDatabase = {
+  delete: (table: typeof sessionTable) => ExecutableWhereStep;
+};
+
+type UserSessionRevocationOptions = {
+  sessionId: string;
+  userId: SafeId<"user">;
+};
+
+export const revokeUserSessionById = async (
+  db: SessionRevocationDatabase,
+  { sessionId, userId }: UserSessionRevocationOptions,
+): Promise<void> => {
+  await db
+    .delete(sessionTable)
+    .where(
+      and(eq(sessionTable.id, sessionId), eq(sessionTable.userId, userId)),
     );
 };
 

@@ -27,7 +27,7 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { analysisStore } from "@/api/lib/case-law/analysis-store";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
-  getTanStackTextModelForRole,
+  getTanStackTextModelInfoForRole,
   requireTanStackAIAvailableForRole,
 } from "@/api/lib/tanstack-ai-models";
 
@@ -133,7 +133,7 @@ export const refreshSignificance = async ({
   });
 
   const written = await Result.tryPromise(async () => {
-    const { modelId } = getTanStackTextModelForRole("fast", orgAIConfig, {
+    const { modelId } = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
       dataClass: "public_corpus",
       organizationId,
     });

@@ -1,4 +1,4 @@
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { readUsagePolicyCatalog } from "@/api/lib/usage/policy-catalog";
 
@@ -21,6 +21,7 @@ const config = {
   // Same gate as the other hosted-billing endpoints: the catalog is
   // only actionable by whoever can start a checkout.
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   access: "read",
   mcp: { type: "internal", reason: "hosted_billing" },
 } satisfies HandlerConfig;

@@ -91,6 +91,7 @@ import {
   buildWireSnapshot,
   unsafeFixture,
 } from "@/api/tests/helpers/chat-fixtures";
+import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
@@ -1330,10 +1331,13 @@ describe("native interrupt boundary persistence", () => {
         "22222222-2222-4222-8222-222222222222",
       ),
       userId: toSafeId<"user">("33333333-3333-4333-8333-333333333333"),
-      workspaceId: toSafeId<"workspace">(
-        "44444444-4444-4444-8444-444444444444",
-      ),
-      entityId: toSafeId<"entity">("55555555-5555-4555-8555-555555555555"),
+      access: memberDocumentWriteAccess({
+        type: "new_version",
+        workspaceId: toSafeId<"workspace">(
+          "44444444-4444-4444-8444-444444444444",
+        ),
+        entityId: toSafeId<"entity">("55555555-5555-4555-8555-555555555555"),
+      }),
       fileFieldId: toSafeId<"field">("77777777-7777-4777-8777-777777777777"),
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
@@ -2951,7 +2955,6 @@ describe("outgoing chat stream message ids", () => {
         type: EventType.RUN_ERROR,
         message: "quota_exhausted",
         code: "quota_exhausted",
-        rawEvent: { statusCode: 429 },
       },
     ]);
     expect(outcomes).toEqual(["failed"]);
@@ -3002,12 +3005,6 @@ describe("outgoing chat stream message ids", () => {
     ).toMatchObject({
       code: "provider_credentials_rejected",
       message: "provider_credentials_rejected",
-      rawEvent: {
-        code: "invalid_api_key",
-        message: "Incorrect API key",
-        param: null,
-        type: "invalid_request_error",
-      },
       type: EventType.RUN_ERROR,
     });
     expect(outcomes).toEqual(["failed"]);
@@ -3082,7 +3079,6 @@ describe("outgoing chat stream message ids", () => {
         type: EventType.RUN_ERROR,
         message: "unknown",
         code: "unknown",
-        rawEvent: expect.any(HandlerError),
       });
       expect(errorSpy).not.toHaveBeenCalledWith(
         "chat.stream_failed",
@@ -3255,7 +3251,6 @@ describe("outgoing chat stream message ids", () => {
       type: EventType.RUN_ERROR,
       message: "provider_billing",
       code: "provider_billing",
-      rawEvent: { statusCode: 402 },
     });
     expect(outcomes).toEqual(["failed"]);
   });

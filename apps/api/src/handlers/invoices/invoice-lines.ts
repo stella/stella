@@ -21,6 +21,8 @@ import { applyMarkupCents, prorateHourlyCents } from "@stll/money";
 import type { Transaction } from "@/api/db/root";
 import {
   expenses,
+  INVOICE_ATTACHMENT,
+  INVOICE_BILLING_PURPOSE,
   INVOICE_STATUS,
   invoiceLines,
   invoices,
@@ -34,10 +36,16 @@ import {
   type AuditRecorder,
   type FieldDiffs,
 } from "@/api/lib/audit-log";
+import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
+import { checkInvoiceBillingArrangement } from "@/api/lib/billing/invoice-arrangements";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents, type CentsAmount } from "@/api/lib/money";
+import type {
+  UnprojectedColumns,
+  UnbackedProjectionKeys,
+} from "@/api/lib/projection-totality";
 
 /** Stored quantity scale: `invoice_lines.quantity` is `numeric(18, 4)`. */
 const QUANTITY_SCALE = 4;
@@ -102,6 +110,7 @@ export type InvoiceLineDraft = LineVat & {
   unitPrice: CentsAmount;
   netAmount: CentsAmount;
   source: InvoiceLineSource;
+  billingPurpose: (typeof invoiceLines.$inferSelect)["billingPurpose"];
   timeEntryId: SafeId<"timeEntry"> | null;
   expenseId: SafeId<"expense"> | null;
 };
@@ -163,6 +172,7 @@ export const timeEntryLineDraft = (
   }),
   ...vat,
   source: INVOICE_LINE_SOURCE.TIME_ENTRY,
+  billingPurpose: INVOICE_BILLING_PURPOSE.ORDINARY,
   timeEntryId: entry.id,
   expenseId: null,
 });
@@ -196,6 +206,7 @@ export const expenseLineDraft = (
     netAmount: amount,
     ...vat,
     source: INVOICE_LINE_SOURCE.EXPENSE,
+    billingPurpose: INVOICE_BILLING_PURPOSE.ORDINARY,
     timeEntryId: null,
     expenseId: expense.id,
   };
@@ -222,6 +233,7 @@ export const manualLineDraft = (
     ...input,
     netAmount: netAmount.value,
     source: INVOICE_LINE_SOURCE.MANUAL,
+    billingPurpose: INVOICE_BILLING_PURPOSE.ORDINARY,
     timeEntryId: null,
     expenseId: null,
   });
@@ -342,6 +354,7 @@ export const insertInvoiceLines = async (
         vatAmount: line.vatAmount,
         grossAmount: line.grossAmount,
         source: line.source,
+        billingPurpose: line.billingPurpose,
         timeEntryId: line.timeEntryId,
         expenseId: line.expenseId,
       })),
@@ -431,6 +444,7 @@ const materialiseAttachedEntryLines = async (
       .where(
         and(
           eq(timeEntries.invoiceId, scope.invoiceId),
+          eq(timeEntries.invoiceAttachment, INVOICE_ATTACHMENT.CHARGED),
           eq(timeEntries.workspaceId, scope.workspaceId),
           notExists(
             tx
@@ -596,7 +610,8 @@ type InvoiceForReadTotals = {
     expenseId: SafeId<"expense"> | null;
     releasedAt: Date | null;
   })[];
-  timeEntries: readonly TimeEntryForLine[];
+  timeEntries: readonly (TimeEntryForLine &
+    Pick<typeof timeEntries.$inferSelect, "invoiceAttachment">)[];
   expenses: readonly ExpenseForLine[];
 };
 
@@ -631,7 +646,11 @@ export const readInvoiceTotals = (
   const lines: LineAmountInput[] = [
     ...invoice.lines,
     ...invoice.timeEntries
-      .filter((entry) => !linedTimeEntries.has(entry.id))
+      .filter(
+        (entry) =>
+          entry.invoiceAttachment === INVOICE_ATTACHMENT.CHARGED &&
+          !linedTimeEntries.has(entry.id),
+      )
       .map((entry) => timeEntryLineDraft(entry, ATTACHED_ENTRY_LINE_VAT)),
     ...invoice.expenses
       .filter((expense) => !linedExpenses.has(expense.id))
@@ -661,6 +680,10 @@ export const recalculateInvoiceTotals = async (
   now: Date,
   recordAuditEvent: AuditRecorder,
 ): Promise<Result<InvoiceTotals, HandlerError>> => {
+  const billing = await checkInvoiceBillingArrangement(tx, scope);
+  if (billing.isErr()) {
+    return Result.err(billing.error);
+  }
   const lines = await tx
     .select({
       description: invoiceLines.description,
@@ -732,6 +755,10 @@ export const recalculateInvoiceTotals = async (
       changes,
     });
   }
+  await recordBillingCapCrossings(tx, {
+    workspaceId: scope.workspaceId,
+    recordAuditEvent,
+  });
   return Result.ok(totals.value);
 };
 
@@ -749,7 +776,30 @@ export const INVOICE_LINE_COLUMNS = {
   vatAmount: true,
   grossAmount: true,
   source: true,
+  billingPurpose: true,
   timeEntryId: true,
   expenseId: true,
   releasedAt: true,
 } as const;
+
+// Tenant and parent identifiers come from the scoped invoice detail; line
+// persistence timestamps belong to audit bookkeeping, not the document line.
+const INVOICE_LINE_OMITTED_COLUMNS = [
+  "organizationId",
+  "workspaceId",
+  "invoiceId",
+  "createdAt",
+  "updatedAt",
+] as const satisfies readonly (keyof typeof invoiceLines.$inferSelect)[];
+type MissingInvoiceLineColumn = UnprojectedColumns<
+  typeof invoiceLines.$inferSelect,
+  typeof INVOICE_LINE_COLUMNS,
+  (typeof INVOICE_LINE_OMITTED_COLUMNS)[number]
+>;
+type ExtraInvoiceLineColumn = UnbackedProjectionKeys<
+  typeof invoiceLines.$inferSelect,
+  typeof INVOICE_LINE_COLUMNS,
+  (typeof INVOICE_LINE_OMITTED_COLUMNS)[number]
+>;
+true satisfies MissingInvoiceLineColumn extends never ? true : never;
+true satisfies ExtraInvoiceLineColumn extends never ? true : never;

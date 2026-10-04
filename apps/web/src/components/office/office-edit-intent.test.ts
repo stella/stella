@@ -104,6 +104,21 @@ describe("Office edit intent", () => {
     ).toBeFalse();
   });
 
+  test("rejects named keys and repeated layout characters but counts Unicode text", () => {
+    for (const key of ["Enter", "Dead", "ab", ""]) {
+      expect(isOfficeEditIntentKey(keyEvent(key))).toBeFalse();
+    }
+    for (const key of ["😀", "e\u0301", "🇨🇿", " "]) {
+      expect(isOfficeEditIntentKey(keyEvent(key))).toBeTrue();
+    }
+    expect(
+      isOfficeEditIntentKey({ ...keyEvent("@"), altKey: true, repeat: true }),
+    ).toBeFalse();
+    expect(
+      isOfficeEditIntentKey({ ...keyEvent("@"), altKey: true, metaKey: true }),
+    ).toBeFalse();
+  });
+
   test("counts characters typed with Option, AltGr, or an IME", () => {
     expect(
       isOfficeEditIntentKey({ ...keyEvent("@"), altKey: true }),

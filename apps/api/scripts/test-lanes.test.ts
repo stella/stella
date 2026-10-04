@@ -11,6 +11,7 @@ import {
 } from "./test-lanes";
 
 const GIB = 1024 * 1024 * 1024;
+
 const HEAVY_BUDGET_MB = 3072;
 
 type FakeBatch = { kind: TestBatchKind; name: string };
@@ -18,6 +19,26 @@ type FakeBatch = { kind: TestBatchKind; name: string };
 const batch = (kind: TestBatchKind, name: string): FakeBatch => ({
   kind,
   name,
+});
+
+test("a serial measurement sweep reports every file even after a failure", async () => {
+  const files = [
+    batch(TEST_BATCH_KIND.regular, "first"),
+    batch(TEST_BATCH_KIND.regular, "second"),
+  ];
+  const started: string[] = [];
+  const outcomes = await runInLanes({
+    batches: files,
+    lanes: 1,
+    failurePolicy: "complete",
+    runBatch: async ({ name }) => {
+      started.push(name);
+      return name === "first" ? 1 : 0;
+    },
+  });
+  expect(started).toEqual(["first", "second"]);
+  expect(outcomes.map(({ exitCode }) => exitCode)).toEqual([1, 0]);
+  expect(laneRunExitCode(outcomes)).toBe(1);
 });
 
 /** A batch body the test settles by hand, so overlap is observable. */

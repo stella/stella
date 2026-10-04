@@ -16,16 +16,14 @@ import {
   documentProcessingRuns,
   organizationSettings,
 } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  DEFAULT_MANAGED_AI_RESIDENCY,
-  MANAGED_AI_RESIDENCIES,
-} from "@/api/lib/chat/ai-data-policy";
+import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
+import type { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { validatePattern } from "@/api/lib/matter-reference";
 
@@ -36,14 +34,33 @@ const documentProcessingModeSchema = t.Union([
   t.Literal(DOCUMENT_PROCESSING_MODE.SEARCHABLE_TEXT),
 ]);
 
+// The literal list mirrors MANAGED_AI_RESIDENCIES: a member on one side only
+// fails to compile here.
+const managedAIResidencySchema = t.Union([t.Literal("eu"), t.Literal("us")]);
+type ManagedAIResidencyValue = (typeof MANAGED_AI_RESIDENCIES)[number];
+type ManagedAIResidencySchemaValue = Static<typeof managedAIResidencySchema>;
+type MissingManagedAIResidencySchemaValue = Exclude<
+  ManagedAIResidencyValue,
+  ManagedAIResidencySchemaValue
+>;
+type UnexpectedManagedAIResidencySchemaValue = Exclude<
+  ManagedAIResidencySchemaValue,
+  ManagedAIResidencyValue
+>;
+
+true satisfies MissingManagedAIResidencySchemaValue extends never
+  ? true
+  : never;
+true satisfies UnexpectedManagedAIResidencySchemaValue extends never
+  ? true
+  : never;
+
 const updateOrganizationSettingsBodySchema = t.Object({
   documentProcessingMode: t.Optional(documentProcessingModeSchema),
   matterNumberPattern: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
   matterNumberPadding: t.Optional(t.Integer({ minimum: 1, maximum: 6 })),
   promptCachingEnabled: t.Optional(t.Boolean()),
-  managedAIResidency: t.Optional(
-    t.Union(MANAGED_AI_RESIDENCIES.map((region) => t.Literal(region))),
-  ),
+  managedAIResidency: t.Optional(managedAIResidencySchema),
   memoryExtractionEnabled: t.Optional(t.Boolean()),
   timeMinimumUnitMinutes: t.Optional(t.Integer({ minimum: 1, maximum: 60 })),
   timeEditWindowDays: t.Optional(t.Integer({ minimum: 0 })),
@@ -61,6 +78,7 @@ const config = {
     "Practice jurisdictions are set through " +
     "organization-settings.practice-jurisdictions.update.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "covered", by: "manage_organization" },
   body: updateOrganizationSettingsBodySchema,
 } satisfies HandlerConfig;

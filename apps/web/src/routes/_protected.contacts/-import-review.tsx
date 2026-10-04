@@ -25,7 +25,6 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
@@ -35,6 +34,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import {
@@ -299,13 +299,7 @@ export const useImportReview = ({
     setIsSeeding(false);
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error);
-      stellaToast.add({
-        title: userErrorFromThrown(
-          result.error,
-          t("contacts.importStudio.validateFailed"),
-        ),
-        type: "error",
-      });
+      notifyUserError(result.error, t("contacts.importStudio.validateFailed"));
       return false;
     }
     seed({
@@ -375,13 +369,7 @@ export const useImportReview = ({
 
     if (Result.isError(outcome)) {
       getAnalytics().captureError(outcome.error);
-      stellaToast.add({
-        title: userErrorFromThrown(
-          outcome.error,
-          t("contacts.importStudio.importFailed"),
-        ),
-        type: "error",
-      });
+      notifyUserError(outcome.error, t("contacts.importStudio.importFailed"));
       return;
     }
 

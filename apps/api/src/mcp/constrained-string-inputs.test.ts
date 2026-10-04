@@ -64,6 +64,9 @@ const HAND_CONSTRAINED_STRING_INPUTS: Record<string, string> = {
     "language tag length-bounded, not the locale kind",
   "POST /v1/legislation/corpus/search.body.language":
     "language tag length-bounded, not the locale kind",
+  // This public projection reuses the authenticated search's language schema.
+  "GET /v1/law/statutes/search.query.language":
+    "language tag length-bounded, not the locale kind",
   "GET /v1/law/statutes.query.language":
     "language tag length-bounded, not the locale kind",
   "GET /v1/law/statutes/by-eli.query.language":

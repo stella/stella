@@ -1,9 +1,15 @@
 import { panic, Result } from "better-result";
 
 import { uploadVersionBodySchema } from "@/api/handlers/entities/upload-version-schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
+import {
+  authorizeDocumentWrite,
+  authorizeDocumentWriteAccess,
+  documentWriteRefusalHandlerError,
+  DocumentWriteRefusedError,
+} from "@/api/lib/entities/authorize-document-write";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
@@ -24,6 +30,7 @@ const config = {
     "you are all conflicts. An agent surface cannot send multipart: use " +
     "uploads.create with purpose entity_version and then uploads.update.",
   permissions: { entity: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "document_processing",
@@ -57,6 +64,8 @@ export default createSafeHandler(
     body,
     session,
     user,
+    memberRole,
+    getWorkspaceAccess,
     recordAuditEvent,
   }) {
     const organizationId = session.activeOrganizationId;
@@ -65,28 +74,26 @@ export default createSafeHandler(
     const sanitizedName = sanitizeFilename(file.name);
 
     // Reject an invalid target before spending scan/storage work. The shared
-    // transaction repeats these checks under FOR UPDATE to close the race.
-    const entity = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.entities.findFirst({
-          where: {
-            id: { eq: entityId },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: { currentVersionId: true, readOnly: true },
-        }),
-      ),
-    );
-    if (!entity?.currentVersionId) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Entity not found" }),
-      );
+    // transaction repeats the entity checks under FOR UPDATE to close the race.
+    const access = authorizeDocumentWriteAccess({
+      authority: memberRole,
+      workspace: await getWorkspaceAccess(workspaceId),
+      operation: { type: "new_version", workspaceId, entityId },
+    });
+    if (Result.isError(access)) {
+      return Result.err(documentWriteRefusalHandlerError(access.error));
     }
-    if (entity.readOnly) {
-      return Result.err(
-        new HandlerError({ status: 409, message: "Entity is read-only" }),
-      );
+    const authorized = await authorizeDocumentWrite({
+      access: access.value,
+      safeDb,
+    });
+    if (Result.isError(authorized)) {
+      if (DocumentWriteRefusedError.is(authorized.error)) {
+        return Result.err(documentWriteRefusalHandlerError(authorized.error));
+      }
+      return Result.err(authorized.error);
     }
+    const target = authorized.value.operation;
 
     const fileBuffer = await file.arrayBuffer();
     const scanResult = await scanFile({
@@ -118,8 +125,8 @@ export default createSafeHandler(
           await createEntityVersionFromBuffer({
             safeDb,
             organizationId,
-            workspaceId,
-            entityId,
+            workspaceId: target.workspaceId,
+            entityId: target.entityId,
             userId,
             recordAuditEvent,
             buffer: fileBuffer,

@@ -46,6 +46,43 @@ const buildForOutput = (output: string): string | undefined =>
       instruction.includes(`--outfile ${output} `),
   );
 
+test("the usage policy seed is available at the documented operator path", () => {
+  const docs = readFileSync(
+    nodePath.resolve(import.meta.dirname, "../docs/self-hosting.md"),
+    "utf-8",
+  );
+  const commands = [
+    ...docs.matchAll(
+      /^<!-- usage-policy-seed-command -->\n\n```bash\n([\s\S]+?)\n```$/gmu,
+    ),
+  ];
+  expect(commands).toHaveLength(1);
+  const command = commands.at(0)?.at(1);
+  expect(command).toBeDefined();
+  const invocation = logicalInstructions(command ?? "").at(0);
+  expect(invocation).toStartWith(
+    "docker compose --env-file deploy/selfhost/.env ",
+  );
+  expect(invocation).toContain(
+    "-f docker-compose.selfhost.yml run --rm --no-deps api bun ",
+  );
+  const output = invocation?.match(/\bbun (\/app\/\S+)/u)?.at(1);
+  if (output === undefined) {
+    throw new TypeError("Missing documented seed entrypoint");
+  }
+  expect(buildForOutput(output)).toContain(
+    "apps/api/scripts/seed-usage-policies.ts",
+  );
+  expect(stage("runner")).toContain(
+    `COPY --chown=stella:stella --from=builder ${output} ${output}`,
+  );
+  const startup = logicalInstructions(stage("runner")).filter((instruction) =>
+    /^(?:CMD|ENTRYPOINT) /u.test(instruction),
+  );
+  expect(startup.length).toBeGreaterThan(0);
+  expect(startup.join(" ")).not.toContain("seed-usage-policies");
+});
+
 test("every bundled /app entrypoint reaches the runner stage", () => {
   const built = [
     ...stage("builder").matchAll(/--outfile \/app\/([\w.-]+\.js)/gu),

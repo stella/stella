@@ -39,6 +39,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 const FORMAT_DEBOUNCE_MS = 400;
@@ -160,7 +161,7 @@ const CompanySpecificationEditor = ({
     );
     if (Result.isError(copied)) {
       getAnalytics().captureError(copied.error);
-      stellaToast.error(t("errors.actionFailed"));
+      notifyUserError(copied.error, t("errors.actionFailed"));
       return;
     }
     stellaToast.success(t("common.copied"));

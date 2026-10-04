@@ -13,6 +13,7 @@ import {
 } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { runIngestionPipeline as runIngestionPipelineWithDependencies } from "@/api/handlers/case-law/ingestion/pipeline";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { processDecision as processDecisionWithDependencies } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -32,10 +33,17 @@ import {
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import type { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
 import * as realCorpusStorage from "@/api/lib/legal-search/corpus-storage";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   sanitizeResult,
   partialObservationFromMetadata,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  approveMetadataUrls,
+  rehydrateMetadataUrls,
+} from "@/api/lib/legal-search/metadata-urls";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -142,6 +150,7 @@ const testSourceLease = (
   source,
 });
 
+let persistedAdapterKey: string = "canonical-unregistered-fixture";
 let persistedCursor: string | null | undefined;
 /**
  * How the decision insert behaves. `fault` is an unambiguous failure;
@@ -163,6 +172,7 @@ afterEach(() => {
   insertedRows.length = 0;
   updatedDecisionRows.length = 0;
   transferredPacks.length = 0;
+  persistedAdapterKey = "canonical-unregistered-fixture";
   persistedCursor = undefined;
   rowWrite = "ok";
   existingDecision = undefined;
@@ -171,7 +181,7 @@ afterEach(() => {
   putPacksMock.mockClear();
 });
 
-const decision: IngestionResult = {
+const decision: IngestionResult = plainTextIngestionResult({
   caseNumber: "X/1/2026",
   court: "Test Court",
   country: "SVK",
@@ -181,7 +191,7 @@ const decision: IngestionResult = {
   textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
   rawHash: "raw-hash",
   documentAst: {},
-};
+});
 
 /**
  * The object-keyed write a row settled before packs existed, and the content
@@ -228,6 +238,9 @@ const scopedDb: ScopedDb = async (callback) => {
     select: (selection: Record<string, unknown>) => ({
       from: (table: unknown) => {
         const rows = async () => {
+          if (table === caseLawSources && "adapterKey" in selection) {
+            return [{ adapterKey: persistedAdapterKey }];
+          }
           if (table === caseLawSources && "sourceDescriptor" in selection) {
             return [
               {
@@ -329,7 +342,7 @@ const scopedDb: ScopedDb = async (callback) => {
     update: (table: unknown) => ({
       set: (values: { syncCursor?: string | null }) => {
         events.push("row-update");
-        if (table === caseLawSources) {
+        if (table === caseLawSources && values.syncCursor !== undefined) {
           persistedCursor = values.syncCursor;
         } else if (table === caseLawDecisions) {
           updatedDecisionRows.push(values);
@@ -494,7 +507,7 @@ describe("processDecision — canonical storage mode", () => {
     };
 
     const outcome = await processDecision({
-      input: {
+      input: plainTextIngestionResult({
         ...decision,
         fulltext: undefined,
         isListingOnly: true,
@@ -502,7 +515,7 @@ describe("processDecision — canonical storage mode", () => {
         rawHash: "listing-only-replay-hash",
         sourceRaw: "<tr>listing only</tr>",
         sourceRawContentType: "text/html",
-      },
+      }),
       observationOrder: 2n,
       sourceId: createSafeId<"caseLawSource">(),
       scopedDb,
@@ -612,12 +625,88 @@ describe("processDecision — canonical storage mode", () => {
     expect(settledDecisionRows()).toEqual([]);
   });
 
+  test.each(["&amp;", "&amp;amp;", "%26"])(
+    "keeps declared URL scalars through normalization and the row write (%s)",
+    async (queryEncoding) => {
+      const fake = startFakeS3();
+      try {
+        const stated = `https://example.org/?a=1${queryEncoding}b=2`;
+        const schema = PL_COURTS_METADATA_URL_SCHEMA;
+        persistedAdapterKey = ADAPTER_KEYS.PL_COURTS;
+        const input = plainTextIngestionResult(
+          {
+            ...decision,
+            country: "POL",
+            language: "pl",
+            fulltext: undefined,
+            sourceRaw: JSON.stringify({ url: stated, invalid: "/relative" }),
+            metadata: approveMetadataUrls(
+              {
+                href: toMetadataUrl(stated, "transport-json"),
+                chambers: [
+                  {
+                    href: toMetadataUrl(stated, "transport-json"),
+                    name: "Law &amp; order",
+                  },
+                  {
+                    href: toMetadataUrl("/relative", "transport-json"),
+                    name: "Invalid link",
+                  },
+                ],
+                ordinaryText: stated,
+              },
+              schema,
+            ),
+          },
+          schema,
+        );
+        const normalized = sanitizeResult(input, schema);
+        expect(sanitizeResult(normalized, schema).metadata).toEqual(
+          normalized.metadata,
+        );
+        const outcome = await processDecision({
+          input,
+          observationOrder: 1n,
+          sourceId: createSafeId<"caseLawSource">(),
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        });
+        expect(outcome.status).toBe("complete");
+        const metadata = insertedRows.at(0)?.["metadata"];
+        expect(metadata).toMatchObject({
+          href: stated,
+          ordinaryText:
+            queryEncoding === "%26" ? stated : "https://example.org/?a=1&b=2",
+          chambers: [
+            { href: stated, name: "Law & order" },
+            { name: "Invalid link" },
+          ],
+          metadataUrlDiagnostics: {
+            entries: [{ address: "chambers[1].href", reason: "invalid-url" }],
+            overflowCount: 0,
+          },
+        });
+        const serialized = JSON.stringify(metadata);
+        const reloaded = rehydrateMetadataUrls(JSON.parse(serialized), schema);
+        // The row write owns the partial-observation marker; projection omits it.
+        expect({
+          value: sanitizeResult(
+            plainTextIngestionResult({ ...input, metadata: reloaded }, schema),
+            schema,
+          ).metadata,
+        }).toHaveProperty("value", normalized.metadata);
+      } finally {
+        fake.stop();
+      }
+    },
+  );
+
   test("stores nothing and settles null pointers for a metadata-only decision", async () => {
     const outcome = await processDecision({
       // A metadata-first observation: identity fields only, the empty-AST
       // placeholder, no fulltext — the shape a deferred-document adapter
       // returns for every listing row.
-      input: { ...decision, fulltext: undefined },
+      input: plainTextIngestionResult({ ...decision, fulltext: undefined }),
       observationOrder: 1n,
       sourceId: createSafeId<"caseLawSource">(),
       scopedDb,
@@ -650,7 +739,7 @@ describe("processDecision — canonical storage mode", () => {
     // holds no document, never by where a payload would have lived.
     expect(
       partialObservationFromMetadata(inserted?.["metadata"]),
-    ).toMatchObject({ isListingOnly: true });
+    ).toMatchObject({ detail: "listing-only" });
   });
 
   test("leaves a settled row's payload alone when only the publisher page moved", async () => {
@@ -741,7 +830,7 @@ describe("processDecision — canonical storage mode", () => {
       sourceRawS3Key: null,
       sourceRawContentType: null,
     };
-    const moved = { ...decision, country: "CZE" };
+    const moved = plainTextIngestionResult({ ...decision, country: "CZE" });
     // Not vacuous: the payload is the one the row records.
     expect(
       realCorpusStorage.corpusContentHash(
@@ -912,7 +1001,10 @@ describe("processDecision — a refresh whose raw-source write failed", () => {
     };
 
     const outcome = await processDecision({
-      input: { ...decision, sourceRaw: "<html></html>" },
+      input: plainTextIngestionResult({
+        ...decision,
+        sourceRaw: "<html></html>",
+      }),
       observationOrder: 1n,
       sourceId: createSafeId<"caseLawSource">(),
       scopedDb,
@@ -943,6 +1035,7 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
       );
 
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb,
@@ -989,6 +1082,7 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
       );
 
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb,

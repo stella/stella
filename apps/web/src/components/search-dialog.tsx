@@ -152,6 +152,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { FILE_OPEN_TARGET, resolveFileOpenTarget } from "@/lib/file-open.logic";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { toSafeId } from "@/lib/safe-id";
@@ -998,10 +999,7 @@ export const SearchDialog = ({
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("common.somethingWentWrong"),
-        type: "error",
-      });
+      notifyUserError(error, t("common.somethingWentWrong"));
     },
   });
 
@@ -1041,10 +1039,7 @@ export const SearchDialog = ({
       detached(
         navigateToTarget().catch((error: unknown) => {
           analytics.captureError(error);
-          stellaToast.add({
-            title: t("common.somethingWentWrong"),
-            type: "error",
-          });
+          notifyUserError(error, t("common.somethingWentWrong"));
         }),
         "search-dialog.navigate-to-target",
       );
@@ -1083,11 +1078,8 @@ export const SearchDialog = ({
             });
           });
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("common.somethingWentWrong"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("common.somethingWentWrong"));
         },
       },
     );
@@ -1111,11 +1103,8 @@ export const SearchDialog = ({
             recordRecentSearch(variables.query, searchRecentsScope),
           );
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("common.somethingWentWrong"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("common.somethingWentWrong"));
         },
       },
     );

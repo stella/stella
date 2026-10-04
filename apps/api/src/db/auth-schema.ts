@@ -1,13 +1,16 @@
-import { defineRelationsPart, sql } from "drizzle-orm";
+import { defineRelationsPart, inArray, sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   pgTable,
   text,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+
+import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
 import { jsonb, timestamptz } from "@/api/db/columns";
 import {
@@ -91,6 +94,8 @@ export const AUTH_USER_STELLA_SELECT_COLUMN_NAMES = Object.values(
   AUTH_USER_STELLA_SELECT_COLUMNS,
 );
 
+const SESSION_REFRESH_MODES = ["automatic", "fixed"] as const;
+
 export const session = pgTable(
   "session",
   {
@@ -107,12 +112,23 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     activeOrganizationId: text("active_organization_id"),
+    refreshMode: text("refresh_mode", { enum: SESSION_REFRESH_MODES })
+      .default("automatic")
+      .notNull(),
+    lastSeenAt: timestamptz("last_seen_at"),
+    priorTokenHash: text("prior_token_hash"),
+    priorTokenExpiresAt: timestamptz("prior_token_expires_at"),
   },
   (table) => [
+    check(
+      "session_refreshMode_check",
+      inArray(table.refreshMode, SESSION_REFRESH_MODES),
+    ),
     index("session_userId_activeOrgId_idx").on(
       table.userId,
       table.activeOrganizationId,
     ),
+    uniqueIndex("session_priorTokenHash_idx").on(table.priorTokenHash),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -173,6 +189,7 @@ export const verification = pgTable(
   },
   (table) => [
     index("verification_identifier_idx").on(table.identifier),
+    index("verification_expires_at_idx").on(table.expiresAt),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -247,6 +264,13 @@ export const member = pgTable(
   },
   (table) => [
     index("member_organizationId_idx").on(table.organizationId),
+    check(
+      "member_single_product_role",
+      sql`${table.role} IN (${sql.join(
+        ORGANIZATION_ROLE_NAMES.map((role) => sql.raw(`'${role}'`)),
+        sql`, `,
+      )})`,
+    ),
     index("member_userId_idx").on(table.userId),
     index("member_lastActiveWorkspaceId_idx").on(table.lastActiveWorkspaceId),
     // One membership per user per organization (the auth layer already
@@ -278,6 +302,13 @@ export const invitation = pgTable(
   },
   (table) => [
     index("invitation_organizationId_idx").on(table.organizationId),
+    check(
+      "invitation_single_product_role",
+      sql`${table.role} IS NOT NULL AND ${table.role} IN (${sql.join(
+        ORGANIZATION_ROLE_NAMES.map((role) => sql.raw(`'${role}'`)),
+        sql`, `,
+      )})`,
+    ),
     index("invitation_email_idx").on(table.email),
     ...denyStellaAccessPolicies(),
   ],
@@ -371,6 +402,13 @@ export const apikey = pgTable(
   ],
 );
 
+export const OAUTH_CLIENT_REGISTRATION_ORIGINS = [
+  "historical",
+  "managed",
+  "open-client",
+  "agent",
+] as const;
+
 export const oauthClient = pgTable(
   "oauth_client",
   {
@@ -378,6 +416,11 @@ export const oauthClient = pgTable(
     clientId: text("client_id").notNull().unique(),
     clientSecret: text("client_secret"),
     clientDiscoveryId: text("client_discovery_id"),
+    registrationOrigin: text("registration_origin", {
+      enum: OAUTH_CLIENT_REGISTRATION_ORIGINS,
+    })
+      .notNull()
+      .default("open-client"),
     disabled: boolean("disabled").default(false).notNull(),
     skipConsent: boolean("skip_consent"),
     enableEndSession: boolean("enable_end_session"),
@@ -428,6 +471,20 @@ export const oauthClient = pgTable(
   (table) => [
     uniqueIndex("oauth_client_client_id_uidx").on(table.clientId),
     index("oauth_client_user_id_idx").on(table.userId),
+    index("oauth_client_registration_retention_idx")
+      .on(table.updatedAt, table.clientId)
+      .where(
+        sql`registration_origin IN ('historical', 'open-client', 'agent')`,
+      ),
+    check(
+      "oauth_client_registration_origin_check",
+      sql`${table.registrationOrigin} IN (${sql.join(
+        OAUTH_CLIENT_REGISTRATION_ORIGINS.map((origin) =>
+          sql.raw(`'${origin}'`),
+        ),
+        sql`, `,
+      )})`,
+    ),
     index("oauth_client_reference_id_idx").on(table.referenceId),
     ...denyStellaAccessPolicies(),
   ],
@@ -490,7 +547,10 @@ export const oauthClientAssertion = pgTable(
     id: text("id").primaryKey(),
     expiresAt: timestamptz("expires_at").notNull(),
   },
-  () => [...denyStellaAccessPolicies()],
+  (table) => [
+    index("oauth_client_assertion_expires_at_idx").on(table.expiresAt),
+    ...denyStellaAccessPolicies(),
+  ],
 );
 
 export const oauthRefreshToken = pgTable(

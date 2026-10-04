@@ -2,34 +2,16 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import type { StatuteQueryIntent } from "@stll/api-contract/statute-query-intent";
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
 
 import {
   statutesInfiniteOptions,
   type StatuteListFilters,
 } from "@/features/statutes/queries/statutes";
-import {
-  parseStatuteQuery,
-  type StatuteQueryIntent,
-} from "@/features/statutes/statute-query-intent";
+import { readStatuteIntent } from "@/features/statutes/statute-index-search.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
-import { isStatuteCountry, type StatuteCountry } from "@/lib/statute-route";
-
-/**
- * What an entry asks for in this jurisdiction. A country the grammar does
- * not know reads every entry as text.
- */
-export const readStatuteIntent = (
-  country: string,
-  q: string | undefined,
-): StatuteQueryIntent => {
-  if (q === undefined) {
-    return { type: "empty" };
-  }
-  return isStatuteCountry(country)
-    ? parseStatuteQuery(country, q)
-    : { type: "text", text: q };
-};
+import type { StatuteCountry } from "@/lib/statute-route";
 
 export const createStatuteFilters = (
   country: string,
