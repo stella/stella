@@ -6,7 +6,7 @@ import type { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { rateEntries } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
   tMinorUnitAmount,
@@ -56,6 +56,7 @@ const createRateEntry = createSafeHandler(
       "Refused when dates overlap a line for the same selector or userId is not an organization member, " +
       "or when the table is at its line limit.",
     permissions: { rate: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",

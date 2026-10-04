@@ -331,6 +331,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
     "no-direct-pdf-save/no-direct-pdf-save",
   ]),
+  fixtureRuleOverride("no-direct-entity-insert.fixture.ts", [
+    "no-direct-entity-insert/no-direct-entity-insert",
+  ]),
   fixtureRuleOverride("no-unvalidated-clause-write.fixture.ts", [
     "no-unvalidated-clause-write/no-unvalidated-clause-write",
   ]),
@@ -961,6 +964,7 @@ export default defineConfig({
     "scanned-file-boundary/scanned-file-boundary": "error",
     "no-raw-zip-load/no-raw-zip-load": "error",
     "no-direct-property-table-write/no-direct-property-table-write": "error",
+    "no-direct-entity-insert/no-direct-entity-insert": "error",
     "no-direct-field-write/no-direct-field-write": "error",
     "no-direct-legislation-revision-write/no-direct-legislation-revision-write":
       "error",
@@ -1346,6 +1350,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
     "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
+    "./.oxlint-plugins/no-direct-entity-insert.ts",
     "./.oxlint-plugins/no-direct-pdf-save.ts",
     "./.oxlint-plugins/no-condition-combinator-outside-conditions.ts",
     "./.oxlint-plugins/no-direct-buffer-cleanup-intent-delete.ts",

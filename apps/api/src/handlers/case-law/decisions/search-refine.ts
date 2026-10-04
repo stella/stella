@@ -16,7 +16,7 @@ import {
 import { resolveCaching } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
@@ -45,6 +45,7 @@ const config = {
   // The grant AI chat carries: one AI spend, withheld from roles that may
   // not start a chat.
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
   body: t.Object({
     query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),
