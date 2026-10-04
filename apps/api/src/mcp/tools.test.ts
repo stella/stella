@@ -4453,11 +4453,13 @@ describe("OpenAI-compatible MCP tools", () => {
       queryUsed,
       hits,
       limit,
+      nextCursor = null,
     }: {
       guidance: CaseLawSearchGuidanceMode;
       queryUsed: string;
       hits: number;
       limit: number;
+      nextCursor?: string | null;
     }) => {
       searchDecisionsHandlerMock.mockResolvedValue({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
@@ -4465,7 +4467,7 @@ describe("OpenAI-compatible MCP tools", () => {
         hits: Array.from({ length: hits }, (_, index) =>
           createCaseLawHit(`decision-${String(index)}`, "Holding"),
         ),
-        nextCursor: null,
+        nextCursor,
         total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, hits),
         queryUsed,
         warnings: [],
@@ -4520,6 +4522,15 @@ describe("OpenAI-compatible MCP tools", () => {
       ],
       ["every slot filled", { guidance: "v1", queryUsed: SIX_TERMS, hits: 3 }],
       ["guidance off", { guidance: "off", queryUsed: SIX_TERMS, hits: 2 }],
+      [
+        "a short first page that still carries a cursor",
+        {
+          guidance: "v1",
+          queryUsed: SIX_TERMS,
+          hits: 2,
+          nextCursor: "next-page",
+        },
+      ],
     ] as const)("%s raises no warning", async (_name, options) => {
       expect(await searchFor({ ...options, limit: 3 })).toEqual([]);
       expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(1);

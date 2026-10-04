@@ -2096,6 +2096,8 @@ type ManyRequiredTermsOptions = {
   guidance: CaseLawSearchGuidanceMode;
   /** The phrasing's cursor this call: `undefined` is its first page. */
   subCursor: string | null | undefined;
+  /** The cursor the page returned: non-null while results remain unread. */
+  nextCursor: string | null;
   /** What the phrasing required, a fixed point of the tokenizer. */
   queryUsed: string;
   hitCount: number;
@@ -2104,13 +2106,16 @@ type ManyRequiredTermsOptions = {
 };
 
 /**
- * `many_required_terms` for a long phrasing whose first page came back short,
+ * `many_required_terms` for a long phrasing exhausted on its first page,
  * read from the page already returned. A continuation is not asked about: it
- * is short at the end of every result set.
+ * is short at the end of every result set. A short first page that still
+ * carries a cursor (a ranked row gone before hydration) has unread results,
+ * so it is not exhausted either.
  */
 const manyRequiredTermsWarnings = ({
   guidance,
   subCursor,
+  nextCursor,
   queryUsed,
   hitCount,
   slots,
@@ -2118,6 +2123,7 @@ const manyRequiredTermsWarnings = ({
   if (
     !CASE_LAW_SEARCH_GUIDANCE_RAISES_MANY_REQUIRED_TERMS[guidance] ||
     subCursor !== undefined ||
+    nextCursor !== null ||
     hitCount >= slots
   ) {
     return [];
@@ -2366,6 +2372,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           ...manyRequiredTermsWarnings({
             guidance,
             subCursor,
+            nextCursor: outcome.page.nextCursor,
             queryUsed: outcome.page.queryUsed,
             hitCount: outcome.page.hits.length,
             slots: perQueryLimit,
