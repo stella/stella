@@ -48,7 +48,7 @@ export const createPublicStatuteSearch = (search = searchLegislationHandler) =>
         Result.tryPromise(async () => {
           switch (countryRead.kind) {
             case "unavailable":
-              return status(503, countryRead.response);
+              return countryRead.answer;
             case "unreadable":
               return status(400, { message: countryRead.message });
             case "read":
