@@ -5,9 +5,9 @@
  * wrote must reach GitHub inert: it must not mention an account, reference or
  * cross-link an issue or pull request, or change the structure of the
  * surrounding markdown (headings, HTML comments, `<details>`, links, entities).
- * GitHub write helpers accept only the branded values below; a plain string
- * does not type-check, and `outbound-text.guard.test.ts` finds every module
- * that writes to the GitHub API and checks it imports from here.
+ * The one GitHub write helper (`github-write.ts`) accepts only the branded
+ * values below, so a plain string does not type-check, and
+ * `outbound-text.guard.test.ts` fails any other module that writes to GitHub.
  *
  * Markdown bodies wrap user text in code, not in escapes. GitHub resolves
  * mentions and references on the rendered text, after HTML entities are
@@ -24,7 +24,8 @@
  *     thing CommonMark strips.
  *   - `toGithubUserTitle`: issue titles are plain text, where code would show
  *     its backticks, so a zero-width space follows each sigil that could start
- *     a mention (`@`), a reference (`#`, `GH-`) or an entity (`&`).
+ *     a mention (`@`), a reference (`#`, `GH-`) or an entity (`&`); the result
+ *     is then held to GitHub's title length limit.
  *
  * Markdown the code itself authors is built with the `githubMarkdown` tag, so
  * every literal part comes from source code and every interpolation is already
@@ -82,13 +83,13 @@ export const toGithubUserInline = (text: string): GithubSafeText => {
   return safeText(`${delimiter} ${line} ${delimiter}`);
 };
 
-/**
- * A title with every live sigil broken by a zero-width space. Idempotent, and
- * removing the zero-width spaces gives back the text (line breaks folded).
- */
-export const toGithubUserTitle = (text: string): GithubSafeTitle => ({
-  [GITHUB_SAFE_TITLE]: true,
-  text: text
+/** GitHub refuses an issue or pull request title longer than this. */
+export const GITHUB_TITLE_MAX_LENGTH = 256;
+const TITLE_ELLIPSIS = "\u2026";
+
+/** Folds line breaks and breaks every live sigil with a zero-width space. */
+const neutralizeTitle = (text: string): string =>
+  text
     .replaceAll(LINE_BREAK, " ")
     .replaceAll(
       /[@#](?=[^\s\u200B])/gu,
@@ -98,8 +99,51 @@ export const toGithubUserTitle = (text: string): GithubSafeTitle => ({
     .replaceAll(
       /(gh)(?=-[0-9])/giu,
       (prefix) => `${prefix}${ZERO_WIDTH_SPACE}`,
-    ),
-});
+    );
+
+/**
+ * The longest prefix of `text`, cut between code points and followed by an
+ * ellipsis, whose neutralized form fits the limit. The prefix is cut before
+ * neutralizing, so a sigil and its zero-width space are never separated and a
+ * sigil the cut leaves before the ellipsis is broken like any other. The
+ * neutralized length only grows with the prefix, so a binary search finds it.
+ */
+const truncateTitle = (text: string): string => {
+  const codePoints = Array.from(text);
+  const fits = (count: number): boolean =>
+    neutralizeTitle(`${codePoints.slice(0, count).join("")}${TITLE_ELLIPSIS}`)
+      .length <= GITHUB_TITLE_MAX_LENGTH;
+  let low = 0;
+  let high = codePoints.length;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (fits(middle)) {
+      low = middle;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return neutralizeTitle(
+    `${codePoints.slice(0, low).join("")}${TITLE_ELLIPSIS}`,
+  );
+};
+
+/**
+ * A title with every live sigil broken by a zero-width space, at most
+ * `GITHUB_TITLE_MAX_LENGTH` UTF-16 code units long (never more code points
+ * than that either). The limit applies after the zero-width spaces are added;
+ * a longer title is cut between code points and ends with an ellipsis.
+ * Idempotent; when nothing is cut, removing the zero-width spaces gives back
+ * the text (line breaks folded).
+ */
+export const toGithubUserTitle = (text: string): GithubSafeTitle => {
+  const neutral = neutralizeTitle(text);
+  return {
+    [GITHUB_SAFE_TITLE]: true,
+    text:
+      neutral.length <= GITHUB_TITLE_MAX_LENGTH ? neutral : truncateTitle(text),
+  };
+};
 
 /**
  * Markdown authored by the code: the literal parts come from source, and each

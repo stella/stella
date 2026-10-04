@@ -1,8 +1,10 @@
 /**
- * Every module in the API that talks to GitHub is found by a scan, and each
- * one either writes through the outbound owner (`outbound-text.ts`) or is
- * listed below as sending no user text, with the reason. A listed module that
- * starts writing, or a new module that talks to GitHub, fails this test.
+ * Every module in the API that talks to GitHub is found by a scan. Exactly one
+ * of them writes: the write helper (`github-write.ts`), whose body type admits
+ * only values the outbound owner (`outbound-text.ts`) produced. Every other
+ * module that talks to GitHub is listed below as a reader, with the reason. A
+ * second writer fails this test whatever it imports, so a raw string can only
+ * reach GitHub through a body type that rejects it.
  *
  * "Talks to GitHub" is any source naming the REST host or an Octokit package.
  * "Writes" is any request whose method is not a literal GET or HEAD, any
@@ -15,8 +17,9 @@ import path from "node:path";
 import ts from "typescript";
 
 const API_ROOT = path.resolve(import.meta.dir, "../../..");
-const OWNER = "src/lib/github/outbound-text.ts";
 const OWNER_IMPORT = "@/api/lib/github/outbound-text";
+/** The one module allowed to write to GitHub. */
+const WRITER = "src/lib/github/github-write.ts";
 const GITHUB_HOST = /api\.github\.com|@octokit\//u;
 const READ_METHODS = new Set(["GET", "HEAD"]);
 
@@ -30,7 +33,6 @@ type GithubModule = {
   file: string;
   talksToGithub: boolean;
   writes: boolean;
-  importsOwner: boolean;
   /** `githubMarkdown` references that are not a template tag, as line numbers. */
   untaggedMarkdown: number[];
 };
@@ -50,18 +52,9 @@ const scanGithubModule = (file: string, source: string): GithubModule => {
     file,
     talksToGithub: GITHUB_HOST.test(source),
     writes: /@octokit\//u.test(source),
-    importsOwner: false,
     untaggedMarkdown: [],
   };
   const visit = (node: ts.Node): void => {
-    if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier) &&
-      node.moduleSpecifier.text === OWNER_IMPORT
-    ) {
-      result.importsOwner = true;
-      return;
-    }
     if (ts.isPropertyAssignment(node) && propertyName(node.name) === "method") {
       const value = node.initializer;
       const literal =
@@ -81,7 +74,10 @@ const scanGithubModule = (file: string, source: string): GithubModule => {
         ts.isTaggedTemplateExpression(parent) && parent.tag === node;
       const isImport =
         ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent);
-      if (!isTag && !isImport) {
+      // The owner's own definition of the tag.
+      const isDefinition =
+        ts.isVariableDeclaration(parent) && parent.name === node;
+      if (!isTag && !isImport && !isDefinition) {
         result.untaggedMarkdown.push(
           sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1,
         );
@@ -99,7 +95,7 @@ const apiSources = async (): Promise<GithubModule[]> =>
       ...new Bun.Glob("src/**/*.ts").scanSync({ cwd: API_ROOT }),
       ...new Bun.Glob("scripts/**/*.ts").scanSync({ cwd: API_ROOT }),
     ]
-      .filter((file) => !/\.(?:test|spec|d)\.ts$/u.test(file) && file !== OWNER)
+      .filter((file) => !/\.(?:test|spec|d)\.ts$/u.test(file))
       .toSorted()
       .map(async (file) =>
         scanGithubModule(
@@ -109,26 +105,30 @@ const apiSources = async (): Promise<GithubModule[]> =>
       ),
   );
 
+/** Modules that write to GitHub without being the write helper. */
+const strayWriters = (modules: readonly GithubModule[]): string[] =>
+  modules
+    .filter(
+      (module) =>
+        module.talksToGithub && module.writes && module.file !== WRITER,
+    )
+    .map((module) => module.file);
+
 describe("GitHub outbound text guard", () => {
-  test("every GitHub writer goes through the owner; every reader is listed", async () => {
+  test("only the write helper writes to GitHub; every reader is listed", async () => {
     const modules = await apiSources();
     const github = modules.filter((module) => module.talksToGithub);
-    const writers = github.filter((module) => module.writes);
-    const readers = github.filter((module) => !module.writes);
 
-    // Not vacuous: the feedback issue writer is found as a writer.
-    expect(writers.map((module) => module.file)).toContain(
-      "src/handlers/feedback/github-delivery.ts",
-    );
+    // Not vacuous: the write helper is found, and found as a writer.
     expect(
-      writers
-        .filter((module) => !module.importsOwner)
-        .map((module) => module.file),
-    ).toEqual([]);
-    expect(writers.filter((module) => module.file in NO_USER_TEXT)).toEqual([]);
-    expect(readers.map((module) => module.file)).toEqual(
-      Object.keys(NO_USER_TEXT).toSorted(),
-    );
+      github
+        .filter((module) => module.file === WRITER)
+        .map(({ file, writes }) => ({ file, writes })),
+    ).toEqual([{ file: WRITER, writes: true }]);
+    expect(strayWriters(modules)).toEqual([]);
+    expect(
+      github.filter((module) => !module.writes).map((module) => module.file),
+    ).toEqual(Object.keys(NO_USER_TEXT).toSorted());
   });
 
   test("githubMarkdown is only ever a template tag", async () => {
@@ -147,7 +147,7 @@ describe("scanGithubModule", () => {
   test("classifies requests by method", () => {
     expect(
       scanGithubModule("a.ts", `${host} fetch(url, { method: "POST" });`),
-    ).toMatchObject({ talksToGithub: true, writes: true, importsOwner: false });
+    ).toMatchObject({ talksToGithub: true, writes: true });
     expect(
       scanGithubModule("a.ts", `${host} fetch(url, { method: "get" });`),
     ).toMatchObject({ talksToGithub: true, writes: false });
@@ -171,13 +171,32 @@ describe("scanGithubModule", () => {
     ).toMatchObject({ talksToGithub: false });
   });
 
-  test("sees the owner import", () => {
-    expect(
-      scanGithubModule(
-        "a.ts",
-        `import type { GithubSafeText } from "${OWNER_IMPORT}"; ${host}`,
-      ),
-    ).toMatchObject({ importsOwner: true });
+  test("a raw-string write outside the helper is refused, whatever it imports", () => {
+    const rawPost = scanGithubModule(
+      "src/handlers/x/raw.ts",
+      [
+        `import "${OWNER_IMPORT}";`,
+        `import type { GithubSafeText } from "${OWNER_IMPORT}";`,
+        host,
+        'fetch(url, { method: "POST", body: JSON.stringify({ title }) });',
+      ].join("\n"),
+    );
+    const octokit = scanGithubModule(
+      "src/handlers/x/octokit.ts",
+      'import { Octokit } from "@octokit/rest"; new Octokit().rest.issues.create({ title });',
+    );
+    const reader = scanGithubModule(
+      "src/handlers/x/read.ts",
+      `${host} fetch(url, { method: "GET" });`,
+    );
+    const helper = scanGithubModule(
+      WRITER,
+      `${host} fetch(url, { method: request.method });`,
+    );
+    expect(strayWriters([rawPost, octokit, reader, helper])).toEqual([
+      "src/handlers/x/raw.ts",
+      "src/handlers/x/octokit.ts",
+    ]);
   });
 
   test("flags githubMarkdown used other than as a tag", () => {
