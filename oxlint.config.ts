@@ -1387,6 +1387,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-field-write.ts",
     "./.oxlint-plugins/no-chat-table-write.ts",
+    "./.oxlint-plugins/fill-diagnostics.ts",
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
     "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
@@ -4575,6 +4576,67 @@ export default defineConfig({
           "error",
           { allowedFiles: Object.keys(sourceFingerprintBaseline.files) },
         ],
+      },
+    },
+    {
+      // A template fill's completion comes from one decision over one record
+      // (`lib/templates/template-fill-completion.ts`): fills read the
+      // decision, diagnostic kinds are not decided on one by one, and status
+      // literals come from the owner. Existing sites are budgeted in
+      // scripts/fill-diagnostics-ledger.json.
+      files: [
+        "apps/api/src/**/*.ts",
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/fill-diagnostics.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/src/**/__tests__/**",
+        "apps/web/src/**/*.test.{ts,tsx}",
+        "packages/*/src/**/*.test.{ts,tsx}",
+      ],
+      rules: {
+        "fill-diagnostics/fill-consumer-reads-decision": "error",
+        "fill-diagnostics/no-raw-diagnostic-decision": "error",
+        "fill-diagnostics/fill-status-literal-in-owner": "error",
+      },
+    },
+    {
+      // The fill pipeline: a new diagnostic channel joins the record.
+      files: [
+        "apps/api/src/lib/docx/**/*.ts",
+        "apps/api/src/lib/templates/**/*.ts",
+        "apps/api/src/lib/clauses/**/*.ts",
+        "apps/api/src/handlers/templates/**/*.ts",
+        "apps/api/src/handlers/chat/tools/template-*.ts",
+        "apps/api/src/handlers/reports/report-export-queue.ts",
+        "apps/api/src/mcp/template-*.ts",
+        ".oxlint-plugins/__fixtures__/fill-diagnostics.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/**/*.test-fixture.ts",
+        "apps/api/src/**/__tests__/**",
+      ],
+      rules: {
+        "fill-diagnostics/no-diagnostic-channel-outside-record": "error",
+      },
+    },
+    {
+      // `template_fills` rows carry the recorded status: one recorder.
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/fill-diagnostics.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/src/**/__tests__/**",
+      ],
+      rules: {
+        "fill-diagnostics/fill-row-through-recorder": "error",
       },
     },
     {

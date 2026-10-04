@@ -1,0 +1,47 @@
+[
+  {
+    "id": "fill-consumer-reads-decision::apps/api/src/lib/templates/fill-preview-logic.ts::<module>::entry:fillTemplateDocx",
+    "count": 1,
+    "reason": "Live preview while values are still being typed: returns the per-kind lists and records no status; move to returning the completion decision with the preview."
+  },
+  {
+    "id": "fill-consumer-reads-decision::apps/api/src/scripts/generate-spa-filled.ts::<module>::raw:fillTemplate",
+    "count": 1,
+    "reason": "Developer script that renders a sample document from mock values; it never reports a fill to anyone. Run it through the fill service or retire it."
+  },
+  {
+    "id": "fill-row-through-recorder::apps/api/src/handlers/templates/fill.ts::fillHandler::insert:templateFills",
+    "count": 1,
+    "reason": "Raw-upload download: an analytics row without a template id, which recordTemplateFill requires; its status already comes from templateFillStatus."
+  },
+  {
+    "id": "fill-row-through-recorder::apps/api/src/handlers/templates/fills/create.ts::try::insert:templateFills",
+    "count": 1,
+    "reason": "Workspace fill row plus its entity audit event, written in the handler's transaction; status already comes from templateFillStatus. Move to recordTemplateFill with entityId."
+  },
+  {
+    "id": "fill-row-through-recorder::apps/api/src/lib/templates/fill-by-id-logic.ts::try::insert:templateFills",
+    "count": 1,
+    "reason": "Stored-template download row with a DOWNLOAD audit action; status already comes from templateFillStatus. Move to recordTemplateFill once it takes the audit action."
+  },
+  {
+    "id": "fill-status-literal-in-owner::apps/api/src/handlers/chat/tools/template-tools.ts::createTemplateTools::complete",
+    "count": 1,
+    "reason": "Chat fill tool maps the decision's type one to one onto completionStatus; move the mapping into the completion owner."
+  },
+  {
+    "id": "fill-status-literal-in-owner::apps/api/src/handlers/chat/tools/template-tools.ts::createTemplateTools::partial",
+    "count": 1,
+    "reason": "Chat fill tool maps the decision's type one to one onto completionStatus; move the mapping into the completion owner."
+  },
+  {
+    "id": "fill-status-literal-in-owner::apps/api/src/mcp/template-tools.ts::gateTemplateFillCompletion::complete",
+    "count": 1,
+    "reason": "MCP completion gate maps the decision's type one to one onto completionStatus; move the mapping into the completion owner."
+  },
+  {
+    "id": "fill-status-literal-in-owner::apps/api/src/mcp/template-tools.ts::gateTemplateFillCompletion::partial",
+    "count": 1,
+    "reason": "MCP completion gate maps the decision's type one to one onto completionStatus; move the mapping into the completion owner."
+  }
+]
