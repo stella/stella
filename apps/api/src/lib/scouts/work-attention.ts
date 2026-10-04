@@ -25,6 +25,7 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   effectiveOrganizationTimeZone,
   organizationTimeZoneColumns,
+  readOrganizationTimeZone,
 } from "@/api/lib/organization-time-zone";
 import type { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
@@ -346,19 +347,22 @@ const groupByOrganization = (
 };
 
 /**
- * The dedupe keys the batch's obligations still warrant, recomputed from rows
- * re-read inside the emitting transaction. The page was read from the root
- * handle and several organizations may have been emitted since: an obligation
- * acknowledged, completed, reassigned or re-dated in that window must not
- * raise a warning, because nothing resolves a stored signal once its condition
- * clears. Bounded by the page, and read through the same projection and join
- * as the page so the two cannot disagree about what qualifies.
+ * The signals the batch's obligations still warrant, recomputed from rows and
+ * the organization's zone re-read inside the emitting transaction. The page was
+ * read from the root handle and several organizations may have been emitted
+ * since: an obligation acknowledged, completed, reassigned or re-dated, or a
+ * zone change that moves the organization's day, in that window must not raise
+ * a warning or carry the page's stale evidence, because nothing resolves a
+ * stored signal once its condition clears. Bounded by the page, and read
+ * through the same projection and join as the page so the two cannot disagree
+ * about what qualifies.
  */
-const stillWarrantedKeys = async (
+const stillWarrantedSignals = async (
   tx: Transaction,
   batch: OrganizationBatch,
   now: Date,
-): Promise<Set<string>> => {
+): Promise<NewSignal[]> => {
+  const zone = await readOrganizationTimeZone(tx, batch.organizationId);
   const rows = await tx
     .select(obligationFactsColumns)
     .from(workObligations)
@@ -370,12 +374,8 @@ const stillWarrantedKeys = async (
       ),
     );
   const assignedAt = await loadAssignedAt(tx, rows);
-  return new Set(
-    rows.flatMap((row) =>
-      workAttentionSignals(toObligation(row, assignedAt), now, batch.zone).map(
-        ({ dedupeKey }) => dedupeKey,
-      ),
-    ),
+  return rows.flatMap((row) =>
+    workAttentionSignals(toObligation(row, assignedAt), now, zone),
   );
 };
 
@@ -437,8 +437,11 @@ export const runWorkAttentionScout = async ({
       scoutKey: SCOUT_KEY.WORK_ATTENTION,
       observe: () => batch.signals,
       screen: async (tx, proposed) => {
-        const warranted = await stillWarrantedKeys(tx, batch, now);
-        return proposed.filter(({ dedupeKey }) => warranted.has(dedupeKey));
+        const proposedKeys = new Set(
+          proposed.map(({ dedupeKey }) => dedupeKey),
+        );
+        const warranted = await stillWarrantedSignals(tx, batch, now);
+        return warranted.filter(({ dedupeKey }) => proposedKeys.has(dedupeKey));
       },
     });
     emitted += result.emittedCount;

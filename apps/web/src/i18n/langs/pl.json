@@ -4487,6 +4487,8 @@
       },
       "timeZone": {
         "description": "Zablokowane miesiące, daty faktur i zadania z terminem są liczone według dnia kalendarzowego w tej strefie czasowej. Dopóki żadna nie zostanie wybrana, wynika z głównej jurysdykcji: Europe/Prague dla Czech i Słowacji, w pozostałych przypadkach UTC.",
+        "followJurisdiction": "Zgodnie z główną jurysdykcją",
+        "followingJurisdiction": "Zgodnie z główną jurysdykcją ({timeZone})",
         "title": "Strefa czasowa",
         "updated": "Strefa czasowa została zaktualizowana"
       },

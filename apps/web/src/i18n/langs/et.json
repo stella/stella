@@ -4487,6 +4487,8 @@
       },
       "timeZone": {
         "description": "Lukustatud kuud, arvete kuupäevad ja tähtajaline töö järgivad selle ajavööndi kalendripäeva. Kuni ühtegi pole valitud, määrab selle peamine jurisdiktsioon: Tšehhi ja Slovakkia puhul Europe/Prague, muidu UTC.",
+        "followJurisdiction": "Järgi peamist jurisdiktsiooni",
+        "followingJurisdiction": "Järgi peamist jurisdiktsiooni ({timeZone})",
         "title": "Ajavöönd",
         "updated": "Ajavöönd on uuendatud"
       },

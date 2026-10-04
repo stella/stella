@@ -26,6 +26,11 @@ import {
   organizationSettingsKeys,
   organizationSettingsOptions,
 } from "@/queries/organization-settings";
+import {
+  FOLLOW_JURISDICTION,
+  timeZonePickerValue,
+  timeZoneToSave,
+} from "@/routes/_protected.settings/-components/organization/time-zone-card.logic";
 import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
 /** The curated zones, plus the organization's own when it is not one of them. */
@@ -44,7 +49,7 @@ export const OrganizationTimeZoneCard = () => {
   );
 
   const mutation = useSettingsMutation({
-    mutationFn: async (timeZone: string) =>
+    mutationFn: async (timeZone: string | null) =>
       unwrapEden(await api["organization-settings"].post({ timeZone })),
     invalidate: organizationSettingsKeys.all,
     successToast: { title: t("settings.organization.timeZone.updated") },
@@ -81,6 +86,7 @@ export const OrganizationTimeZoneCard = () => {
       return panic("Unhandled organization settings query state");
   }
   const settings = view.items;
+  const selected = timeZonePickerValue(settings);
 
   return (
     <Frame>
@@ -95,17 +101,24 @@ export const OrganizationTimeZoneCard = () => {
           <Select
             disabled={!canEdit || mutation.isPending}
             onValueChange={(next) => {
-              if (!next || next === settings.timeZone) {
+              if (!next || next === selected) {
                 return;
               }
-              mutation.mutate(next);
+              mutation.mutate(timeZoneToSave(next));
             }}
-            value={settings.timeZone}
+            value={selected}
           >
             <SelectTrigger className="w-72" id={selectId}>
               <SelectValue />
             </SelectTrigger>
             <SelectPopup>
+              <SelectItem value={FOLLOW_JURISDICTION}>
+                {selected === FOLLOW_JURISDICTION
+                  ? t("settings.organization.timeZone.followingJurisdiction", {
+                      timeZone: settings.timeZone.replace(/_/gu, " "),
+                    })
+                  : t("settings.organization.timeZone.followJurisdiction")}
+              </SelectItem>
               {zoneOptions(settings.timeZone).map((zone) => (
                 <SelectItem key={zone} value={zone}>
                   {zone.replace(/_/gu, " ")}

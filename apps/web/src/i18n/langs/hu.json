@@ -4487,6 +4487,8 @@
       },
       "timeZone": {
         "description": "A zárolt hónapok, a számlák dátuma és az esedékes munka ennek az időzónának a naptári napját követi. Amíg nincs kiválasztva, az elsődleges joghatóság határozza meg: Csehországban és Szlovákiában Europe/Prague, egyébként UTC.",
+        "followJurisdiction": "Az elsődleges joghatóság szerint",
+        "followingJurisdiction": "Az elsődleges joghatóság szerint ({timeZone})",
         "title": "Időzóna",
         "updated": "Időzóna frissítve"
       },

@@ -4487,6 +4487,8 @@
       },
       "timeZone": {
         "description": "Užrakinti mėnesiai, sąskaitų datos ir terminuoti darbai vadovaujasi šios laiko juostos kalendorine diena. Kol jokia nepasirinkta, ji nustatoma pagal pagrindinę jurisdikciją: Europe/Prague Čekijai ir Slovakijai, kitais atvejais UTC.",
+        "followJurisdiction": "Pagal pagrindinę jurisdikciją",
+        "followingJurisdiction": "Pagal pagrindinę jurisdikciją ({timeZone})",
         "title": "Laiko juosta",
         "updated": "Laiko juosta atnaujinta"
       },

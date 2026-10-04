@@ -4490,6 +4490,8 @@ type Messages = {
       };
       "timeZone": {
         "description": "Locked months, invoice dates and due work follow the calendar day in this time zone. Until one is chosen, it follows the primary jurisdiction: Europe/Prague for Czechia and Slovakia, UTC otherwise.";
+        "followJurisdiction": "Follow the primary jurisdiction";
+        "followingJurisdiction": "Follow the primary jurisdiction ({timeZone})";
         "title": "Time zone";
         "updated": "Time zone updated";
       };

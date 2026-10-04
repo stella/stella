@@ -4487,6 +4487,8 @@
       },
       "timeZone": {
         "description": "Uzamknuté mesiace, dátumy faktúr a splatná práca sa riadia kalendárnym dňom v tomto časovom pásme. Kým žiadne nevyberiete, určuje ho hlavná jurisdikcia: Europe/Prague pre Česko a Slovensko, inak UTC.",
+        "followJurisdiction": "Podľa hlavnej jurisdikcie",
+        "followingJurisdiction": "Podľa hlavnej jurisdikcie ({timeZone})",
         "title": "Časové pásmo",
         "updated": "Časové pásmo bolo aktualizované"
       },

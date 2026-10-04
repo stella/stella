@@ -4487,6 +4487,8 @@
       },
       "timeZone": {
         "description": "Los meses bloqueados, las fechas de factura y el trabajo pendiente siguen el día natural de esta zona horaria. Mientras no se elija una, se deriva de la jurisdicción principal: Europe/Prague para Chequia y Eslovaquia, UTC en los demás casos.",
+        "followJurisdiction": "Seguir la jurisdicción principal",
+        "followingJurisdiction": "Seguir la jurisdicción principal ({timeZone})",
         "title": "Zona horaria",
         "updated": "Zona horaria actualizada"
       },

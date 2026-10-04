@@ -505,4 +505,49 @@ describe("work attention scout", () => {
         );
     }
   });
+  test("judges the emit on the zone the organization has when it emits", async () => {
+    // At 23:30 UTC on 1 March a deadline on 5 March is at risk on the Prague
+    // day the page reads, and not yet on the UTC day chosen before the emit.
+    const lateEvening = new Date("2026-03-01T23:30:00.000Z");
+    const label = "active, deadline on 5 March, zone changed before the emit";
+    await testDb
+      .insert(organizationSettings)
+      .values({
+        id: createSafeId<"organizationSettings">(),
+        organizationId: ids.orgA,
+        timeZone: parseTimeZoneId("Europe/Prague"),
+      })
+      .onConflictDoUpdate({
+        target: organizationSettings.organizationId,
+        set: { timeZone: parseTimeZoneId("Europe/Prague") },
+      });
+    await seedWork({
+      label,
+      tenant: "A",
+      status: WORK_OBLIGATION_STATUS.ACTIVE,
+      hardDeadlineDate: "2026-03-05",
+      createdDaysAgo: 1,
+      assignedDaysAgo: null,
+    });
+
+    try {
+      await runWorkAttentionScout({
+        cursor: null,
+        now: lateEvening,
+        dependencies: dependenciesMutatingBeforeEmit(async () => {
+          await testDb
+            .update(organizationSettings)
+            .set({ timeZone: parseTimeZoneId("UTC") })
+            .where(eq(organizationSettings.organizationId, ids.orgA));
+        }),
+      });
+
+      expect(await signalsFor(label)).toEqual([]);
+    } finally {
+      await testDb
+        .update(organizationSettings)
+        .set({ timeZone: null })
+        .where(eq(organizationSettings.organizationId, ids.orgA));
+    }
+  });
 });
