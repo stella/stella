@@ -36,6 +36,7 @@ import {
   adaptAiFields,
   type AiOccurrenceAdapter,
 } from "@/api/lib/docx/adapt-ai-fields";
+import { loopContext } from "@/api/lib/docx/block-directives";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import {
@@ -93,6 +94,7 @@ import {
   readStoredTemplateFile,
   STORED_TEMPLATE_FILE_COLUMNS,
 } from "@/api/lib/templates/stored-template-file";
+import { isRecord } from "@/api/lib/type-guards";
 import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
@@ -755,6 +757,7 @@ type RenderClauseSlotOptions = {
   clause: ClauseProvenance;
   values: TemplateData;
   namedConditions: ApplyClausePatchesOptions["namedConditions"];
+  enclosingLoop?: ReturnType<typeof loopContext> | undefined;
 };
 
 /** One clause slot rendered against the values in scope where it renders. */
@@ -764,12 +767,14 @@ const renderClauseSlot = ({
   clause,
   values,
   namedConditions,
+  enclosingLoop,
 }: RenderClauseSlotOptions) => {
   const patch = clauseBodyToRichPatch(body, {
     source: clause.resolution === "override" ? "authored" : "stored",
     values,
     slotKey: slot.patchKey,
     namedConditions,
+    enclosingLoop,
   });
   return Result.isError(patch)
     ? Result.err(clauseDirectiveError({ error: patch.error, clause, slot }))
@@ -984,7 +989,7 @@ type PrepareClauseOccurrencesOptions = {
   bindingContext: BindingContext | null;
   generateAiValue: AiFieldGenerator | undefined;
   decideAiCondition: AiConditionDecider | undefined;
-  documentText: string;
+  documentText: string | undefined;
   policy: RequiredFieldsPolicy;
 };
 
@@ -1133,6 +1138,14 @@ const loopClauseSlotRenderer = ({
     ) {
       return undefined;
     }
+    const loop = loopScope["loop"];
+    if (
+      !isRecord(loop) ||
+      typeof loop["index0"] !== "number" ||
+      typeof loop["length"] !== "number"
+    ) {
+      return panic("Clause loop scope has no iteration counters");
+    }
     const patch = renderClauseSlot({
       slot,
       body,
@@ -1140,6 +1153,7 @@ const loopClauseSlotRenderer = ({
         clauses[patchKey] ?? panic(`Missing clause provenance for ${patchKey}`),
       values,
       namedConditions,
+      enclosingLoop: loopContext(loop["index0"], loop["length"]),
     });
     if (Result.isError(patch)) {
       refusal = patch.error;

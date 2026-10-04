@@ -2122,6 +2122,44 @@ describe("clause slot requiredness follows rendering", () => {
     },
   );
 
+  test.each(["block", "inline"])(
+    "a %s slot renders enclosing loop properties and clause-local counters",
+    async (mode) => {
+      const body = [
+        {
+          text: "{{ loop.index }}/{{ loop.index0 }}/{{ loop.first }}/{{ loop.last }}/{{ loop.length }}",
+          runs: [
+            { text: "{{ loop.", bold: true },
+            {
+              text: "index }}/{{ loop.index0 }}/{{ loop.first }}/{{ loop.last }}/{{ loop.length }}",
+            },
+          ],
+        },
+        clauseDirective("{% for child in p.children %}"),
+        { text: "Inner {{ loop.index }}/{{ loop.length }}" },
+        clauseDirective("{% endfor %}"),
+        { text: "Outer {{ loop.index }}" },
+      ];
+      const templateBody =
+        mode === "block"
+          ? P("{% for p in persons %}") +
+            P('{{ clause("Terms") }}') +
+            P("{% endfor %}")
+          : P('{% for p in persons %}{{ clause("Terms") }}{% endfor %}');
+      const result = await fillLinkedClause(
+        body,
+        {
+          persons: [{ children: ["A", "B"] }, { children: ["C"] }],
+        },
+        { templateBody },
+      );
+      const text = (await filledTexts(result)).join(";");
+      expect(text).toBe(
+        "1/0/true/false/2;Inner 1/2;Inner 2/2;Outer 1;2/1/false/true/2;Inner 1/1;Outer 2",
+      );
+    },
+  );
+
   test("nested inline slots inherit outer bindings and innermost loop counters", async () => {
     const body = [
       {
