@@ -56,8 +56,8 @@ import {
   protectEcjLegacyDocument,
 } from "./eu-completion-protection";
 import {
+  capRefusalHold,
   CompletionPayloadTooLarge,
-  EU_COMPLETION_STORE_LIMITS,
   euCompletionDecisionNotWithdrawn,
 } from "./eu-completion-store";
 import type {
@@ -428,10 +428,9 @@ const fetchCompletionCandidate = (
           type: "unchanged",
         } satisfies EuCompletionRowOutcome);
       case "rate-limited":
-        state.refusal = Math.min(
+        state.refusal = capRefusalHold(
           refreshed.cooldownUntilEpochMs,
-          Temporal.Now.instant().epochMilliseconds +
-            EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs,
+          Temporal.Now.instant().epochMilliseconds,
         );
         return Result.err(
           new EuCompletionStop({
@@ -1189,10 +1188,9 @@ const runControlledCompletionRow = (
               chargeRequest: async () =>
                 rememberStop(await chargeCompletionRequest(context)),
               onRefusal: (deadline) => {
-                state.refusal = Math.min(
+                state.refusal = capRefusalHold(
                   deadline,
-                  Temporal.Now.instant().epochMilliseconds +
-                    EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs,
+                  Temporal.Now.instant().epochMilliseconds,
                 );
               },
               onFailure: (error) => {

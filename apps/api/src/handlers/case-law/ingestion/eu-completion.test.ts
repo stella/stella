@@ -12,6 +12,10 @@ import {
   type EuCompletionRowOptions,
   type RunEuCompletionTickOptions,
 } from "./eu-completion";
+import {
+  capRefusalHold,
+  EU_COMPLETION_STORE_LIMITS,
+} from "./eu-completion-store";
 import type { EuCompletionReceipt } from "./eu-completion-store";
 
 const sourceId = createSafeId<"caseLawSource">();
@@ -324,4 +328,13 @@ describe("bounded EU completion orchestration", () => {
     expect((await state.run()).status).toBe("cancelled");
     expect(state.events).toEqual(["reserve", "pickup:first", "refund:first"]);
   });
+});
+
+test("a publisher refusal holds completion no longer than the hold cap", () => {
+  const now = 1_000_000;
+  const max = EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs;
+  expect(capRefusalHold(now + 60_000, now)).toBe(now + 60_000);
+  expect(capRefusalHold(now + max, now)).toBe(now + max);
+  expect(capRefusalHold(now + max + 1, now)).toBe(now + max);
+  expect(capRefusalHold(Number.MAX_SAFE_INTEGER, now)).toBe(now + max);
 });

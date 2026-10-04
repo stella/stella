@@ -81,6 +81,10 @@ export const EU_COMPLETION_STORE_LIMITS = {
   maxMirrorWaits: 3,
   mirrorWaitMs: 60_000,
 } as const;
+
+/** A publisher refusal holds completion at most `refusalMaxHoldMs` from now. */
+export const capRefusalHold = (untilMs: number, nowMs: number) =>
+  Math.min(untilMs, nowMs + EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs);
 const QUIESCENT = [
   "dry-run",
   "publisher-refused",
@@ -469,9 +473,9 @@ const holdPublisherRefusalTx = async (
     ...batch,
     holdCause: "other" as const,
     heldSince: batch.heldSince ?? currentTime,
-    holdUntil: Math.min(
-      currentTime + EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs,
+    holdUntil: capRefusalHold(
       Math.max(batch.holdUntil ?? 0, retryAt.getTime()),
+      currentTime,
     ),
     holdCount: batch.holdCount + 1,
   };
