@@ -30,6 +30,7 @@ import { scanEmailAttachmentForSave } from "./email-attachment-save-scan";
 const EMAIL_ATTACHMENT_DISPOSITION_PATTERN = "^(?:inline|download)$";
 
 const config = {
+  contentDelivery: { type: "audited" },
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },

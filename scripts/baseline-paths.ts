@@ -29,6 +29,8 @@ export const BASELINE_PATHS = {
   reactCompilerBailouts: "scripts/react-compiler-bailouts.json",
   /** scripts/design-lint-baseline.ts */
   designLint: "scripts/design-lint-baseline.json",
+  /** scripts/query-data-state-baseline.ts */
+  queryDataState: ".oxlint-plugins/query-data-requires-state-baseline.json",
   /** scripts/failure-as-empty-baseline.ts */
   failureAsEmpty: ".oxlint-plugins/no-failure-as-empty-baseline.json",
   /** scripts/typecheck-baseline.ts */
@@ -41,6 +43,8 @@ export const BASELINE_PATHS = {
   mcpCoverage: "apps/api/mcp-coverage-baseline.json",
   /** apps/api/scripts/mcp-surface-baseline.ts */
   mcpSurface: "apps/api/mcp-surface-baseline.json",
+  /** apps/api/scripts/deployment-feature-guard.ts */
+  deploymentFeature: "apps/api/deployment-feature-baseline.json",
   /** apps/api/src/handlers/chat/provider-request-cache.integration.test.ts */
   chatPromptPrefix:
     "apps/api/src/tests/fixtures/provider-request-schemas/chat-prompt-baseline.json",
