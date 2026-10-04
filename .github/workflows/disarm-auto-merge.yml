@@ -4,8 +4,7 @@ on:
   pull_request:
     types: [synchronize]
 
-permissions:
-  pull-requests: write
+permissions: {}
 
 # Each push invalidation must run, including one followed by an autofix push.
 concurrency:
@@ -14,6 +13,9 @@ concurrency:
 
 jobs:
   disarm:
+    permissions:
+      contents: write
+      pull-requests: write
     # Avoid mutations with read-only fork and Dependabot tokens.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository
