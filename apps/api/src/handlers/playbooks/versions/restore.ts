@@ -3,7 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { playbookDefinitions } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { mapPlaybookDocumentTypeError } from "@/api/handlers/playbooks/assert-document-type";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -25,6 +26,7 @@ const config = {
     "as an update would validate them, so a restore that would bring back a " +
     "source document the caller cannot read is refused.",
   permissions: { playbook: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "knowledge_library_admin",
@@ -142,7 +144,7 @@ const restorePlaybookVersion = createSafeRootHandler(
             restoredFromVersion: { old: null, new: params.version },
           },
         });
-      }),
+      }).then((result) => result.mapError(mapPlaybookDocumentTypeError)),
     );
 
     return Result.ok({ status: "draft" as const });

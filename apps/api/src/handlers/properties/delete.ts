@@ -2,7 +2,8 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { properties } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { propertyRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -17,6 +18,8 @@ const config = {
     "and list placements. System properties, file properties, and properties " +
     "another property depends on are refused.",
   permissions: { property: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: propertyRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

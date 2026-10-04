@@ -9,9 +9,10 @@ import {
   agentSkillProposals,
   agentSkillRevisions,
 } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
 import { lockSkillForAnchor } from "@/api/lib/agent-skills/revisions";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -44,6 +45,8 @@ const config = {
     "branched from. The quoted source text is captured from the range so the " +
     "comment survives the text moving on.",
   permissions: { agentSkill: ["comment"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   access: "write",
   mcp: {
     type: "capability",

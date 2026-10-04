@@ -571,6 +571,22 @@ const ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH = nodePath.join(
   "migration.sql",
 );
 
+/** Install the migration-owned matter-contact capacity guard after schema push. */
+export const installPgliteWorkspaceContactCapacity = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261003125100_workspace_contact_capacity",
+      "migration.sql",
+    ),
+  ).filter((statement) => !executableSql(statement).startsWith("SET "));
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES = [
   "CREATE FUNCTION",
   "REVOKE ALL ON FUNCTION",
@@ -619,6 +635,31 @@ export const installPgliteTimeEntryTimerSignals = async (
         source.includes('ON "time_entry_timer_states"'))
     );
   });
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Install the trigger that derives a playbook's document type key from scope. */
+export const installPglitePlaybookDocumentTypeKey = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261003125200_playbook_document_type_reference",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("CREATE TRIGGER")
+    );
+  });
+  if (statements.length !== 2) {
+    panic("Expected the playbook document type key function and trigger");
+  }
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { isStatuteQueryCountry } from "./statute-aliases";
 import {
   STATUTE_GAZETTES,
   statuteGazetteAbbreviation,
 } from "./statute-gazette";
+import { readStatuteQueryScope } from "./statute-query-capability";
 import { parseStatuteQuery } from "./statute-query-intent";
 
 /** Read through one shape: the per-country literals do not unify for `Object.entries`. */
@@ -42,12 +42,13 @@ describe("a gazette's printed abbreviation and its ELI segment", () => {
       expect(statuteGazetteAbbreviation(eliCollection, year)).toBe(
         abbreviation,
       );
-      expect(isStatuteQueryCountry(country)).toBe(true);
-      if (!isStatuteQueryCountry(country)) {
+      const scope = readStatuteQueryScope(country);
+      expect(scope.type, `${country} has gazettes`).toBe("supported");
+      if (scope.type === "unsupported") {
         return;
       }
       expect(
-        parseStatuteQuery(country, `57/${String(year)} ${abbreviation}`),
+        parseStatuteQuery(scope.country, `57/${String(year)} ${abbreviation}`),
       ).toMatchObject({ type: "act", collection: eliCollection });
     },
   );

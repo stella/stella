@@ -1228,6 +1228,19 @@ export const bufferObjectCleanupIntents = p.pgTable(
           AND t.id::text = pg_catalog.split_part(${table.objectKey}, '/', 3)
       )
     )`;
+    const templateCreationAccess = sql`(
+      ${table.chatThreadId} IS NULL
+      AND ${table.workspaceId} IS NULL
+      AND pg_catalog.split_part(${table.objectKey}, '/', 1) = ${table.organizationId}
+      AND pg_catalog.split_part(${table.objectKey}, '/', 2) = 'templates'
+      AND pg_catalog.split_part(${table.objectKey}, '/', 3) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[.]docx$'
+      AND pg_catalog.array_length(pg_catalog.string_to_array(${table.objectKey}, '/'), 1) = 3
+      AND NOT EXISTS (
+        SELECT 1 FROM templates t
+        WHERE t.organization_id = ${table.organizationId}
+          AND (t.s3_key = ${table.objectKey} OR t.id::text || '.docx' = pg_catalog.split_part(${table.objectKey}, '/', 3))
+      )
+    )`;
 
     return [
       p
@@ -1254,7 +1267,7 @@ export const bufferObjectCleanupIntents = p.pgTable(
       p.pgPolicy("buffer_object_cleanup_insert", {
         for: "insert",
         to: stella,
-        withCheck: sql`${organizationCheck} AND ${writerSettlementAccess} AND (${ownerScopeAccess} OR ${templateWriteAccess})`,
+        withCheck: sql`${organizationCheck} AND ${writerSettlementAccess} AND (${ownerScopeAccess} OR ${templateWriteAccess} OR ${templateCreationAccess})`,
       }),
       p.pgPolicy("buffer_object_cleanup_select", {
         for: "select",

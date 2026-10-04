@@ -30,6 +30,24 @@ describe("DOCX buffer validation", () => {
     expect(result).toEqual({ valid: true });
   });
 
+  test("reads only the viewed bytes of an offset Uint8Array", async () => {
+    const documentXml =
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+      `<w:document xmlns:w="${W_NS}"><w:body><w:p/></w:body></w:document>`;
+    const docx = new Uint8Array(await makeDocxBuffer(documentXml));
+    // Surround the archive with junk so a reader that ignores the view's
+    // offset and length sees an unreadable archive.
+    const backing = new Uint8Array(docx.byteLength + 16).fill(0xff);
+    backing.set(docx, 8);
+    const view = backing.subarray(8, 8 + docx.byteLength);
+
+    expect(await validateDocxBuffer(view)).toEqual({ valid: true });
+    expect(await validateDocxBuffer(backing)).toMatchObject({
+      valid: false,
+      reason: "unreadable-archive",
+    });
+  });
+
   test("rejects archives without a main document part", async () => {
     const result = await validateDocxBuffer(await makeDocxBuffer());
 

@@ -24,7 +24,7 @@ import {
 import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
 import {
   hasGrantedScope,
-  isStaticToolVisibleToRole,
+  isStaticToolShownToMemberRole,
   listOfferedStaticMcpToolDefinitions,
 } from "@/api/mcp/gateway/static-tool-visibility";
 import {
@@ -39,6 +39,7 @@ import type {
   McpToolAnnotations,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
+import type { McpWriteToolPermissions } from "@/api/mcp/write-tool-authority";
 
 // The gate's one owner is `mcp/tool-feature.ts`, so the resource list and the
 // connect-time instructions apply the same predicate without importing the
@@ -85,6 +86,8 @@ const externalMcpToolAccess = ({
         readOnlyHint: false;
       };
       destructiveBehavior: { type: "upstream" };
+      permissions: McpWriteToolPermissions;
+      accountAccess: "standard";
     } =>
   readOnlyHint === true
     ? {
@@ -106,6 +109,14 @@ const externalMcpToolAccess = ({
           readOnlyHint: false,
         },
         destructiveBehavior: { type: "upstream" },
+        permissions: {
+          type: "delegated",
+          reason:
+            "The connector's upstream server authorizes the call under the connection's own credentials.",
+        },
+        // Connector administration is reserved to standard accounts over
+        // REST; a connector's tools follow it.
+        accountAccess: "standard",
       };
 
 export const listGatewayMcpToolDefinitions = async ({
@@ -154,7 +165,10 @@ export const getGatewayMcpToolDefinition = async ({
 }): Promise<McpToolDefinition | undefined> => {
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (staticTool) {
-    return isStaticToolVisibleToRole(context, staticTool)
+    // Write authority is not decided here: dispatch refuses it with a
+    // `permission_denied` that names the role or the credential, as it
+    // refuses a gated-off tool with `feature_disabled`.
+    return isStaticToolShownToMemberRole(context, staticTool)
       ? staticTool
       : undefined;
   }

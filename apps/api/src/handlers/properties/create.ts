@@ -3,7 +3,8 @@ import { eq } from "drizzle-orm";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { properties, propertyDependencies } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { propertyRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -26,6 +27,8 @@ const config = {
     "this matter, or when the matter already has a document-type classifier " +
     "column.",
   permissions: { property: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: propertyRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

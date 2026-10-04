@@ -21,7 +21,8 @@ import {
   recalculateInvoiceTotals,
   timeEntryLineDraft,
 } from "@/api/handlers/invoices/invoice-lines";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
@@ -302,6 +303,8 @@ const addEntries = createSafeHandler(
       "fails with a retryable conflict rather than attaching part of the " +
       "set.",
     permissions: { invoice: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: invoiceRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",

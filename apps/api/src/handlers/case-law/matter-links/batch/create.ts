@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { linkDecisionsToMatter } from "@/api/handlers/case-law/matter-links/link-writes";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -37,6 +37,7 @@ const config = {
     "the same items safely; the second call reports them as `existing`. At " +
     "most as many items as the matter may hold links.",
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "legal_corpus_admin",

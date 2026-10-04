@@ -200,6 +200,7 @@ const readPlaybook = async (playbookId: SafeId<"playbookDefinition">) => {
     .select({
       name: playbookDefinitions.name,
       scope: playbookDefinitions.scope,
+      documentTypeKey: playbookDefinitions.documentTypeKey,
       status: playbookDefinitions.status,
       positions: playbookDefinitions.positions,
     })
@@ -269,6 +270,7 @@ describe("save a completed review run as a playbook", () => {
     expect(playbook?.status).toBe("draft");
     // Purchaser is a sale side by definition, so the scope perspective is pinned.
     expect(playbook?.scope).toEqual({ perspective: "buyer" });
+    expect(playbook?.documentTypeKey).toBeNull();
     // The position id survives: findings key on it, so a decision already taken
     // in the run stays attached to the position in the saved playbook.
     expect(playbook?.positions.items.map((item) => item.sourceId)).toEqual([
@@ -299,6 +301,7 @@ describe("save a completed review run as a playbook", () => {
     // Guessing buyer or seller here would invert every favourable/unfavourable
     // judgment a later run makes, so nothing is guessed.
     expect(playbook?.scope).toBeNull();
+    expect(playbook?.documentTypeKey).toBeNull();
   });
 
   test("the saved playbook carries the decisions already taken on its positions", async () => {

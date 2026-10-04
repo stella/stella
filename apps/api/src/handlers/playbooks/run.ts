@@ -3,7 +3,8 @@ import { t } from "elysia";
 
 import { PLAYBOOK_RUN_PROJECTIONS } from "@stll/api-contract";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { playbookRunRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -41,6 +42,8 @@ const config = {
     "materializes the playbook's extraction and verdict columns onto the " +
     'table, "none" materializes none. Findings populate asynchronously.',
   permissions: { playbook: ["apply"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: playbookRunRealtimeUpdates,
   access: "write",
   mcp: { type: "tool", name: "run_playbook" },
   params: workspaceParams({

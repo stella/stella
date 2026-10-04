@@ -6,6 +6,7 @@ import type * as v from "valibot";
 
 import type { SearchPaginationOutcome } from "@stll/api-contract/search";
 
+import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type {
   MCP_ALL_RESOURCE_SCOPES,
@@ -14,6 +15,7 @@ import type {
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import type { TextWindowResult } from "@/api/mcp/tool-utils";
+import type { McpWriteToolPermissions } from "@/api/mcp/write-tool-authority";
 
 /**
  * v2 types `Tool["inputSchema"]` as an arbitrary JSON value, which loses the
@@ -178,6 +180,17 @@ export type McpToolAccessBranch =
       /** Generic dispatch may invoke a read target despite its own write access. */
       readClass?: McpReadClassResolver;
       annotations: McpToolAnnotations & { readOnlyHint: false };
+      /**
+       * The member authority every call needs; discovery and dispatch enforce
+       * it centrally through `write-tool-authority.ts`.
+       */
+      permissions: McpWriteToolPermissions;
+      /**
+       * Whether the configured demo account may use the tool, declared as its
+       * REST counterpart declares it (`standard` refuses it, `sandbox`
+       * admits it); discovery and dispatch read it through the same owner.
+       */
+      accountAccess: AccountAccess;
     };
 
 export type McpToolDestructiveBehavior =

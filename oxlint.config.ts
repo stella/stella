@@ -8,7 +8,13 @@ import {
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
+import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
+import {
+  AUDIT_MUTATION_LEDGER_SCOPE,
+  auditMutationBudgets,
+} from "./scripts/audit-mutation-ledger-scope.ts";
+import { DERIVED_ATTRIBUTES } from "./scripts/derived-attributes.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
   SHADCN_LINT_JS_PLUGINS,
@@ -28,6 +34,7 @@ import {
   RESULT_CONVENTION_ENABLED_GLOBS,
   RESULT_CONVENTION_EXCLUDE_GLOBS,
 } from "./scripts/result-boundary-globs.ts";
+import sourceFingerprintBaseline from "./scripts/source-fingerprint-baseline.json" with { type: "json" };
 import {
   SQL_PERF_LINT_EXCLUDES,
   SQL_PERF_LINT_FILES,
@@ -145,6 +152,17 @@ const publicSsrAmbientStateRules = {
   ],
 } satisfies NonNullable<OxlintOverride["rules"]>;
 
+// One override carries every registered derived attribute: an oxlint override
+// replaces a rule's whole configuration, so a second override for the same
+// files would silently drop the first one's attributes.
+const derivedAttributeRuleOptions = {
+  attributes: DERIVED_ATTRIBUTES.map(({ name, detector, within }) => ({
+    name,
+    detector,
+    within,
+  })),
+};
+
 const fixtureRuleOverrides = [
   fixtureRuleOverride("drizzle.fixture.ts", [
     "drizzle/enforce-delete-with-where",
@@ -163,8 +181,14 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-swallowed-item-error.fixture.test.ts", [
     "no-swallowed-item-error/no-test-swallowed-error",
   ]),
+  fixtureRuleOverride("no-failure-as-empty.fixture.ts", [
+    "no-failure-as-empty/no-failure-as-empty",
+  ]),
   fixtureRuleOverride("provider-call-error-message.fixture.ts", [
     "provider-call-error-message/provider-call-error-message",
+  ]),
+  fixtureRuleOverride("require-contract-domains.fixture.tsx", [
+    "require-contract-domains/require-contract-domains",
   ]),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
@@ -199,6 +223,14 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-ambient-nondeterminism.fixture.ts", [
     "no-ambient-nondeterminism/no-ambient-nondeterminism",
+  ]),
+  ...[
+    "calendar-day.fixture.ts",
+    "calendar-day.fixture.legacy.ts",
+    "calendar-day.fixture.stale.ts",
+  ].map((file) => fixtureRuleOverride(file, ["calendar-day/no-utc-user-day"])),
+  fixtureRuleOverride("calendar-day.fixture.scheduler.ts", [
+    "calendar-day/no-wall-clock-scheduler-decision",
   ]),
   fixtureRuleOverride("require-cn-for-classname-composition.fixture.tsx", [
     "require-cn-for-classname-composition/require-cn-for-classname-composition",
@@ -325,8 +357,14 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-direct-field-write.fixture.ts", [
     "no-direct-field-write/no-direct-field-write",
   ]),
+  fixtureRuleOverride("no-chat-table-write.fixture.ts", [
+    "no-chat-table-write/no-chat-table-write",
+  ]),
   fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
     "no-direct-pdf-save/no-direct-pdf-save",
+  ]),
+  fixtureRuleOverride("no-direct-entity-insert.fixture.ts", [
+    "no-direct-entity-insert/no-direct-entity-insert",
   ]),
   fixtureRuleOverride("no-unvalidated-clause-write.fixture.ts", [
     "no-unvalidated-clause-write/no-unvalidated-clause-write",
@@ -954,10 +992,12 @@ export default defineConfig({
       "error",
     "require-tenant-page-limit/require-tenant-page-limit": "error",
     "no-direct-audit-log-insert/no-direct-audit-log-insert": "error",
+    "no-direct-clause-variant-insert/no-direct-clause-variant-insert": "error",
     "no-ad-hoc-chat-request/no-ad-hoc-chat-request": "error",
     "scanned-file-boundary/scanned-file-boundary": "error",
     "no-raw-zip-load/no-raw-zip-load": "error",
     "no-direct-property-table-write/no-direct-property-table-write": "error",
+    "no-direct-entity-insert/no-direct-entity-insert": "error",
     "no-direct-field-write/no-direct-field-write": "error",
     "no-direct-legislation-revision-write/no-direct-legislation-revision-write":
       "error",
@@ -1221,9 +1261,11 @@ export default defineConfig({
   ],
 
   jsPlugins: [
+    "./.oxlint-plugins/require-contract-domains.ts",
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
+    "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
     "./.oxlint-plugins/drizzle.ts",
@@ -1244,6 +1286,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-hand-rolled-typed-character.ts",
     "./.oxlint-plugins/no-ambient-hotkey-format.ts",
     "./.oxlint-plugins/no-ambient-nondeterminism.ts",
+    "./.oxlint-plugins/calendar-day.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-layout-motion-classes.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
@@ -1274,6 +1317,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-adhoc-loader.ts",
     "./.oxlint-plugins/no-shared-suspense-query.ts",
     "./.oxlint-plugins/no-bare-chrome-query.ts",
+    "./.oxlint-plugins/query-data-requires-state.ts",
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
@@ -1298,9 +1342,11 @@ export default defineConfig({
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
+    "./.oxlint-plugins/no-literal-derived-attribute.ts",
     "./.oxlint-plugins/no-parser-validator-calls.ts",
     "./.oxlint-plugins/no-raw-parser-html.ts",
     "./.oxlint-plugins/no-swallowed-item-error.ts",
+    "./.oxlint-plugins/no-failure-as-empty.ts",
     "./.oxlint-plugins/no-raw-decision-text-fields.ts",
     "./.oxlint-plugins/no-unowned-file-version-write.ts",
     "./.oxlint-plugins/mcp-security.ts",
@@ -1333,14 +1379,17 @@ export default defineConfig({
     "./.oxlint-plugins/require-billing-cap-crossings.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
+    "./.oxlint-plugins/no-direct-clause-variant-insert.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-request.ts",
     "./.oxlint-plugins/scanned-file-boundary.ts",
     "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-field-write.ts",
+    "./.oxlint-plugins/no-chat-table-write.ts",
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
     "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
+    "./.oxlint-plugins/no-direct-entity-insert.ts",
     "./.oxlint-plugins/no-direct-pdf-save.ts",
     "./.oxlint-plugins/no-condition-combinator-outside-conditions.ts",
     "./.oxlint-plugins/no-direct-buffer-cleanup-intent-delete.ts",
@@ -1904,6 +1953,14 @@ export default defineConfig({
       },
     },
     {
+      files: [
+        ".oxlint-plugins/__fixtures__/query-data-requires-state.fixture.tsx",
+      ],
+      rules: {
+        "query-data-requires-state/query-data-requires-state": "error",
+      },
+    },
+    {
       // Repository and workspace tooling: CLIs that print reports, plus the
       // on-demand eval runs. Anchored so `apps/api/src/scripts`, which ships
       // as runtime workers and backfills, keeps the product rules.
@@ -2438,6 +2495,48 @@ export default defineConfig({
       },
     },
     {
+      // A user-facing "today" is the day in the user's or organization's
+      // zone, read through `todayFor(zone)`; the UTC day is another day for
+      // hours around local midnight. Existing sites are budgeted in
+      // scripts/calendar-day-ledger.json, which only shrinks.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "apps/api/src/handlers/**/*.ts",
+        "apps/api/src/lib/**/*.ts",
+      ],
+      rules: {
+        "calendar-day/no-utc-user-day": "error",
+      },
+    },
+    {
+      // Ingestion adapters and parsers read publisher calendars, whose dates
+      // are the source's own days rather than a user's; tests build fixtures
+      // on fixed UTC days.
+      files: [
+        "apps/api/src/handlers/*/ingestion/**",
+        "apps/api/src/tests/**",
+        "apps/*/src/**/*.test.{ts,tsx}",
+      ],
+      rules: {
+        "calendar-day/no-utc-user-day": "off",
+      },
+    },
+    {
+      // Scheduler tasks decide on the slot they were due for (`ctx.dueAt`),
+      // not on the wall clock when the runner got to them: a late tick would
+      // otherwise see the next day and skip or repeat the slot.
+      files: ["apps/api/src/lib/scheduler/tasks/**/*.ts"],
+      rules: {
+        "calendar-day/no-wall-clock-scheduler-decision": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/lib/scheduler/tasks/**/*.test.ts"],
+      rules: {
+        "calendar-day/no-wall-clock-scheduler-decision": "off",
+      },
+    },
+    {
       // An ambient async-context store is per-request state, and `enterWith`
       // is the one way to bind it that outlives the work it was opened for:
       // the frame it mutates stays current for whatever the runtime dispatches
@@ -2451,6 +2550,15 @@ export default defineConfig({
       ],
       rules: {
         "no-async-context-enter-with/no-async-context-enter-with": "error",
+      },
+    },
+    {
+      // Chat tools write rows through the shared write primitives in
+      // `apps/api/src/lib`, which own each write's checks and audit event.
+      files: ["apps/api/src/handlers/chat/tools/**/*.ts"],
+      excludeFiles: ["apps/api/src/handlers/chat/tools/**/*.test.ts"],
+      rules: {
+        "no-chat-table-write/no-chat-table-write": "error",
       },
     },
     {
@@ -3184,6 +3292,16 @@ export default defineConfig({
       rules: { "no-swallowed-item-error/no-swallowed-item-error": "error" },
     },
     {
+      // A failed read must not come back as an empty value; existing sites
+      // are held to the shrink-only baseline the rule reads.
+      files: ["apps/api/src/**/*.ts", "packages/*/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/{test,tests,__tests__,__fixtures__}/**",
+      ],
+      rules: { "no-failure-as-empty/no-failure-as-empty": "error" },
+    },
+    {
       files: [
         "{apps,packages,scripts}/**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
         "{apps,packages,scripts}/**/{tests,__tests__}/**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
@@ -3235,6 +3353,43 @@ export default defineConfig({
       ],
       rules: {
         "no-literal-decision-court/no-literal-decision-court": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-literal-derived-attribute.fixture.ts",
+      ],
+      rules: {
+        "no-literal-derived-attribute/no-literal-derived-attribute": [
+          "error",
+          {
+            attributes: [
+              {
+                name: "encrypted",
+                detector: "apps/api/src/lib/files/detect-file-encryption.ts",
+                within: [".oxlint-plugins/__fixtures__/"],
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // A derived attribute (scripts/derived-attributes.ts) comes from its
+      // detector: a literal written to it elsewhere records a guess.
+      files: [
+        ...new Set(DERIVED_ATTRIBUTES.flatMap(({ within }) => within)),
+      ].map((tree) => `${tree}**/*.ts`),
+      excludeFiles: [
+        "**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-literal-derived-attribute/no-literal-derived-attribute": [
+          "error",
+          derivedAttributeRuleOptions,
+        ],
       },
     },
     {
@@ -3500,6 +3655,12 @@ export default defineConfig({
       },
     },
     {
+      files: ["apps/web/src/**"],
+      rules: {
+        "query-data-requires-state/query-data-requires-state": "error",
+      },
+    },
+    {
       // Persistent chrome that mounts on every route: defer cold-cache fetches
       // past mount via useChromeQuery so they cannot warn on a not-yet-mounted
       // fiber. See apps/web/src/hooks/use-chrome-query.ts.
@@ -3724,9 +3885,25 @@ export default defineConfig({
       },
     },
     {
+      // Outside the API, apps and packages read their own env modules; a
+      // deployment flag is never read off the raw process environment.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "apps/*/scripts/**/*.ts",
+        "packages/*/src/**/*.{ts,tsx}",
+        "packages/*/scripts/**/*.ts",
+      ],
+      rules: {
+        "no-raw-deployment-feature-read/no-raw-deployment-feature-read": [
+          "error",
+          { processEnvOnly: true },
+        ],
+      },
+    },
+    {
       // Deployment feature flags are read through `isDeploymentFeatureEnabled`
       // so every surface shares one local-development policy per flag.
-      files: ["apps/api/src/**/*.ts"],
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
       rules: {
         "no-raw-deployment-feature-read/no-raw-deployment-feature-read": [
           "error",
@@ -3781,14 +3958,29 @@ export default defineConfig({
     },
     {
       // Every workspace mutation must leave an audit trail (SOC 2 /
-      // ISO 27001). Scope to handler files — DB writes elsewhere
-      // (auth lifecycle hooks, job framework internals, RLS session
-      // setup) have different audit semantics and would generate
-      // false positives.
+      // ISO 27001). Handlers are held to the full rule; the block below
+      // extends it to MCP and library code with a reasoned ledger.
       files: ["apps/api/src/handlers/**/*.ts"],
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
         "require-audit-on-mutation/require-audit-on-mutation": "error",
+      },
+    },
+    {
+      // The same rule over MCP tools and shared library code. Writes that
+      // predate this scope are budgeted per owning function by the reasoned
+      // ledger (scripts/audit-mutation-ledger.ts), which only shrinks; any
+      // other unaudited write fails like it does in a handler.
+      files: [...AUDIT_MUTATION_LEDGER_SCOPE],
+      excludeFiles: [
+        "apps/api/src/mcp/**/*.test.ts",
+        "apps/api/src/lib/**/*.test.ts",
+      ],
+      rules: {
+        "require-audit-on-mutation/require-audit-on-mutation": [
+          "error",
+          { budgets: auditMutationBudgets(auditMutationLedger) },
+        ],
       },
     },
     {
@@ -4252,11 +4444,10 @@ export default defineConfig({
       },
     },
     {
-      // A computed-key write onto an object literal sends `__proto__` through
-      // the prototype setter, so a record rebuilt from client, model or
-      // parsed-JSON keys loses that entry. Existing debt is carried per file
-      // in scripts/design-lint-baseline.json and switched off there by
-      // `designLintBacklogOverrides` below.
+      // Dynamic record writes use own-property builders; open module tables
+      // require an own-key check. Existing sites covered by these syntax checks
+      // carry count ceilings in scripts/design-lint-baseline.json and are
+      // switched off here by `designLintBacklogOverrides` below.
       files: [
         "apps/*/src/**/*.{ts,tsx}",
         "apps/*/scripts/**/*.{ts,tsx}",
@@ -4358,6 +4549,26 @@ export default defineConfig({
       ],
       rules: {
         "no-raw-cache-control/no-raw-cache-control": "error",
+      },
+    },
+    {
+      // A case-law adapter's rawHash decides whether a re-fetched decision is
+      // written, so it comes from `sourceFingerprint` over the stored source.
+      // Files that predate the owner are listed, shrink-only, in
+      // scripts/source-fingerprint-baseline.json.
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
+        ".oxlint-plugins/__fixtures__/raw-hash-from-source-fingerprint.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/handlers/case-law/ingestion/adapters/__fixtures__/**",
+      ],
+      rules: {
+        "raw-hash-from-source-fingerprint/raw-hash-from-source-fingerprint": [
+          "error",
+          { allowedFiles: Object.keys(sourceFingerprintBaseline.files) },
+        ],
       },
     },
     {
@@ -4912,6 +5123,10 @@ export default defineConfig({
       rules: {
         "no-imported-class-constant/no-imported-class-constant": "error",
       },
+    },
+    {
+      files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/mcp/**/*.{ts,tsx}"],
+      rules: { "require-contract-domains/require-contract-domains": "error" },
     },
     ...fixtureRuleOverrides,
     // Last: oxlint resolves overrides by replacement, so a scope that enables

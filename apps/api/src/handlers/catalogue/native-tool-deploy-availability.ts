@@ -2,11 +2,15 @@ import { Result } from "better-result";
 
 import { TOGGLEABLE_NATIVE_TOOL_BACKEND_SLUGS } from "@stll/catalogue";
 
-import { createSafeSessionHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeSessionHandler,
+} from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "deploy_mechanics" },
 } satisfies SessionHandlerConfig;
 

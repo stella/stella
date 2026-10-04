@@ -1561,11 +1561,21 @@ export const BILLING_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "input",
+      select: {
+        by: "presence",
+        property: "time_entry_id",
+        present: {
+          operation: "update",
+          permissions: { timeEntry: ["update"] },
+        },
+        absent: { operation: "create", permissions: { timeEntry: ["create"] } },
+      },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     feature: "FEATURE_TIME_BILLING",
-    isVisibleToMemberRole: (memberRole) =>
-      roles[memberRole].authorize({ timeEntry: ["create"] }).success ||
-      roles[memberRole].authorize({ timeEntry: ["update"] }).success,
     name: "save_time_entry",
     scope: "stella:billing_write",
   }),
@@ -1585,11 +1595,11 @@ export const BILLING_TOOL_DEFINITIONS = [
       "reverted. Returns whether the entry was hard-deleted.",
     inputSchema: deleteTimeEntryArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: { timeEntry: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     feature: "FEATURE_TIME_BILLING",
-    isVisibleToMemberRole: (memberRole) =>
-      roles[memberRole].authorize({ timeEntry: ["delete"] }).success,
     name: "delete_time_entry",
     scope: "stella:billing_write",
   }),

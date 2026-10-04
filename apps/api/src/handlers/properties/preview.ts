@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { propertyContentSchema } from "@/api/db/schema-validators";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { aiHandlerError } from "@/api/lib/ai-error";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -48,6 +48,11 @@ const previewBodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Returns parsed property preview data rather than stored-file bytes.",
+  },
   description:
     "Run a column prompt against one document without creating the column or " +
     "storing anything, so a prompt can be tried before it is saved. Pass the " +
@@ -57,6 +62,7 @@ const config = {
     "unusable on that document, unsupported when the document cannot be " +
     "processed, or empty when the model returned nothing. Consumes AI usage.",
   permissions: { property: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   // A model call runs even though nothing is persisted: an AI generation
   // kickoff is a write by the same rule as any other (see CapabilityAccess).
   access: "write",

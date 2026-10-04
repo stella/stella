@@ -94,6 +94,7 @@ import {
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
+import { mcpToolAuthorityRefusal } from "@/api/mcp/write-tool-authority";
 
 const MAX_TOOL_NAME_SUGGESTION_CHARS = 128;
 const responseDisposition = new AsyncLocalStorage<{ type: "read" | "tool" }>();
@@ -875,6 +876,18 @@ export const createMcpHttpRequestHandler = ({
         });
       }
 
+      // Before admission: an unauthorized call must not spend the caller's
+      // action budget, nor be answered with an admission refusal instead.
+      const authorityRefusal = mcpToolAuthorityRefusal({
+        authority: context,
+        definition,
+        toolName,
+        userEmail: context.userEmail,
+      });
+      if (authorityRefusal !== null) {
+        return mcpStructuredErrorResult(authorityRefusal);
+      }
+
       const resultDisposition = toolResultDisposition(definition.annotations);
       const readClass = isDeploymentFeatureEnabled("FEATURE_MCP_READ_FENCE")
         ? await resolveMcpReadClass(
@@ -902,13 +915,6 @@ export const createMcpHttpRequestHandler = ({
           captureError,
         });
       };
-      if (
-        !isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION") &&
-        !isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS")
-      ) {
-        return await run();
-      }
-
       let consumesServices = definition.consumesServices;
       if (toolName === "invoke_capability") {
         const classified = await invokedCapabilityConsumesServices(

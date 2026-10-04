@@ -20,12 +20,14 @@ import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";
 import { MatterCombobox } from "@/components/workspaces/matter-combobox";
 import type { MatterOption } from "@/components/workspaces/matter-combobox";
+import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
+import { workflowActionsDisabled } from "@/lib/workspaces/queries/workspace.logic";
 
 type UploadDocumentDialogProps = {
   onClose: () => void;
@@ -170,13 +172,14 @@ const UploadDocumentForMatter = ({
   const t = useTranslations();
   const [isUploadPending, createFileEntities] =
     useCreateFileEntities(workspaceId);
-  const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
+  const workflowView = useIsWorkflowRunning(workspaceId);
+  const workflowDisabled = workflowActionsDisabled(workflowView);
   const isEntitiesLimitReached = useEntitiesCountLimit(workspaceId);
   const canCreateEntity = usePermissions({ entity: ["create"] });
   const disabled =
     !canCreateEntity ||
     isEntitiesLimitReached ||
-    isWorkflowRunning ||
+    workflowDisabled ||
     isUploadPending;
 
   if (!canCreateEntity) {
@@ -194,6 +197,7 @@ const UploadDocumentForMatter = ({
 
   return (
     <div className="flex flex-col gap-2">
+      <WorkflowQueryFeedback view={workflowView} />
       <Button
         className="min-h-11 border border-dashed"
         disabled={disabled}
