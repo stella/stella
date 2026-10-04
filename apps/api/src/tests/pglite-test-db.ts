@@ -29,6 +29,7 @@ import {
   installPgliteSchedulerJobPauseLog,
   installPgliteOrganizationMemberCapacity,
   installPglitePdfSigningTokenScopes,
+  installPglitePlaybookDocumentTypeKey,
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
   installPgliteTimeEntryTimerSignals,
@@ -736,6 +737,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
     await db.execute(sql.raw(statement));
   }
   await installPgliteTimeEntryTimerSignals(db);
+  await installPglitePlaybookDocumentTypeKey(db);
 
   return client;
 };
