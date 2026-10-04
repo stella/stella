@@ -236,10 +236,14 @@ const queueRun = async (serviceTier: "standard" | "flex") => {
   return { actor, run, runId };
 };
 
-const readRun = async (runId: string) =>
-  await testDb.query.extractionRuns.findFirst({
-    where: { id: { eq: brandPersistedExtractionRunId(runId) } },
-  });
+const readRun = async (runId: string) => {
+  const [run] = await testDb
+    .select()
+    .from(extractionRunsTable)
+    .where(eq(extractionRunsTable.id, brandPersistedExtractionRunId(runId)))
+    .limit(1);
+  return run;
+};
 
 const readCells = async () =>
   await testDb
