@@ -60,10 +60,5 @@ export const TENANT_SYSTEM_ACTOR = {
   usageProvider: "system:usage-provider",
 } as const;
 
-export type TenantSystemActor =
-  (typeof TENANT_SYSTEM_ACTOR)[keyof typeof TENANT_SYSTEM_ACTOR];
-
-export type SystemActor = SystemRunActor | TenantSystemActor;
-
 /** The shape the database CHECK enforces on `system_audit_runs.actor`. */
 export const SYSTEM_ACTOR_PATTERN = /^system:[a-z][a-z0-9-]*$/u;
