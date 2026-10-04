@@ -87,7 +87,7 @@ import type {
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
-  readPublisher,
+  readPublisherBytes,
   readPublisherText,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { backoffMs } from "@/api/handlers/case-law/ingestion/adapters/retry";
@@ -408,6 +408,11 @@ const readFailureError = ({
         status: cause.status,
         message: `${label}: ${cause.status}`,
       });
+    case "too-large":
+      return new FetchBoundaryError({
+        url,
+        message: `${label}: body over ${cause.maxBytes} bytes`,
+      });
     default:
       cause satisfies never;
       return panic(`Unhandled read cause: ${String(cause)}`);
@@ -429,7 +434,7 @@ const fetchPdfBytes = async (
   documentId: string,
   signal?: AbortSignal,
 ): Promise<SkUsPdfRead> => {
-  const read = await readPublisher(`${DOC_DOWNLOAD_URL}/${documentId}`, {
+  const read = await readPublisherBytes(`${DOC_DOWNLOAD_URL}/${documentId}`, {
     fetchStage: "document",
     adapterKey: ADAPTER_KEYS.SK_US,
     expectedContentType: "pdf",
@@ -457,18 +462,14 @@ const fetchPdfBytes = async (
     );
     return { type: "unavailable", cause };
   };
+  // A served but empty body, one over the read ceiling, and one that fails
+  // after the headers are failed reads, not a page the court answered with in
+  // place of a document: the read types all three as unavailable.
   switch (read.type) {
-    case "present": {
-      const bytes = new Uint8Array(await read.value.arrayBuffer());
-      // A served but empty body is a failed read, not a page the court
-      // answered with in place of a document.
-      if (bytes.length === 0) {
-        return unavailable({ kind: "empty-body", status: read.value.status });
-      }
-      return isPdf(bytes)
-        ? { type: "pdf", bytes }
+    case "present":
+      return isPdf(read.value)
+        ? { type: "pdf", bytes: read.value }
         : { type: "not-served", evidence: "not-a-pdf" };
-    }
     case "absent":
       return { type: "not-served", evidence: read.evidence };
     case "refused":
@@ -937,7 +938,7 @@ export type SkUsListingFetchOutcome =
   | { type: "retry_later"; error: AdapterFetchError };
 
 /** A search request that established no listing. */
-type SearchReadFailure = Exclude<ReadOutcome<Response>, { type: "present" }>;
+type SearchReadFailure = Exclude<ReadOutcome<string>, { type: "present" }>;
 
 /** The status an HTTP absence was stated with. */
 const absenceStatus = (evidence: AbsenceEvidence): number => {
@@ -1000,7 +1001,7 @@ type FetchSkUsListingOptions = {
   documentId: string;
   caseNumber: string;
   signal?: AbortSignal;
-  read?: typeof readPublisher;
+  read?: typeof readPublisherText;
   pause?: (milliseconds: number) => Promise<void>;
 };
 
@@ -1010,7 +1011,7 @@ export const fetchSkUsListing = async ({
   documentId,
   caseNumber,
   signal,
-  read = readPublisher,
+  read = readPublisherText,
   pause = async (milliseconds) => {
     await Bun.sleep(milliseconds);
   },
@@ -1060,8 +1061,7 @@ export const fetchSkUsListing = async ({
             label: "SK ÚS listing fetch failed",
           });
         }
-        const body = await listed.value.text();
-        const data: unknown = JSON.parse(body);
+        const data: unknown = JSON.parse(listed.value);
         if (!isSearchResponse(data)) {
           throw new FetchBoundaryError({
             url: SEARCH_URL,
@@ -1127,6 +1127,15 @@ export type SkUsBuildResult =
    * far; the pipeline decides what it costs the page.
    */
   | { type: "unread"; part: SkUsReadPart; item: UnreadListedItem };
+
+/**
+ * States, as plain text the reconciliation walk can select on, that a row was
+ * built without a part the service refused. It is written beside the typed
+ * refusal and from the same value, and is gone once a build reads the part.
+ */
+const SK_US_PART_READ_METADATA_KEY = "partReadState";
+
+const SK_US_PART_READ_STATE = { WITHHELD: "withheld" } as const;
 
 /** The per-decision responses a build cannot do without once requested. */
 type SkUsReadPart =
@@ -1680,7 +1689,10 @@ const assembleSkUsDecision = ({
       ...skUsMetadata({ doc, facetsJson, header, collection }),
       ...(withheld === undefined
         ? {}
-        : { [READ_OUTCOME_METADATA_KEY]: withheld }),
+        : {
+            [READ_OUTCOME_METADATA_KEY]: withheld,
+            [SK_US_PART_READ_METADATA_KEY]: SK_US_PART_READ_STATE.WITHHELD,
+          }),
     }),
     // Over the envelope, not over the listing row: the row is one of seven
     // responses stored, and a hash of it alone would call a decision
@@ -1898,7 +1910,7 @@ const executeSearch = async ({
   range,
   signal,
 }: ExecuteSearchOptions): Promise<SearchRead> => {
-  const read = await readPublisher(SEARCH_URL, {
+  const read = await readPublisherText(SEARCH_URL, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_US,
     method: "POST",
@@ -1945,7 +1957,7 @@ const executeSearch = async ({
     });
   }
 
-  const data: unknown = await read.value.json();
+  const data: unknown = JSON.parse(read.value);
   if (!isSearchResponse(data)) {
     const preview = JSON.stringify(data).slice(0, 200);
     panic(`SK ÚS search returned an invalid payload: ${preview}`);
@@ -3036,6 +3048,14 @@ export const skUsAdapter = defineSourceAdapter({
     // by one rather than through a representative, and a sibling whose PDF
     // failed no longer hides behind one that succeeded.
     heldRequiresDetail: true,
+    // A row built without a part the service refused (the vocabularies, the
+    // facets, the collection entry or the docket file) holds its document and
+    // counts as held; it is read again on each walk of its month until a
+    // build reads the part.
+    recheckHeld: {
+      metadataKey: SK_US_PART_READ_METADATA_KEY,
+      values: [SK_US_PART_READ_STATE.WITHHELD],
+    },
     listSlicePage: listSkUsSlicePage,
     buildDecision: buildSkUsFromPayload,
   },

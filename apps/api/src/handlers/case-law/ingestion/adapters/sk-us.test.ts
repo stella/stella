@@ -61,6 +61,19 @@ const storedRefusal = (decision: IngestionResult): ReadRefusal => {
   return marker;
 };
 
+/**
+ * Whether the reconciliation walk reads this held row again: its row states
+ * a value the adapter's `recheckHeld` rule names.
+ */
+const readAgainByReconciliation = (decision: IngestionResult): boolean => {
+  const recheck = reconciliation.recheckHeld;
+  if (recheck === undefined) {
+    return false;
+  }
+  const stated = decision.metadata[recheck.metadataKey];
+  return recheck.values.some((value) => value === stated);
+};
+
 const SEARCH_PATH = "/o/v1/dms/search";
 const CONTENT_PATH = "/o/v1/dms/content";
 const CODELIST_PATH = "/o/v1/codelist/decision";
@@ -196,7 +209,9 @@ type DownloadStub =
   | { type: "not-a-pdf" }
   | { type: "status"; status: number }
   /** The request fails before any response, as a dropped connection does. */
-  | { type: "fails"; error: Error };
+  | { type: "fails"; error: Error }
+  /** A 200 whose body resets after its first bytes. */
+  | { type: "body-resets" };
 
 type MockOptions = {
   /** Listing responses, one per request, in order. */
@@ -296,6 +311,18 @@ const downloadResponse = (stub: DownloadStub): Response => {
       return new Response(null, { status: stub.status });
     case "fails":
       throw stub.error;
+    case "body-resets":
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            controller.enqueue(PDF_BYTES.slice(0, 8));
+          },
+          pull: (controller) => {
+            controller.error(new TypeError("Connection reset by peer"));
+          },
+        }),
+        { headers: { "Content-Type": "application/pdf" } },
+      );
     default: {
       const exhaustive: never = stub;
       throw new Error(`unhandled download stub: ${JSON.stringify(exhaustive)}`);
@@ -1243,6 +1270,9 @@ describe("sk-us buildDecision", () => {
         decodeSourceRawEnvelope(built.decision.sourceRaw ?? "") ?? {},
       );
       expect(parts).not.toContain(SURFACE_PART[surface]);
+      // The row holds its document, so only the recheck rule reads it again.
+      expect(built.decision.isListingOnly).not.toBe(true);
+      expect(readAgainByReconciliation(built.decision)).toBe(true);
 
       // The same part stated absent builds the same envelope with no marker,
       // and the refusal joins the hash.
@@ -1259,6 +1289,7 @@ describe("sk-us buildDecision", () => {
       );
       expect(absent.decision.sourceRaw).toBe(built.decision.sourceRaw);
       expect(absent.decision.rawHash).not.toBe(built.decision.rawHash);
+      expect(readAgainByReconciliation(absent.decision)).toBe(false);
     },
   );
 
@@ -1271,6 +1302,7 @@ describe("sk-us buildDecision", () => {
     expect(
       Object.hasOwn(built.decision.metadata, READ_OUTCOME_METADATA_KEY),
     ).toBe(false);
+    expect(readAgainByReconciliation(built.decision)).toBe(false);
   });
 
   test.each(["content", "facets", "file", "codelist"] as const)(
@@ -1637,6 +1669,26 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
         outcome: { type: "unavailable", cause: { kind: "empty-body" } },
       },
     });
+  });
+
+  test("a document file whose body resets after the headers keeps its listed identity as an unread item", async () => {
+    mockFetch({
+      search: [{ type: "page", documents: [PLENARY_OPINION], numFound: 1 }],
+      download: { type: "body-resets" },
+    });
+
+    const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
+
+    expect(page.decisions).toEqual([]);
+    expect(
+      page.unreadItems?.map(({ listing, outcome }) => ({
+        sourceDocumentId: listing.sourceDocumentId,
+        outcome:
+          outcome.type === "unavailable" ? outcome.cause.kind : outcome.type,
+      })),
+    ).toEqual([
+      { sourceDocumentId: PLENARY_OPINION.documentId, outcome: "thrown" },
+    ]);
   });
 
   test.each([
