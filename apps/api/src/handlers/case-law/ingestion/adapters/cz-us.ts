@@ -2129,6 +2129,10 @@ const unreadNalusFailure = ({
       return new NalusResponseError({
         message: `NALUS ${subject} returned HTTP ${cause.status} with no body`,
       });
+    case "too-large":
+      return new NalusResponseError({
+        message: `NALUS ${subject} body exceeded ${cause.maxBytes} bytes`,
+      });
     default:
       cause satisfies never;
       return panic(`Unhandled NALUS read failure: ${String(cause)}`);
@@ -2170,7 +2174,7 @@ export const fetchNalusRecordCard = async (
       }
       return {
         type: CZ_US_RECORD_CARD_STATE.UNAVAILABLE,
-        status: read.cause.status,
+        status: read.cause.kind === "too-large" ? null : read.cause.status,
       };
     default:
       read satisfies never;
@@ -2477,7 +2481,8 @@ const fetchListedDecision = async (
             ? CARD_NOT_ASKED
             : {
                 type: CZ_US_RECORD_CARD_STATE.UNAVAILABLE,
-                status: card.cause.status,
+                status:
+                  card.cause.kind === "too-large" ? null : card.cause.status,
               };
         unreadPart = storedPartReadOutcome(card);
         break;

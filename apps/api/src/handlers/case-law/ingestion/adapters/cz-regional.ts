@@ -647,6 +647,7 @@ const isRetryableFinaldocRead = (read: ReadOutcome<Response>): boolean => {
       return isTimeoutError(read.cause.error);
     case "no-content":
     case "empty-body":
+    case "too-large":
       return false;
     default:
       read.cause satisfies never;

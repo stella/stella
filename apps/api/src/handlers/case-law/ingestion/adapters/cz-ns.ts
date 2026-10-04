@@ -1360,7 +1360,7 @@ const CZ_NS_SOURCE_SURFACES = {
 
 type ReadCzNsListPageOptions = {
   start: number;
-  signal: AbortSignal;
+  signal: AbortSignal | undefined;
   cursor: string | null;
 };
 
