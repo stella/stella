@@ -314,8 +314,8 @@ const identityReaders = (
     )
       .map(String)
       .toSorted();
-  const rowsRead = (intent: DecisionIdentifierIntent) =>
-    lookupDecisionsByIdentity({
+  const rowsRead = async (intent: DecisionIdentifierIntent) =>
+    await lookupDecisionsByIdentity({
       caseLawDb: caseLawDb(),
       country: jurisdiction,
       locator: decisionIdentityLocatorOf(intent),
