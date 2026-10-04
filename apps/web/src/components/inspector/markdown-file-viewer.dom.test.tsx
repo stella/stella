@@ -281,9 +281,9 @@ test("publication captures the displayed source inside the debounce interval", a
   expect(view.queryByRole("button", { name: "Save" })).toBeNull();
 });
 
-test.each(["committed", "refused"] as const)(
-  "publication locks the model until %s settlement and resumes editing",
-  async (outcome) => {
+test.each([true, false])(
+  "publication locks the model until settlement (success=%s) and resumes editing",
+  async (succeeded) => {
     const view = await mount();
     edit(view.container, "Draft B");
     await advance(400);
@@ -307,7 +307,7 @@ test.each(["committed", "refused"] as const)(
     edit(view.container, "Draft C");
     expect(view.container.textContent).not.toContain("Draft C");
     jest.useRealTimers();
-    if (outcome === "committed") {
+    if (succeeded) {
       await publish();
       await waitFor(() =>
         expect(view.container.querySelector(".md-editor")).not.toBeNull(),
@@ -436,39 +436,36 @@ test("publication settlement preserves metadata confirmed while it was pending",
 test("editor resets are fixed points for source and pending notifications", async () => {
   await assertProperty(
     "editor resets are fixed points for source and pending notifications",
-    fc.asyncProperty(
-      fc.string({ minLength: 1, maxLength: 50 }),
-      async (source) => {
-        const handle = React.createRef<MarkdownHybridEditorHandle>();
-        const changes: string[] = [];
-        const view = render(
-          <IntlProvider locale="en" messages={englishMessages}>
-            <MarkdownHybridEditor
-              ref={handle}
-              markdown="Server text"
-              imagePolicy="data-only"
-              onMarkdownChange={(next) => {
-                changes.push(next);
-              }}
-            />
-          </IntlProvider>,
-        );
-        jest.useFakeTimers();
-        edit(view.container, "Pending edit");
-        act(() => handle.current?.resetMarkdown(source));
-        act(() => handle.current?.resetMarkdown(source));
-        expect(handle.current?.captureForSave()).toBe(source);
-        // The imperative snapshot locks synchronously, before a host can commit
-        // its pending-state render, and covers every generated source string.
-        edit(view.container, "Later edit");
-        expect(handle.current?.captureForSave()).toBe(source);
-        await advance(400);
-        expect(changes).toEqual([source, source]);
-        await act(async () => view.unmount());
-        expect(changes).toEqual([source, source]);
-        jest.useRealTimers();
-      },
-    ),
+    fc.asyncProperty(fc.string(), async (source) => {
+      const handle = React.createRef<MarkdownHybridEditorHandle>();
+      const changes: string[] = [];
+      const view = render(
+        <IntlProvider locale="en" messages={englishMessages}>
+          <MarkdownHybridEditor
+            ref={handle}
+            markdown="Server text"
+            imagePolicy="data-only"
+            onMarkdownChange={(next) => {
+              changes.push(next);
+            }}
+          />
+        </IntlProvider>,
+      );
+      jest.useFakeTimers();
+      edit(view.container, "Pending edit");
+      act(() => handle.current?.resetMarkdown(source));
+      act(() => handle.current?.resetMarkdown(source));
+      expect(handle.current?.captureForSave()).toBe(source);
+      // The imperative snapshot locks synchronously, before a host can commit
+      // its pending-state render, and covers every generated source string.
+      edit(view.container, "Later edit");
+      expect(handle.current?.captureForSave()).toBe(source);
+      await advance(400);
+      expect(changes).toEqual([source, source]);
+      await act(async () => view.unmount());
+      expect(changes).toEqual([source, source]);
+      jest.useRealTimers();
+    }),
     { numRuns: 25 },
   );
 });
