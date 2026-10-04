@@ -6,6 +6,8 @@ import {
   auditLogs,
   contacts,
   entities,
+  flowRuns,
+  flowRunSteps,
   taskAssignees,
   timeEntries,
   workspaceMembers,
@@ -169,6 +171,25 @@ test.each([
           ),
         );
     }
+    const runId = createSafeId<"flowRun">();
+    await db.insert(flowRuns).values({
+      id: runId,
+      workspaceId: coassigned.workspaceId,
+      status: "awaiting_review",
+      definitionSnapshot: {
+        name: "Assignment review",
+        steps: [{ kind: "review-gate", name: "Review", instructions: "" }],
+      },
+      triggerSource: { type: "manual", userId: leaver.userId },
+    });
+    await db.insert(flowRunSteps).values({
+      id: createSafeId<"flowRunStep">(),
+      workspaceId: coassigned.workspaceId,
+      runId,
+      index: 0,
+      kind: "review-gate",
+      status: "awaiting_review",
+    });
     const headers = owner.headers();
     headers.set("content-type", "application/json");
     headers.set("origin", "http://localhost:3001");
@@ -189,6 +210,52 @@ test.each([
       }),
     );
     expect(response.status).toBe(refused ? 400 : 200);
+    expect(
+      await db
+        .select({ status: flowRuns.status })
+        .from(flowRuns)
+        .where(eq(flowRuns.id, runId)),
+    ).toEqual([{ status: refused ? "awaiting_review" : "cancelled" }]);
+    expect(
+      await db
+        .select({
+          changes: auditLogs.changes,
+          workspaceId: auditLogs.workspaceId,
+        })
+        .from(auditLogs)
+        .where(eq(auditLogs.resourceId, runId)),
+    ).toEqual(
+      refused
+        ? []
+        : [
+            {
+              workspaceId: coassigned.workspaceId,
+              changes: { status: { old: "awaiting_review", new: "cancelled" } },
+            },
+          ],
+    );
+    const membershipAudit = await db
+      .select({ metadata: auditLogs.metadata, userId: auditLogs.userId })
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, org.id));
+    expect(
+      membershipAudit.filter(
+        ({ metadata }) => metadata?.["change"] === "member-removed",
+      ),
+    ).toEqual(
+      refused
+        ? []
+        : [
+            {
+              userId: owner.userId,
+              metadata: {
+                change: "member-removed",
+                memberId: added.id,
+                userId: leaver.userId,
+              },
+            },
+          ],
+    );
     expect(await db.$count(member, eq(member.id, otherMembership.id))).toBe(1);
     expect(
       await db.$count(taskAssignees, eq(taskAssignees.entityId, otherTaskId)),

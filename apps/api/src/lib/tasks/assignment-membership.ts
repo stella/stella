@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import { abortTransaction } from "@/api/db/safe-db";
 import { taskAssignees, workspaceMembers, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -89,6 +90,7 @@ export const writeTaskAssignments = async ({
   workspaceId,
   assignments,
 }: WriteTaskAssignmentsOptions) => {
+  // audit: skip - The task writer records creation or assignment changes in this same transaction.
   if (assignments.length === 0) {
     return;
   }
@@ -98,10 +100,12 @@ export const writeTaskAssignments = async ({
     userIds: assignments.map((row) => row.userId),
   });
   if (assignments.some((row) => !members.has(row.userId))) {
-    throw new HandlerError({
-      status: 400,
-      message: "User is not a member of this workspace",
-    });
+    abortTransaction(
+      new HandlerError({
+        status: 400,
+        message: "User is not a member of this workspace",
+      }),
+    );
   }
   await tx
     .insert(taskAssignees)
@@ -125,6 +129,7 @@ export const removeTaskAssignment = async ({
   entityId,
   userId,
 }: RemoveTaskAssignmentOptions) => {
+  // audit: skip - The remove or move handler records its task mutation in this same transaction.
   await tx
     .delete(taskAssignees)
     .where(

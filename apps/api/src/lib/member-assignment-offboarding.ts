@@ -16,6 +16,7 @@ import {
   session,
 } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import { abortTransaction } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   correspondence,
@@ -94,7 +95,7 @@ export const tryLockMemberCleanupWorkspace = async (
     .from(workspaces)
     .where(eq(workspaces.id, workspaceId));
   if (!advisory.at(0)?.locked) {
-    throw removalBusy();
+    abortTransaction(removalBusy());
   }
   const locked = await Result.tryPromise({
     try: async () =>
@@ -106,9 +107,11 @@ export const tryLockMemberCleanupWorkspace = async (
     catch: (error) => error,
   });
   if (Result.isError(locked)) {
-    throw isPgError(locked.error, PG_ERROR.LOCK_NOT_AVAILABLE)
-      ? removalBusy()
-      : locked.error;
+    abortTransaction(
+      isPgError(locked.error, PG_ERROR.LOCK_NOT_AVAILABLE)
+        ? removalBusy()
+        : locked.error,
+    );
   }
 };
 
@@ -176,10 +179,12 @@ const clearMemberObligationOwners = async ({
             userIds: [reassignTo],
           });
           if (!members.has(reassignTo)) {
-            throw new HandlerError({
-              status: 400,
-              message: "User is not a member of this workspace",
-            });
+            abortTransaction(
+              new HandlerError({
+                status: 400,
+                message: "User is not a member of this workspace",
+              }),
+            );
           }
         }
       }
@@ -292,10 +297,12 @@ const clearMemberTaskAssignments = async ({
           userIds: [reassignTo],
         });
         if (!members.has(reassignTo)) {
-          throw new HandlerError({
-            status: 400,
-            message: "User is not a member of this workspace",
-          });
+          abortTransaction(
+            new HandlerError({
+              status: 400,
+              message: "User is not a member of this workspace",
+            }),
+          );
         }
       }
     }
@@ -369,6 +376,7 @@ const closeMemberExchanges = async ({
   scope,
   userId,
 }: ClearMemberAssignmentsOptions) => {
+  // audit: skip - These ephemeral exchanges close within the audited member removal lifecycle.
   const workspaceScope = memberWorkspaceScope(scope);
   const scopedWorkspaces = tx
     .select({ id: workspaces.id })
@@ -428,11 +436,11 @@ const clearMemberContactAssignments = async ({
       ? eq(contacts.organizationId, scope.organizationId)
       : undefined;
   while (true) {
-    // db-await-in-loop: drain attorney references in bounded audited batches.
     // Matter creation already locks its client before organization membership.
     // Refuse contention here instead of introducing the opposite waiting order.
     const contactResult = await Result.tryPromise({
       try: async () =>
+        // db-await-in-loop: drain attorney references in bounded audited batches.
         await tx
           .select({
             id: contacts.id,
@@ -456,9 +464,11 @@ const clearMemberContactAssignments = async ({
       catch: (error) => error,
     });
     if (Result.isError(contactResult)) {
-      throw isPgError(contactResult.error, PG_ERROR.LOCK_NOT_AVAILABLE)
-        ? removalBusy()
-        : contactResult.error;
+      abortTransaction(
+        isPgError(contactResult.error, PG_ERROR.LOCK_NOT_AVAILABLE)
+          ? removalBusy()
+          : contactResult.error,
+      );
     }
     const contactRows = contactResult.value;
     if (contactRows.length === 0) {
@@ -549,9 +559,9 @@ const clearMemberTimeEntryApprovals = async ({
   recordAuditEvent,
 }: ClearMemberAssignmentsOptions) => {
   while (true) {
-    // db-await-in-loop: drain pending approvals in bounded audited batches.
     const pending = await Result.tryPromise({
       try: async () =>
+        // db-await-in-loop: drain pending approvals in bounded audited batches.
         await tx
           .select({
             id: timeEntries.id,
@@ -572,9 +582,11 @@ const clearMemberTimeEntryApprovals = async ({
       catch: (error) => error,
     });
     if (Result.isError(pending)) {
-      throw isPgError(pending.error, PG_ERROR.LOCK_NOT_AVAILABLE)
-        ? removalBusy()
-        : pending.error;
+      abortTransaction(
+        isPgError(pending.error, PG_ERROR.LOCK_NOT_AVAILABLE)
+          ? removalBusy()
+          : pending.error,
+      );
     }
     const rows = pending.value;
     if (rows.length === 0) {
@@ -624,10 +636,12 @@ export const clearMemberAssignments = async (
   options: ClearMemberAssignmentsOptions,
 ) => {
   if (options.reassignTo === options.userId) {
-    throw new HandlerError({
-      status: 400,
-      message: "User is not a member of this workspace",
-    });
+    abortTransaction(
+      new HandlerError({
+        status: 400,
+        message: "User is not a member of this workspace",
+      }),
+    );
   }
   await clearMemberObligationOwners(options);
   await clearMemberTaskAssignments(options);
@@ -840,10 +854,12 @@ export const selectMemberCleanupWorkspaceIds = async ({
     }
   }
   if (ids.size > bound) {
-    throw new HandlerError({
-      status: 400,
-      message: "Workspaces limit reached",
-    });
+    abortTransaction(
+      new HandlerError({
+        status: 400,
+        message: "Workspaces limit reached",
+      }),
+    );
   }
   return [...ids].toSorted();
 };
@@ -914,6 +930,7 @@ const cancelMemberFlowRuns = async ({
   tx,
   organizationId,
   userId,
+  actorUserId,
 }: RemoveOrganizationMemberOptions) => {
   // Workspace locks precede run, step, obligation and entity cleanup.
   const affectedWorkspaceIds = tx
@@ -923,7 +940,11 @@ const cancelMemberFlowRuns = async ({
   while (true) {
     // db-await-in-loop: cancel bounded run batches while holding the workspace prefix.
     const runs = await tx
-      .select({ id: flowRuns.id })
+      .select({
+        id: flowRuns.id,
+        workspaceId: flowRuns.workspaceId,
+        status: flowRuns.status,
+      })
       .from(flowRuns)
       .leftJoin(flowDefinitions, eq(flowDefinitions.id, flowRuns.definitionId))
       .where(
@@ -974,7 +995,96 @@ const cancelMemberFlowRuns = async ({
             ]),
           ),
         );
+      const recordAuditEvent = createBackgroundAuditRecorder({
+        organizationId,
+        workspaceId: null,
+        userId: actorUserId,
+        execution: {
+          performer: { type: "user", id: actorUserId },
+          trigger: { type: "system", source: "membership_removal" },
+        },
+      });
+      // db-await-in-loop: audit the cancelled run batch before reading the next page.
+      await recordAuditEvent(
+        tx,
+        runs.map((run) => ({
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+          resourceId: run.id,
+          workspaceId: run.workspaceId,
+          changes: { status: { old: run.status, new: "cancelled" } },
+          metadata: { cause: "membership_removed" },
+        })),
+      );
     }
+  }
+};
+
+type LockOrganizationCleanupWorkspacesOptions = Pick<
+  RemoveOrganizationMemberOptions,
+  "tx" | "organizationId" | "userId" | "reassignTo"
+>;
+
+const lockOrganizationCleanupWorkspaces = async ({
+  tx,
+  organizationId,
+  userId,
+  reassignTo,
+}: LockOrganizationCleanupWorkspacesOptions) => {
+  const locked = await lockMemberCleanupWorkspaces({
+    tx,
+    userId,
+    organizationId,
+  });
+  // Existing promotion takes workspace -> organization membership.
+  await tx
+    .select({ id: member.id })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, organizationId),
+        inArray(member.userId, reassignTo ? [userId, reassignTo] : [userId]),
+      ),
+    )
+    .orderBy(member.userId)
+    .limit(reassignTo ? 2 : 1)
+    .for("update");
+  // A grant that held its matter before this membership lock may have
+  // committed meanwhile; the held membership refuses every later one.
+  const current = (
+    await selectMemberCleanupWorkspaceIds({
+      tx,
+      userId,
+      organizationId,
+    })
+  ).map((id) => ({ id }));
+  const lockedIds = new Set(locked);
+  for (const { id } of current) {
+    if (lockedIds.has(id)) {
+      continue;
+    }
+    // db-await-in-loop: newly affected matters cannot invert held membership locks.
+    await tryLockMemberCleanupWorkspace(tx, id);
+  }
+  if (current.length > 0) {
+    await tx
+      .select({ id: workspaceMembers.id })
+      .from(workspaceMembers)
+      .where(
+        and(
+          inArray(
+            workspaceMembers.workspaceId,
+            current.map(({ id }) => id),
+          ),
+          inArray(
+            workspaceMembers.userId,
+            reassignTo ? [userId, reassignTo] : [userId],
+          ),
+        ),
+      )
+      .orderBy(workspaceMembers.workspaceId, workspaceMembers.userId)
+      .limit(current.length * (reassignTo ? 2 : 1))
+      .for("update");
   }
 };
 
@@ -997,69 +1107,16 @@ export const removeOrganizationMemberInTransaction = async (
     organizationId,
     tx,
     userId,
-    lockWorkspaces: async (transaction) => {
-      const locked = await lockMemberCleanupWorkspaces({
+    lockWorkspaces: (transaction) =>
+      lockOrganizationCleanupWorkspaces({
         tx: transaction,
-        userId,
         organizationId,
-      });
-      // Existing promotion takes workspace -> organization membership.
-      await transaction
-        .select({ id: member.id })
-        .from(member)
-        .where(
-          and(
-            eq(member.organizationId, organizationId),
-            inArray(
-              member.userId,
-              reassignTo ? [userId, reassignTo] : [userId],
-            ),
-          ),
-        )
-        .orderBy(member.userId)
-        .limit(reassignTo ? 2 : 1)
-        .for("update");
-      // A grant that held its matter before this membership lock may have
-      // committed meanwhile; the held membership refuses every later one.
-      const current = (
-        await selectMemberCleanupWorkspaceIds({
-          tx: transaction,
-          userId,
-          organizationId,
-        })
-      ).map((id) => ({ id }));
-      const lockedIds = new Set(locked);
-      for (const { id } of current) {
-        if (lockedIds.has(id)) {
-          continue;
-        }
-        // db-await-in-loop: newly affected matters cannot invert held membership locks.
-        await tryLockMemberCleanupWorkspace(transaction, id);
-      }
-      if (current.length > 0) {
-        await transaction
-          .select({ id: workspaceMembers.id })
-          .from(workspaceMembers)
-          .where(
-            and(
-              inArray(
-                workspaceMembers.workspaceId,
-                current.map(({ id }) => id),
-              ),
-              inArray(
-                workspaceMembers.userId,
-                reassignTo ? [userId, reassignTo] : [userId],
-              ),
-            ),
-          )
-          .orderBy(workspaceMembers.workspaceId, workspaceMembers.userId)
-          .limit(current.length * (reassignTo ? 2 : 1))
-          .for("update");
-      }
-    },
+        userId,
+        reassignTo,
+      }),
   });
   if (Result.isError(timerClose)) {
-    throw timerClose.error;
+    abortTransaction(timerClose.error);
   }
   if (reassignTo) {
     const replacement = await tx
@@ -1072,10 +1129,12 @@ export const removeOrganizationMemberInTransaction = async (
         ),
       );
     if (reassignTo === userId || replacement.length === 0) {
-      throw new HandlerError({
-        status: 400,
-        message: "User is not a member of this organization",
-      });
+      abortTransaction(
+        new HandlerError({
+          status: 400,
+          message: "User is not a member of this organization",
+        }),
+      );
     }
   }
   // Workspace locks precede run, step, obligation and entity cleanup.
@@ -1182,6 +1241,21 @@ export const removeOrganizationMemberInTransaction = async (
     memberId,
     organizationId,
     userId,
+  });
+  const recordAuditEvent = createBackgroundAuditRecorder({
+    organizationId,
+    workspaceId: null,
+    userId: actorUserId,
+    execution: {
+      performer: { type: "user", id: actorUserId },
+      trigger: { type: "system", source: "membership_removal" },
+    },
+  });
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+    resourceId: organizationId,
+    metadata: { change: "member-removed", memberId, userId },
   });
 };
 

@@ -14,7 +14,7 @@ import { Temporal } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { resultTx } from "@/api/db/safe-db";
+import { abortTransaction, resultTx } from "@/api/db/safe-db";
 import {
   entities,
   flowRuns,
@@ -249,9 +249,11 @@ export const executeFlowStep = async (
       tx,
     );
     if (!authorization?.workspace) {
-      throw new FlowStepError({
-        message: "The workflow actor is no longer a member of this matter.",
-      });
+      abortTransaction(
+        new FlowStepError({
+          message: "The workflow actor is no longer a member of this matter.",
+        }),
+      );
     }
     await tx
       .update(flowRunSteps)

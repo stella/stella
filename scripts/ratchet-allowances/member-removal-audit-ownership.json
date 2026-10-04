@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 3,
+  "reason": "Task assignment primitives retain the creating/add/remove/move caller's audit event in the same transaction; ephemeral session exchanges share the member-removal lifecycle audit. The shared cleanup writes an organization lifecycle event and matter removal records its member event. Separate helper rows would duplicate these existing events."
+}

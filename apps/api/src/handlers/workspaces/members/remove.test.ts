@@ -5,6 +5,8 @@ import {
   auditLogs,
   correspondence,
   desktopEditSessions,
+  desktopEditHandoffs,
+  pdfSigningSessions,
   timeEntries,
   workspaceMembers,
   workspaces,
@@ -14,7 +16,10 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import {
   createRemoveWorkspaceMember,
@@ -132,7 +137,12 @@ describe("removeWorkspaceMember", () => {
     const { safeDb, scopedDb } = createScopedDbMock({
       select: () => ({
         from: (table: unknown) => ({
+          innerJoin: () => ({
+            ...createSelectQueryMock([]).from(),
+            innerJoin: () => createSelectQueryMock([]).from(),
+          }),
           where: () => ({
+            orderBy: () => createSelectQueryMock([]).from().where(),
             limit: () => ({
               for: async () => [],
             }),
@@ -191,6 +201,24 @@ describe("removeWorkspaceMember", () => {
     expect(deletedWorkspaceMembers).toEqual([workspaceMembers]);
     expect(updates).toEqual([
       {
+        table: desktopEditSessions,
+        value: { takeoverRequestedBy: null, takeoverRequestedAt: null },
+      },
+      {
+        table: desktopEditHandoffs,
+        value: { expiresAt: expect.any(Date), updatedAt: expect.any(Date) },
+      },
+      {
+        table: pdfSigningSessions,
+        value: {
+          status: "cancelled",
+          closeReason: "expired",
+          closedAt: expect.any(Date),
+          handoffExpiresAt: expect.any(Date),
+          tokenExpiresAt: expect.any(Date),
+        },
+      },
+      {
         table: correspondence,
         value: { assigneeId: null, updatedAt: expect.any(Date) },
       },
@@ -200,29 +228,31 @@ describe("removeWorkspaceMember", () => {
         value: { status: "cancelled", closedAt: expect.any(Date) },
       },
     ]);
-    expect(insertedAuditLogs).toHaveLength(2);
-    expect(insertedAuditLogs).toEqual([
+    expect(insertedAuditLogs.flat()).toHaveLength(2);
+    expect(insertedAuditLogs.flat()).toEqual(
       [
-        expect.objectContaining({
-          action: "delete",
-          resourceId: "wm_lead",
-          resourceType: "workspace_member",
-        }),
-      ],
-      [
-        expect.objectContaining({
-          action: "update",
-          changes: {
-            leadUserId: {
-              old: "user_lead",
-              new: null,
+        [
+          expect.objectContaining({
+            action: "delete",
+            resourceId: "wm_lead",
+            resourceType: "workspace_member",
+          }),
+        ],
+        [
+          expect.objectContaining({
+            action: "update",
+            changes: {
+              leadUserId: {
+                old: "user_lead",
+                new: null,
+              },
             },
-          },
-          resourceId: "ws_test123",
-          resourceType: "workspace",
-        }),
-      ],
-    ]);
+            resourceId: "ws_test123",
+            resourceType: "workspace",
+          }),
+        ],
+      ].flat(),
+    );
     expect(revokeWorkspaceSseAccessMock).toHaveBeenCalledWith(
       "ws_test123",
       "user_lead",

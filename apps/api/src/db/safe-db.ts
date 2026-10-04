@@ -56,6 +56,11 @@ export type SafeDbOrTx =
   | { safeDb: SafeDb; tx?: undefined }
   | { safeDb?: undefined; tx: Transaction };
 
+/** Reject a transaction callback so its writes roll back, preserving the refusal. */
+export const abortTransaction = (error: unknown): never => {
+  throw error;
+};
+
 /**
  * Recover the failure a transaction callback threw to abort itself.
  *
@@ -129,7 +134,7 @@ export const resultTx = async <T>(
   const result = await abortableTx(safeDb, async (tx) => {
     const outcome = await run(tx);
     if (outcome.isErr()) {
-      throw outcome.error;
+      abortTransaction(outcome.error);
     }
     return outcome.value;
   });

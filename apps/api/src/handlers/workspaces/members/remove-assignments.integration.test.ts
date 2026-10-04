@@ -285,7 +285,7 @@ test.each([
   },
 );
 
-test("removal moves open work and keeps finished work's former assignee", async () => {
+test("membership-removal.task-preservation", async () => {
   await assertProperty(
     "membership-removal.task-preservation",
     fc.asyncProperty(

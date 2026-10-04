@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
-import { abortableTx } from "@/api/db/safe-db";
+import { abortTransaction, abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   correspondence,
@@ -101,6 +101,115 @@ const readMemberWorkToUnassign = ({
     .limit(LIMITS.workspaceMemberRemovalWorkObligationsMax + 1)
     .for("update");
 
+type RemovedMemberAuditEventsOptions = {
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  deletedId: SafeId<"workspaceMember">;
+  closedSessionCount: number;
+  leadWasCleared: boolean;
+  ownedWork: Awaited<ReturnType<typeof readMemberWorkToUnassign>>;
+  nextOwnerUserId: SafeId<"user"> | null;
+  nextWorkStatus:
+    | typeof WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT
+    | typeof WORK_OBLIGATION_STATUS.UNASSIGNED;
+};
+
+const removedMemberAuditEvents = ({
+  workspaceId,
+  userId,
+  deletedId,
+  closedSessionCount,
+  leadWasCleared,
+  ownedWork,
+  nextOwnerUserId,
+  nextWorkStatus,
+}: RemovedMemberAuditEventsOptions) => {
+  const auditEvents: AuditEvent[] = [
+    {
+      action: AUDIT_ACTION.DELETE,
+      resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER,
+      resourceId: deletedId,
+      changes: {
+        deleted: {
+          old: { userId, workspaceId },
+          new: null,
+        },
+      },
+      metadata: {
+        closedDesktopEditSessions: closedSessionCount,
+        unassignedWorkObligations: ownedWork.length,
+        correspondenceAssignmentDisposition: "cleared",
+      },
+    },
+  ];
+
+  for (const work of ownedWork) {
+    auditEvents.push({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+      resourceId: work.entityId,
+      changes: {
+        ownerUserId: { old: userId, new: nextOwnerUserId },
+        status: {
+          old: work.status,
+          new: nextWorkStatus,
+        },
+      },
+      metadata: { cause: "owner_removed_from_workspace" },
+    });
+  }
+
+  if (leadWasCleared) {
+    auditEvents.push({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+      resourceId: workspaceId,
+      changes: {
+        leadUserId: {
+          old: userId,
+          new: null,
+        },
+      },
+    });
+  }
+  return auditEvents;
+};
+
+type RemovedMemberWorkEventsOptions = {
+  ownedWork: Awaited<ReturnType<typeof readMemberWorkToUnassign>>;
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  actorUserId: SafeId<"user">;
+  nextOwnerUserId: SafeId<"user"> | null;
+  now: Date;
+};
+
+const removedMemberWorkEvents = ({
+  ownedWork,
+  workspaceId,
+  userId,
+  actorUserId,
+  nextOwnerUserId,
+  now,
+}: RemovedMemberWorkEventsOptions) =>
+  ownedWork.map(
+    ({ entityId }) =>
+      ({
+        id: createSafeId<"workObligationEvent">(),
+        workspaceId,
+        obligationEntityId: entityId,
+        actorUserId,
+        type: WORK_OBLIGATION_EVENT_TYPE.DELEGATED,
+        details: {
+          type: "ownership_changed",
+          previousOwnerUserId: userId,
+          nextOwnerUserId,
+          cause: "owner_removed_from_workspace",
+        },
+        occurredAt: now,
+      }) as const satisfies typeof workObligationEvents.$inferInsert,
+  );
+
 // Shared remove-member logic reused by the HTTP handler and the
 // `manage_organization` MCP tool. Keeps the tx (last-member guard, lead
 // clear, desktop-edit session cancel, audit events) and the in-process SSE
@@ -165,10 +274,12 @@ export const removeWorkspaceMemberHandler = async function* ({
         (reassignTo === userId ||
           !lockedRows.some((row) => row.userId === reassignTo))
       ) {
-        throw new HandlerError({
-          status: 400,
-          message: "User is not a member of this workspace",
-        });
+        abortTransaction(
+          new HandlerError({
+            status: 400,
+            message: "User is not a member of this workspace",
+          }),
+        );
       }
 
       const activeTimers = await tx
@@ -268,25 +379,16 @@ export const removeWorkspaceMemberHandler = async function* ({
             ),
           );
 
-        const unassignmentEvents: (typeof workObligationEvents.$inferInsert)[] =
-          [];
-        for (const { entityId } of ownedWork) {
-          unassignmentEvents.push({
-            id: createSafeId<"workObligationEvent">(),
+        await tx.insert(workObligationEvents).values(
+          removedMemberWorkEvents({
+            ownedWork,
             workspaceId,
-            obligationEntityId: entityId,
+            userId,
             actorUserId,
-            type: WORK_OBLIGATION_EVENT_TYPE.DELEGATED,
-            details: {
-              type: "ownership_changed",
-              previousOwnerUserId: userId,
-              nextOwnerUserId,
-              cause: "owner_removed_from_workspace",
-            },
-            occurredAt: now,
-          });
-        }
-        await tx.insert(workObligationEvents).values(unassignmentEvents);
+            nextOwnerUserId,
+            now,
+          }),
+        );
       }
 
       const leadWasCleared = workspace.leadUserId === userId;
@@ -309,55 +411,19 @@ export const removeWorkspaceMemberHandler = async function* ({
         )
         .returning({ id: desktopEditSessions.id });
 
-      const auditEvents: AuditEvent[] = [
-        {
-          action: AUDIT_ACTION.DELETE,
-          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER,
-          resourceId: deleted.id,
-          changes: {
-            deleted: {
-              old: { userId, workspaceId },
-              new: null,
-            },
-          },
-          metadata: {
-            closedDesktopEditSessions: closedSessions.length,
-            unassignedWorkObligations: ownedWork.length,
-            correspondenceAssignmentDisposition: "cleared",
-          },
-        },
-      ];
-
-      for (const work of ownedWork) {
-        auditEvents.push({
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
-          resourceId: work.entityId,
-          changes: {
-            ownerUserId: { old: userId, new: nextOwnerUserId },
-            status: {
-              old: work.status,
-              new: nextWorkStatus,
-            },
-          },
-          metadata: { cause: "owner_removed_from_workspace" },
-        });
-      }
-      await recordAuditEvent(tx, auditEvents);
-
-      if (leadWasCleared) {
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
-          resourceId: workspaceId,
-          changes: {
-            leadUserId: {
-              old: userId,
-              new: null,
-            },
-          },
-        });
-      }
+      await recordAuditEvent(
+        tx,
+        removedMemberAuditEvents({
+          workspaceId,
+          userId,
+          deletedId: deleted.id,
+          closedSessionCount: closedSessions.length,
+          leadWasCleared,
+          ownedWork,
+          nextOwnerUserId,
+          nextWorkStatus,
+        }),
+      );
 
       return {
         id: deleted.id,

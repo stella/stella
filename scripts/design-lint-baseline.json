@@ -487,7 +487,7 @@
     "apps/api/src/handlers/entities/publish-folio-collab-version.ts": 1,
     "apps/api/src/handlers/entities/zip/download.ts": 1,
     "apps/api/src/handlers/files/document-properties.ts": 1,
-    "apps/api/src/handlers/files/get.ts": 2,
+    "apps/api/src/handlers/files/get.ts": 1,
     "apps/api/src/handlers/files/update-document-properties.ts": 1,
     "apps/api/src/handlers/sharepoint/graph-client.ts": 2,
     "apps/api/src/handlers/sharepoint/graph-oauth.ts": 1,
