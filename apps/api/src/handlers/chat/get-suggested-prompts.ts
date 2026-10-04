@@ -13,6 +13,7 @@ import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
+  ACCOUNT_ACCESS,
   assertUsageAvailableForHandler,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
@@ -38,6 +39,7 @@ Write the suggestions in the same language as the conversation. Be specific to t
 
 const config = {
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({ workspaceId: t.Optional(tSafeId("workspace")) }),

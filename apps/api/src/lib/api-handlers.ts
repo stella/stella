@@ -20,7 +20,6 @@ import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
-import { requiresStandardAccount } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -375,7 +374,7 @@ export type HandlerConfig = InputSchema &
   CapabilityAccess &
   CapabilityTransportDisposition & {
     permissions: PermissionInput;
-    accountAccess?: "standard";
+    accountAccess: AccountAccess;
     /** Finite API-owned transport deadline for a generated capability command. */
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
@@ -397,10 +396,34 @@ type WorkspaceHandlerConfigOf<TConfig> = TConfig extends HandlerConfig
 
 export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
 
+/**
+ * Factories without an organization-scoped caller run no account check, so
+ * their handlers admit the demo account and can only declare `sandbox`.
+ */
+/**
+ * Whether the configured demo account may call a handler. Every handler config
+ * declares one: `standard` refuses the demo account, `sandbox` admits it.
+ */
+export const ACCOUNT_ACCESS = {
+  standard: "standard",
+  sandbox: "sandbox",
+} as const;
+
+export type AccountAccess =
+  (typeof ACCOUNT_ACCESS)[keyof typeof ACCOUNT_ACCESS];
+
+export const requiresStandardAccount = (accountAccess: AccountAccess) =>
+  accountAccess === ACCOUNT_ACCESS.standard;
+
+type SandboxAccountAccess = {
+  accountAccess: typeof ACCOUNT_ACCESS.sandbox;
+};
+
 export type SessionHandlerConfig = InputSchema &
   CapabilityDescription &
   CapabilityAccess &
-  CapabilityTransportDisposition & {
+  CapabilityTransportDisposition &
+  SandboxAccountAccess & {
     mcp: McpExposure;
   };
 
@@ -1030,7 +1053,7 @@ const createSafeScopedHandler = <
       });
     }
 
-    if (requiresStandardAccount(config.permissions, config.accountAccess)) {
+    if (requiresStandardAccount(config.accountAccess)) {
       const accountAccess = checkAccountOperation(ctx.user.email);
       if (Result.isError(accountAccess)) {
         return toSafeStatusResponse(403, {
@@ -1528,7 +1551,8 @@ export type TokenHandlerConfig = Omit<
   "body" | "query" | "params"
 > &
   CapabilityDescription &
-  CapabilityAccess & {
+  CapabilityAccess &
+  SandboxAccountAccess & {
     body?: AnyPermissiveRouteSchema;
     query?: AnyPermissiveRouteSchema;
     params?: AnyPermissiveRouteSchema;
@@ -1558,7 +1582,8 @@ export const createSafeTokenHandler = <
 
 export type PublicHandlerConfig = InputSchema &
   CapabilityDescription &
-  CapabilityAccess & {
+  CapabilityAccess &
+  SandboxAccountAccess & {
     cache: CachePolicy;
     mcp: McpExposure;
   };
