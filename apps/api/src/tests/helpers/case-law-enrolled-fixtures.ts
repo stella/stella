@@ -1564,6 +1564,17 @@ export const skUsFixture = (): EnrolledAdapterFixture => ({
     );
 
     const built = await buildSkUsDecision({ ...SK_US_LISTING_ROW });
+    if (built.type === "unread") {
+      // What the pipeline stores for the item once its bound is spent: the
+      // listing-only row with the typed outcome.
+      const { item } = built;
+      return (
+        planUnreadItems([item], {
+          [item.listing.sourceDocumentId]:
+            UNAVAILABLE_CYCLES_BEFORE_MARKING - 1,
+        }).terminal.at(0) ?? panic("sk-us unread item stored nothing")
+      );
+    }
     if (built.type !== "built") {
       return panic(`sk-us fixture did not build: ${built.type}`);
     }

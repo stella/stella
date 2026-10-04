@@ -359,7 +359,6 @@ const UNMIGRATED_PUBLISHER_READERS = [
   "handlers/case-law/ingestion/adapters/pl-uodo.ts",
   "handlers/case-law/ingestion/adapters/pl-uokik.ts",
   "handlers/case-law/ingestion/adapters/sk-collections.ts",
-  "handlers/case-law/ingestion/adapters/sk-us.ts",
 ] as const;
 
 export const OWNERSHIP = [

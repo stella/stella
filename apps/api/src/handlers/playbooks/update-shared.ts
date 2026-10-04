@@ -41,6 +41,8 @@ type UpdatePlaybookDefinitionBody = {
 type UpdatePlaybookDefinitionArgs = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
+  /** Matters the caller can access; a newly added source must be in one. */
+  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   playbookId: SafeId<"playbookDefinition">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -53,6 +55,7 @@ type UpdatePlaybookDefinitionArgs = {
 export const updatePlaybookDefinitionHandler = async function* ({
   safeDb,
   organizationId,
+  accessibleWorkspaceIds,
   playbookId,
   orgAIConfig,
   managedAIResidency,
@@ -61,11 +64,36 @@ export const updatePlaybookDefinitionHandler = async function* ({
   recordAuditEvent,
   body,
 }: UpdatePlaybookDefinitionArgs): SafeHandlerGenerator<{ updatedAt: string }> {
+  // Read the stored positions to tell which sources this save adds and which
+  // the playbook already had; only added sources need an access check. This
+  // read happens before the row lock below. That is safe because both callers
+  // send `expectedUpdatedAt`: if the playbook changes in between, the save
+  // fails instead of being checked against an outdated list. A caller that
+  // omits the token can at worst keep a source that was stored a moment ago.
+  const stored = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.playbookDefinitions.findFirst({
+        where: {
+          id: { eq: playbookId },
+          organizationId: { eq: organizationId },
+        },
+        columns: { positions: true },
+      }),
+    ),
+  );
+  if (!stored) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Playbook not found" }),
+    );
+  }
+
   yield* Result.await(
     assertPositionsValid({
       safeDb,
       organizationId,
+      accessibleWorkspaceIds,
       positions: body.positions,
+      storedPositions: stored.positions,
     }),
   );
 
