@@ -598,6 +598,19 @@ const uiStandaloneImports = [
   },
 ];
 
+// The all-locales folio catalog entries (and their `getFolioMessages`) bundle
+// every editor locale into the importing chunk. apps/web loads English eagerly
+// and each other locale on demand through `folioMessageLoaders`.
+const webFolioAllLocalesImports = [
+  "@stll/folio-react/messages",
+  "@stll/folio-core/i18n/messages",
+].map((name) => ({
+  name,
+  allowTypeImports: true,
+  message:
+    "Import one locale from '@stll/folio-react/messages/<locale>' (see folioMessageLoaders in '@/i18n/i18n-store'); the all-locales entry ships every folio catalog.",
+}));
+
 const webDatePickerImport = {
   // Both spellings: the grouped subpath is a deprecated alias of the flat one
   // and still resolves, so banning only the flat one would leave a way around.
@@ -3232,7 +3245,11 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, webPragmaticDragAdapterImport],
+            paths: [
+              noZodImport,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+            ],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -3275,7 +3292,7 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport],
+            paths: [noZodImport, ...webFolioAllLocalesImports],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -3481,7 +3498,11 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, webPragmaticDragAdapterImport],
+            paths: [
+              noZodImport,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+            ],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -3506,6 +3527,7 @@ export default defineConfig({
             paths: [
               noZodImport,
               webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
               {
                 name: "@tanstack/react-router",
                 importNames: ["getRouteApi", "useRouteContext"],
@@ -3536,7 +3558,11 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, webPragmaticDragAdapterImport],
+            paths: [
+              noZodImport,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+            ],
             patterns: [
               {
                 group: webProtectedRouteImportGroup,
@@ -3580,6 +3606,7 @@ export default defineConfig({
             paths: [
               noZodImport,
               webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
               {
                 name: "@/lib/api",
                 importNames: ["api"],
@@ -3622,6 +3649,7 @@ export default defineConfig({
             paths: [
               noZodImport,
               webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
               {
                 name: "@/routes/-auth-context",
                 message:
