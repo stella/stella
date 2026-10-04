@@ -189,7 +189,6 @@ const loadRuntime = async () => {
     { runEuCompletionTick },
     { createEuCompletionRunner },
     { acquireCaseLawSourceIngestionLease },
-    { caseLawSources },
   ] = await Promise.all([
     import("@/api/db/long-running-connection"),
     import("@/api/db/backfill-runtime"),
@@ -198,8 +197,9 @@ const loadRuntime = async () => {
     import("@/api/handlers/case-law/ingestion/eu-completion"),
     import("@/api/handlers/case-law/ingestion/eu-completion-runner"),
     import("@/api/lib/legal-search/case-law-source-ingestion-lease"),
-    import("@/api/db/schema"),
   ]);
+  // Named, so the import shows which schema table it takes.
+  const { caseLawSources } = await import("@/api/db/schema");
   return {
     withLongRunningConnection,
     createScriptBackfillHealthReader,
@@ -537,7 +537,7 @@ const runEnabledWithOptions = async (
   return report ?? emptyReport("held");
 };
 
-export const runEnabledEuCompletionTick = async (signal: AbortSignal) =>
+const runEnabledEuCompletionTick = async (signal: AbortSignal) =>
   await runEnabledWithOptions(signal, {});
 
 /** Test configuration is inaccessible before a local harness passes this guard. */

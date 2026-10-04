@@ -43,8 +43,8 @@ import type { SystemAuditCounts } from "@/api/lib/system-audit/actors";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 export type EuCompletionReceipt = typeof euCompletionReceipts.$inferSelect;
-export type EuCompletionMode = EuCompletionReceipt["mode"];
-export type EuCompletionTerminalStatus =
+type EuCompletionMode = EuCompletionReceipt["mode"];
+type EuCompletionTerminalStatus =
   | "applied"
   | "unchanged"
   | "review-required"
@@ -142,7 +142,7 @@ const validateLimit = (limit: number) => {
   }
 };
 
-export type EuCompletionReserveOptions = {
+type EuCompletionReserveOptions = {
   sourceId: EuCompletionReceipt["sourceId"];
   mode: EuCompletionMode;
   parserVersion: number;
