@@ -5,7 +5,7 @@ import { Temporal } from "@stll/time";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
-import { createSafeTokenHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -150,6 +150,7 @@ export const createDesktopLinkRedeemHandler = (
 ) =>
   createSafeTokenHandler(
     {
+      accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "provider_secret" },
       body: permissiveBodySchema({
         keys: [

@@ -1,12 +1,13 @@
 import { listFlowDefinitionsHandler } from "@/api/handlers/flows/read";
 import { listFlowDefinitionsQuerySchema } from "@/api/handlers/flows/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
   description:
     "List flow definitions available to the organization, with optional status filtering and pagination.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",
