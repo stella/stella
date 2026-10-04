@@ -1120,14 +1120,8 @@ const ROOT_CONNECTION_DOOR_FILES: ReadonlySet<string> = new Set(
 // occurrences that stripping comments removes.
 const AUDIT_SKIP_DIRECTIVE = /\baudit:\s*skip\b/giu;
 
-export const countPublicCorpusMembership = (content: string): number => {
-  const source = ts.createSourceFile(
-    "membership.ts",
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+export const countPublicCorpusMembership: FileCounter = (content, { file }) => {
+  const source = parseSource({ fileName: file, text: content });
   for (const statement of source.statements) {
     if (!ts.isVariableStatement(statement)) {
       continue;

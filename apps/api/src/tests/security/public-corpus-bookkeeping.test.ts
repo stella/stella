@@ -137,6 +137,21 @@ describe("public corpus bookkeeping admission", () => {
     ).toEqual(["missing table or non-table schema export"]);
   });
 
+  test("binds declaration export and SQL names to the actual table", () => {
+    expect(
+      verifyPublicCorpusSchema({
+        declaration: { ...declaration, schemaExport: "otherExport" },
+        schema: { checkpoint },
+      }),
+    ).toEqual(["missing table or non-table schema export"]);
+    expect(
+      verifyPublicCorpusSchema({
+        declaration: { ...declaration, sqlName: "other_relation" },
+        schema: { checkpoint },
+      }),
+    ).toContain("schema relation identity differs from declaration");
+  });
+
   test("rejects nullable ownership and indirect tenant foreign keys", () => {
     const tenant = pgTable("tenant", {
       id: uuid().primaryKey(),

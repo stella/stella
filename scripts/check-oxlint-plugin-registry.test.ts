@@ -10,11 +10,40 @@ import {
   approvedAdapterPathErrors,
   approvedAdapterPaths,
   redeclaredSharedHelpers,
+  ruleNamesFromSource,
 } from "./check-oxlint-plugin-registry.ts";
 
 const temporaryDirectories: string[] = [];
 const TYPEBOX_UNSAFE_RULE_ID =
   "no-unreviewed-typebox-unsafe/no-unreviewed-typebox-unsafe";
+
+describe("plugin rule census", () => {
+  test("derives literal and computed rule names independently of formatting or factory nesting", () => {
+    for (const indentation of ["", "  ", "    ", "      ", "\t"]) {
+      const rules = `rules: {\n${indentation}"literal-rule": {},\n${indentation}[RULE_NAME]: {}\n}`;
+      for (const source of [
+        `const RULE_NAME = "computed-rule"; export default { ${rules} };`,
+        `const RULE_NAME = "computed-rule"; const createPlugin = () => ({ ${rules} }); export default createPlugin();`,
+      ]) {
+        expect(ruleNamesFromSource(source)).toEqual([
+          "literal-rule",
+          "computed-rule",
+        ]);
+      }
+    }
+  });
+
+  test("does not derive rules from comments, strings, other objects or unresolved keys", () => {
+    expect(
+      ruleNamesFromSource(`
+      // rules: { "comment-rule": {} }
+      const text = 'rules: { "string-rule": {} }';
+      const messages = { "message-rule": {} };
+      export default { rules: { [UNKNOWN]: {} } };
+    `),
+    ).toEqual([]);
+  });
+});
 
 afterEach(async () => {
   await Promise.all(

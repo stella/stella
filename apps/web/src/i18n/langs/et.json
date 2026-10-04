@@ -2288,6 +2288,7 @@
       "deeplQuotaExceeded": "Selle organisatsiooni DeepL-i tähemärgikvoot on ammendatud.",
       "disposableEmailNotAllowed": "Ajutised e-posti aadressid ei ole lubatud. Kasutage püsivat e-posti aadressi.",
       "encryptedContent": "Krüpteeritud dokumendi sisu ei saa välja võtta. Eemalda faililt parool ja proovi uuesti.",
+      "filePropertyTypeImmutable": "Faili omaduse tüüpi ei saa muuta. Säilitage praegune tüüp; muude väärtuste jaoks looge kohandatud omadus.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",

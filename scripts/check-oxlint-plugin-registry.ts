@@ -1,13 +1,16 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 import oxlintConfig from "../oxlint.config.ts";
+import { parseSource } from "./parse-memo.ts";
 
 const PLUGIN_DIRECTORY = ".oxlint-plugins";
 const FIXTURE_DIRECTORY = path.join(PLUGIN_DIRECTORY, "__fixtures__");
 const CONFIG_PATH = "oxlint.config.ts";
 const README_PATH = path.join(PLUGIN_DIRECTORY, "README.md");
 const NON_PLUGIN_MODULES = new Set([
+  "budget-ledger.ts",
   "physical-properties.ts",
   "restricted-import.ts",
   "utils.ts",
@@ -94,19 +97,54 @@ export const approvedAdapterPathErrors = (
         `${CONFIG_PATH}: approved TypeBox adapter path does not exist: ${approvedAdapterPath}`,
     );
 
-const ruleNamesFromSource = (source: string): string[] => {
-  const literalNames = Array.from(
-    source.matchAll(/^ {4}"(?<ruleName>[a-z0-9-]+)": \{$/gmu),
-    (match) => match.groups?.["ruleName"],
-  ).filter((ruleName): ruleName is string => ruleName !== undefined);
-  const computedRuleName = source.includes("    [RULE_NAME]: {")
-    ? /const RULE_NAME = "(?<ruleName>[a-z0-9-]+)";/u.exec(source)?.groups?.[
-        "ruleName"
-      ]
-    : undefined;
-  return computedRuleName === undefined
-    ? literalNames
-    : [...literalNames, computedRuleName];
+export const ruleNamesFromSource = (source: string): string[] => {
+  const tree = parseSource({ fileName: "plugin.ts", text: source });
+  const constants = new Map<string, string>();
+  for (const statement of tree.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        ts.isIdentifier(declaration.name) &&
+        declaration.initializer !== undefined &&
+        ts.isStringLiteral(declaration.initializer)
+      ) {
+        constants.set(declaration.name.text, declaration.initializer.text);
+      }
+    }
+  }
+  const names = new Set<string>();
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isPropertyAssignment(node) &&
+      (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) &&
+      node.name.text === "rules" &&
+      ts.isObjectLiteralExpression(node.initializer)
+    ) {
+      for (const property of node.initializer.properties) {
+        if (!ts.isPropertyAssignment(property)) {
+          continue;
+        }
+        const name = property.name;
+        let ruleName: string | undefined;
+        if (ts.isStringLiteral(name) || ts.isIdentifier(name)) {
+          ruleName = name.text;
+        } else if (
+          ts.isComputedPropertyName(name) &&
+          ts.isIdentifier(name.expression)
+        ) {
+          ruleName = constants.get(name.expression.text);
+        }
+        if (ruleName !== undefined) {
+          names.add(ruleName);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(tree);
+  return [...names];
 };
 
 const DISABLE_DIRECTIVE_PREFIXES = [

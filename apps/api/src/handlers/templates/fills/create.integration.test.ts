@@ -27,6 +27,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, templateFills, templates } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import fillTemplateToWorkspace from "@/api/handlers/templates/fills/create";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { FieldMeta } from "@/api/lib/docx/types";
@@ -137,6 +138,15 @@ describe("fill to workspace records the completion decision", () => {
       createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     );
     let createdEntityId: string | undefined;
+    const templateEvents: Record<string, unknown>[] = [];
+    const recordTemplateEvents: AuditRecorder = async (_tx, event) => {
+      for (const each of Array.isArray(event) ? event : [event]) {
+        if (each.resourceType === AUDIT_RESOURCE_TYPE.TEMPLATE) {
+          templateEvents.push({ ...each });
+        }
+      }
+      await Promise.resolve();
+    };
     try {
       const result = await fillTemplateToWorkspace.handler(
         createTestHandlerContext<
@@ -148,7 +158,8 @@ describe("fill to workspace records the completion decision", () => {
           safeDb: toSafeDbMock(scopedDb),
           scopedDb,
           recordAuditEvent: recordNothing,
-          createAuditRecorder: () => recordNothing,
+          // The handler rebinds its recorder to the validated workspace.
+          createAuditRecorder: () => recordTemplateEvents,
           orgAIConfig: null,
           params: { workspaceId: ids.wsA1, templateId },
           body: { values: {}, name: "Consumer NDA" },
@@ -175,6 +186,23 @@ describe("fill to workspace records the completion decision", () => {
         .from(templateFills)
         .where(eq(templateFills.templateId, templateId));
       expect(fills.map(({ status }) => status)).toEqual(["partial"]);
+      // Audited with the same counts the chat and MCP fills record.
+      expect(templateEvents).toEqual([
+        {
+          action: AUDIT_ACTION.EXECUTE,
+          resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
+          resourceId: templateId,
+          workspaceId: ids.wsA1,
+          metadata: {
+            format: "docx",
+            status: "partial",
+            unmatchedCount: 0,
+            aiFieldErrorCount: 0,
+            undecidedConditionCount: 1,
+            entityId: createdEntityId,
+          },
+        },
+      ]);
 
       // How the unset condition renders is unchanged (it reads as false);
       // the recorded status and the response are what make it visible.
