@@ -18,7 +18,11 @@
  * - Every other 401, 403 or 451 answer is about the one address read: it
  *   becomes a `refused` outcome with the caller's `refusalScope` (default
  *   "document"), for the adapter to store as a typed marker.
- * A 429 outside those stops stays `unavailable` (retried later).
+ * - A 429 is the publisher's rate-limit refusal (rule 19a): a typed halt. A
+ *   read sends `refusalMode: "stop-rate-limit"` at least, so it rejects with
+ *   an `AdapterFetchError` carrying the status after one request; the page
+ *   fails with its cursor untouched and no later read in the cycle spends the
+ *   budget the refusal protects.
  *
  * Cancellation by the caller's signal also rejects.
  */
@@ -61,7 +65,9 @@ const readStep = async <T>(
   return Result.err(readUnavailable({ kind: "thrown", error }));
 };
 
-export type PublisherReadInit = PublisherFetchInit & {
+export type PublisherReadInit = Omit<PublisherFetchInit, "refusalMode"> & {
+  /** "stop-refusal" for a session workflow; a 429 ends the cycle either way. */
+  refusalMode?: "stop-refusal" | undefined;
   /** What a 401, 403 or 451 answer withholds; "document" when omitted. */
   refusalScope?: ReadRefusalScope | undefined;
 };
@@ -69,11 +75,15 @@ export type PublisherReadInit = PublisherFetchInit & {
 /** One publisher request, typed by what its answer established. */
 export const readPublisher = async (
   url: string | URL,
-  { refusalScope = "document", ...init }: PublisherReadInit,
+  { refusalScope = "document", refusalMode, ...init }: PublisherReadInit,
 ): Promise<ReadOutcome<Response>> => {
   const fetched = await readStep(
-    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher read boundary: the lint rule checks each target where readPublisher or readPublisherText is called
-    async () => await fetchPublisher(url, init),
+    async () =>
+      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher read boundary: the lint rule checks each target where readPublisher or readPublisherText is called
+      await fetchPublisher(url, {
+        ...init,
+        refusalMode: refusalMode ?? "stop-rate-limit",
+      }),
     init.signal ?? undefined,
   );
   if (Result.isError(fetched)) {

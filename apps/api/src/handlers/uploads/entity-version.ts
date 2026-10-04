@@ -21,11 +21,17 @@ import {
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
+import type { WriteFileVersionResult } from "@/api/lib/entity-versions/write-file-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import {
+  detectFileEncryption,
+  uploadFileEncryption,
+} from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { createFileKey } from "@/api/lib/files/utils";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
@@ -91,12 +97,41 @@ export type FinalizeEntityVersionProps = {
   declaredSize: number;
   declaredSha256Hex: string;
   purposeData: Extract<PendingUploadPurposeData, { type: "entity_version" }>;
+  /** The staged upload as scanned, before reference removal. */
+  scanned: ScannedFile;
   scanWarnings: string[] | undefined;
   uploadId: SafeId<"pendingUpload">;
   claimRequestId: string;
   promoteTmpObject: (
     finalKey: string,
   ) => Promise<Result<PromotedUploadObject, UploadFinalizeError>>;
+};
+
+const versionWriteRejection = (
+  status: Exclude<WriteFileVersionResult["status"], "ok">,
+) => {
+  if (status === "entity-not-found" || status === "current-version-not-found") {
+    return finalizeErr({
+      status: 404,
+      message:
+        status === "entity-not-found"
+          ? "Entity not found"
+          : "Current version not found",
+      rejectReason: status,
+    });
+  }
+  if (status === "entity-read-only") {
+    return finalizeErr({
+      status: 409,
+      message: "Entity is read-only",
+      rejectReason: status,
+    });
+  }
+  return finalizeErr({
+    status: 400,
+    message: "Entity has no file field",
+    rejectReason: status,
+  });
 };
 
 /**
@@ -118,6 +153,7 @@ export const finalizeEntityVersion = async function* ({
   declaredSize,
   declaredSha256Hex,
   purposeData,
+  scanned,
   scanWarnings,
   uploadId,
   claimRequestId,
@@ -125,6 +161,19 @@ export const finalizeEntityVersion = async function* ({
 }: FinalizeEntityVersionProps) {
   const fileName = sanitizeFilename(declaredName);
   const { entityId } = purposeData;
+  // The new bytes decide the attribute: a version is a different file from
+  // the one it replaces, and may be encrypted when that one was not.
+  const encryption = uploadFileEncryption(
+    await detectFileEncryption({ mimeType: declaredMime, scanned }),
+    { mimeType: declaredMime, sizeBytes: String(declaredSize) },
+  );
+  if (encryption === null) {
+    return finalizeErr({
+      status: 422,
+      message: "Failed to open PDF: file appears corrupted",
+      rejectReason: "pdf-open-failed",
+    });
+  }
   const fileId = allocateFileObject();
   const entityVersionId = createSafeId<"entityVersion">();
   const fieldId = createSafeId<"field">();
@@ -175,6 +224,7 @@ export const finalizeEntityVersion = async function* ({
         fileId,
         fileName,
         mimeType: declaredMime,
+        encryption,
         sizeBytes: declaredSize,
         sha256Hex: declaredSha256Hex,
         source: UPLOAD_DOCUMENT_SOURCE,
@@ -235,31 +285,7 @@ export const finalizeEntityVersion = async function* ({
     }
 
     if (writeResult.status !== "ok") {
-      if (
-        writeResult.status === "entity-not-found" ||
-        writeResult.status === "current-version-not-found"
-      ) {
-        return finalizeErr({
-          status: 404,
-          message:
-            writeResult.status === "entity-not-found"
-              ? "Entity not found"
-              : "Current version not found",
-          rejectReason: writeResult.status,
-        });
-      }
-      if (writeResult.status === "entity-read-only") {
-        return finalizeErr({
-          status: 409,
-          message: "Entity is read-only",
-          rejectReason: writeResult.status,
-        });
-      }
-      return finalizeErr({
-        status: 400,
-        message: "Entity has no file field",
-        rejectReason: writeResult.status,
-      });
+      return versionWriteRejection(writeResult.status);
     }
 
     const finalizedResult =
@@ -270,7 +296,7 @@ export const finalizeEntityVersion = async function* ({
         captureError(error, { entityId });
       });
       enqueuePdfDerivativeOrMarkFailed({
-        encrypted: false,
+        encrypted: encryption.encrypted,
         entityId,
         fieldId,
         mimeType: declaredMime,
@@ -281,7 +307,7 @@ export const finalizeEntityVersion = async function* ({
         captureError(error, { entityId, fieldId, mimeType: declaredMime });
       });
       enqueueImageThumbnailOrMarkFailed({
-        encrypted: false,
+        encrypted: encryption.encrypted,
         entityId,
         fieldId,
         mimeType: declaredMime,

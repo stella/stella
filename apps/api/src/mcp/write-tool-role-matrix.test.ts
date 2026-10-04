@@ -11,14 +11,17 @@ import {
   UPLOAD_PURPOSE_PERMISSION,
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
+import type { AccountAccess } from "@/api/lib/api-handlers";
 import { isMemberRole, type MemberRole } from "@/api/lib/member-roles";
 import {
+  type AuthorizedMemberRole,
   hasMemberPermission,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
 import { loadCapabilityEndpoint } from "@/api/mcp/capability-tools";
 import { MCP_MODES, type McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
 import { listOfferedStaticMcpToolDefinitions } from "@/api/mcp/gateway/static-tool-visibility";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
@@ -26,7 +29,10 @@ import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import {
   isMemberAuthorizedForMcpTool,
+  isMemberAuthorizedForMcpToolInput,
   type McpToolAuthorityDeclaration,
+  type McpWriteToolOperationSelector,
+  selectableOperations,
 } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -67,7 +73,7 @@ type RestEndpointRef =
   | {
       type: "handler";
       name: string;
-      config: { permissions?: PermissionInput };
+      config: { permissions?: PermissionInput; accountAccess?: AccountAccess };
     };
 
 /**
@@ -219,21 +225,27 @@ for (const entry of rawCatalog) {
   catalogOperationsByTool.set(tool, operations);
 }
 
-/** The REST grant an endpoint declares, read from its live handler config. */
-const restPermissionsOf = async (
+/**
+ * The REST grant and account access an endpoint declares, read from its live
+ * handler config.
+ */
+const restDeclarationOf = async (
   endpoint: RestEndpointRef,
-): Promise<PermissionInput> => {
+): Promise<{ permissions: PermissionInput; accountAccess: AccountAccess }> => {
   const config =
     endpoint.type === "handler"
       ? endpoint.config
       : (await loadCapabilityEndpoint(endpoint.id))?.config;
   const name = endpoint.type === "handler" ? endpoint.name : endpoint.id;
-  if (config?.permissions === undefined) {
-    // A write endpoint always declares its grant; one without is not a
+  if (config?.permissions === undefined || config.accountAccess === undefined) {
+    // A write endpoint always declares both; one without is not a
     // counterpart this matrix can derive from.
     throw new Error(`REST endpoint ${name} declares no permissions`);
   }
-  return config.permissions;
+  return {
+    permissions: config.permissions,
+    accountAccess: config.accountAccess,
+  };
 };
 
 // --- MCP write tools ----------------------------------------------------------
@@ -263,6 +275,7 @@ const writeTools = (() => {
 type ResolvedOperation = {
   endpoints: string[];
   permissions: PermissionInput[];
+  accountAccess: AccountAccess[];
 };
 
 /** The REST operations behind each write tool, with their declared grants. */
@@ -275,15 +288,19 @@ for (const { definition } of writeTools) {
   const resolved: ResolvedOperation[] = [];
   for (const operation of operations) {
     const permissions: PermissionInput[] = [];
+    const accountAccess: AccountAccess[] = [];
     for (const endpoint of operation.endpoints) {
       // db-await-in-loop: no database; each dispatch thunk loads one module.
-      permissions.push(await restPermissionsOf(endpoint));
+      const declaration = await restDeclarationOf(endpoint);
+      permissions.push(declaration.permissions);
+      accountAccess.push(declaration.accountAccess);
     }
     resolved.push({
       endpoints: operation.endpoints.map((endpoint) =>
         endpoint.type === "capability" ? endpoint.id : endpoint.name,
       ),
       permissions,
+      accountAccess,
     });
   }
   restOperationsByTool.set(definition.name, resolved);
@@ -333,6 +350,10 @@ const declaredGrantSets = (definition: WriteTool): string[][] => {
   switch (permissions.type) {
     case "all":
       return [permissionPairs([permissions.permissions])];
+    case "input":
+      return selectableOperations(permissions.select).map((operation) =>
+        permissionPairs([operation.permissions]),
+      );
     case "any":
       return permissions.alternatives.map((alternative) =>
         permissionPairs([alternative]),
@@ -344,6 +365,236 @@ const declaredGrantSets = (definition: WriteTool): string[][] => {
       return [];
   }
 };
+
+// --- Operations selected by input -------------------------------------------
+
+/**
+ * For each tool whose input selects its operation, the REST endpoints that
+ * perform each operation. Every REST counterpart of the tool appears under
+ * exactly one operation, and each endpoint must declare that operation's
+ * grant.
+ */
+const REST_ENDPOINTS_BY_OPERATION: Readonly<
+  Record<string, Readonly<Record<string, readonly string[]>>>
+> = {
+  create_template: {
+    create: ["templates.create"],
+    update: ["templates.update"],
+  },
+  delete_document: {
+    delete: ["entities.delete"],
+    delete_version: ["entities.versions.delete"],
+  },
+  manage_organization: {
+    add_member: ["matters.members.add"],
+    remove_member: ["matters.members.remove"],
+    update_org_settings: ["organization-settings.update"],
+  },
+  save_clause: { create: ["clauses.create"], update: ["clauses.update"] },
+  save_contact: {
+    create: ["contacts.create", "contacts.import"],
+    update: ["contacts.update"],
+  },
+  save_matter: {
+    create: ["matters.create"],
+    update: ["matters.update", "matters.archive", "matters.unarchive"],
+  },
+  save_playbook: {
+    create: ["playbooks.create"],
+    update: ["playbooks.update"],
+  },
+  save_task: {
+    create: ["tasks.create"],
+    update: [
+      "tasks.update",
+      "tasks.assignees.add",
+      "tasks.assignees.move",
+      "tasks.assignees.remove",
+      "tasks.entity-links.create",
+      "tasks.entity-links.delete",
+    ],
+  },
+  save_time_entry: {
+    create: ["time-entries.create"],
+    update: ["time-entries.update"],
+  },
+};
+
+/** Each single-endpoint REST operation behind a write tool, by endpoint id. */
+const restEndpointGrant = (
+  tool: string,
+  endpoint: string,
+): PermissionInput | null =>
+  (restOperationsByTool.get(tool) ?? []).find(
+    (operation) =>
+      operation.endpoints.length === 1 && operation.endpoints[0] === endpoint,
+  )?.permissions[0] ?? null;
+
+const inputSelectorOf = (
+  definition: WriteTool,
+): McpWriteToolOperationSelector | null =>
+  definition.access === "write" && definition.permissions.type === "input"
+    ? definition.permissions.select
+    : null;
+
+/** An input that selects `operation`, built from the selector itself. */
+const inputSelecting = (
+  select: McpWriteToolOperationSelector,
+  operation: string,
+): Record<string, unknown> => {
+  switch (select.by) {
+    case "presence":
+      return select.present.operation === operation
+        ? { [select.property]: "00000000-0000-4000-8000-000000000001" }
+        : {};
+    case "value": {
+      const value = Object.entries(select.values).find(
+        ([, candidate]) => candidate.operation === operation,
+      )?.[0];
+      return value === undefined ? {} : { [select.property]: value };
+    }
+    default:
+      select satisfies never;
+      return {};
+  }
+};
+
+/**
+ * Where a tool's per-operation declaration and REST disagree: an operation
+ * REST does not name, a REST endpoint under no operation, or an endpoint
+ * whose grant is not the operation's declared grant.
+ */
+const inputOperationMismatches = (definition: WriteTool): string[] => {
+  const select = inputSelectorOf(definition);
+  if (select === null) {
+    return [];
+  }
+  const tool = definition.name;
+  const restByOperation = REST_ENDPOINTS_BY_OPERATION[tool] ?? {};
+  const declared = selectableOperations(select);
+  const mismatches: string[] = [];
+  for (const operation of declared) {
+    const endpoints = restByOperation[operation.operation] ?? [];
+    if (endpoints.length === 0) {
+      mismatches.push(`${tool} ${operation.operation} names no REST endpoint`);
+    }
+    const declaredPairs = permissionPairs([operation.permissions]).join(",");
+    for (const endpoint of endpoints) {
+      const grant = restEndpointGrant(tool, endpoint);
+      const restPairs =
+        grant === null
+          ? "<not a REST counterpart>"
+          : permissionPairs([grant]).join(",");
+      if (restPairs !== declaredPairs) {
+        mismatches.push(
+          `${tool} ${operation.operation} declares ${declaredPairs}; REST ${endpoint} needs ${restPairs}`,
+        );
+      }
+    }
+  }
+  const declaredNames = new Set(
+    declared.map((operation) => operation.operation),
+  );
+  for (const name of Object.keys(restByOperation)) {
+    if (!declaredNames.has(name)) {
+      mismatches.push(
+        `${tool} maps REST endpoints to undeclared operation ${name}`,
+      );
+    }
+  }
+  const mapped = new Set(Object.values(restByOperation).flat());
+  for (const operation of restOperationsByTool.get(tool) ?? []) {
+    for (const endpoint of operation.endpoints) {
+      if (!mapped.has(endpoint)) {
+        mismatches.push(`${tool}: REST ${endpoint} is under no operation`);
+      }
+    }
+  }
+  return mismatches;
+};
+
+/** REST: may this authority perform every endpoint of the operation? */
+const restAllowsOperation = (
+  authority: AuthorizedMemberRole,
+  tool: string,
+  operation: string,
+): boolean =>
+  (REST_ENDPOINTS_BY_OPERATION[tool]?.[operation] ?? []).every((endpoint) => {
+    const grant = restEndpointGrant(tool, endpoint);
+    return grant !== null && hasMemberPermission(authority, grant);
+  });
+
+/**
+ * The call-time decision for an input selecting `operation`, against the
+ * REST decision for the same operation; `null` when they agree.
+ */
+const operationDecisionMismatch = ({
+  authority,
+  definition,
+  operation,
+}: {
+  authority: AuthorizedMemberRole;
+  definition: WriteTool;
+  operation: string;
+}): string | null => {
+  const select = inputSelectorOf(definition);
+  if (select === null) {
+    return `${definition.name} does not select its operation by input`;
+  }
+  const declared = isMemberAuthorizedForMcpToolInput(
+    authority,
+    definition,
+    inputSelecting(select, operation),
+  );
+  const rest = restAllowsOperation(authority, definition.name, operation);
+  return declared === rest
+    ? null
+    : `${definition.name} ${operation}: declared ${declared}, REST ${rest}`;
+};
+
+type OperationRow = { tool: string; operation: string; role: MemberRole };
+
+const OPERATION_MATRIX: readonly OperationRow[] = writeTools.flatMap(
+  ({ definition }) => {
+    const select = inputSelectorOf(definition);
+    return select === null
+      ? []
+      : selectableOperations(select).flatMap(({ operation }) =>
+          MEMBER_ROLES.map((role) => ({
+            tool: definition.name,
+            operation,
+            role,
+          })),
+        );
+  },
+);
+
+// --- Account access -----------------------------------------------------------
+
+/**
+ * The account access a write tool must declare: `standard` when any REST
+ * operation it performs refuses the demo account, else `sandbox`. A tool
+ * without a REST counterpart dispatches to a target that applies its own.
+ */
+const expectedAccountAccess = (tool: string): AccountAccess =>
+  (restOperationsByTool.get(tool) ?? []).some((operation) =>
+    operation.accountAccess.includes("standard"),
+  )
+    ? "standard"
+    : "sandbox";
+
+const accountAccessMismatches = (definitions: readonly WriteTool[]): string[] =>
+  definitions.flatMap((definition) => {
+    if (definition.access !== "write") {
+      return [];
+    }
+    const expected = expectedAccountAccess(definition.name);
+    return definition.accountAccess === expected
+      ? []
+      : [
+          `${definition.name} declares ${definition.accountAccess}; REST counterparts need ${expected}`,
+        ];
+  });
 
 // --- Surfaces -----------------------------------------------------------------
 
@@ -592,6 +843,127 @@ describe("write tool role matrix", () => {
         outcome: expected ? "past_permission_gate" : "permission_denied",
       });
     }
+  });
+});
+
+describe("write tool operation matrix", () => {
+  test("every tool whose input selects its operation maps each operation to REST endpoints with its exact grant", () => {
+    expect(Object.keys(REST_ENDPOINTS_BY_OPERATION).toSorted()).toEqual(
+      writeTools
+        .filter(({ definition }) => inputSelectorOf(definition) !== null)
+        .map(({ definition }) => definition.name),
+    );
+    expect(
+      writeTools.flatMap(({ definition }) =>
+        inputOperationMismatches(definition),
+      ),
+    ).toEqual([]);
+  });
+
+  test("the operation matrix covers every operation for every role", () => {
+    const operations = writeTools.flatMap(({ definition }) => {
+      const select = inputSelectorOf(definition);
+      return select === null ? [] : selectableOperations(select);
+    });
+    expect(operations.length).toBeGreaterThan(0);
+    expect(OPERATION_MATRIX.length).toBe(
+      operations.length * MEMBER_ROLES.length,
+    );
+  });
+
+  test.each(OPERATION_MATRIX)(
+    "$tool $operation as $role",
+    ({ tool, operation, role }) => {
+      const definition = writeTools.find(
+        (candidate) => candidate.definition.name === tool,
+      )?.definition;
+      if (definition === undefined) {
+        throw new Error(`Unknown write tool ${tool}`);
+      }
+      expect(
+        operationDecisionMismatch({
+          authority: sessionMemberRole(role),
+          definition,
+          operation,
+        }),
+      ).toBeNull();
+    },
+  );
+});
+
+describe("write tool account access", () => {
+  test("each write tool declares the account access of its REST counterparts", () => {
+    expect(
+      accountAccessMismatches(writeTools.map(({ definition }) => definition)),
+    ).toEqual([]);
+  });
+});
+
+describe("write tool operation matrix self-test", () => {
+  const deleteDocument = writeTools.find(
+    ({ definition }) => definition.name === "delete_document",
+  )?.definition;
+  if (
+    deleteDocument?.access !== "write" ||
+    deleteDocument.permissions.type !== "input" ||
+    deleteDocument.permissions.select.by !== "presence"
+  ) {
+    throw new Error("delete_document must select its operation by version_id");
+  }
+  const { select } = deleteDocument.permissions;
+  // Deleting the whole document declared with the grant of deleting a version.
+  const weakened: WriteTool = {
+    ...deleteDocument,
+    permissions: {
+      type: "input",
+      select: {
+        ...select,
+        absent: { ...select.absent, permissions: { entity: ["update"] } },
+      },
+    },
+  };
+
+  test("a declaration weaker than REST for delete fails the structural check", () => {
+    expect(inputOperationMismatches(weakened)).toContain(
+      "delete_document delete declares entity:update; REST entities.delete needs entity:delete",
+    );
+  });
+
+  test("a declaration weaker than REST for delete fails the decision check", () => {
+    // Roles hold entity update and delete together, so the divergence shows
+    // for a credential attenuated to entity:update.
+    const updateOnly = mcpMemberAuthority({
+      memberRole: "owner",
+      credentialPermissions: { entity: ["update"] },
+    });
+    expect(
+      operationDecisionMismatch({
+        authority: updateOnly,
+        definition: weakened,
+        operation: "delete",
+      }),
+    ).toBe("delete_document delete: declared true, REST false");
+    expect(
+      operationDecisionMismatch({
+        authority: updateOnly,
+        definition: deleteDocument,
+        operation: "delete",
+      }),
+    ).toBeNull();
+  });
+
+  test("an account access weaker than REST fails the account check", () => {
+    const definition = writeTools.find(
+      (candidate) => candidate.definition.name === "set_practice_jurisdictions",
+    )?.definition;
+    if (definition?.access !== "write") {
+      throw new Error("set_practice_jurisdictions must be a write tool");
+    }
+    expect(
+      accountAccessMismatches([{ ...definition, accountAccess: "sandbox" }]),
+    ).toEqual([
+      "set_practice_jurisdictions declares sandbox; REST counterparts need standard",
+    ]);
   });
 });
 

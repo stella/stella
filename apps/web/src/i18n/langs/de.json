@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Nummernkreis hinzufügen",
       "advance": "Anzahlung",
+      "allSellers": "Alle Verkäufer",
       "archiveConfirm": "Diesen Nummernkreis archivieren? Er steht dann für neue Belege nicht mehr zur Verfügung.",
       "creditNote": "Gutschrift",
       "default": "Standardnummernkreis",
@@ -562,6 +563,9 @@
       "preview": "Nächste Nummer",
       "previewAllocated": "Diese Nummer ist bereits vergeben.",
       "previewHelp": "Die Vorschau verwendet die gespeicherte Vorlage und reserviert keine Nummer.",
+      "sellerProfile": "Verkäuferprofil",
+      "sellerUnavailable": "Verkäufer archiviert oder nicht verfügbar",
+      "sellerUnavailableHelp": "Dieser Verkäufer ist archiviert oder nicht verfügbar. Behalten Sie die Zuordnung bei oder wählen Sie einen anderen Verkäufer.",
       "setDefault": "Als Standardnummernkreis festlegen",
       "title": "Nummernkreise"
     },
@@ -1165,6 +1169,7 @@
       "noSkills": "Noch keine Skills",
       "pinnedMatters": "Angeheftete Akten",
       "recentChats": "Letzte Chats",
+      "skillEditedBy": "Bearbeitet von {name} · {time}",
       "skills": "Skills"
     },
     "loadEarlierMessages": "Ältere Nachrichten laden",
@@ -1296,6 +1301,9 @@
     },
     "tabToAsk": "→ zum Fragen: „{prompt}“",
     "thinking": "Arbeite mit Kontext",
+    "threadFiles": {
+      "title": "Dateien in diesem Chat"
+    },
     "tool": {
       "add_comment": "Kommentar hinzufügen",
       "apply-active-docx-edits": "Dokumentänderungen vorbereiten",
@@ -1608,15 +1616,6 @@
     "currency": "Währung",
     "currentPage": "Aktuelle Seite",
     "date": "Datum",
-    "datePicker": {
-      "label": "Datumsauswahl",
-      "nextDecade": "Nächstes Jahrzehnt",
-      "nextMonth": "Nächster Monat",
-      "nextYear": "Nächstes Jahr",
-      "previousDecade": "Vorheriges Jahrzehnt",
-      "previousMonth": "Vorheriger Monat",
-      "previousYear": "Vorheriges Jahr"
-    },
     "decisions": "Entscheidungen",
     "decline": "Ablehnen",
     "delete": "Löschen",
@@ -2271,6 +2270,7 @@
       "deeplKeyRejected": "Der gespeicherte DeepL-Schlüssel wurde abgelehnt. Ersetzen Sie ihn in den Organisationseinstellungen.",
       "deeplQuotaExceeded": "Das DeepL-Zeichenkontingent dieser Organisation ist aufgebraucht.",
       "disposableEmailNotAllowed": "Temporäre E-Mail-Adressen sind nicht zulässig. Verwenden Sie eine dauerhafte E-Mail-Adresse.",
+      "encryptedContent": "Der Inhalt verschlüsselter Dokumente kann nicht extrahiert werden. Entfernen Sie das Passwort aus der Datei und versuchen Sie es erneut.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "legalSourceEntityLimitReached": "Diese Akte hat das Limit für Einträge erreicht, daher konnte das Dokument nicht erstellt werden.",
@@ -4835,6 +4835,7 @@
     "addPart": "Teil hinzufügen",
     "addTag": "Schlagwort hinzufügen",
     "aiAdaptHint": "Die KI passt diese Formulierung an jede Stelle im Dokument an, an der sie vorkommt.",
+    "aiConditionsUndecided": "Die KI konnte diese Bedingungen nicht entscheiden; ihre Abschnitte wurden so ausgefüllt, als ob sie nicht zutreffen: {list}",
     "aiDecidedConditions": "Von der KI entschieden",
     "aiFieldsNotDrafted": "Die KI konnte diese Felder nicht entwerfen: {list}",
     "allTemplates": "Alle Vorlagen",
@@ -4926,6 +4927,7 @@
     "directiveFor": "Schleife: {expression}",
     "directiveIf": "Wenn: {expression}",
     "discoveryFailed": "Vorlage konnte nicht analysiert werden",
+    "documentCreatedIncomplete": "Dokument erstellt, aber die Ausfüllung ist unvollständig",
     "downloadAnyway": "Trotzdem herunterladen",
     "downloadDocx": "DOCX herunterladen",
     "downloadPdf": "PDF herunterladen",
@@ -5021,6 +5023,7 @@
     "saveFailed": "Vorlage konnte nicht gespeichert werden",
     "savedLookupFormats": "Gespeicherte Ausgabeformate",
     "searchTemplates": "Vorlagen durchsuchen…",
+    "structureErrorsInDocument": "Vorlagenanweisungen, die nicht angewendet werden konnten: {count}. Prüfen Sie das Dokument.",
     "structureWarningParagraph": "Absatz {paragraph, number}",
     "structureWarnings": "{count, plural, one {# Strukturwarnung} other {# Strukturwarnungen}}",
     "studio": {

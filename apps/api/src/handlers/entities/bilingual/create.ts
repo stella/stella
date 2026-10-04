@@ -29,6 +29,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createBilingualDocxFromScanned } from "@/api/lib/file-scan/document-parsers";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { getScanWarnings } from "@/api/lib/file-scan/warnings";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -203,6 +204,7 @@ export const createBilingualEntityHandler = (
         buffer,
         fileName,
         mimeType: DOCX_MIME_TYPE,
+        encryption: serverBuiltFileEncryption(),
         scanWarnings:
           dependencies.getScanWarnings(scanResult.value) ?? undefined,
       });

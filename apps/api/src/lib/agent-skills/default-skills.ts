@@ -38,6 +38,13 @@ const DEFAULT_SKILLS = [
   },
 ] as const;
 
+const defaultSkillSlug = (command: string) => `${command}-default`;
+
+/** The body each starter skill is seeded with, by its slug. */
+export const DEFAULT_SKILL_BODY_BY_SLUG: ReadonlyMap<string, string> = new Map(
+  DEFAULT_SKILLS.map(({ body, command }) => [defaultSkillSlug(command), body]),
+);
+
 const DEFAULT_SKILL_SEED_SOURCE = "membership-created";
 
 type SeedDefaultSkillsOptions = {
@@ -62,8 +69,8 @@ export const seedDefaultSkills = async ({
     organizationId,
     userId,
     scope: "private" as const,
-    origin: "authored" as const,
-    slug: `${skill.command}-default`,
+    origin: "default" as const,
+    slug: defaultSkillSlug(skill.command),
     name: skill.name,
     description: skill.description,
     metadata: {},
