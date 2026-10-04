@@ -115,10 +115,11 @@ export const useSettingsMutation = <TVariables = void, TData = unknown>(
     mutationFn: async (variables: TVariables) => {
       const organization =
         await checkSettingsOrganization(activeOrganizationId);
-      if (organization.isErr()) {
-        throw organization.error;
-      }
-      return await options.mutationFn(variables);
+      // TanStack Query reads a failed write only from the rejection, so the
+      // typed error is handed over as one; the write is never sent.
+      return organization.isErr()
+        ? await Promise.reject(organization.error)
+        : await options.mutationFn(variables);
     },
     onSuccess: (data, variables) => {
       if (!invalidatesOnSettle) {
