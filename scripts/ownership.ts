@@ -412,6 +412,11 @@ export const OWNERSHIP = [
             "Schema export or full-schema test introspection; no production receipt writer.",
         },
         {
+          path: "apps/api/src/db/code-owned-tables.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
           path: "apps/api/src/db/high-volume-tables.test.ts",
           reason:
             "Schema export or full-schema test introspection; no production receipt writer.",
