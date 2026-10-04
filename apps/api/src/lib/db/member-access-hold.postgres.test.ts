@@ -6,8 +6,8 @@ import type { Transaction } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { createMembershipSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
-import { holdMemberAccessOnTx } from "@/api/lib/member-access-hold";
-import type { MemberAccessHold } from "@/api/lib/member-access-hold";
+import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
+import type { MemberAccessHold } from "@/api/lib/db/member-access-hold";
 import {
   withGatedTestClients,
   type GatedTestDb,
