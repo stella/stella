@@ -980,7 +980,6 @@
     "packPartial": "{installed} installés, {failed} en échec",
     "removed": "Cet outil n'est plus disponible.",
     "sectionOthers": "Autres",
-    "sectionRecommended": "Recommandés",
     "settings": {
       "packTitle": "Pack recommandé"
     },
@@ -1188,8 +1187,10 @@
       "label": "IA simulée"
     },
     "modelSelector": {
+      "allModels": "Tous les modèles ({count, number})",
       "autoDescription": "Choisit automatiquement le modèle et le niveau de raisonnement.",
       "autoLabel": "Automatique",
+      "belowFrontier": "En deçà des meilleurs compromis",
       "effortHelpDescription": "Détermine l’effort de raisonnement utilisé par le modèle avant de répondre. Les niveaux élevés peuvent aider pour les tâches complexes, mais prennent généralement plus de temps. Le point indique le niveau par défaut du fournisseur pour ce modèle.",
       "effortHelpLabel": "À propos du niveau de raisonnement",
       "effortLabel": "Niveau de raisonnement",
@@ -1203,6 +1204,10 @@
         "providerDefault": "Par défaut",
         "xhigh": "Très élevé"
       },
+      "newModel": "Nouveau",
+      "premiumCost": "Coût inhabituellement élevé",
+      "recommendedHelpDescription": "Aucun autre modèle disponible n’est à la fois moins cher et mieux noté. Les modèles trop récents pour être notés sont signalés comme nouveaux. Qualité : <link>{benchmark} de LMArena</link> ({licence}) ; coût : prix catalogue.",
+      "recommendedHelpLabel": "À propos des modèles recommandés",
       "selectionLabel": "{model} | {effort}",
       "title": "Sélectionner le modèle de conversation",
       "viaProvider": "par {provider}"
@@ -1616,6 +1621,16 @@
     "currency": "Devise",
     "currentPage": "Page actuelle",
     "date": "Date",
+    "datePicker": {
+      "label": "Sélecteur de date",
+      "nextDecade": "Décennie suivante",
+      "nextMonth": "Mois suivant",
+      "nextYear": "Année suivante",
+      "previousDecade": "Décennie précédente",
+      "previousMonth": "Mois précédent",
+      "previousYear": "Année précédente",
+      "time": "Heure"
+    },
     "decisions": "Décisions",
     "decline": "Refuser",
     "delete": "Supprimer",
@@ -1776,6 +1791,7 @@
     "properties": "Propriétés",
     "queued": "En file d'attente",
     "reason": "Motif",
+    "recommended": "Recommandés",
     "reconnecting": "Reconnexion…",
     "reference": "Référence",
     "refresh": "Actualiser",
@@ -1901,6 +1917,7 @@
       "addBankAccount": "Ajouter un compte bancaire",
       "noBillingData": "Aucune donnée de facturation.",
       "removeBankAccount": "Supprimer le compte bancaire",
+      "selectCurrencyForRate": "Sélectionnez une devise pour définir un taux horaire.",
       "title": "Données de facturation"
     },
     "columns": {
@@ -2276,6 +2293,8 @@
       "internalServerError": "Une erreur s’est produite. Veuillez réessayer.",
       "legalSourceEntityLimitReached": "Ce dossier a atteint la limite d’éléments, le document n’a donc pas pu être créé.",
       "legalSourceFilePropertyMissing": "Il manque une propriété de fichier dans ce dossier, le document n’a donc pas pu être créé.",
+      "matterContactCapacityExceeded": "Ce dossier contient plus de contacts qu’il n’est possible d’afficher. Retirez des liens visibles vers des contacts pour afficher les contacts restants.",
+      "matterContactCapacityReached": "Ce dossier a atteint la limite de contacts. Retirez un lien vers un contact avant d’en ajouter un autre.",
       "mcpAuthorizationApprovalRequired": "Un administrateur doit approuver ce connecteur avant que vous puissiez vous connecter.",
       "notOrganizationMember": "Vous n’êtes pas membre de cette organisation.",
       "providerKeyRejected": "Le fournisseur a refusé la clé API.",

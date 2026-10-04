@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { type InferOk, panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
@@ -433,27 +433,34 @@ const CONTRACT_CORPUS = {
             },
           ],
         } satisfies Awaited<ReturnType<typeof readOverviewHandler>>);
-        readWorkspaceContactsHandlerMock.mockResolvedValue([
-          {
-            id: toSafeId<"workspaceContact">(uid(6)),
-            organizationId: ORGANIZATION_ID,
-            workspaceId: toSafeId<"workspace">(WS),
-            contactId: toSafeId<"contact">(uid(7)),
-            // Not "client": that relationship lives on `workspaces.clientId`,
-            // not a `workspaceContacts` row; "client" is not one of this
-            // table's roles.
-            role: "co_counsel",
-            isPrimary: false,
-            notes: null,
-            createdAt: new Date("2026-01-01"),
-            contact: {
-              id: toSafeId<"contact">(uid(7)),
-              type: "person",
-              displayName: "Jan Novák",
-              color: null,
-            },
-          },
-        ] satisfies Awaited<ReturnType<typeof readWorkspaceContactsHandler>>);
+        readWorkspaceContactsHandlerMock.mockResolvedValue(
+          Result.ok({
+            contacts: [
+              {
+                id: toSafeId<"workspaceContact">(uid(6)),
+                organizationId: ORGANIZATION_ID,
+                workspaceId: toSafeId<"workspace">(WS),
+                contactId: toSafeId<"contact">(uid(7)),
+                // Not "client": that relationship lives on `workspaces.clientId`,
+                // not a `workspaceContacts` row; "client" is not one of this
+                // table's roles.
+                role: "co_counsel",
+                isPrimary: false,
+                notes: null,
+                createdAt: new Date("2026-01-01"),
+                contact: {
+                  id: toSafeId<"contact">(uid(7)),
+                  type: "person",
+                  displayName: "Jan Novák",
+                  color: null,
+                },
+              },
+            ],
+            overflow: false,
+          } satisfies InferOk<
+            Awaited<ReturnType<typeof readWorkspaceContactsHandler>>
+          >),
+        );
         readWorkspaceMembersHandlerMock.mockResolvedValue([
           {
             id: toSafeId<"workspaceMember">(uid(8)),
@@ -943,6 +950,7 @@ const CONTRACT_CORPUS = {
       mode: "detail",
       buildArgs: () => ({ clause_id: uid(30) }),
       tx: () => ({
+        $count: async () => 0,
         query: {
           clauses: {
             findFirst: async () => ({
@@ -1247,6 +1255,7 @@ const CONTRACT_CORPUS = {
                   narrative: "Drafted the NDA",
                   narrativeLanguage: null,
                   invoiceNarrative: null,
+                  noCharge: false,
                   status: "invoiced",
                   workItem: { id: uid(48), name: "NDA draft" },
                 },

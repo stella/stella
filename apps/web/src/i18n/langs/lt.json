@@ -980,7 +980,6 @@
     "packPartial": "Įdiegta {installed}, {failed} nepavyko",
     "removed": "Šis įrankis nebepasiekiamas.",
     "sectionOthers": "Kiti",
-    "sectionRecommended": "Rekomenduojami",
     "settings": {
       "packTitle": "Rekomenduojamas paketas"
     },
@@ -1188,8 +1187,10 @@
       "label": "Imituojamas DI"
     },
     "modelSelector": {
+      "allModels": "Visi modeliai ({count, number})",
       "autoDescription": "Automatiškai parenka modelį ir samprotavimo lygį.",
       "autoLabel": "Automatinis",
+      "belowFrontier": "Žemiau geriausių kompromisų",
       "effortHelpDescription": "Nustato, kiek samprotavimo modelis naudoja prieš atsakydamas. Aukštesni lygiai gali padėti atliekant sudėtingas užduotis, tačiau paprastai užtrunka ilgiau. Taškas žymi šio modelio teikėjo numatytąjį lygį.",
       "effortHelpLabel": "Apie samprotavimo lygį",
       "effortLabel": "Samprotavimo lygis",
@@ -1203,6 +1204,10 @@
         "providerDefault": "Numatytasis",
         "xhigh": "Labai aukštas"
       },
+      "newModel": "Naujas",
+      "premiumCost": "Neįprastai didelė kaina",
+      "recommendedHelpDescription": "Joks kitas prieinamas modelis nėra kartu pigesnis ir geriau įvertintas. Modeliai, kurie per nauji, kad būtų įvertinti, pažymėti kaip nauji. Kokybė: <link>LMArena {benchmark}</link> ({licence}); kaina: kainoraščio kainos.",
+      "recommendedHelpLabel": "Apie rekomenduojamus modelius",
       "selectionLabel": "{model} | {effort}",
       "title": "Pasirinkti pokalbių modelį",
       "viaProvider": "per {provider}"
@@ -1616,6 +1621,16 @@
     "currency": "Valiuta",
     "currentPage": "Dabartinis puslapis",
     "date": "Data",
+    "datePicker": {
+      "label": "Datos parinkiklis",
+      "nextDecade": "Kitas dešimtmetis",
+      "nextMonth": "Kitas mėnuo",
+      "nextYear": "Kiti metai",
+      "previousDecade": "Ankstesnis dešimtmetis",
+      "previousMonth": "Ankstesnis mėnuo",
+      "previousYear": "Ankstesni metai",
+      "time": "Laikas"
+    },
     "decisions": "Sprendimai",
     "decline": "Atmesti",
     "delete": "Ištrinti",
@@ -1776,6 +1791,7 @@
     "properties": "Savybės",
     "queued": "Eilėje",
     "reason": "Priežastis",
+    "recommended": "Rekomenduojami",
     "reconnecting": "Jungiamasi iš naujo…",
     "reference": "Nuoroda",
     "refresh": "Atnaujinti",
@@ -1901,6 +1917,7 @@
       "addBankAccount": "Pridėti banko sąskaitą",
       "noBillingData": "Atsiskaitymo duomenų nėra.",
       "removeBankAccount": "Pašalinti banko sąskaitą",
+      "selectCurrencyForRate": "Norėdami nustatyti valandinį įkainį, pasirinkite valiutą.",
       "title": "Atsiskaitymo duomenys"
     },
     "columns": {
@@ -2276,6 +2293,8 @@
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
       "legalSourceEntityLimitReached": "Šioje byloje pasiektas elementų limitas, todėl dokumento sukurti nepavyko.",
       "legalSourceFilePropertyMissing": "Šioje byloje trūksta failo ypatybės, todėl dokumento sukurti nepavyko.",
+      "matterContactCapacityExceeded": "Šioje byloje yra daugiau kontaktų, nei galima parodyti. Pašalinkite matomus kontaktų susiejimus, kad būtų parodyti likę kontaktai.",
+      "matterContactCapacityReached": "Ši byla pasiekė kontaktų skaičiaus ribą. Prieš pridėdami kitą kontaktą, pašalinkite vieną kontaktų susiejimą.",
       "mcpAuthorizationApprovalRequired": "Kad galėtumėte prisijungti, administratorius turi patvirtinti šią jungtį.",
       "notOrganizationMember": "Nesate šios organizacijos narys.",
       "providerKeyRejected": "Teikėjas atmetė API raktą.",

@@ -54,6 +54,7 @@ import type {
   SchedulerTask,
   SchedulerTaskContext,
 } from "@/api/lib/scheduler/types";
+import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 export const MEMORY_EXTRACTOR_TASK = "memory.extractor" as const;
@@ -63,7 +64,7 @@ const MAX_CANDIDATES = 3;
 const MAX_CONTENT_LENGTH = 4000;
 const SUMMARY_MAX_CHARS = 12_000;
 const MEMORY_MAX_OUTPUT_TOKENS = 1024;
-const MEMORY_EXTRACTOR_AUDIT_ACTOR = "system:memory-extractor";
+const MEMORY_EXTRACTOR_AUDIT_ACTOR = TENANT_SYSTEM_ACTOR.memoryExtractor;
 
 // Suggested-first: the model proposes a kind and content; scope is then
 // derived from the kind (never trusted from the model) so a matter fact

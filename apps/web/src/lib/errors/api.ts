@@ -14,6 +14,7 @@ import {
 } from "@stll/api-contract/action-admission";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
+import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
 
 import { getTranslator } from "@/i18n/translator";
 import type { TranslationKey } from "@/i18n/types";
@@ -104,6 +105,10 @@ const RAW_INTERNAL_TOOL_ERROR_CODE = {
 const CODE_ERROR_KEYS = {
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
     "errors.apiCodes.filePropertyTypeImmutable",
+  [MATTER_CONTACT_CAPACITY_CODE.reached]:
+    "errors.apiCodes.matterContactCapacityReached",
+  [MATTER_CONTACT_CAPACITY_CODE.exceeded]:
+    "errors.apiCodes.matterContactCapacityExceeded",
   [CLAUSE_DIRECTIVES_INVALID_CODE]: "errors.apiCodes.clauseDirectivesInvalid",
   [CLAUSE_VERSION_LIMIT_ERROR_CODE]: "clauses.versionLimitReached",
   [PUBLIC_COUNTRY_UNAVAILABLE_CODE]: "errors.api.publicCountryUnavailable",

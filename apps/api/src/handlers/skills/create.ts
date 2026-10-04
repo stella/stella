@@ -8,6 +8,7 @@ import {
   RESERVED_AGENT_SKILL_COMMANDS,
   agentSkills,
 } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { hashSkillContent } from "@/api/lib/agent-skills/content-hash";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -42,6 +43,7 @@ const config = {
     "skills.upload or skills.from-url.import for a packaged skill instead.",
   permissions: { agentSkill: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

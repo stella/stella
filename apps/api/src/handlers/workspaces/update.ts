@@ -14,6 +14,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -65,6 +66,7 @@ const config = {
     "that already has a client, are refused.",
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: workspaceRealtimeUpdates,
   mcp: { type: "covered", by: "save_matter" },
   body: updateWorkspaceBodySchema,
 } satisfies WorkspaceHandlerConfig;

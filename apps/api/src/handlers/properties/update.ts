@@ -16,6 +16,7 @@ import {
 } from "@/api/db/schema-validators";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { comparePropertiesForStale } from "@/api/handlers/properties/utils";
+import { propertyRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -249,6 +250,7 @@ const config = {
     "use properties.create for a custom column with another value type.",
   permissions: { property: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: propertyRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

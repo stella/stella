@@ -980,7 +980,6 @@
     "packPartial": "{installed} instalēti, {failed} neizdevās",
     "removed": "Šis rīks vairs nav pieejams.",
     "sectionOthers": "Citi",
-    "sectionRecommended": "Ieteiktie",
     "settings": {
       "packTitle": "Ieteicamā paka"
     },
@@ -1188,8 +1187,10 @@
       "label": "Simulēts AI"
     },
     "modelSelector": {
+      "allModels": "Visi modeļi ({count, number})",
       "autoDescription": "Automātiski izvēlas modeli un spriešanas līmeni.",
       "autoLabel": "Automātiski",
+      "belowFrontier": "Zem labākajiem kompromisiem",
       "effortHelpDescription": "Nosaka, cik daudz spriešanas modelis izmanto pirms atbildes. Augstāki līmeņi var palīdzēt sarežģītos uzdevumos, bet parasti aizņem vairāk laika. Punkts apzīmē pakalpojuma sniedzēja noklusējuma līmeni šim modelim.",
       "effortHelpLabel": "Par spriešanas līmeni",
       "effortLabel": "Spriešanas līmenis",
@@ -1203,6 +1204,10 @@
         "providerDefault": "Noklusējuma",
         "xhigh": "Ļoti augsts"
       },
+      "newModel": "Jauns",
+      "premiumCost": "Neparasti augstas izmaksas",
+      "recommendedHelpDescription": "Neviens cits pieejamais modelis nav vienlaikus lētāks un augstāk novērtēts. Modeļi, kas ir pārāk jauni novērtējumam, ir atzīmēti kā jauni. Kvalitāte: <link>LMArena {benchmark}</link> ({licence}); izmaksas: cenrāža cenas.",
+      "recommendedHelpLabel": "Par ieteicamajiem modeļiem",
       "selectionLabel": "{model} | {effort}",
       "title": "Atlasīt tērzēšanas modeli",
       "viaProvider": "izmantojot {provider}"
@@ -1616,6 +1621,16 @@
     "currency": "Valūta",
     "currentPage": "Pašreizējā lapa",
     "date": "Datums",
+    "datePicker": {
+      "label": "Datuma atlasītājs",
+      "nextDecade": "Nākamā desmitgade",
+      "nextMonth": "Nākamais mēnesis",
+      "nextYear": "Nākamais gads",
+      "previousDecade": "Iepriekšējā desmitgade",
+      "previousMonth": "Iepriekšējais mēnesis",
+      "previousYear": "Iepriekšējais gads",
+      "time": "Laiks"
+    },
     "decisions": "Nolēmumi",
     "decline": "Noraidīt",
     "delete": "Dzēst",
@@ -1776,6 +1791,7 @@
     "properties": "Rekvizīti",
     "queued": "Rindā",
     "reason": "Iemesls",
+    "recommended": "Ieteiktie",
     "reconnecting": "Atkārtota savienošana…",
     "reference": "Atsauce",
     "refresh": "Atsvaidzināt",
@@ -1901,6 +1917,7 @@
       "addBankAccount": "Pievienot bankas kontu",
       "noBillingData": "Nav norēķinu datu.",
       "removeBankAccount": "Noņemt bankas kontu",
+      "selectCurrencyForRate": "Lai iestatītu stundas likmi, izvēlieties valūtu.",
       "title": "Norēķinu dati"
     },
     "columns": {
@@ -2276,6 +2293,8 @@
       "internalServerError": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "legalSourceEntityLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums, tāpēc dokumentu nevarēja izveidot.",
       "legalSourceFilePropertyMissing": "Šajā lietā trūkst faila rekvizīta, tāpēc dokumentu nevarēja izveidot.",
+      "matterContactCapacityExceeded": "Šajā lietā ir vairāk kontaktu, nekā iespējams parādīt. Noņemiet redzamās kontaktu piesaistes, lai parādītu pārējos kontaktus.",
+      "matterContactCapacityReached": "Šī lieta ir sasniegusi kontaktu skaita ierobežojumu. Pirms pievienojat vēl vienu kontaktu, noņemiet vienu kontakta piesaisti.",
       "mcpAuthorizationApprovalRequired": "Lai varētu izveidot savienojumu, administratoram šis savienotājs ir jāapstiprina.",
       "notOrganizationMember": "Jūs neesat šīs organizācijas dalībnieks.",
       "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",

@@ -980,7 +980,6 @@
     "packPartial": "Zainstalowano {installed}, {failed} nieudane",
     "removed": "To narzędzie nie jest już dostępne.",
     "sectionOthers": "Pozostałe",
-    "sectionRecommended": "Polecane",
     "settings": {
       "packTitle": "Polecany pakiet"
     },
@@ -1188,8 +1187,10 @@
       "label": "Symulowane AI"
     },
     "modelSelector": {
+      "allModels": "Wszystkie modele ({count, number})",
       "autoDescription": "Automatycznie wybiera model i poziom rozumowania.",
       "autoLabel": "Automatycznie",
+      "belowFrontier": "Poniżej najlepszych kompromisów",
       "effortHelpDescription": "Określa, ile rozumowania model wykorzystuje przed udzieleniem odpowiedzi. Wyższe poziomy mogą pomóc w złożonych zadaniach, ale zwykle zajmują więcej czasu. Kropka oznacza domyślny poziom dostawcy dla tego modelu.",
       "effortHelpLabel": "Informacje o poziomie rozumowania",
       "effortLabel": "Poziom rozumowania",
@@ -1203,6 +1204,10 @@
         "providerDefault": "Domyślny",
         "xhigh": "Bardzo wysoki"
       },
+      "newModel": "Nowy",
+      "premiumCost": "Nietypowo wysoki koszt",
+      "recommendedHelpDescription": "Żaden inny dostępny model nie jest jednocześnie tańszy i wyżej oceniany. Modele zbyt nowe, by mieć ocenę, są oznaczone jako nowe. Jakość: <link>{benchmark} od LMArena</link> ({licence}); koszt: ceny katalogowe.",
+      "recommendedHelpLabel": "Informacje o polecanych modelach",
       "selectionLabel": "{model} | {effort}",
       "title": "Wybierz model czatu",
       "viaProvider": "przez {provider}"
@@ -1616,6 +1621,16 @@
     "currency": "Waluta",
     "currentPage": "Bieżąca strona",
     "date": "Data",
+    "datePicker": {
+      "label": "Wybór daty",
+      "nextDecade": "Następna dekada",
+      "nextMonth": "Następny miesiąc",
+      "nextYear": "Następny rok",
+      "previousDecade": "Poprzednia dekada",
+      "previousMonth": "Poprzedni miesiąc",
+      "previousYear": "Poprzedni rok",
+      "time": "Godzina"
+    },
     "decisions": "Orzeczenia",
     "decline": "Odrzuć",
     "delete": "Usuń",
@@ -1776,6 +1791,7 @@
     "properties": "Właściwości",
     "queued": "W kolejce",
     "reason": "Powód",
+    "recommended": "Polecane",
     "reconnecting": "Ponowne łączenie…",
     "reference": "Numer referencyjny",
     "refresh": "Odśwież",
@@ -1901,6 +1917,7 @@
       "addBankAccount": "Dodaj konto bankowe",
       "noBillingData": "Brak danych rozliczeniowych.",
       "removeBankAccount": "Usuń konto bankowe",
+      "selectCurrencyForRate": "Wybierz walutę, aby ustawić stawkę godzinową.",
       "title": "Dane rozliczeniowe"
     },
     "columns": {
@@ -2276,6 +2293,8 @@
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
+      "matterContactCapacityExceeded": "Ta sprawa zawiera więcej kontaktów, niż można wyświetlić. Usuń widoczne powiązania z kontaktami, aby wyświetlić pozostałe kontakty.",
+      "matterContactCapacityReached": "Ta sprawa osiągnęła limit kontaktów. Usuń jedno powiązanie z kontaktem przed dodaniem kolejnego.",
       "mcpAuthorizationApprovalRequired": "Administrator musi zatwierdzić ten konektor, zanim będzie można się połączyć.",
       "notOrganizationMember": "Nie jesteś członkiem tej organizacji.",
       "providerKeyRejected": "Dostawca odrzucił klucz API.",

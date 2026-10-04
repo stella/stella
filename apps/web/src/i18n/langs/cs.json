@@ -980,7 +980,6 @@
     "packPartial": "Nainstalováno {installed}, {failed} selhalo",
     "removed": "Tento nástroj již není dostupný.",
     "sectionOthers": "Ostatní",
-    "sectionRecommended": "Doporučené",
     "settings": {
       "packTitle": "Doporučený balík"
     },
@@ -1188,8 +1187,10 @@
       "label": "Simulovaná AI"
     },
     "modelSelector": {
+      "allModels": "Všechny modely ({count, number})",
       "autoDescription": "Automaticky vybere model a úroveň uvažování.",
       "autoLabel": "Automaticky",
+      "belowFrontier": "Pod nejlepšími kompromisy",
       "effortHelpDescription": "Určuje, kolik uvažování model použije před odpovědí. Vyšší úrovně mohou pomoci u složité práce, ale obvykle trvají déle. Tečka označuje výchozí úroveň poskytovatele pro tento model.",
       "effortHelpLabel": "O úrovni uvažování",
       "effortLabel": "Úroveň uvažování",
@@ -1203,6 +1204,10 @@
         "providerDefault": "Výchozí",
         "xhigh": "Velmi vysoká"
       },
+      "newModel": "Nový",
+      "premiumCost": "Neobvykle vysoká cena",
+      "recommendedHelpDescription": "Žádný jiný dostupný model není zároveň levnější a lépe hodnocený. Modely, které jsou na hodnocení příliš nové, jsou označené jako nové. Kvalita: <link>{benchmark} od LMArena</link> ({licence}); cena: ceníkové ceny.",
+      "recommendedHelpLabel": "O doporučených modelech",
       "selectionLabel": "{model} | {effort}",
       "title": "Vybrat model chatu",
       "viaProvider": "přes {provider}"
@@ -1616,6 +1621,16 @@
     "currency": "Měna",
     "currentPage": "Aktuální stránka",
     "date": "Datum",
+    "datePicker": {
+      "label": "Výběr data",
+      "nextDecade": "Další desetiletí",
+      "nextMonth": "Další měsíc",
+      "nextYear": "Další rok",
+      "previousDecade": "Předchozí desetiletí",
+      "previousMonth": "Předchozí měsíc",
+      "previousYear": "Předchozí rok",
+      "time": "Čas"
+    },
     "decisions": "Rozhodnutí",
     "decline": "Odmítnout",
     "delete": "Smazat",
@@ -1776,6 +1791,7 @@
     "properties": "Vlastnosti",
     "queued": "Ve frontě",
     "reason": "Důvod",
+    "recommended": "Doporučené",
     "reconnecting": "Obnovování spojení…",
     "reference": "Reference",
     "refresh": "Obnovit",
@@ -1901,6 +1917,7 @@
       "addBankAccount": "Přidat bankovní účet",
       "noBillingData": "Žádné fakturační údaje.",
       "removeBankAccount": "Odebrat bankovní účet",
+      "selectCurrencyForRate": "Pro nastavení hodinové sazby vyberte měnu.",
       "title": "Fakturační údaje"
     },
     "columns": {
@@ -2276,6 +2293,8 @@
       "internalServerError": "Něco se pokazilo. Zkuste to prosím znovu.",
       "legalSourceEntityLimitReached": "Tento spis dosáhl limitu položek, takže dokument nelze vytvořit.",
       "legalSourceFilePropertyMissing": "V tomto spisu chybí vlastnost souboru, takže dokument nelze vytvořit.",
+      "matterContactCapacityExceeded": "Tento spis obsahuje více kontaktů, než lze zobrazit. Odebráním viditelných propojení s kontakty zobrazíte zbývající kontakty.",
+      "matterContactCapacityReached": "Tento spis dosáhl limitu kontaktů. Před přidáním dalšího kontaktu odeberte jedno propojení s kontaktem.",
       "mcpAuthorizationApprovalRequired": "Než se budete moci připojit, správce musí tento konektor schválit.",
       "notOrganizationMember": "Nejste členem této organizace.",
       "providerKeyRejected": "Poskytovatel odmítl klíč API.",
