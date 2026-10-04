@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "legal-atlas declares valibot directly to validate provision identities and references before minting their shared branded contracts."
+}

@@ -12,9 +12,14 @@ import {
 } from "@/api/lib/entities/authorize-document-write";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
-import { scanFile } from "@/api/lib/file-scan/scan";
-import { getScanWarnings } from "@/api/lib/file-scan/warnings";
+import {
+  FileScanRejectedError,
+  scanUpload,
+} from "@/api/lib/file-scan/scan-upload";
+import {
+  detectFileEncryption,
+  uploadFileEncryption,
+} from "@/api/lib/files/detect-file-encryption";
 import {
   OrganizationFileUsageError,
   organizationFileUsageHandlerError,
@@ -100,26 +105,33 @@ export default createSafeHandler(
     }
     const target = authorized.value.operation;
 
-    const fileBuffer = await file.arrayBuffer();
-    const scanResult = await scanFile({
-      buffer: new Uint8Array(fileBuffer),
+    const scanned = await scanUpload({
+      bytes: await file.arrayBuffer(),
       declaredMimeType: file.type,
       fileName: sanitizedName,
     });
-    if (Result.isError(scanResult)) {
+    if (Result.isError(scanned)) {
       return Result.err(
-        new HandlerError({ status: 422, message: "File scan failed" }),
+        scanned.error instanceof FileScanRejectedError
+          ? new HandlerError({ ...scanned.error.rejection, status: 422 })
+          : new HandlerError({ status: 422, message: "File scan failed" }),
       );
     }
-    if (scanResult.value.verdict === "reject") {
-      const rejection = fileSecurityRejection(scanResult.value);
-      if (rejection === null) {
-        panic("Rejecting scan had no rejecting findings");
-      }
+    const encryption = uploadFileEncryption(
+      await detectFileEncryption({
+        mimeType: file.type,
+        scanned: scanned.value,
+      }),
+      {
+        mimeType: file.type,
+        sizeBytes: String(scanned.value.bytes.byteLength),
+      },
+    );
+    if (encryption === null) {
       return Result.err(
         new HandlerError({
-          ...rejection,
           status: 422,
+          message: "Failed to open PDF: file appears corrupted",
         }),
       );
     }
@@ -134,12 +146,13 @@ export default createSafeHandler(
             entityId: target.entityId,
             userId,
             recordAuditEvent,
-            buffer: fileBuffer,
+            buffer: scanned.value.bytes,
             fileName: sanitizedName,
             mimeType: file.type,
+            encryption,
             source: UPLOAD_DOCUMENT_SOURCE,
             writePolicy: { type: "replace-current-file" },
-            scanWarnings: getScanWarnings(scanResult.value) ?? undefined,
+            scanWarnings: scanned.value.scanWarnings ?? undefined,
           }),
         catch: (cause) =>
           new HandlerError({

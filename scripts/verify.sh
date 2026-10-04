@@ -198,6 +198,8 @@ run_module_mock_ledger_guard() {
   bun scripts/check-write-tool-authority-ledger.ts --base "$base_ref" || return 1
   bun scripts/check-contract-domain-ledger.ts --self-test || return 1
   bun scripts/check-contract-domain-ledger.ts --base "$base_ref" || return 1
+  bun scripts/calendar-day-ledger.ts --self-test || return 1
+  bun scripts/calendar-day-ledger.ts --base "$base_ref" || return 1
   # Case-law rawHash files and external-id writers: exact sets, shrink-only.
   # The registration (drivers) section is checked by the API guard test.
   bun scripts/source-fingerprint-baseline.ts --self-test || return 1
@@ -293,6 +295,17 @@ run_capability_description_ledger() {
   # --self-test run first proves the detectors still fire.
   bun apps/api/scripts/capability-description-guard.ts --self-test || return 1
   bun apps/api/scripts/capability-description-guard.ts
+}
+
+run_deployment_feature_guard() {
+  # Deployment flags: every declared flag has a reader and every read flag is
+  # declared, no raw process-environment flag reads, and every flagged
+  # capability's route mount sits behind a gate on its flag. The baseline
+  # (apps/api/deployment-feature-baseline.json) may only shrink against the
+  # merge base. The --self-test run first proves each detector still fires.
+  bun apps/api/scripts/deployment-feature-guard.ts --self-test || return 1
+  bun apps/api/scripts/deployment-feature-guard.ts \
+    --base "$(git merge-base "$base_ref" HEAD)"
 }
 
 run_knip() {
@@ -449,6 +462,7 @@ run_step "CLI contract changeset guard" bun scripts/check-cli-contract-changeset
 run_step "MCP App bundle" run_mcp_app_bundle
 run_step "Capability catalog drift" run_capability_catalog
 run_step "Capability description ledger" run_capability_description_ledger
+run_step "Deployment feature guard" run_deployment_feature_guard
 run_step "Knip production deps" run_knip
 run_step "Knip dead-export budget" run_knip_exports
 run_step "Documentation MCP tests" bun --cwd .claude/mcp test

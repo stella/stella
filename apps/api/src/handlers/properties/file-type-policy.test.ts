@@ -9,6 +9,7 @@ import { fields, properties } from "@/api/db/schema";
 import type { PropertyContent } from "@/api/db/schema-validators";
 import { createScopedDb, createSafeDb } from "@/api/db/scoped";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { validateEntityCreate } from "@/api/lib/uploads/entity-create";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -307,6 +308,7 @@ test("renaming a file column retains its scope and generated document creation",
       buffer: new TextEncoder().encode("Generated document"),
       fileName: "generated.txt",
       mimeType: "text/plain",
+      encryption: serverBuiltFileEncryption(),
       dependencies: {
         broadcastWorkspaceResourceUpdated: () => {},
         processExtraction: async () => {},

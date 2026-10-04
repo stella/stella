@@ -43,6 +43,8 @@ export const BASELINE_PATHS = {
   mcpCoverage: "apps/api/mcp-coverage-baseline.json",
   /** apps/api/scripts/mcp-surface-baseline.ts */
   mcpSurface: "apps/api/mcp-surface-baseline.json",
+  /** apps/api/scripts/deployment-feature-guard.ts */
+  deploymentFeature: "apps/api/deployment-feature-baseline.json",
   /** apps/api/src/handlers/chat/provider-request-cache.integration.test.ts */
   chatPromptPrefix:
     "apps/api/src/tests/fixtures/provider-request-schemas/chat-prompt-baseline.json",

@@ -120,7 +120,6 @@ export const readOverviewHandler = async ({
     let fieldId: string | null = null;
     let propertyId: string | null = null;
     let pdfFileId: string | null = null;
-    let encrypted = false;
     if (primaryField) {
       fieldId = primaryField.id;
       propertyId = primaryField.propertyId;
@@ -135,7 +134,6 @@ export const readOverviewHandler = async ({
         name = e.name || c.fileName;
         mimeType = c.mimeType;
         pdfFileId = c.pdfFileId;
-        encrypted = c.encrypted;
       }
     }
 
@@ -159,7 +157,8 @@ export const readOverviewHandler = async ({
       fieldId,
       propertyId,
       pdfFileId,
-      encrypted,
+      encrypted:
+        primaryField?.content.type === "file" && primaryField.content.encrypted,
       createdAt: e.createdAt.toISOString(),
       updatedAt: e.updatedAt?.toISOString() ?? null,
       createdBy: displayName,

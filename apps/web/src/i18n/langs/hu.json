@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Számsorozat hozzáadása",
       "advance": "Előleg",
+      "allSellers": "Minden eladó",
       "archiveConfirm": "Archiválja ezt a számsorozatot? Új bizonylatokhoz többé nem lesz elérhető.",
       "creditNote": "Jóváírás",
       "default": "Alapértelmezett sorozat",
@@ -562,6 +563,9 @@
       "preview": "Következő szám",
       "previewAllocated": "Ez a szám már ki van osztva.",
       "previewHelp": "Az előnézet a mentett sablont használja, és nem foglal le számot.",
+      "sellerProfile": "Eladói profil",
+      "sellerUnavailable": "Az eladó archivált vagy nem érhető el",
+      "sellerUnavailableHelp": "Ez az eladó archivált vagy nem érhető el. Tartsa meg a hozzárendelést, vagy válasszon másik eladót.",
       "setDefault": "Beállítás alapértelmezett sorozatként",
       "title": "Számsorozatok"
     },
@@ -1165,6 +1169,7 @@
       "noSkills": "Még nincsenek készségek",
       "pinnedMatters": "Kitűzött ügyek",
       "recentChats": "Legutóbbi csevegések",
+      "skillEditedBy": "{name} szerkesztette · {time}",
       "skills": "Készségek"
     },
     "loadEarlierMessages": "Korábbi üzenetek betöltése",
@@ -1296,6 +1301,9 @@
     },
     "tabToAsk": "→ a kérdezéshez: „{prompt}“",
     "thinking": "Kontextussal dolgozom",
+    "threadFiles": {
+      "title": "Fájlok ebben a csevegésben"
+    },
     "tool": {
       "add_comment": "Megjegyzés hozzáadása",
       "apply-active-docx-edits": "Dokumentummódosítások előkészítése",
@@ -2262,6 +2270,7 @@
       "deeplKeyRejected": "A mentett DeepL-kulcsot a szolgáltató elutasította. Cserélje le a szervezet beállításaiban.",
       "deeplQuotaExceeded": "A szervezet DeepL-karakterkerete elfogyott.",
       "disposableEmailNotAllowed": "Az ideiglenes e-mail-címek nem engedélyezettek. Használjon állandó e-mail-címet.",
+      "encryptedContent": "A titkosított dokumentum tartalma nem nyerhető ki. Távolítsa el a jelszót a fájlból, és próbálja újra.",
       "filePropertyTypeImmutable": "A fájltulajdonság típusa nem módosítható. Tartsa meg a jelenlegi típust; más értékekhez hozzon létre egyéni tulajdonságot.",
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
       "internalServerError": "Hiba történt. Próbálja újra.",
@@ -4827,6 +4836,7 @@
     "addPart": "Rész hozzáadása",
     "addTag": "Címke hozzáadása",
     "aiAdaptHint": "Az AI a megfogalmazást a dokumentum minden előfordulási helyéhez igazítja.",
+    "aiConditionsUndecided": "Az AI nem tudta eldönteni ezeket a feltételeket, ezért a hozzájuk tartozó részeket úgy töltötte ki, mintha nem teljesülnének: {list}",
     "aiDecidedConditions": "Az AI dönti el",
     "aiFieldsNotDrafted": "Az AI nem tudta megfogalmazni ezeket a mezőket: {list}",
     "allTemplates": "Összes sablon",
@@ -4918,6 +4928,7 @@
     "directiveFor": "Ciklus: {expression}",
     "directiveIf": "Ha: {expression}",
     "discoveryFailed": "Nem sikerült elemezni a sablont",
+    "documentCreatedIncomplete": "A dokumentum létrejött, de a kitöltés hiányos",
     "downloadAnyway": "Letöltés így is",
     "downloadDocx": "Letöltés DOCX-ként",
     "downloadPdf": "Letöltés PDF-ként",
@@ -5013,6 +5024,7 @@
     "saveFailed": "Nem sikerült menteni a sablont",
     "savedLookupFormats": "Mentett kimeneti formátumok",
     "searchTemplates": "Sablonok keresése…",
+    "structureErrorsInDocument": "Nem alkalmazható sablonutasítások: {count}. Ellenőrizze a dokumentumot.",
     "structureWarningParagraph": "Bekezdés {paragraph, number}",
     "structureWarnings": "{count, plural, one {# struktúra figyelmeztetés} other {# struktúra figyelmeztetés}}",
     "studio": {

@@ -46,6 +46,7 @@
     "./legislation-publication": "./src/legislation-publication.ts",
     "./matter-activity": "./src/matter-activity.ts",
     "./notifications": "./src/notifications.ts",
+    "./provision-key": "./src/provision-key.ts",
     "./provision-link-status": "./src/provision-link-status.ts",
     "./property-policy": "./src/property-policy.ts",
     "./safe-id": "./src/safe-id.ts",

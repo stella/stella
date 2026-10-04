@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Pridať číselný rad",
       "advance": "Záloha",
+      "allSellers": "Všetci dodávatelia",
       "archiveConfirm": "Archivovať tento číselný rad? Nebude už dostupný pre nové doklady.",
       "creditNote": "Dobropis",
       "default": "Predvolený rad",
@@ -562,6 +563,9 @@
       "preview": "Ďalšie číslo",
       "previewAllocated": "Toto číslo už bolo pridelené.",
       "previewHelp": "Náhľad používa uložený vzor a nerezervuje číslo.",
+      "sellerProfile": "Profil dodávateľa",
+      "sellerUnavailable": "Dodávateľ je archivovaný alebo nedostupný",
+      "sellerUnavailableHelp": "Tento dodávateľ je archivovaný alebo nedostupný. Ponechajte priradenie alebo vyberte iného dodávateľa.",
       "setDefault": "Nastaviť ako predvolený rad",
       "title": "Číselné rady"
     },
@@ -1165,6 +1169,7 @@
       "noSkills": "Zatiaľ žiadne zručnosti",
       "pinnedMatters": "Pripnuté spisy",
       "recentChats": "Nedávne chaty",
+      "skillEditedBy": "Upravil(a) {name} · {time}",
       "skills": "Zručnosti"
     },
     "loadEarlierMessages": "Načítať staršie správy",
@@ -1296,6 +1301,9 @@
     },
     "tabToAsk": "→ pre otázku: \"{prompt}\"",
     "thinking": "Pracujem s kontextom",
+    "threadFiles": {
+      "title": "Súbory v tomto chate"
+    },
     "tool": {
       "add_comment": "Pridávanie komentára",
       "apply-active-docx-edits": "Pripravujem úpravy dokumentu",
@@ -2262,6 +2270,7 @@
       "deeplKeyRejected": "Uložený kľúč DeepL bol odmietnutý. Nahraďte ho v nastaveniach organizácie.",
       "deeplQuotaExceeded": "Limit znakov DeepL pre túto organizáciu bol vyčerpaný.",
       "disposableEmailNotAllowed": "Dočasné e-mailové adresy nie sú povolené. Použite trvalú e-mailovú adresu.",
+      "encryptedContent": "Obsah šifrovaného dokumentu nie je možné extrahovať. Odstráňte zo súboru heslo a skúste to znova.",
       "filePropertyTypeImmutable": "Typ súborovej vlastnosti nie je možné zmeniť. Ponechajte existujúci typ; pre iné hodnoty vytvorte vlastnú vlastnosť.",
       "forbidden": "Na túto akciu nemáte oprávnenie.",
       "internalServerError": "Niečo sa pokazilo. Skúste to prosím znova.",
@@ -4827,6 +4836,7 @@
     "addPart": "Pridať časť",
     "addTag": "Pridať štítok",
     "aiAdaptHint": "AI prispôsobí túto formuláciu každému miestu v dokumente, kde sa objaví.",
+    "aiConditionsUndecided": "AI nedokázala rozhodnúť tieto podmienky, preto boli ich časti vyplnené, akoby neplatili: {list}",
     "aiDecidedConditions": "Rozhoduje AI",
     "aiFieldsNotDrafted": "AI nedokázala navrhnúť tieto polia: {list}",
     "allTemplates": "Všetky vzory",
@@ -4918,6 +4928,7 @@
     "directiveFor": "Cyklus: {expression}",
     "directiveIf": "Ak: {expression}",
     "discoveryFailed": "Nepodarilo sa analyzovať vzor",
+    "documentCreatedIncomplete": "Dokument bol vytvorený, ale vyplnenie nie je úplné",
     "downloadAnyway": "Aj tak stiahnuť",
     "downloadDocx": "Stiahnuť DOCX",
     "downloadPdf": "Stiahnuť PDF",
@@ -5013,6 +5024,7 @@
     "saveFailed": "Nepodarilo sa uložiť vzor",
     "savedLookupFormats": "Uložené výstupné formáty",
     "searchTemplates": "Hľadať vzory…",
+    "structureErrorsInDocument": "Direktívy vzoru, ktoré nebolo možné použiť: {count}. Skontrolujte dokument.",
     "structureWarningParagraph": "Odsek {paragraph, number}",
     "structureWarnings": "{count, plural, one {# varovanie štruktúry} few {# varovania štruktúry} other {# varovaní štruktúry}}",
     "studio": {

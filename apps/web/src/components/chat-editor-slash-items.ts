@@ -6,9 +6,18 @@ import type {
   SlashItem,
   SlashSkillScope,
 } from "@/components/chat/prompt-slash-extension";
+import type { api } from "@/lib/api";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { getReservedChatCommands } from "@/lib/reserved-chat-commands";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
+
+type SkillListResponse = Awaited<ReturnType<typeof api.skills.get>>;
+
+/** Who wrote an installed skill's newest revision, as `skills.list` reports. */
+export type SkillLastEdit = Exclude<
+  NonNullable<Extract<SkillListResponse, { data: unknown }>["data"]>,
+  Response
+>["installed"][number]["lastEdit"];
 
 type SlashShortcutRow = Pick<
   ChatPrompt,
@@ -16,6 +25,8 @@ type SlashShortcutRow = Pick<
 > & {
   prompt: string;
 };
+
+type CommandShortcutRow = SlashShortcutRow & { lastEdit: SkillLastEdit };
 
 type SlashSkillRow = {
   body?: string | null;
@@ -39,6 +50,10 @@ type SlashSkillRow = {
 type SlashSkillPage = {
   builtIn: readonly SlashSkillRow[];
   installed: readonly SlashSkillRow[];
+};
+
+type CommandSkillPage = {
+  installed: readonly (SlashSkillRow & { lastEdit: SkillLastEdit })[];
 };
 
 /**
@@ -163,10 +178,10 @@ export const buildChatSlashItems = ({
 };
 
 export const commandShortcutRowsFromSkillPages = (
-  skillPages: readonly SlashSkillPage[] | undefined,
+  skillPages: readonly CommandSkillPage[] | undefined,
   unavailableSkillIds: UnavailableSkillIds,
-): SlashShortcutRow[] => {
-  const rows: SlashShortcutRow[] = [];
+): CommandShortcutRow[] => {
+  const rows: CommandShortcutRow[] = [];
   const installedRows = skillPages
     ? skillPages.flatMap((page) => page.installed)
     : [];
@@ -190,6 +205,7 @@ export const commandShortcutRowsFromSkillPages = (
       name: row.name,
       command: row.command,
       prompt: row.body,
+      lastEdit: row.lastEdit,
     });
   }
 

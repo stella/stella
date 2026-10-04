@@ -68,20 +68,25 @@ export const ruleCensusDiagnostics = ({
     config,
     `export default ${JSON.stringify({ categories: { correctness: "off" }, jsPlugins: [path.join(ROOT, ".oxlint-plugins", `${rule}.ts`)], rules: { [`${rule}/${rule}`]: ["error", { census: true }] } })};\n`,
   );
-  const result = Bun.spawnSync(
-    [
-      process.execPath,
-      "--bun",
-      path.join(ROOT, "node_modules/oxlint/bin/oxlint"),
-      "-c",
-      config,
-      "--format=json",
-      lintTarget,
-    ],
-    { cwd: directory, stdout: Bun.file(report), stderr: "pipe" },
-  );
-  const output = readFileSync(report, "utf-8");
-  rmSync(directory, { recursive: true, force: true });
+  const { result, output } = (() => {
+    try {
+      const spawned = Bun.spawnSync(
+        [
+          process.execPath,
+          "--bun",
+          path.join(ROOT, "node_modules/oxlint/bin/oxlint"),
+          "-c",
+          config,
+          "--format=json",
+          lintTarget,
+        ],
+        { cwd: directory, stdout: Bun.file(report), stderr: "pipe" },
+      );
+      return { result: spawned, output: readFileSync(report, "utf-8") };
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  })();
   if (result.exitCode !== 0 && result.exitCode !== 1) {
     panic(`${label} census failed: ${result.stderr.toString()}`);
   }

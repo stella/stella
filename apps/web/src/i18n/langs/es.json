@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Añadir serie de numeración",
       "advance": "Anticipo",
+      "allSellers": "Todos los vendedores",
       "archiveConfirm": "¿Archivar esta serie de numeración? Ya no estará disponible para nuevos documentos.",
       "creditNote": "Nota de crédito",
       "default": "Serie predeterminada",
@@ -562,6 +563,9 @@
       "preview": "Siguiente número",
       "previewAllocated": "Este número ya está asignado.",
       "previewHelp": "La vista previa utiliza la plantilla guardada y no reserva ningún número.",
+      "sellerProfile": "Perfil de vendedor",
+      "sellerUnavailable": "Vendedor archivado o no disponible",
+      "sellerUnavailableHelp": "Este vendedor está archivado o no disponible. Mantén la asignación o selecciona otro vendedor.",
       "setDefault": "Establecer como serie predeterminada",
       "title": "Series de numeración"
     },
@@ -1165,6 +1169,7 @@
       "noSkills": "Aún no hay habilidades",
       "pinnedMatters": "Asuntos fijados",
       "recentChats": "Chats recientes",
+      "skillEditedBy": "Editado por {name} · {time}",
       "skills": "Habilidades"
     },
     "loadEarlierMessages": "Cargar mensajes anteriores",
@@ -1296,6 +1301,9 @@
     },
     "tabToAsk": "→ para preguntar: \"{prompt}\"",
     "thinking": "Trabajando con contexto",
+    "threadFiles": {
+      "title": "Archivos de este chat"
+    },
     "tool": {
       "add_comment": "Añadiendo comentario",
       "apply-active-docx-edits": "Preparando cambios del documento",
@@ -2262,6 +2270,7 @@
       "deeplKeyRejected": "La clave de DeepL guardada fue rechazada. Sustitúyela en la configuración de la organización.",
       "deeplQuotaExceeded": "Se ha agotado la cuota de caracteres de DeepL de esta organización.",
       "disposableEmailNotAllowed": "No se permiten direcciones de correo temporales. Usa una dirección de correo permanente.",
+      "encryptedContent": "No se puede extraer el contenido de un documento cifrado. Quita la contraseña del archivo y vuelve a intentarlo.",
       "filePropertyTypeImmutable": "No se puede cambiar el tipo de una propiedad de archivo. Mantén el tipo actual; crea una propiedad personalizada para otros valores.",
       "forbidden": "No tienes permiso para hacer esto.",
       "internalServerError": "Algo salió mal. Inténtalo de nuevo.",
@@ -4827,6 +4836,7 @@
     "addPart": "Añadir parte",
     "addTag": "Añadir etiqueta",
     "aiAdaptHint": "La IA adapta esta redacción a cada lugar del documento donde aparece.",
+    "aiConditionsUndecided": "La IA no pudo decidir estas condiciones; sus secciones se rellenaron como si no se aplicaran: {list}",
     "aiDecidedConditions": "Decidido por la IA",
     "aiFieldsNotDrafted": "La IA no pudo redactar estos campos: {list}",
     "allTemplates": "Todas las plantillas",
@@ -4918,6 +4928,7 @@
     "directiveFor": "Bucle: {expression}",
     "directiveIf": "Si: {expression}",
     "discoveryFailed": "No se pudo analizar la plantilla",
+    "documentCreatedIncomplete": "Documento creado, pero el rellenado está incompleto",
     "downloadAnyway": "Descargar de todos modos",
     "downloadDocx": "Descargar DOCX",
     "downloadPdf": "Descargar PDF",
@@ -5013,6 +5024,7 @@
     "saveFailed": "No se pudo guardar la plantilla",
     "savedLookupFormats": "Formatos de salida guardados",
     "searchTemplates": "Buscar plantillas…",
+    "structureErrorsInDocument": "Directivas de la plantilla que no se pudieron aplicar: {count}. Revise el documento.",
     "structureWarningParagraph": "Párrafo {paragraph, number}",
     "structureWarnings": "{count, plural, one {# advertencia de estructura} other {# advertencias de estructura}}",
     "studio": {
