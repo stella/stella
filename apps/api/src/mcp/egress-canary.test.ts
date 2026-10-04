@@ -2,6 +2,8 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { Result } from "better-result";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { SEARCH_PAGINATION_COMPLETE } from "@stll/api-contract/search";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -259,11 +261,23 @@ const buildContext = ({
       // asks the public corpus, whose hits carry no tenant text at all, so
       // both corpora answer an empty page here.
       searchDecisionsHandler: asTestRaw(
-        mock(async () => await Promise.resolve({ hits: [], nextCursor: null })),
+        mock(
+          async () =>
+            await Promise.resolve({
+              hits: [],
+              nextCursor: null,
+              paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+            }),
+        ),
       ),
       searchLegislationHandler: asTestRaw(
         mock(
-          async () => await Promise.resolve({ items: [], nextCursor: null }),
+          async () =>
+            await Promise.resolve({
+              items: [],
+              nextCursor: null,
+              paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+            }),
         ),
       ),
       readWorkspaceHandler: readWorkspaceHandlerMock,
@@ -373,6 +387,54 @@ const canaryTestsFor = <const TToolName extends AnonymizingMcpToolName>(
 };
 
 describe("MCP anonymization canary corpus", () => {
+  test("list_matters returns visible contacts with an overflow flag", async () => {
+    readWorkspaceHandlerMock.mockResolvedValue({
+      id: "00000000-0000-4000-8000-0000000a0001",
+      name: "Fixture matter",
+      reference: "REF-1",
+      status: "active",
+      client: null,
+    });
+    readOverviewHandlerMock.mockResolvedValue({
+      entityCount: 0,
+      documentCount: 0,
+      taskCount: 0,
+      recentEntities: [],
+    });
+    readWorkspaceMembersHandlerMock.mockResolvedValue([]);
+    readWorkspaceContactsHandlerMock.mockResolvedValue(
+      Result.ok({
+        contacts: [
+          {
+            id: "wc_1",
+            role: "witness",
+            contact: {
+              id: "00000000-0000-4000-8000-0000000c0001",
+              type: "person",
+              displayName: "Visible party",
+            },
+          },
+        ],
+        overflow: true,
+      }),
+    );
+
+    const result = await STELLA_TOOL_HANDLERS.list_matters({
+      args: { matter_id: "00000000-0000-4000-8000-0000000a0001" },
+      context: buildContext(),
+    });
+    expect(result).toMatchObject({
+      egress: "structured",
+      payload: {
+        matter: { name: "Fixture matter" },
+        contacts: [
+          { workspaceContactId: "wc_1", displayName: "Visible party" },
+        ],
+        contactsOverflow: true,
+      },
+    });
+  });
+
   test("every anonymize-mode tool in the registry has a canary fixture", () => {
     const anonymizeToolNames = ANONYMIZED_MCP_TOOL_DEFINITIONS.filter(
       (tool) => tool.anonymized.exposure === "anonymize",
@@ -560,17 +622,22 @@ describe("MCP anonymization canary corpus", () => {
           },
         ],
       });
-      readWorkspaceContactsHandlerMock.mockResolvedValue([
-        {
-          id: "wc_1",
-          role: "client",
-          contact: {
-            id: "00000000-0000-4000-8000-0000000c0001",
-            type: "person",
-            displayName: contactDisplayNameSeed,
-          },
-        },
-      ]);
+      readWorkspaceContactsHandlerMock.mockResolvedValue(
+        Result.ok({
+          contacts: [
+            {
+              id: "wc_1",
+              role: "client",
+              contact: {
+                id: "00000000-0000-4000-8000-0000000c0001",
+                type: "person",
+                displayName: contactDisplayNameSeed,
+              },
+            },
+          ],
+          overflow: false,
+        }),
+      );
       readWorkspaceMembersHandlerMock.mockResolvedValue([
         {
           id: "wm_1",
@@ -1663,6 +1730,7 @@ describe("MCP anonymization canary corpus", () => {
       const variantBodySeed = mkSeed(tool, 9);
       const metadataSeed = mkSeed(tool, 10);
       const tx = {
+        $count: async () => 0,
         query: {
           clauses: {
             findFirst: async () => ({
@@ -1758,6 +1826,7 @@ describe("MCP anonymization canary corpus", () => {
   test("list_clauses fails closed (no leak) when a clause body has an unrecognized format", async () => {
     const titleSeed = mkSeed("list_clauses_fail_closed", 0);
     const tx = {
+      $count: async () => 0,
       query: {
         clauses: {
           findFirst: async () => ({

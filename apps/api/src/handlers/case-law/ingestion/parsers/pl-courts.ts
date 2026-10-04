@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
 /**
  * Polish Courts (SAOS) parser.
  *
@@ -29,6 +30,8 @@ import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
 
 import {
+  isExcludedHtmlTag,
+  ownTableRows,
   appendTextInline,
   inlinesToPlainText,
   walkInlines as walkInlinesShared,
@@ -356,7 +359,7 @@ const parseTableElement = (
   });
   const rows: TableCell[][] = [];
 
-  node.find("tr").each((_, row) => {
+  ownTableRows(node).each((_, row) => {
     const cells: TableCell[] = [];
     $(row)
       .children("th, td")
@@ -388,7 +391,7 @@ const parseChildren = (
 ): void => {
   root.contents().each((_, node) => {
     if (isText(node)) {
-      const text = normalizeWhitespace($(node).text());
+      const text = normalizeWhitespace(node.data);
       if (!text) {
         return;
       }
@@ -410,7 +413,7 @@ const parseChildren = (
     const tag = node.tagName.toLowerCase();
 
     // isTag() also matches <script>/<style>; never emit their raw text.
-    if (tag === "script" || tag === "style") {
+    if (isExcludedHtmlTag(tag)) {
       return;
     }
 

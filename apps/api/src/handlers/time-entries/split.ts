@@ -3,8 +3,9 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
+import { timeEntryRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { apportionSplitDurations } from "@/api/handlers/time-entries/split-durations";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import {
@@ -12,6 +13,7 @@ import {
   readTimePolicy,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
+import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -41,6 +43,8 @@ const splitEntry = createSafeHandler(
       "apportioned and re-rounded to the billing increment. A billed or " +
       "written-off entry, and a duration too short to divide, are refused.",
     permissions: { timeEntry: ["approve"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: timeEntryRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",
@@ -351,6 +355,7 @@ const splitEntry = createSafeHandler(
         ];
 
         await recordAuditEvent(tx, events);
+        await recordBillingCapCrossings(tx, { workspaceId, recordAuditEvent });
 
         return { ok: true as const };
       }),

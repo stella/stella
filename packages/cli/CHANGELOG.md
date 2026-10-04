@@ -1,5 +1,77 @@
 # @stll/cli
 
+## 3.6.2
+
+### Patch Changes
+
+- [#4605](https://github.com/stella/stella/pull/4605) [`c9125de`](https://github.com/stella/stella/commit/c9125de1a278d7fca5934b60f09718eb17a761f8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Clarify file column update requirements and preserve playbook refusal codes and recovery hints.
+
+## 3.6.1
+
+### Patch Changes
+
+- [#4716](https://github.com/stella/stella/pull/4716) [`b64acc4`](https://github.com/stella/stella/commit/b64acc48136876e2a638c8994d6f1664875d3fd7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Clarify matter contact capacity requirements.
+
+- [#4528](https://github.com/stella/stella/pull/4528) [`8e5a77d`](https://github.com/stella/stella/commit/8e5a77d0c78131dd1551b8be3480901e14488aa1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe edit attribution returned by the skill listing command.
+
+- [#4732](https://github.com/stella/stella/pull/4732) [`2e3ed99`](https://github.com/stella/stella/commit/2e3ed993016a296132301badca5717596b7f32a9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Template fills report undecided AI conditions, and the completion gate grades every fill diagnostic.
+
+## 3.6.0
+
+### Minor Changes
+
+- [#4630](https://github.com/stella/stella/pull/4630) [`a288e01`](https://github.com/stella/stella/commit/a288e01207fc95f92588ce94b17639d7931351e2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Sign in with the client document the server publishes for the CLI when the server supports it.
+
+## 3.5.4
+
+### Patch Changes
+
+- [#4608](https://github.com/stella/stella/pull/4608) [`43f98b6`](https://github.com/stella/stella/commit/43f98b6ae327251066763a6593ca05e833be3968) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update linked clause discovery and authoring guidance in the capability catalog.
+
+## 3.5.3
+
+### Patch Changes
+
+- [#4600](https://github.com/stella/stella/pull/4600) [`2e1ebc2`](https://github.com/stella/stella/commit/2e1ebc2c4bc5c91baf821f904242173f0801bd63) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Accept grouped case-law search continuation cursors.
+
+## 3.5.2
+
+### Patch Changes
+
+- [#4454](https://github.com/stella/stella/pull/4454) [`5518250`](https://github.com/stella/stella/commit/55182503902d5ada7d4f7e5e514a7f2ce78c3de1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Accept corpus search cursors that carry the ranking mode.
+
+## 3.5.1
+
+### Patch Changes
+
+- [#4489](https://github.com/stella/stella/pull/4489) [`a2690f4`](https://github.com/stella/stella/commit/a2690f4225ce99d3f661e333e1db9fc8e68f300f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Report strict and relaxed legislation matches and preserve search phases in continuation cursors.
+
+## 3.5.0
+
+### Minor Changes
+
+- [#4514](https://github.com/stella/stella/pull/4514) [`ab4d98e`](https://github.com/stella/stella/commit/ab4d98ed5959581bcda956b4163fb9125a4dbd05) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add matter billing arrangement capabilities and preserve exact minor-unit arithmetic.
+
+- [#4566](https://github.com/stella/stella/pull/4566) [`a41c647`](https://github.com/stella/stella/commit/a41c64773d8740ab7c0d1832f3b9ef2b32037e6e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose optional clause body preconditions when saving clauses.
+
+### Patch Changes
+
+- [#4381](https://github.com/stella/stella/pull/4381) [`108bebb`](https://github.com/stella/stella/commit/108bebb36e4381ff1591ddbde3dfe3a22d57559d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Publish regenerated capability contracts.
+
+- [#4580](https://github.com/stella/stella/pull/4580) [`69b3fd6`](https://github.com/stella/stella/commit/69b3fd64c7427b962f38343710954fcf28f4a8f5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep every key of cached registry schemas and expanded input schemas as an own property, including `__proto__`.
+
+- [#4281](https://github.com/stella/stella/pull/4281) [`4b0c11e`](https://github.com/stella/stella/commit/4b0c11e635c46ab1c51bb7cb7ef1ea5cc2a2c24c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Support the correspondence view layout.
+
+- [#4381](https://github.com/stella/stella/pull/4381) [`108bebb`](https://github.com/stella/stella/commit/108bebb36e4381ff1591ddbde3dfe3a22d57559d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Ship the capability contract as per-capability JSON files.
+
+## 3.4.0
+
+### Minor Changes
+
+- [#4146](https://github.com/stella/stella/pull/4146) [`1a16c0c`](https://github.com/stella/stella/commit/1a16c0cef6bba7a8dc281ad18851b393f8153589) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Screen counterparties against the sanctions lists.
+
+- [#4490](https://github.com/stella/stella/pull/4490) [`032e379`](https://github.com/stella/stella/commit/032e379de50656a9ac259b0225414855630fa8c6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add daily time target controls and remaining minutes to the personal day view.
+
 ## 3.3.4
 
 ### Patch Changes

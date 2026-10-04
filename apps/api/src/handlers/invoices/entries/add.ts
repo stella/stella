@@ -21,10 +21,12 @@ import {
   recalculateInvoiceTotals,
   timeEntryLineDraft,
 } from "@/api/handlers/invoices/invoice-lines";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -132,6 +134,7 @@ const validateAttachmentInputs = async (
             status: true,
             currency: true,
             documentType: true,
+            billingMode: true,
           },
         }),
       ),
@@ -150,6 +153,10 @@ const validateAttachmentInputs = async (
           message: "Entries can only be added to draft invoices",
         }),
       );
+    }
+
+    if (invoice.billingMode === "flat_fee") {
+      return Result.err(flatFeeInvoiceRefusal());
     }
 
     if (invoice.documentType === "credit_note") {
@@ -296,6 +303,8 @@ const addEntries = createSafeHandler(
       "fails with a retryable conflict rather than attaching part of the " +
       "set.",
     permissions: { invoice: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: invoiceRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",
@@ -351,6 +360,9 @@ const addEntries = createSafeHandler(
         return Result.err(invoiceResult.error);
       }
       const invoiceCheck = invoiceResult.value;
+      if (invoiceCheck.billingMode === "flat_fee") {
+        return Result.err(flatFeeInvoiceRefusal());
+      }
       if (invoiceCheck.documentType === "credit_note") {
         return Result.err(
           new HandlerError({
@@ -375,6 +387,7 @@ const addEntries = createSafeHandler(
         rateAtEntry: CentsAmount;
         narrative: string;
         invoiceNarrative: string | null;
+        noCharge: boolean;
       }[] = [];
       if (timeEntryIds && timeEntryIds.length > 0) {
         attachedTimeEntries = await tx
@@ -404,6 +417,7 @@ const addEntries = createSafeHandler(
             rateAtEntry: timeEntries.rateAtEntry,
             narrative: timeEntries.narrative,
             invoiceNarrative: timeEntries.invoiceNarrative,
+            noCharge: timeEntries.noCharge,
           });
 
         if (attachedTimeEntries.length !== timeEntryIds.length) {

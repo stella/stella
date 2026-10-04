@@ -14,7 +14,11 @@ pre-commit:
       run: bun run secrets:check:staged
     lint:
       glob: "**/*.{ts,tsx,js,jsx}"
-      run: bun --bun oxlint -c oxlint.config.ts --threads=2 --no-error-on-unmatched-pattern --fix {staged_files}
+      # Lint autofixes never reach a commit unreviewed: the hook fails and
+      # prints them instead (scripts/precommit-lint.ts). stage_fixed makes
+      # lefthook hide unstaged changes, so lint checks the staged text; the
+      # script restores every file, so it never stages a fix.
+      run: bun scripts/precommit-lint.ts {staged_files}
       stage_fixed: true
     format:
       glob: "**/*.{ts,tsx,js,jsx,json,css}"

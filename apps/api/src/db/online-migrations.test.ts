@@ -1,15 +1,84 @@
+import { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
+
+import { defaultConfig } from "@stll/db-load-gate/health";
 
 import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-state-backfill/backfill";
 
+import { readOnlineIndexConfig } from "../env-online-index";
 import { BackfillHeldError } from "./backfill-runtime";
+import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
+import { createOnlineIndexHold } from "./online-index-gate";
+import type { OnlineIndexGateOptions } from "./online-index-gate";
 import {
   assertOnlineMigrationsApplied,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
   ONLINE_MIGRATION_REPAIRS,
-  runOnlineMigrations,
+  runOnlineMigrations as runOnlineMigrationsWithGate,
+  type OnlineRepairOptions,
 } from "./online-migrations";
+import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
+
+const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
+const healthyIndexGate = {
+  config: {
+    ...readOnlineIndexConfig({}),
+    health: { ...defaultConfig, busyWindows: [] },
+  },
+  clock: testClock,
+  ebs: {
+    type: "reader",
+    read: async () => ({
+      indicator: "ebs_balance",
+      kind: "normal",
+      value: 100,
+      threshold: 70,
+      observedAt: new Date(testClock()).toISOString(),
+      reason: "Injected balance",
+    }),
+  },
+  log: () => undefined,
+} satisfies OnlineIndexGateOptions;
+const heldIndexGate = {
+  ...healthyIndexGate,
+  ebs: {
+    type: "reader",
+    read: async () => ({
+      indicator: "ebs_balance",
+      kind: "unknown",
+      value: null,
+      threshold: 70,
+      observedAt: null,
+      reason: "Injected unavailable metric",
+    }),
+  },
+} satisfies OnlineIndexGateOptions;
+const runOnlineMigrations = async (
+  pool: Parameters<typeof runOnlineMigrationsWithGate>[0],
+  options: Partial<OnlineRepairOptions> = {},
+) =>
+  await runOnlineMigrationsWithGate(pool, {
+    indexGate: healthyIndexGate,
+    ...options,
+    reserveObserver: async () => ({
+      execute: async () => undefined,
+      query: async (query) => {
+        if (query.includes("pg_backend_pid() AS pid")) {
+          return [{ pid: 2, database: "test" }];
+        }
+        if (query.includes("ageMs")) {
+          return [
+            { ageMs: 0, observedAt: new Date(testClock()).toISOString() },
+          ];
+        }
+        return [
+          { active: false, observedAt: new Date(testClock()).toISOString() },
+        ];
+      },
+      release: () => undefined,
+    }),
+  });
 
 const CREATE_INDEX_FRAGMENT = "CREATE INDEX CONCURRENTLY";
 const DROP_INDEX_FRAGMENT = "DROP INDEX CONCURRENTLY";
@@ -20,6 +89,9 @@ const CHAT_RUN_INDEX = "chat_turns_org_run_id_uidx";
 const SOURCE_DOCUMENT_INDEX = "case_law_decisions_source_document_idx";
 const SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_null_idx";
 const LEGACY_SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_idx";
+const DOCUMENT_DATE_INDEX = "case_law_decisions_document_outstanding_date_idx";
+const LEGACY_DOCUMENT_DATE_INDEX =
+  "case_law_decisions_document_pending_date_idx";
 const ACCOUNT_INDEX = "account_provider_account_id_uidx";
 const LEGACY_ACCOUNT_INDEX = "account_issuer_account_id_uidx";
 const FILTER_INDEX_CUTOVER = ONLINE_MIGRATION_INDEX_CUTOVERS.at(0);
@@ -33,6 +105,11 @@ const VALIDATE_CONSTRAINT_FRAGMENT = `VALIDATE CONSTRAINT "${DECISION_DATE_CONST
 const DELETE_RECEIPT_CONSTRAINT =
   "corpus_index_projection_intents_delete_receipt_paired";
 const VALIDATE_DELETE_RECEIPT_FRAGMENT = `VALIDATE CONSTRAINT "${DELETE_RECEIPT_CONSTRAINT}"`;
+const CLEANUP_STALL_CONSTRAINTS = [
+  "corpus_index_projection_intents_status_values",
+  "corpus_index_projection_intents_status_shape",
+  "corpus_index_projection_intents_delete_reissues_nonnegative",
+] as const;
 
 describe("online migrations", () => {
   /**
@@ -55,6 +132,31 @@ describe("online migrations", () => {
     ).toEqual([]);
   });
 
+  test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
+    "validates monitoring constraint $name once and rejects incomplete startup",
+    async ({ name }) => {
+      const harness = createHarness({ unvalidatedConstraints: [name] });
+      const rejection = await assertOnlineMigrationsApplied(harness.pool).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(rejection).toMatchObject({
+        message: `Online repair ${name} is not complete: constraint ${name} is not validated`,
+      });
+      const beforeRepair = harness.statements.length;
+      await runOnlineMigrations(harness.pool);
+      await assertOnlineMigrationsApplied(harness.pool);
+      await runOnlineMigrations(harness.pool);
+      const validations = harness.statements
+        .slice(beforeRepair)
+        .filter((statement) =>
+          statement.includes(`VALIDATE CONSTRAINT "${name}"`),
+        );
+      expect(validations).toHaveLength(1);
+      expect(harness.released()).toBe(true);
+    },
+  );
+
   test("accepts an already valid index without rebuilding it", async () => {
     const harness = createHarness();
 
@@ -69,7 +171,7 @@ describe("online migrations", () => {
 
   test("creates a missing index online and verifies completion", async () => {
     const harness = createHarness({
-      indexStates: { [REPORT_EXPORT_INDEX]: [undefined, true] },
+      missingIndexes: [REPORT_EXPORT_INDEX],
     });
 
     await runOnlineMigrations(harness.pool);
@@ -80,9 +182,179 @@ describe("online migrations", () => {
     expect(harness.released()).toBe(true);
   });
 
+  /**
+   * The migrator runs this phase holding the exclusive corpus schema lane, so
+   * a gate that sleeps until health returns pauses every corpus writer for
+   * that long. A held build ends the phase instead, and nothing after it runs:
+   * later steps may depend on the index it would have built.
+   */
+  test("defers at an index the gate holds, without waiting or running a later step", async () => {
+    const heldIndexAt = ONLINE_MIGRATION_INDEXES.findIndex(
+      ({ name }) => name === REPORT_EXPORT_INDEX,
+    );
+    const laterIndexes = ONLINE_MIGRATION_INDEXES.slice(heldIndexAt + 1);
+    expect(laterIndexes.length).toBeGreaterThan(0);
+    const harness = createHarness({
+      indexStates: {
+        [REPORT_EXPORT_INDEX]: [undefined, undefined, undefined, true],
+      },
+    });
+    const waits: number[] = [];
+
+    const held = await runOnlineMigrations(harness.pool, {
+      indexGate: {
+        ...healthyIndexGate,
+        ebs: {
+          type: "reader",
+          read: async () => ({
+            indicator: "ebs_balance",
+            kind: "unknown",
+            value: null,
+            threshold: 70,
+            observedAt: null,
+            reason: "Injected unavailable metric",
+          }),
+        },
+        wait: async (milliseconds) => {
+          waits.push(milliseconds);
+        },
+      },
+    });
+
+    expect(held).toEqual({
+      type: "deferred",
+      index: REPORT_EXPORT_INDEX,
+      retryAfterMs: healthyIndexGate.config.retryMs,
+    });
+    expect(waits).toEqual([]);
+    expect(indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT)).toBe(
+      -1,
+    );
+    for (const { name } of laterIndexes) {
+      expect(indexOfStatement(harness.statements, `"${name}"`), name).toBe(-1);
+    }
+    expect(indexOfStatement(harness.statements, FILTER_INDEX)).toBe(-1);
+    expect(
+      indexOfStatement(harness.statements, "DROP INDEX CONCURRENTLY IF EXISTS"),
+    ).toBe(-1);
+    expect(indexOfStatement(harness.statements, "pg_constraint")).toBe(-1);
+    expect(
+      indexOfStatement(
+        harness.statements,
+        "pg_advisory_unlock(hashtext('stella-online-migrations'))",
+      ),
+    ).toBeGreaterThan(-1);
+    expect(harness.released()).toBe(true);
+
+    // The next run resumes at the held index once the gate admits it, and
+    // only then reaches the steps after it.
+    const resumedAt = harness.statements.length;
+    expect(await runOnlineMigrations(harness.pool)).toEqual({
+      type: "complete",
+    });
+    const resumed = harness.statements.slice(resumedAt);
+    expect(
+      indexOfStatement(
+        resumed,
+        `${CREATE_INDEX_FRAGMENT} "${REPORT_EXPORT_INDEX}"`,
+      ),
+    ).toBeGreaterThan(-1);
+    expect(indexOfStatement(resumed, "pg_constraint")).toBeGreaterThan(-1);
+  });
+
+  for (const { final, staged } of ONLINE_MIGRATION_INDEX_CUTOVERS) {
+    for (const stage of ["missing", "invalid"] as const) {
+      test(`a held ${stage} stage preserves ${final.name} and defers every later phase`, async () => {
+        const harness = createHarness({
+          indexStates: {
+            [final.name]: [
+              {
+                definitionBody:
+                  "ON public.case_law_decisions USING btree (updated_at, id)",
+                isValid: true,
+              },
+            ],
+            [staged.name]: [stage === "missing" ? undefined : false],
+          },
+        });
+        const waits: number[] = [];
+        expect(
+          await runOnlineMigrations(harness.pool, {
+            indexGate: {
+              ...heldIndexGate,
+              wait: async (milliseconds) => {
+                waits.push(milliseconds);
+              },
+            },
+          }),
+        ).toEqual({
+          type: "deferred",
+          index: staged.name,
+          retryAfterMs: heldIndexGate.config.retryMs,
+        });
+        expect(waits).toEqual([]);
+        for (const fragment of [
+          CREATE_INDEX_FRAGMENT,
+          REINDEX_FRAGMENT,
+          DROP_INDEX_FRAGMENT,
+          "ALTER INDEX",
+          "pg_constraint",
+          "database_backfill_states",
+        ]) {
+          expect(indexOfStatement(harness.statements, fragment), fragment).toBe(
+            -1,
+          );
+        }
+        expect(harness.released()).toBe(true);
+      });
+    }
+  }
+
+  test("online migration retries share the hold through the actual index gate and alert once", async () => {
+    const harness = createHarness({
+      indexStates: { [REPORT_EXPORT_INDEX]: [undefined] },
+    });
+    const hold = createOnlineIndexHold();
+    let now = testClock();
+    const records: unknown[] = [];
+    const indexGate = {
+      ...heldIndexGate,
+      hold,
+      clock: () => now,
+      log: (record: unknown) => {
+        records.push(record);
+      },
+    };
+    const run = async () => {
+      expect(
+        await runOnlineMigrations(harness.pool, { indexGate }),
+      ).toMatchObject({
+        type: "deferred",
+        index: REPORT_EXPORT_INDEX,
+      });
+    };
+    const alerts = () =>
+      records.filter(
+        (record) =>
+          typeof record === "object" &&
+          record !== null &&
+          "event" in record &&
+          record.event === "database_load_gate_held_too_long",
+      );
+    await run();
+    expect(hold.current).toEqual({ type: "held", since: now });
+    expect(alerts()).toHaveLength(0);
+    now += indexGate.config.health.maxHeldMs + 1;
+    await run();
+    expect(alerts()).toHaveLength(1);
+    await run();
+    expect(alerts()).toHaveLength(1);
+    expect(hold.current).toEqual({ type: "alerted", since: testClock() });
+  });
+
   test("concurrently repairs an interrupted invalid build", async () => {
     const harness = createHarness({
-      indexStates: { [CREDENTIAL_INDEX]: [false, true] },
+      indexStates: { [CREDENTIAL_INDEX]: [false, false, true] },
     });
 
     await runOnlineMigrations(harness.pool);
@@ -96,29 +368,67 @@ describe("online migrations", () => {
     expect(harness.released()).toBe(true);
   });
 
+  /**
+   * A concurrent build interrupted after PostgreSQL marked the index ready
+   * leaves it INVALID but maintained, and a unique one keeps rejecting
+   * duplicates. Dropping it before its replacement is valid would let a
+   * duplicate commit, after which the rebuild fails for good.
+   */
+  test("never drops a ready invalid index it repairs, so uniqueness stays enforced", async () => {
+    const readyInvalid = { isReady: true, isValid: false } as const;
+    expect(ONLINE_MIGRATION_INDEXES.some(({ isUnique }) => isUnique)).toBe(
+      true,
+    );
+    for (const { name } of ONLINE_MIGRATION_INDEXES) {
+      const harness = createHarness({
+        indexStates: { [name]: [readyInvalid, readyInvalid, true] },
+      });
+
+      await runOnlineMigrations(harness.pool);
+
+      expect(
+        indexOfStatement(
+          harness.statements,
+          `${DROP_INDEX_FRAGMENT} public."${name}"`,
+        ),
+        name,
+      ).toBe(-1);
+      expect(
+        indexOfStatement(
+          harness.statements,
+          `${REINDEX_FRAGMENT} public."${name}"`,
+        ),
+        name,
+      ).toBeGreaterThan(-1);
+      expect(
+        indexOfStatement(harness.statements, `INDEX CONCURRENTLY "${name}"`),
+        name,
+      ).toBe(-1);
+    }
+  });
+
   test("drops an interrupted reindex artifact before retrying", async () => {
     const artifactName = `${CREDENTIAL_INDEX}_ccnew`;
     const harness = createHarness({
       artifacts: {
         [CREDENTIAL_INDEX]: [{ isValid: false, name: artifactName }],
       },
-      indexStates: { [CREDENTIAL_INDEX]: [false, true] },
+      indexStates: { [CREDENTIAL_INDEX]: [false, false, true] },
     });
 
     await runOnlineMigrations(harness.pool);
 
-    expect(
-      indexOfStatement(
-        harness.statements,
-        `${DROP_INDEX_FRAGMENT} public."${artifactName}"`,
-      ),
-    ).toBeGreaterThan(-1);
+    const drop = indexOfStatement(
+      harness.statements,
+      `${DROP_INDEX_FRAGMENT} public."${artifactName}"`,
+    );
+    expect(drop).toBeGreaterThan(-1);
     expect(
       indexOfStatement(
         harness.statements,
         `${REINDEX_FRAGMENT} public."${CREDENTIAL_INDEX}"`,
       ),
-    ).toBeGreaterThan(-1);
+    ).toBeGreaterThan(drop);
   });
 
   test("repairs an invalid chat run index after an interrupted build", async () => {
@@ -130,7 +440,7 @@ describe("online migrations", () => {
       artifacts: {
         [CHAT_RUN_INDEX]: [{ isValid: false, name: artifactName }],
       },
-      indexStates: { [CHAT_RUN_INDEX]: [false, true] },
+      indexStates: { [CHAT_RUN_INDEX]: [false, false, true] },
     });
 
     await runOnlineMigrations(harness.pool);
@@ -203,6 +513,46 @@ describe("online migrations", () => {
     expect(dropOffset).toBeGreaterThan(
       indexOfStatement(harness.statements, SOURCE_CASE_INDEX),
     );
+  });
+
+  test("retires the broad document index only after its exact replacement validates", async () => {
+    const harness = createHarness({
+      missingIndexes: [DOCUMENT_DATE_INDEX],
+    });
+
+    await runOnlineMigrations(harness.pool);
+
+    const createOffset = indexOfStatement(
+      harness.statements,
+      `${CREATE_INDEX_FRAGMENT} "${DOCUMENT_DATE_INDEX}"`,
+    );
+    const dropOffset = indexOfStatement(
+      harness.statements,
+      `DROP INDEX CONCURRENTLY IF EXISTS public."${LEGACY_DOCUMENT_DATE_INDEX}"`,
+    );
+    expect(createOffset).toBeGreaterThan(-1);
+    expect(dropOffset).toBeGreaterThan(createOffset);
+  });
+
+  test("preserves the broad document index when its replacement loses validity", async () => {
+    const harness = createHarness({
+      indexStates: { [DOCUMENT_DATE_INDEX]: [true, false] },
+    });
+
+    const rejection: unknown = await runOnlineMigrations(harness.pool).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toMatchObject({
+      message: `Required migration index ${DOCUMENT_DATE_INDEX} is not ready`,
+    });
+    expect(indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT)).toBe(
+      -1,
+    );
+    expect(indexOfStatement(harness.statements, REINDEX_FRAGMENT)).toBe(-1);
+    expect(
+      indexOfStatement(harness.statements, LEGACY_DOCUMENT_DATE_INDEX),
+    ).toBe(-1);
   });
 
   test("retires the account issuer index only after its replacement validates", async () => {
@@ -367,7 +717,7 @@ describe("online migrations", () => {
           },
           true,
         ],
-        [FILTER_INDEX_REPLACEMENT]: [false, true],
+        [FILTER_INDEX_REPLACEMENT]: [false, false, true],
       },
     });
 
@@ -427,6 +777,54 @@ describe("online migrations", () => {
     expect(harness.released()).toBe(true);
   });
 
+  test("validates the cleanup-stall checks without walking the intents", async () => {
+    const harness = createHarness({
+      unvalidatedConstraints: CLEANUP_STALL_CONSTRAINTS,
+    });
+
+    await runOnlineMigrations(harness.pool);
+    await assertOnlineMigrationsApplied(harness.pool);
+
+    for (const constraint of CLEANUP_STALL_CONSTRAINTS) {
+      expect(
+        indexOfStatement(
+          harness.statements,
+          `VALIDATE CONSTRAINT "${constraint}"`,
+        ),
+      ).toBeGreaterThan(-1);
+    }
+    expect(
+      indexOfStatement(
+        harness.statements,
+        'UPDATE public."corpus_index_projection_intents"',
+      ),
+    ).toBe(-1);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("startup validation rejects an unvalidated cleanup-stall check without repairing", async () => {
+    const [constraint] = CLEANUP_STALL_CONSTRAINTS;
+    const harness = createHarness({ unvalidatedConstraints: [constraint] });
+
+    const rejection: unknown = await assertOnlineMigrationsApplied(
+      harness.pool,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({
+      message: `Online repair corpus-projection-cleanup-stall is not complete: constraint ${constraint} is not validated`,
+    });
+    expect(
+      indexOfStatement(
+        harness.statements,
+        `VALIDATE CONSTRAINT "${constraint}"`,
+      ),
+    ).toBe(-1);
+    expect(harness.released()).toBe(true);
+  });
+
   test("defers the delete-receipt walk when health cannot be read", async () => {
     const harness = createHarness({
       unvalidatedConstraints: [DELETE_RECEIPT_CONSTRAINT],
@@ -463,6 +861,52 @@ describe("online migrations", () => {
         harness.statements,
         'UPDATE public."corpus_index_projection_intents"',
       ),
+    ).toBe(-1);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("a migrate-phase batch statement timeout stays pending and deployment proceeds", async () => {
+    const harness = createHarness({
+      unvalidatedConstraints: [DECISION_DATE_CONSTRAINT],
+      timeoutRepairBatch: true,
+    });
+    const repair = createDecisionDateCeilingRepair({
+      readVerdict: async () => ({ kind: "normal", signals: [] }),
+      clock: () => 0,
+      log: () => undefined,
+    });
+    const pending: unknown[] = [];
+    await runOnlineMigrations(harness.pool, {
+      repairs: [repair],
+      log: (record) => {
+        pending.push(record);
+      },
+    });
+    await assertOnlineMigrationsApplied(harness.pool, {
+      repairs: [repair],
+      log: (record) => {
+        pending.push(record);
+      },
+    });
+    expect(pending).toHaveLength(2);
+    expect(pending).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "online_repair_pending",
+          repair: repair.name,
+          completion: expect.objectContaining({
+            type: "pending",
+            holdUntil: null,
+            heldSince: null,
+          }),
+        }),
+      ]),
+    );
+    expect(
+      indexOfStatement(harness.statements, "corrupt AS MATERIALIZED"),
+    ).toBeGreaterThan(-1);
+    expect(
+      indexOfStatement(harness.statements, VALIDATE_CONSTRAINT_FRAGMENT),
     ).toBe(-1);
     expect(harness.released()).toBe(true);
   });
@@ -624,7 +1068,8 @@ describe("online migrations", () => {
 type IndexState =
   | boolean
   | undefined
-  | { definitionBody: string; isValid: boolean };
+  | { definitionBody: string; isValid: boolean }
+  | { isReady: boolean; isValid: boolean };
 type IndexStates = Readonly<Record<string, IndexState[]>>;
 type Artifact = { isValid: boolean; name: string };
 type Artifacts = Readonly<Record<string, Artifact[]>>;
@@ -637,7 +1082,10 @@ type HarnessOptions = {
    */
   unvalidatedConstraints?: readonly string[];
   emptyRepairTables?: boolean;
+  timeoutRepairBatch?: boolean;
   indexStates?: IndexStates;
+  /** Missing until their CREATE statement completes, independent of reads. */
+  missingIndexes?: readonly string[];
 };
 
 const POSTGRES_IDENTIFIER_MAX_LENGTH = 63;
@@ -649,7 +1097,9 @@ const createHarness = ({
   artifacts = {},
   unvalidatedConstraints = [],
   indexStates = {},
+  missingIndexes = [],
   emptyRepairTables = false,
+  timeoutRepairBatch = false,
 }: HarnessOptions = {}) => {
   const statements: string[] = [];
   const backfillStates = new Map<
@@ -658,16 +1108,18 @@ const createHarness = ({
   >();
   const pendingConstraints = new Set(unvalidatedConstraints);
   const indexOffsets = new Map<string, number>();
+  const pendingIndexes = new Set(missingIndexes);
   const remainingArtifacts = new Map(
     Object.entries(artifacts).map(([name, values]) => [name, [...values]]),
   );
   let released = false;
-  const managedIndexes = [
+  const onlineIndexes = [
     ...ONLINE_MIGRATION_INDEXES,
-    ...ONLINE_MIGRATION_INDEX_CUTOVERS.flatMap(({ final, staged }) => [
-      final,
-      staged,
-    ]),
+    ...ONLINE_MIGRATION_INDEX_CUTOVERS.map(({ staged }) => staged),
+  ];
+  const managedIndexes = [
+    ...onlineIndexes,
+    ...ONLINE_MIGRATION_INDEX_CUTOVERS.map(({ final }) => final),
   ];
 
   return {
@@ -675,6 +1127,11 @@ const createHarness = ({
       reserve: async () => ({
         execute: async (query: string) => {
           statements.push(query);
+          for (const { name, createSql } of onlineIndexes) {
+            if (query === createSql) {
+              pendingIndexes.delete(name);
+            }
+          }
           for (const constraint of pendingConstraints) {
             if (query.includes(`VALIDATE CONSTRAINT "${constraint}"`)) {
               pendingConstraints.delete(constraint);
@@ -695,6 +1152,17 @@ const createHarness = ({
         },
         query: async (query: string, params: readonly unknown[] = []) => {
           statements.push(`${query}\n-- params ${JSON.stringify(params)}`);
+          if (query.includes("pg_backend_pid() AS pid")) {
+            return [{ pid: 1, database: "test" }];
+          }
+          if (
+            query.includes(" AS acquired") ||
+            query.includes("pg_try_advisory_lock") ||
+            query.includes("pg_advisory_unlock") ||
+            query.includes("pg_locks")
+          ) {
+            return [{ acquired: true }];
+          }
           if (query.startsWith("SELECT set_config(")) {
             return [];
           }
@@ -703,13 +1171,16 @@ const createHarness = ({
           }
           if (query.includes("database_backfill_states")) {
             if (query.startsWith("INSERT")) {
-              const serialized = params.at(1);
+              const serialized = params.at(2);
               if (typeof serialized !== "string") {
                 throw new TypeError("Expected checkpoint JSON");
               }
               const batch: unknown = JSON.parse(serialized);
               if (!backfillStates.has(params.at(0))) {
-                backfillStates.set(params.at(0), { cursor: null, batch });
+                backfillStates.set(params.at(0), {
+                  cursor: params.at(1),
+                  batch,
+                });
               }
               return [];
             }
@@ -733,6 +1204,15 @@ const createHarness = ({
           }
           // The decision-date repair's selection: nothing left to repair.
           if (query.includes("corrupt AS MATERIALIZED")) {
+            if (timeoutRepairBatch) {
+              throw new SQL.PostgresError("repair batch statement timeout", {
+                code: "ERR_POSTGRES_SERVER_ERROR",
+                errno: "57014",
+                detail: "",
+                hint: "",
+                severity: "ERROR",
+              });
+            }
             return [];
           }
           // The delete-receipt repair's walk: no batch boundary left, so the
@@ -784,6 +1264,9 @@ const createHarness = ({
           if (!index) {
             throw new TypeError("Expected managed index name");
           }
+          if (pendingIndexes.has(indexName)) {
+            return [];
+          }
           const offset = indexOffsets.get(indexName) ?? 0;
           const states = indexStates[indexName];
           let state: IndexState =
@@ -798,10 +1281,16 @@ const createHarness = ({
           if (typeof state === "boolean") {
             return [indexRow(index, state)];
           }
+          if ("isReady" in state) {
+            return [
+              { ...indexRow(index, state.isValid), isReady: state.isReady },
+            ];
+          }
           return [
             indexRow(index, state.isValid, index.name, state.definitionBody),
           ];
         },
+        terminate: async () => undefined,
         release: () => {
           released = true;
         },

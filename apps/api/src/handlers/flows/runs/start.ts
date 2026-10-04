@@ -7,7 +7,9 @@ import {
   flowRunsWorkspaceParamsSchema,
   startFlowRunBodySchema,
 } from "@/api/handlers/flows/schema";
+import { flowRunRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import {
+  ACCOUNT_ACCESS,
   assertRunSizeConfirmedForHandler,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
@@ -19,16 +21,15 @@ import {
   FlowRunStartError,
   startFlowRun,
 } from "@/api/lib/flows/start-flow-run";
-import {
-  ActionAdmissionError,
-  actionAdmissionRefusal,
-} from "@/api/lib/rate-limit/action-admission";
+import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
   description:
     "Start a manual flow run in a matter using a flow definition and optional input documents. Returns the run ID and initial status.",
   permissions: { flow: ["run"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: flowRunRealtimeUpdates,
   access: "write",
   mcp: {
     type: "capability",
@@ -133,9 +134,9 @@ const startFlowRunHandler = createSafeHandler(
 
 const toHandlerError = (
   error: FlowRunStartError | SafeDbError | ActionAdmissionError,
-): HandlerError => {
+): HandlerError | ActionAdmissionError => {
   if (ActionAdmissionError.is(error)) {
-    return new HandlerError({ ...actionAdmissionRefusal(error), cause: error });
+    return error;
   }
   if (FlowRunStartError.is(error)) {
     switch (error.reason) {

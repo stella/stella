@@ -41,7 +41,9 @@
 
 import { panic } from "better-result";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
+import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
 import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
 import { REPO_ROOT } from "./lib/enumerate-safe-handlers";
 
@@ -50,7 +52,7 @@ const LEDGER_PATH = path.resolve(
   "apps/api/capability-description-ledger.json",
 );
 
-const CATALOG_PATH = "packages/cli/capability-catalog.json";
+const CATALOG_PATH = "packages/cli/capabilities/";
 
 type CatalogEntry = { id: string; description?: string };
 
@@ -118,9 +120,9 @@ export const computeLedgerDiff = ({
   return { unledgered, described, unknown, malformed };
 };
 
-const readCatalog = async (relativePath: string): Promise<CatalogEntry[]> => {
+const readCatalog = (relativePath: string): CatalogEntry[] => {
   const absolute = path.resolve(REPO_ROOT, relativePath);
-  const raw: unknown = await Bun.file(absolute).json();
+  const raw = readCapabilityCatalog(pathToFileURL(`${absolute}/`));
   const parsed = parseCapabilityCatalog(raw);
   if (parsed === null) {
     return panic(
@@ -165,8 +167,8 @@ type Loaded = {
   undescribed: string[];
 };
 
-const loadCatalog = async (): Promise<Loaded> => {
-  const entries = await readCatalog(CATALOG_PATH);
+const loadCatalog = (): Loaded => {
+  const entries = readCatalog(CATALOG_PATH);
   return {
     catalogIds: entries.map(({ id }) => id).toSorted(),
     undescribed: findUndescribedIds(entries),
@@ -174,7 +176,7 @@ const loadCatalog = async (): Promise<Loaded> => {
 };
 
 const runCheck = async (): Promise<number> => {
-  const { catalogIds, undescribed } = await loadCatalog();
+  const { catalogIds, undescribed } = loadCatalog();
 
   if (catalogIds.length === 0) {
     console.error(
@@ -240,7 +242,7 @@ const runCheck = async (): Promise<number> => {
 };
 
 const runWriteLedger = async (): Promise<number> => {
-  const { undescribed } = await loadCatalog();
+  const { undescribed } = loadCatalog();
   await writeLedger(undescribed);
   console.log(
     `capability-description-guard --write-ledger: wrote ${undescribed.length} capability ids to apps/api/capability-description-ledger.json`,

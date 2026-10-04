@@ -351,6 +351,7 @@ test("the blend read carries what ranking and the fold need, and nothing a card 
   );
   for (const row of hydrated.values()) {
     expect(Object.keys(row ?? {}).toSorted()).toEqual([
+      "canRecur",
       "citationAuthority",
       "country",
       "court",

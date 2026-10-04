@@ -14,7 +14,7 @@ import { member, user } from "@/api/db/auth-schema";
 import { feedbackIntakeGuards } from "@/api/handlers/feedback/intake-guards";
 import { FEEDBACK_REQUEST_ID_PATTERN } from "@/api/handlers/feedback/sanitize-report";
 import { submitFeedbackReport } from "@/api/handlers/feedback/submit";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -27,6 +27,7 @@ const optionalCapped = (maxLength: number) =>
   t.Optional(t.String({ maxLength }));
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "File a feedback report from the signed-in web app. The content is " +
     "sanitized server-side, stored, and delivered to every channel the " +

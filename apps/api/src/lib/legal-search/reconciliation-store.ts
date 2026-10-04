@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The parked-item store for the standing listing reconciliation.
  *
@@ -11,20 +12,53 @@
  * Every read is bounded and scoped to one source. Nothing here contacts a
  * publisher; the payload is stored verbatim so a retry needs no listing walk.
  */
-
 import { and, count, eq, gt, inArray, lte, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawReconciliationItems,
+  caseLawSources,
   RECONCILIATION_ITEM_STATUS,
+  RECONCILIATION_MAX_REVIVALS,
 } from "@/api/db/schema";
 import type { ReconciliationItemStatus } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { chunked } from "@/api/lib/chunked";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { logger } from "@/api/lib/observability/logger";
+
+import { fingerprintReconciliationPayload } from "./reconciliation-payload";
+
+type ReconciliationLease = {
+  sourceId: SafeId<"caseLawSource">;
+  leaseToken: SafeId<"caseLawSourceIngestionLease">;
+};
+
+/** Source first, then item: the row lock fences takeover until this bookkeeping commits. */
+const hasReconciliationLease = async (
+  tx: Transaction,
+  { sourceId, leaseToken }: ReconciliationLease,
+) => {
+  const owned = (
+    await tx
+      .select({ id: caseLawSources.id })
+      .from(caseLawSources)
+      .where(
+        and(
+          eq(caseLawSources.id, sourceId),
+          eq(caseLawSources.ingestionLeaseToken, leaseToken),
+          sql`${caseLawSources.ingestionLeaseExpiresAt} > now()`,
+        ),
+      )
+      .for("update")
+      .limit(1)
+  ).at(0);
+  return owned !== undefined;
+};
 
 const HOUR_IN_MS = 60 * 60 * 1000;
 
@@ -84,22 +118,30 @@ export type ParkedReconciliationItem = {
   slice: string;
   identityKey: string;
   payload: unknown;
+  payloadHash: string | null;
   attempts: number;
 };
 
-export type ParkReconciliationItemInput = {
-  sourceId: SafeId<"caseLawSource">;
-  slice: string;
-  identityKey: string;
-  payload: unknown;
-  /** An `errorTag`, never a raw message. */
-  errorTag: string;
-  now: Date;
+type ReconciliationRevision = {
+  revisionOf: (payload: unknown) => unknown;
 };
 
-export type ParkReconciliationItemResult = {
-  status: ReconciliationItemStatus;
-  attempts: number;
+export type ParkReconciliationItemInput = ReconciliationLease &
+  ReconciliationRevision & {
+    slice: string;
+    identityKey: string;
+    payload: unknown;
+    /** An `errorTag`, never a raw message. */
+    errorTag: string;
+    now: Date;
+  };
+
+export type ParkReconciliationItemResult =
+  | { outcome: "superseded" }
+  | { outcome: "recorded"; status: ReconciliationItemStatus; attempts: number };
+
+export type ReconciliationMutationOutcome = {
+  outcome: "recorded" | "superseded";
 };
 
 /**
@@ -116,19 +158,27 @@ export const parkReconciliationItem = async (
   scopedDb: ScopedDb,
   {
     sourceId,
+    leaseToken,
     slice,
     identityKey,
     payload,
+    revisionOf,
     errorTag,
     now,
   }: ParkReconciliationItemInput,
 ): Promise<ParkReconciliationItemResult> => {
+  const payloadHash = fingerprintReconciliationPayload(revisionOf(payload));
   const result = await scopedDb(async (tx) => {
+    if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
+      return { outcome: "superseded" as const };
+    }
     const existing = (
       await tx
         .select({
           attempts: caseLawReconciliationItems.attempts,
           status: caseLawReconciliationItems.status,
+          payload: sql<unknown>`CASE WHEN ${caseLawReconciliationItems.payloadHash} IS NULL THEN ${caseLawReconciliationItems.payload} ELSE NULL END`,
+          payloadHash: caseLawReconciliationItems.payloadHash,
         })
         .from(caseLawReconciliationItems)
         .where(
@@ -137,9 +187,18 @@ export const parkReconciliationItem = async (
             eq(caseLawReconciliationItems.identityKey, identityKey),
           ),
         )
+        .for("update")
         .limit(1)
     ).at(0);
 
+    if (
+      existing !== undefined &&
+      (existing.payloadHash ??
+        fingerprintReconciliationPayload(revisionOf(existing.payload))) !==
+        payloadHash
+    ) {
+      return { outcome: "superseded" as const };
+    }
     const attempts = (existing?.attempts ?? 0) + 1;
     const schedule = reconciliationSchedule({ attempts, now });
     const status =
@@ -150,7 +209,7 @@ export const parkReconciliationItem = async (
       schedule.type === "terminal" ? null : schedule.nextAttemptAt;
 
     // audit: skip — ingestion bookkeeping for public source data
-    await tx
+    const written = await tx
       .insert(caseLawReconciliationItems)
       .values({
         id: createSafeId<"caseLawReconciliationItem">(),
@@ -158,6 +217,7 @@ export const parkReconciliationItem = async (
         slice,
         identityKey,
         payload,
+        payloadHash,
         status,
         attempts,
         nextAttemptAt,
@@ -169,20 +229,27 @@ export const parkReconciliationItem = async (
           caseLawReconciliationItems.sourceId,
           caseLawReconciliationItems.identityKey,
         ],
+        setWhere: sql`${caseLawReconciliationItems.payloadHash} IS NOT DISTINCT FROM ${existing?.payloadHash ?? null}`,
         set: {
           // A later listing may place the same decision in another slice;
           // the row follows the listing rather than pinning the first one.
           slice,
           payload,
+          payloadHash,
           status,
           attempts,
           nextAttemptAt,
           lastError: errorTag,
           lastAttemptAt: now,
         },
-      });
+      })
+      .returning({ id: caseLawReconciliationItems.id });
+    if (written.length === 0) {
+      return { outcome: "superseded" as const };
+    }
 
     return {
+      outcome: "recorded" as const,
       status,
       attempts,
       becameTerminal:
@@ -191,6 +258,9 @@ export const parkReconciliationItem = async (
     };
   });
 
+  if (result.outcome === "superseded") {
+    return result;
+  }
   if (result.becameTerminal) {
     // Once, on the transition: an item leaving the hunt is a decision the
     // publisher lists and the corpus will not hold, and it must not happen
@@ -204,17 +274,21 @@ export const parkReconciliationItem = async (
     });
   }
 
-  return { status: result.status, attempts: result.attempts };
+  return {
+    outcome: "recorded",
+    status: result.status,
+    attempts: result.attempts,
+  };
 };
 
-export type RetireReconciliationItemInput = {
-  sourceId: SafeId<"caseLawSource">;
-  slice: string;
-  identityKey: string;
-  payload: unknown;
-  errorTag: string;
-  now: Date;
-};
+export type RetireReconciliationItemInput = ReconciliationLease &
+  ReconciliationRevision & {
+    slice: string;
+    identityKey: string;
+    payload: unknown;
+    errorTag: string;
+    now: Date;
+  };
 
 /**
  * Retire an item immediately, without serving the retry schedule.
@@ -227,17 +301,27 @@ export const retireReconciliationItem = async (
   scopedDb: ScopedDb,
   {
     sourceId,
+    leaseToken,
     slice,
     identityKey,
     payload,
+    revisionOf,
     errorTag,
     now,
   }: RetireReconciliationItemInput,
-): Promise<void> => {
-  const becameTerminal = await scopedDb(async (tx) => {
+): Promise<ReconciliationMutationOutcome> => {
+  const payloadHash = fingerprintReconciliationPayload(revisionOf(payload));
+  const result = await scopedDb(async (tx) => {
+    if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
+      return { outcome: "superseded" as const };
+    }
     const existing = (
       await tx
-        .select({ status: caseLawReconciliationItems.status })
+        .select({
+          status: caseLawReconciliationItems.status,
+          payload: sql<unknown>`CASE WHEN ${caseLawReconciliationItems.payloadHash} IS NULL THEN ${caseLawReconciliationItems.payload} ELSE NULL END`,
+          payloadHash: caseLawReconciliationItems.payloadHash,
+        })
         .from(caseLawReconciliationItems)
         .where(
           and(
@@ -245,11 +329,21 @@ export const retireReconciliationItem = async (
             eq(caseLawReconciliationItems.identityKey, identityKey),
           ),
         )
+        .for("update")
         .limit(1)
     ).at(0);
 
+    if (
+      existing !== undefined &&
+      (existing.payloadHash ??
+        fingerprintReconciliationPayload(revisionOf(existing.payload))) !==
+        payloadHash
+    ) {
+      return { outcome: "superseded" as const };
+    }
+
     // audit: skip — ingestion bookkeeping for public source data
-    await tx
+    const written = await tx
       .insert(caseLawReconciliationItems)
       .values({
         id: createSafeId<"caseLawReconciliationItem">(),
@@ -257,6 +351,7 @@ export const retireReconciliationItem = async (
         slice,
         identityKey,
         payload,
+        payloadHash,
         status: RECONCILIATION_ITEM_STATUS.TERMINAL,
         attempts: RECONCILIATION_TERMINAL_ATTEMPTS,
         nextAttemptAt: null,
@@ -268,21 +363,33 @@ export const retireReconciliationItem = async (
           caseLawReconciliationItems.sourceId,
           caseLawReconciliationItems.identityKey,
         ],
+        setWhere: sql`${caseLawReconciliationItems.payloadHash} IS NOT DISTINCT FROM ${existing?.payloadHash ?? null}`,
         set: {
           slice,
           payload,
+          payloadHash,
           status: RECONCILIATION_ITEM_STATUS.TERMINAL,
           attempts: RECONCILIATION_TERMINAL_ATTEMPTS,
           nextAttemptAt: null,
           lastError: errorTag,
           lastAttemptAt: now,
         },
-      });
+      })
+      .returning({ id: caseLawReconciliationItems.id });
+    if (written.length === 0) {
+      return { outcome: "superseded" as const };
+    }
 
-    return existing?.status !== RECONCILIATION_ITEM_STATUS.TERMINAL;
+    return {
+      outcome: "recorded" as const,
+      becameTerminal: existing?.status !== RECONCILIATION_ITEM_STATUS.TERMINAL,
+    };
   });
 
-  if (becameTerminal) {
+  if (result.outcome === "superseded") {
+    return result;
+  }
+  if (result.becameTerminal) {
     logger.warn("case_law.reconciliation.item_terminal", {
       sourceId,
       slice,
@@ -291,63 +398,90 @@ export const retireReconciliationItem = async (
       "error.type": errorTag,
     });
   }
+  return { outcome: "recorded" };
 };
 
-export type ResolveReconciliationItemInput = {
-  sourceId: SafeId<"caseLawSource">;
+export type ResolveReconciliationItemInput = ReconciliationLease & {
   identityKey: string;
+  payload: unknown;
 };
 
-/**
- * Forget an item because its identity is now held. Deleted rather than marked
- * resolved: the question this table answers is "what is still outstanding",
- * and a held decision answers it from the decisions table itself.
- */
+/** Only the listing revision actually consumed may leave the retry ledger. */
 export const resolveReconciliationItem = async (
   scopedDb: ScopedDb,
-  { sourceId, identityKey }: ResolveReconciliationItemInput,
-): Promise<void> => {
+  {
+    sourceId,
+    leaseToken,
+    identityKey,
+    payload,
+  }: ResolveReconciliationItemInput,
+): Promise<ReconciliationMutationOutcome> =>
   await scopedDb(async (tx) => {
+    if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
+      return { outcome: "superseded" as const };
+    }
     // audit: skip — ingestion bookkeeping for public source data
-    await tx
+    const removed = await tx
       .delete(caseLawReconciliationItems)
       .where(
         and(
           eq(caseLawReconciliationItems.sourceId, sourceId),
           eq(caseLawReconciliationItems.identityKey, identityKey),
+          sql`${caseLawReconciliationItems.payload} = ${JSON.stringify(payload)}::text::jsonb`,
         ),
-      );
+      )
+      .returning({ id: caseLawReconciliationItems.id });
+    return { outcome: removed.length === 0 ? "superseded" : "recorded" };
   });
+
+type ResolveReconciliationItemsInput = ReconciliationLease & {
+  items: readonly Pick<
+    ParkedReconciliationItem,
+    "identityKey" | "payloadHash"
+  >[];
 };
 
-export type ResolveReconciliationItemsInput = {
-  sourceId: SafeId<"caseLawSource">;
-  identityKeys: readonly string[];
-};
-
-/**
- * The same, for a batch the caller already knows is held. One bounded delete
- * rather than one per item: a retry batch is checked against the decisions
- * table in a single read, and forgetting its rows should cost a single write.
- */
+/** Resolve a bounded batch of held listings without a transaction per identity. */
 export const resolveReconciliationItems = async (
   scopedDb: ScopedDb,
-  { sourceId, identityKeys }: ResolveReconciliationItemsInput,
-): Promise<void> => {
-  if (identityKeys.length === 0) {
-    return;
-  }
-  await scopedDb(async (tx) => {
-    // audit: skip — ingestion bookkeeping for public source data
-    await tx
-      .delete(caseLawReconciliationItems)
-      .where(
-        and(
-          eq(caseLawReconciliationItems.sourceId, sourceId),
-          inArray(caseLawReconciliationItems.identityKey, [...identityKeys]),
-        ),
+  { sourceId, leaseToken, items }: ResolveReconciliationItemsInput,
+): Promise<ReconciliationMutationOutcome> => {
+  for (const page of chunked(items, LISTING_REVISION_BATCH_SIZE)) {
+    const result = await scopedDb(async (tx) => {
+      if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
+        return { outcome: "superseded" as const };
+      }
+      const identities = page.map(({ identityKey, payloadHash }) => ({
+        identityKey,
+        payloadHash,
+      }));
+      // audit: skip — ingestion bookkeeping for public source data
+      const removed = executedRows(
+        await tx.execute(sql`
+        DELETE FROM ${caseLawReconciliationItems} AS tracked
+        USING jsonb_to_recordset(${JSON.stringify(identities)}::text::jsonb)
+          AS incoming("identityKey" text, "payloadHash" text)
+        WHERE tracked.source_id = ${sourceId}
+          AND tracked.identity_key = incoming."identityKey"
+          AND tracked.payload_hash IS NOT DISTINCT FROM incoming."payloadHash"
+        RETURNING tracked.id
+      `),
       );
-  });
+      if (removed.length !== page.length) {
+        logger.warn("case_law.reconciliation.batch_resolution_mismatch", {
+          sourceId,
+          expected: page.length,
+          removed: removed.length,
+        });
+        return { outcome: "superseded" as const };
+      }
+      return { outcome: "recorded" as const };
+    });
+    if (result.outcome === "superseded") {
+      return result;
+    }
+  }
+  return { outcome: "recorded" };
 };
 
 export type SelectDueReconciliationItemsInput = {
@@ -369,6 +503,7 @@ export const selectDueReconciliationItems = async (
           slice: caseLawReconciliationItems.slice,
           identityKey: caseLawReconciliationItems.identityKey,
           payload: caseLawReconciliationItems.payload,
+          payloadHash: caseLawReconciliationItems.payloadHash,
           attempts: caseLawReconciliationItems.attempts,
         })
         .from(caseLawReconciliationItems)
@@ -430,47 +565,147 @@ export const countReconciliationItems = async (
   return counts;
 };
 
-export type SelectTrackedIdentityKeysInput = {
-  sourceId: SafeId<"caseLawSource">;
-  identityKeys: readonly string[];
-};
+const LISTING_REVISION_BATCH_SIZE = 250;
+type RefreshTrackedReconciliationItemsOptions = ReconciliationLease &
+  ReconciliationRevision & {
+    items: readonly { identityKey: string; slice: string; payload: unknown }[];
+    now: Date;
+  };
 
-/**
- * Which of these identities the store already tracks, whatever their state.
- *
- * A slice walk must not re-fetch them. A parked item has a schedule and a
- * walk that fetched it anyway would serve none of it — the widening backoff
- * exists precisely so a document the publisher will not serve is asked for
- * less often, and a daily tip walk asking every time defeats it. A terminal
- * item is worse: it has left the hunt, and re-fetching it is the unbounded
- * loop the whole disposition exists to end. Both belong to the due-retry
- * path alone.
- */
-export const selectTrackedIdentityKeys = async (
+type RefreshTrackedReconciliationItemsResult =
+  | { outcome: "superseded" }
+  | {
+      outcome: "refreshed";
+      trackedIdentityKeys: Set<string>;
+      refreshedIdentityKeys: Set<string>;
+    };
+
+/** Reopen corrected input before item budgets; unchanged revisions keep their schedule. */
+export const refreshTrackedReconciliationItems = async (
   scopedDb: ScopedDb,
-  { sourceId, identityKeys }: SelectTrackedIdentityKeysInput,
-): Promise<Set<string>> => {
-  if (identityKeys.length === 0) {
-    return new Set();
-  }
-  const rows = await scopedDb(
-    async (tx) =>
-      await tx
-        .select({ identityKey: caseLawReconciliationItems.identityKey })
+  {
+    sourceId,
+    leaseToken,
+    items,
+    revisionOf,
+    now,
+  }: RefreshTrackedReconciliationItemsOptions,
+): Promise<RefreshTrackedReconciliationItemsResult> => {
+  const trackedIdentityKeys = new Set<string>();
+  const refreshedIdentityKeys = new Set<string>();
+  for (const page of chunked(items, LISTING_REVISION_BATCH_SIZE)) {
+    const result = await scopedDb(async (tx) => {
+      if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
+        return { outcome: "superseded" as const };
+      }
+      const incoming = new Map(page.map((item) => [item.identityKey, item]));
+      const rows = await tx
+        .select({
+          id: caseLawReconciliationItems.id,
+          identityKey: caseLawReconciliationItems.identityKey,
+          slice: caseLawReconciliationItems.slice,
+          status: caseLawReconciliationItems.status,
+          revivalCount: caseLawReconciliationItems.revivalCount,
+          payloadHash: caseLawReconciliationItems.payloadHash,
+          rawPayloadChanged: sql<boolean>`${caseLawReconciliationItems.payload} IS DISTINCT FROM incoming.payload`,
+          payload: sql<unknown>`CASE WHEN ${caseLawReconciliationItems.payloadHash} IS NULL THEN ${caseLawReconciliationItems.payload} ELSE NULL END`,
+        })
         .from(caseLawReconciliationItems)
+        .innerJoin(
+          sql`jsonb_to_recordset(${JSON.stringify(page)}::text::jsonb) AS incoming("identityKey" text, payload jsonb)`,
+          sql`${caseLawReconciliationItems.identityKey} = incoming."identityKey"`,
+        )
         .where(
           and(
             eq(caseLawReconciliationItems.sourceId, sourceId),
-            inArray(caseLawReconciliationItems.identityKey, [...identityKeys]),
+            inArray(
+              caseLawReconciliationItems.identityKey,
+              page.map(({ identityKey }) => identityKey),
+            ),
           ),
         )
-        .limit(identityKeys.length),
-  );
-  return new Set(rows.map(({ identityKey }) => identityKey));
+        .for("update", { of: caseLawReconciliationItems })
+        .limit(page.length);
+      const updates = [];
+      const refreshed: string[] = [];
+      for (const row of rows) {
+        const item = incoming.get(row.identityKey);
+        if (item === undefined) {
+          return panic("Tracked revision was not in its listing batch");
+        }
+        const payloadHash = fingerprintReconciliationPayload(
+          revisionOf(item.payload),
+        );
+        const changed =
+          (row.payloadHash ??
+            fingerprintReconciliationPayload(revisionOf(row.payload))) !==
+          payloadHash;
+        const revived =
+          changed &&
+          (row.status !== RECONCILIATION_ITEM_STATUS.TERMINAL ||
+            row.revivalCount < RECONCILIATION_MAX_REVIVALS);
+        if (revived) {
+          refreshed.push(row.identityKey);
+        }
+        if (
+          changed ||
+          row.rawPayloadChanged ||
+          row.payloadHash === null ||
+          row.slice !== item.slice
+        ) {
+          updates.push({
+            id: row.id,
+            slice: item.slice,
+            payload: item.payload,
+            payload_hash: payloadHash,
+            expected_hash: row.payloadHash,
+            disposition: revived ? "revived" : "retained",
+          });
+        }
+      }
+      if (updates.length > 0) {
+        const updated = executedRows(
+          await tx.execute(sql`
+        UPDATE ${caseLawReconciliationItems} AS tracked
+        SET slice = incoming.slice, payload = incoming.payload, payload_hash = incoming.payload_hash,
+          status = CASE WHEN incoming.disposition = 'revived' THEN 'parked' ELSE tracked.status END,
+          revival_count = CASE WHEN incoming.disposition = 'revived' AND tracked.status = 'terminal' THEN tracked.revival_count + 1 ELSE tracked.revival_count END,
+          next_attempt_at = CASE WHEN incoming.disposition = 'revived' THEN ${now}::timestamptz ELSE tracked.next_attempt_at END,
+          last_error = CASE WHEN incoming.disposition = 'revived' THEN NULL ELSE tracked.last_error END,
+          last_attempt_at = CASE WHEN incoming.disposition = 'revived' THEN NULL ELSE tracked.last_attempt_at END
+        FROM jsonb_to_recordset(${JSON.stringify(updates)}::text::jsonb)
+          AS incoming(id uuid, slice text, payload jsonb, payload_hash text, expected_hash text, disposition text)
+        WHERE tracked.id = incoming.id AND tracked.source_id = ${sourceId}
+          AND tracked.payload_hash IS NOT DISTINCT FROM incoming.expected_hash
+        RETURNING tracked.id
+      `),
+        );
+        if (updated.length !== updates.length) {
+          return panic(
+            "Locked reconciliation listing revision changed during refresh",
+          );
+        }
+      }
+      return {
+        outcome: "refreshed" as const,
+        tracked: rows.map(({ identityKey }) => identityKey),
+        refreshed,
+      };
+    });
+    if (result.outcome === "superseded") {
+      return result;
+    }
+    for (const key of result.tracked) {
+      trackedIdentityKeys.add(key);
+    }
+    for (const key of result.refreshed) {
+      refreshedIdentityKeys.add(key);
+    }
+  }
+  return { outcome: "refreshed", trackedIdentityKeys, refreshedIdentityKeys };
 };
 
-export type PruneUnlistedTerminalItemsInput = {
-  sourceId: SafeId<"caseLawSource">;
+export type PruneUnlistedTerminalItemsInput = ReconciliationLease & {
   slice: string;
   /** Every identity the completed walk saw for the slice. */
   listedIdentityKeys: readonly string[];
@@ -494,16 +729,24 @@ export type PruneUnlistedTerminalItemsInput = {
  * its slice short either way, so removing it would buy nothing and would throw
  * away an attempt history.
  */
+type PruneUnlistedTerminalItemsResult =
+  | { outcome: "superseded" }
+  | { outcome: "pruned"; removed: number };
+
 export const pruneUnlistedTerminalItems = async (
   scopedDb: ScopedDb,
   {
     sourceId,
+    leaseToken,
     slice,
     listedIdentityKeys,
     limit,
   }: PruneUnlistedTerminalItemsInput,
-): Promise<number> =>
+): Promise<PruneUnlistedTerminalItemsResult> =>
   await scopedDb(async (tx) => {
+    if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
+      return { outcome: "superseded" as const };
+    }
     const listed = new Set(listedIdentityKeys);
     const rows = await tx
       .select({ identityKey: caseLawReconciliationItems.identityKey })
@@ -523,7 +766,7 @@ export const pruneUnlistedTerminalItems = async (
       listed.has(identityKey) ? [] : [identityKey],
     );
     if (unlisted.length === 0) {
-      return 0;
+      return { outcome: "pruned" as const, removed: 0 };
     }
     // audit: skip — ingestion bookkeeping for public source data
     const removed = await tx
@@ -535,7 +778,7 @@ export const pruneUnlistedTerminalItems = async (
         ),
       )
       .returning({ id: caseLawReconciliationItems.id });
-    return removed.length;
+    return { outcome: "pruned" as const, removed: removed.length };
   });
 
 export type CountTerminalBySliceInput = {

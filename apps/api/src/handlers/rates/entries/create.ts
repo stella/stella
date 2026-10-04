@@ -2,9 +2,12 @@ import { Result } from "better-result";
 import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import type { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
+
 import { abortableTx } from "@/api/db/safe-db";
 import { rateEntries } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
   tMinorUnitAmount,
@@ -18,8 +21,23 @@ import { cents } from "@/api/lib/money";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
+type LiteralSchemas<Values extends readonly string[]> = {
+  [Index in keyof Values]: ReturnType<typeof t.Literal<Values[Index]>>;
+};
+
+// A tuple preserves TypeBox's static union; the canonical role tuple binds its
+// membership and order so adding a role cannot silently omit its input schema.
+const roleSchemas = [
+  t.Literal("owner"),
+  t.Literal("admin"),
+  t.Literal("member"),
+  t.Literal("intern"),
+  t.Literal("external"),
+] satisfies LiteralSchemas<typeof ORGANIZATION_ROLE_NAMES>;
+
 const createRateEntryBodySchema = t.Object({
   userId: t.Optional(t.Nullable(tUserId)),
+  role: t.Optional(t.Nullable(t.Union(roleSchemas))),
   hourlyRate: tMinorUnitAmount(0),
   effectiveFrom: t.String({ format: "date" }),
   effectiveTo: t.Optional(t.Nullable(t.String({ format: "date" }))),
@@ -34,11 +52,13 @@ const createRateEntry = createSafeHandler(
     description:
       "Add one rate line to a rate table: an hourly rate in integer minor " +
       "currency units, effective from a date and optionally until another. " +
-      "Pass userId for a person-specific rate or omit it for the table's " +
-      "fallback rate. Refused when the date range overlaps an existing line " +
-      "for the same user, when userId is not a member of the organization, " +
+      "Pass userId for a person-specific rate, role for an organization-role rate, " +
+      "or omit both for the table fallback. Set at most one selector. " +
+      "Refused when dates overlap a line for the same selector or userId is not an organization member, " +
       "or when the table is at its line limit.",
     permissions: { rate: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: rateRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",
@@ -55,6 +75,16 @@ const createRateEntry = createSafeHandler(
     body,
     recordAuditEvent,
   }) {
+    const selectedUserId = body.userId ?? null;
+    const selectedRole = body.role ?? null;
+    if (selectedUserId !== null && selectedRole !== null) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Choose a person or a role, not both",
+        }),
+      );
+    }
     if (body.userId) {
       const userId = body.userId;
       const validatedUserId = yield* Result.await(
@@ -121,6 +151,9 @@ const createRateEntry = createSafeHandler(
     const overlapConditions = [
       eq(rateEntries.rateTableId, params.rateTableId),
       userCondition,
+      selectedRole === null
+        ? isNull(rateEntries.role)
+        : eq(rateEntries.role, selectedRole),
       overlapToCondition,
     ];
     if (overlapFromCondition) {
@@ -155,7 +188,8 @@ const createRateEntry = createSafeHandler(
         if (overlap) {
           throw new HandlerError({
             status: 400,
-            message: "Date range overlaps with an existing entry for this user",
+            message:
+              "Date range overlaps with an existing entry for this person, role, or table default",
           });
         }
 
@@ -165,6 +199,7 @@ const createRateEntry = createSafeHandler(
             workspaceId,
             rateTableId: params.rateTableId,
             userId: body.userId ?? null,
+            role: body.role ?? null,
             hourlyRate: cents(body.hourlyRate),
             effectiveFrom: body.effectiveFrom,
             effectiveTo: body.effectiveTo ?? null,
@@ -188,6 +223,7 @@ const createRateEntry = createSafeHandler(
               new: {
                 rateTableId: params.rateTableId,
                 userId: body.userId ?? null,
+                role: body.role ?? null,
                 hourlyRate: cents(body.hourlyRate),
                 effectiveFrom: body.effectiveFrom,
                 effectiveTo: body.effectiveTo ?? null,

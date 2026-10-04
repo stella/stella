@@ -1,10 +1,14 @@
 /* oxlint-disable oxc/no-barrel-file -- Keep the existing "@/api/db/schema" public import path while table definitions live in domain modules. */
+export * from "./registration-budget-schema";
 export * from "./schema/contacts";
 export * from "./schema/backfill-state";
+export * from "./schema/case-law-replay";
+export * from "./schema/system-audit";
 export * from "./schema/properties";
 export * from "./schema/entities";
 export * from "./schema/templates";
 export * from "./schema/billing";
+export * from "./schema/billing-arrangements";
 export * from "./schema/workspace-admin";
 export * from "./schema/clauses";
 export * from "./schema/corpus-index-jobs";
@@ -13,6 +17,7 @@ export * from "./schema/case-law-provision-extraction";
 export * from "./schema/legal-reader";
 export * from "./schema/legislation";
 export * from "./schema/sanctions";
+export * from "./schema/sanctions-monitoring";
 export * from "./schema/corpus-index-generations";
 export * from "./schema/corpus-index-projections";
 export * from "./schema/lists";
@@ -137,3 +142,5 @@ export type {
   ViewLayout,
   ViewTemplateProperty,
 } from "./schema/common";
+
+export * from "./schema/soft-law";

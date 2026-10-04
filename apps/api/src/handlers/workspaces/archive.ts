@@ -8,7 +8,8 @@ import {
   timeEntries,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -22,6 +23,8 @@ const config = {
     "is deleted. Refused while document processing is running in the matter " +
     "or any timer is still running there.",
   permissions: { workspace: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: organizationWorkspaceRealtimeUpdates,
   mcp: { type: "covered", by: "save_matter" },
 } satisfies WorkspaceHandlerConfig;
 

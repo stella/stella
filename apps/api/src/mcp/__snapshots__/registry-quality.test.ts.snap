@@ -29,7 +29,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 512,
+          "maxLength": 9784,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -204,7 +204,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1623,
+          "maxLength": 12450,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
@@ -948,7 +948,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1844,
+          "maxLength": 5364,
           "description": "Opaque cursor from a previous search_legislation call"
         }
       }
@@ -1199,7 +1199,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "allow_partial"
           ],
           "type": "string",
-          "description": "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+          "description": "Require a complete fill by default (every placeholder filled, every AI-drafted field written, every AI-decided condition decided); use allow_partial only for an intentionally incomplete document.",
           "default": "require_complete"
         },
         "output_mode": {
@@ -1291,7 +1291,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "allow_partial"
           ],
           "type": "string",
-          "description": "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+          "description": "Require a complete fill by default (every placeholder filled, every AI-drafted field written, every AI-decided condition decided); use allow_partial only for an intentionally incomplete document.",
           "default": "require_complete"
         }
       }
@@ -2837,7 +2837,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 512,
+          "maxLength": 4154,
           "description": "Opaque cursor from the previous page"
         },
         "limit": {
@@ -3650,7 +3650,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "link_matter_contact",
     "scope": "stella:matters_write",
     "access": "write",
-    "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass matter_contact_id (precise, from list_matters) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter.",
+    "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass matter_contact_id (precise, from list_matters) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter. At the contact limit, unlink an existing matter_contact_id (without role) before linking another contact.",
     "annotations": {
       "title": "Link contact to matter",
       "destructiveHint": false,
@@ -3761,7 +3761,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "save_clause",
     "scope": "stella:knowledge_write",
     "access": "write",
-    "description": "Create or update a clause in the organization's clause library. Omit clause_id to create (title and body required); pass clause_id to update. body is an ordered array of paragraphs, each with text and optional style, level, runs, list_kind, list_level, is_directive, directive_kind, and directive_expression. category_id, language, description, usage_notes, and metadata accept null to clear them on update. Set snapshot_version true on an update to also append a version snapshot of the body. Returns the clause id.",
+    "description": "Create or update a clause in the organization's clause library. Omit clause_id to create (title and body required); pass clause_id to update. body is an ordered array of paragraphs, each with text and optional style, level, runs, list_kind, list_level, is_directive, directive_kind, and directive_expression. Use balanced {% ... %} tags. Keep num(), ref(), clause() and ai(adapt=true) in the template body. category_id, language, description, usage_notes, and metadata accept null to clear them on update. Set snapshot_version true on an update to also append a version snapshot of the body. Returns the clause id.",
     "annotations": {
       "title": "Save clause",
       "destructiveHint": false,
@@ -3792,7 +3792,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "properties": {
               "text": {
                 "type": "string",
-                "description": "Paragraph plain text"
+                "description": "Paragraph text; directive paragraphs use balanced literal tags, e.g. {% if enabled %} ... {% endif %}."
               },
               "style": {
                 "type": "string",
@@ -3867,6 +3867,24 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           },
           "minItems": 1,
           "description": "Ordered clause body paragraphs; required when creating. Each paragraph carries text and optional formatting."
+        },
+        "expected_body": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "Paragraph text from the read body"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "additionalProperties": {}
+          },
+          "minItems": 1,
+          "description": "Body from your last read; update only if the current body still matches. On conflict, read the clause again before saving."
         },
         "category_id": {
           "anyOf": [
@@ -6658,7 +6676,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 512,
+          "maxLength": 9784,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -6833,7 +6851,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1623,
+          "maxLength": 12450,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
@@ -7272,7 +7290,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1844,
+          "maxLength": 5364,
           "description": "Opaque cursor from a previous search_legislation call"
         }
       }
@@ -8266,7 +8284,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 512,
+          "maxLength": 9675,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -8351,7 +8369,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1623,
+          "maxLength": 12450,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
@@ -8732,7 +8750,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1844,
+          "maxLength": 5364,
           "description": "Opaque cursor from a previous search_legislation call"
         }
       }

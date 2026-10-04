@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -32,7 +34,7 @@ describe("exportAuditLogs", () => {
                       resourceId: "thread_test",
                       changes: {
                         title: { old: "Earlier title", new: "Later title" },
-                        model: { old: "model_a", new: "model_b" },
+                        chatModel: { old: "model_a", new: "model_b" },
                       },
                     },
                   ],
@@ -53,11 +55,11 @@ describe("exportAuditLogs", () => {
       },
     });
     const context = asTestRaw<ExportAuditLogsContext>({
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       query: {},
-      recordAuditEvent: async () => {
+      recordAuditEvent: auditRecorderDouble(() => {
         auditCallCount += 1;
-      },
+      }),
       request: new Request("https://example.test/v1/audit-logs/export"),
       route: "/v1/audit-logs/export",
       safeDb,
@@ -72,7 +74,7 @@ describe("exportAuditLogs", () => {
 
     expect(result).toBe(
       "Time,User Name,User Email,Action,Resource Type,Resource ID,Changes\n" +
-        '2026-07-16T12:00:00.000Z,Test User,test@example.com,update,chat_thread,thread_test,"{""model"":{""old"":""model_a"",""new"":""model_b""}}"',
+        '2026-07-16T12:00:00.000Z,Test User,test@example.com,update,chat_thread,thread_test,"{""chatModel"":{""old"":""model_a"",""new"":""model_b""}}"',
     );
     expect(result).not.toContain("Earlier title");
     expect(result).not.toContain("Later title");
@@ -97,11 +99,11 @@ describe("exportAuditLogs", () => {
       }),
     });
     const context = asTestRaw<ExportAuditLogsContext>({
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       query: {},
-      recordAuditEvent: async () => {
+      recordAuditEvent: auditRecorderDouble(() => {
         auditCallCount += 1;
-      },
+      }),
       request: new Request("https://example.test/v1/audit-logs/export"),
       route: "/v1/audit-logs/export",
       safeDb,

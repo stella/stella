@@ -1,16 +1,11 @@
-import type { TSchema } from "@sinclair/typebox";
+import type { Static, TSchema } from "@sinclair/typebox";
 import type { Err } from "better-result";
 import { Result, UnhandledException } from "better-result";
-import type {
-  Context,
-  ElysiaCustomStatusResponse,
-  InputSchema,
-  UnwrapRoute,
-} from "elysia";
-import { status, t } from "elysia";
+import type { Context, InputSchema, UnwrapRoute } from "elysia";
+import { ElysiaCustomStatusResponse, status, t } from "elysia";
 
 import type { ModelRole } from "@stll/ai-catalog";
-import type { PermissionInput, roles } from "@stll/permissions";
+import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
@@ -25,7 +20,6 @@ import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
-import { requiresStandardAccount } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -47,7 +41,14 @@ import type {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag, unredactedErrorFields } from "@/api/lib/errors/utils";
 import {
+  getContentDeliveryReceiptError,
+  markContentDeliveryIntent,
+  runWithContentDeliveryScope,
+} from "@/api/lib/files/content-delivery";
+import type { ContentDelivery } from "@/api/lib/files/content-delivery";
+import {
   causeChainAttributes,
+  failureSink,
   identityFields,
   requestErrorStatusFields,
 } from "@/api/lib/observability/failure";
@@ -59,15 +60,30 @@ import {
   shadowFields,
 } from "@/api/lib/observability/failure-shadow";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 import {
   hasMemberPermission,
   readAuthorizedMemberRole,
 } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
 import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
+import {
+  announceResourceSetUpdates,
+  isSuccessfulHandlerResult,
+  type NoResourceSetUpdates,
+  type OrganizationResourceSetUpdates,
+  type ResourceSetRealtime,
+} from "@/api/lib/resource-set-realtime";
+import {
+  projectPublicErrorBody,
+  PUBLIC_ERROR_TEXT_BYTES,
+  safePublicHandlerErrorOrStatusTextResponseSchema,
+} from "@/api/lib/search/public-error-response";
+import { truncateTextBytes } from "@/api/lib/search/response-text-bounds";
 import {
   applyResponseCachePolicy,
   type CachePolicy,
@@ -88,6 +104,8 @@ import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
 import type { McpReadClass } from "@/api/mcp/tool-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
+
+export { safePublicHandlerErrorResponseSchema } from "@/api/lib/search/public-error-response";
 
 /**
  * The closed set of curated static MCP tool names. Every `type: "tool"` and
@@ -366,16 +384,28 @@ type CapabilityTransportDisposition = {
   transport?: CapabilityTransport;
 };
 
+type ContentDeliveryDisposition = {
+  contentDelivery?: ContentDelivery;
+};
+
 export type HandlerConfig = InputSchema &
   CapabilityDescription &
+  ContentDeliveryDisposition &
   CapabilityAccess &
   CapabilityTransportDisposition & {
     permissions: PermissionInput;
+    accountAccess: AccountAccess;
     /** Finite API-owned transport deadline for a generated capability command. */
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
     actionAdmission?: { type: "handler"; actionKind: PeriodActionKind };
+    /**
+     * Resource sets a successful call announces to open tabs. The wrapper
+     * broadcasts them for every transport (REST, `invoke_capability`, CLI);
+     * see `lib/resource-set-realtime.ts`.
+     */
+    realtime?: ResourceSetRealtime;
     mcp: McpExposure;
   };
 
@@ -392,19 +422,58 @@ type WorkspaceHandlerConfigOf<TConfig> = TConfig extends HandlerConfig
 
 export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
 
+/**
+ * Factories without an organization-scoped caller run no account check, so
+ * their handlers admit the demo account and can only declare `sandbox`.
+ */
+/**
+ * Whether the configured demo account may call a handler. Every handler config
+ * declares one: `standard` refuses the demo account, `sandbox` admits it.
+ */
+export const ACCOUNT_ACCESS = {
+  standard: "standard",
+  sandbox: "sandbox",
+} as const;
+
+export type AccountAccess =
+  (typeof ACCOUNT_ACCESS)[keyof typeof ACCOUNT_ACCESS];
+
+export const requiresStandardAccount = (accountAccess: AccountAccess) =>
+  accountAccess === ACCOUNT_ACCESS.standard;
+
+type SandboxAccountAccess = {
+  accountAccess: typeof ACCOUNT_ACCESS.sandbox;
+};
+
 export type SessionHandlerConfig = InputSchema &
   CapabilityDescription &
+  ContentDeliveryDisposition &
   CapabilityAccess &
   CapabilityTransportDisposition & {
+    accountAccess: AccountAccess;
     mcp: McpExposure;
   };
 
 type ConfigRouteSchema<TConfig extends HandlerConfig> = UnwrapRoute<
-  Omit<TConfig, "permissions" | "mcp" | "description" | "access" | "transport">
+  Omit<
+    TConfig,
+    | "permissions"
+    | "mcp"
+    | "description"
+    | "access"
+    | "contentDelivery"
+    | "transport"
+    | "realtime"
+  >
 >;
 
 type SessionConfigRouteSchema<TConfig extends SessionHandlerConfig> =
-  UnwrapRoute<Omit<TConfig, "mcp" | "description" | "access" | "transport">>;
+  UnwrapRoute<
+    Omit<
+      TConfig,
+      "mcp" | "description" | "access" | "contentDelivery" | "transport"
+    >
+  >;
 
 type SessionHandlerContext<
   TConfig extends SessionHandlerConfig = SessionHandlerConfig,
@@ -438,9 +507,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     pinServerValidatedWorkspaceId: (
       workspaceId: SafeId<"workspace">,
     ) => boolean;
-    memberRole: {
-      role: keyof typeof roles;
-    };
+    memberRole: AuthorizedMemberRole;
     orgAIConfig: OrgAIConfig | null;
     /**
      * Whether `orgAIConfig` reflects the org's stored configuration.
@@ -505,6 +572,7 @@ type SafeErrorBody = {
   message: string;
   /** Corrective next step for programmatic clients. */
   hint?: string;
+  clause?: HandlerError["clause"];
   contactUrl?: string;
   retryable?: boolean;
   /** Field-scoped reasons the request was rejected. */
@@ -627,6 +695,23 @@ export const safeHandlerResponseSchemasWithStatusText = <
   ...SAFE_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS,
 });
 
+const SAFE_PUBLIC_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS =
+  safeHandlerErrorResponseSchemas(
+    safePublicHandlerErrorOrStatusTextResponseSchema,
+  );
+
+export const safePublicHandlerResponseSchemasWithStatusText = <
+  TSuccessSchema extends TSchema,
+>(
+  successSchema: TSuccessSchema,
+): SafeHandlerResponseSchemasFor<
+  TSuccessSchema,
+  typeof safePublicHandlerErrorOrStatusTextResponseSchema
+> => ({
+  200: successSchema,
+  ...SAFE_PUBLIC_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS,
+});
+
 // The conditional form is intentional: it keeps status unions distributive so
 // Eden sees distinct error codes instead of a single widened response.
 type SafeStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
@@ -711,17 +796,67 @@ type SafeHandlerLogContext = {
   route: string;
 };
 
-const runSafeHandler = async <
+type ErrorStatusBuilder<TErrorStatus> = (
+  statusCode: HandlerErrorStatusCode,
+  body: SafeErrorBody,
+) => TErrorStatus;
+
+type RunSafeHandlerWithOptions<
   TContext extends SafeHandlerLogContext,
   TResult extends SafeHandlerPayload,
->(
-  ctx: TContext,
-  handler: SafeHandlerFn<TContext, TResult>,
-): Promise<SafeHandlerResult<TResult>> => {
+  TErrorStatus,
+> = {
+  ctx: TContext;
+  handler: SafeHandlerFn<TContext, TResult>;
+  /** Builds the response for every handled failure; owns the error wire shape. */
+  toErrorStatus: ErrorStatusBuilder<TErrorStatus>;
+};
+
+const runSafeHandlerInDeliveryScope = async <
+  TContext extends SafeHandlerLogContext,
+  TResult extends SafeHandlerPayload,
+  TErrorStatus,
+>({
+  ctx,
+  handler,
+  toErrorStatus,
+}: RunSafeHandlerWithOptions<TContext, TResult, TErrorStatus>): Promise<
+  TResult | TErrorStatus
+> => {
   try {
     const result = await Result.gen(() => handler(ctx));
 
     if (Result.isOk(result)) {
+      const response = result.value;
+      const responseSet: unknown = Reflect.get(ctx, "set");
+      const headers: unknown =
+        typeof responseSet === "object" && responseSet !== null
+          ? Reflect.get(responseSet, "headers")
+          : undefined;
+      let disposition: unknown;
+      if (headers instanceof Headers) {
+        disposition = headers.get("Content-Disposition");
+      } else if (typeof headers === "object" && headers !== null) {
+        disposition = Object.entries(headers)
+          .find(([key]) => key.toLowerCase() === "content-disposition")
+          ?.at(1);
+      }
+      if (
+        (response instanceof Response &&
+          response.ok &&
+          response.body !== null) ||
+        response instanceof ArrayBuffer ||
+        ArrayBuffer.isView(response) ||
+        response instanceof Blob ||
+        response instanceof ReadableStream ||
+        (disposition !== undefined && disposition !== null)
+      ) {
+        markContentDeliveryIntent();
+      }
+      const deliveryError = getContentDeliveryReceiptError();
+      if (deliveryError) {
+        throw deliveryError;
+      }
       return result.value;
     }
 
@@ -742,7 +877,7 @@ const runSafeHandler = async <
         telemetry: safeErrorTelemetryDisposition(statusCode),
       });
 
-      return toSafeStatusResponse(statusCode, safeErrorBody(handlerError));
+      return toErrorStatus(statusCode, safeErrorBody(handlerError));
     }
 
     if (DatabaseError.is(error)) {
@@ -754,7 +889,7 @@ const runSafeHandler = async <
         telemetry: "capture",
       });
 
-      return toSafeStatusResponse(500, {
+      return toErrorStatus(500, {
         code: API_ERROR_CODE.internalServerError,
         message: "Internal server error",
       });
@@ -772,7 +907,7 @@ const runSafeHandler = async <
         telemetry: "capture",
       });
 
-      return toSafeStatusResponse(400, {
+      return toErrorStatus(400, {
         code: API_ERROR_CODE.accessDenied,
         message: "Access denied",
       });
@@ -786,7 +921,7 @@ const runSafeHandler = async <
       telemetry: "capture",
     });
 
-    return toSafeStatusResponse(500, {
+    return toErrorStatus(500, {
       code: API_ERROR_CODE.internalServerError,
       message: "Internal server error",
     });
@@ -810,10 +945,7 @@ const runSafeHandler = async <
         statusCode: handlerError.status,
         telemetry: safeErrorTelemetryDisposition(handlerError.status),
       });
-      return toSafeStatusResponse(
-        handlerError.status,
-        safeErrorBody(handlerError),
-      );
+      return toErrorStatus(handlerError.status, safeErrorBody(handlerError));
     }
 
     logAndCaptureSafeError({
@@ -824,12 +956,53 @@ const runSafeHandler = async <
       telemetry: "capture",
     });
 
-    return toSafeStatusResponse(500, {
+    return toErrorStatus(500, {
       code: API_ERROR_CODE.internalServerError,
       message: "Internal server error",
     });
   }
 };
+
+const runSafeHandlerWith = async <
+  TContext extends SafeHandlerLogContext,
+  TResult extends SafeHandlerPayload,
+  TErrorStatus,
+>({
+  contentDelivery,
+  ...options
+}: RunSafeHandlerWithOptions<TContext, TResult, TErrorStatus> & {
+  contentDelivery: ContentDelivery | undefined;
+}): Promise<TResult | TErrorStatus> =>
+  await runWithContentDeliveryScope(
+    contentDelivery,
+    async () => await runSafeHandlerInDeliveryScope(options),
+  );
+
+type RunSafeHandlerOptions<
+  TContext extends SafeHandlerLogContext,
+  TResult extends SafeHandlerPayload,
+> = {
+  ctx: TContext;
+  handler: SafeHandlerFn<TContext, TResult>;
+  contentDelivery: ContentDelivery | undefined;
+};
+
+const runSafeHandler = async <
+  TContext extends SafeHandlerLogContext,
+  TResult extends SafeHandlerPayload,
+>({
+  ctx,
+  handler,
+  contentDelivery,
+}: RunSafeHandlerOptions<TContext, TResult>): Promise<
+  SafeHandlerResult<TResult>
+> =>
+  await runSafeHandlerWith({
+    ctx,
+    handler,
+    contentDelivery,
+    toErrorStatus: toSafeStatusResponse,
+  });
 
 type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
   ? unknown
@@ -876,14 +1049,19 @@ const runAdmittedFiniteHandler = async function* <
           getRequestContext(ctx.request)?.requestId ?? Bun.randomUUIDv7(),
       },
       run: async (signal) => {
-        // A disconnected request may carry no reason after signal composition.
+        // Check before composing signals: composition can drop the request's
+        // reason. Keep a typed refusal's status; any other disconnect is a 400.
         if (ctx.request.signal.aborted) {
+          // The DOM types the reason as any; read it as unknown and narrow.
+          const reason: unknown = ctx.request.signal.reason;
           return Result.err(
-            new HandlerError({
-              status: 400,
-              message: "Request aborted",
-              cause: ctx.request.signal.reason,
-            }),
+            reason instanceof HandlerError
+              ? reason
+              : new HandlerError({
+                  status: 400,
+                  message: "Request aborted",
+                  cause: reason,
+                }),
           );
         }
         ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);
@@ -939,9 +1117,6 @@ export const admitFiniteAction = async function* <
   handler: SafeHandlerFn<TContext, TResult> &
     NoInfer<FiniteHandlerGuard<TResult>>;
 }): SafeHandlerGenerator<TResult> {
-  if (!env.FEATURE_ACTION_ADMISSION && !env.FEATURE_ACTION_COST_RECORDS) {
-    return yield* handler(ctx);
-  }
   return yield* runAdmittedFiniteHandler({
     actionKind,
     ctx,
@@ -953,7 +1128,13 @@ export const admitFiniteAction = async function* <
 type HandlerAdmissionDependencies = {
   admit?: typeof withActionAdmission;
   checkAccountOperation?: typeof checkDemoAccountOperation;
+  announce?: typeof announceResourceSetUpdates;
 };
+
+const REALTIME_ANNOUNCEMENT_FAILURE = failureSink({
+  event: "resource-set-realtime.announce",
+  expected: [],
+});
 
 const createSafeScopedHandler = <
   TConfig extends HandlerConfig,
@@ -965,6 +1146,7 @@ const createSafeScopedHandler = <
   {
     admit = withActionAdmission,
     checkAccountOperation = checkDemoAccountOperation,
+    announce = announceResourceSetUpdates,
   }: HandlerAdmissionDependencies = {},
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
@@ -977,7 +1159,7 @@ const createSafeScopedHandler = <
       });
     }
 
-    if (requiresStandardAccount(config.permissions)) {
+    if (requiresStandardAccount(config.accountAccess)) {
       const accountAccess = checkAccountOperation(ctx.user.email);
       if (Result.isError(accountAccess)) {
         return toSafeStatusResponse(403, {
@@ -1022,21 +1204,41 @@ const createSafeScopedHandler = <
     }
 
     const admission = config.actionAdmission;
+    const result = await runSafeHandler({
+      ctx,
+      contentDelivery: config.contentDelivery,
+      handler:
+        admission === undefined
+          ? handler
+          : (input) =>
+              runAdmittedFiniteHandler({
+                ctx: input,
+                handler,
+                admit,
+                actionKind: admission.actionKind,
+              }),
+    });
+    // The transaction has settled; realtime delivery cannot change its result.
     if (
-      admission === undefined ||
-      (!env.FEATURE_ACTION_ADMISSION && !env.FEATURE_ACTION_COST_RECORDS)
+      config.realtime !== undefined &&
+      config.realtime.scope !== "none" &&
+      isSuccessfulHandlerResult(result)
     ) {
-      return await runSafeHandler(ctx, handler);
+      const announcement = Result.try(() =>
+        announce({
+          realtime: config.realtime,
+          result,
+          organizationId: ctx.session.activeOrganizationId,
+          workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : undefined,
+        }),
+      );
+      if (Result.isError(announcement)) {
+        observeFailure(announcement.error, {
+          sink: REALTIME_ANNOUNCEMENT_FAILURE,
+        });
+      }
     }
-
-    return await runSafeHandler(ctx, (input) =>
-      runAdmittedFiniteHandler({
-        ctx: input,
-        handler,
-        admit,
-        actionKind: admission.actionKind,
-      }),
-    );
+    return result;
   },
 });
 
@@ -1380,7 +1582,7 @@ export const assertRunSizeConfirmedForHandler = async ({
 };
 
 const createSafeDirectHandler = <
-  TConfig extends InputSchema,
+  TConfig extends InputSchema & ContentDeliveryDisposition,
   TContext extends SafeHandlerLogContext,
   TResult extends SafeHandlerPayload,
 >(
@@ -1389,13 +1591,18 @@ const createSafeDirectHandler = <
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
   handler: async (ctx): Promise<SafeHandlerResult<TResult>> =>
-    await runSafeHandler(ctx, handler),
+    await runSafeHandler({
+      ctx,
+      handler,
+      contentDelivery: config.contentDelivery,
+    }),
 });
 
 const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   ...(error.code ? { code: error.code } : {}),
   message: error.message,
   ...(error.hint ? { hint: error.hint } : {}),
+  ...(error.clause ? { clause: error.clause } : {}),
   ...(error.contactUrl ? { contactUrl: error.contactUrl } : {}),
   ...(error.retryable === undefined ? {} : { retryable: error.retryable }),
   ...(error.issues ? { issues: error.issues } : {}),
@@ -1415,8 +1622,16 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   ...(error.requiredFields ? { requiredFields: error.requiredFields } : {}),
 });
 
+/**
+ * A root handler has no validated matter, so it can only announce
+ * organization-wide resource sets.
+ */
+type RootHandlerConfig = HandlerConfig & {
+  realtime?: OrganizationResourceSetUpdates | NoResourceSetUpdates;
+};
+
 export const createSafeRootHandler = <
-  TConfig extends HandlerConfig,
+  TConfig extends RootHandlerConfig,
   TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
@@ -1433,26 +1648,35 @@ export const createSafeHandler = <
   config: TConfig,
   handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult> &
     ConfiguredFiniteHandlerGuard<TConfig, TResult>,
+  dependencies?: HandlerAdmissionDependencies,
 ): SafeHandlerDefinition<TConfig, WorkspaceHandlerContext<TConfig>, TResult> =>
-  createSafeScopedHandler(config, (ctx) => {
-    // Elysia may expand validateAuth again after validateWorkspaceAccess when a
-    // route also declares permissions. That later resolve carries the root
-    // recorder and can overwrite the recorder bound by the workspace macro.
-    // Rebind here, where the context type proves workspaceId was validated, so
-    // workspace mutations cannot emit organization-only audit rows regardless
-    // of macro composition order.
-    // Direct unit tests below the Elysia boundary may intentionally use a
-    // minimal raw context. Real WorkspaceHandlerContext values always carry
-    // this factory; keep those fixture-only omissions from changing handler
-    // behavior while still rebinding every framework-produced request.
-    const recorderFactory: unknown = Reflect.get(ctx, "createAuditRecorder");
-    if (typeof recorderFactory === "function") {
-      ctx.recordAuditEvent = ctx.createAuditRecorder({
-        workspaceId: ctx.workspaceId,
-      });
-    }
-    return handler(ctx);
-  });
+  createSafeScopedHandler(
+    config,
+    (ctx) => {
+      // Elysia may expand validateAuth again after validateWorkspaceAccess when a
+      // route also declares permissions. That later resolve carries the root
+      // recorder and can overwrite the recorder bound by the workspace macro.
+      // Rebind here, where the context type proves workspaceId was validated, so
+      // workspace mutations cannot emit organization-only audit rows regardless
+      // of macro composition order.
+      // Direct unit tests below the Elysia boundary may intentionally use a
+      // minimal raw context. Real WorkspaceHandlerContext values always carry
+      // this factory; keep those fixture-only omissions from changing handler
+      // behavior while still rebinding every framework-produced request.
+      const recorderFactory: unknown = Reflect.get(ctx, "createAuditRecorder");
+      if (typeof recorderFactory === "function") {
+        ctx.recordAuditEvent = ctx.createAuditRecorder({
+          workspaceId: ctx.workspaceId,
+        });
+      }
+      return handler(ctx);
+    },
+    dependencies,
+  );
+
+type SessionHandlerDependencies = {
+  checkAccountOperation?: typeof checkDemoAccountOperation;
+};
 
 export const createSafeSessionHandler = <
   TConfig extends SessionHandlerConfig,
@@ -1460,8 +1684,28 @@ export const createSafeSessionHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<SessionHandlerContext<TConfig>, TResult>,
-): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> =>
-  createSafeDirectHandler(config, handler);
+  {
+    checkAccountOperation = checkDemoAccountOperation,
+  }: SessionHandlerDependencies = {},
+): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> => ({
+  config,
+  handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
+    if (requiresStandardAccount(config.accountAccess)) {
+      const accountAccess = checkAccountOperation(ctx.user.email);
+      if (Result.isError(accountAccess)) {
+        return toSafeStatusResponse(403, {
+          code: "account_access_unavailable",
+          message: "This operation is unavailable for this account.",
+        });
+      }
+    }
+    return await runSafeHandler({
+      ctx,
+      handler,
+      contentDelivery: config.contentDelivery,
+    });
+  },
+});
 
 /**
  * Config for self-authorizing (token) routes. The `body`, `query`, and
@@ -1477,7 +1721,9 @@ export type TokenHandlerConfig = Omit<
   "body" | "query" | "params"
 > &
   CapabilityDescription &
-  CapabilityAccess & {
+  ContentDeliveryDisposition &
+  CapabilityAccess &
+  SandboxAccountAccess & {
     body?: AnyPermissiveRouteSchema;
     query?: AnyPermissiveRouteSchema;
     params?: AnyPermissiveRouteSchema;
@@ -1486,7 +1732,11 @@ export type TokenHandlerConfig = Omit<
 
 type TokenHandlerContext<
   TConfig extends TokenHandlerConfig = TokenHandlerConfig,
-> = Context<UnwrapRoute<Omit<TConfig, "mcp" | "description" | "access">>>;
+> = Context<
+  UnwrapRoute<
+    Omit<TConfig, "mcp" | "description" | "access" | "contentDelivery">
+  >
+>;
 
 /**
  * Like `createSafeSessionHandler`, but the framework does not
@@ -1507,14 +1757,20 @@ export const createSafeTokenHandler = <
 
 export type PublicHandlerConfig = InputSchema &
   CapabilityDescription &
-  CapabilityAccess & {
+  ContentDeliveryDisposition &
+  CapabilityAccess &
+  SandboxAccountAccess & {
     cache: CachePolicy;
     mcp: McpExposure;
   };
 
 export type PublicHandlerContext<
   TConfig extends PublicHandlerConfig = PublicHandlerConfig,
-> = Context<UnwrapRoute<Omit<TConfig, "mcp" | "description" | "access">>>;
+> = Context<
+  UnwrapRoute<
+    Omit<TConfig, "mcp" | "description" | "access" | "contentDelivery">
+  >
+>;
 
 /**
  * Handlers this factory produced. A public route census asserts that every
@@ -1526,14 +1782,35 @@ const safePublicHandlers = new WeakMap<object, CachePolicy>();
 export const getPublicHandlerCachePolicy = (handler: unknown) =>
   typeof handler === "function" ? safePublicHandlers.get(handler) : undefined;
 
-/** Whether a mounted route handler came out of `createSafePublicHandler`. */
+/** Whether a mounted route handler came out of a public handler factory. */
 export const isSafePublicHandler = (handler: unknown): boolean =>
   typeof handler === "function" && safePublicHandlers.has(handler);
+
+type SafePublicStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
+  TStatusCode extends HandlerErrorStatusCode
+    ? ElysiaCustomStatusResponse<
+        TStatusCode,
+        string | ReturnType<typeof projectPublicErrorBody>
+      >
+    : never;
+
+function toSafePublicStatusResponse<TStatusCode extends HandlerErrorStatusCode>(
+  statusCode: TStatusCode,
+  body: string | ReturnType<typeof projectPublicErrorBody>,
+): SafePublicStatusResponse<TStatusCode>;
+function toSafePublicStatusResponse(
+  statusCode: HandlerErrorStatusCode,
+  body: string | ReturnType<typeof projectPublicErrorBody>,
+) {
+  return status(statusCode, body);
+}
 
 /**
  * For unauthenticated routes that intentionally expose public data.
  * The handler still gets structured error capture and sanitized
  * responses, but no user, org, workspace, or permission context.
+ * Error bodies keep their ceremony fields for self-authorizing endpoints;
+ * corpus routes use `createSafeBoundedPublicHandler`.
  */
 export const createSafePublicHandler = <
   TConfig extends PublicHandlerConfig,
@@ -1541,11 +1818,15 @@ export const createSafePublicHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,
-): SafeHandlerDefinition<TConfig, PublicHandlerContext<TConfig>, TResult> => {
+) => {
   const definition = {
     config,
     handler: async (ctx: PublicHandlerContext<TConfig>) => {
-      const response = await runSafeHandler(ctx, handler);
+      const response = await runSafeHandler({
+        ctx,
+        handler,
+        contentDelivery: config.contentDelivery,
+      });
       applyResponseCachePolicy({
         cache: config.cache,
         response,
@@ -1557,6 +1838,116 @@ export const createSafePublicHandler = <
   safePublicHandlers.set(definition.handler, config.cache);
   return definition;
 };
+
+const toBoundedPublicErrorStatus = (
+  statusCode: HandlerErrorStatusCode,
+  body: SafeErrorBody,
+) => toSafePublicStatusResponse(statusCode, projectPublicErrorBody(body));
+
+/** What a handler answers with a 200: its result minus statuses and raw bodies. */
+type SuccessPayload<TResult> = TResult extends
+  | ElysiaCustomStatusResponse<infer _Code, infer _Body, infer _Status>
+  | Response
+  ? never
+  : TResult;
+
+/**
+ * A payload with every array and property readonly. Primitives, branded ones
+ * included, and `unknown` stay as they are; the mapped type is homomorphic, so
+ * tuples stay tuples.
+ */
+type ReadonlyWire<T> = unknown extends T
+  ? T
+  : T extends string | number | boolean | bigint | null | undefined
+    ? T
+    : { readonly [Key in keyof T]: ReadonlyWire<T[Key]> };
+
+/**
+ * Binds a public route's 200 schema to the data its handler returns.
+ *
+ * Elysia checks only that the payload is assignable to the schema, and Eden
+ * types the client from the schema, so a schema looser than the data (a plain
+ * string for a `SafeId`, `X | null` for `X`, `number` for a literal, a key the
+ * data never has) compiles and misdescribes the wire. Requiring the reverse
+ * direction too makes the two mutually assignable. Readonly differences do not
+ * count: the schema is compared with a readonly view of the data, which a
+ * readonly or a mutable schema array are both assignable to.
+ */
+export type ExactSuccessSchemaGuard<TConfig, TResult> = TConfig extends {
+  response: { 200: infer TSuccessSchema extends TSchema };
+}
+  ? [SuccessPayload<TResult>] extends [never]
+    ? unknown
+    : [Static<TSuccessSchema>] extends [ReadonlyWire<SuccessPayload<TResult>>]
+      ? unknown
+      : {
+          responseSchemaLooserThanData: {
+            schema: Static<TSuccessSchema>;
+            data: SuccessPayload<TResult>;
+          };
+        }
+  : unknown;
+
+/**
+ * `createSafeBoundedPublicHandler` without the schema guard, for a factory
+ * whose result type is still generic where it calls this one; that factory
+ * applies `ExactSuccessSchemaGuard` on its own entry points instead.
+ */
+export const createSafeUncheckedBoundedPublicHandler = <
+  TConfig extends PublicHandlerConfig,
+  TResult extends SafeHandlerPayload,
+>(
+  config: TConfig,
+  handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,
+) => {
+  const definition = {
+    config,
+    handler: async (ctx: PublicHandlerContext<TConfig>) => {
+      const result = await runSafeHandlerWith({
+        ctx,
+        handler,
+        contentDelivery: config.contentDelivery,
+        toErrorStatus: toBoundedPublicErrorStatus,
+      });
+      const response =
+        // Projection is idempotent, so factory-built statuses pass through it
+        // unchanged; handler-returned statuses are bounded the same way.
+        result instanceof ElysiaCustomStatusResponse && result.code >= 400
+          ? toSafePublicStatusResponse(
+              result.code,
+              typeof result.response === "string"
+                ? truncateTextBytes(
+                    result.response,
+                    PUBLIC_ERROR_TEXT_BYTES.statusText,
+                  )
+                : projectPublicErrorBody(result.response),
+            )
+          : result;
+      applyResponseCachePolicy({
+        cache: config.cache,
+        response,
+        set: ctx.set,
+      });
+      return response;
+    },
+  };
+  safePublicHandlers.set(definition.handler, config.cache);
+  return definition;
+};
+
+/**
+ * A public corpus route: every error answers with the bounded public body
+ * (`safePublicHandlerErrorResponseSchema`), whether the failure is handled
+ * by the factory or returned as a status by the handler itself.
+ */
+export const createSafeBoundedPublicHandler = <
+  TConfig extends PublicHandlerConfig,
+  TResult extends SafeHandlerPayload,
+>(
+  config: TConfig,
+  handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult> &
+    NoInfer<ExactSuccessSchemaGuard<TConfig, TResult>>,
+) => createSafeUncheckedBoundedPublicHandler(config, handler);
 
 /**
  * Whether a failure also reaches the exception reporter.

@@ -6,6 +6,7 @@ import type { Transaction } from "@/api/db/root";
 import { resultTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
+  INVOICE_ATTACHMENT,
   expenses,
   INVOICE_STATUS,
   invoiceLines,
@@ -13,10 +14,16 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
+import {
+  lockDraftInvoiceForLines,
+  recalculateInvoiceTotals,
+} from "@/api/handlers/invoices/invoice-lines";
 import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder, AuditEvent } from "@/api/lib/audit-log";
+import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import {
   allocateNumber,
   findDefaultNumberSeries,
@@ -26,8 +33,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
-
-import { validateInvoiceDocument } from "./document-type";
 
 type TransitionAction =
   | "finalize"
@@ -155,6 +160,7 @@ const releaseInvoiceEntries = async (
     .set({
       status: BILLING_STATUS.APPROVED,
       invoiceId: null,
+      invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
       updatedAt: now,
     })
     .where(
@@ -215,6 +221,8 @@ const transitionInvoice = createSafeHandler(
       "reference an eligible original and cannot exceed its total. Voiding releases " +
       "attached entries and clears the paid timestamp.",
     permissions: { invoice: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: invoiceRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",
@@ -226,6 +234,7 @@ const transitionInvoice = createSafeHandler(
   async function* ({
     safeDb,
     user,
+    session,
     workspaceId,
     params,
     body,
@@ -236,7 +245,7 @@ const transitionInvoice = createSafeHandler(
     const result = await resultTx(
       safeDb,
       async (tx): Promise<Result<{ id: SafeId<"invoice"> }, HandlerError>> => {
-        if (body.action === "void") {
+        if (body.action === "void" || body.action === "finalize") {
           const runningError = await guardRunningTimeEntries({
             tx,
             workspaceId,
@@ -296,22 +305,34 @@ const transitionInvoice = createSafeHandler(
           set.finalizedAt = existing.finalizedAt ?? now;
         }
         if (body.action === "finalize") {
-          const valid = await validateInvoiceDocument(tx, {
+          const scope = {
             invoiceId: existing.id,
             workspaceId,
-            documentType: existing.documentType,
-            originalInvoiceId: existing.originalInvoiceId,
-            currency: existing.currency,
-            totalAmount: existing.totalAmount,
-          });
-          if (valid.isErr()) {
-            return Result.err(valid.error);
+            organizationId: session.activeOrganizationId,
+          };
+          const draft = await lockDraftInvoiceForLines(
+            tx,
+            scope,
+            recordAuditEvent,
+          );
+          if (draft.isErr()) {
+            return Result.err(draft.error);
+          }
+          const totals = await recalculateInvoiceTotals(
+            tx,
+            scope,
+            now,
+            recordAuditEvent,
+          );
+          if (totals.isErr()) {
+            return Result.err(totals.error);
           }
           set.finalizedAt = existing.finalizedAt ?? now;
           if (existing.invoiceNumber === null) {
             const series = await findDefaultNumberSeries(
               tx,
               existing.documentType,
+              existing.sellerProfileId,
             );
             if (!series) {
               return Result.err(
@@ -319,7 +340,7 @@ const transitionInvoice = createSafeHandler(
                   status: 409,
                   message:
                     "No default number series configured for this document type",
-                  hint: "Create or update a number series with this documentType and isDefault=true, then finalize again.",
+                  hint: "Create a number series for this documentType and this seller or all sellers, set it as default, then finalize again.",
                 }),
               );
             }
@@ -366,6 +387,10 @@ const transitionInvoice = createSafeHandler(
           if (release.isErr()) {
             return Result.err(release.error);
           }
+          await recordBillingCapCrossings(tx, {
+            workspaceId,
+            recordAuditEvent,
+          });
         } else {
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.UPDATE,

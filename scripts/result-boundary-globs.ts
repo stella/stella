@@ -26,6 +26,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "apps/api/src/handlers/realtime-resource-sets.ts",
   "apps/api/src/lib/auth/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
   "apps/api/src/handlers/ai-config/**/*.ts",
@@ -60,6 +61,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/saved-time-narratives/**/*.ts",
   "apps/api/src/handlers/saved-searches/**/*.ts",
   "apps/api/src/handlers/search/**/*.ts",
+  "apps/api/src/handlers/soft-law/**/*.ts",
   "apps/api/src/handlers/seller-profiles/**/*.ts",
   "apps/api/src/handlers/tasks/**/*.ts",
   "apps/api/src/handlers/template-packs/**/*.ts",
@@ -81,7 +83,9 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/email/correspondence/**/*.ts",
   "apps/api/src/lib/email/inbound/**/*.ts",
   "apps/api/src/lib/extraction-runs/**/*.ts",
+  "apps/api/src/lib/fields/**/*.ts",
   "apps/api/src/lib/files/pdf-signing/**/*.ts",
+  "apps/api/src/lib/github/**/*.ts",
   "apps/api/src/lib/infosoud/**/*.ts",
   "apps/api/src/lib/json-schema/**/*.ts",
   "apps/api/src/lib/lists/**/*.ts",
@@ -93,6 +97,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/s3/**/*.ts",
   "apps/api/src/lib/skills/**/*.ts",
   "apps/api/src/lib/smoke-session/**/*.ts",
+  "apps/api/src/lib/system-audit/**/*.ts",
   "apps/api/src/lib/template-binding/**/*.ts",
   "apps/api/src/lib/uploads/**/*.ts",
   "apps/api/src/lib/usage/**/*.ts",
@@ -115,6 +120,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/organization/**/*.{ts,tsx}",
   "apps/web/src/components/billing/**/*.{ts,tsx}",
   "apps/web/src/components/public-law-table/**/*.{ts,tsx}",
+  "apps/web/src/components/references/**/*.{ts,tsx}",
   "apps/web/src/features/avt/**/*.{ts,tsx}",
   "apps/web/src/features/command-palette/**/*.{ts,tsx}",
   "apps/web/src/features/desktop/**/*.{ts,tsx}",
@@ -128,6 +134,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
   "apps/web/src/queries/**/*.{ts,tsx}",
+  "apps/web/src/routes/-protected-app/**/*.{ts,tsx}",
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
@@ -166,6 +173,8 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 export const RESULT_BOUNDARY_GLOBS = [
   // Better Auth invokes these hooks and consumes rejected APIError values.
   "apps/api/src/lib/auth/demo-account-hooks.ts",
+  // Better Auth consumes adapter failures through Promise rejection.
+  "apps/api/src/lib/auth/registration-adapter.ts",
 
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",
@@ -218,6 +227,12 @@ export const RESULT_BOUNDARY_GLOBS = [
   // These packages are boundary adapters by design: the runtime turns
   // invalid startup state into fatal exceptions, while the testkit exposes
   // assertion failures to test runners.
+  // Fetch-compatible callback used by Better Auth's customFetchImpl. The SDK
+  // consumes Response/rejection, so this HTTP boundary cannot return Result.
+  "packages/fetch/src/index.ts",
+  // The publisher HTTP boundary keeps the fetch-compatible rejection contract;
+  // adapters convert its typed failures to Result at their ingestion boundary.
+  "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
   "packages/property-testing/src/index.ts",

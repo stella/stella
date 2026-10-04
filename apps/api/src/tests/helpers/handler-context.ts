@@ -1,7 +1,5 @@
 import { panic } from "better-result";
 
-import type { roles } from "@stll/permissions";
-
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
@@ -13,6 +11,9 @@ import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 /**
@@ -32,15 +33,14 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
  * (`getActiveWorkspaceIds`, `getWorkspaceAccess`, `createAuditRecorder`, ...)
  * that the DB-backed integration contexts need, so one factory covers both the
  * pure-mock and the PGlite-backed styles. Every field is overridable, and the
- * three nested identity objects deep-merge so a caller can change just
- * `session.activeOrganizationId` or just `memberRole.role` without restating
- * the rest.
+ * session and user identity objects deep-merge; member authority is replaced
+ * as one value.
  */
 
 /** The identity/capability fields the factory owns defaults for. */
 export type BaseTestHandlerContext = {
   workspaceId: SafeId<"workspace">;
-  memberRole: { role: keyof typeof roles };
+  memberRole: AuthorizedMemberRole;
   session: { activeOrganizationId: SafeId<"organization"> };
   user: { id: SafeId<"user">; email: string };
   safeDb: SafeDb;
@@ -79,7 +79,7 @@ const DEFAULT_WORKSPACE_ID = toSafeId<"workspace">("workspace_test");
 const DEFAULT_ORGANIZATION_ID = toSafeId<"organization">("org_test");
 const DEFAULT_USER_ID = toSafeId<"user">("user_test");
 
-const noopAuditRecorder: AuditRecorder = async () => await Promise.resolve();
+const noopAuditRecorder: AuditRecorder = auditRecorderDouble();
 
 // A handler that reaches for the database without the test providing one is a
 // test bug, not an empty result: fail loudly instead of silently returning
@@ -91,7 +91,7 @@ const unconfiguredDb = (): never =>
 
 const createBaseContext = (): BaseTestHandlerContext => ({
   workspaceId: DEFAULT_WORKSPACE_ID,
-  memberRole: { role: "owner" },
+  memberRole: sessionMemberRole("owner"),
   session: { activeOrganizationId: DEFAULT_ORGANIZATION_ID },
   user: { id: DEFAULT_USER_ID, email: "standard@example.test" },
   safeDb: unconfiguredDb,
@@ -136,9 +136,8 @@ export const createTestHandlerContext = <TContext = BaseTestHandlerContext>(
   return asTestRaw<TContext>({
     ...base,
     ...overrides,
-    // Deep-merge the nested identity objects so a caller can override a single
-    // field (just the org id, just the role) without restating the siblings.
-    memberRole: { ...base.memberRole, ...overrides.memberRole },
+    // Merge identity details and replace authority as one value.
+    memberRole: overrides.memberRole ?? base.memberRole,
     session: { ...base.session, ...overrides.session },
     user: { ...base.user, ...overrides.user },
   });

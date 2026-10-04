@@ -40,7 +40,7 @@ import {
   type PersistedSearchSummarySources,
 } from "@/api/handlers/chat/export/export-shared";
 import { styleDocumentCitationsWithCounts } from "@/api/handlers/chat/export/style-document-citations";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
@@ -91,6 +91,8 @@ const onlySourceDocumentTitle = (
 };
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
+  contentDelivery: { type: "audited" },
   description:
     "Export one assistant chat message as a DOCX document with the selected " +
     "citation style. Returns a short-lived download URL.",
@@ -253,11 +255,14 @@ const createMessageExport = createSafeRootHandler(
     yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await writeS3ObjectWithRetry({
-            contentType: DOCX_MIME_TYPE,
-            data: new Uint8Array(renderedExport.docx),
-            key,
-          }),
+          await writeS3ObjectWithRetry(
+            {
+              contentType: DOCX_MIME_TYPE,
+              data: new Uint8Array(renderedExport.docx),
+              key,
+            },
+            { type: "lifecycle-prefix", prefix: "exports/" },
+          ),
         catch: (cause) =>
           new HandlerError({
             status: 502,

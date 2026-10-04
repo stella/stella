@@ -10,13 +10,14 @@ import {
   resolveUiLocale,
 } from "@stll/locales";
 import type { UiLocale } from "@stll/locales";
-import { stellaToast } from "@stll/ui/toast";
 
 import { getStorageKey } from "@/consts";
 import en from "@/i18n/langs/en.json";
 import { resolveAppTimeZone, SERVER_I18N_TIME_ZONE } from "@/i18n/time-zone";
+import { getTranslator, setTranslator } from "@/i18n/translator";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 
 export type { TextDirection } from "@stll/locales";
@@ -227,12 +228,14 @@ export const loadLocaleMessages = async (
   return withFolioMessages(messages, folioCatalog);
 };
 
-let translator = createTranslator({
-  locale: "en",
-  messages: defaultMessages,
-});
+setTranslator(
+  createTranslator({
+    locale: "en",
+    messages: defaultMessages,
+  }),
+);
 
-export const getTranslator = () => translator;
+export { getTranslator } from "@/i18n/translator";
 
 export type CalendarPreference = "auto" | "gregory" | "islamic-umalqura";
 export type NumberingPreference = "auto" | "latn" | "arab";
@@ -387,10 +390,12 @@ const applyMessages = ({
   numberingSystem,
   weekStart,
 }: ApplyMessagesArgs): void => {
-  translator = createTranslator({
-    locale: lang,
-    messages,
-  });
+  setTranslator(
+    createTranslator({
+      locale: lang,
+      messages,
+    }),
+  );
   refreshFormatter(
     buildFormattingLocale({
       lang,
@@ -477,10 +482,7 @@ export const useI18nStore = create<State & Actions>()(
           // The UI stays in the previous language; tell the user the switch
           // did not happen. The toast renders in that previous language.
           getAnalytics().captureError(error);
-          stellaToast.add({
-            type: "error",
-            title: translator("common.languageLoadFailed"),
-          });
+          notifyUserError(error, getTranslator()("common.languageLoadFailed"));
           return;
         }
 

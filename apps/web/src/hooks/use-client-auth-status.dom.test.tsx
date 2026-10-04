@@ -71,6 +71,7 @@ const readSession = async (
       retry: false,
       staleTime: 0,
     })
+    // swallow-ok: injected session failure is asserted as unavailable hook state by the calling tests
     .catch(() => undefined);
 };
 

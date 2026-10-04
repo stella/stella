@@ -11,6 +11,12 @@ concurrency:
 
 permissions: {}
 
+env:
+  # Disposable non-RDS databases: online index builds in migrate must not wait
+  # on EBS metrics or a wall-clock busy window.
+  DB_LOAD_GATE_EBS_SIGNAL: disabled
+  DB_LOAD_GATE_BUSY_WINDOWS: "[]"
+
 jobs:
   scope:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
@@ -255,7 +261,7 @@ jobs:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           EMAIL_PROVIDER: smtp
           FRONTEND_URL: "http://127.0.0.1:3000"
-          GOTENBERG_PASSWORD: gotenberg
+          GOTENBERG_PASSWORD: migration-smoke-password
           GOTENBERG_URL: "http://127.0.0.1:3000"
           GOTENBERG_USERNAME: gotenberg
           REDIS_URL: "redis://127.0.0.1:6379"

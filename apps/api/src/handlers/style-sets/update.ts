@@ -3,7 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { styleSets } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
@@ -23,6 +23,7 @@ const config = {
     "name. The stored style package is untouched, so use style-sets.replace " +
     "or style-sets.from-editor.update to change the styles themselves.",
   permissions: { styleSet: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

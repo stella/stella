@@ -10,7 +10,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { applyMarkupCents, prorateHourlyCents } from "@stll/money";
+import { applyMarkupCents, timeEntryAmount } from "@stll/money";
 import { Temporal } from "@stll/time";
 import {
   AlertDialog,
@@ -40,7 +40,6 @@ import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
@@ -49,7 +48,8 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -77,6 +77,7 @@ export const Route = createFileRoute(
       invoiceByIdOptions(params.workspaceId, params.invoiceId),
     );
   },
+  remountDeps: ({ params }) => [params.workspaceId, params.invoiceId],
 });
 
 function InvoiceDetailPage() {
@@ -197,8 +198,8 @@ const InvoiceDetailSkeleton = () => (
   </div>
 );
 
-const showErrorToast = (title: string) => {
-  stellaToast.add({ type: "error", title });
+const showErrorToast = (error: unknown, title: string) => {
+  notifyUserError(error, title);
 };
 
 const InvoiceDetail = ({
@@ -254,8 +255,8 @@ const InvoiceDetail = ({
     onSuccess: () => {
       invalidateAll();
     },
-    onError: () => {
-      showErrorToast(t("common.somethingWentWrong"));
+    onError: (error) => {
+      showErrorToast(error, t("common.somethingWentWrong"));
     },
   });
 
@@ -275,8 +276,8 @@ const InvoiceDetail = ({
         params: { workspaceId },
       });
     },
-    onError: () => {
-      showErrorToast(t("common.somethingWentWrong"));
+    onError: (error) => {
+      showErrorToast(error, t("common.somethingWentWrong"));
     },
   });
 
@@ -294,8 +295,8 @@ const InvoiceDetail = ({
     onSuccess: () => {
       invalidateAll();
     },
-    onError: () => {
-      showErrorToast(t("common.somethingWentWrong"));
+    onError: (error) => {
+      showErrorToast(error, t("common.somethingWentWrong"));
     },
   });
 
@@ -313,8 +314,8 @@ const InvoiceDetail = ({
     onSuccess: () => {
       invalidateAll();
     },
-    onError: () => {
-      showErrorToast(t("common.somethingWentWrong"));
+    onError: (error) => {
+      showErrorToast(error, t("common.somethingWentWrong"));
     },
   });
 
@@ -441,10 +442,7 @@ const InvoiceDetail = ({
                     </td>
                     <td className="px-4 py-2 text-end tabular-nums">
                       {formatCurrencyAmount(
-                        prorateHourlyCents({
-                          billedMinutes: entry.billedMinutes,
-                          hourlyRateCents: entry.rateAtEntry,
-                        }),
+                        timeEntryAmount(entry),
                         entry.currency,
                       )}
                     </td>
@@ -790,7 +788,7 @@ const EditInvoiceForm = ({
             notes: value.notes || null,
           });
         if (response.error) {
-          showErrorToast(t("billing.failedToSave"));
+          showErrorToast(toAPIError(response.error), t("billing.failedToSave"));
           return;
         }
         detached(

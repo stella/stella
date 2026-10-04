@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
 import type {
@@ -11,13 +12,26 @@ import { auditLogs } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveClientIp } from "@/api/lib/client-ip";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
+import { recordContentDeliveryReceipt } from "@/api/lib/files/content-delivery";
 
-import { auditDetailsForResource } from "./audit-log-details";
+import {
+  auditChangesForResource,
+  auditMetadataForResource,
+} from "./audit-log-details";
+import type {
+  ChatAuditChanges,
+  ChatAuditResourceType,
+  NonChatAuditResourceType,
+} from "./audit-log-details";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "./audit-log.constants";
 import type { AuditAction, AuditResourceType } from "./audit-log.constants";
 
 export { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "./audit-log.constants";
 export type { AuditAction, AuditResourceType } from "./audit-log.constants";
+export type {
+  ChatAuditChanges,
+  NonChatAuditResourceType,
+} from "./audit-log-details";
 
 type ServerLike = {
   requestIP: (request: Request) => { address: string } | null;
@@ -79,11 +93,9 @@ export type AuditExecutionContext = {
       };
 };
 
-export type AuditEvent = {
+type AuditEventFields = {
   action: AuditAction;
-  resourceType: AuditResourceType;
   resourceId: string;
-  changes?: FieldDiffs | null;
   // Merged onto the base request metadata (IP, UA, forwardedFor).
   // Use for non-diff context (download s3Key, fileName, etc.).
   metadata?: AuditMetadata;
@@ -93,8 +105,36 @@ export type AuditEvent = {
   workspaceId?: SafeId<"workspace"> | null;
 };
 
+// Requiring rollback keeps a database handle from standing in for a transaction.
+type AuditTransaction = Pick<
+  PgAsyncDatabase<PgQueryResultHKT>,
+  "insert" | "select"
+> &
+  Pick<Transaction, "rollback">;
+
+/** Chat entries carry only the change fields their resource type lists. */
+type ChatAuditEvent = {
+  [T in ChatAuditResourceType]: AuditEventFields & {
+    resourceType: T;
+    changes?: ChatAuditChanges[T] | null;
+  };
+}[ChatAuditResourceType];
+
+export type AuditEvent =
+  | ChatAuditEvent
+  | (AuditEventFields & {
+      resourceType: NonChatAuditResourceType;
+      changes?: FieldDiffs | null;
+    })
+  // Any resource without a change payload, for helpers that take the
+  // resource type as a parameter.
+  | (AuditEventFields & {
+      resourceType: AuditResourceType;
+      changes?: null;
+    });
+
 export type AuditRecorder = (
-  tx: Transaction,
+  tx: AuditTransaction,
   event: AuditEvent | AuditEvent[],
 ) => Promise<void>;
 
@@ -176,15 +216,20 @@ const executionColumns = (
   };
 };
 
+/** An event's change payload read as plain field diffs, whatever its resource. */
+export const auditEventChanges = (
+  event: AuditEvent,
+): FieldDiffs | null | undefined => event.changes;
+
 const entityActivityCategory = (event: AuditEvent): AuditActivityCategory => {
-  const createdEntity = event.changes?.["created"]?.new;
+  const createdEntity = auditEventChanges(event)?.["created"]?.new;
   const createdKind =
     typeof createdEntity === "object" &&
     createdEntity !== null &&
     "kind" in createdEntity
       ? createdEntity.kind
       : null;
-  const deletedEntity = event.changes?.["deleted"]?.old;
+  const deletedEntity = auditEventChanges(event)?.["deleted"]?.old;
   const deletedKind =
     typeof deletedEntity === "object" &&
     deletedEntity !== null &&
@@ -207,8 +252,8 @@ const playbookActivityCategory = (event: AuditEvent): AuditActivityCategory =>
   event.action === AUDIT_ACTION.EXECUTE ? "automation" : "other";
 
 const workspaceActivityCategory = (event: AuditEvent): AuditActivityCategory =>
-  event.changes?.["membersAdded"] !== undefined ||
-  event.changes?.["membersRemoved"] !== undefined
+  auditEventChanges(event)?.["membersAdded"] !== undefined ||
+  auditEventChanges(event)?.["membersRemoved"] !== undefined
     ? "team"
     : "matter";
 
@@ -257,6 +302,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   usage_allocation: "other",
   usage_entitlement: "other",
   usage_event: "other",
+  usage_provider_event: "other",
   desktop_edit_session: "other",
   pdf_signing_session: "other",
   expense: "other",
@@ -331,10 +377,18 @@ const baseRequestMetadata = (
  * creations in one transaction).
  */
 const insertAuditRows = async (
-  tx: Transaction,
+  tx: AuditTransaction,
   rows: readonly (typeof auditLogs.$inferInsert)[],
 ): Promise<void> => {
   await insertInChunks(rows, (batch) => tx.insert(auditLogs).values(batch));
+  if (
+    rows.some(
+      ({ action }) =>
+        action === AUDIT_ACTION.ACCESS || action === AUDIT_ACTION.DOWNLOAD,
+    )
+  ) {
+    recordContentDeliveryReceipt();
+  }
 };
 
 /**
@@ -359,8 +413,8 @@ export const createBackgroundAuditRecorder =
     const execution = executionColumns(bindings.execution, bindings.userId);
     const toRow = (e: AuditEvent) => ({
       action: e.action,
-      changes: auditDetailsForResource(e.resourceType, e.changes),
-      metadata: auditDetailsForResource(e.resourceType, e.metadata) ?? null,
+      changes: auditChangesForResource(e.resourceType, e.changes),
+      metadata: auditMetadataForResource(e.resourceType, e.metadata) ?? null,
       organizationId: bindings.organizationId,
       resourceId: e.resourceId,
       resourceType: e.resourceType,
@@ -390,10 +444,10 @@ export const createAuditRecorder = (
     const execution = executionColumns(bindings.execution, bindings.userId);
     const toRow = (e: AuditEvent) => ({
       action: e.action,
-      changes: auditDetailsForResource(e.resourceType, e.changes),
+      changes: auditChangesForResource(e.resourceType, e.changes),
       metadata: {
         ...base,
-        ...auditDetailsForResource(e.resourceType, e.metadata),
+        ...auditMetadataForResource(e.resourceType, e.metadata),
       },
       organizationId: bindings.organizationId,
       resourceId: e.resourceId,

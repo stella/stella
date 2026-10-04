@@ -39,10 +39,10 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { invalidateAIConfigurationCaches } from "@/lib/organization/ai-config-cache";
 import {
   aiAvailabilityOptions,
-  aiConfigKeys,
   aiConfigOptions,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
@@ -113,14 +113,7 @@ const AIConfigUnreadable = ({
       }
     },
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: aiConfigKeys.byOrganization({ organizationId }),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: aiConfigKeys.availability({ organizationId }),
-        }),
-      ]);
+      await invalidateAIConfigurationCaches(queryClient, organizationId);
       stellaToast.add({
         title: tSuccess("aiConfigDeleted"),
         type: "success",
@@ -128,10 +121,7 @@ const AIConfigUnreadable = ({
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: tErrors("actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, tErrors("actionFailed"));
     },
   });
 
@@ -259,14 +249,7 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
             orgConfigured: true,
           }),
       );
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: aiConfigKeys.byOrganization({ organizationId }),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: aiConfigKeys.availability({ organizationId }),
-        }),
-      ]);
+      await invalidateAIConfigurationCaches(queryClient, organizationId);
       stellaToast.add({
         title: tSuccess("aiConfigUpdated"),
         type: "success",
@@ -274,10 +257,7 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: userErrorFromThrown(error, tErrors("actionFailed")),
-        type: "error",
-      });
+      notifyUserError(error, tErrors("actionFailed"));
     },
   });
 
@@ -305,14 +285,7 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
             orgConfigured: false,
           }),
       );
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: aiConfigKeys.byOrganization({ organizationId }),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: aiConfigKeys.availability({ organizationId }),
-        }),
-      ]);
+      await invalidateAIConfigurationCaches(queryClient, organizationId);
       stellaToast.add({
         title: tSuccess("aiConfigDeleted"),
         type: "success",
@@ -320,10 +293,7 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: tErrors("actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, tErrors("actionFailed"));
     },
   });
 

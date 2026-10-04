@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { buildTemplateCheckFindings } from "@/api/handlers/templates/check-template";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -106,6 +106,11 @@ const checkTemplateHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Run the authoring checks over one stored template and return their " +
     "findings: broken marker structure and invalid markers, markers with no " +
@@ -114,6 +119,7 @@ const config = {
     "type, selects with no options, and formulas or conditions referring to " +
     "unknown paths. Read-only: it reports, it never repairs.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

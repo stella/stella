@@ -20,7 +20,27 @@
   "globalDependencies": ["patches/**"],
   "tasks": {
     // Outputs are ignored by Git, but restored by Turbo on a cache hit.
+    "@stll/web#generate:route-tree": {
+      "inputs": [
+        "src/routes/**",
+        "vite.config.ts",
+        "route-tree.config.ts",
+        "scripts/generate-route-tree.ts",
+        "package.json",
+        "$TURBO_ROOT$/bun.lock"
+      ],
+      "outputs": ["src/routeTree.gen.ts"]
+    },
+    "@stll/web#build": {
+      "dependsOn": ["^build", "generate:route-tree", "generate:api-types"]
+    },
+    "@stll/web#dev": {
+      "dependsOn": ["generate:route-tree", "generate:api-types"],
+      "persistent": true,
+      "cache": false
+    },
     "@stll/web#generate:api-types": {
+      "dependsOn": ["generate:route-tree"],
       "inputs": [
         "$TURBO_ROOT$/apps/api/**",
         "$TURBO_ROOT$/apps/web/src/**",
@@ -45,14 +65,15 @@
         "!$TURBO_ROOT$/packages/**/.env*",
         "!$TURBO_ROOT$/packages/**/.turbo/**",
         "!$TURBO_ROOT$/packages/**/*.tsbuildinfo",
-        "!src/generated/api-routes.gen.ts"
+        "!src/generated/api-routes.gen.ts",
+        "!src/routeTree.gen.ts"
       ],
       "outputs": ["src/generated/api-routes.gen.ts"]
     },
     // Compiler scripts prepare direct invocations, but skip that cache restore
     // inside Turbo (TURBO_HASH): these dependencies already prepared the file.
     "@stll/web#typecheck": {
-      "dependsOn": ["transit", "generate:api-types"],
+      "dependsOn": ["transit", "generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
@@ -67,7 +88,7 @@
       "outputs": [".cache/tsbuildinfo*.json", "**/.cache/tsbuildinfo*.json"]
     },
     "@stll/web#lint": {
-      "dependsOn": ["transit", "generate:api-types"],
+      "dependsOn": ["transit", "generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
@@ -82,9 +103,14 @@
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/system-audit/modules.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+        "$TURBO_ROOT$/scripts/derived-attributes.ts",
+        "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+        "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -92,7 +118,7 @@
       ]
     },
     "@stll/web#lint:fix": {
-      "dependsOn": ["transit", "generate:api-types"],
+      "dependsOn": ["transit", "generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/oxlint.config.ts",
@@ -103,24 +129,22 @@
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/system-audit/modules.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+        "$TURBO_ROOT$/scripts/derived-attributes.ts",
+        "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+        "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/tsconfig.tooling.json"
       ],
       "cache": false
     },
     "@stll/web#test:property": {
-      "dependsOn": ["generate:api-types"],
+      "dependsOn": ["generate:api-types", "generate:route-tree"],
       "inputs": ["$TURBO_DEFAULT$"],
       "cache": false
-    },
-    "@stll/redis-config#test": {
-      "inputs": [
-        "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/apps/**",
-        "$TURBO_ROOT$/packages/**"
-      ]
     },
     "transit": {
       "dependsOn": ["^transit"]
@@ -159,7 +183,9 @@
       "cache": false
     },
     "typecheck": {
-      "dependsOn": ["transit"],
+      // A package type-checking @stll/api source needs its generated capability
+      // runtime modules first.
+      "dependsOn": ["transit", "^generate:capability-runtime"],
       // These files live outside each workspace but can change dependency
       // resolution or the shared compiler program. Hash them explicitly so a
       // linked worktree never restores a stale lint or TypeScript result.
@@ -179,7 +205,9 @@
     "//#typecheck:repo": {
       "dependsOn": [
         "@stll/web#generate:api-types",
-        "@stll/cli#codegen:runtime"
+        "@stll/web#generate:route-tree",
+        "@stll/cli#codegen:runtime",
+        "@stll/api#generate:capability-runtime"
       ],
       // Root projects can import workspace source. The broad workspace inputs
       // trade some misses for correctness while still sharing exact results
@@ -245,7 +273,9 @@
       ]
     },
     "lint": {
-      "dependsOn": ["transit"],
+      // A package type-checking @stll/api source needs its generated capability
+      // runtime modules first.
+      "dependsOn": ["transit", "^generate:capability-runtime"],
       // Type-aware lint reads the same external install and compiler inputs as
       // TypeScript, in addition to Oxlint's root config and plugins.
       "inputs": [
@@ -262,9 +292,14 @@
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/system-audit/modules.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+        "$TURBO_ROOT$/scripts/derived-attributes.ts",
+        "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+        "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -297,9 +332,14 @@
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/system-audit/modules.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+        "$TURBO_ROOT$/scripts/derived-attributes.ts",
+        "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+        "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -323,9 +363,14 @@
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/system-audit/modules.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+        "$TURBO_ROOT$/scripts/derived-attributes.ts",
+        "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+        "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -344,9 +389,14 @@
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/system-audit/modules.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
-        "$TURBO_ROOT$/scripts/design-lint-baseline.json"
+        "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+        "$TURBO_ROOT$/scripts/derived-attributes.ts",
+        "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+        "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts"
       ],
       "cache": false
     },
@@ -374,8 +424,9 @@
     "@stll/cli#codegen:runtime": {
       "inputs": [
         "package.json",
-        "capability-catalog.json",
+        "capabilities/**",
         "src/codegen.ts",
+        "src/capability-catalog-data.ts",
         "src/write-generated-file.ts",
         "src/capability-catalog-load.ts",
         "src/generate-capability-tree.ts",
@@ -435,9 +486,14 @@
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/system-audit/modules.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+        "$TURBO_ROOT$/scripts/derived-attributes.ts",
+        "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+        "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -465,8 +521,30 @@
         "$TURBO_ROOT$/.github/workflows/scheduled-run-alerts.yml"
       ]
     },
+    // Lets dependents name `^generate:capability-runtime`; only @stll/api has
+    // the script, configured below.
+    "generate:capability-runtime": {},
+    "@stll/api#generate:capability-runtime": {
+      "inputs": [
+        "scripts/generate-capability-runtime.ts",
+        "src/mcp/generated/capability-dispatch/**",
+        "$TURBO_ROOT$/packages/cli/capabilities/**",
+        "$TURBO_ROOT$/packages/cli/src/capability-catalog-data.ts"
+      ],
+      "outputs": [
+        "src/mcp/generated/capability-dispatch.ts",
+        "src/mcp/generated/capability-catalog.ts"
+      ]
+    },
+    "@stll/api#build": {
+      "dependsOn": ["^build", "generate:capability-runtime"]
+    },
     "@stll/api#typecheck": {
-      "dependsOn": ["transit", "@stll/cli#codegen:runtime"],
+      "dependsOn": [
+        "transit",
+        "@stll/cli#codegen:runtime",
+        "generate:capability-runtime"
+      ],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
@@ -481,12 +559,14 @@
       "outputs": [
         ".cache/tsbuildinfo*.json",
         "**/.cache/tsbuildinfo*.json",
+        "src/mcp/generated/capability-dispatch.ts",
+        "src/mcp/generated/capability-catalog.ts",
         "$TURBO_ROOT$/packages/cli/src/generated/route-map.ts",
         "$TURBO_ROOT$/packages/cli/src/generated/tool-annotations.ts"
       ]
     },
     "@stll/api#lint": {
-      "dependsOn": ["typecheck"],
+      "dependsOn": ["typecheck", "generate:capability-runtime"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
@@ -501,9 +581,14 @@
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
         "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
         "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/system-audit/modules.ts",
         "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+        "$TURBO_ROOT$/scripts/derived-attributes.ts",
+        "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+        "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/tsconfig.tooling.json",
@@ -511,14 +596,18 @@
       ]
     },
     "@stll/api#lint:fix": {
-      "dependsOn": ["transit", "@stll/cli#codegen:runtime"]
+      "dependsOn": [
+        "transit",
+        "@stll/cli#codegen:runtime",
+        "generate:capability-runtime"
+      ]
     },
     "@stll/api#test:property": {
-      "dependsOn": ["@stll/cli#codegen:runtime"],
+      "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
       "cache": false
     },
     "@stll/api#test": {
-      "dependsOn": ["@stll/cli#codegen:runtime"],
+      "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
       "env": ["API_TEST_SHARD"],
       // How many test batches run at once; it never changes results, so it
       // passes through without entering the cache key.
@@ -529,11 +618,12 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
-        "$TURBO_ROOT$/oxlint.config.ts"
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
       ]
     },
     "@stll/web#test": {
-      "dependsOn": ["generate:api-types"],
+      "dependsOn": ["generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.oxlint-plugins/**",

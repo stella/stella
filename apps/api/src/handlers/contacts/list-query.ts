@@ -40,6 +40,8 @@ const UNPROJECTED_CONTACT_LIST_COLUMNS = [
   "dateOfBirthMonth",
   "dateOfBirthDay",
   "nationalityCodes",
+  // Monitoring state belongs to the screening surface.
+  "sanctionsMonitoringMode",
   // Free-text notes are a detail-view field, not a directory summary field.
   "notes",
   "addresses",
@@ -74,7 +76,7 @@ type DecodedCursor = {
   id: SafeId<"contact">;
 };
 
-const CONTACT_DISPLAY_NAME_MAX_LENGTH = 512;
+export const CONTACT_DISPLAY_NAME_MAX_LENGTH = 512;
 const MAX_JSON_ESCAPE_LENGTH = 6;
 const UUID_LENGTH = 36;
 const JSON_TUPLE_OVERHEAD = 7;

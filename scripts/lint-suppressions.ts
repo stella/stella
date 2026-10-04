@@ -22,6 +22,8 @@
 import { panic } from "better-result";
 import ts from "typescript";
 
+import { parseSource } from "./parse-memo";
+
 // --- Tracked rules ----------------------------------------------------------
 
 // A `security` rule guards a tenancy, authorization, credential, or audit
@@ -128,7 +130,7 @@ export const TRACKED_SUPPRESSION_RULES = [
     guards: "unredacted OAuth registration secrets persisted to JSONB",
   },
   {
-    rule: "auth-lifecycle/after-remove-member-revokes-artifacts",
+    rule: "auth-lifecycle/member-removal-revokes-artifacts",
     tier: "security",
     guards: "membership removal leaving auth artifacts behind",
   },
@@ -167,6 +169,11 @@ export const TRACKED_SUPPRESSION_RULES = [
     rule: "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status",
     tier: "security",
     guards: "cleanup-intent inserts that silently inherit a lifecycle state",
+  },
+  {
+    rule: "no-direct-clause-variant-insert/no-direct-clause-variant-insert",
+    tier: "data-volume",
+    guards: "clause variant inserts bypassing the shared capacity lock",
   },
   {
     rule: "require-query-limit/require-query-limit",
@@ -298,14 +305,8 @@ export type LintDirective = {
   readonly rules: readonly string[];
 };
 
-const parseSource = (content: string, file: string): ts.SourceFile =>
-  ts.createSourceFile(
-    file,
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+const parseFile = (content: string, file: string): ts.SourceFile =>
+  parseSource({ fileName: file, text: content });
 
 // The rules a directive names, or `[]` for a bare directive. The rule list
 // ends at the `--` reason trailer or the block-comment close, whichever comes
@@ -333,7 +334,7 @@ const scanDirectives = (
   content: string,
   file: string,
 ): readonly LintDirective[] => {
-  const source = parseSource(content, file);
+  const source = parseFile(content, file);
   const comments = new Map<string, ts.CommentRange>();
   const collect = (ranges: readonly ts.CommentRange[] | undefined) => {
     for (const range of ranges ?? []) {
@@ -484,7 +485,7 @@ export const resolveDirectiveAnchors = (
   file: string,
   directives: readonly LintDirective[],
 ): readonly string[] => {
-  const source = parseSource(content, file);
+  const source = parseFile(content, file);
   const lineOf = (pos: number): number =>
     source.getLineAndCharacterOfPosition(pos).line;
 

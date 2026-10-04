@@ -15,11 +15,6 @@ import { v7 as uuidv7 } from "uuid";
 import * as v from "valibot";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
-import {
-  resourceRef,
-  RESOURCE_TYPE,
-  toChatResourceHref,
-} from "@stll/api-contract";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
@@ -56,7 +51,6 @@ import {
   prepareCreateDocumentDraft as prepareCreateDocumentDraftBuffer,
   settleCreateDocumentDraftWithRetry,
 } from "@/components/chat/create-document-draft-runtime";
-import "@/components/chat/create-document-draft-inspector";
 import {
   buildCreateDocumentDraftPayload,
   buildCreateDocumentDownloadFileName,
@@ -75,6 +69,7 @@ import {
   setCreateDocumentDraftPayloadStatus,
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
+import "@/components/chat/create-document-draft-inspector";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type {
   CreateDocumentDestination,
@@ -83,6 +78,7 @@ import type {
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { entityReferenceHref } from "@/components/references/reference.logic";
 import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
 import {
   isChatMessageStartError,
@@ -130,6 +126,7 @@ import {
   toAPIError,
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileOptions } from "@/lib/files/queries";
 import { sha256Hex } from "@/lib/files/sha256";
 import { knowledgeKeys, mcpConnectorsOptions } from "@/lib/knowledge/queries";
@@ -505,10 +502,10 @@ export const useChatSession = ({
                 draft.toolCallId,
               ),
             );
-            stellaToast.add({
-              title: t("chat.createDocument.failedHeader"),
-              type: "error",
-            });
+            notifyUserError(
+              settleResult.error,
+              t("chat.createDocument.failedHeader"),
+            );
           }
         })(),
         "use-chat-session.settle-create-document-draft-with-retry",
@@ -595,10 +592,7 @@ export const useChatSession = ({
       // pauses (the manual button retries) instead of looping the request.
       getAnalytics().captureError(result.error);
       setLoadOlderError(true);
-      stellaToast.add({
-        title: t("chat.loadEarlierMessagesError"),
-        type: "error",
-      });
+      notifyUserError(result.error, t("chat.loadEarlierMessagesError"));
       return;
     }
 
@@ -1091,10 +1085,10 @@ export const useChatSession = ({
           if (Result.isError(downloadResult)) {
             getAnalytics().captureError(downloadResult.error);
           }
-          stellaToast.add({
-            title: t("chat.createDocument.failedHeader"),
-            type: "error",
-          });
+          notifyUserError(
+            Result.isError(downloadResult) ? downloadResult.error : undefined,
+            t("chat.createDocument.failedHeader"),
+          );
           return;
         }
         return;
@@ -1196,19 +1190,9 @@ export const useChatSession = ({
         }
         const created = response.data;
         const fileName = created.fileName;
-        const href = toChatResourceHref({
-          type: RESOURCE_TYPE.ENTITY,
-          resource: resourceRef({
-            type: RESOURCE_TYPE.ENTITY,
-            id: toSafeId<"entity">(created.entityId),
-          }),
-          location: {
-            type: "workspace",
-            workspace: resourceRef({
-              type: RESOURCE_TYPE.WORKSPACE,
-              id: toSafeId<"workspace">(matterId),
-            }),
-          },
+        const href = entityReferenceHref({
+          entityId: created.entityId,
+          matterId,
         });
         return {
           success: true,
@@ -1230,12 +1214,12 @@ export const useChatSession = ({
           toolCallId,
         });
         getAnalytics().captureError(createResult.error);
-        stellaToast.add({
-          title: APIError.is(createResult.error)
+        notifyUserError(
+          createResult.error,
+          APIError.is(createResult.error)
             ? internalToolErrorMessage(createResult.error)
             : t("chat.createDocument.failedHeader"),
-          type: "error",
-        });
+        );
         return;
       }
       const output = createResult.value;
@@ -1363,7 +1347,7 @@ export const useChatSession = ({
     }
     lastStopFailureRef.current = stopState.error;
     getAnalytics().captureError(stopState.error);
-    stellaToast.add({ title: t("chat.stopFailed"), type: "error" });
+    notifyUserError(stopState.error, t("chat.stopFailed"));
   }, [stopState, t]);
 
   useExternalSyncEffect(() => {

@@ -3,8 +3,9 @@ import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { agentSkills } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { loadManagedSkill } from "@/api/handlers/skills/managed-skill";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -20,6 +21,8 @@ const config = {
     "or owner and private skills only by their author; bundled skills, which " +
     "cannot be edited, can still be deleted here.",
   permissions: { agentSkill: ["delete"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

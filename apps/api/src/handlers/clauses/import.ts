@@ -3,19 +3,20 @@ import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import {
-  clauseCategories,
-  clauses,
-  clauseVariants,
-  clauseVersions,
-} from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { resultTx } from "@/api/db/safe-db";
+import { clauseCategories, clauses, clauseVersions } from "@/api/db/schema";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  inspectLegacyClauseDirectives,
+  validateClauseBodyDirectives,
+} from "@/api/lib/clauses/clause-directives";
+import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
 import type { ClauseParagraph } from "@/api/lib/clauses/types";
 import { CSV_PARSE_STATUS, parseCSV } from "@/api/lib/csv";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -25,6 +26,7 @@ import { deriveClauseSlug, parseClauseTags } from "./clause-csv";
 import { isClauseExportPayload } from "./import-export-schema";
 import { normalizeClauseMetadata } from "./metadata";
 import { buildClauseSearchVector } from "./search-vector";
+import { insertClauseVariants } from "./variant-insert";
 
 const importBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.dataImport }),
@@ -48,6 +50,8 @@ export const importHandler = async function* ({
   recordAuditEvent,
 }: ImportProps) {
   const text = await file.text();
+  const clauseWarnings: ClauseDirectiveWarning[] = [];
+  const errors: string[] = [];
 
   // Try parsing as JSON first
   const parseJsonResult = Result.try((): unknown => JSON.parse(text));
@@ -72,7 +76,29 @@ export const importHandler = async function* ({
     }
 
     if (parsed.clauses.length === 0) {
-      return Result.ok({ created: 0, skipped: 0, errors: [] });
+      return Result.ok({ created: 0, skipped: 0, errors, clauseWarnings });
+    }
+
+    for (const item of parsed.clauses) {
+      const warning = inspectLegacyClauseDirectives(item.body, {
+        clauseName: item.title,
+        version: 1,
+      });
+      if (warning !== undefined) {
+        clauseWarnings.push(warning);
+      }
+      if (item.variants === undefined) {
+        continue;
+      }
+      for (const variant of item.variants) {
+        const variantWarning = inspectLegacyClauseDirectives(variant.body, {
+          clauseName: `${item.title} (${variant.label})`,
+          version: null,
+        });
+        if (variantWarning !== undefined) {
+          clauseWarnings.push(variantWarning);
+        }
+      }
     }
 
     // Check org limit
@@ -143,7 +169,6 @@ export const importHandler = async function* ({
       });
     }
 
-    const errors: string[] = [];
     const prepared = toProcess.map((item) => {
       const clauseId = createSafeId<"clause">();
       const categoryId = item.categoryName
@@ -194,8 +219,6 @@ export const importHandler = async function* ({
           createdBy: userId,
         },
         variants: variants.map((variant, sortOrder) => ({
-          id: createSafeId<"clauseVariant">(),
-          organizationId,
           clauseId,
           label: variant.label,
           body: variant.body,
@@ -212,7 +235,7 @@ export const importHandler = async function* ({
     });
 
     const result = yield* Result.await(
-      safeDb(async (tx) => {
+      resultTx(safeDb, async (tx) => {
         if (categoriesToInsert.length > 0) {
           await tx.insert(clauseCategories).values(categoriesToInsert);
         }
@@ -222,9 +245,14 @@ export const importHandler = async function* ({
           .insert(clauseVersions)
           .values(prepared.map(({ version }) => version));
 
-        const variants = prepared.flatMap((item) => item.variants);
-        if (variants.length > 0) {
-          await tx.insert(clauseVariants).values(variants);
+        const variantResult = await insertClauseVariants({
+          tx,
+          organizationId,
+          variants: prepared.flatMap((item) => item.variants),
+          recordAuditEvent,
+        });
+        if (variantResult.isErr()) {
+          return variantResult;
         }
 
         await recordAuditEvent(tx, [
@@ -232,11 +260,16 @@ export const importHandler = async function* ({
           ...prepared.map(({ auditEvent }) => auditEvent),
         ]);
 
-        return { count: prepared.length };
+        return Result.ok({ count: prepared.length });
       }),
     );
 
-    return Result.ok({ created: result.count, skipped, errors });
+    return Result.ok({
+      created: result.count,
+      skipped,
+      errors,
+      clauseWarnings,
+    });
   }
 
   const csvResult = parseCSV(text);
@@ -289,7 +322,7 @@ export const importHandler = async function* ({
   }
 
   if (dataRows.length === 0) {
-    return Result.ok({ created: 0, skipped: 0, errors: [] });
+    return Result.ok({ created: 0, skipped: 0, errors, clauseWarnings });
   }
 
   // Check org limit
@@ -338,6 +371,11 @@ export const importHandler = async function* ({
         }),
       );
     }
+
+    yield* validateClauseBodyDirectives(
+      bodyVal.split(/\r?\n/u).map((line) => ({ text: line })),
+      { name: `Row ${index + 2} (${titleVal})` },
+    );
 
     if (slugVal.length > CLAUSE_CSV_TEXT_LIMIT) {
       return Result.err(
@@ -425,7 +463,7 @@ export const importHandler = async function* ({
     }),
   );
 
-  return Result.ok({ created: result.count, skipped, errors: [] });
+  return Result.ok({ created: result.count, skipped, errors, clauseWarnings });
 };
 
 const config = {
@@ -438,6 +476,7 @@ const config = {
     "capped, and clauses beyond the organization's remaining capacity are " +
     "reported as skipped instead of failing the import.",
   permissions: { clause: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "knowledge_library_admin",

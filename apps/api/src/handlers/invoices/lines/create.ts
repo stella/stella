@@ -5,6 +5,7 @@ import { type Static, t } from "elysia";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type { InvoiceTotals } from "@stll/invoicing";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDbError } from "@/api/db/safe-db";
 import { resultTx } from "@/api/db/safe-db";
 import { BILLING_STATUS, expenses, timeEntries } from "@/api/db/schema";
@@ -23,10 +24,12 @@ import {
   tVatRateBps,
   tVatTreatment,
 } from "@/api/handlers/invoices/invoice-lines";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -92,6 +95,86 @@ const lineCreationError = (error: HandlerError | SafeDbError) =>
     ? new HandlerError({ status: 409, message: NOT_BILLABLE_MESSAGE })
     : error;
 
+type ReadInvoiceLineDraftOptions = {
+  source: Static<typeof createLineBodySchema>["source"];
+  vat: Pick<InvoiceLineDraft, "vatRateBps" | "vatTreatment">;
+  manualDraft: InvoiceLineDraft | null;
+  workspaceId: SafeId<"workspace">;
+  currency: string;
+};
+const readInvoiceLineDraft = async (
+  tx: Transaction,
+  {
+    source,
+    vat,
+    manualDraft,
+    workspaceId,
+    currency,
+  }: ReadInvoiceLineDraftOptions,
+) => {
+  if (source.type === "time_entry") {
+    const [entry] = await tx
+      .select({
+        id: timeEntries.id,
+        billedMinutes: timeEntries.billedMinutes,
+        rateAtEntry: timeEntries.rateAtEntry,
+        narrative: timeEntries.narrative,
+        invoiceNarrative: timeEntries.invoiceNarrative,
+        noCharge: timeEntries.noCharge,
+      })
+      .from(timeEntries)
+      .where(
+        and(
+          eq(timeEntries.id, source.timeEntryId),
+          eq(timeEntries.workspaceId, workspaceId),
+          eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
+          eq(timeEntries.status, BILLING_STATUS.APPROVED),
+          eq(timeEntries.billable, true),
+          isNull(timeEntries.invoiceId),
+          eq(timeEntries.currency, currency),
+          ne(timeEntries.currency, UNPRICED_TIME_ENTRY_CURRENCY),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!entry) {
+      return Result.err(
+        new HandlerError({ status: 400, message: NOT_BILLABLE_MESSAGE }),
+      );
+    }
+    return Result.ok(timeEntryLineDraft(entry, vat, source.description));
+  } else if (source.type === "expense") {
+    const [expense] = await tx
+      .select({
+        id: expenses.id,
+        amount: expenses.amount,
+        markup: expenses.markup,
+        description: expenses.description,
+        invoiceDescription: expenses.invoiceDescription,
+      })
+      .from(expenses)
+      .where(
+        and(
+          eq(expenses.id, source.expenseId),
+          eq(expenses.workspaceId, workspaceId),
+          eq(expenses.status, BILLING_STATUS.APPROVED),
+          eq(expenses.billable, true),
+          isNull(expenses.invoiceId),
+          eq(expenses.currency, currency),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!expense) {
+      return Result.err(
+        new HandlerError({ status: 400, message: NOT_BILLABLE_MESSAGE }),
+      );
+    }
+    return Result.ok(expenseLineDraft(expense, vat, source.description));
+  }
+  return Result.ok(manualDraft ?? panic("A manual line has no draft"));
+};
+
 const createInvoiceLine = createSafeHandler(
   {
     description:
@@ -102,6 +185,8 @@ const createInvoiceLine = createSafeHandler(
       "entry and marks the entry billed. Every line carries a VAT rate in " +
       "basis points and a VAT treatment. Only draft invoices accept lines.",
     permissions: { invoice: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: invoiceRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",
@@ -161,6 +246,9 @@ const createInvoiceLine = createSafeHandler(
             }),
           );
         }
+        if (invoice.billingMode === "flat_fee") {
+          return Result.err(flatFeeInvoiceRefusal());
+        }
 
         if (
           invoice.documentType === "credit_note" &&
@@ -184,68 +272,17 @@ const createInvoiceLine = createSafeHandler(
 
         // Read and lock the entry the line bills before writing anything, so
         // a refusal commits nothing.
-        let draft: InvoiceLineDraft;
-        if (body.source.type === "time_entry") {
-          const [entry] = await tx
-            .select({
-              id: timeEntries.id,
-              billedMinutes: timeEntries.billedMinutes,
-              rateAtEntry: timeEntries.rateAtEntry,
-              narrative: timeEntries.narrative,
-              invoiceNarrative: timeEntries.invoiceNarrative,
-            })
-            .from(timeEntries)
-            .where(
-              and(
-                eq(timeEntries.id, body.source.timeEntryId),
-                eq(timeEntries.workspaceId, workspaceId),
-                eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
-                eq(timeEntries.status, BILLING_STATUS.APPROVED),
-                eq(timeEntries.billable, true),
-                isNull(timeEntries.invoiceId),
-                eq(timeEntries.currency, invoice.currency),
-                ne(timeEntries.currency, UNPRICED_TIME_ENTRY_CURRENCY),
-              ),
-            )
-            .limit(1)
-            .for("update");
-          if (!entry) {
-            return Result.err(
-              new HandlerError({ status: 400, message: NOT_BILLABLE_MESSAGE }),
-            );
-          }
-          draft = timeEntryLineDraft(entry, vat, body.source.description);
-        } else if (body.source.type === "expense") {
-          const [expense] = await tx
-            .select({
-              id: expenses.id,
-              amount: expenses.amount,
-              markup: expenses.markup,
-              description: expenses.description,
-              invoiceDescription: expenses.invoiceDescription,
-            })
-            .from(expenses)
-            .where(
-              and(
-                eq(expenses.id, body.source.expenseId),
-                eq(expenses.workspaceId, workspaceId),
-                eq(expenses.status, BILLING_STATUS.APPROVED),
-                eq(expenses.billable, true),
-                isNull(expenses.invoiceId),
-                eq(expenses.currency, invoice.currency),
-              ),
-            )
-            .limit(1)
-            .for("update");
-          if (!expense) {
-            return Result.err(
-              new HandlerError({ status: 400, message: NOT_BILLABLE_MESSAGE }),
-            );
-          }
-          draft = expenseLineDraft(expense, vat, body.source.description);
-        } else {
-          draft = manualDraft ?? panic("A manual line has no draft");
+        const prepared = await readInvoiceLineDraft(tx, {
+          source: body.source,
+          vat,
+          manualDraft,
+          workspaceId,
+          currency: invoice.currency,
+        });
+        if (prepared.isErr()) {
+          return Result.err(prepared.error);
         }
+        const draft = prepared.value;
 
         // The locked entry is still eligible, so its claim cannot miss.
         const events: AuditEvent[] = [];

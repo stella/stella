@@ -1,9 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
 import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
-import capabilityCatalog from "@stll/cli/capability-catalog.json";
+import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 
 import { MCP_DOCUMENTS_RESOURCE_SCOPES } from "@/api/mcp/constants";
+
+import { parseCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-load";
+
+const capabilityCatalog = parseCapabilityCatalog(readCapabilityCatalog());
+if (capabilityCatalog === null) {
+  throw new TypeError("Invalid capability catalog");
+}
 
 describe("style set document capability scopes", () => {
   test("keeps compound custom Style Set consent out of the catalog", () => {

@@ -1,0 +1,586 @@
+[
+  {
+    "key": "flagged-capability:billing-codes.create@apps/api/src/handlers/billing-codes/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:billing-codes.delete@apps/api/src/handlers/billing-codes/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:billing-codes.list@apps/api/src/handlers/billing-codes/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:billing-codes.update@apps/api/src/handlers/billing-codes/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:case-law.analysis.generate@apps/api/src/handlers/case-law/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:case-law.ingestion.get@apps/api/src/handlers/case-law/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:case-law.matter-links.batch.create@apps/api/src/handlers/case-law/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:case-law.matter-links.create@apps/api/src/handlers/case-law/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:case-law.matter-links.delete@apps/api/src/handlers/case-law/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:case-law.matter-links.list@apps/api/src/handlers/case-law/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:expenses.create@apps/api/src/handlers/expenses/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:expenses.delete@apps/api/src/handlers/expenses/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:expenses.list@apps/api/src/handlers/expenses/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:expenses.update@apps/api/src/handlers/expenses/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:invoices.create@apps/api/src/handlers/invoices/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:invoices.delete@apps/api/src/handlers/invoices/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:invoices.entries.add@apps/api/src/handlers/invoices/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:invoices.entries.remove@apps/api/src/handlers/invoices/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:invoices.get@apps/api/src/handlers/invoices/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:invoices.lines.create@apps/api/src/handlers/invoices/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:invoices.lines.delete@apps/api/src/handlers/invoices/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:invoices.lines.update@apps/api/src/handlers/invoices/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:invoices.list@apps/api/src/handlers/invoices/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:invoices.transition@apps/api/src/handlers/invoices/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:invoices.update@apps/api/src/handlers/invoices/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:legislation.boe.law-structure.get@apps/api/src/handlers/legislation/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:legislation.boe.laws.get@apps/api/src/handlers/legislation/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:legislation.boe.related-laws.list@apps/api/src/handlers/legislation/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:legislation.boe.search@apps/api/src/handlers/legislation/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:legislation.boe.text-block.get@apps/api/src/handlers/legislation/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:legislation.borme.summary.get@apps/api/src/handlers/legislation/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:legislation.get@apps/api/src/handlers/legislation/corpus-routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:legislation.search@apps/api/src/handlers/legislation/corpus-routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:rates.arrangement.get@apps/api/src/handlers/rates/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:rates.arrangement.summary.get@apps/api/src/handlers/rates/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:rates.arrangement.update@apps/api/src/handlers/rates/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:rates.create@apps/api/src/handlers/rates/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:rates.delete@apps/api/src/handlers/rates/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:rates.entries.create@apps/api/src/handlers/rates/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:rates.entries.delete@apps/api/src/handlers/rates/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:rates.entries.list@apps/api/src/handlers/rates/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:rates.entries.update@apps/api/src/handlers/rates/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:rates.list@apps/api/src/handlers/rates/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:rates.resolve@apps/api/src/handlers/rates/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:rates.update@apps/api/src/handlers/rates/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:saved-time-narratives.create@apps/api/src/handlers/saved-time-narratives/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:saved-time-narratives.delete@apps/api/src/handlers/saved-time-narratives/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:saved-time-narratives.list@apps/api/src/handlers/saved-time-narratives/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:saved-time-narratives.update@apps/api/src/handlers/saved-time-narratives/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.approval-queue.approve@apps/api/src/handlers/time-entries/approval-queue/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.approval-queue.list@apps/api/src/handlers/time-entries/approval-queue/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.approval-queue.return@apps/api/src/handlers/time-entries/approval-queue/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.batch.delete@apps/api/src/handlers/time-entries/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.batch.update@apps/api/src/handlers/time-entries/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.create@apps/api/src/handlers/time-entries/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.csv.export@apps/api/src/handlers/time-entries/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.delete@apps/api/src/handlers/time-entries/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.get@apps/api/src/handlers/time-entries/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.internal.create@apps/api/src/handlers/time-entries/internal/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.ledes.export@apps/api/src/handlers/time-entries/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.list@apps/api/src/handlers/time-entries/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.me.daily-target.update@apps/api/src/handlers/time-entries/me/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.me.list@apps/api/src/handlers/time-entries/me/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.members.daily-target.update@apps/api/src/handlers/time-entries/members/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.pdf.export@apps/api/src/handlers/time-entries/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.split@apps/api/src/handlers/time-entries/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.suggestions.decisions.create@apps/api/src/handlers/time-entries/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.suggestions.list@apps/api/src/handlers/time-entries/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.summary.get@apps/api/src/handlers/time-entries/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-entries.update@apps/api/src/handlers/time-entries/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-timers.admin.list@apps/api/src/handlers/time-timers/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-timers.admin.stop@apps/api/src/handlers/time-timers/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-timers.confirm@apps/api/src/handlers/time-timers/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-timers.discard@apps/api/src/handlers/time-timers/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-timers.list@apps/api/src/handlers/time-timers/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-timers.pause@apps/api/src/handlers/time-timers/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-timers.resume@apps/api/src/handlers/time-timers/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-timers.start@apps/api/src/handlers/time-timers/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:time-timers.update@apps/api/src/handlers/time-timers/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "flagged-capability:work-obligations.queues.list@apps/api/src/handlers/work-obligations/my-work-route.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/agent-auth/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/ai-autocomplete/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/ai-config/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/api-keys/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/audit-logs/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/auth/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/auth/ui-routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/bilingual-translations/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/case-law/research/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/catalogue/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/chat/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/clauses/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/contacts/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/desktop-registry/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/dev/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/document-reviews/passages-routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/document-reviews/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/document-translations/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/document-types/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/documents/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/docx-suggestions/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/entities/desktop-edit-sessions-route.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/entities/pdf-signing-sessions-route.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/entities/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/entity-views/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/external-preview/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/feedback/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/fields/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/files/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/flows/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/flows/run-route.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/folio-collab/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/health/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/hosted-usage-webhook/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/legal-reader/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/mcp-connectors/oauth-client-metadata-route.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/mcp-connectors/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/mcp/routes-core.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/me/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/notifications/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/number-series/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/organization-settings/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/playbooks/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/playbooks/run-route.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/properties/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/reports/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/saved-searches/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/search/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/seller-profiles/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/sharepoint/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/signals/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/skills/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/smoke/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/style-sets/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/tasks/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/template-recipes/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/templates/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/uploads/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/user-files/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/vat-rates/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/verify/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/view-templates/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/views/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/well-known/routes.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/workspaces/events.ts",
+    "reason": "pending gate classification"
+  },
+  {
+    "key": "route-file:apps/api/src/handlers/workspaces/routes.ts",
+    "reason": "pending gate classification"
+  }
+]

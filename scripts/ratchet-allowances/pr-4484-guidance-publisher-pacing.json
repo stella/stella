@@ -1,0 +1,5 @@
+{
+  "metric": "cross-handler-imports",
+  "delta": 1,
+  "reason": "Guidance publisher access shares the existing case-law Redis pacing owner; gate definitions live in the shared legal-search module."
+}

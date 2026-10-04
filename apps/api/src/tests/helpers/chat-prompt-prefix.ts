@@ -41,8 +41,10 @@ import { isRecord } from "@/api/lib/type-guards";
 // - A request made by a process that then died before storing what it had
 //   sent (a tool's result, a partial answer): nothing kept it, so nothing can
 //   extend it (`loseSince`).
-// - In no conversation checked here: compaction and the history window (both
-//   replace old history once a thread outgrows the model's context), editing
+// - A compaction checkpoint landing between requests: its summary replaces
+//   the history earlier requests sent (`compacted`).
+// - In no conversation checked here: the history window (it drops old
+//   history once a thread outgrows its row cap), editing
 //   a message, a change of the context the user has open (the system prompt
 //   describes it), and the day changing in the user's time zone (the system
 //   prompt states the date).
@@ -296,6 +298,14 @@ export const createPromptPrefixLedger = () => {
      *  only up to that call's last user message. */
     replacesTail: (): void => {
       nextReplacesTail = true;
+    },
+    /** The thread's history was compacted before the next call: the summary
+     *  replaces what earlier calls sent, so the next call extends none of
+     *  them. */
+    compacted: (): void => {
+      compare();
+      kept.splice(0);
+      compared = 0;
     },
     /** Where the next recorded call will sit, for `loseSince`. */
     mark: (): number => kept.length,

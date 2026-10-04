@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+export { isUuid } from "@stll/uuid-codec";
+
 export type SafeIdType =
   | "accountDeletionRequest"
   | "agentSkill"
@@ -98,6 +100,7 @@ export type SafeIdType =
   | "signal"
   | "signalEvent"
   | "scoutRun"
+  | "systemScriptRun"
   | "folioCollabRoom"
   | "folioCollabRoomToken"
   | "folioCollabContribution"
@@ -110,6 +113,12 @@ export type SafeIdType =
   | "legislationDocument"
   | "legislationIndexJob"
   | "legislationSource"
+  | "softLawSource"
+  | "softLawDocument"
+  | "softLawDocumentVersion"
+  | "softLawDocumentLocator"
+  | "softLawIngestionLease"
+  | "softLawIngestionAttempt"
   | "legislationWorkName"
   | "legalList"
   | "legalListColumn"
@@ -140,6 +149,7 @@ export type SafeIdType =
   | "rateEntry"
   | "rateTable"
   | "sanctionsEdition"
+  | "sanctionsScreeningEvent"
   | "savedSearch"
   | "vatRate"
   | "sellerProfile"

@@ -7,9 +7,11 @@ import type { ReasoningEffort } from "@stll/ai-catalog";
 import { groupReasoningEfforts } from "@stll/chat/model-selector";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { InfoIcon } from "@stll/ui/icons";
+import { ChevronDownIcon, InfoIcon } from "@stll/ui/icons";
 import {
   MenuCheckboxItem,
+  MenuGroupLabel,
+  MenuItem,
   MenuRadioGroup,
   MenuRadioItem,
   MenuSeparator,
@@ -18,19 +20,27 @@ import {
   MenuSubTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { cn } from "@stll/ui/utils";
 
 import {
   PROVIDER_LABELS,
   type ProviderValue,
 } from "@/components/ai-config-role-models.logic";
 import { AIProviderIcon } from "@/components/ai-provider-icons";
+import { getModelPickerView } from "@/components/chat/chat-model-options-menu.logic";
+import type {
+  ModelPickerEntry,
+  ModelRecommendation,
+} from "@/components/chat/chat-model-options-menu.logic";
 import {
   ComposerSubmenuSearch,
   useFocusSearchOnOpen,
 } from "@/components/chat/composer-submenu-search";
 import { modelOptionsOptions } from "@/features/chat/queries";
+import type { ChatModelBenchmarkOption } from "@/features/chat/queries";
 import type { TranslationKey } from "@/i18n/types";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { sanitizeHref } from "@/lib/sanitize-href";
 
 export const CHAT_MODEL_MENU_POPUP_CLASS_NAME =
   "w-[min(32rem,calc(100vw-2rem))] max-w-(--available-width)";
@@ -71,6 +81,9 @@ type ModelOption = {
 };
 
 const EMPTY_MODEL_OPTIONS: readonly ModelOption[] = [];
+const EMPTY_BENCHMARK_OPTIONS: readonly ChatModelBenchmarkOption[] = [];
+
+type ModelTradeoff = ChatModelBenchmarkOption["tradeoff"];
 
 type ChatModelOptionsMenuProps = {
   enabled: boolean;
@@ -94,21 +107,20 @@ export const ChatModelOptionsMenu = ({
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   useFocusSearchOnOpen(open, searchRef);
+  // Remounted on every open (keyed by the host), so All models starts folded.
+  const [allModelsExpanded, setAllModelsExpanded] = useState(false);
   const { data, isPending } = useQuery({
     ...modelOptionsOptions(activeOrganizationId),
     enabled,
   });
 
-  const query = search.trim().toLowerCase();
-  let filteredOptions = EMPTY_MODEL_OPTIONS;
-  if (data) {
-    filteredOptions = data.options;
-  }
-  if (query) {
-    filteredOptions = filteredOptions.filter((option) =>
-      option.displayName.toLowerCase().includes(query),
-    );
-  }
+  const options: readonly ModelOption[] = data?.options ?? EMPTY_MODEL_OPTIONS;
+  const view = getModelPickerView({
+    benchmarks: data?.benchmarkOptions ?? EMPTY_BENCHMARK_OPTIONS,
+    options,
+    query: search,
+    selectedValue: selectedModel,
+  });
 
   const selectAuto = () => {
     if (selectedModel !== null) {
@@ -142,28 +154,85 @@ export const ChatModelOptionsMenu = ({
     }
   };
 
-  let optionRows = (
-    <MenuRadioGroup value={selectedModel ?? ""}>
-      {filteredOptions.map((option) => (
-        <ModelOptionRow
-          key={option.value}
-          onSelect={(reasoningEffort) => selectOption(option, reasoningEffort)}
-          option={option}
-          selected={selectedModel === option.value}
-          selectedReasoningEffort={
-            selectedModel === option.value ? selectedReasoningEffort : null
-          }
-        />
-      ))}
-    </MenuRadioGroup>
+  const renderRow = ({
+    option,
+    recommendation,
+    tradeoff,
+  }: ModelPickerEntry<ModelOption>) => (
+    <ModelOptionRow
+      key={option.value}
+      onSelect={(reasoningEffort) => selectOption(option, reasoningEffort)}
+      option={option}
+      recommendation={recommendation}
+      selected={selectedModel === option.value}
+      selectedReasoningEffort={
+        selectedModel === option.value ? selectedReasoningEffort : null
+      }
+      tradeoff={tradeoff}
+    />
   );
+
+  const radioValue = selectedModel ?? "";
+  const visibleCount =
+    view.type === "all"
+      ? view.entries.length
+      : view.recommended.length + view.others.length;
+  let optionRows =
+    view.type === "all" ? (
+      <MenuRadioGroup value={radioValue}>
+        {view.entries.map(renderRow)}
+      </MenuRadioGroup>
+    ) : (
+      <>
+        <MenuRadioGroup value={radioValue}>
+          <div className="flex items-center">
+            <MenuGroupLabel className="flex-1">
+              {t("common.recommended")}
+            </MenuGroupLabel>
+            {data && (
+              <RecommendedHelp
+                benchmarkName={data.benchmarkMetadata.benchmarkName}
+                licence={data.benchmarkMetadata.licence}
+                sourceUrl={data.benchmarkMetadata.sourceUrl}
+              />
+            )}
+          </div>
+          {view.recommended.map(renderRow)}
+        </MenuRadioGroup>
+        <MenuItem
+          aria-expanded={allModelsExpanded}
+          closeOnClick={false}
+          onClick={() => setAllModelsExpanded((expanded) => !expanded)}
+        >
+          <span className="text-muted-foreground flex-1">
+            {t("chat.modelSelector.allModels", { count: visibleCount })}
+          </span>
+          <ChevronDownIcon
+            className={cn(
+              "text-muted-foreground size-3.5 transition-transform duration-150",
+              allModelsExpanded && "rotate-180",
+            )}
+          />
+        </MenuItem>
+        {allModelsExpanded && (
+          <MenuRadioGroup
+            aria-label={t("chat.modelSelector.allModels", {
+              count: visibleCount,
+            })}
+            value={radioValue}
+          >
+            {view.others.map(renderRow)}
+          </MenuRadioGroup>
+        )}
+      </>
+    );
   if (isPending) {
     optionRows = (
       <p className="text-muted-foreground px-2.5 py-2 text-xs">
         {t("common.loading")}
       </p>
     );
-  } else if (filteredOptions.length === 0) {
+  } else if (visibleCount === 0) {
     optionRows = (
       <p className="text-muted-foreground px-2.5 py-2 text-xs">
         {t("organization.aiConfig.noModelResults")}
@@ -207,13 +276,17 @@ export const ChatModelOptionsMenu = ({
 const ModelOptionRow = ({
   onSelect,
   option,
+  recommendation,
   selected,
   selectedReasoningEffort,
+  tradeoff,
 }: {
   onSelect: (reasoningEffort: ReasoningEffort | null) => void;
   option: ModelOption;
+  recommendation: ModelRecommendation;
   selected: boolean;
   selectedReasoningEffort: ReasoningEffort | null;
+  tradeoff: ModelTradeoff | null;
 }) => {
   const t = useTranslations();
   const displayedEffort = selected ? selectedReasoningEffort : null;
@@ -234,14 +307,26 @@ const ModelOptionRow = ({
             provider={option.iconProvider}
           />
           <span className="flex min-w-0 flex-col">
-            <BidiText as="span" className="truncate">
-              {option.displayName}
-            </BidiText>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <BidiText as="span" className="truncate">
+                {option.displayName}
+              </BidiText>
+              {recommendation === "new" && (
+                <span className="bg-muted text-muted-foreground text-2xs shrink-0 rounded px-1.5 py-px font-medium">
+                  {t("chat.modelSelector.newModel")}
+                </span>
+              )}
+            </span>
             {routedProviderDiffers && (
               <span className="text-muted-foreground text-2xs">
                 {t("chat.modelSelector.viaProvider", {
                   provider: PROVIDER_LABELS[option.provider],
                 })}
+              </span>
+            )}
+            {tradeoff?.type === "dominated" && (
+              <span className="text-muted-foreground text-2xs">
+                {t("chat.modelSelector.belowFrontier")}
               </span>
             )}
           </span>
@@ -256,6 +341,7 @@ const ModelOptionRow = ({
               providerDefaultEffort={option.defaultReasoningEffort}
               onSelect={onSelect}
               selected={selected}
+              tradeoff={tradeoff}
               value={displayedEffort}
             />
           </>
@@ -269,12 +355,14 @@ const EffortSubmenu = ({
   providerDefaultEffort,
   onSelect,
   selected,
+  tradeoff,
   value,
 }: {
   efforts: readonly ReasoningEffort[];
   providerDefaultEffort: ReasoningEffort | null;
   onSelect: (reasoningEffort: ReasoningEffort | null) => void;
   selected: boolean;
+  tradeoff: ModelTradeoff | null;
   value: ReasoningEffort | null;
 }) => {
   const t = useTranslations();
@@ -288,7 +376,7 @@ const EffortSubmenu = ({
       onClick={() => onSelect(effort === providerDefaultEffort ? null : effort)}
       value={effort}
     >
-      <span className="flex items-center gap-1.5">
+      <span className="flex w-full items-center gap-1.5">
         {t(EFFORT_LABEL_KEY[effort])}
         {effort === providerDefaultEffort && (
           <>
@@ -300,6 +388,9 @@ const EffortSubmenu = ({
               ({t("chat.modelSelector.effortValues.providerDefault")})
             </span>
           </>
+        )}
+        {tradeoff !== null && (
+          <EffortTradeoffNote effort={effort} tradeoff={tradeoff} />
         )}
       </span>
     </MenuRadioItem>
@@ -325,7 +416,12 @@ const EffortSubmenu = ({
               onClick={() => onSelect(null)}
               value="provider-default"
             >
-              {t("chat.modelSelector.effortValues.providerDefault")}
+              <span className="flex w-full items-center gap-1.5">
+                {t("chat.modelSelector.effortValues.providerDefault")}
+                {tradeoff !== null && (
+                  <EffortTradeoffNote effort={null} tradeoff={tradeoff} />
+                )}
+              </span>
             </MenuRadioItem>
           )}
           {groupedEfforts.standard.map(renderEffort)}
@@ -334,6 +430,84 @@ const EffortSubmenu = ({
         </MenuRadioGroup>
       </MenuSubPopup>
     </MenuSub>
+  );
+};
+
+/**
+ * Muted suffix for an effort that is dominated or unusually expensive;
+ * `effort: null` is the provider default.
+ */
+const EffortTradeoffNote = ({
+  effort,
+  tradeoff,
+}: {
+  effort: ReasoningEffort | null;
+  tradeoff: ModelTradeoff;
+}) => {
+  const t = useTranslations();
+  const dominated = tradeoff.dominatedReasoningEfforts.includes(effort);
+  const premium = tradeoff.premiumReasoningEfforts.includes(effort);
+  if (!dominated && !premium) {
+    return null;
+  }
+  return (
+    <span className="text-muted-foreground text-2xs ms-auto flex flex-col items-end text-end">
+      {dominated && <span>{t("chat.modelSelector.belowFrontier")}</span>}
+      {premium && <span>{t("chat.modelSelector.premiumCost")}</span>}
+    </span>
+  );
+};
+
+/** What "Recommended" means, with the attribution the rating licence asks for. */
+const RecommendedHelp = ({
+  benchmarkName,
+  licence,
+  sourceUrl,
+}: {
+  benchmarkName: string;
+  licence: string;
+  sourceUrl: string;
+}) => {
+  const t = useTranslations();
+  return (
+    <Popover>
+      <PopoverTrigger
+        aria-label={t("chat.modelSelector.recommendedHelpLabel")}
+        render={
+          <Button
+            className="size-11 self-center sm:size-11"
+            size="icon"
+            variant="muted"
+          />
+        }
+      >
+        <InfoIcon className="size-3.5" />
+      </PopoverTrigger>
+      <PopoverPopup
+        align="end"
+        className="w-72"
+        layer="popup"
+        side="inline-start"
+        sideOffset={6}
+      >
+        <div className="text-xs font-normal text-pretty">
+          {t.rich("chat.modelSelector.recommendedHelpDescription", {
+            benchmark: benchmarkName,
+            licence,
+            link: (chunks) => (
+              <a
+                className="hover:text-foreground underline"
+                href={sanitizeHref(sourceUrl)}
+                rel="noreferrer"
+                target="_blank"
+              >
+                {chunks}
+              </a>
+            ),
+          })}
+        </div>
+      </PopoverPopup>
+    </Popover>
   );
 };
 

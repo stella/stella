@@ -28,6 +28,7 @@ import {
   materializePlaybookRun,
   resolveScopedGate,
 } from "@/api/lib/workflow/materialize-playbook-run";
+import type { MaterializePlaybookRunResult } from "@/api/lib/workflow/materialize-playbook-run";
 import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -60,7 +61,7 @@ export type OpenPlaybookRunResult =
       materializedPropertyIds: SafeId<"property">[];
       tableRuns: CreatePlaybookTableRunsResult;
     }
-  | { ok: false; status: 400; message: string };
+  | Extract<MaterializePlaybookRunResult, { ok: false }>;
 
 export const openPlaybookRun = async ({
   tx,

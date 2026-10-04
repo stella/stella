@@ -1,5 +1,37 @@
 # @stll/ui
 
+## 0.42.0
+
+### Minor Changes
+
+- [#4763](https://github.com/stella/stella/pull/4763) [`019d735`](https://github.com/stella/stella/commit/019d735308d3baec6d4143c61b3b5a5e38fe8ce9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DatePickerPopover` gains localizable accessible labels (`dialogLabel`, `previousMonthLabel`, `nextMonthLabel`, `previousYearLabel`, `nextYearLabel`, `previousDecadeLabel`, `nextDecadeLabel`, `timeLabel`), `disabled`, `className`, `hideClear`, a bordered `variant="field"` trigger, `size="touch"` for 44px cells under a coarse pointer, and `mode="date-time"`, which reads and writes a zone-less `YYYY-MM-DDTHH:mm` value. Defaults keep the existing behaviour.
+
+## 0.41.1
+
+### Patch Changes
+
+- [#4528](https://github.com/stella/stella/pull/4528) [`8e5a77d`](https://github.com/stella/stella/commit/8e5a77d0c78131dd1551b8be3480901e14488aa1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Landing column headings use sentence case, and row text lines up with the heading label.
+
+## 0.41.0
+
+### Minor Changes
+
+- [#4504](https://github.com/stella/stella/pull/4504) [`9669e8a`](https://github.com/stella/stella/commit/9669e8acbb6460e3fbf32478eb0dd2c0a0c1c185) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DatePickerPopover` gains localizable accessible labels (`dialogLabel`, `previousMonthLabel`, `nextMonthLabel`, `previousYearLabel`, `nextYearLabel`, `previousDecadeLabel`, `nextDecadeLabel`, `timeLabel`), `disabled`, `className`, `hideClear`, a bordered `variant="field"` trigger, `size="touch"` for 44px cells under a coarse pointer, and `mode="date-time"`, which reads and writes a zone-less `YYYY-MM-DDTHH:mm` value. Defaults keep the existing behaviour.
+
+## 0.40.2
+
+### Patch Changes
+
+- [#4527](https://github.com/stella/stella/pull/4527) [`7511562`](https://github.com/stella/stella/commit/75115627f781b29b63f3dc7cd92ae82506a89367) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `MenuPopup` accepts a `collisionAvoidance` prop for its positioner.
+
+- [#4505](https://github.com/stella/stella/pull/4505) [`20902c2`](https://github.com/stella/stella/commit/20902c2f6c7adc4899504538e2ce701b51eb08e5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Declare React type packages as optional peers so isolated and global-store installs resolve React types.
+
+## 0.40.1
+
+### Patch Changes
+
+- [#4500](https://github.com/stella/stella/pull/4500) [`986bac7`](https://github.com/stella/stella/commit/986bac7ed65df97e8ecb980733a36763807e8bbb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `typedCharacter` (`@stll/ui/typed-character`), which returns the character a keystroke typed across keyboard layouts.
+
 ## 0.40.0
 
 ### Minor Changes

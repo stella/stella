@@ -1,3 +1,5 @@
+import * as v from "valibot";
+
 const OAUTH_SIGNATURE_PARAM = "sig";
 const OAUTH_QUERY_HASH_PARAM = "oauth_query";
 
@@ -69,3 +71,12 @@ export const getOauthRedirectUrl = (value: unknown): string | null => {
 
   return null;
 };
+
+export const oauthConsentInfoSchema = v.object({
+  client_name: v.nullable(v.string()),
+  redirectHosts: v.array(v.string()),
+  clientIdHost: v.nullable(v.string()),
+  unverified: v.boolean(),
+});
+
+export type OAuthConsentInfo = v.InferOutput<typeof oauthConsentInfoSchema>;

@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -15,10 +17,14 @@ import {
 import {
   ALL_WORKSPACE_CACHE_INPUTS,
   ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS,
+  CommandFailedError,
   DEPENDENCY_CACHE_INPUTS,
+  failureExitCode,
+  formatCheckFailure,
   LINT_ONLY_CACHE_INPUTS,
   planCheck,
   planFullCheck,
+  planResultBoundaryLint,
   PLUGIN_FIXTURE_INPUTS,
   PLUGIN_REGISTRY_INPUTS,
   ROOT_SCRIPT_LINT_INPUTS,
@@ -26,6 +32,7 @@ import {
   TYPECHECK_ONLY_CACHE_INPUTS,
   resultBoundaryLintCommand,
   scopedCommands,
+  summarizeCheckFailure,
 } from "./code-check-affected";
 import { isChangedLintPath } from "./lint-paths";
 
@@ -52,13 +59,104 @@ const plan = (
   });
 
 describe("changed-file result boundary lint", () => {
+  test.each([
+    ["README.md"],
+    ["scripts/guard.ts"],
+    ["apps/api/src/lib/client.test.ts"],
+    ["apps/api/src/lib/document-processing-queue.ts"],
+  ])("does not resolve or measure debt for %s", (file) => {
+    expect(
+      planResultBoundaryLint({
+        files: [file],
+        mergeBase: null,
+        resolveMergeBase: () => {
+          throw new Error("Unrelated files must not resolve a debt base");
+        },
+        measureDebt: () => {
+          throw new Error("Unrelated files must not measure debt");
+        },
+        report: () => {
+          throw new Error("Unrelated files must not report skipped checks");
+        },
+      }),
+    ).toBeNull();
+  });
+
+  test("reuses the affected scope's merge base when measuring candidate debt", () => {
+    const measuredBases: string[] = [];
+    const file = "apps/api/src/lib/new-client.ts";
+    expect(
+      planResultBoundaryLint({
+        files: ["README.md", file],
+        mergeBase: "planned-merge-base",
+        resolveMergeBase: () => {
+          throw new Error(
+            "Affected checks must reuse their planned merge base",
+          );
+        },
+        measureDebt: (base) => {
+          measuredBases.push(base);
+          return new Set();
+        },
+        report: () => {
+          throw new Error("An available base must not skip checks");
+        },
+      }),
+    ).toEqual(resultBoundaryLintCommand([file], new Set()));
+    expect(measuredBases).toEqual(["planned-merge-base"]);
+  });
+
+  test("the full scope resolves a base and excludes its measured debt", () => {
+    const debtFile = "apps/api/src/lib/old-client.ts";
+    const cleanFile = "apps/api/src/lib/new-client.ts";
+    const measuredBases: string[] = [];
+    expect(
+      planResultBoundaryLint({
+        files: [debtFile, cleanFile],
+        mergeBase: null,
+        resolveMergeBase: () => "full-merge-base",
+        measureDebt: (base) => {
+          measuredBases.push(base);
+          return new Set([debtFile]);
+        },
+        report: () => {
+          throw new Error("An available base must not skip checks");
+        },
+      }),
+    ).toEqual(resultBoundaryLintCommand([cleanFile], new Set()));
+    expect(measuredBases).toEqual(["full-merge-base"]);
+  });
+
+  test("the full scope clearly skips the extra pass without a comparison base", () => {
+    const messages: string[] = [];
+    expect(
+      planResultBoundaryLint({
+        files: ["apps/api/src/lib/new-client.ts"],
+        mergeBase: null,
+        resolveMergeBase: () => null,
+        measureDebt: () => {
+          throw new Error("A missing base must not measure debt");
+        },
+        report: (message) => {
+          messages.push(message);
+        },
+      }),
+    ).toBeNull();
+    expect(messages).toEqual([
+      "code-check: skipping exact result boundary lint; no merge base for origin/main (normal lint checks still run)\n",
+    ]);
+  });
+
   test("enforces the exact Oxlint rules for files without baseline debt", () => {
     expect(
-      resultBoundaryLintCommand([
-        "apps/api/src/lib/new-client.ts",
-        "apps/api/src/lib/new-client.ts",
-        "packages/boe/src/new-client.ts",
-      ]),
+      resultBoundaryLintCommand(
+        [
+          "apps/api/src/lib/new-client.ts",
+          "apps/api/src/lib/new-client.ts",
+          "packages/boe/src/new-client.ts",
+        ],
+        new Set(),
+      ),
     ).toEqual([
       "bun",
       "--bun",
@@ -71,21 +169,29 @@ describe("changed-file result boundary lint", () => {
     ]);
   });
 
-  test("skips baselined debt, boundaries, generated output, tests, and unrelated source", () => {
+  test("skips measured debt, boundaries, generated output, tests, and unrelated source", () => {
     expect(
-      resultBoundaryLintCommand([
-        "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
-        "apps/api/src/lib/document-processing-queue.ts",
-        "apps/api/src/lib/document-processing-queue.test.ts",
-        "apps/api/src/mcp/generated/capability-dispatch.ts",
-        "packages/start-runtime/src/runtime.ts",
-        "packages/ssr-testkit/src/assert-document.ts",
-        // apps/landing is outside RESULT_CONVENTION_SOURCE_GLOBS and carries
-        // an opt-out reason, so its source is not planned for this lint.
-        "apps/landing/src/example.ts",
-        "apps/api/src/lib/new-client.ts",
-        "apps/web/src/lib/example.ts",
-      ]),
+      resultBoundaryLintCommand(
+        [
+          "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+          "apps/api/src/lib/document-processing-queue.ts",
+          "apps/api/src/lib/document-processing-queue.test.ts",
+          "apps/api/src/mcp/generated/capability-dispatch/matters.list.ts",
+          "packages/start-runtime/src/runtime.ts",
+          "packages/ssr-testkit/src/assert-document.ts",
+          // apps/landing is outside RESULT_CONVENTION_SOURCE_GLOBS and carries
+          // an opt-out reason, so its source is not planned for this lint.
+          "apps/landing/src/example.ts",
+          "apps/api/src/lib/new-client.ts",
+          "apps/web/src/lib/example.ts",
+        ],
+        new Set([
+          "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+          "apps/api/src/lib/document-processing-queue.ts",
+          "packages/start-runtime/src/runtime.ts",
+          "packages/ssr-testkit/src/assert-document.ts",
+        ]),
+      ),
     ).toEqual([
       "bun",
       "--bun",
@@ -186,6 +292,7 @@ describe("affected code-check planning", () => {
     }
     const commands = scopedCommands(planned);
 
+    expect(commands).toContainEqual(["bun", "run", "generate"]);
     const oxc = commands.find((command) => command.includes("oxlint"));
     expect(oxc).toContain("--type-aware");
     expect(oxc).toContain("--type-check");
@@ -427,7 +534,7 @@ describe("changed lint path selection", () => {
   test.each([
     "README.md",
     "apps/web/src/routeTree.gen.ts",
-    "apps/api/src/mcp/generated/capability-dispatch.ts",
+    "apps/api/src/mcp/generated/capability-dispatch/matters.list.ts",
     "apps/api/src/not-real.mtsx",
     "packages/ui/node_modules/library/index.js",
   ])("excludes non-source or generated path %s", (changedPath) => {
@@ -515,6 +622,77 @@ describe("Turbo cache input contract", () => {
 });
 
 describe("full and affected code-check parity", () => {
+  test("an unexpected merge-base failure is surfaced, not read as no base", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "code-check-git-"));
+    const git = Bun.which("git");
+    expect(git).not.toBeNull();
+    writeFileSync(
+      path.join(directory, "git"),
+      `#!/usr/bin/env bun
+if (process.argv[2] === "merge-base") {
+  process.stderr.write("fatal: injected failure\\n");
+  process.exit(128);
+}
+const result = Bun.spawnSync([${JSON.stringify(git)}, ...process.argv.slice(2)], { stdout: "inherit", stderr: "inherit" });
+process.exit(result.exitCode);
+`,
+      { mode: 0o755 },
+    );
+    try {
+      const environmentPath = process.env["PATH"];
+      if (environmentPath === undefined) {
+        throw new Error("PATH is required to run the code-check command");
+      }
+      const result = Bun.spawnSync(
+        ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
+        { env: { ...process.env, PATH: `${directory}:${environmentPath}` } },
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr.toString()).toContain(
+        "git merge-base origin/main HEAD failed: fatal: injected failure",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  test("the full command still plans normal checks without origin/main", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "code-check-git-"));
+    const git = Bun.which("git");
+    expect(git).not.toBeNull();
+    writeFileSync(
+      path.join(directory, "git"),
+      `#!/usr/bin/env bun
+if (process.argv[2] === "rev-parse" && process.argv.at(-1) === "origin/main^{commit}") process.exit(1);
+const result = Bun.spawnSync([${JSON.stringify(git)}, ...process.argv.slice(2)], { stdout: "inherit", stderr: "inherit" });
+process.exit(result.exitCode);
+`,
+      { mode: 0o755 },
+    );
+    try {
+      const environmentPath = process.env["PATH"];
+      if (environmentPath === undefined) {
+        throw new Error("PATH is required to run the code-check command");
+      }
+      const result = Bun.spawnSync(
+        ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
+        { env: { ...process.env, PATH: `${directory}:${environmentPath}` } },
+      );
+      expect(result.exitCode).toBe(0);
+      const output = result.stdout.toString();
+      expect(output).toContain(
+        "skipping exact result boundary lint; no merge base for origin/main",
+      );
+      expect(output).toContain("code-check: lint all; typecheck all");
+      expect(output).toContain("turbo run lint typecheck");
+      expect(output).not.toContain(
+        "oxlint -c oxlint.result-boundary.config.ts",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   test("the full check lints untracked root source files", () => {
     const file = `.claude/mcp/code-check-untracked-${process.pid}.ts`;
     expect(existsSync(file)).toBe(false);
@@ -531,7 +709,7 @@ describe("full and affected code-check parity", () => {
     } finally {
       rmSync(file);
     }
-  });
+  }, 30_000);
 
   // The full check and every affected run reach workspaces through the same
   // `lint` and `typecheck` tasks, so the workspace scripts are the pass list.
@@ -818,5 +996,164 @@ describe("parallel code-quality legs", () => {
         CODE_CHECK_LEGS.filter((leg) => ownsCodeCheckPath(file, leg)),
       ).toHaveLength(1);
     }
+  });
+});
+
+const TURBO_LINT_TYPECHECK = [
+  "bun",
+  "--bun",
+  "turbo",
+  "run",
+  "lint",
+  "typecheck",
+  "--concurrency=2",
+];
+
+const failure = (command: readonly string[], lines: readonly string[]) =>
+  new CommandFailedError({
+    message: "Command failed (1)",
+    command,
+    exitCode: 1,
+    output: lines.join("\n"),
+  });
+
+// Turbo 2 output shapes captured from real failing runs, with paths shortened.
+const turboRunSummary = (task: string) => [
+  `${task}:  ERROR  command (/repo/packages/errors) /tmp/bun run typecheck exited (1)`,
+  "",
+  " Tasks:    0 successful, 2 total",
+  "Cached:    0 cached, 2 total",
+  "  Time:    472ms ",
+  `Failed:    ${task}`,
+  "",
+  " ERROR  run failed: command  exited (1)",
+  'error: "turbo" exited with code 1',
+];
+const BUN_CACHE_STACK = [
+  "Panic: Command failed (1): bun --bun turbo run lint typecheck",
+  "      at panic (/home/runner/.bun/install/cache/better-result@3.0.1/dist/index.mjs:42:9)",
+  "      at run (/repo/node_modules/better-result/dist/index.mjs:7:1)",
+];
+
+const expectNoStackFrames = (text: string) => {
+  expect(text).not.toMatch(/^\s*at\s/mu);
+  expect(text).not.toContain("node_modules");
+  expect(text).not.toContain(".bun/install/cache");
+};
+
+describe("check failure summary", () => {
+  test("a failed check never exits 0", () => {
+    expect(failureExitCode(2)).toBe(2);
+    expect(failureExitCode(128)).toBe(128);
+    for (const code of [0, null, undefined, -1, 256, 1.5, Number.NaN]) {
+      expect(failureExitCode(code)).toBe(1);
+    }
+  });
+
+  test("names the failed Turbo task and its TypeScript errors from prefixed output", () => {
+    const summary = summarizeCheckFailure(
+      failure(TURBO_LINT_TYPECHECK, [
+        "@stll/errors:lint: cache miss, executing c50df39634620efa",
+        "@stll/errors:typecheck: $ bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+        "@stll/errors:typecheck: src/zz-broken.ts(1,14): error TS2322: Type 'string' is not assignable to type 'number'.",
+        '@stll/errors:typecheck: error: script "typecheck" exited with code 1',
+        ...turboRunSummary("@stll/errors#typecheck"),
+        ...BUN_CACHE_STACK,
+      ]),
+    );
+    expect(summary.tasks).toEqual([
+      {
+        task: "@stll/errors#typecheck",
+        errors: [
+          "src/zz-broken.ts(1,14): error TS2322: Type 'string' is not assignable to type 'number'.",
+        ],
+      },
+    ]);
+    expectNoStackFrames(formatCheckFailure({ summary, annotations: true }));
+  });
+
+  test("attributes grouped GitHub Actions output and reads tool annotations", () => {
+    const summary = summarizeCheckFailure(
+      failure(TURBO_LINT_TYPECHECK, [
+        "::group::@stll/web:typecheck",
+        "src/fine.ts(1,1): error TS2322: belongs to a passing task",
+        "::endgroup::",
+        "\u001B[;31m@stll/errors:lint\u001B[;0m",
+        "$ cd ../.. && bun --bun oxlint -c oxlint.config.ts packages/errors",
+        "::error file=packages/errors/src/zz-broken.ts,line=1,col=26,title=eslint(no-debugger)::packages/errors/src/zz-broken.ts:1:26: `debugger` statement is not allowed",
+        "",
+        "Found 0 warnings and 1 error.",
+        'error: "oxlint" exited with code 1',
+        "::error::command (/repo/packages/errors) /tmp/bun run lint exited (1)",
+        ...turboRunSummary("@stll/errors#lint"),
+      ]),
+    );
+    expect(summary.tasks).toEqual([
+      {
+        task: "@stll/errors#lint",
+        errors: [
+          "eslint(no-debugger): packages/errors/src/zz-broken.ts:1:26: `debugger` statement is not allowed",
+          "Found 0 warnings and 1 error.",
+        ],
+      },
+    ]);
+    const formatted = formatCheckFailure({ summary, annotations: true });
+    expect(formatted).toContain(
+      "::error title=code-check%3A @stll/errors#lint failed::eslint(no-debugger): packages/errors/src/zz-broken.ts:1:26: `debugger` statement is not allowed%0AFound 0 warnings and 1 error.",
+    );
+    expect(formatCheckFailure({ summary, annotations: false })).not.toContain(
+      "::error",
+    );
+  });
+
+  test("keeps oxlint's diagnostic and location for each failed task", () => {
+    const summary = summarizeCheckFailure(
+      failure(TURBO_LINT_TYPECHECK, [
+        "@stll/errors:lint:   x eslint(no-debugger): `debugger` statement is not allowed",
+        "@stll/errors:lint:    ,-[packages/errors/src/zz-broken.ts:1:26]",
+        "@stll/errors:lint:  1 | export const f = () => { debugger; };",
+        "@stll/errors:lint: Found 0 warnings and 1 error.",
+        "@stll/web:typecheck: src/a.ts(2,3): error TS2304: Cannot find name 'x'.",
+        "Failed:    @stll/errors#lint, @stll/web#typecheck",
+      ]),
+    );
+    expect(summary.tasks).toEqual([
+      {
+        task: "@stll/errors#lint",
+        errors: [
+          "x eslint(no-debugger): `debugger` statement is not allowed",
+          ",-[packages/errors/src/zz-broken.ts:1:26]",
+          "Found 0 warnings and 1 error.",
+        ],
+      },
+      {
+        task: "@stll/web#typecheck",
+        errors: ["src/a.ts(2,3): error TS2304: Cannot find name 'x'."],
+      },
+    ]);
+  });
+
+  test("summarizes a non-Turbo command by its last lines without a stack", () => {
+    const command = ["bun", "scripts/check-oxlint-plugin-registry.ts"];
+    const summary = summarizeCheckFailure(
+      failure(command, [
+        "plugin registry: stella/no-foo is registered but has no fixture",
+        ...BUN_CACHE_STACK,
+      ]),
+    );
+    expect(summary.tasks).toEqual([
+      {
+        task: command.join(" "),
+        errors: [
+          "plugin registry: stella/no-foo is registered but has no fixture",
+          "Panic: Command failed (1): bun --bun turbo run lint typecheck",
+        ],
+      },
+    ]);
+    const formatted = formatCheckFailure({ summary, annotations: true });
+    expect(formatted).toContain(
+      "code-check: failed (exit 1): bun scripts/check-oxlint-plugin-registry.ts",
+    );
+    expectNoStackFrames(formatted);
   });
 });

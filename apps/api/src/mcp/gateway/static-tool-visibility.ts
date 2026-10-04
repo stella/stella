@@ -5,6 +5,10 @@ import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
 import { enumProp } from "@/api/mcp/tool-utils";
+import {
+  hasMcpToolAuthority,
+  isAccountAuthorizedForMcpTool,
+} from "@/api/mcp/write-tool-authority";
 
 /**
  * A session that cannot confirm is not offered tools that always need
@@ -22,16 +26,28 @@ const isStaticToolAvailableToConfirmation = (
   return behavior !== "always" && behavior !== "outbound";
 };
 
-export const isStaticToolVisibleToRole = (
+/**
+ * A tool whose definition hides it from a member role outright: absent from
+ * discovery and, on a call by name, answered as an unknown tool.
+ */
+export const isStaticToolShownToMemberRole = (
   context: McpRequestContext,
   definition: McpToolDefinition,
-): boolean => {
-  if (definition.isVisibleToMemberRole === undefined) {
-    return true;
-  }
+): boolean => definition.isVisibleToMemberRole?.(context.memberRole) ?? true;
 
-  return definition.isVisibleToMemberRole(context.memberRole);
-};
+/**
+ * A write tool is offered only to a request whose effective authority holds
+ * its declared permissions and whose account its declared account access
+ * admits. A call by name still resolves it, so dispatch answers
+ * `permission_denied` naming the member role, the credential, or the account.
+ */
+const isStaticToolVisibleToRole = (
+  context: McpRequestContext,
+  definition: McpToolDefinition,
+): boolean =>
+  hasMcpToolAuthority(context, definition) &&
+  isAccountAuthorizedForMcpTool(context.userEmail, definition) &&
+  isStaticToolShownToMemberRole(context, definition);
 
 const LOOKUP_BUSINESS_REGISTRY_TOOL_NAME = "lookup_business_registry";
 

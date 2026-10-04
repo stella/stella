@@ -11,6 +11,10 @@ import {
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  authorizedMemberRole,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -94,7 +98,7 @@ describe("updateWorkObligation", () => {
       asTestRaw<UpdateContext>({
         body: { ownerUserId: nextOwnerUserId, reason: "Coverage handoff" },
         createAuditRecorder: () => recordAuditEvent,
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         orgAIConfig: null,
         orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
         managedAIResidency: "eu" as const,
@@ -223,7 +227,7 @@ describe("updateWorkObligation", () => {
       asTestRaw<UpdateContext>({
         body: { workingTargetDate: "2026-08-21" },
         createAuditRecorder: () => recordAuditEvent,
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         orgAIConfig: null,
         orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
         managedAIResidency: "eu" as const,
@@ -247,89 +251,134 @@ describe("updateWorkObligation", () => {
     expect(obligationReadCount).toBe(2);
   });
 
-  test("refuses a non-management member reassigning already-owned work to themselves", async () => {
-    const workspaceId = toSafeId<"workspace">(
-      "0198fa3d-fc8d-7000-8000-000000000021",
-    );
-    const entityId = toSafeId<"entity">("0198fa3d-fc8d-7000-8000-000000000022");
-    const actorUserId = toSafeId<"user">(
-      "0198fa3d-fc8d-7000-8000-000000000023",
-    );
-    const previousOwnerUserId = toSafeId<"user">(
-      "0198fa3d-fc8d-7000-8000-000000000024",
-    );
+  test.each([
+    {
+      name: "member session",
+      authority: sessionMemberRole("member"),
+      expected: "denied",
+    },
+    {
+      name: "admin route grant",
+      authority: authorizedMemberRole({
+        role: "admin",
+        credential: { type: "attenuated", permissions: { entity: ["update"] } },
+      }),
+      expected: "denied",
+    },
+    {
+      name: "admin management grant",
+      authority: authorizedMemberRole({
+        role: "admin",
+        credential: {
+          type: "attenuated",
+          permissions: { entity: ["update"], workspace: ["update"] },
+        },
+      }),
+      expected: "allowed",
+    },
+    {
+      name: "admin session",
+      authority: sessionMemberRole("admin"),
+      expected: "allowed",
+    },
+  ])(
+    "applies owner-change permissions for $name",
+    async ({ authority, expected }) => {
+      const workspaceId = toSafeId<"workspace">(
+        "0198fa3d-fc8d-7000-8000-000000000021",
+      );
+      const entityId = toSafeId<"entity">(
+        "0198fa3d-fc8d-7000-8000-000000000022",
+      );
+      const actorUserId = toSafeId<"user">(
+        "0198fa3d-fc8d-7000-8000-000000000023",
+      );
+      const previousOwnerUserId = toSafeId<"user">(
+        "0198fa3d-fc8d-7000-8000-000000000024",
+      );
 
-    const { safeDb, scopedDb } = createScopedDbMock({
-      select: () => ({
-        from: (table: unknown) => ({
-          where: () => ({
-            limit: () => ({
-              for: async () => {
-                if (table === workspaceMembers) {
-                  return [{ userId: actorUserId }];
-                }
-                return [
-                  {
-                    entityId,
-                    workspaceId,
-                    ownerUserId: previousOwnerUserId,
-                    status: WORK_OBLIGATION_STATUS.ACTIVE,
-                    acknowledgedAt: new Date(),
-                    acknowledgedByUserId: previousOwnerUserId,
-                    type: "task",
-                    workingTargetDate: null,
-                    hardDeadlineDate: null,
-                    sourceType: "manual",
-                    sourceEntityId: null,
-                    sourceDescription: null,
-                  },
-                ];
-              },
+      const { safeDb, scopedDb } = createScopedDbMock({
+        select: () => ({
+          from: (table: unknown) => ({
+            where: () => ({
+              limit: () => ({
+                for: async () => {
+                  if (table === workspaceMembers) {
+                    return [{ userId: actorUserId }];
+                  }
+                  return [
+                    {
+                      entityId,
+                      workspaceId,
+                      ownerUserId: previousOwnerUserId,
+                      status: WORK_OBLIGATION_STATUS.ACTIVE,
+                      acknowledgedAt: new Date(),
+                      acknowledgedByUserId: previousOwnerUserId,
+                      type: "task",
+                      workingTargetDate: null,
+                      hardDeadlineDate: null,
+                      sourceType: "manual",
+                      sourceEntityId: null,
+                      sourceDescription: null,
+                    },
+                  ];
+                },
+              }),
             }),
           }),
         }),
-      }),
-    });
-    const request = new Request("https://api.example.test/work-obligations");
-    const recordAuditEvent = createAuditRecorder({
-      organizationId: toSafeId<"organization">(
-        "0198fa3d-fc8d-7000-8000-000000000025",
-      ),
-      workspaceId,
-      userId: actorUserId,
-      request,
-      server: null,
-    });
-
-    const result = await updateWorkObligation.handler(
-      asTestRaw<UpdateContext>({
-        body: { ownerUserId: actorUserId, reason: "Taking this over" },
-        createAuditRecorder: () => recordAuditEvent,
-        memberRole: { role: "member" },
-        orgAIConfig: null,
-        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
-        managedAIResidency: "eu" as const,
-        params: { workspaceId, entityId },
-        recordAuditEvent,
-        request,
-        safeDb,
-        scopedDb,
-        session: {
-          activeOrganizationId: toSafeId<"organization">(
-            "0198fa3d-fc8d-7000-8000-000000000025",
-          ),
-        },
-        user: { id: actorUserId },
+        update: () => ({
+          set: () => ({
+            where: () => ({ returning: async () => [{ entityId }] }),
+          }),
+        }),
+        insert: () => ({ values: async () => undefined }),
+      });
+      const request = new Request("https://api.example.test/work-obligations");
+      const recordAuditEvent = createAuditRecorder({
+        organizationId: toSafeId<"organization">(
+          "0198fa3d-fc8d-7000-8000-000000000025",
+        ),
         workspaceId,
-      }),
-    );
+        userId: actorUserId,
+        request,
+        server: null,
+      });
 
-    expect(result).toMatchObject({
-      code: 403,
-      response: {
-        message:
-          "Only an admin or owner can reassign work already owned by someone else",
-      },
-    });
-  });
+      const result = await updateWorkObligation.handler(
+        asTestRaw<UpdateContext>({
+          body: { ownerUserId: actorUserId, reason: "Taking this over" },
+          createAuditRecorder: () => recordAuditEvent,
+          memberRole: authority,
+          orgAIConfig: null,
+          orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+          managedAIResidency: "eu" as const,
+          params: { workspaceId, entityId },
+          recordAuditEvent,
+          request,
+          safeDb,
+          scopedDb,
+          session: {
+            activeOrganizationId: toSafeId<"organization">(
+              "0198fa3d-fc8d-7000-8000-000000000025",
+            ),
+          },
+          user: { id: actorUserId },
+          workspaceId,
+        }),
+      );
+
+      if (expected === "allowed") {
+        expect(result).toEqual({ success: true });
+        return;
+      }
+      expect(result).toMatchObject({
+        code: 403,
+        response: {
+          message:
+            "Only an admin or owner can reassign work already owned by someone else",
+        },
+      });
+    },
+  );
 });

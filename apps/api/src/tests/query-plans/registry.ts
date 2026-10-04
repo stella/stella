@@ -4,6 +4,7 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -41,9 +42,18 @@ import {
 } from "@/api/lib/case-law/sitemap-shard-refresh";
 import { corpusProjectionErasureClaimQuery } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import { rehydrateCorpusIndexProviderCandidatesQuery } from "@/api/lib/legal-search/corpus-index-provider";
+import {
+  pendingDocumentPresenceQuery,
+  remainingDocumentCandidateQuery,
+} from "@/api/lib/legal-search/sk-document-backfill";
+import { DOCUMENT_SCAN_ROW_BUDGET } from "@/api/lib/legal-search/sk-document-remaining-scan";
 import { LIMITS } from "@/api/lib/limits";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import type { PublicLawSharedQuery } from "@/api/lib/public-law-shared-query";
+import {
+  SYSTEM_AUDIT_RETENTION_DAYS,
+  systemAuditPurgeCandidatesQuery,
+} from "@/api/lib/scheduler/tasks/system-audit-retention";
 import planContracts from "@/api/tests/query-plans/contracts.json" with { type: "json" };
 import type {
   AccessPath,
@@ -87,8 +97,48 @@ const withFirstParameter = (text: string, value: string): SQLWrapper => {
   return sql`${sql.raw(head)}${value}${sql.raw(tail)}`;
 };
 
+const systemAuditPurgeCutoff = new Date(
+  Temporal.Instant.from(QUERY_PLAN_SAMPLE.systemAudit.now).epochMilliseconds -
+    SYSTEM_AUDIT_RETENTION_DAYS * DAY_IN_MS,
+);
+
 /** Curated production builders with a committed access path for each scan. */
 export const QUERY_PLAN_REGISTRY = [
+  {
+    id: "system-audit.purge-candidates",
+    class: "page",
+    role: "root",
+    build: () => systemAuditPurgeCandidatesQuery(systemAuditPurgeCutoff),
+    seed: "case-law",
+    contract: planContracts["system-audit.purge-candidates"],
+  },
+  {
+    id: "case-law.outstanding-document-candidates",
+    class: "page",
+    role: "root",
+    build: (tx) =>
+      remainingDocumentCandidateQuery({
+        tx,
+        sourceId: QUERY_PLAN_SAMPLE.caseLaw.sourceId,
+        limit: DOCUMENT_SCAN_ROW_BUDGET,
+      }),
+    seed: "case-law",
+    planMode: "covering-index",
+    contract: planContracts["case-law.outstanding-document-candidates"],
+  },
+  {
+    id: "case-law.outstanding-document-probe",
+    class: "point",
+    role: "root",
+    build: (tx) =>
+      pendingDocumentPresenceQuery({
+        sourceId: QUERY_PLAN_SAMPLE.caseLaw.sourceId,
+        tx,
+      }),
+    seed: "case-law",
+    planMode: "covering-index",
+    contract: planContracts["case-law.outstanding-document-probe"],
+  },
   {
     id: "case-law.ecli-identity",
     class: "point",

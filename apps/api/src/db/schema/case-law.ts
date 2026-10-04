@@ -75,6 +75,7 @@ import {
   storedObservationIsListingOnly,
 } from "@/api/lib/legal-search/partial-observation-sql";
 import { documentFetchParked } from "@/api/lib/legal-search/sk-document-parking-sql";
+import { pendingDeferredDocumentSql } from "@/api/lib/legal-search/sk-document-pending-sql";
 
 import {
   caseLawAnalysisReaderPolicies,
@@ -365,22 +366,21 @@ export const caseLawSources = p.pgTable(
       .varchar("reported_total_origin", { length: 16 })
       .$type<SourceTotalOrigin>(),
     /**
-     * How many decisions the corpus holds for this source, and when it was
-     * counted.
-     *
-     * Persisted rather than computed on demand because the count is a walk of
-     * the source's whole range of
-     * `case_law_decisions_source_generation_cursor_idx`: on a corpus this size
-     * that is seconds, and the public reader that would have to run it holds a
-     * two-connection pool shared with every other public page. The ingestion
-     * side counts it on its own connection instead
-     * (`ingestion/source-totals.ts`), so a public request reads an integer.
+     * Persisted exact count and when it was observed. One gated daily
+     * snapshot refreshes it; public requests read this pair.
      *
      * Zero is a real answer here, unlike `reported_total`: a source can be
      * registered and hold nothing yet. The pair is one fact and moves together.
      */
     storedTotal: p.integer("stored_total"),
     storedTotalAsOf: timestamptz("stored_total_as_of"),
+    /** Claims and failed refreshes share the same durable interval. */
+    storedTotalAttemptedAt: timestamptz("stored_total_attempted_at"),
+    /** Durable source phase; overdue refreshes remain queued. */
+    storedTotalNextRefreshAt: timestamptz("stored_total_next_refresh_at"),
+    /** Unavailable indicators preserve the first hold and its warning slot. */
+    storedTotalHeldSince: timestamptz("stored_total_held_since"),
+    storedTotalWarnedSlot: timestamptz("stored_total_warned_slot"),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
@@ -916,17 +916,20 @@ export const caseLawDecisions = p.pgTable(
       .where(
         sql`${t.fulltext} is null and ${t.documentUrl} is not null and ${t.documentFetchRequestedAt} is not null`,
       ),
-    // Deferred-document queue, remaining tier: newest decisions first,
-    // per source. Matches the loader's ORDER BY so the head of the queue
-    // is a bounded index range scan rather than a sort over the backlog.
-    // Attempt count is deliberately not a key column: leading with it
-    // ordered every retry behind the whole untried backlog, and keeping
-    // it here would make the index unable to serve the order that fixed
-    // that.
+    // Date-led drain: exclude corpus-served rows from the ordered backlog,
+    // using the same outstanding predicate as every document queue read.
     p
-      .index("case_law_decisions_document_pending_date_idx")
+      .index("case_law_decisions_document_outstanding_date_idx")
       .on(t.sourceId, t.decisionDate.desc().nullsLast(), t.id)
-      .where(sql`${t.fulltext} is null and ${t.documentUrl} is not null`),
+      .where(pendingDeferredDocumentSql(t)),
+    // Presence probe for every unfilled deferred document, including rows
+    // cooling down or parked. Its exact predicate excludes corpus-served
+    // trimmed rows, so an empty probe ranges over this index rather than the
+    // decisions table.
+    p
+      .index("case_law_decisions_document_outstanding_idx")
+      .on(t.sourceId, t.id)
+      .where(pendingDeferredDocumentSql(t)),
     // Deferred-document queue, parked decisions: the pending rows that used
     // up their attempts. The pending index above holds every decision whose
     // text lives outside `fulltext`, so counting or requeueing parked rows
@@ -1629,6 +1632,8 @@ export const RECONCILIATION_ITEM_STATUS = {
 export type ReconciliationItemStatus =
   (typeof RECONCILIATION_ITEM_STATUS)[keyof typeof RECONCILIATION_ITEM_STATUS];
 
+export const RECONCILIATION_MAX_REVIVALS = 2;
+
 export const caseLawReconciliationItems = p.pgTable(
   "case_law_reconciliation_items",
   {
@@ -1642,6 +1647,10 @@ export const caseLawReconciliationItems = p.pgTable(
     identityKey: p.varchar("identity_key", { length: 320 }).notNull(),
     /** The listing item verbatim, so a retry needs no second listing walk. */
     payload: jsonb().$type<unknown>().notNull(),
+    /** Lazy listing revision fingerprint; null is a row written before revision tracking. */
+    payloadHash: p.varchar("payload_hash", { length: 64 }),
+    /** Lifetime terminal revivals; failed revived attempts preserve the retry budget. */
+    revivalCount: p.integer("revival_count").default(0).notNull(),
     status: p
       .varchar({ length: 16, enum: RECONCILIATION_ITEM_STATUSES })
       .default(RECONCILIATION_ITEM_STATUS.PARKED)
@@ -1677,6 +1686,10 @@ export const caseLawReconciliationItems = p.pgTable(
         Object.values(RECONCILIATION_ITEM_STATUS).map((value) => sql`${value}`),
         sql`, `,
       )})`,
+    ),
+    p.check(
+      "case_law_reconciliation_items_revival_count_bounded",
+      sql`${t.revivalCount} >= 0 AND ${t.revivalCount} <= ${RECONCILIATION_MAX_REVIVALS}`,
     ),
     p.check(
       "case_law_reconciliation_items_attempts_nonnegative",
@@ -2757,7 +2770,11 @@ export const caseLawResearchAnswers = p.pgTable(
 export const caseLawCourtWeights = p.pgTable(
   "case_law_court_weights",
   {
-    id: pUuid<"caseLawCourtWeight">().primaryKey(),
+    // Seed migrations draw ids from gen_random_uuid(); see
+    // 20261004120000_case_law_court_weight_id_default.
+    id: pUuid<"caseLawCourtWeight">()
+      .default(sql`gen_random_uuid()`)
+      .primaryKey(),
     country: p.varchar({ length: 3 }).notNull(),
     courtPattern: p.varchar("court_pattern", { length: 512 }).notNull(),
     tier: p.integer().notNull(),

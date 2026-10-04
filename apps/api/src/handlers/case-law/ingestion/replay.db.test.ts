@@ -33,6 +33,10 @@ import type {
   ReplayRowReport,
   ReplayVisitBound,
 } from "@/api/handlers/case-law/ingestion/replay";
+import {
+  ReplayStageError,
+  replayFailure,
+} from "@/api/handlers/case-law/ingestion/replay-failure";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -40,6 +44,7 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // The walk's boundary is the thing under test. Postgres stores `timestamptz`
@@ -310,6 +315,8 @@ type StubAdapterOptions = {
  */
 const stubAdapterWithoutReparse = (): SourceAdapter => ({
   key: ADAPTER_KEYS.EU_ECJ,
+  documentStage: "inline",
+  observeDocumentStage: async ({ fetchPage }) => await fetchPage(),
   sourceFields: { status: "declared", fields: {}, listSourceFields: () => [] },
   sourceSurfaces: { surfaces: {} },
   name: "replay stub",
@@ -323,6 +330,7 @@ const stubAdapterWithoutReparse = (): SourceAdapter => ({
     throw new Error("a replay must never fetch from the publisher");
   },
   reconciliation: {
+    revisionOf: (payload) => payload,
     firstSlice: "1970-01-01",
     sliceOf: () => "1970-01-01",
     nextSlice: () => null,
@@ -457,6 +465,7 @@ describe("replay of a source", () => {
     expect(failing.report.visited).toBe(1);
     expect(failing.report.resumeAfter).toBe(firstId);
     expect(failing.report.haltReason).toContain("C-2/26");
+    expect(failing.report.haltReason).toContain("connection reset");
     expect(failing.report.outcomes[REPLAY_ROW_OUTCOME.MISSING_PAYLOAD]).toBe(0);
 
     // A store that confirms it holds no such object is the opposite: a fact
@@ -469,6 +478,73 @@ describe("replay of a source", () => {
     expect(absent.report.outcomes[REPLAY_ROW_OUTCOME.MISSING_PAYLOAD]).toBe(3);
     expect(absent.report.haltReason).toBeNull();
   });
+
+  test.each(["read", "adapter"] as const)(
+    "operator %s diagnostics retain nested stage causes while failure metadata stays closed",
+    async (stage) => {
+      const sourceId = await createSource();
+      const id = createSafeId<"caseLawDecision">();
+      await insertDecision({
+        sourceId,
+        id,
+        sub: 1,
+        caseNumber: "C-1/26",
+        storedRaw: true,
+        sourceHash: "fixture-diagnostic-source-hash",
+      });
+      const classified = replayFailure(
+        stage === "read" ? "stored-raw-read" : "adapter-exception",
+      );
+      const message = `fixture underlying ${stage} failure`;
+      const nested = new ReplayStageError({
+        message: "fixture nested stage wrapper",
+        failure: classified,
+        cause: new ReplayStageError({
+          message: "fixture inner stage wrapper",
+          failure: classified,
+          cause: new Error(message),
+        }),
+      });
+      const ran = await replayCaseLawSource({
+        adapter: stubAdapter({
+          reparse: () => {
+            if (stage === "adapter") {
+              throw nested;
+            }
+            return {
+              type: "rejected",
+              rejection: "no-document",
+              detail: "fixture",
+            };
+          },
+        }),
+        scopedDb,
+        sourceId,
+        scope: { type: "decision", decisionId: id },
+        readStoredRaw: async () => {
+          if (stage === "read") {
+            throw nested;
+          }
+          return new TextEncoder().encode("<html></html>");
+        },
+        sourceLease: null,
+        bound: { type: "at-most", limit: 1 },
+        pageSize: 1,
+      });
+      if (ran.type !== "ran") {
+        throw new TypeError("Expected the capable adapter to run");
+      }
+      expect(ran.report.haltReason).toBe(
+        `C-1/26 (en) could not be replayed: ${message}`,
+      );
+      expect(ran.report.failure).toEqual(classified);
+      expect(Object.keys(ran.report.failure ?? {}).toSorted()).toEqual([
+        "code",
+        "messageClass",
+        "scope",
+      ]);
+    },
+  );
 
   test("a resume boundary from another source is refused, not silently empty", async () => {
     const sourceId = await createSource();
@@ -653,7 +729,7 @@ describe("replay of a source", () => {
         // re-run converges to); the second to something new.
         reparse: (stored) => ({
           type: "parsed",
-          result: {
+          result: plainTextIngestionResult({
             caseNumber: stored.caseNumber,
             court: stored.court,
             country: "EU",
@@ -665,7 +741,7 @@ describe("replay of a source", () => {
             rawHash:
               stored.caseNumber === "C-1/26" ? "stored-hash-1" : "new-hash-2",
             documentAst: EMPTY_AST,
-          },
+          }),
         }),
       }),
       scopedDb,
@@ -715,7 +791,7 @@ describe("replay of a source", () => {
       adapter: stubAdapter({
         reparse: (stored) => ({
           type: "parsed",
-          result: {
+          result: plainTextIngestionResult({
             caseNumber: "C-42/26",
             court: stored.court,
             country: "EU",
@@ -726,7 +802,7 @@ describe("replay of a source", () => {
             ),
             rawHash: "new-hash-41",
             documentAst: EMPTY_AST,
-          },
+          }),
         }),
       }),
       scopedDb,
@@ -767,7 +843,7 @@ describe("replay of a source", () => {
       adapter: stubAdapter({
         reparse: (stored) => ({
           type: "parsed",
-          result: {
+          result: plainTextIngestionResult({
             caseNumber: stored.caseNumber,
             court: stored.court,
             country: "EU",
@@ -778,12 +854,66 @@ describe("replay of a source", () => {
             ),
             rawHash: "stored-hash-42",
             documentAst: EMPTY_AST,
-          },
+          }),
         }),
       }),
       scopedDb,
       sourceId,
       scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+      readStoredRaw: storedRawReader([]),
+      sourceLease: null,
+      bound: { type: "at-most", limit: 10 },
+      pageSize: 10,
+    });
+
+    if (ran.type !== "ran") {
+      throw new TypeError("Expected the capable adapter to run");
+    }
+    expect(ran.report.outcomes[REPLAY_ROW_OUTCOME.WOULD_APPLY]).toBe(1);
+    expect(ran.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(0);
+  });
+
+  test("a current-stamped pending corpus mirror remains work in the reserved decision scope", async () => {
+    const sourceId = await createSource();
+    const id = createSafeId<"caseLawDecision">();
+    await insertDecision({
+      sourceId,
+      id,
+      sub: 42,
+      caseNumber: "C-42/26",
+      storedRaw: true,
+      sourceHash: "stored-hash-42",
+    });
+    await db
+      .update(caseLawDecisions)
+      .set({
+        corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+        parserVersion: 4,
+      })
+      .where(eq(caseLawDecisions.id, id));
+
+    const ran = await replayCaseLawSource({
+      adapter: stubAdapter({
+        reparse: (stored) => ({
+          type: "parsed",
+          result: plainTextIngestionResult({
+            caseNumber: stored.caseNumber,
+            court: stored.court,
+            country: "EU",
+            language: stored.language,
+            metadata: stored.metadata,
+            textFields: absentDecisionTextFields(
+              TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+            ),
+            rawHash: "stored-hash-42",
+            documentAst: EMPTY_AST,
+            parserVersion: 4,
+          }),
+        }),
+      }),
+      scopedDb,
+      sourceId,
+      scope: { type: "decision", decisionId: id },
       readStoredRaw: storedRawReader([]),
       sourceLease: null,
       bound: { type: "at-most", limit: 10 },
@@ -877,7 +1007,7 @@ describe("replay of a source", () => {
           reparsesToDocument(stored.caseNumber)
             ? {
                 type: "parsed",
-                result: {
+                result: plainTextIngestionResult({
                   caseNumber: stored.caseNumber,
                   court: stored.court,
                   country: "EU",
@@ -888,7 +1018,7 @@ describe("replay of a source", () => {
                   ),
                   rawHash: `new-${stored.caseNumber}`,
                   documentAst: EMPTY_AST,
-                },
+                }),
               }
             : {
                 type: "rejected",

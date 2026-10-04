@@ -472,7 +472,7 @@ const runCheck = (): number => {
   console.error(
     `\nThe ledger is a mirror of the security-tier suppressions in the tree.\n` +
       `Removing a suppression is a pure deletion; adding one is a ledger edit\n` +
-      `plus a per-rule baseline reseed (\`bun scripts/ratchet.ts --write\`).`,
+      `with no increase over the measured merge-base tree.`,
   );
   return 1;
 };

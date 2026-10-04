@@ -3,13 +3,14 @@ import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillProposals } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import {
   loadLatestSkillRevision,
   lockSkillForAnchor,
 } from "@/api/lib/agent-skills/revisions";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -36,6 +37,8 @@ const config = {
     "skill itself is untouched until someone with edit rights accepts the " +
     "proposal; bundled skills are refused.",
   permissions: { agentSkill: ["propose"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   access: "write",
   mcp: {
     type: "capability",

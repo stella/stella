@@ -9,13 +9,14 @@ import {
   TIME_ENTRY_SUGGESTION_STATUS,
   timeEntrySuggestions,
 } from "@/api/db/schema";
+import { timeEntryRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { loadTimeSuggestions } from "@/api/handlers/time-entries/suggestions/load";
 import {
   timeSuggestionDateSchema,
   timeSuggestionFingerprintSchema,
   timeSuggestionTimezoneSchema,
 } from "@/api/handlers/time-entries/suggestions/schemas";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { readTimePolicy } from "@/api/lib/billing-time";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
@@ -293,6 +294,8 @@ const createTimeSuggestionDecision = createSafeHandler(
       "the suggestion for good and is idempotent: repeating it returns the " +
       "decision already stored, including an earlier accept.",
     permissions: { timeEntry: ["create"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: timeEntryRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",

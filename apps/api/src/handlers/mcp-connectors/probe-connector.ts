@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import { probeMcpServer } from "@/api/handlers/mcp-connectors/probe";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const requestBody = t.Object({
@@ -12,6 +12,7 @@ const requestBody = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "mcp_transport" },
   body: requestBody,
 } satisfies HandlerConfig;

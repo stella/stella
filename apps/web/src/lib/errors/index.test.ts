@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
+import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
+
+import messages from "@/i18n/langs/en.json";
+
 import {
   APIError,
   internalToolErrorMessage,
@@ -46,6 +51,41 @@ describe("API request retries", () => {
 });
 
 describe("toAPIError", () => {
+  test("explains how to preserve a file property's type", () => {
+    const error = toAPIError({
+      status: 422,
+      value: {
+        code: FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
+        message: "Raw property refusal",
+      },
+    });
+
+    expect(error.message).toBe(
+      "File property types cannot be changed. Keep the existing type; create a custom property for other values.",
+    );
+    expect(userErrorFromThrown(error, "Fallback")).toBe(error.message);
+    expect(shouldRetryAPIRequest(0, error)).toBe(false);
+  });
+
+  test.each([
+    [
+      "matter_contact_capacity_reached",
+      messages.errors.apiCodes.matterContactCapacityReached,
+    ],
+    [
+      "matter_contact_capacity_exceeded",
+      messages.errors.apiCodes.matterContactCapacityExceeded,
+    ],
+  ])("localizes matter contact capacity code %s", (code, expected) => {
+    const error = toAPIError({
+      status: 422,
+      value: { code, message: "Raw capacity refusal", retryable: false },
+    });
+    expect(error.code).toBe(code);
+    expect(error.message).toBe(expected);
+    expect(error.rawMessage).toBe("Raw capacity refusal");
+    expect(shouldRetryAPIRequest(0, error)).toBe(false);
+  });
   test("localizes string payloads by status and preserves the raw message", () => {
     const error = toAPIError({
       status: 400,
@@ -535,4 +575,57 @@ describe("error predicates", () => {
     expect(isUnauthorizedError(authError)).toBe(true);
     expect(isUnauthorizedError(forbidden)).toBe(false);
   });
+});
+
+test("clause directive refusal is localized and never retried", () => {
+  const error = toAPIError({
+    status: 422,
+    value: {
+      code: CLAUSE_DIRECTIVES_INVALID_CODE,
+      message: "Clause slot @clause:Terms has invalid directives.",
+    },
+  });
+  expect(error.code).toBe(CLAUSE_DIRECTIVES_INVALID_CODE);
+  expect(error.message).toBe(
+    "A linked clause has invalid directives. Correct the clause before filling the template.",
+  );
+  expect(error.rawMessage).toContain("@clause:Terms");
+  expect(shouldRetryAPIRequest(0, error)).toBe(false);
+});
+
+test("clause directive refusal names the slot and linked clause", () => {
+  const error = toAPIError({
+    status: 422,
+    value: {
+      code: CLAUSE_DIRECTIVES_INVALID_CODE,
+      message: "Invalid clause directives",
+      clause: { slotKey: "@clause:Terms", id: "cl_1", name: "Payment terms" },
+      hint: "Open the clause editor and correct paragraph 2.",
+      retryable: false,
+    },
+  });
+  expect(error.message).toBe(
+    "Clause Payment terms in slot @clause:Terms has invalid directives. Open the clause editor, correct the named paragraphs, and fill the template again.",
+  );
+  expect(shouldRetryAPIRequest(0, error)).toBe(false);
+});
+
+test("a fill override refusal points to the current override without an empty identifier", () => {
+  const error = toAPIError({
+    status: 422,
+    value: {
+      code: CLAUSE_DIRECTIVES_INVALID_CODE,
+      message: "Invalid clause directives",
+      clause: {
+        slotKey: "@clause:Terms",
+        name: "Payment terms",
+        resolution: "override",
+      },
+    },
+  });
+  expect(error.message).toBe(
+    "The override for clause Payment terms in slot @clause:Terms has invalid directives. Correct this fill’s override before filling again.",
+  );
+  expect(error.message).not.toContain("()");
+  expect(shouldRetryAPIRequest(0, error)).toBe(false);
 });

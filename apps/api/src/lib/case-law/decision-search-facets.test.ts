@@ -4,6 +4,7 @@ import {
   COURT_TIER_LABELS,
   type CourtTierLabel,
 } from "@stll/api-contract/case-law-court-tiers";
+import { FACET_COUNT_TYPE } from "@stll/api-contract/search";
 
 import {
   COURT_WEIGHT_SEED,
@@ -11,6 +12,7 @@ import {
 } from "@/api/handlers/case-law/court-weight-seed";
 import { courtTierLabel } from "@/api/lib/case-law/court-tiers";
 import {
+  cappedSourceFacetBuckets,
   groupCourtsByTier,
   labelSourceBuckets,
   type SearchFacetBucket,
@@ -224,4 +226,21 @@ test("the ranks inside the scale keep their own tiers", () => {
     "supreme",
     "constitutional",
   ]);
+});
+
+// Exhaust the bounded probe's result domain, including both sides of the cap.
+test("source bucket lower bounds appear only above the cap and survive labelling", () => {
+  const cap = LIMITS.caseLawSourceFacetCountCap;
+  const inputs = Array.from({ length: cap + 2 }, (_, count) =>
+    bucket(String(count), count),
+  );
+  const names = new Map(inputs.map(({ value }) => [value, `source-${value}`]));
+  const outputs = labelSourceBuckets(cappedSourceFacetBuckets(inputs), names);
+  for (const [index, output] of outputs.entries()) {
+    expect(output.count).toBe(Math.min(index, cap));
+    expect(output.countType).toBe(
+      index > cap ? FACET_COUNT_TYPE.AT_LEAST : FACET_COUNT_TYPE.EXACT,
+    );
+    expect(output.label).toBe(`source-${index}`);
+  }
 });

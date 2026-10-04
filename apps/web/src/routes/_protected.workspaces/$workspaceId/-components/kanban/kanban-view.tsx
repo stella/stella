@@ -48,8 +48,9 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { PropertyOptionColor } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
   preflightAttachedTemplateUpload,
@@ -164,10 +165,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       if (Result.isError(createResult)) {
         inspector.closeTab(pendingTaskId);
         analytics.captureError(createResult.error);
-        stellaToast.add({
-          title: t("errors.actionFailed"),
-          type: "error",
-        });
+        notifyUserError(createResult.error, t("errors.actionFailed"));
         return null;
       }
 
@@ -183,10 +181,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
             }),
         );
         inspector.closeTab(pendingTaskId);
-        stellaToast.add({
-          title: t("errors.actionFailed"),
-          type: "error",
-        });
+        notifyUserError(
+          taskError ? toAPIError(taskError) : undefined,
+          t("errors.actionFailed"),
+        );
         return null;
       }
 
@@ -212,11 +210,8 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
             type: "success",
           });
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -428,10 +423,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     },
     onSuccess: async ({ taskId }) => {
       await invalidateTaskQueries({ queryClient, workspaceId, taskId });

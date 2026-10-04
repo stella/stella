@@ -11,12 +11,15 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { IMPORT_SOURCE_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  toPlainTextIngestionResult,
+  STORED_RAW_REPARSE_REJECTION,
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   IngestionResult,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/lib/legal-search/ingestion-types";
-import { STORED_RAW_REPARSE_REJECTION } from "@/api/lib/legal-search/ingestion-types";
 
 import { classifyCourtListenerDecision } from "./order-classification";
 import { planCourtListenerRecord } from "./plan";
@@ -30,7 +33,7 @@ import {
 import { hasVisibleText } from "./snapshot-columns";
 
 export const COURTLISTENER_IMPORT_KEY = IMPORT_SOURCE_KEYS.COURTLISTENER;
-export const COURTLISTENER_PARSER_VERSION = 4;
+export const COURTLISTENER_PARSER_VERSION = 5;
 
 const textField = (value: string) =>
   hasVisibleText(value)
@@ -90,7 +93,7 @@ export const mapCourtListenerRecord = (
     principal: composed.principal,
   });
   const { decisionType } = classification;
-  return Result.ok({
+  return toPlainTextIngestionResult({
     sourceDocumentId: plan.sourceDocumentId,
     country: plan.country,
     language: plan.language,
@@ -142,7 +145,15 @@ export const mapCourtListenerRecord = (
     sourceRaw: plan.sourceRaw,
     sourceRawContentType: plan.sourceRawContentType,
     parserVersion: COURTLISTENER_PARSER_VERSION,
-  });
+  }).mapError((error) =>
+    rejectCourtListenerRecord({
+      reason: COURTLISTENER_REJECTION_REASON.PLAIN_TEXT_REJECTED,
+      sourceRecordKey,
+      clusterId,
+      opinionIds: opinions.map(({ row }) => row.id),
+      diagnostics: [{ path: "labels-or-metadata", detail: error.reason }],
+    }),
+  );
 };
 
 export const reparseStoredRaw = (

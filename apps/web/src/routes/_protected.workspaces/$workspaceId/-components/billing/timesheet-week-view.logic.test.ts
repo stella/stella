@@ -14,6 +14,7 @@ const entry = (
   workItemId: "m1",
   currency: "USD",
   billable: true,
+  noCharge: false,
   billedMinutes: 60,
   rateAtEntry: cents(10_000),
   ...overrides,
@@ -86,4 +87,14 @@ describe("summarizeBillableAmountByMatterAndCurrency", () => {
     ]);
     expect(map.has("m1")).toBe(false);
   });
+});
+
+test("no-charge time contributes zero to week and matter subtotals", () => {
+  const rows = [entry(), entry({ noCharge: true })];
+  expect(summarizeBillableAmountByCurrency(rows)).toEqual([
+    { currency: "USD", amount: 10_000 },
+  ]);
+  expect(summarizeBillableAmountByMatterAndCurrency(rows).get("m1")).toEqual([
+    { currency: "USD", amount: 10_000 },
+  ]);
 });

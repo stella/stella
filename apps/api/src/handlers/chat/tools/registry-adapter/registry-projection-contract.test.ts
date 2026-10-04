@@ -1,10 +1,12 @@
-import { panic, Result } from "better-result";
+import { type InferOk, panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
+  SEARCH_PAGINATION_COMPLETE,
   countedSearchTotal,
+  LEGISLATION_SEARCH_MATCH_TYPES,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
@@ -27,6 +29,7 @@ import { deriveRefMediationEntry } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -181,7 +184,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
     async (run: (transaction: unknown) => unknown) => await run(tx),
   );
   return buildMcpContextFromChat({
-    memberRole: "owner",
+    memberRole: sessionMemberRole("owner"),
     organizationId: ORGANIZATION_ID,
     safeDb: toSafeDbMock(scopedDb),
     scopedDb,
@@ -430,27 +433,34 @@ const CONTRACT_CORPUS = {
             },
           ],
         } satisfies Awaited<ReturnType<typeof readOverviewHandler>>);
-        readWorkspaceContactsHandlerMock.mockResolvedValue([
-          {
-            id: toSafeId<"workspaceContact">(uid(6)),
-            organizationId: ORGANIZATION_ID,
-            workspaceId: toSafeId<"workspace">(WS),
-            contactId: toSafeId<"contact">(uid(7)),
-            // Not "client": that relationship lives on `workspaces.clientId`,
-            // not a `workspaceContacts` row; "client" is not one of this
-            // table's roles.
-            role: "co_counsel",
-            isPrimary: false,
-            notes: null,
-            createdAt: new Date("2026-01-01"),
-            contact: {
-              id: toSafeId<"contact">(uid(7)),
-              type: "person",
-              displayName: "Jan Novák",
-              color: null,
-            },
-          },
-        ] satisfies Awaited<ReturnType<typeof readWorkspaceContactsHandler>>);
+        readWorkspaceContactsHandlerMock.mockResolvedValue(
+          Result.ok({
+            contacts: [
+              {
+                id: toSafeId<"workspaceContact">(uid(6)),
+                organizationId: ORGANIZATION_ID,
+                workspaceId: toSafeId<"workspace">(WS),
+                contactId: toSafeId<"contact">(uid(7)),
+                // Not "client": that relationship lives on `workspaces.clientId`,
+                // not a `workspaceContacts` row; "client" is not one of this
+                // table's roles.
+                role: "co_counsel",
+                isPrimary: false,
+                notes: null,
+                createdAt: new Date("2026-01-01"),
+                contact: {
+                  id: toSafeId<"contact">(uid(7)),
+                  type: "person",
+                  displayName: "Jan Novák",
+                  color: null,
+                },
+              },
+            ],
+            overflow: false,
+          } satisfies InferOk<
+            Awaited<ReturnType<typeof readWorkspaceContactsHandler>>
+          >),
+        );
         readWorkspaceMembersHandlerMock.mockResolvedValue([
           {
             id: toSafeId<"workspaceMember">(uid(8)),
@@ -940,6 +950,7 @@ const CONTRACT_CORPUS = {
       mode: "detail",
       buildArgs: () => ({ clause_id: uid(30) }),
       tx: () => ({
+        $count: async () => 0,
         query: {
           clauses: {
             findFirst: async () => ({
@@ -1244,6 +1255,7 @@ const CONTRACT_CORPUS = {
                   narrative: "Drafted the NDA",
                   narrativeLanguage: null,
                   invoiceNarrative: null,
+                  noCharge: false,
                   status: "invoiced",
                   workItem: { id: uid(48), name: "NDA draft" },
                 },
@@ -1329,6 +1341,7 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ country: "CZE", queries: ["dobré mravy"] }),
       setup: () => {
         searchDecisionsHandlerMock.mockResolvedValue({
+          paginationOutcome: SEARCH_PAGINATION_COMPLETE,
           facets: null,
           hits: [
             {
@@ -1538,35 +1551,38 @@ const CONTRACT_CORPUS = {
       expectRefPaths: [],
     },
   ],
-  search_legislation: [
-    {
-      mode: "search",
-      buildArgs: () => ({ country: "CZE", query: "náhrada škody" }),
-      setup: () => {
-        searchLegislationHandlerMock.mockResolvedValue({
-          items: [
-            {
-              documentId: uid(70),
-              eli: "/eli/cz/sb/2012/89",
-              title: "89/2012 Sb., občanský zákoník",
-              country: "CZE",
-              language: "cs",
-              documentType: "act",
-              status: "in_force",
-              effectiveDate: "2014-01-01",
-              // GUID-bearing publisher URL; see the statute fixture above.
-              sourceUrl: `https://example.test/89-2012/${uid(95)}`,
-              headline: "<mark>náhrada škody</mark>",
-              score: 1.5,
-            },
-          ],
-          nextCursor: null,
-          total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
-        });
-      },
-      expectRefPaths: [],
+  search_legislation: LEGISLATION_SEARCH_MATCH_TYPES.map((matchType) => ({
+    mode: `search-${matchType}`,
+    buildArgs: () => ({ country: "CZE", query: "náhrada škody" }),
+    setup: () => {
+      searchLegislationHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        items: [
+          {
+            documentId: uid(70),
+            eli: "/eli/cz/sb/2012/89",
+            title: "89/2012 Sb., občanský zákoník",
+            country: "CZE",
+            language: "cs",
+            match: { type: matchType },
+            documentType: "act",
+            status: "in_force",
+            effectiveDate: "2014-01-01",
+            // GUID-bearing publisher URL; see the statute fixture above.
+            sourceUrl: `https://example.test/89-2012/${uid(95)}`,
+            headline: "<mark>náhrada škody</mark>",
+            score: 1.5,
+          },
+        ],
+        nextCursor: null,
+        total: { type: SEARCH_TOTAL_TYPE.NOT_COUNTED },
+      });
     },
-  ],
+    expectRefPaths: [],
+    expectPayloadContains: [
+      JSON.stringify({ match: { type: matchType } }).slice(1, -1),
+    ],
+  })),
   read_statute: [
     {
       mode: "read",

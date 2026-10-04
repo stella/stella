@@ -4,18 +4,18 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { prorateHourlyCents } from "@stll/money";
+import { timeEntryAmount } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { PlusIcon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 
 import {
   DEFAULT_CURRENCY,
   formatCurrencyAmount,
 } from "@/components/billing/format-currency";
 import { GlobalTimer } from "@/features/time-timers/global-timer";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   formatDecimalHours,
   formatMinutes,
@@ -71,10 +71,7 @@ export const TimesheetDayView = ({
     let total = 0;
     for (const e of entries) {
       if (e.billable) {
-        total += prorateHourlyCents({
-          billedMinutes: e.billedMinutes,
-          hourlyRateCents: e.rateAtEntry,
-        });
+        total += timeEntryAmount(e);
       }
     }
     return total;
@@ -106,11 +103,8 @@ export const TimesheetDayView = ({
       },
       {
         onSuccess: () => setFormOpen(false),
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -137,11 +131,8 @@ export const TimesheetDayView = ({
       },
       {
         onSuccess: () => setEditingId(null),
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -151,11 +142,8 @@ export const TimesheetDayView = ({
     deleteEntry.mutate(
       { workspaceId, id },
       {
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
