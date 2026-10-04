@@ -1279,6 +1279,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "SMOKE_AI_OPENAI_API_KEY",
   "SMOKE_API_URL",
   "SMOKE_TEST",
+  // The source-fingerprint baseline generator reads the guard test's census.
+  "SOURCE_FINGERPRINT_CENSUS_OUT",
   "STAGING_STATE",
   // CI names the target-branch revision the statute recall floor compares to.
   "STATUTE_RECALL_BASE_REF",
