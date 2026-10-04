@@ -1559,6 +1559,7 @@ export const czNsAdapter = defineSourceAdapter({
               case "detail-unavailable": {
                 // Nothing is stored, so the identity is not held and the
                 // reconciliation's walk of its day builds the entry.
+                refused += 1;
                 const error = unreadPublisherError({
                   outcome: built.read,
                   message: `CZ Supreme Court ${built.page} page unread`,

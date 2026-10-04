@@ -170,6 +170,10 @@ describe("decision pages the publisher did not serve", () => {
 
     expect(page.decisions).toEqual([]);
     expect(page.nextCursor).toBe("2");
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
   });
 
   test("a print page the publisher has none of still builds the decision", async () => {
@@ -213,6 +217,10 @@ describe("decision pages the publisher did not serve", () => {
 
       expect(page.decisions).toEqual([]);
       expect(page.nextCursor).toBe("2");
+      expect(page.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 1,
+      });
     });
 
     test(`a listing answering ${status} stops the source as a publisher refusal`, async () => {
