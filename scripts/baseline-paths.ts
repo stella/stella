@@ -29,6 +29,8 @@ export const BASELINE_PATHS = {
   reactCompilerBailouts: "scripts/react-compiler-bailouts.json",
   /** scripts/design-lint-baseline.ts */
   designLint: "scripts/design-lint-baseline.json",
+  /** scripts/query-data-state-baseline.ts */
+  queryDataState: ".oxlint-plugins/query-data-requires-state-baseline.json",
   /** scripts/failure-as-empty-baseline.ts */
   failureAsEmpty: ".oxlint-plugins/no-failure-as-empty-baseline.json",
   /** scripts/typecheck-baseline.ts */
