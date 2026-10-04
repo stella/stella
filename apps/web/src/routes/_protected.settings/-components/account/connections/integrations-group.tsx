@@ -1,9 +1,24 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useState } from "react";
+
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogFooter,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
+  DialogTrigger,
+} from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import {
@@ -26,18 +41,30 @@ import {
 } from "@stll/ui/list";
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
+import { McpAuthorizationReview } from "@/components/mcp-authorization-review";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
+import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   isEffectivelyInstalled,
   type CatalogueMcp,
 } from "@/lib/knowledge/catalogue-types";
-import { mcpConnectionsOptions } from "@/lib/knowledge/queries";
+import {
+  mcpConnectorsOptions,
+  mcpConnectionsOptions,
+  type McpConnectorsResponse,
+} from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 
 import {
+  canApproveIntegrationAuthorization,
   integrationStatus,
   matchesConnectionQuery,
+  type IntegrationAuthorizationStatus,
   type IntegrationConnection,
 } from "./connections.logic";
 
@@ -47,6 +74,14 @@ export type IntegrationsData = {
   /** The ones matching the search query. */
   visible: readonly CatalogueMcp[];
   connectionBySlug: ReadonlyMap<string, IntegrationConnection>;
+  authorizationStatusBySlug: ReadonlyMap<
+    string,
+    IntegrationAuthorizationStatus
+  >;
+  authorizationReviewBySlug: ReadonlyMap<
+    string,
+    McpConnectorsResponse["connectors"][number]["authorizationReview"]
+  >;
 };
 
 export const useIntegrations = (query: string): IntegrationsData => {
@@ -56,6 +91,9 @@ export const useIntegrations = (query: string): IntegrationsData => {
   );
   const { data: connectionsData } = useSuspenseQuery(
     mcpConnectionsOptions(activeOrganizationId, userId),
+  );
+  const { data: connectorsData } = useSuspenseQuery(
+    mcpConnectorsOptions(activeOrganizationId),
   );
 
   const connectionBySlug = new Map<string, IntegrationConnection>(
@@ -70,7 +108,25 @@ export const useIntegrations = (query: string): IntegrationsData => {
   const visible = installed.filter((entry) =>
     matchesConnectionQuery(query, [entry.displayName, entry.description]),
   );
-  return { installed, visible, connectionBySlug };
+  const authorizationStatusBySlug = new Map(
+    connectorsData.connectors.map((connector) => [
+      connector.slug,
+      connector.authorizationStatus,
+    ]),
+  );
+  const authorizationReviewBySlug = new Map(
+    connectorsData.connectors.map((connector) => [
+      connector.slug,
+      connector.authorizationReview,
+    ]),
+  );
+  return {
+    installed,
+    visible,
+    connectionBySlug,
+    authorizationStatusBySlug,
+    authorizationReviewBySlug,
+  };
 };
 
 /**
@@ -79,12 +135,21 @@ export const useIntegrations = (query: string): IntegrationsData => {
  * its entry there.
  */
 export const IntegrationsGroup = ({
-  integrations: { installed, visible, connectionBySlug },
+  integrations: {
+    installed,
+    visible,
+    connectionBySlug,
+    authorizationStatusBySlug,
+    authorizationReviewBySlug,
+  },
 }: {
   integrations: IntegrationsData;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
+  const canManageOrganizationSettings = usePermissions({
+    organizationSettings: ["update"],
+  });
 
   return (
     <ListGroup aria-labelledby="connections-integrations">
@@ -113,15 +178,28 @@ export const IntegrationsGroup = ({
       </ListGroupHeader>
       <List>
         {visible.map((entry) => {
-          const status = integrationStatus(
-            entry.authType,
-            connectionBySlug.get(entry.installedConnectorSlug ?? entry.slug),
-          );
+          const connectorSlug = entry.installedConnectorSlug ?? entry.slug;
+          const review = authorizationReviewBySlug.get(connectorSlug);
+          const canApprove =
+            canApproveIntegrationAuthorization(
+              canManageOrganizationSettings,
+              authorizationStatusBySlug.get(connectorSlug),
+            ) &&
+            review !== undefined &&
+            review !== null &&
+            review.issuer !== null;
+          const status = integrationStatus({
+            authType: entry.authType,
+            authorizationStatus: authorizationStatusBySlug.get(connectorSlug),
+            connection: connectionBySlug.get(connectorSlug),
+          });
           return (
             <ListItem
               key={entry.slug}
               render={
-                <Link search={{ slug: entry.slug }} to="/knowledge/tools" />
+                canApprove ? undefined : (
+                  <Link search={{ slug: entry.slug }} to="/knowledge/tools" />
+                )
               }
             >
               <ListItemMedia>
@@ -135,13 +213,26 @@ export const IntegrationsGroup = ({
               </ListItemMedia>
               <ListItemContent>
                 <ListItemTitle>
-                  <BidiText>{entry.displayName}</BidiText>
+                  {canApprove ? (
+                    <Link search={{ slug: entry.slug }} to="/knowledge/tools">
+                      <BidiText>{entry.displayName}</BidiText>
+                    </Link>
+                  ) : (
+                    <BidiText>{entry.displayName}</BidiText>
+                  )}
                 </ListItemTitle>
                 {entry.description.length > 0 && (
                   <ListItemDescription>{entry.description}</ListItemDescription>
                 )}
               </ListItemContent>
               <ListItemActions>
+                {canApprove && review.issuer !== null && (
+                  <ApproveAuthorizationButton
+                    connectorSlug={connectorSlug}
+                    issuer={review.issuer}
+                    endpointOrigins={review.endpointOrigins}
+                  />
+                )}
                 {status && (
                   <ListItemStatus tone={status.tone}>
                     {t(status.labelKey)}
@@ -168,5 +259,77 @@ export const IntegrationsGroup = ({
         )}
       </List>
     </ListGroup>
+  );
+};
+
+const ApproveAuthorizationButton = ({
+  connectorSlug,
+  issuer,
+  endpointOrigins,
+}: {
+  connectorSlug: string;
+  issuer: string;
+  endpointOrigins: string[];
+}) => {
+  const t = useTranslations();
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  const approve = useMutation({
+    mutationFn: async () =>
+      unwrapEden(
+        await api.mcp
+          .connectors({ slug: connectorSlug })
+          ["approve-authorization"].post({
+            confirmedIssuer: issuer,
+            confirmedEndpointOrigins: endpointOrigins,
+          }),
+      ),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: mcpConnectorsOptions(activeOrganizationId).queryKey,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: mcpConnectionsOptions(activeOrganizationId, userId)
+            .queryKey,
+        }),
+      ]);
+      setOpen(false);
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+      notifyUserError(error, t("errors.actionFailed"));
+    },
+  });
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button size="xs" variant="outline" />}>
+        {t("common.approve")}
+      </DialogTrigger>
+      <DialogPopup>
+        <DialogHeader>
+          <DialogTitle>{t("common.approve")}</DialogTitle>
+        </DialogHeader>
+        <McpAuthorizationReview
+          issuer={issuer}
+          endpointOrigins={endpointOrigins}
+        />
+        <DialogFooter>
+          <DialogClose render={<Button variant="ghost" />}>
+            {t("common.cancel")}
+          </DialogClose>
+          <Button
+            disabled={approve.isPending}
+            onClick={() => approve.mutate()}
+            size="xs"
+            variant="outline"
+          >
+            {t("common.approve")}
+          </Button>
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
   );
 };

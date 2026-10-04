@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
@@ -63,12 +63,18 @@ const createTemplateFromStyleSetHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Processes template content and returns parsed data or saved-document metadata rather than stored-file bytes.",
+  },
   description:
     "Create an empty template whose document is built from one of the " +
     "organization's style sets, so it starts in that house style, with a " +
     "name and an optional category. Like templates.blank.create it carries " +
     "no fields until a document is saved onto it.",
   permissions: { template: ["create"], styleSet: ["use"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

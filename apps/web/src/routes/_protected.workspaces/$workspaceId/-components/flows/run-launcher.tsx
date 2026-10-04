@@ -25,7 +25,9 @@ import type { RunSizeConfirmationDetail } from "@/components/usage/run-size-conf
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { FLOW_PICKER_LIMIT, flowsOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { entitySummariesOptions } from "@/lib/workspaces/queries/entities";
@@ -104,9 +106,7 @@ export const RunLauncher = ({
         setSizeConfirmation(detail);
         return;
       }
-      stellaToast.add({
-        type: "error",
-        title: t("flows.runs.startFailed"),
+      notifyUserError(toAPIError(response.error), t("flows.runs.startFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),

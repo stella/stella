@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_MANIFESTS,
   type CorpusIndexManifest,
@@ -10,6 +11,7 @@ import {
   type CaseLawProjectionInput,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { caseLawProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import {
@@ -18,6 +20,7 @@ import {
   MORPHOLOGY_REVISIONS,
   morphologyKey,
 } from "@/api/lib/legal-search/morphology/stem";
+import { PARTIAL_OBSERVATION_KEY } from "@/api/lib/legal-search/partial-observation-sql";
 
 const CASE_LAW_INPUT = {
   family: "case_law",
@@ -128,6 +131,33 @@ test("redaction, a listing-only row, missing or empty payload, and redistributio
         { ...CASE_LAW_INPUT, contentHash },
       ),
     ).toEqual({ action: "erase" });
+  }
+});
+
+test("persisted observation kinds erase only listings, including legacy listing markers", () => {
+  for (const { marker, action } of [
+    { marker: { isListingOnly: true }, action: "erase" },
+    {
+      marker: { detail: "listing-only", isListingOnly: true },
+      action: "erase",
+    },
+    { marker: { detail: "secondary-refused" }, action: "upsert" },
+    { marker: { detail: "complete" }, action: "upsert" },
+  ] as const) {
+    const input = caseLawProjectionInputFromCanonical({
+      ...CASE_LAW_INPUT,
+      documentId: createSafeId<"caseLawDecision">(),
+      sourceId: createSafeId<"caseLawSource">(),
+      redactedAt: null,
+      sourceDescriptor: null,
+      metadata: { [PARTIAL_OBSERVATION_KEY]: marker },
+    });
+    expect(
+      deriveCorpusIndexProjectionDescriptor(
+        CORPUS_INDEX_MANIFESTS.case_law_v5,
+        input,
+      ).action,
+    ).toBe(action);
   }
 });
 

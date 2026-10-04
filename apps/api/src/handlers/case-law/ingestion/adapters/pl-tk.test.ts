@@ -1519,3 +1519,20 @@ test("ordinary tribunal rows omit undefined metadata from stored JSON", async ()
   const noDocket = decisionOf(rowFor({ caseNumber: undefined }), undefined);
   expect(sanitizeMetadata(noDocket.metadata)).not.toHaveProperty("rulingKeys");
 });
+
+test("tribunal listing ignores excluded HTML in every docket", async () => {
+  const pageHtml = await listingFixture("pl-tk-listing-merits-page-0.html.gz");
+  const contaminated = pageHtml.replaceAll(
+    "</span>",
+    "<script>hidden-script</script><style>hidden-style</style></span>",
+  );
+  expect(contaminated).not.toBe(pageHtml);
+  const expected = parsePlTkListingPage(pageHtml, "merits");
+  expect(expected).not.toBeNull();
+  const actual = parsePlTkListingPage(contaminated, "merits");
+  expect(actual?.page).toEqual(expected?.page);
+  expect(actual?.totalPages).toEqual(expected?.totalPages);
+  const fields = (rows: readonly PlTkListingRow[]) =>
+    rows.map(({ rowHtml, ...row }) => row);
+  expect(fields(actual?.rows ?? [])).toEqual(fields(expected?.rows ?? []));
+});

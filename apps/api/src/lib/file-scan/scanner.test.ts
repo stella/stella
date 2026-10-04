@@ -255,7 +255,13 @@ describe("createArchiveContentScanner", () => {
         },
         evaluate: () => null,
       },
-      budget: { windowBytes: 1024, maxEvidenceBytes: 1024, timeBudgetMs: 1000 },
+      budget: {
+        windowBytes: 1024,
+        maxNestedEntryBytes: 1024 * 1024,
+        maxTotalInflatedBytes: 1024 * 1024 * 1024,
+        maxEvidenceBytes: 1024,
+        timeBudgetMs: 1000,
+      },
       guard,
     });
 

@@ -1,5 +1,8 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
+
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -12,6 +15,8 @@ import {
 import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/decisions/slug";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
+import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -28,6 +33,7 @@ import {
   openGatedTestDatabase,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -1004,6 +1010,165 @@ if (!databaseUrl || !runPostgresTests) {
       expect(isRecord(row) ? Number(row["fallbackCount"]) : 0).toBe(0);
     });
 
+    test.each(["reserved", "legacy"] as const)(
+      "adopts a stored raw-text NALUS quarantine identity after publisher recovery (%s)",
+      async (identityState) => {
+        const caseNumber =
+          identityState === "reserved" ? "Pl.ÚS 46999/24" : "Pl.ÚS 46998/24";
+        const publisherId =
+          identityState === "reserved" ? "Pl-46999-24_1" : "Pl-46998-24_1";
+        const legacyId = `nalus-quarantine:${hashContent(
+          JSON.stringify({
+            stablePrimaryText: "Jan NovákoldPrimary()",
+            stableActionsText: "oldAction()",
+            stableDetailText: caseNumber,
+            stableCounterText: "1",
+          }),
+        )}`;
+        const listing = `<html><body>Výsledky 1 - 1 z celkem 1
+        <table>
+          <tr class="resultData0"><td></td><td>
+            <a href="ResultDetail.aspx?malformed=true&pos=1&cnt=1">${caseNumber} #1</a><br />
+            Jan Novák<script>oldPrimary()</script>
+          </td></tr>
+          <tr class="resultData0" valign="top"><td>
+            <img onclick='javascript:ShowLink("https://nalus.usoud.cz/Search/GetText.aspx?sz=${publisherId}", "Odkaz", "")' /><script>oldAction()</script>
+          </td></tr>
+        </table>Výsledky 1 - 1 z celkem 1</body></html>`;
+        const sleepSpy = spyOn(Bun, "sleep").mockResolvedValue(undefined);
+        const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
+          asFetchMock(async (input, init) => {
+            const url = new URL(
+              input instanceof Request ? input.url : String(input),
+            );
+            if (url.pathname.endsWith("/Search/Search.aspx")) {
+              if (init?.method === "POST") {
+                return new Response(null, {
+                  status: 302,
+                  headers: { Location: "/Search/Results.aspx" },
+                });
+              }
+              return new Response(`<html><body>
+            <input id="__VIEWSTATE" value="view-state" />
+            <input id="__VIEWSTATEGENERATOR" value="generator" />
+            <input id="__EVENTVALIDATION" value="validation" />
+            <select name="ctl00$MainContent$resultsPageSize" id="ctl00_MainContent_resultsPageSize">
+              <option selected="selected" value="20">20</option>
+            </select>
+          </body></html>`);
+            }
+            if (url.pathname.endsWith("/Search/Results.aspx")) {
+              return new Response(listing);
+            }
+            return new Response("missing", { status: 404 });
+          }),
+        );
+        const page = await Result.tryPromise(
+          async () =>
+            await czUsAdapter.fetchPage(
+              "search:historical:2026-08-07:2024:collect:0:0:-",
+              {},
+            ),
+        );
+        fetchSpy.mockRestore();
+        sleepSpy.mockRestore();
+        if (Result.isError(page)) {
+          panic(page.error.message);
+        }
+        if (Result.isError(page.value)) {
+          panic(page.value.error.message);
+        }
+        const recovered = page.value.value.decisions.at(0);
+        expect(page.value.value.decisions).toHaveLength(1);
+        if (!recovered?.sourceDocumentId) {
+          panic("Expected recovered NALUS observation");
+        }
+        expect(recovered.sourceDocumentId).toBe(`nalus-sz:${publisherId}`);
+        // Raw storage has its own integration tests; this suite exercises DB identity.
+        const observation = {
+          ...recovered,
+          sourceRaw: undefined,
+          sourceRawBytes: undefined,
+        };
+        expect(recovered.sourceDocumentIdRepairAliases).toContain(legacyId);
+        expect(recovered.sourceDocumentIdAliases ?? []).not.toContain(legacyId);
+        await processDecision({
+          input: {
+            ...observation,
+            sourceDocumentId: legacyId,
+            sourceDocumentIdAliases: undefined,
+            sourceDocumentIdRepairAliases: undefined,
+            rawHash: "legacy-nalus-script-quarantine",
+          },
+          observationOrder: 1n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        });
+        const [stored] = await db
+          .select({ id: caseLawDecisions.id })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              eq(caseLawDecisions.sourceDocumentId, legacyId),
+            ),
+          );
+        expect(stored).toBeDefined();
+        if (!stored) {
+          panic("Expected stored NALUS quarantine row");
+        }
+        if (identityState === "legacy") {
+          await db
+            .delete(caseLawDecisionSourceIdentities)
+            .where(
+              and(
+                eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
+                eq(caseLawDecisionSourceIdentities.decisionId, stored.id),
+              ),
+            );
+        }
+        for (const observationOrder of [2n, 3n]) {
+          await processDecision({
+            input: observation,
+            observationOrder,
+            sourceId,
+            scopedDb,
+            observedAt: new Date("2026-07-31T12:00:01.000Z"),
+          });
+        }
+        // A late identity-less listing must still resolve to the recovered row.
+        await processDecision({
+          input: {
+            ...observation,
+            sourceDocumentId: legacyId,
+            sourceDocumentIdAliases: undefined,
+            sourceDocumentIdRepairAliases: undefined,
+            rawHash: "legacy-nalus-script-quarantine",
+          },
+          observationOrder: 4n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:02.000Z"),
+        });
+        const rows = await db
+          .select({
+            id: caseLawDecisions.id,
+            sourceDocumentId: caseLawDecisions.sourceDocumentId,
+          })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              eq(caseLawDecisions.caseNumber, caseNumber),
+            ),
+          );
+        expect(rows).toEqual([
+          { id: stored.id, sourceDocumentId: recovered.sourceDocumentId },
+        ]);
+      },
+    );
+
     test("uses heuristic repair aliases only when an owner already exists", async () => {
       const quarantineId = "nalus-quarantine:known-repair";
       const recoveredId = "nalus-record:known-repair";
@@ -1099,6 +1264,69 @@ if (!databaseUrl || !runPostgresTests) {
       expect(isRecord(row) ? Number(row["distinctCount"]) : 0).toBe(2);
       expect(isRecord(row) ? Number(row["unclaimedRepairCount"]) : -1).toBe(0);
     });
+
+    test.each(["reserved", "legacy"] as const)(
+      "does not adopt ambiguous quarantine owners (%s)",
+      async (identityState) => {
+        const quarantineIds = [
+          `quarantine:${identityState}:a`,
+          `quarantine:${identityState}:b`,
+        ];
+        for (const quarantineId of quarantineIds) {
+          await processDecision({
+            input: decisionAt("Ambiguous repair", quarantineId),
+            observationOrder: 1n,
+            sourceId,
+            scopedDb,
+            observedAt: new Date("2026-07-31T12:00:00.000Z"),
+          });
+        }
+        if (identityState === "legacy") {
+          await db
+            .delete(caseLawDecisionSourceIdentities)
+            .where(
+              and(
+                eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
+                inArray(
+                  caseLawDecisionSourceIdentities.sourceDocumentId,
+                  quarantineIds,
+                ),
+              ),
+            );
+        }
+        const canonicalId = `canonical:${identityState}:ambiguous`;
+        for (const observationOrder of [2n, 3n]) {
+          await processDecision({
+            input: {
+              ...decisionAt("Ambiguous repair", canonicalId),
+              sourceDocumentIdRepairAliases: quarantineIds,
+            },
+            observationOrder,
+            sourceId,
+            scopedDb,
+            observedAt: new Date("2026-07-31T12:00:01.000Z"),
+          });
+        }
+        const rows = await db
+          .select({ sourceDocumentId: caseLawDecisions.sourceDocumentId })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              inArray(caseLawDecisions.sourceDocumentId, [
+                ...quarantineIds,
+                canonicalId,
+              ]),
+            ),
+          );
+        const storedIds = rows.map(({ sourceDocumentId }) => sourceDocumentId);
+        // The expected ids are distinct, so length plus containment is equality.
+        expect(storedIds).toHaveLength(quarantineIds.length + 1);
+        expect(storedIds).toEqual(
+          expect.arrayContaining([...quarantineIds, canonicalId]),
+        );
+      },
+    );
 
     test("keeps canonical ownership when a later observation has only a fallback", async () => {
       const canonicalId = "nalus-record:inverse-7391";
@@ -2005,32 +2233,38 @@ if (!databaseUrl || !runPostgresTests) {
       ).toEqual(initial);
 
       expect(
-        db
-          .insert(caseLawDecisionAliases)
-          .values({ retiredDecisionId: middle, canonicalDecisionId: first })
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .insert(caseLawDecisionAliases)
+            .values({ retiredDecisionId: middle, canonicalDecisionId: first })
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: { message: expect.stringContaining("Decision alias cycle") },
       });
       expect(
-        db
-          .insert(caseLawDecisionAliases)
-          .values({ retiredDecisionId: later, canonicalDecisionId: missing })
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .insert(caseLawDecisionAliases)
+            .values({ retiredDecisionId: later, canonicalDecisionId: missing })
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: {
           message: expect.stringContaining("Decision alias target is not live"),
         },
       });
       expect(
-        db
-          .insert(caseLawDecisionAliases)
-          .values({
-            retiredDecisionId: missing,
-            canonicalDecisionId: terminal,
-          })
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .insert(caseLawDecisionAliases)
+            .values({
+              retiredDecisionId: missing,
+              canonicalDecisionId: terminal,
+            })
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: {
           message: expect.stringContaining(
             "Register decision alias before retirement",
@@ -2043,12 +2277,14 @@ if (!databaseUrl || !runPostgresTests) {
         { createdAt: new Date("2000-01-01T00:00:00Z") },
       ]) {
         expect(
-          db
-            .update(caseLawDecisionAliases)
-            .set(patch)
-            .where(eq(caseLawDecisionAliases.retiredDecisionId, first))
-            .execute(),
-        ).rejects.toMatchObject({
+          await rejectionOf(
+            db
+              .update(caseLawDecisionAliases)
+              .set(patch)
+              .where(eq(caseLawDecisionAliases.retiredDecisionId, first))
+              .execute(),
+          ),
+        ).toMatchObject({
           cause: {
             message: expect.stringContaining(
               "canonicalDecisionId" in patch
@@ -2059,11 +2295,13 @@ if (!databaseUrl || !runPostgresTests) {
         });
       }
       expect(
-        db
-          .delete(caseLawDecisions)
-          .where(eq(caseLawDecisions.id, middle))
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .delete(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, middle))
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: {
           code: "ERR_POSTGRES_SERVER_ERROR",
           errno: "23001",
@@ -2108,11 +2346,13 @@ if (!databaseUrl || !runPostgresTests) {
         expect(rows).toContainEqual({ retired, target: terminal });
       }
       expect(
-        db
-          .delete(caseLawDecisions)
-          .where(eq(caseLawDecisions.id, terminal))
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .delete(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, terminal))
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: {
           code: "ERR_POSTGRES_SERVER_ERROR",
           errno: "23001",
@@ -2122,27 +2362,31 @@ if (!databaseUrl || !runPostgresTests) {
         },
       });
       expect(
-        db
-          .insert(caseLawDecisions)
-          .values({
-            id: first,
-            sourceId,
-            country: "SVK",
-            court: "Alias lifecycle court",
-            language: "sk",
-            caseNumber: first,
-          })
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .insert(caseLawDecisions)
+            .values({
+              id: first,
+              sourceId,
+              country: "SVK",
+              court: "Alias lifecycle court",
+              language: "sk",
+              caseNumber: first,
+            })
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: { message: expect.stringContaining("Decision UUID is retired") },
       });
       expect(
-        db
-          .update(caseLawDecisions)
-          .set({ id: first })
-          .where(eq(caseLawDecisions.id, later))
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .update(caseLawDecisions)
+            .set({ id: first })
+            .where(eq(caseLawDecisions.id, later))
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: { message: expect.stringContaining("Decision UUID is retired") },
       });
     });

@@ -1,4 +1,5 @@
 // parser-output-unchanged: completion admission uses typed Results and job-boundary rejection; parsing and stored output are unchanged.
+// parser-output-unchanged: immediate checks at the request boundary share publisher pacing; response parsing and stored output are unchanged.
 /**
  * What each publisher costs, declared once, and the only fetch that spends it.
  *
@@ -16,13 +17,14 @@
  * requests rather than a total.
  */
 
-import { panic, type Result } from "better-result";
+import { panic, Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { DAY_IN_MS } from "@stll/time";
 
 import {
   createPublisherRequestSlot,
+  PublisherPacingStopped,
   publisherGateReserves,
   type PublisherRequestGateDependencies,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
@@ -373,6 +375,51 @@ export const publisherRunControls = (gateId: PublisherGateId) => {
   return run?.gateId === gateId ? run.controls : undefined;
 };
 
+// Immediate mode checks the shared gate at every outbound request boundary.
+const immediateRequestGate = new AsyncLocalStorage<{
+  gateId: PublisherGateId;
+  slot: ReturnType<typeof createPublisherGateSlot>;
+}>();
+
+type WithImmediatePublisherSlotOptions<T> = {
+  adapterKey: AdapterKey;
+  operation: () => Promise<T>;
+  dependencies?: PublisherRequestGateDependencies;
+};
+
+export type PublisherPacingOutcome = PublisherPacingStopped["status"];
+
+export type ImmediatePublisherSlotResult<T> =
+  | { status: "completed"; value: T }
+  | { status: PublisherPacingOutcome }
+  | { status: "failed"; error: unknown };
+
+export const withImmediatePublisherSlot = async <T>({
+  adapterKey,
+  operation,
+  dependencies,
+}: WithImmediatePublisherSlotOptions<T>): Promise<
+  ImmediatePublisherSlotResult<T>
+> => {
+  const gateId = ADAPTER_PUBLISHER_GATES[adapterKey];
+  const slot =
+    dependencies === undefined
+      ? getPublisherGateSlot(gateId)
+      : createPublisherGateSlot(gateId, dependencies);
+  const result = await Result.tryPromise({
+    try: async () =>
+      await immediateRequestGate.run({ gateId, slot }, operation),
+    catch: (error) => error,
+  });
+  if (Result.isOk(result)) {
+    return { status: "completed", value: result.value };
+  }
+  if (PublisherPacingStopped.is(result.error)) {
+    return { status: result.error.status };
+  }
+  return { status: "failed", error: result.error };
+};
+
 const getPublisherGateSlot = (gateId: PublisherGateId) => {
   const slot = slotsByGate.get(gateId) ?? createPublisherGateSlot(gateId);
   slotsByGate.set(gateId, slot);
@@ -428,14 +475,18 @@ export const withPublisherRequestRateLimit = async <T>({
 export const reservePublisherSlot = async (
   adapterKey: AdapterKey,
   signal?: AbortSignal,
-): Promise<void> => {
+): Promise<void> =>
   await reservePublisherGateSlot(ADAPTER_PUBLISHER_GATES[adapterKey], signal);
-};
 
 export const reservePublisherGateSlot = async (
   gateId: PublisherGateId,
   signal?: AbortSignal,
 ): Promise<void> => {
+  const immediate = immediateRequestGate.getStore();
+  if (immediate?.gateId === gateId) {
+    await immediate.slot.reserveImmediately(signal);
+    return;
+  }
   const runLimit = runPublisherLimit.getStore();
   if (runLimit?.gateId === gateId) {
     await runLimit.gateSlot(signal);

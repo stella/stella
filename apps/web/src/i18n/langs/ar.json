@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "إضافة سلسلة ترقيم",
       "advance": "دفعة مقدمة",
+      "allSellers": "جميع البائعين",
       "archiveConfirm": "هل تريد أرشفة سلسلة الترقيم هذه؟ لن تعود متاحة للمستندات الجديدة.",
       "creditNote": "إشعار دائن",
       "default": "السلسلة الافتراضية",
@@ -562,6 +563,9 @@
       "preview": "الرقم التالي",
       "previewAllocated": "هذا الرقم مخصص بالفعل.",
       "previewHelp": "تستخدم المعاينة القالب المحفوظ ولا تحجز رقمًا.",
+      "sellerProfile": "ملف البائع",
+      "sellerUnavailable": "البائع مؤرشف أو غير متاح",
+      "sellerUnavailableHelp": "هذا البائع مؤرشف أو غير متاح. احتفظ بالتعيين أو اختر بائعًا آخر.",
       "setDefault": "تعيين كسلسلة افتراضية",
       "title": "سلاسل الترقيم"
     },
@@ -1165,6 +1169,7 @@
       "noSkills": "لا توجد مهارات بعد",
       "pinnedMatters": "الملفات القانونية المثبّتة",
       "recentChats": "الدردشات الحديثة",
+      "skillEditedBy": "عُدِّل بواسطة {name} · {time}",
       "skills": "المهارات"
     },
     "loadEarlierMessages": "تحميل الرسائل السابقة",
@@ -1296,6 +1301,9 @@
     },
     "tabToAsk": "→ للسؤال: «{prompt}»",
     "thinking": "العمل مع السياق",
+    "threadFiles": {
+      "title": "الملفات في هذه الدردشة"
+    },
     "tool": {
       "add_comment": "إضافة تعليق",
       "apply-active-docx-edits": "جارٍ تجهيز تعديلات المستند",
@@ -1566,6 +1574,7 @@
       "socialSecurityNumber": "رقم الضمان الاجتماعي",
       "taxIdentificationNumber": "الرقم الضريبي"
     },
+    "approve": "موافقة",
     "archive": "أرشفة",
     "ask": "اسأل",
     "askAI": "اسأل الذكاء الاصطناعي",
@@ -1849,12 +1858,14 @@
   },
   "consent": {
     "allow": "السماح",
+    "appIdentity": "هوية التطبيق",
     "completeSetup": "إكمال الإعداد",
     "defaultClientName": "تطبيق ما",
     "description": "يريد {clientName} الوصول إلى مساحة عمل stella الخاصة بك",
     "error": "حدث خطأ ما. يُرجى المحاولة مرة أخرى.",
     "missingJurisdictions": "لم تُعدّ مؤسستك في stella ولاياتها القضائية للممارسة بعد. ستكون بعض الأدوات المراعية للولاية القضائية غير متاحة حتى تُكمل الإعداد.",
     "permissions": "سيسمح هذا للتطبيق بـ:",
+    "redirectDestination": "وجهة إعادة التوجيه",
     "scopeAdminRead": "قراءة سجل تدقيق مؤسستك",
     "scopeAdminWrite": "إدارة أعضاء المؤسسة وإعداداتها",
     "scopeBillingWrite": "إنشاء إدخالات الوقت الخاصة بك وتعديلها وحذفها",
@@ -1875,7 +1886,8 @@
     "scopeSkills": "استخدام مهارات stella المحفوظة لديك",
     "scopeTemplates": "سرد قوالب مستنداتك وتعبئتها وإنشاؤها",
     "scopeTemplatesAnonymized": "سرد النسخ المُخفاة الهوية من قوالب مستنداتك وتعبئتها وإنشاؤها",
-    "title": "التفويض بالوصول"
+    "title": "التفويض بالوصول",
+    "unverifiedApp": "تطبيق غير موثّق"
   },
   "contacts": {
     "alsoPartyIn": "يظهر أيضاً كطرف في {count, plural, zero {# ملف قانوني آخر} one {ملف قانوني آخر واحد} two {ملفين قانونيين آخرين} few {# ملفات قانونية أخرى} many {# ملفًا قانونيًا آخر} other {# ملف قانوني آخر}}",
@@ -2258,10 +2270,12 @@
       "deeplKeyRejected": "تم رفض مفتاح DeepL المحفوظ. استبدله في إعدادات المؤسسة.",
       "deeplQuotaExceeded": "تم استنفاد حصة أحرف DeepL لهذه المؤسسة.",
       "disposableEmailNotAllowed": "عناوين البريد الإلكتروني المؤقتة غير مسموح بها. استخدم عنوان بريد إلكتروني دائم.",
+      "encryptedContent": "لا يمكن استخراج محتوى المستند المشفّر. أزِل كلمة المرور من الملف ثم أعِد المحاولة.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
       "internalServerError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "legalSourceEntityLimitReached": "بلغ هذا الملف القانوني الحد الأقصى للعناصر، لذا تعذّر إنشاء المستند.",
       "legalSourceFilePropertyMissing": "يفتقر هذا الملف القانوني إلى خاصية ملف، لذا تعذر إنشاء المستند.",
+      "mcpAuthorizationApprovalRequired": "يجب على المسؤول الموافقة على هذا الموصل قبل أن تتمكن من الاتصال.",
       "notOrganizationMember": "أنت لست عضوًا في هذه المؤسسة.",
       "providerKeyRejected": "رفض مزود الخدمة مفتاح API.",
       "providerRateLimited": "تم بلوغ حد طلبات مزود الخدمة. حاول مرة أخرى بعد قليل.",
@@ -3393,6 +3407,8 @@
         "none": "بدون مصادقة",
         "oauth2": "OAuth 2.0"
       },
+      "authorizationReviewDescription": "راجع خادم التفويض وأصول نقاط النهاية قبل الموافقة.",
+      "authorizationServer": "خادم التفويض",
       "bearerTokenDescription": "يستخدم هذا الخادم رمز Bearer. الصق الرمز من المزوّد لإتمام الاتصال.",
       "connectedToast": "تم اتصال MCP",
       "connectedWithLastUsed": "متصل · آخر استخدام {time}",
@@ -3403,9 +3419,11 @@
       "emptyDescription": "ستظهر التكاملات القانونية المنسَّقة هنا عند تفعيلها لمساحة عملك.",
       "emptyTitle": "لا توجد تكاملات بعد",
       "enable": "تفعيل",
+      "endpointOrigins": "أصول نقاط النهاية",
       "errorDescription": "تعذّر تحديث التكامل.",
       "errorTitle": "فشل MCP",
       "mcpExplainer": "تربط التكاملات بالدردشة خدماتٍ خارجية يمكن للذكاء الاصطناعي العمل معها.",
+      "needsReapproval": "يتطلب موافقة جديدة",
       "needsReauth": "يلزم إعادة الاتصال",
       "off": "إيقاف",
       "on": "تشغيل",
@@ -4817,6 +4835,7 @@
     "addPart": "إضافة جزء",
     "addTag": "إضافة وسم",
     "aiAdaptHint": "يكيّف الذكاء الاصطناعي هذه الصياغة لتلائم كل موضع تظهر فيه داخل المستند.",
+    "aiConditionsUndecided": "تعذّر على الذكاء الاصطناعي البتّ في هذه الشروط، لذا مُلئت أقسامها كما لو أنها لا تنطبق: {list}",
     "aiDecidedConditions": "يقرّره الذكاء الاصطناعي",
     "aiFieldsNotDrafted": "لم يتمكن الذكاء الاصطناعي من صياغة هذه الحقول: {list}",
     "allTemplates": "جميع القوالب",
@@ -4908,6 +4927,7 @@
     "directiveFor": "حلقة: {expression}",
     "directiveIf": "إذا: {expression}",
     "discoveryFailed": "تعذّر تحليل القالب",
+    "documentCreatedIncomplete": "تم إنشاء المستند، لكن التعبئة غير مكتملة",
     "downloadAnyway": "التنزيل على أي حال",
     "downloadDocx": "تنزيل DOCX",
     "downloadPdf": "تنزيل PDF",
@@ -5003,6 +5023,7 @@
     "saveFailed": "تعذّر حفظ القالب",
     "savedLookupFormats": "تنسيقات الإخراج المحفوظة",
     "searchTemplates": "البحث في القوالب…",
+    "structureErrorsInDocument": "توجيهات القالب التي تعذّر تطبيقها: {count}. راجع المستند.",
     "structureWarningParagraph": "الفقرة {paragraph, number}",
     "structureWarnings": "{count, plural, zero {# تحذير بنيوي} one {تحذير بنيوي واحد} two {تحذيران بنيويان} few {# تحذيرات بنيوية} many {# تحذيراً بنيوياً} other {# تحذير بنيوي}}",
     "studio": {

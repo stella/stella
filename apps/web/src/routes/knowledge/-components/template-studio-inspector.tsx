@@ -73,7 +73,9 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { BoundedMap } from "@/lib/bounded-set";
 import { SIDE_RAIL_TAB_ICON_SIZE_PX, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   knowledgeKeys,
   invalidateTemplateClauseSources,
@@ -178,7 +180,7 @@ export function TemplateStudioInspectorView({
       .templates({ templateId: toSafeId<"template">(templateId) })
       .post({ name: next });
     if (response.error) {
-      stellaToast.add({ type: "error", title: t("templates.renameFailed") });
+      notifyUserError(toAPIError(response.error), t("templates.renameFailed"));
       return;
     }
     // Reflect the new name in the tab label, the breadcrumb, and the list.
@@ -1318,9 +1320,7 @@ export const ClauseDriftPopover = ({
     setSyncingAll(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.syncFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.syncFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -1458,9 +1458,7 @@ export const GuidanceFields = ({
       languages,
     });
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.saveFailed"),
+      notifyUserError(toAPIError(response.error), t("templates.saveFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -145,6 +145,7 @@ const config = {
     "entities.versions.get to read a historical version, and " +
     "entities.versions.list for the version list.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "read_document" },
   access: "read",
   params: readEntityByIdParamsSchema,

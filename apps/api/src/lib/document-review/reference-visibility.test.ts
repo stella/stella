@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
+  basisForReader,
   findingForReader,
   referencesForReader,
   referenceWorkspacesByPosition,
@@ -170,5 +176,227 @@ describe("referencesForReader", () => {
     expect(
       referencesForReader([reference], new Set([REFERENCE_WORKSPACE])),
     ).toEqual([reference]);
+  });
+});
+
+describe("basisForReader", () => {
+  const prose = {
+    purpose: "Caps the claim window",
+    guidance: "Compare with the 24-month limit",
+    negotiation: { rationale: "Market standard is 24 months" },
+  };
+  const pinned = basis.playbook.definitionSnapshot.positions.items.at(0);
+  if (pinned?.mode !== "graded") {
+    throw new TypeError("fixture has no graded position");
+  }
+  const withProse: DocumentReviewRunBasis = {
+    playbook: {
+      definitionId: basis.playbook.definitionId,
+      versionId: basis.playbook.versionId,
+      provenance: basis.playbook.provenance,
+      definitionSnapshot: {
+        name: basis.playbook.definitionSnapshot.name,
+        positions: { version: 3, items: [{ ...pinned, ...prose }] },
+      },
+    },
+    references: basis.references,
+    perspective: basis.perspective,
+  };
+  const positionsFor = (readable: readonly string[]) =>
+    basisForReader(withProse, new Set(readable)).playbook.definitionSnapshot
+      .positions.items;
+
+  test("keeps a reference position whole when every source matter is readable", () => {
+    expect(
+      positionsFor([REFERENCE_WORKSPACE, OTHER_REFERENCE_WORKSPACE]),
+    ).toEqual(withProse.playbook.definitionSnapshot.positions.items);
+  });
+
+  test("drops reference prose when any source matter is unreadable", () => {
+    const [position] = positionsFor([REFERENCE_WORKSPACE]);
+
+    expect(position).toEqual({
+      mode: "graded",
+      sourceId: REFERENCE_POSITION,
+      issue: "Claims time bar",
+      severity: "high",
+      standard: pinned.standard,
+      ask: { mode: "auto" },
+      enabled: true,
+      referenceDetail: "withheld",
+    });
+    expect(JSON.stringify(position)).not.toContain("month");
+    expect(JSON.stringify(position)).not.toContain("claim window");
+  });
+
+  test("projects the reference list with the positions", () => {
+    expect(basisForReader(withProse, new Set()).references).toEqual(
+      referencesForReader(withProse.references, new Set()),
+    );
+  });
+});
+
+/** Every prose string in a value: the string leaves that contain whitespace,
+ *  so ids, block ids and enum values never count as text. */
+const proseLeaves = (value: unknown): string[] => {
+  if (typeof value === "string") {
+    return /\s/u.test(value) ? [value] : [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap(proseLeaves);
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.values(value).flatMap(proseLeaves);
+  }
+  return [];
+};
+
+describe("basis and finding projections agree", () => {
+  // The reference-derived prose, as the finding projection itself decides it:
+  // whatever it drops for a reader who can open none of the source matters.
+  const withheldProse = (() => {
+    const shown = new Set(
+      proseLeaves(
+        findingForReader(referenceFinding, {
+          positionWorkspaces,
+          readable: new Set(),
+        }),
+      ),
+    );
+    return proseLeaves(referenceFinding).filter((text) => !shown.has(text));
+  })();
+  const pool = [REFERENCE_WORKSPACE, OTHER_REFERENCE_WORKSPACE, TIERS_POSITION];
+
+  test("the basis projection shows reference prose exactly when the finding projection does", () => {
+    expect(withheldProse.length).toBeGreaterThan(0);
+    const prose = withheldProse.join(" | ");
+
+    assertProperty(
+      "the basis projection shows reference prose exactly when the finding projection does",
+      fc.property(
+        fc.record({
+          source: fc.constantFrom("reference", "tiers"),
+          passageWorkspaces: fc.subarray(pool, { minLength: 1 }),
+          readable: fc.subarray(pool),
+        }),
+        ({ source, passageWorkspaces, readable }) => {
+          const sourceId = Bun.randomUUIDv7();
+          const position = {
+            mode: "graded" as const,
+            sourceId,
+            issue: referenceFinding.issue,
+            severity: "high" as const,
+            standard:
+              source === "reference"
+                ? {
+                    source: "reference" as const,
+                    termKind: "parameter" as const,
+                    passages: passageWorkspaces.map(passage),
+                  }
+                : {
+                    source: "tiers" as const,
+                    tiers: {
+                      acceptable: { rules: [] },
+                      fallback: { entries: [] },
+                      notAcceptable: { rules: [] },
+                    },
+                  },
+            ask: { mode: "auto" as const },
+            purpose: prose,
+            guidance: prose,
+            negotiation: {
+              rationale: prose,
+              talkingPoints: [prose],
+              escalation: prose,
+            },
+            enabled: true,
+          };
+          const runBasis: DocumentReviewRunBasis = {
+            playbook: {
+              definitionId: null,
+              versionId: null,
+              provenance: "ephemeral",
+              definitionSnapshot: {
+                name: "Positions confirmed for this review",
+                positions: { version: 3, items: [position] },
+              },
+            },
+            references: [],
+            perspective: { type: "neutral" },
+          };
+          const readableSet = new Set(readable);
+          // Exact leaves: a withheld fragment can recur inside a kept
+          // target-side quotation, which is not the reference speaking.
+          const findingShown = new Set(
+            proseLeaves(
+              findingForReader(
+                {
+                  ...referenceFinding,
+                  positionId: sourceId,
+                  standardSource: source,
+                },
+                {
+                  positionWorkspaces: referenceWorkspacesByPosition(runBasis),
+                  readable: readableSet,
+                },
+              ),
+            ),
+          );
+          const basisShown = JSON.stringify(
+            basisForReader(runBasis, readableSet),
+          );
+
+          for (const text of [...withheldProse, referenceFinding.issue]) {
+            expect({ text, shown: basisShown.includes(text) }).toEqual({
+              text,
+              shown: findingShown.has(text),
+            });
+          }
+        },
+      ),
+    );
+  });
+});
+
+// Every module that reads a run's stored basis, and what its response carries
+// of it. A new reader fails the first test until it is listed, and a reader
+// listed as `projects` must answer through `basisForReader`.
+const STORED_BASIS_READERS = {
+  "lib/document-review/read-run-detail.ts": "projects",
+  "handlers/document-reviews/export-run.ts": "projects",
+  // Answers with the playbook name, provenance, reference count and role only.
+  "handlers/document-reviews/list-runs.ts": "summary",
+  // Refuses unless every reference matter is readable.
+  "handlers/playbooks/from-run/create.ts": "gated",
+  "lib/document-review/run-queue.ts": "internal",
+  "lib/document-review/table-run-findings.ts": "internal",
+  "lib/document-review/review-suggestion-staging.ts": "internal",
+} as const satisfies Record<
+  string,
+  "projects" | "summary" | "gated" | "internal"
+>;
+
+describe("stored run basis readers", () => {
+  const apiSource = path.resolve(import.meta.dir, "../..");
+  const source = (file: string) =>
+    readFileSync(path.join(apiSource, file), "utf-8");
+
+  test("every reader of the stored basis is classified", () => {
+    const readers = [...new Bun.Glob("**/*.ts").scanSync(apiSource)]
+      .filter((file) => !file.endsWith(".test.ts"))
+      .filter((file) => source(file).includes("documentReviewRuns.basis"));
+
+    expect(readers.toSorted()).toEqual(
+      Object.keys(STORED_BASIS_READERS).toSorted(),
+    );
+  });
+
+  test("every responding reader projects the basis for its reader", () => {
+    const projecting = Object.entries(STORED_BASIS_READERS).flatMap(
+      ([file, kind]) => (kind === "projects" ? [file] : []),
+    );
+    expect(
+      projecting.filter((file) => !source(file).includes("basisForReader(")),
+    ).toEqual([]);
   });
 });

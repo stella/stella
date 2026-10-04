@@ -18,7 +18,7 @@ import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -1089,6 +1089,7 @@ const config = {
     "and entities.rename. Per-document summaries are generated and cached " +
     "where missing, and the call consumes AI usage.",
   permissions: { workspace: ["read"], chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "document_processing",

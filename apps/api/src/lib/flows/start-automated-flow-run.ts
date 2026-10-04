@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 
 import type { rootDb } from "@/api/db/root";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
@@ -255,10 +254,6 @@ export const startAutomatedFlowRun = async (
       triggerType: triggerSource.type,
     });
   };
-  if (!env.FEATURE_ACTION_ADMISSION) {
-    await createAndEnqueue();
-    return;
-  }
   const started = await Result.tryPromise({
     try: async () =>
       await kickoff({

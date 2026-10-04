@@ -36,13 +36,11 @@ import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header"
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { BoundedSet } from "@/lib/bounded-set";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { APIError, toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { PDFPage } from "@/lib/pdf/pdf-page";
@@ -50,9 +48,7 @@ import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
-const SERVER_PREVIEW_ERROR_THRESHOLD = 500;
-
-const toastedPreviewFailures = new BoundedSet<string>(100);
+import { externalReferencePreviewOptions } from "./external-reference-preview";
 
 export type ExternalReferencePanelProps = {
   onClose: () => void;
@@ -301,37 +297,11 @@ const GenericExternalReferencePanel = ({
       storedSource?.sourceToolName !== undefined);
   const previewErrorTitle = t("common.somethingWentWrong");
   const { data: fetchedPreview, isLoading: previewLoading } = useQuery({
-    queryKey: ["external-preview", tab.url, previewErrorTitle],
-    queryFn: async ({ signal }) => {
-      const response = await api["external-preview"].get({
-        query: { url: tab.url },
-        fetch: { signal },
-      });
-
-      if (response.error) {
-        const error = toAPIError(response.error);
-        if (
-          APIError.is(error) &&
-          error.status >= SERVER_PREVIEW_ERROR_THRESHOLD
-        ) {
-          const toastKey = `${tab.url}|${error.status}`;
-          if (!toastedPreviewFailures.has(toastKey)) {
-            toastedPreviewFailures.add(toastKey);
-            stellaToast.add({
-              title: previewErrorTitle,
-              description: error.message,
-              type: "error",
-            });
-          }
-        }
-        throw error;
-      }
-
-      return response.data;
-    },
+    ...externalReferencePreviewOptions({
+      url: tab.url,
+      errorTitle: previewErrorTitle,
+    }),
     enabled: shouldFetchPreview,
-    retry: false,
-    staleTime: 1000 * 60 * 10,
   });
 
   const previewTitle = fetchedPreview?.title ?? storedSource?.title;
@@ -437,7 +407,7 @@ const GenericExternalReferencePanel = ({
     const copied = await copyToClipboard(confirmHref);
     if (Result.isError(copied)) {
       getAnalytics().captureError(copied.error);
-      stellaToast.error(t("common.error"));
+      notifyUserError(copied.error, t("common.error"));
       return;
     }
     stellaToast.success(t("common.copied"));

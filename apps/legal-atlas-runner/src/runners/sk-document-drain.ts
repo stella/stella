@@ -18,7 +18,7 @@
  * and the priority handling can be exercised on their own.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   DOCUMENT_FETCH_EVENT,
@@ -84,6 +84,7 @@ const emptySummary = (): SkDocumentDrainSummary => ({
   failures: {
     "publisher-status": 0,
     network: 0,
+    "too-large": 0,
     unparseable: 0,
   } satisfies Record<DocumentFetchFailure, number>,
   filled: 0,
@@ -168,6 +169,8 @@ export type SkDocumentDrainOptions = {
  * - an empty queue doubles its sleep towards the idle ceiling, so a
  *   drained backlog stops asking the database every half second. Any
  *   document found resets it.
+ * - a scan that spent its row budget keeps the fetch gap: more candidates
+ *   remain, so a page of cooling documents cannot trigger idle backoff.
  * - a throw doubles its delay towards the failure ceiling. The unit
  *   throws only for what may affect every document: an unreachable
  *   database, a publisher that is down, refusing this client or asking
@@ -246,20 +249,30 @@ export const runSkDocumentDrain = async ({
     try {
       const queued = await queue.next();
 
-      if (queued === undefined) {
-        delayMs = idleMs;
-        idleMs = Math.min(idleMs * 2, timing.idleSleepMaxMs);
-      } else {
-        idleMs = timing.idleSleepMs;
-        summary.attempted += 1;
-        const outcome = await fetchDocument(
-          queued.decision,
-          observations?.observe,
-        );
-        summary[outcome.status] += 1;
-        if (outcome.status === "deferred" || outcome.status === "parked") {
-          summary.failures[outcome.failure] += 1;
-          summary.lastFailureDetail = outcome.detail;
+      switch (queued.type) {
+        case "exhausted":
+          delayMs = idleMs;
+          idleMs = Math.min(idleMs * 2, timing.idleSleepMaxMs);
+          break;
+        case "budget-spent":
+          break;
+        case "row": {
+          idleMs = timing.idleSleepMs;
+          summary.attempted += 1;
+          const outcome = await fetchDocument(
+            queued.row.decision,
+            observations?.observe,
+          );
+          summary[outcome.status] += 1;
+          if (outcome.status === "deferred" || outcome.status === "parked") {
+            summary.failures[outcome.failure] += 1;
+            summary.lastFailureDetail = outcome.detail;
+          }
+          break;
+        }
+        default: {
+          queued satisfies never;
+          panic("Unexpected document queue outcome");
         }
       }
 

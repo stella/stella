@@ -17,6 +17,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 import {
@@ -52,6 +53,8 @@ if (!databaseUrl || !runPostgresTests) {
         db,
         job,
         payload: job.payload,
+        dueAt: DueSlot.of(job),
+
         runId: createSafeId<"schedulerJobRun">(),
         scheduleContinuation: () => undefined,
         signal: new AbortController().signal,

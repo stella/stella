@@ -7,8 +7,8 @@ import {
   organizationConfiguredAccess,
   usageEntitlements,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   CONFIGURED_ACCESS_STATE,
   type ConfiguredAccess,
@@ -111,7 +111,7 @@ export const readOrganizationAccessSnapshot = async (
     db,
     organizationId,
   );
-  if (env.FEATURE_CONFIGURED_ACCESS) {
+  if (isDeploymentFeatureEnabled("FEATURE_CONFIGURED_ACCESS")) {
     const source = await db
       .select({
         status: usageEntitlements.status,

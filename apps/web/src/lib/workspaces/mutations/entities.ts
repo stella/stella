@@ -4,8 +4,6 @@ import { Result, panic } from "better-result";
 import { useTranslations } from "use-intl";
 import type { StoreApi } from "zustand";
 
-import { stellaToast } from "@stll/ui/toast";
-
 import type { InspectorTabsStore } from "@/components/inspector/inspector-store-types";
 import {
   closeInspectorTabsForEntities,
@@ -17,6 +15,7 @@ import type { UpsertFieldContent } from "@/lib/api-contract";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileMetadataByFieldQueryRoot } from "@/lib/files/file-metadata-query.logic";
 import { inboxKeys } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
@@ -142,7 +141,7 @@ export const useRenameEntity = (
   const queryClient = useQueryClient();
   const reportFailure = (error: unknown) => {
     analytics.captureError(error);
-    stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+    notifyUserError(error, t("errors.actionFailed"));
   };
 
   const mutation = useMutation({
@@ -361,10 +360,7 @@ export const useUpdateKanbanPlacement = () => {
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };
@@ -393,10 +389,7 @@ export const useUpsertField = () => {
 
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };

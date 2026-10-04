@@ -17,6 +17,7 @@ import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
+import type { SafeId } from "@/api/lib/branded-types";
 import { errorSystemFields, safeErrorCode } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -280,6 +281,7 @@ const fetchImdsCredentials = async ({
 
 // Set only by `configureS3ForTesting`; production always uses the env.
 let _endpointOverride: string | null = null;
+let _writeTimeoutOverride: number | null = null;
 const s3Endpoint = (): string => _endpointOverride ?? envBase.S3_ENDPOINT;
 
 const buildS3Client = (
@@ -703,6 +705,18 @@ const writeViaClient: S3ObjectWriter = async ({
   );
 };
 
+export type S3ObjectWriteOwnership =
+  | {
+      type: "cleanup-intent";
+      intent: SafeId<"pendingUpload"> | readonly SafeId<"pendingUpload">[];
+    }
+  | { type: "fixed-key"; reason: string }
+  | { type: "lifecycle-prefix"; prefix: string }
+  | { type: "public-corpus" }
+  | { type: "derivative"; source: string }
+  | { type: "fixture" }
+  | { type: "style-set-cleanup"; styleSetId: SafeId<"styleSet"> };
+
 /**
  * Write one object with a per-attempt deadline and a bounded, jittered retry.
  *
@@ -720,8 +734,27 @@ const writeViaClient: S3ObjectWriter = async ({
  */
 export const writeS3ObjectWithRetry = async (
   object: S3ObjectWrite,
+  ownership: S3ObjectWriteOwnership,
   write: S3ObjectWriter = writeViaClient,
 ): Promise<S3ObjectWriteCertainty> => {
+  switch (ownership.type) {
+    case "lifecycle-prefix":
+      if (!object.key.startsWith(ownership.prefix)) {
+        return panic("Object key is outside its cleanup lifecycle prefix");
+      }
+      break;
+    case "cleanup-intent":
+    case "fixed-key":
+    case "public-corpus":
+    case "derivative":
+    case "fixture":
+    case "style-set-cleanup":
+      break;
+    default:
+      ownership satisfies never;
+      return panic("Unhandled object write ownership");
+  }
+  const timeoutMs = _writeTimeoutOverride ?? S3_WRITE_TIMEOUT_MS;
   const operationSignal = object.signal ?? object.s3Policy?.signal;
   let lastError: unknown;
   let priorAttemptMayCompleteLate = false;
@@ -737,7 +770,7 @@ export const writeS3ObjectWithRetry = async (
           {
             signal: operationSignal,
             label: "s3 object write",
-            timeoutMs: S3_WRITE_TIMEOUT_MS,
+            timeoutMs,
           },
         ),
       catch: (cause) => cause,
@@ -783,6 +816,10 @@ export const createS3ObjectIfAbsent = async (
   let conditional = true;
   await writeS3ObjectWithRetry(
     object,
+    {
+      type: "fixed-key",
+      reason: "Content-addressed bytes are immutable at this key",
+    },
     async ({ contentType, data, key, signal, s3Policy }): Promise<void> => {
       signal?.throwIfAborted();
       if (!conditional) {
@@ -1733,10 +1770,13 @@ export const deleteCorpusS3ObjectWithSignal = async (
  */
 export const configureS3ForTesting = ({
   endpoint,
+  writeTimeoutMs,
 }: {
   endpoint: string;
+  writeTimeoutMs?: number;
 }): void => {
   _endpointOverride = endpoint;
+  _writeTimeoutOverride = writeTimeoutMs ?? null;
   const credentials = staticCredentialsFromEnv();
   _client = buildS3Client(envBase.S3_BUCKET, credentials);
   _abortableClient = buildAbortableS3Client(credentials);
@@ -1750,6 +1790,7 @@ export const configureS3ForTesting = ({
 
 export const resetS3ForTesting = (): void => {
   _endpointOverride = null;
+  _writeTimeoutOverride = null;
   _client = null;
   _abortableClient = null;
   _corpusClient = null;

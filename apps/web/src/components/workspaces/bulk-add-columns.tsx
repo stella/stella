@@ -86,6 +86,7 @@ import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import type { PropertyDependency } from "@/lib/types";
 import {
@@ -507,10 +508,10 @@ const useColumnsSubmit = (onClose: () => void) => {
     const created = await run();
     if (Result.isError(created)) {
       getAnalytics().captureError(created.error);
-      stellaToast.add({
-        title: t("workspaces.properties.bulk.createFailed"),
-        type: "error",
-      });
+      notifyUserError(
+        created.error,
+        t("workspaces.properties.bulk.createFailed"),
+      );
       return;
     }
     stellaToast.add({
@@ -911,10 +912,7 @@ const DraftCard = ({
           }),
     onError: (error) => {
       getAnalytics().captureError(error);
-      stellaToast.add({
-        title: t("workspaces.properties.autoPromptFailed"),
-        type: "error",
-      });
+      notifyUserError(error, t("workspaces.properties.autoPromptFailed"));
     },
   });
 

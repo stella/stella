@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Adicionar série de numeração",
       "advance": "Adiantamento",
+      "allSellers": "Todos os vendedores",
       "archiveConfirm": "Arquivar esta série de numeração? Ela não estará mais disponível para novos documentos.",
       "creditNote": "Nota de crédito",
       "default": "Série padrão",
@@ -562,6 +563,9 @@
       "preview": "Próximo número",
       "previewAllocated": "Este número já está atribuído.",
       "previewHelp": "A prévia usa o modelo salvo e não reserva um número.",
+      "sellerProfile": "Perfil de vendedor",
+      "sellerUnavailable": "Vendedor arquivado ou indisponível",
+      "sellerUnavailableHelp": "Este vendedor está arquivado ou indisponível. Mantenha a atribuição ou selecione outro vendedor.",
       "setDefault": "Definir como série padrão",
       "title": "Séries de numeração"
     },
@@ -1165,6 +1169,7 @@
       "noSkills": "Nenhuma habilidade ainda",
       "pinnedMatters": "Casos fixados",
       "recentChats": "Chats recentes",
+      "skillEditedBy": "Editado por {name} · {time}",
       "skills": "Habilidades"
     },
     "loadEarlierMessages": "Carregar mensagens anteriores",
@@ -1296,6 +1301,9 @@
     },
     "tabToAsk": "→ para perguntar: \"{prompt}\"",
     "thinking": "Trabalhando com contexto",
+    "threadFiles": {
+      "title": "Arquivos deste chat"
+    },
     "tool": {
       "add_comment": "Adicionando comentário",
       "apply-active-docx-edits": "Preparando edições no documento",
@@ -1566,6 +1574,7 @@
       "socialSecurityNumber": "Número de seguro social",
       "taxIdentificationNumber": "CPF / CNPJ"
     },
+    "approve": "Aprovar",
     "archive": "Arquivar",
     "ask": "Perguntar",
     "askAI": "Perguntar à IA",
@@ -1849,12 +1858,14 @@
   },
   "consent": {
     "allow": "Permitir",
+    "appIdentity": "Identidade do aplicativo",
     "completeSetup": "Concluir configuração",
     "defaultClientName": "Um aplicativo",
     "description": "{clientName} deseja acessar seu espaço de trabalho stella",
     "error": "Algo deu errado. Por favor, tente novamente.",
     "missingJurisdictions": "Sua organização na stella ainda não configurou as jurisdições de atuação. Algumas ferramentas que dependem de jurisdição ficarão indisponíveis até você concluir a configuração.",
     "permissions": "Isso permitirá que o aplicativo:",
+    "redirectDestination": "Destino do redirecionamento",
     "scopeAdminRead": "Ler o registro de auditoria da sua organização",
     "scopeAdminWrite": "Gerenciar membros e configurações da organização",
     "scopeBillingWrite": "Criar, editar e excluir seus lançamentos de horas",
@@ -1875,7 +1886,8 @@
     "scopeSkills": "Usar suas habilidades stella salvas",
     "scopeTemplates": "Listar, preencher e criar seus modelos de documento",
     "scopeTemplatesAnonymized": "Listar, preencher e criar versões anônimas de seus modelos de documento",
-    "title": "Autorizar acesso"
+    "title": "Autorizar acesso",
+    "unverifiedApp": "Aplicativo não verificado"
   },
   "contacts": {
     "alsoPartyIn": "Também aparece como parte em {count, plural, one {# outro caso} many {# outros casos} other {# outros casos}}",
@@ -2258,10 +2270,12 @@
       "deeplKeyRejected": "A chave do DeepL salva foi rejeitada. Substitua-a nas configurações da organização.",
       "deeplQuotaExceeded": "A cota de caracteres do DeepL desta organização foi esgotada.",
       "disposableEmailNotAllowed": "Endereços de e-mail temporários não são permitidos. Use um endereço de e-mail permanente.",
+      "encryptedContent": "Não é possível extrair o conteúdo de um documento criptografado. Remova a senha do arquivo e tente novamente.",
       "forbidden": "Você não tem permissão para fazer isso.",
       "internalServerError": "Algo deu errado. Tente novamente.",
       "legalSourceEntityLimitReached": "Este assunto atingiu o limite de itens, portanto não foi possível criar o documento.",
       "legalSourceFilePropertyMissing": "Este assunto não tem uma propriedade de arquivo, portanto não foi possível criar o documento.",
+      "mcpAuthorizationApprovalRequired": "Um administrador precisa aprovar este conector antes que você possa se conectar.",
       "notOrganizationMember": "Você não é membro desta organização.",
       "providerKeyRejected": "O provedor rejeitou a chave de API.",
       "providerRateLimited": "O limite de solicitações do provedor foi atingido. Tente novamente em instantes.",
@@ -3393,6 +3407,8 @@
         "none": "Sem autenticação",
         "oauth2": "OAuth 2.0"
       },
+      "authorizationReviewDescription": "Revise o servidor de autorização e as origens dos endpoints antes de aprovar.",
+      "authorizationServer": "Servidor de autorização",
       "bearerTokenDescription": "Este servidor usa um token Bearer. Cole o token do provedor para concluir a conexão.",
       "connectedToast": "MCP conectado",
       "connectedWithLastUsed": "Conectado · último uso {time}",
@@ -3403,9 +3419,11 @@
       "emptyDescription": "Integrações jurídicas selecionadas aparecerão aqui quando forem habilitadas para seu espaço de trabalho.",
       "emptyTitle": "Ainda não há integrações",
       "enable": "Ativar",
+      "endpointOrigins": "Origens dos endpoints",
       "errorDescription": "Não foi possível atualizar a integração.",
       "errorTitle": "Falha MCP",
       "mcpExplainer": "As integrações conectam serviços externos ao chat com os quais a IA pode trabalhar.",
+      "needsReapproval": "É necessária uma nova aprovação",
       "needsReauth": "Precisa reconectar",
       "off": "Desligado",
       "on": "Ligado",
@@ -4817,6 +4835,7 @@
     "addPart": "Adicionar parte",
     "addTag": "Adicionar etiqueta",
     "aiAdaptHint": "A IA adapta este texto a cada lugar do documento em que ele aparece.",
+    "aiConditionsUndecided": "A IA não conseguiu decidir estas condições; as seções correspondentes foram preenchidas como se não se aplicassem: {list}",
     "aiDecidedConditions": "Decidido pela IA",
     "aiFieldsNotDrafted": "A IA não conseguiu redigir estes campos: {list}",
     "allTemplates": "Todos os modelos",
@@ -4908,6 +4927,7 @@
     "directiveFor": "Repetição: {expression}",
     "directiveIf": "Se: {expression}",
     "discoveryFailed": "Falha ao analisar o modelo",
+    "documentCreatedIncomplete": "Documento criado, mas o preenchimento está incompleto",
     "downloadAnyway": "Baixar mesmo assim",
     "downloadDocx": "Baixar DOCX",
     "downloadPdf": "Baixar PDF",
@@ -5003,6 +5023,7 @@
     "saveFailed": "Falha ao salvar o modelo",
     "savedLookupFormats": "Formatos de saída salvos",
     "searchTemplates": "Pesquisar modelos…",
+    "structureErrorsInDocument": "Diretivas do modelo que não puderam ser aplicadas: {count}. Verifique o documento.",
     "structureWarningParagraph": "Parágrafo {paragraph, number}",
     "structureWarnings": "{count, plural, one {# aviso de estrutura} many {# avisos de estrutura} other {# avisos de estrutura}}",
     "studio": {

@@ -56,7 +56,6 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -134,6 +133,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { formatHotkeyForPlatform, NAV_KEY } from "@/lib/hotkeys";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
@@ -1105,11 +1105,8 @@ const MatterItem = ({
           update: { type: "name", value },
         },
         {
-          onError: () => {
-            stellaToast.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
+          onError: (error) => {
+            notifyUserError(error, t("errors.actionFailed"));
           },
         },
       );

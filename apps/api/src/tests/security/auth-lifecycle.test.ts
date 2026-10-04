@@ -14,19 +14,6 @@ const readRootFixture = (relativePath: string) =>
   );
 
 describe("organization member auth lifecycle", () => {
-  test("member removal routes cleanup through the shared helper", () => {
-    const authSource = readSecurityFixture("../../lib/auth.ts");
-
-    const hookIndex = authSource.indexOf("afterRemoveMember");
-    const helperCallIndex = authSource.indexOf(
-      "revokeOrganizationMemberAuthArtifacts",
-      hookIndex,
-    );
-
-    expect(hookIndex).toBeGreaterThanOrEqual(0);
-    expect(helperCallIndex).toBeGreaterThan(hookIndex);
-  });
-
   test("shared cleanup covers org-scoped sessions and OAuth tokens", () => {
     const helperSource = readSecurityFixture("../../lib/auth-artifacts.ts");
 

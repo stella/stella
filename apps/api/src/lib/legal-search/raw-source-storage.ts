@@ -201,13 +201,16 @@ const putRawSourcePayload = async ({
     });
     return;
   }
-  await writeS3ObjectWithRetry({
-    contentType,
-    data,
-    key,
-    ...(signal === undefined ? {} : { signal }),
-    ...(s3Policy === undefined ? {} : { s3Policy }),
-  });
+  await writeS3ObjectWithRetry(
+    {
+      contentType,
+      data,
+      key,
+      ...(signal === undefined ? {} : { signal }),
+      ...(s3Policy === undefined ? {} : { s3Policy }),
+    },
+    { type: "public-corpus" },
+  );
 };
 
 /**

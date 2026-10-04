@@ -101,10 +101,12 @@ import {
   createBilingualDocxFromScanned,
   readScannedBilingualDocx,
 } from "@/api/lib/file-scan/document-parsers";
-import { scanFile } from "@/api/lib/file-scan/scan";
 import { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-import { getScanWarnings } from "@/api/lib/file-scan/warnings";
+import {
+  detectFileEncryption,
+  uploadFileEncryption,
+} from "@/api/lib/files/detect-file-encryption";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
@@ -238,7 +240,7 @@ const translationLanguagesForRun = (
       };
 
 const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
-  const claimed = await actor.scopedDb(async (tx) => {
+  const claimed = await actor.writeDb(async (tx) => {
     // audit: skip — lifecycle bookkeeping on the run audited at create.
     const rows = await tx
       .update(documentTranslationRuns)
@@ -281,7 +283,7 @@ const transitionStage = async (
   from: ActiveRunStage,
   to: ActiveRunStage,
 ): Promise<boolean> =>
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     // audit: skip — lifecycle bookkeeping on the run audited at create.
     const transitioned = await tx
       .update(documentTranslationRuns)
@@ -297,7 +299,7 @@ const transitionStage = async (
   });
 
 const failRedeliveredRun = async (actor: RunActor): Promise<boolean> =>
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     // A stalled BullMQ delivery means the previous worker lost its lease. AI
     // calls are intentionally one-shot, so fail the durable run immediately
     // rather than resuming it and double-spending metered work. Every later
@@ -326,7 +328,7 @@ const setRunFailed = async (
   actor: RunActor,
   errorCode: DocumentTranslationRunErrorCode,
 ): Promise<void> => {
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     // audit: skip — lifecycle bookkeeping on the run audited at create.
     await tx
       .update(documentTranslationRuns)
@@ -352,7 +354,7 @@ const loadPinnedSource = async (
   run: ClaimedRun,
 ): Promise<Result<ScannedFile, DocumentTranslationRunErrorCode>> => {
   const file = await resolveEntityVersionFile({
-    safeDb: actor.safeDb,
+    safeDb: actor.inputSafeDb,
     workspaceId: actor.workspaceId,
     entityId: run.entityId,
     fileFieldId: run.fileFieldId,
@@ -378,7 +380,7 @@ const createAIContext = async (
   actor: RunActor,
   run: ClaimedRun,
 ): Promise<Result<BilingualAIContext, HandlerError>> => {
-  const settings = await actor.scopedDb(
+  const settings = await actor.writeDb(
     async (tx) => await loadOrgAISettings(tx, actor),
   );
   if (Result.isError(settings)) {
@@ -397,7 +399,7 @@ const createAIContext = async (
     usageMetering: {
       actionType: "doc_review",
       organizationId: actor.organizationId,
-      safeDb: actor.safeDb,
+      safeDb: actor.writeSafeDb,
       serviceTier: "standard",
       userId: actor.userId,
       workspaceId: actor.workspaceId,
@@ -406,7 +408,7 @@ const createAIContext = async (
 };
 
 const setTotal = async (actor: RunActor, total: number): Promise<void> => {
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     // audit: skip — progress bookkeeping on the run audited at create.
     await tx
       .update(documentTranslationRuns)
@@ -422,7 +424,7 @@ const updateTranslatedUnits = async (
   if (updates.length === 0) {
     return;
   }
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     // audit: skip — unit and progress bookkeeping inside the audited run.
     const values = sql.join(
       updates.map((update) => sql`(${update.unitKey}, ${update.targetText})`),
@@ -452,16 +454,10 @@ type TranslationOutput = {
   warnings: string[];
 };
 
-const copyToArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
-  const buffer = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(buffer).set(bytes);
-  return buffer;
-};
-
 const loadDeepLApiKey = async (
   actor: RunActor,
 ): Promise<Result<string, "provider_unavailable">> => {
-  const settings = await actor.safeDb((tx) =>
+  const settings = await actor.writeSafeDb((tx) =>
     tx.query.organizationSettings.findFirst({
       where: { organizationId: { eq: actor.organizationId } },
       columns: { deeplApiKeyEncrypted: true, deeplApiKeyIv: true },
@@ -597,7 +593,7 @@ const translateWithDeepL = async (
     targetLang: run.targetLang,
   });
   await setTotal(actor, 1);
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     await tx
       .update(documentTranslationRuns)
       .set({ completed: 1 })
@@ -643,7 +639,7 @@ const translateDocxWithAI = async (
   ) {
     return Result.err("unsupported_format");
   }
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     await tx.insert(documentTranslationUnits).values(
       segments.map((segment, ordinal) => ({
         id: createSafeId<"documentTranslationUnit">(),
@@ -825,7 +821,7 @@ const translateBilingualWithAI = async (
   if (pending.length === 0) {
     return Result.err("translation_failed");
   }
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     await tx.insert(documentTranslationUnits).values(
       rows.map((row) => ({
         id: createSafeId<"documentTranslationUnit">(),
@@ -1154,29 +1150,33 @@ const executeRun = async (
     return "internal";
   }
   if (completedOutput.mimeType === DOCX_MIME_TYPE) {
-    const validation = await validateDocxBuffer(
-      completedOutput.buffer instanceof Uint8Array
-        ? copyToArrayBuffer(completedOutput.buffer)
-        : completedOutput.buffer,
-    );
+    const validation = await validateDocxBuffer(completedOutput.buffer);
     if (!validation.valid) {
       return "format_validation_failed";
     }
   }
-  const scan = await scanFile({
-    buffer:
-      completedOutput.buffer instanceof Uint8Array
-        ? completedOutput.buffer
-        : new Uint8Array(completedOutput.buffer),
+  const scanned = await scanUpload({
+    bytes: completedOutput.buffer,
     declaredMimeType: completedOutput.mimeType,
     fileName: completedOutput.fileName,
   });
-  if (Result.isError(scan) || scan.value.verdict === "reject") {
+  if (Result.isError(scanned)) {
+    return "format_validation_failed";
+  }
+  // A provider's output: its bytes decide the attribute, as an upload's do.
+  const encryption = uploadFileEncryption(
+    await detectFileEncryption({
+      mimeType: completedOutput.mimeType,
+      scanned: scanned.value,
+    }),
+    { mimeType: completedOutput.mimeType, runId: actor.runId },
+  );
+  if (encryption === null) {
     return "format_validation_failed";
   }
 
   const created = await createEntityFromBuffer({
-    scopedDb: actor.scopedDb,
+    scopedDb: actor.writeDb,
     organizationId: actor.organizationId,
     workspaceId: actor.workspaceId,
     userId: actor.userId,
@@ -1203,7 +1203,8 @@ const executeRun = async (
     buffer: completedOutput.buffer,
     fileName: completedOutput.fileName,
     mimeType: completedOutput.mimeType,
-    scanWarnings: getScanWarnings(scan.value) ?? undefined,
+    encryption,
+    scanWarnings: scanned.value.scanWarnings ?? undefined,
     afterCreate: async (tx, createdOutput) => {
       // audit: skip — lifecycle bookkeeping committed atomically with the
       // audited output entity, preventing a completed file with a stuck run.
@@ -1240,7 +1241,12 @@ const executeRun = async (
 const processRunJob = async (
   data: DocumentTranslationRunJobData,
 ): Promise<void> => {
-  const actor = brandActor(data);
+  await processDocumentTranslationRun(brandActor(data));
+};
+
+export const processDocumentTranslationRun = async (
+  actor: RunActor,
+): Promise<void> => {
   const run = await claimRun(actor);
   if (run === null) {
     if (await failRedeliveredRun(actor)) {
@@ -1341,7 +1347,12 @@ export const initDocumentTranslationRunWorker = ({
   const worker = new Worker<DocumentTranslationRunJobData>(
     QUEUE_NAME,
     async (job) => await processRunJob(job.data),
-    { connection: createBullMqConnection(), concurrency: WORKER_CONCURRENCY },
+    {
+      connection: createBullMqConnection({
+        storeClass: "durable-coordination",
+      }),
+      concurrency: WORKER_CONCURRENCY,
+    },
   );
   worker.on("failed", (job, error) => {
     if (job) {
