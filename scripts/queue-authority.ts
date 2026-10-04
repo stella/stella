@@ -7,17 +7,19 @@
 // checks what the type cannot:
 //
 //   errors   (never baselined) a queue the host table and the registry
-//            disagree on; a row without a reason; a declared worker module
-//            that does not construct a BullMQ `Worker`; a BullMQ `Worker`
-//            constructed in a module no row declares; a `MEMBER_RUN_QUEUES`
-//            entry the registry does not classify as a member run of that
-//            module.
-//   members  (baselined, keyed without line numbers) a member-run queue that
-//            does not build its handles with `createRootRunActor`
+//            disagree on; a row without a reason; a BullMQ `Worker` whose
+//            queue name does not resolve statically to string literals; a
+//            row whose worker module consumes no `Worker` on that queue; a
+//            `Worker` on a queue the registry assigns to another module (or
+//            to none); a `MEMBER_RUN_QUEUES` entry the registry does not
+//            classify as a member run of that module.
+//   members  (baselined, keyed without line numbers) a member-run queue whose
+//            worker module never calls the imported `createRootRunActor`
 //            (`<queue>::run-actor`); a member-run module the pinned-handle
 //            allowlist still admits (`<queue>::pinned-handles::<file>`); a
-//            member-run queue without an integration test of both revocation
-//            cases (`<queue>::revocation-test`).
+//            member-run queue without an `*.integration.test.ts` that declares
+//            an active bun:test case per revocation title
+//            (`<queue>::revocation-test`).
 //
 // Modes:
 //   bun scripts/queue-authority.ts --check [--base <ref>]   (default base:
@@ -47,7 +49,9 @@ const API_SOURCE = "apps/api/src/";
 const HOST_TABLE_FILE = "apps/api/src/lib/bullmq-queue.ts";
 const HOST_TABLE_NAME = "BULLMQ_QUEUE_HOSTS";
 const PINNED_HANDLES_ROW = "pinned-workspace-handles";
-const RUN_ACTOR_CALL = "createRootRunActor(";
+const RUN_ACTOR = "createRootRunActor";
+const RUN_ACTOR_MODULE = "@/api/lib/root-scoped-db";
+const REVOCATION_TEST_SUFFIX = ".integration.test.ts";
 
 const BASELINE_SCHEMA = v.object({
   comment: v.string(),
@@ -68,8 +72,11 @@ type AuditInput = {
   hostQueues: readonly string[];
   registry: Readonly<Record<string, QueueAuthorityEntry>>;
   memberRunQueues: readonly { queue: string; module: string }[];
-  /** Modules that construct a BullMQ `Worker`. */
-  workerModules: readonly string[];
+  /**
+   * Modules that construct a BullMQ `Worker`, with the queue names those
+   * workers consume; `null` when a queue name does not resolve statically.
+   */
+  workerQueues: ReadonlyMap<string, readonly string[] | null>;
   pinnedAllowed: ReadonlySet<string>;
   /** Repository-relative read; `null` when the file does not exist. */
   readFile: (relativePath: string) => string | null;
@@ -85,7 +92,6 @@ const auditRegistry = (input: AuditInput, errors: string[]) => {
       errors.push(`Queue without an authority row: ${queue}`);
     }
   }
-  const declaredWorkers = new Set<string>();
   for (const [queue, entry] of Object.entries(input.registry)) {
     if (!hosted.has(queue)) {
       errors.push(`Authority row for a queue the host table lacks: ${queue}`);
@@ -93,10 +99,14 @@ const auditRegistry = (input: AuditInput, errors: string[]) => {
     if (entry.reason.trim() === "") {
       errors.push(`Authority row without a reason: ${queue}`);
     }
-    declaredWorkers.add(entry.worker);
-    if (!input.workerModules.includes(entry.worker)) {
+    const consumed = input.workerQueues.get(entry.worker);
+    if (consumed === undefined) {
       errors.push(
         `Declared worker module constructs no BullMQ Worker: ${queue} -> ${entry.worker}`,
+      );
+    } else if (consumed !== null && !consumed.includes(queue)) {
+      errors.push(
+        `Declared worker module has no Worker on its queue: ${queue} -> ${entry.worker}`,
       );
     }
     for (const executor of entry.executors ?? []) {
@@ -107,11 +117,22 @@ const auditRegistry = (input: AuditInput, errors: string[]) => {
       }
     }
   }
-  for (const module of input.workerModules) {
-    if (!declaredWorkers.has(module)) {
+  for (const [module, queues] of input.workerQueues) {
+    if (queues === null) {
       errors.push(
-        `BullMQ Worker outside the queue authority registry: ${module}`,
+        `BullMQ Worker queue name does not resolve to string literals: ${module}`,
       );
+      continue;
+    }
+    for (const queue of queues) {
+      const owner = input.registry[queue]?.worker;
+      if (owner !== module) {
+        errors.push(
+          owner === undefined
+            ? `BullMQ Worker outside the queue authority registry: ${module} (${queue})`
+            : `BullMQ Worker on ${queue} in ${module}, but the registry assigns it to ${owner}`,
+        );
+      }
     }
   }
   for (const { queue, module } of input.memberRunQueues) {
@@ -124,6 +145,272 @@ const auditRegistry = (input: AuditInput, errors: string[]) => {
   }
 };
 
+const unwrap = (node: ts.Expression): ts.Expression =>
+  ts.isSatisfiesExpression(node) ||
+  ts.isAsExpression(node) ||
+  ts.isParenthesizedExpression(node)
+    ? unwrap(node.expression)
+    : node;
+
+const propertyName = (name: ts.PropertyName): string | null =>
+  ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : null;
+
+const parseSource = (name: string, source: string): ts.SourceFile =>
+  ts.createSourceFile(name, source, ts.ScriptTarget.Latest, true);
+
+const findNodes = <T extends ts.Node>(
+  root: ts.Node,
+  guard: (node: ts.Node) => node is T,
+): T[] => {
+  const found: T[] = [];
+  const visit = (node: ts.Node) => {
+    if (guard(node)) {
+      found.push(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return found;
+};
+
+type ImportBinding = { module: string; imported: string };
+
+/** Value (not type-only) named imports, keyed by local name. */
+const importBindings = (file: ts.SourceFile): Map<string, ImportBinding> => {
+  const bindings = new Map<string, ImportBinding>();
+  for (const statement of file.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
+    ) {
+      continue;
+    }
+    const named = statement.importClause?.namedBindings;
+    if (named === undefined || !ts.isNamedImports(named)) {
+      continue;
+    }
+    for (const element of named.elements) {
+      if (!element.isTypeOnly) {
+        bindings.set(element.name.text, {
+          module: statement.moduleSpecifier.text,
+          imported: (element.propertyName ?? element.name).text,
+        });
+      }
+    }
+  }
+  return bindings;
+};
+
+/** Local names bound to `imported` from `module`. */
+const importedAs = (
+  file: ts.SourceFile,
+  module: string,
+  imported: string,
+): Set<string> =>
+  new Set(
+    [...importBindings(file)]
+      .filter(
+        ([, binding]) =>
+          binding.module === module && binding.imported === imported,
+      )
+      .map(([local]) => local),
+  );
+
+/** Whether the module calls the `createRootRunActor` it imports. */
+const callsRunActor = (source: string): boolean => {
+  const file = parseSource("worker.ts", source);
+  const locals = importedAs(file, RUN_ACTOR_MODULE, RUN_ACTOR);
+  return findNodes(file, ts.isCallExpression).some(
+    (call) =>
+      ts.isIdentifier(call.expression) && locals.has(call.expression.text),
+  );
+};
+
+const INACTIVE_MODIFIERS = new Set([
+  "if",
+  "skip",
+  "skipIf",
+  "todo",
+  "todoIf",
+  "failing",
+]);
+
+/** Whether `node` sits inside a skipped, conditional or todo suite or test. */
+const insideInactiveBlock = (node: ts.Node): boolean => {
+  let current = node.parent;
+  while (!ts.isSourceFile(current)) {
+    if (ts.isCallExpression(current)) {
+      const callee = ts.isCallExpression(current.expression)
+        ? current.expression.expression
+        : current.expression;
+      if (
+        ts.isPropertyAccessExpression(callee) &&
+        INACTIVE_MODIFIERS.has(callee.name.text)
+      ) {
+        return true;
+      }
+    }
+    current = current.parent;
+  }
+  return false;
+};
+
+/**
+ * Titles of the active bun:test cases in `source`: a plain `test`/`it` call
+ * imported from bun:test with a literal title and a function body, outside
+ * any skipped or conditional block. Comments and constants do not count.
+ */
+const activeTestTitles = (source: string): Set<string> => {
+  const file = parseSource("revocation.test.ts", source);
+  const runners = new Set([
+    ...importedAs(file, "bun:test", "test"),
+    ...importedAs(file, "bun:test", "it"),
+  ]);
+  const titles = new Set<string>();
+  for (const call of findNodes(file, ts.isCallExpression)) {
+    const [title, body] = call.arguments;
+    if (
+      ts.isIdentifier(call.expression) &&
+      runners.has(call.expression.text) &&
+      title !== undefined &&
+      ts.isStringLiteralLike(title) &&
+      body !== undefined &&
+      (ts.isArrowFunction(body) || ts.isFunctionExpression(body)) &&
+      !insideInactiveBlock(call)
+    ) {
+      titles.add(title.text);
+    }
+  }
+  return titles;
+};
+
+const API_ALIAS = "@/api/";
+const MAX_RESOLVE_DEPTH = 6;
+
+const resolveModulePath = (from: string, specifier: string): string | null => {
+  let base: string;
+  if (specifier.startsWith(API_ALIAS)) {
+    base = path.posix.join(API_SOURCE, specifier.slice(API_ALIAS.length));
+  } else if (specifier.startsWith(".")) {
+    base = path.posix.join(path.posix.dirname(from), specifier);
+  } else {
+    return null;
+  }
+  return `${base.replace(/\.ts$/u, "")}.ts`;
+};
+
+const declarationInitializer = (
+  file: ts.SourceFile,
+  name: string,
+): ts.Expression | undefined =>
+  findNodes(file, ts.isVariableDeclaration).find(
+    (declaration) =>
+      ts.isIdentifier(declaration.name) && declaration.name.text === name,
+  )?.initializer;
+
+type ResolveContext = {
+  relativePath: string;
+  file: ts.SourceFile;
+  readFile: AuditInput["readFile"];
+  depth: number;
+};
+
+/**
+ * The string literals an expression can evaluate to, following local
+ * constants, named imports (relative or `@/api/`), element access into an
+ * object literal and its values. `null` when any step is not a literal.
+ */
+const resolveStrings = (
+  expression: ts.Expression,
+  context: ResolveContext,
+): string[] | null => {
+  const node = unwrap(expression);
+  if (ts.isStringLiteralLike(node)) {
+    return [node.text];
+  }
+  if (context.depth > MAX_RESOLVE_DEPTH) {
+    return null;
+  }
+  const deeper = { ...context, depth: context.depth + 1 };
+  if (ts.isElementAccessExpression(node)) {
+    return resolveStrings(node.expression, deeper);
+  }
+  if (ts.isObjectLiteralExpression(node)) {
+    const values: string[] = [];
+    for (const property of node.properties) {
+      const resolved = ts.isPropertyAssignment(property)
+        ? resolveStrings(property.initializer, deeper)
+        : null;
+      if (resolved === null) {
+        return null;
+      }
+      values.push(...resolved);
+    }
+    return values;
+  }
+  if (!ts.isIdentifier(node)) {
+    return null;
+  }
+  const local = declarationInitializer(context.file, node.text);
+  if (local !== undefined) {
+    return resolveStrings(local, deeper);
+  }
+  const binding = importBindings(context.file).get(node.text);
+  const target =
+    binding === undefined
+      ? null
+      : resolveModulePath(context.relativePath, binding.module);
+  const source = target === null ? null : context.readFile(target);
+  if (binding === undefined || target === null || source === null) {
+    return null;
+  }
+  const file = parseSource(target, source);
+  const exported = declarationInitializer(file, binding.imported);
+  return exported === undefined
+    ? null
+    : resolveStrings(exported, { ...deeper, relativePath: target, file });
+};
+
+/**
+ * Queue names consumed by the BullMQ `Worker`s a module constructs:
+ * `undefined` when it constructs none, `null` when a queue name does not
+ * resolve statically.
+ */
+const workerQueueNames = (
+  relativePath: string,
+  source: string,
+  readFile: AuditInput["readFile"],
+): readonly string[] | null | undefined => {
+  if (!source.includes("bullmq")) {
+    return undefined;
+  }
+  const file = parseSource(relativePath, source);
+  const locals = importedAs(file, "bullmq", "Worker");
+  const constructions = findNodes(file, ts.isNewExpression).filter(
+    (node) =>
+      ts.isIdentifier(node.expression) && locals.has(node.expression.text),
+  );
+  if (constructions.length === 0) {
+    return undefined;
+  }
+  const queues = new Set<string>();
+  for (const construction of constructions) {
+    const first = construction.arguments?.at(0);
+    const names =
+      first === undefined
+        ? null
+        : resolveStrings(first, { relativePath, file, readFile, depth: 0 });
+    if (names === null) {
+      return null;
+    }
+    for (const name of names) {
+      queues.add(name);
+    }
+  }
+  return [...queues].toSorted();
+};
+
 const revocationGap = (
   entry: QueueAuthorityEntry,
   readFile: AuditInput["readFile"],
@@ -131,12 +418,16 @@ const revocationGap = (
   if (entry.revocationTest === undefined) {
     return REASONS.revocationTest;
   }
+  if (!entry.revocationTest.endsWith(REVOCATION_TEST_SUFFIX)) {
+    return `revocationTest ${entry.revocationTest} is not an integration test (*${REVOCATION_TEST_SUFFIX}).`;
+  }
   const source = readFile(entry.revocationTest);
   if (source === null) {
     return `revocationTest ${entry.revocationTest} does not exist.`;
   }
+  const active = activeTestTitles(source);
   const missing = MEMBER_RUN_REVOCATION_CASES.filter(
-    (title) => !source.includes(title),
+    (title) => !active.has(title),
   );
   return missing.length === 0
     ? null
@@ -153,8 +444,7 @@ const auditQueueAuthority = (input: AuditInput): Audit => {
       continue;
     }
     const usesActor =
-      onActor.has(queue) &&
-      (input.readFile(entry.worker) ?? "").includes(RUN_ACTOR_CALL);
+      onActor.has(queue) && callsRunActor(input.readFile(entry.worker) ?? "");
     if (!usesActor) {
       members.push({ key: `${queue}::run-actor`, reason: REASONS.runActor });
     }
@@ -174,16 +464,6 @@ const auditQueueAuthority = (input: AuditInput): Audit => {
   members.sort((left, right) => left.key.localeCompare(right.key));
   return { errors, members };
 };
-
-const unwrap = (node: ts.Expression): ts.Expression =>
-  ts.isSatisfiesExpression(node) ||
-  ts.isAsExpression(node) ||
-  ts.isParenthesizedExpression(node)
-    ? unwrap(node.expression)
-    : node;
-
-const propertyName = (name: ts.PropertyName): string | null =>
-  ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : null;
 
 /** Keys of the object literal assigned to `name` in `source`. */
 const objectKeys = (source: string, name: string): string[] | null => {
@@ -213,47 +493,6 @@ const objectKeys = (source: string, name: string): string[] | null => {
   return null;
 };
 
-/** Whether `source` constructs the `Worker` it imports from bullmq. */
-const constructsBullMqWorker = (source: string): boolean => {
-  if (!source.includes("bullmq")) {
-    return false;
-  }
-  const file = ts.createSourceFile("worker.ts", source, ts.ScriptTarget.Latest);
-  const local = new Set<string>();
-  for (const statement of file.statements) {
-    if (
-      ts.isImportDeclaration(statement) &&
-      ts.isStringLiteral(statement.moduleSpecifier) &&
-      statement.moduleSpecifier.text === "bullmq" &&
-      statement.importClause?.namedBindings !== undefined &&
-      ts.isNamedImports(statement.importClause.namedBindings)
-    ) {
-      for (const element of statement.importClause.namedBindings.elements) {
-        if ((element.propertyName ?? element.name).text === "Worker") {
-          local.add(element.name.text);
-        }
-      }
-    }
-  }
-  if (local.size === 0) {
-    return false;
-  }
-  let found = false;
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isNewExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      local.has(node.expression.text)
-    ) {
-      found = true;
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
-  return found;
-};
-
 const isProductionSource = (relativePath: string): boolean =>
   !/\.(test|type-test)\.ts$/u.test(relativePath) &&
   !/(^|\/)(__fixtures__|__tests__|tests)\//u.test(relativePath);
@@ -271,12 +510,21 @@ const treeInput = (): AuditInput => {
   if (hostQueues === null) {
     return panic(`${HOST_TABLE_NAME} not found in ${HOST_TABLE_FILE}`);
   }
-  const workerModules = [
+  const workerQueues = new Map<string, readonly string[] | null>();
+  for (const file of [
     ...new Bun.Glob(`${API_SOURCE}**/*.ts`).scanSync({ cwd: ROOT }),
   ]
     .filter(isProductionSource)
-    .filter((file) => constructsBullMqWorker(readRepoFile(file) ?? ""))
-    .toSorted();
+    .toSorted()) {
+    const queues = workerQueueNames(
+      file,
+      readRepoFile(file) ?? "",
+      readRepoFile,
+    );
+    if (queues !== undefined) {
+      workerQueues.set(file, queues);
+    }
+  }
   const pinnedRow = OWNERSHIP.find(({ id }) => id === PINNED_HANDLES_ROW);
   if (pinnedRow?.enforcement.kind !== "import") {
     return panic(`ownership row ${PINNED_HANDLES_ROW} is not an import row`);
@@ -285,7 +533,7 @@ const treeInput = (): AuditInput => {
     hostQueues,
     registry: QUEUE_AUTHORITY,
     memberRunQueues: MEMBER_RUN_QUEUES,
-    workerModules,
+    workerQueues,
     pinnedAllowed: new Set(
       pinnedRow.enforcement.allowed.map(({ path: file }) => file),
     ),
@@ -386,25 +634,63 @@ const check = (args: readonly string[]): number => {
 
 const SELF_TEST_WORKER = `
   import { Worker as BullWorker, type Job } from "bullmq";
-  export const start = () => new BullWorker<Job>("q", async () => {});
+  import { NAMES } from "@/api/lib/names";
+  const LOCAL = "local";
+  const name = NAMES[kind];
+  export const start = () => [
+    new BullWorker<Job>(LOCAL, async () => {}),
+    new BullWorker<Job>(name, async () => {}),
+  ];
+`;
+const SELF_TEST_NAMES = `
+  export const NAMES = { [K.a]: "imported-a", b: "imported-b" } as const;
 `;
 const SELF_TEST_WEB_WORKER = `
   export const start = () => new Worker(new URL("./w.ts", import.meta.url));
 `;
-const SELF_TEST_REVOCATION = MEMBER_RUN_REVOCATION_CASES.map(
-  (title) => `test("${title}", async () => {});`,
-).join("\n");
+const SELF_TEST_DYNAMIC_WORKER = `
+  import { Worker } from "bullmq";
+  export const start = (queue: string) => new Worker(queue, async () => {});
+`;
+const workerOn = (queue: string) =>
+  `import { Worker } from "bullmq"; new Worker("${queue}", async () => {});`;
+const SELF_TEST_ACTOR = `
+  import { ${RUN_ACTOR} as actorFor } from "${RUN_ACTOR_MODULE}";
+  const actor = actorFor(data);
+`;
+const SELF_TEST_ACTOR_TEXT_ONLY = `
+  // ${RUN_ACTOR}(data) is planned
+  const note = "${RUN_ACTOR}(data)";
+  const ${RUN_ACTOR} = (value: unknown) => value;
+  ${RUN_ACTOR}(data);
+`;
+const SELF_TEST_BUN_TEST = 'import { describe, test } from "bun:test";\n';
+const revocationCase = (title: string, call = "test") =>
+  `${call}("${title}", async () => {});`;
+const SELF_TEST_REVOCATION =
+  SELF_TEST_BUN_TEST +
+  MEMBER_RUN_REVOCATION_CASES.map((title) => revocationCase(title)).join("\n");
+const SELF_TEST_INACTIVE_REVOCATIONS = [
+  // Titles only in comments and constants.
+  `${SELF_TEST_BUN_TEST}// ${MEMBER_RUN_REVOCATION_CASES.join(" ")}\nconst titles = ${JSON.stringify(MEMBER_RUN_REVOCATION_CASES)};`,
+  // A skipped case.
+  `${SELF_TEST_BUN_TEST}${revocationCase(MEMBER_RUN_REVOCATION_CASES[0])}\n${revocationCase(MEMBER_RUN_REVOCATION_CASES[1], "test.skip")}`,
+  // Both cases inside a skipped suite.
+  `${SELF_TEST_BUN_TEST}describe.skipIf(true)("s", () => {\n${MEMBER_RUN_REVOCATION_CASES.map((title) => revocationCase(title)).join("\n")}\n});`,
+  // A local function named test, not bun:test.
+  `const test = (..._args: unknown[]) => undefined;\n${MEMBER_RUN_REVOCATION_CASES.map((title) => revocationCase(title)).join("\n")}`,
+];
 
 const selfTest = (): number => {
   const failures: string[] = [];
   const files: Record<string, string> = {
-    "on-actor.ts": `const actor = ${RUN_ACTOR_CALL}data);`,
+    "on-actor.ts": SELF_TEST_ACTOR,
     "pinned.ts": "createRootScopedDb({});",
     "executor.ts": "createRootSafeDb({});",
     "org.ts": "",
     "stray.ts": "",
-    "on-actor.test.ts": SELF_TEST_REVOCATION,
-    "half.test.ts": `test("${MEMBER_RUN_REVOCATION_CASES[0]}", async () => {});`,
+    "on-actor.integration.test.ts": SELF_TEST_REVOCATION,
+    "half.integration.test.ts": `${SELF_TEST_BUN_TEST}${revocationCase(MEMBER_RUN_REVOCATION_CASES[0])}`,
   };
   const entry = (
     authority: QueueAuthorityEntry["authority"],
@@ -415,12 +701,12 @@ const selfTest = (): number => {
     hostQueues: ["actor", "pinned", "org", "half", "unclassified"],
     registry: {
       actor: entry("member-run", "on-actor.ts", {
-        revocationTest: "on-actor.test.ts",
+        revocationTest: "on-actor.integration.test.ts",
       }),
       pinned: entry("member-run", "pinned.ts", { executors: ["executor.ts"] }),
       org: entry("org-automation", "org.ts"),
       half: entry("member-run", "on-actor.ts", {
-        revocationTest: "half.test.ts",
+        revocationTest: "half.integration.test.ts",
       }),
       ghost: entry("org-automation", "org.ts", { reason: " " }),
     },
@@ -429,7 +715,12 @@ const selfTest = (): number => {
       { queue: "half", module: "on-actor.ts" },
       { queue: "org", module: "org.ts" },
     ],
-    workerModules: ["on-actor.ts", "pinned.ts", "org.ts", "stray.ts"],
+    workerQueues: new Map([
+      ["on-actor.ts", ["actor", "half"]],
+      ["pinned.ts", ["pinned"]],
+      ["org.ts", ["ghost", "org"]],
+      ["stray.ts", ["stray"]],
+    ]),
     pinnedAllowed: new Set(["executor.ts", "pinned.ts"]),
     readFile: (file) => files[file] ?? null,
   });
@@ -437,7 +728,7 @@ const selfTest = (): number => {
     "Queue without an authority row: unclassified",
     "Authority row for a queue the host table lacks: ghost",
     "Authority row without a reason: ghost",
-    "BullMQ Worker outside the queue authority registry: stray.ts",
+    "BullMQ Worker outside the queue authority registry: stray.ts (stray)",
     "MEMBER_RUN_QUEUES lists org (org.ts), but the registry does not classify it as a member run of that module",
   ];
   const expectedMembers = [
@@ -462,18 +753,104 @@ const selfTest = (): number => {
     hostQueues: ["q"],
     registry: { q: entry("org-automation", "missing.ts") },
     memberRunQueues: [],
-    workerModules: [],
+    workerQueues: new Map(),
     pinnedAllowed: new Set(),
     readFile: () => null,
   });
   if (declaredMissing.errors.length !== 1) {
     failures.push("a declared worker that constructs no Worker must fail");
   }
-  if (!constructsBullMqWorker(SELF_TEST_WORKER)) {
-    failures.push("an aliased BullMQ Worker construction must be found");
+  // Two rows pointing at each other's modules: module membership is
+  // unchanged, so only the queue-to-worker pairs reveal the swap.
+  const swapped = auditQueueAuthority({
+    hostQueues: ["member", "org"],
+    registry: {
+      member: entry("member-run", "org.ts"),
+      org: entry("org-automation", "member.ts"),
+    },
+    memberRunQueues: [],
+    workerQueues: new Map([
+      [
+        "member.ts",
+        workerQueueNames("member.ts", workerOn("member"), () => null) ?? null,
+      ],
+      [
+        "org.ts",
+        workerQueueNames("org.ts", workerOn("org"), () => null) ?? null,
+      ],
+    ]),
+    pinnedAllowed: new Set(),
+    readFile: () => null,
+  });
+  const expectedSwap = [
+    "Declared worker module has no Worker on its queue: member -> org.ts",
+    "Declared worker module has no Worker on its queue: org -> member.ts",
+    "BullMQ Worker on member in member.ts, but the registry assigns it to org.ts",
+    "BullMQ Worker on org in org.ts, but the registry assigns it to member.ts",
+  ];
+  if (JSON.stringify(swapped.errors) !== JSON.stringify(expectedSwap)) {
+    failures.push(
+      `swapped worker rows must fail as ${JSON.stringify(expectedSwap)}; got ${JSON.stringify(swapped.errors)}`,
+    );
   }
-  if (constructsBullMqWorker(SELF_TEST_WEB_WORKER)) {
+  const resolved = workerQueueNames(
+    "apps/api/src/lib/w.ts",
+    SELF_TEST_WORKER,
+    (file) => (file === "apps/api/src/lib/names.ts" ? SELF_TEST_NAMES : null),
+  );
+  if (
+    JSON.stringify(resolved) !==
+    JSON.stringify(["imported-a", "imported-b", "local"])
+  ) {
+    failures.push(
+      `aliased Worker queue names must resolve through constants and imports; got ${JSON.stringify(resolved)}`,
+    );
+  }
+  if (
+    workerQueueNames("w.ts", SELF_TEST_WEB_WORKER, () => null) !== undefined
+  ) {
     failures.push("a web Worker must not count as a BullMQ worker");
+  }
+  if (workerQueueNames("w.ts", SELF_TEST_DYNAMIC_WORKER, () => null) !== null) {
+    failures.push("a Worker on a runtime queue name must not resolve");
+  }
+  const unresolved = auditQueueAuthority({
+    hostQueues: [],
+    registry: {},
+    memberRunQueues: [],
+    workerQueues: new Map([["dynamic.ts", null]]),
+    pinnedAllowed: new Set(),
+    readFile: () => null,
+  });
+  if (unresolved.errors.length !== 1) {
+    failures.push("an unresolved Worker queue name must fail");
+  }
+  if (!callsRunActor(SELF_TEST_ACTOR)) {
+    failures.push("an aliased run actor call must count");
+  }
+  if (callsRunActor(SELF_TEST_ACTOR_TEXT_ONLY)) {
+    failures.push(
+      "run actor text in comments, strings or a local function must not count",
+    );
+  }
+  for (const [index, source] of SELF_TEST_INACTIVE_REVOCATIONS.entries()) {
+    const gap = revocationGap(
+      entry("member-run", "w.ts", { revocationTest: "r.integration.test.ts" }),
+      () => source,
+    );
+    if (gap === null) {
+      failures.push(`inactive revocation case ${String(index)} must not count`);
+    }
+  }
+  if (
+    revocationGap(
+      entry("member-run", "w.ts", { revocationTest: "r.test.ts" }),
+      () => SELF_TEST_REVOCATION,
+    ) === null
+  ) {
+    failures.push(
+      "a revocation test outside *.integration.test.ts must not count",
+    );
   }
   const keys = objectKeys(
     `const T = { "a-b": "api", c: "x" } as const satisfies Record<string, string>;`,
