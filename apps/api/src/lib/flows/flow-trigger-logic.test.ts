@@ -6,9 +6,10 @@ import {
   fileUploadTriggerMatches,
   flowScheduleToSchedulerSchedule,
   isAutomatedRunCapReached,
-  shouldRunScheduledFlowNow,
+  isScheduledFlowDue,
 } from "@/api/lib/flows/flow-trigger-logic";
 import { MAX_AUTOMATED_FLOW_RUNS_PER_DEFINITION_PER_DAY } from "@/api/lib/flows/flow-types";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
 
 const ws = (id: string) => toSafeId<"workspace">(id);
 
@@ -151,25 +152,27 @@ describe("flowScheduleToSchedulerSchedule", () => {
   });
 });
 
-describe("shouldRunScheduledFlowNow", () => {
-  // 2026-07-01 is a Wednesday (UTC weekday 3).
-  const wednesday = new Date("2026-07-01T09:00:00.000Z");
+describe("isScheduledFlowDue", () => {
+  // 2026-07-01 is a Wednesday (weekday 3).
+  const wednesday = DueSlot.of({
+    nextRunAt: new Date("2026-07-01T09:00:00.000Z"),
+  });
 
   test("daily always runs", () => {
     expect(
-      shouldRunScheduledFlowNow({ frequency: "daily", hourUtc: 9 }, wednesday),
+      isScheduledFlowDue({ frequency: "daily", hourUtc: 9 }, wednesday),
     ).toBe(true);
   });
 
-  test("weekly runs only on the matching UTC weekday", () => {
+  test("weekly runs only on the slot's weekday", () => {
     expect(
-      shouldRunScheduledFlowNow(
+      isScheduledFlowDue(
         { frequency: "weekly", hourUtc: 9, dayOfWeek: 3 },
         wednesday,
       ),
     ).toBe(true);
     expect(
-      shouldRunScheduledFlowNow(
+      isScheduledFlowDue(
         { frequency: "weekly", hourUtc: 9, dayOfWeek: 1 },
         wednesday,
       ),
@@ -178,31 +181,60 @@ describe("shouldRunScheduledFlowNow", () => {
 
   test("weekly with no configured day fails closed (never runs)", () => {
     expect(
-      shouldRunScheduledFlowNow({ frequency: "weekly", hourUtc: 9 }, wednesday),
+      isScheduledFlowDue({ frequency: "weekly", hourUtc: 9 }, wednesday),
     ).toBe(false);
   });
 
-  test("monthly runs only on the matching UTC day of month", () => {
+  test("monthly runs only on the slot's day of month", () => {
     expect(
-      shouldRunScheduledFlowNow(
+      isScheduledFlowDue(
         { frequency: "monthly", hourUtc: 9, dayOfMonth: 1 },
         wednesday,
       ),
     ).toBe(true);
     expect(
-      shouldRunScheduledFlowNow(
+      isScheduledFlowDue(
         { frequency: "monthly", hourUtc: 9, dayOfMonth: 15 },
         wednesday,
       ),
     ).toBe(false);
   });
 
+  test("a backlogged claim also covers each later slot that had elapsed", () => {
+    // A Tuesday 09:00 slot claimed on Wednesday after 09:00 covers Wednesday's
+    // slot too: the runner schedules the next slot after this run.
+    const lateClaim = DueSlot.of({
+      nextRunAt: new Date("2026-06-30T09:00:00.000Z"),
+      lockedAt: new Date("2026-07-01T10:00:00.000Z"),
+    });
+    expect(
+      isScheduledFlowDue(
+        { frequency: "weekly", hourUtc: 9, dayOfWeek: 3 },
+        lateClaim,
+      ),
+    ).toBe(true);
+    expect(
+      isScheduledFlowDue(
+        { frequency: "monthly", hourUtc: 9, dayOfMonth: 1 },
+        lateClaim,
+      ),
+    ).toBe(true);
+    // Before Wednesday's 09:00 has elapsed, the claim covers Tuesday only.
+    const earlyClaim = DueSlot.of({
+      nextRunAt: new Date("2026-06-30T09:00:00.000Z"),
+      lockedAt: new Date("2026-07-01T08:59:59.999Z"),
+    });
+    expect(
+      isScheduledFlowDue(
+        { frequency: "weekly", hourUtc: 9, dayOfWeek: 3 },
+        earlyClaim,
+      ),
+    ).toBe(false);
+  });
+
   test("monthly with no configured day fails closed (never runs)", () => {
     expect(
-      shouldRunScheduledFlowNow(
-        { frequency: "monthly", hourUtc: 9 },
-        wednesday,
-      ),
+      isScheduledFlowDue({ frequency: "monthly", hourUtc: 9 }, wednesday),
     ).toBe(false);
   });
 });

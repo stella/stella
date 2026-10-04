@@ -31,6 +31,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readScannedBilingualDocx } from "@/api/lib/file-scan/document-parsers";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Prepares translation inputs without returning stored-file bytes.",
+  },
   description:
     "Start an asynchronous translation of a bilingual document using the reviewed row dispositions and glossary. Returns a run ID to poll.",
   permissions: { entity: ["create"] },

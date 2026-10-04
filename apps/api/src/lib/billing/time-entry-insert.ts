@@ -34,6 +34,8 @@ type TimeEntryInsertInput = {
   narrative: string;
   narrativeLanguage?: string | null | undefined;
   billable?: boolean | undefined;
+  noCharge?: boolean | undefined;
+  invoiceNarrative?: string | null | undefined;
   taskCode?: string | null | undefined;
   activityCode?: string | null | undefined;
 };
@@ -60,6 +62,8 @@ type PreparedTimeEntry = {
   narrative: string;
   narrativeLanguage: string | null;
   billable: boolean;
+  noCharge: boolean;
+  invoiceNarrative: string | null;
   taskCode: string | null;
   activityCode: string | null;
 };
@@ -165,6 +169,8 @@ export const prepareTimeEntryInsert = async function* ({
     narrative: body.narrative,
     narrativeLanguage: body.narrativeLanguage ?? null,
     billable,
+    noCharge: body.noCharge ?? false,
+    invoiceNarrative: body.invoiceNarrative ?? null,
     taskCode: body.taskCode ?? null,
     activityCode: body.activityCode ?? null,
   };
@@ -259,6 +265,8 @@ export const insertPreparedTimeEntry = async ({
       narrative: prepared.narrative,
       narrativeLanguage: prepared.narrativeLanguage,
       billable: prepared.billable,
+      noCharge: prepared.noCharge,
+      invoiceNarrative: prepared.invoiceNarrative,
       taskCode: prepared.taskCode,
       activityCode: prepared.activityCode,
       source,

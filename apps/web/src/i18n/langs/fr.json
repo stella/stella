@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Ajouter une série de numérotation",
       "advance": "Acompte",
+      "allSellers": "Tous les vendeurs",
       "archiveConfirm": "Archiver cette série de numérotation ? Elle ne sera plus disponible pour les nouveaux documents.",
       "creditNote": "Avoir",
       "default": "Série par défaut",
@@ -562,6 +563,9 @@
       "preview": "Numéro suivant",
       "previewAllocated": "Ce numéro est déjà attribué.",
       "previewHelp": "L’aperçu utilise le modèle enregistré et ne réserve aucun numéro.",
+      "sellerProfile": "Profil de vendeur",
+      "sellerUnavailable": "Vendeur archivé ou indisponible",
+      "sellerUnavailableHelp": "Ce vendeur est archivé ou indisponible. Conservez cette affectation ou sélectionnez un autre vendeur.",
       "setDefault": "Définir comme série par défaut",
       "title": "Séries de numérotation"
     },
@@ -1165,6 +1169,7 @@
       "noSkills": "Aucune compétence pour le moment",
       "pinnedMatters": "Dossiers épinglés",
       "recentChats": "Conversations récentes",
+      "skillEditedBy": "Modifié par {name} · {time}",
       "skills": "Compétences"
     },
     "loadEarlierMessages": "Charger les messages précédents",
@@ -1296,6 +1301,9 @@
     },
     "tabToAsk": "→ pour demander : « {prompt} »",
     "thinking": "Traitement du contexte",
+    "threadFiles": {
+      "title": "Fichiers de cette conversation"
+    },
     "tool": {
       "add_comment": "Ajout d’un commentaire",
       "apply-active-docx-edits": "Préparation des modifications",
@@ -2262,6 +2270,7 @@
       "deeplKeyRejected": "La clé DeepL enregistrée a été refusée. Remplacez-la dans les paramètres de l’organisation.",
       "deeplQuotaExceeded": "Le quota de caractères DeepL de cette organisation est épuisé.",
       "disposableEmailNotAllowed": "Les adresses e-mail temporaires ne sont pas autorisées. Utilisez une adresse e-mail permanente.",
+      "encryptedContent": "Le contenu d’un document chiffré ne peut pas être extrait. Retirez le mot de passe du fichier et réessayez.",
       "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
       "internalServerError": "Une erreur s’est produite. Veuillez réessayer.",
       "legalSourceEntityLimitReached": "Ce dossier a atteint la limite d’éléments, le document n’a donc pas pu être créé.",
@@ -4826,6 +4835,7 @@
     "addPart": "Ajouter une partie",
     "addTag": "Ajouter une étiquette",
     "aiAdaptHint": "L'IA adapte cette formulation à chaque endroit du document où elle apparaît.",
+    "aiConditionsUndecided": "L'IA n'a pas pu trancher ces conditions ; leurs sections ont été remplies comme si elles ne s'appliquaient pas : {list}",
     "aiDecidedConditions": "Décidé par l’IA",
     "aiFieldsNotDrafted": "L'IA n'a pas pu rédiger ces champs : {list}",
     "allTemplates": "Tous les modèles",
@@ -4917,6 +4927,7 @@
     "directiveFor": "Boucle : {expression}",
     "directiveIf": "Si : {expression}",
     "discoveryFailed": "Impossible d'analyser le modèle",
+    "documentCreatedIncomplete": "Document créé, mais le remplissage est incomplet",
     "downloadAnyway": "Télécharger quand même",
     "downloadDocx": "Télécharger en DOCX",
     "downloadPdf": "Télécharger en PDF",
@@ -5012,6 +5023,7 @@
     "saveFailed": "Impossible d'enregistrer le modèle",
     "savedLookupFormats": "Formats de sortie enregistrés",
     "searchTemplates": "Rechercher des modèles…",
+    "structureErrorsInDocument": "Directives du modèle qui n'ont pas pu être appliquées : {count}. Vérifiez le document.",
     "structureWarningParagraph": "Paragraphe {paragraph, number}",
     "structureWarnings": "{count, plural, one {# avertissement de structure} many {# avertissements de structure} other {# avertissements de structure}}",
     "studio": {

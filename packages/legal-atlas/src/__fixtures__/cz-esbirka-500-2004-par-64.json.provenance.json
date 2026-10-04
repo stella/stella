@@ -1,0 +1,8 @@
+{
+  "capture": "recorded",
+  "sha256": "565358d07fdfd9d1e42b77e1ba4d6af5244ea553769e02f41c1451bb410ec098",
+  "sourceUrl": "https://opendata.eselpoint.gov.cz/sparql",
+  "capturedAt": "2026-10-02T09:22:52.498463+00:00",
+  "query": "SELECT ?citace ?url WHERE {\n GRAPH <esel-esb:eli/czPravniAktZneni> {\n  <https://opendata.eselpoint.gov.cz/esel-esb/eli/cz/sb/2004/500/2025-07-01> <https://slovník.gov.cz/datový/sbírka/pojem/má-fragment-znění> ?zf .\n }\n GRAPH <esel-esb:eli/czPravniAktZneniFragment> {\n  ?zf <https://slovník.gov.cz/datový/sbírka/pojem/citace-označení-fragmentu-znění-právního-aktu> ?citace ;\n      <https://slovník.gov.cz/datový/sbírka/pojem/url-fragmentu-znění> ?url .\n  FILTER(STRSTARTS(STR(?url), \"/sb/2004/500/2025-07-01#par_64\"))\n }\n} ORDER BY ?url",
+  "note": "Publisher citation and reader URL projection for every fragment under section 64, consolidation 2025-07-01."
+}
