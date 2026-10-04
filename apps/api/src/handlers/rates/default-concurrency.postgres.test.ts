@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
   rateTables,
@@ -30,7 +30,10 @@ import updateRateTable from "./update";
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
-const observeBlocking = async (tx: Transaction, pid: number) => {
+const observeBlocking = async (
+  tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">,
+  pid: number,
+) => {
   for (let attempt = 0; attempt < 200; attempt += 1) {
     const rows = await tx
       .select({

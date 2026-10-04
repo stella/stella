@@ -1256,7 +1256,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
             (name) => [name, "web research is off for this chat"] as const,
           )),
       ...Object.keys(registered)
-        .filter((name) => !(name in tools))
+        .filter((name) => !(name in projected))
         .map((name) => [name, "subagents cannot call it"] as const),
     ]),
   };

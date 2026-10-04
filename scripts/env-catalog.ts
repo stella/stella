@@ -7,6 +7,7 @@ import {
 } from "../apps/api/src/env-base-schema";
 import { envDocumentProcessingWorkerServerSchema } from "../apps/api/src/env-document-processing-worker-schema";
 import { envOnlineIndexServerSchema } from "../apps/api/src/env-online-index";
+import { replayTickServerSchema } from "../apps/api/src/env-replay";
 import { envApiServerSchema } from "../apps/api/src/env-schema";
 import { envCollabServerSchema } from "../apps/collab/src/env-schema";
 import { envWebClientSchema } from "../apps/web/src/env-schema";
@@ -100,6 +101,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "BETTER_AUTH_COOKIE_PREFIX",
   "BETTER_AUTH_URL",
   "CASE_LAW_DATABASE_POOL_MAX",
+  "CASE_LAW_REPLAY_ENABLED",
+  "CASE_LAW_REPLAY_KILL_SWITCH",
+  "CASE_LAW_REPLAY_DISABLED_SOURCES",
   "PUBLIC_LAW_DATABASE_POOL_MAX",
   "PUBLIC_CORPUS_RESERVED_CONNECTIONS",
   "PUBLIC_CORPUS_ASSUMED_REPLICAS",
@@ -265,6 +269,12 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  CASE_LAW_REPLAY_ENABLED:
+    "Enable bounded background case-law replay. Defaults to false.",
+  CASE_LAW_REPLAY_KILL_SWITCH:
+    "Stop background case-law replay at the next batch boundary. Defaults to false.",
+  CASE_LAW_REPLAY_DISABLED_SOURCES:
+    "Comma-separated adapter keys excluded from background case-law replay.",
   UNUSED_CLIENT_RETENTION_DAYS:
     "Age in days before unused client registrations expire (1–365; default 30).",
   AGENT_REGISTRATION_DAILY_LIMIT:
@@ -596,6 +606,7 @@ type EnvCatalogName =
   | keyof typeof envDocumentProcessingWorkerServerSchema
   | keyof typeof envApiServerSchema
   | keyof typeof envCollabServerSchema
+  | keyof typeof replayTickServerSchema
   | keyof typeof envWebClientSchema;
 
 export const ENV_CREDENTIAL_CLASSIFICATION = {
@@ -641,6 +652,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   BETTER_AUTH_SECRET: ENV_CREDENTIAL_KIND.credential,
   BETTER_AUTH_URL: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DATABASE_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_REPLAY_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_REPLAY_KILL_SWITCH: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_REPLAY_DISABLED_SOURCES: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DATABASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   CHAT_RUN_LOG_SHADOW: ENV_CREDENTIAL_KIND.notCredential,
   COMPANIES_HOUSE_API_KEY: ENV_CREDENTIAL_KIND.credential,
@@ -1079,6 +1093,10 @@ const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
 export const ENV_CATALOG = [
   ...createCatalogEntries({
     owner: ENV_OWNER.apiBase,
+    schema: replayTickServerSchema,
+  }),
+  ...createCatalogEntries({
+    owner: ENV_OWNER.apiBase,
     schema: envBaseServerSchema,
   }),
   ...createCatalogEntries({
@@ -1105,6 +1123,7 @@ export const ENV_CATALOG = [
 ];
 
 export const API_ENV_SCHEMA = {
+  ...replayTickServerSchema,
   ...envBaseServerSchema,
   ...envOnlineIndexServerSchema,
   ...envDocumentProcessingWorkerServerSchema,

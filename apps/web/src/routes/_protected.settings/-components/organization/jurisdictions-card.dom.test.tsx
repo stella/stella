@@ -9,6 +9,10 @@ GlobalRegistrator.register({
 });
 
 const ORGANIZATION = "jurisdictions-card-org";
+const ORGANIZATION_SETTINGS_CALLER = {
+  organizationId: ORGANIZATION,
+  userId: "user",
+};
 
 type PendingWrite = {
   body: unknown;
@@ -134,8 +138,9 @@ const mountCard = async () => {
   );
   await testing.waitFor(() => {
     expect(
-      client.getQueryState(organizationSettingsOptions(ORGANIZATION).queryKey)
-        ?.status,
+      client.getQueryState(
+        organizationSettingsOptions(ORGANIZATION_SETTINGS_CALLER).queryKey,
+      )?.status,
     ).toBe("success");
   });
   const countryButton = (name: RegExp) => {
@@ -242,8 +247,9 @@ test.each(SCHEDULES)(
     expect(writes.map((write) => write.body)).toEqual([[CZ], [CZ, SK]]);
     expect(server.practiceJurisdictions).toEqual([CZ, SK]);
     expect(
-      client.getQueryData(organizationSettingsOptions(ORGANIZATION).queryKey)
-        ?.practiceJurisdictions,
+      client.getQueryData(
+        organizationSettingsOptions(ORGANIZATION_SETTINGS_CALLER).queryKey,
+      )?.practiceJurisdictions,
     ).toEqual([CZ, SK]);
     expect(displayedSelection(view)).toEqual(EXPECTED_DISPLAY);
     client.clear();
@@ -267,8 +273,9 @@ test("the card keeps the newest selection while the older write's refetch lands"
   );
   await drain();
   expect(
-    client.getQueryData(organizationSettingsOptions(ORGANIZATION).queryKey)
-      ?.practiceJurisdictions,
+    client.getQueryData(
+      organizationSettingsOptions(ORGANIZATION_SETTINGS_CALLER).queryKey,
+    )?.practiceJurisdictions,
   ).toEqual([CZ]);
   expect(displayedSelection(view)).toEqual(EXPECTED_DISPLAY);
 

@@ -2,6 +2,7 @@
 export * from "./registration-budget-schema";
 export * from "./schema/contacts";
 export * from "./schema/backfill-state";
+export * from "./schema/case-law-replay";
 export * from "./schema/system-audit";
 export * from "./schema/properties";
 export * from "./schema/entities";

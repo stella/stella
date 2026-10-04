@@ -2288,6 +2288,7 @@
       "deeplQuotaExceeded": "Limit znaków DeepL dla tej organizacji został wyczerpany.",
       "disposableEmailNotAllowed": "Tymczasowe adresy e-mail są niedozwolone. Użyj stałego adresu e-mail.",
       "encryptedContent": "Nie można wyodrębnić zawartości zaszyfrowanego dokumentu. Usuń hasło z pliku i spróbuj ponownie.",
+      "filePropertyTypeImmutable": "Nie można zmienić typu właściwości pliku. Zachowaj obecny typ; dla innych wartości utwórz własną właściwość.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",

@@ -51,7 +51,11 @@ import {
   type McpRequestContext,
 } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
-import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
+import {
+  projectMcpRefusal,
+  statusCodeToErrorCode,
+} from "@/api/mcp/error-codes";
+import type { McpValidationIssue } from "@/api/mcp/error-codes";
 import {
   isMcpDescriptorFeatureEnabled,
   resolveMcpDescriptorFeatureId,
@@ -680,49 +684,6 @@ const validatePart = ({
 
 // --- Result mapping ----------------------------------------------------------
 
-/**
- * Deliberate map from every 4xx a safe handler actually returns (sweep of
- * `HandlerError`/`status(...)` statuses in apps/api/src/handlers) onto the
- * error envelope, preserving the handler's message:
- *  - 400 validation, 422 semantic validation, 413 payload too large ->
- *    `validation_error`;
- *  - 401 (unauthenticated) and 403 (role/permission) -> `permission_denied`
- *    (the generic path is always authenticated, so a 401 here is an
- *    authorization gap, not a login prompt);
- *  - 404 -> `not_found`; 402 -> `usage_limited`; 429 -> `rate_limited`;
- *  - 409 -> `conflict` (duplicate link/name, concurrent edit; the message
- *    names the conflicting resource).
- * Unlisted statuses fall through to `internal_error` deliberately: 5xx are
- * genuine server failures (500/502 in handlers), 2xx/3xx status responses do
- * not occur on catalog handlers (302 lives in oauth-callback/verify, which are
- * `internal`-disposition; `redirect()` also trips the context-fidelity scan),
- * and 410 is unused across the handler tree.
- */
-const STATUS_CODE_TO_ENVELOPE: {
-  min: number;
-  max: number;
-  code: McpErrorCode;
-}[] = [
-  { min: 400, max: 400, code: "validation_error" },
-  { min: 401, max: 401, code: "permission_denied" },
-  { min: 402, max: 402, code: "usage_limited" },
-  { min: 403, max: 403, code: "permission_denied" },
-  { min: 404, max: 404, code: "not_found" },
-  { min: 409, max: 409, code: "conflict" },
-  { min: 413, max: 413, code: "validation_error" },
-  { min: 422, max: 422, code: "validation_error" },
-  { min: 429, max: 429, code: "rate_limited" },
-];
-
-const statusCodeToErrorCode = (code: number): McpErrorCode => {
-  for (const range of STATUS_CODE_TO_ENVELOPE) {
-    if (code >= range.min && code <= range.max) {
-      return range.code;
-    }
-  }
-  return "internal_error";
-};
-
 const statusResponseMessage = (response: unknown): string => {
   if (isRecord(response) && typeof response["message"] === "string") {
     return response["message"];
@@ -765,7 +726,25 @@ const mapStatusResponse = (
       hint: MCP_INTERNAL_ERROR_HINT,
     });
   }
-  return structuredErrorResult({ code, message });
+  return structuredErrorResult(
+    projectMcpRefusal({
+      status: statusCode,
+      code:
+        isRecord(responseBody) && typeof responseBody["code"] === "string"
+          ? responseBody["code"]
+          : undefined,
+      message,
+      issues: isRecord(responseBody) ? responseBody["issues"] : undefined,
+      hint:
+        isRecord(responseBody) && typeof responseBody["hint"] === "string"
+          ? responseBody["hint"]
+          : undefined,
+      retryable:
+        isRecord(responseBody) && typeof responseBody["retryable"] === "boolean"
+          ? responseBody["retryable"]
+          : undefined,
+    }),
+  );
 };
 
 /**
