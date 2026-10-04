@@ -103,13 +103,7 @@ const readWorkspaceContacts = createSafeHandler(
   } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
     const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await readWorkspaceContactsHandler({
-            workspaceId,
-            scopedDb,
-          }),
-      ),
+      readWorkspaceContactsHandler({ workspaceId, scopedDb }),
     );
 
     return Result.ok(response);
