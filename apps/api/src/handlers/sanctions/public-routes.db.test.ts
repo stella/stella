@@ -44,7 +44,7 @@ const FRESH_NOW = new Date("2026-09-20T09:00:00Z");
 const STALE_NOW = new Date("2026-09-23T08:00:00Z");
 const MANY_MATCHES = SANCTIONS_MATCH_LIMIT + 5;
 const BENCHMARK_ENTRY_COUNT = 20_000;
-const INSERT_BATCH_SIZE = 500;
+const INSERT_BATCH_SIZE = 100;
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -624,26 +624,41 @@ describe("public sanctions search parity", () => {
   test(
     "measures cold and warm public searches over 20000 stored entries",
     async () => {
-      const entries = Array.from(
-        { length: BENCHMARK_ENTRY_COUNT },
-        (_, index) =>
-          entry({
-            source: "eu",
-            sourceId: `benchmark-${index}`,
-            overrides: {
-              names: [
-                {
-                  name: `Registered Entity ${index} Holdings`,
-                  quality: "strong",
-                },
-              ],
+      for (
+        let offset = 0;
+        offset < BENCHMARK_ENTRY_COUNT;
+        offset += INSERT_BATCH_SIZE
+      ) {
+        await seedEntries(
+          "eu",
+          Array.from(
+            {
+              length: Math.min(
+                INSERT_BATCH_SIZE,
+                BENCHMARK_ENTRY_COUNT - offset,
+              ),
             },
-          }),
-      );
-      await seedEntries("eu", entries);
+            (_, index) => {
+              const entryIndex = offset + index;
+              return entry({
+                source: "eu",
+                sourceId: `benchmark-${entryIndex}`,
+                overrides: {
+                  names: [
+                    {
+                      name: `Registered Entity ${entryIndex} Holdings`,
+                      quality: "strong",
+                    },
+                  ],
+                },
+              });
+            },
+          ),
+        );
+      }
       await db
         .update(sanctionsEditions)
-        .set({ entryCount: entriesFor("eu").length + entries.length })
+        .set({ entryCount: entriesFor("eu").length + BENCHMARK_ENTRY_COUNT })
         .where(eq(sanctionsEditions.id, activeEdition("eu")));
       const cache = createSanctionsIndexCache();
       const context = new InMemoryRateLimitContext();
@@ -686,7 +701,7 @@ describe("public sanctions search parity", () => {
         });
         console.info(
           JSON.stringify({
-            entries: entries.length,
+            entries: BENCHMARK_ENTRY_COUNT,
             coldMs: Number(coldMs.toFixed(2)),
             warmMs: Number(warmMs.toFixed(2)),
           }),
@@ -786,7 +801,7 @@ describe("public sanctions search parity", () => {
           .set({
             entryCount:
               entriesFor("eu").length +
-              entries.length +
+              BENCHMARK_ENTRY_COUNT +
               costly.length +
               partialAliases.length,
           })
