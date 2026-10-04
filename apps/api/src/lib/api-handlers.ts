@@ -935,8 +935,9 @@ const runSafeHandlerWith = async <
 }: RunSafeHandlerWithOptions<TContext, TResult, TErrorStatus> & {
   contentDelivery: ContentDelivery | undefined;
 }): Promise<TResult | TErrorStatus> =>
-  await runWithContentDeliveryScope(contentDelivery, () =>
-    runSafeHandlerInDeliveryScope(options),
+  await runWithContentDeliveryScope(
+    contentDelivery,
+    async () => await runSafeHandlerInDeliveryScope(options),
   );
 
 type RunSafeHandlerOptions<

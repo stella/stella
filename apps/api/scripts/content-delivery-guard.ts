@@ -291,7 +291,7 @@ class ContentDeliveryInspector {
   };
   private readonly traceImport = (definition: ts.Node, member?: string) => {
     let current = definition;
-    while (!ts.isImportDeclaration(current) && current.parent) {
+    while (!ts.isImportDeclaration(current) && !ts.isSourceFile(current)) {
       current = current.parent;
     }
     if (
@@ -476,7 +476,7 @@ class ContentDeliveryInspector {
       );
     }
     let current: ts.Node = definition;
-    while (!ts.isImportDeclaration(current) && current.parent) {
+    while (!ts.isImportDeclaration(current) && !ts.isSourceFile(current)) {
       current = current.parent;
     }
     if (

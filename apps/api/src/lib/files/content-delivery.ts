@@ -36,13 +36,13 @@ export const recordContentDeliveryReceipt = (): void => {
   }
 };
 
-export const getContentDeliveryReceiptError = () => {
+export const getContentDeliveryReceiptError = (): HandlerError | undefined => {
   const scope = deliveryScope.getStore();
   if (!scope || scope.intent === "absent") {
-    return;
+    return undefined;
   }
   if (scope.declaration?.type !== "audited" || scope.receipt === "recorded") {
-    return;
+    return undefined;
   }
   return new HandlerError({
     status: 500,

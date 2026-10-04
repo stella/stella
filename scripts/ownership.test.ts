@@ -121,11 +121,15 @@ test("the run actor allowlist names exactly the member-run queues", () => {
 describe("stored-reader ownership coverage", () => {
   for (const id of ["stored-file-read", "stored-tenant-file-read"]) {
     test(`${id} covers every exported stored-reader primitive`, () => {
-      const row = OWNERSHIP.find((candidate) => candidate.id === id);
-      if (row === undefined || row.enforcement.kind !== "import") {
+      const enforcement = OWNERSHIP.find(
+        (candidate) => candidate.id === id,
+      )?.enforcement;
+      if (enforcement?.kind !== "import") {
         throw new TypeError("Stored-reader ownership must confine imports.");
       }
-      const specifier = row.enforcement.specifiers.at(0);
+      const names: readonly string[] | undefined =
+        "names" in enforcement ? enforcement.names : undefined;
+      const specifier = enforcement.specifiers.at(0);
       if (specifier === undefined) {
         throw new TypeError(
           "Stored-reader ownership must name its source module.",
@@ -177,7 +181,7 @@ describe("stored-reader ownership coverage", () => {
           exportedNames.push(statement.name.text);
         }
       }
-      expect(row.enforcement.names?.toSorted()).toEqual(
+      expect(names?.toSorted()).toEqual(
         exportedNames
           .filter((name) =>
             /^(?:readTenantS3ArrayBuffer|getS3ObjectWithSignal|readS3Object\w*|readS3ArrayBuffer)$/u.test(
