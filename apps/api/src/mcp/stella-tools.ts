@@ -33,6 +33,7 @@ import type {
   ContactPhone,
   FieldContent,
 } from "@/api/db/schema-validators";
+import { envBase } from "@/api/env-base";
 import {
   DECISION_DOCUMENT_HYDRATION,
   DECISION_DOCUMENT_STATE,
@@ -2086,6 +2087,10 @@ const mismatchedSearchCursorResult = (encoded: number, queryCount: number) =>
     hint: `Send the same ${String(encoded)} queries this cursor was issued for, in the same order, or omit 'cursor' to start a new search.`,
   });
 
+const mcpCorpusQueryVariant = ({ testDependencies }: McpRequestContext) =>
+  testDependencies?.corpusIndexQueryVariant ??
+  envBase.CORPUS_INDEX_QUERY_VARIANT;
+
 const caseLawSearchResult = ({
   hit,
   matchedQueries,
@@ -2222,10 +2227,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       body,
       query,
       subCursor,
-      interpretation: interpretDecisionQuery(
+      interpretation: interpretDecisionQuery({
         body,
-        parseDecisionQuery(query, { grammar, reporters }),
-      ),
+        configuredVariant: mcpCorpusQueryVariant(context),
+        intent: parseDecisionQuery(query, { grammar, reporters }),
+      }),
     };
   });
   const outcomes = await mapWithConcurrency({
@@ -2237,7 +2243,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       }
       return {
         exhausted: false as const,
-        result: await search(body, caseLawPublicReadDb, observer),
+        result: await search({
+          body,
+          caseLawDb: caseLawPublicReadDb,
+          observer,
+        }),
       };
     },
   });

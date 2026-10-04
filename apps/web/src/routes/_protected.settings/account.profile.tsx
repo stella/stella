@@ -63,6 +63,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
@@ -319,11 +320,8 @@ function ProfilePageBody() {
         queryKey: sessionOptions.queryKey,
       });
     },
-    onError: () => {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 
@@ -345,11 +343,8 @@ function ProfilePageBody() {
         queryKey: sessionOptions.queryKey,
       });
     },
-    onError: () => {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 
@@ -372,11 +367,8 @@ function ProfilePageBody() {
         queryKey: sessionOptions.queryKey,
       });
     },
-    onError: () => {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 
@@ -461,10 +453,10 @@ function ProfilePageBody() {
               // identity surface renders. Stop the empty submit here rather
               // than letting the server silently keep the previous value.
               if (displayName.trim().length === 0) {
-                stellaToast.add({
-                  title: t("settings.account.displayNameRequired"),
-                  type: "error",
-                });
+                notifyUserError(
+                  undefined,
+                  t("settings.account.displayNameRequired"),
+                );
                 return;
               }
               // Awaited, not detached: `ProfileSubmitButton` disables itself

@@ -7,7 +7,6 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import { desktopEditSessions, workspaces } from "@/api/db/schema";
-import { env } from "@/api/env";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -15,6 +14,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import {
   authorizeDesktopEditSession,
@@ -251,7 +251,7 @@ export const checkpointDesktopEditSessionHandler = async ({
     // the persisted checkpointSha256Hex. The lock is held for one write on
     // a low-frequency, single-session path.
     const checkpointBytes = new Uint8Array(buffer);
-    if (!env.FEATURE_FILE_USAGE_LIMITS) {
+    if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
       await writeS3ObjectWithRetry({ data: checkpointBytes, key });
     } else {
       const fileWrite = await writeOrganizationFile({

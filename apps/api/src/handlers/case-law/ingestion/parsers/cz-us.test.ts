@@ -924,3 +924,54 @@ describe("embedded RTF text destinations", () => {
     ]);
   });
 });
+
+test("excludes scripts and styles from the HTML fallback", () => {
+  for (const container of ["div class='DocContent'", "section"]) {
+    const tag = container.replace(/ .*$/u, "");
+    const parsed = parseUsDecisionHtml(
+      baseInput(
+        `<span id="lblDecisionForm">NÁLEZ</span><${container}>Visible<script>scriptqzexcluded</script><style>styleqzexcluded</style></${tag}>`,
+      ),
+    );
+    expect(parsed.fulltext).toContain("Visible");
+    expect(parsed.fulltext).not.toContain("scriptqzexcluded");
+    expect(parsed.fulltext).not.toContain("styleqzexcluded");
+  }
+});
+
+test("excludes all RTF header and footer destinations", () => {
+  for (const destination of [
+    "header",
+    "headerf",
+    "headerl",
+    "headerr",
+    "footer",
+    "footerf",
+    "footerl",
+    "footerr",
+  ]) {
+    const parsed = parseUsDecisionHtml(
+      baseInput(
+        `<input id="docContentHidden" value="{\\rtf1{\\${destination} furnitureqzexcluded}Visible\\par}">`,
+      ),
+    );
+    expect(parsed.fulltext).toBe("Visible");
+  }
+});
+
+for (const tag of ["script", "style"]) {
+  test(`ignores ${tag} text in decision form and cross references`, () => {
+    const clean = `<html><body><span id="lblDecisionForm">Nález</span>
+      <div class="DocContent"><p>Rozhodnutí soudu obsahuje odkaz na
+      <a href="GetRegSignDecisions.aspx?sz=II.US.200.25">II.ÚS 200/25</a>.</p></div>
+    </body></html>`;
+    const hidden = `<${tag}>qzmetadataHidden</${tag}>`;
+    const injected = clean
+      .replace("Nález</span>", () => `Nález${hidden}</span>`)
+      .replace("II.ÚS 200/25</a>", () => `II.ÚS 200/25${hidden}</a>`);
+    expect(injected).not.toBe(clean);
+    expect(parseUsDecisionHtml(baseInput(injected))).toEqual(
+      parseUsDecisionHtml(baseInput(clean)),
+    );
+  });
+}

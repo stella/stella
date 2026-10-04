@@ -6,7 +6,6 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -18,6 +17,7 @@ import {
   reserveBufferIntent,
   startBufferIntentHeartbeat,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { DocumentSource } from "@/api/lib/document-source";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
@@ -247,7 +247,7 @@ export const createEntityVersionFromBuffer = async ({
     };
 
     try {
-      if (!env.FEATURE_FILE_USAGE_LIMITS) {
+      if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
         await withTimeout(
           async (signal) =>
             await putS3ObjectWithSignal(objectKey, bytes, mimeType, signal),

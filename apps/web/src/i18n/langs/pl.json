@@ -1566,6 +1566,7 @@
       "socialSecurityNumber": "Numer ubezpieczenia społecznego",
       "taxIdentificationNumber": "NIP"
     },
+    "approve": "Zatwierdź",
     "archive": "Archiwizuj",
     "ask": "Zapytaj",
     "askAI": "Zapytaj AI",
@@ -1849,12 +1850,14 @@
   },
   "consent": {
     "allow": "Zezwól",
+    "appIdentity": "Tożsamość aplikacji",
     "completeSetup": "Zakończ konfigurację",
     "defaultClientName": "Aplikacja",
     "description": "{clientName} chce uzyskać dostęp do Twojego obszaru roboczego w stella",
     "error": "Coś poszło nie tak. Spróbuj ponownie.",
     "missingJurisdictions": "Twoja organizacja w stelli nie skonfigurowała jeszcze swoich jurysdykcji praktyki. Niektóre narzędzia uwzględniające jurysdykcję będą niedostępne do czasu zakończenia konfiguracji.",
     "permissions": "Spowoduje to przyznanie aplikacji dostępu do:",
+    "redirectDestination": "Cel przekierowania",
     "scopeAdminRead": "Odczyt dziennika audytu Twojej organizacji",
     "scopeAdminWrite": "Zarządzanie członkami i ustawieniami organizacji",
     "scopeBillingWrite": "Tworzenie, edytowanie i usuwanie Twoich wpisów czasu",
@@ -1875,7 +1878,8 @@
     "scopeSkills": "Korzystanie z zapisanych umiejętności stella",
     "scopeTemplates": "Wyświetlanie, wypełnianie i tworzenie szablonów dokumentów",
     "scopeTemplatesAnonymized": "Wyświetlanie, wypełnianie i tworzenie zanonimizowanych wersji Twoich szablonów dokumentów",
-    "title": "Autoryzacja dostępu"
+    "title": "Autoryzacja dostępu",
+    "unverifiedApp": "Niezweryfikowana aplikacja"
   },
   "contacts": {
     "alsoPartyIn": "Występuje również jako strona w {count, plural, one {# innej sprawie} few {# innych sprawach} many {# innych sprawach} other {# innych sprawach}}",
@@ -2262,6 +2266,7 @@
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
+      "mcpAuthorizationApprovalRequired": "Administrator musi zatwierdzić ten konektor, zanim będzie można się połączyć.",
       "notOrganizationMember": "Nie jesteś członkiem tej organizacji.",
       "providerKeyRejected": "Dostawca odrzucił klucz API.",
       "providerRateLimited": "Osiągnięto limit żądań dostawcy. Spróbuj ponownie za chwilę.",
@@ -3393,6 +3398,8 @@
         "none": "Bez uwierzytelniania",
         "oauth2": "OAuth 2.0"
       },
+      "authorizationReviewDescription": "Przed zatwierdzeniem sprawdź serwer autoryzacji i domeny punktów końcowych.",
+      "authorizationServer": "Serwer autoryzacji",
       "bearerTokenDescription": "Ten serwer używa tokenu Bearer. Wklej token od dostawcy, aby zakończyć łączenie.",
       "connectedToast": "MCP połączone",
       "connectedWithLastUsed": "Połączono · ostatnio użyto {time}",
@@ -3403,9 +3410,11 @@
       "emptyDescription": "Wybrane prawnicze integracje pojawią się tutaj po włączeniu ich dla Twojego obszaru roboczego.",
       "emptyTitle": "Brak integracji",
       "enable": "Włącz",
+      "endpointOrigins": "Domeny punktów końcowych",
       "errorDescription": "Nie udało się zaktualizować integracji.",
       "errorTitle": "MCP nieudane",
       "mcpExplainer": "Integracje łączą z czatem usługi zewnętrzne, z którymi może pracować AI.",
+      "needsReapproval": "Wymaga ponownego zatwierdzenia",
       "needsReauth": "Wymaga ponownego połączenia",
       "off": "Wył.",
       "on": "Wł.",

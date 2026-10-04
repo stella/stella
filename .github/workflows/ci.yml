@@ -2856,6 +2856,25 @@ jobs:
             --retry-all-errors --retry-delay 1 --retry-max-time 60 --max-time 2 \
             http://127.0.0.1:7290/health/readyz
 
+      # The statute recall floor is raise-only against the target branch; the
+      # shallow checkout holds only HEAD, so fetch exactly the base commit.
+      - name: Select statute recall base from the target branch
+        if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
+        env:
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          base="${MERGE_GROUP_BASE_SHA:-${PULL_REQUEST_BASE_SHA:-$PUSH_BEFORE_SHA}}"
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            git fetch --no-tags --depth=1 origin main
+            base="$(git rev-parse FETCH_HEAD)"
+          else
+            git fetch --no-tags --depth=1 origin "$base"
+          fi
+          git cat-file -e "$base^{commit}"
+          echo "STATUTE_RECALL_BASE_REF=$base" >> "$GITHUB_ENV"
+
       - name: Run corpus engine suites
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         working-directory: apps/api
@@ -2866,6 +2885,7 @@ jobs:
           mapfile -t engine_tests < <(grep -rl --include='*.test.ts' STELLA_RUN_CORPUS_ENGINE_TESTS src | sort)
           # This suite is mandatory; retain dynamic discovery for the other engine contracts.
           printf '%s\n' "${engine_tests[@]}" | grep -Fx 'src/handlers/legislation/search-relaxed.contract.test.ts'
+          printf '%s\n' "${engine_tests[@]}" | grep -Fx 'src/handlers/legislation/statute-recall.contract.test.ts'
           test "${#engine_tests[@]}" -gt 0
           bun test --preload ./src/tests/setup-env.ts --reporter=junit --reporter-outfile=engine-tests.xml "${engine_tests[@]}"
           python3 -c 'import xml.etree.ElementTree as E; r=E.parse("engine-tests.xml").getroot(); n=len(list(r.iter("testcase"))); assert n > 0 and not any(list(r.iter(t)) for t in ("skipped", "failure", "error")) and not any(int(e.get(k, "0")) for e in r.iter() for k in ("skipped", "disabled", "failures", "errors")), "Engine tests must execute without skips or failures"; print(f"Executed {n} engine tests")'

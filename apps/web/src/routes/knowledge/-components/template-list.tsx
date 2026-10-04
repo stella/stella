@@ -68,7 +68,9 @@ import { optionalArray } from "@/lib/arrays";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { isDocxFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 import { CategoryMobileFilterBar } from "@/routes/knowledge/-components/category-sidebar";
@@ -131,10 +133,7 @@ export const TemplateList = ({
 
   const discover = async (file: File) => {
     if (!isDocxFile(file)) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.invalidFileType"),
-      });
+      notifyUserError(undefined, t("templates.invalidFileType"));
       return;
     }
 
@@ -147,23 +146,22 @@ export const TemplateList = ({
     });
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.discoveryFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
+      notifyUserError(
+        toAPIError(response.error),
+        t("templates.discoveryFailed"),
+        {
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        },
+      );
       return;
     }
 
     const { data } = response;
     if (data instanceof Response) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.discoveryFailed"),
-      });
+      notifyUserError(undefined, t("templates.discoveryFailed"));
       return;
     }
 
@@ -172,10 +170,7 @@ export const TemplateList = ({
 
   const dropFile = (file: File) => {
     if (!isDocxFile(file)) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.invalidFileType"),
-      });
+      notifyUserError(undefined, t("templates.invalidFileType"));
       return;
     }
     // Errors are surfaced as toasts inside discover
@@ -324,9 +319,7 @@ const MemberTemplateRow = ({
     setDeleting(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.deleteFailed"),
+      notifyUserError(toAPIError(response.error), t("templates.deleteFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -347,7 +340,7 @@ const MemberTemplateRow = ({
   const downloadSource = async () => {
     const sourceUrl = await templateActions.readSourceUrl(template.id);
     if (sourceUrl === null) {
-      stellaToast.add({ type: "error", title: t("common.unexpectedError") });
+      notifyUserError(undefined, t("common.unexpectedError"));
       return;
     }
     openIsolatedWindow(sourceUrl);
@@ -575,9 +568,7 @@ const TemplateTagsDialogBody = ({
     setSaving(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.saveFailed"),
+      notifyUserError(toAPIError(response.error), t("templates.saveFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -716,9 +707,7 @@ const TemplateGuidanceDialogBody = ({
     setSaving(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.saveFailed"),
+      notifyUserError(toAPIError(response.error), t("templates.saveFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -914,9 +903,7 @@ const useAssignTemplateCategory = () => {
     });
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.saveFailed"),
+      notifyUserError(toAPIError(response.error), t("templates.saveFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),

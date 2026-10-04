@@ -30,8 +30,10 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { clearOrganizationCorrespondenceAssignments } from "@/api/lib/email/correspondence/offboarding";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { MAX_FLOW_STEPS } from "@/api/lib/flows/flow-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -613,15 +615,21 @@ const cancelMemberFlowRuns = async ({
   }
 };
 
-/** Better Auth's permission/owner checks precede this transactional operation. */
-export const removeOrganizationMemberInTransaction = async ({
-  tx,
-  organizationId,
-  memberId,
-  userId,
-  actorUserId,
-  reassignTo,
-}: RemoveOrganizationMemberOptions) => {
+/**
+ * Better Auth's permission/owner checks precede this transactional operation.
+ * The membership row, its credentials and every assignment leave in the
+ * caller's one transaction.
+ */
+export const removeOrganizationMemberInTransaction = async (
+  tx: Transaction,
+  {
+    organizationId,
+    memberId,
+    userId,
+    actorUserId,
+    reassignTo,
+  }: Omit<RemoveOrganizationMemberOptions, "tx">,
+) => {
   const timerClose = await closeRemovedMemberActiveTimer({
     organizationId,
     tx,
@@ -805,15 +813,16 @@ export const removeOrganizationMemberInTransaction = async ({
         ),
       ),
     );
-  await tx
-    .delete(member)
-    .where(
-      and(
-        eq(member.id, memberId),
-        eq(member.organizationId, organizationId),
-        eq(member.userId, userId),
-      ),
-    );
+  await clearOrganizationCorrespondenceAssignments({
+    tx,
+    organizationId,
+    userId,
+  });
+  await removeOrganizationMemberWithAuthArtifacts(tx, {
+    memberId,
+    organizationId,
+    userId,
+  });
 };
 
 /** Schema coverage guard consumes this operation's tenant-scoped cleanup set. */

@@ -1,13 +1,4 @@
-// Auth lifecycle guardrails.
-// Membership removal must clear every org-scoped auth artifact through
-// revokeOrganizationMemberAuthArtifacts(). TypeScript cannot infer that a
-// Better Auth organization hook, Stella sessions, and OAuth token rows are one
-// lifecycle boundary, so this rule keeps that coupling explicit.
-//
-// Tables and the helper are recognised by import (aliased, namespace member,
-// destructured), not by spelling, and a helper call only counts when it can
-// run: a call after a `return` / `throw` in the same block, or under a
-// constant-false branch, does not.
+// Authentication lifecycle operations share one transaction.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
@@ -29,9 +20,19 @@ import {
 type RuleContext = ImportedFromOptions["context"];
 
 const HELPER: ReadonlySet<string> = new Set([
+  "removeOrganizationMemberWithAuthArtifacts",
+]);
+const REMOVAL_HELPERS: ReadonlySet<string> = new Set([
+  "removeOrganizationMemberWithAuthArtifacts",
   "revokeOrganizationMemberAuthArtifacts",
 ]);
 const HELPER_MODULE = "apps/api/src/lib/auth-artifacts";
+// The organization offboarding operation ends with the helper above, in the
+// same transaction, so it satisfies the hook on its behalf.
+const OFFBOARDING_HELPER: ReadonlySet<string> = new Set([
+  "removeOrganizationMemberInTransaction",
+]);
+const OFFBOARDING_MODULE = "apps/api/src/lib/member-assignment-offboarding";
 const HELPER_FILE = "apps/api/src/lib/auth-artifacts.ts";
 const AUTH_SCHEMA_MODULE = "apps/api/src/db/auth-schema";
 const AUTH_ARTIFACT_TABLES: ReadonlySet<string> = new Set([
@@ -43,104 +44,220 @@ const AUTH_ARTIFACT_TABLES: ReadonlySet<string> = new Set([
 // object.
 const AUTH_SCHEMA_OBJECT: ReadonlySet<string> = new Set(["authSchema"]);
 
-const COMPLETION_STATEMENTS: ReadonlySet<string> = new Set([
-  "ReturnStatement",
-  "ThrowStatement",
-]);
+const ROOT_MODULE = "apps/api/src/db/root";
+const ROOT_DATABASE: ReadonlySet<string> = new Set(["rootDb"]);
 
-// The truthiness of an expression whose value is fixed at parse time, or null
-// when it depends on runtime state.
-const constantTruthiness = (node: unknown): boolean | null => {
-  const expression = unwrapExpression(node);
-  if (expression === null) {
-    return null;
-  }
-  if (expression.type === "Literal") {
-    return expression.regex === undefined ? Boolean(expression.value) : true;
-  }
-  if (isIdentifier(expression, "undefined")) {
-    return false;
-  }
-  if (expression.type === "UnaryExpression") {
-    if (expression.operator === "void") {
+const containsReachableReturn = (root: AstNode): boolean =>
+  everyNode(root).some((node) => {
+    if (node.type !== "ReturnStatement") {
       return false;
     }
-    const operand = constantTruthiness(expression.argument);
-    return expression.operator === "!" && operand !== null ? !operand : null;
-  }
-  return null;
-};
-
-// Whether `child`, a direct child of `parent`, can never execute because of
-// where it sits in `parent`.
-const isDeadChild = (parent: AstNode, child: AstNode): boolean => {
-  const statements = Array.isArray(parent.body)
-    ? parent.body
-    : Array.isArray(parent.consequent)
-      ? parent.consequent
-      : null;
-  if (statements?.includes(child) === true) {
-    return statements
-      .slice(0, statements.indexOf(child))
-      .some(
-        (statement) =>
-          isAstNode(statement) && COMPLETION_STATEMENTS.has(statement.type),
-      );
-  }
-  if (
-    parent.type === "IfStatement" ||
-    parent.type === "ConditionalExpression"
-  ) {
-    const test = constantTruthiness(parent.test);
-    return (
-      (test === false && parent.consequent === child) ||
-      (test === true && parent.alternate === child)
-    );
-  }
-  if (parent.type === "LogicalExpression" && parent.right === child) {
-    const left = constantTruthiness(parent.left);
-    return (
-      (parent.operator === "&&" && left === false) ||
-      (parent.operator === "||" && left === true)
-    );
-  }
-  if (parent.type === "WhileStatement" && parent.body === child) {
-    return constantTruthiness(parent.test) === false;
-  }
-  return false;
-};
-
-// Whether `node` can run when `root` runs, judged by the path between them.
-const isReachableWithin = (node: AstNode, root: AstNode): boolean => {
-  let child = node;
-  let parent = node.parent;
-  while (isAstNode(parent) && child !== root) {
-    if (isDeadChild(parent, child)) {
-      return false;
+    let child = node;
+    let parent = node.parent;
+    while (isAstNode(parent)) {
+      if (
+        parent.type === "ArrowFunctionExpression" ||
+        parent.type === "FunctionExpression" ||
+        parent.type === "FunctionDeclaration"
+      ) {
+        return false;
+      }
+      if (parent.type === "IfStatement") {
+        const test = unwrapExpression(parent.test);
+        if (
+          test?.type === "Literal" &&
+          ((Boolean(test.value) && parent.alternate === child) ||
+            (!test.value && parent.consequent === child))
+        ) {
+          return false;
+        }
+      }
+      const statements = Array.isArray(parent.body) ? parent.body : null;
+      if (
+        statements?.includes(child) &&
+        statements
+          .slice(0, statements.indexOf(child))
+          .some(
+            (statement) =>
+              isAstNode(statement) &&
+              (statement.type === "ReturnStatement" ||
+                statement.type === "ThrowStatement"),
+          )
+      ) {
+        return false;
+      }
+      if (parent === root) {
+        return true;
+      }
+      child = parent;
+      parent = parent.parent;
     }
-    child = parent;
-    parent = parent.parent;
-  }
-  return true;
-};
-
-const isHelperCall = (context: RuleContext, node: AstNode): boolean =>
-  node.type === "CallExpression" &&
-  isImportedFrom({
-    context,
-    node: invokedCallee(node),
-    modules: [HELPER_MODULE],
-    names: HELPER,
+    return node === root;
   });
 
-const containsReachableHelperCall = (
+// `const x = await ...`: the single initializer of a one-binding declaration.
+const declaredValue = (statement: AstNode): AstNode | null => {
+  if (
+    !Array.isArray(statement.declarations) ||
+    statement.declarations.length !== 1
+  ) {
+    return null;
+  }
+  const declarator: unknown = statement.declarations.at(0);
+  return isAstNode(declarator) ? unwrapExpression(declarator.init) : null;
+};
+
+// `Result.tryPromise({ try: async () => ... })` runs its `try` callback
+// unconditionally; its direct calls count as the hook's own.
+const tryPromiseCalls = (call: AstNode): AstNode[] => {
+  const callee = unwrapExpression(call.callee);
+  if (
+    callee?.type !== "MemberExpression" ||
+    memberPropertyName(callee) !== "tryPromise" ||
+    !isIdentifier(callee.object, "Result") ||
+    !Array.isArray(call.arguments)
+  ) {
+    return [];
+  }
+  const options = unwrapExpression(call.arguments.at(0));
+  if (
+    options?.type !== "ObjectExpression" ||
+    !Array.isArray(options.properties)
+  ) {
+    return [];
+  }
+  const attempt: unknown = options.properties.find(
+    (property: unknown) =>
+      isAstNode(property) &&
+      property.type === "Property" &&
+      getPropertyName(property.key) === "try",
+  );
+  const callback = isAstNode(attempt) ? unwrapExpression(attempt.value) : null;
+  return callback !== null &&
+    (callback.type === "ArrowFunctionExpression" ||
+      callback.type === "FunctionExpression")
+    ? directCalls(callback.body)
+    : [];
+};
+
+const directCalls = (root: unknown): AstNode[] => {
+  const expression = unwrapExpression(root);
+  if (expression === null) {
+    return [];
+  }
+  if (expression.type !== "BlockStatement") {
+    const call =
+      expression.type === "AwaitExpression"
+        ? unwrapExpression(expression.argument)
+        : expression;
+    return call?.type === "CallExpression" ? [call] : [];
+  }
+  const calls: AstNode[] = [];
+  if (!Array.isArray(expression.body)) {
+    return calls;
+  }
+  for (const statement of expression.body) {
+    if (!isAstNode(statement)) {
+      continue;
+    }
+    const value =
+      statement.type === "ExpressionStatement"
+        ? unwrapExpression(statement.expression)
+        : statement.type === "ReturnStatement"
+          ? unwrapExpression(statement.argument)
+          : statement.type === "VariableDeclaration"
+            ? declaredValue(statement)
+            : null;
+    const call =
+      value?.type === "AwaitExpression"
+        ? unwrapExpression(value.argument)
+        : statement.type === "ReturnStatement"
+          ? value
+          : null;
+    if (call?.type === "CallExpression") {
+      calls.push(call);
+    }
+    if (
+      statement.type === "ReturnStatement" ||
+      statement.type === "ThrowStatement"
+    ) {
+      break;
+    }
+    // A successful early exit skips the operation; an exception aborts the transaction.
+    if (containsReachableReturn(statement)) {
+      break;
+    }
+  }
+  return calls;
+};
+
+const containsTransactionalRemoval = (
   context: RuleContext,
   root: unknown,
-): boolean =>
-  isAstNode(root) &&
-  everyNode(root).some(
-    (node) => isHelperCall(context, node) && isReachableWithin(node, root),
-  );
+): boolean => {
+  const hook = unwrapExpression(root);
+  if (
+    hook === null ||
+    (hook.type !== "ArrowFunctionExpression" &&
+      hook.type !== "FunctionExpression")
+  ) {
+    return false;
+  }
+  return directCalls(hook.body)
+    .flatMap((call) => [call].concat(tryPromiseCalls(call)))
+    .some((call) => {
+      const callee = unwrapExpression(call.callee);
+      if (
+        callee?.type !== "MemberExpression" ||
+        memberPropertyName(callee) !== "transaction" ||
+        !isImportedFrom({
+          context,
+          node: callee.object,
+          modules: [ROOT_MODULE],
+          names: ROOT_DATABASE,
+        }) ||
+        !Array.isArray(call.arguments)
+      ) {
+        return false;
+      }
+      const callback = unwrapExpression(call.arguments.at(0));
+      if (
+        callback === null ||
+        (callback.type !== "ArrowFunctionExpression" &&
+          callback.type !== "FunctionExpression") ||
+        callback.async !== true ||
+        !Array.isArray(callback.params)
+      ) {
+        return false;
+      }
+      const transaction = callback.params.at(0);
+      if (!isIdentifier(transaction)) {
+        return false;
+      }
+      return directCalls(callback.body).some((operation) => {
+        if (
+          !Array.isArray(operation.arguments) ||
+          !isIdentifier(operation.arguments.at(0), transaction.name)
+        ) {
+          return false;
+        }
+        return (
+          isImportedFrom({
+            context,
+            node: invokedCallee(operation),
+            modules: [HELPER_MODULE],
+            names: HELPER,
+          }) ||
+          isImportedFrom({
+            context,
+            node: invokedCallee(operation),
+            modules: [OFFBOARDING_MODULE],
+            names: OFFBOARDING_HELPER,
+          })
+        );
+      });
+    });
+};
 
 // The auth artifact table a `<receiver>.delete(<table>)` call targets.
 const deletedAuthTable = (
@@ -188,22 +305,59 @@ const deletedAuthTable = (
 export default eslintCompatPlugin({
   meta: { name: "auth-lifecycle" },
   rules: {
-    "after-remove-member-revokes-artifacts": {
+    "member-removal-revokes-artifacts": {
       meta: {
         type: "problem",
         messages: {
           missingAuthArtifactCleanup:
-            "afterRemoveMember must call revokeOrganizationMemberAuthArtifacts(...) so org-scoped auth artifacts stay on one lifecycle path.",
+            "beforeRemoveMember must await removeOrganizationMemberWithAuthArtifacts(...) inside rootDb.transaction(...).",
         },
       },
       createOnce(context) {
+        const organizationHooks: AstNode[] = [];
         return {
+          before() {
+            organizationHooks.length = 0;
+          },
           Property(node) {
-            if (getPropertyName(node.key) !== "afterRemoveMember") {
+            const hookName = getPropertyName(node.key);
+            if (
+              hookName === "organizationHooks" &&
+              isAstNode(node) &&
+              isAstNode(node.value) &&
+              node.value.type === "ObjectExpression"
+            ) {
+              organizationHooks.push(node);
+              return;
+            }
+            if (
+              hookName !== "beforeRemoveMember" &&
+              hookName !== "afterRemoveMember"
+            ) {
               return;
             }
 
-            if (containsReachableHelperCall(context, node.value)) {
+            if (
+              hookName === "afterRemoveMember" &&
+              (!isAstNode(node.value) ||
+                !everyNode(node.value).some(
+                  (call) =>
+                    call.type === "CallExpression" &&
+                    isImportedFrom({
+                      context,
+                      node: invokedCallee(call),
+                      modules: [HELPER_MODULE],
+                      names: REMOVAL_HELPERS,
+                    }),
+                ))
+            ) {
+              return;
+            }
+
+            if (
+              hookName === "beforeRemoveMember" &&
+              containsTransactionalRemoval(context, node.value)
+            ) {
               return;
             }
 
@@ -211,6 +365,26 @@ export default eslintCompatPlugin({
               node,
               messageId: "missingAuthArtifactCleanup",
             });
+          },
+          "Program:exit"() {
+            for (const node of organizationHooks) {
+              if (
+                isAstNode(node.value) &&
+                Array.isArray(node.value.properties) &&
+                node.value.properties.some(
+                  (property) =>
+                    isAstNode(property) &&
+                    property.type === "Property" &&
+                    getPropertyName(property.key) === "beforeRemoveMember",
+                )
+              ) {
+                continue;
+              }
+              context.report({
+                node,
+                messageId: "missingAuthArtifactCleanup",
+              });
+            }
           },
         };
       },

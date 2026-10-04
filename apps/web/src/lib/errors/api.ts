@@ -13,7 +13,7 @@ import {
 } from "@stll/api-contract/action-admission";
 import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
 
-import { getTranslator } from "@/i18n/i18n-store";
+import { getTranslator } from "@/i18n/translator";
 import type { TranslationKey } from "@/i18n/types";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import {
@@ -127,6 +127,9 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.legalSourceEntityLimitReached",
   legal_source_file_property_missing:
     "errors.apiCodes.legalSourceFilePropertyMissing",
+  mcp_oauth_binding_invalid: "errors.apiCodes.mcpAuthorizationApprovalRequired",
+  mcp_authorization_approval_required:
+    "errors.apiCodes.mcpAuthorizationApprovalRequired",
   provider_key_rejected: "errors.apiCodes.providerKeyRejected",
   provider_rate_limited: "errors.apiCodes.providerRateLimited",
   third_party_boundary_refusal: "errors.apiCodes.thirdPartyBoundaryRefusal",

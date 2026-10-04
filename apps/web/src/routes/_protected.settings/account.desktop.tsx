@@ -19,6 +19,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
 import { captureDesktopAccountLink } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
 export const Route = createFileRoute("/_protected/settings/account/desktop")({
@@ -37,11 +38,11 @@ function DesktopPage() {
     if (outcome.status === "started") {
       return;
     }
-    stellaToast.add(
-      outcome.status === "connected"
-        ? { title: t("common.done"), type: "success" }
-        : { title: t("errors.actionFailed"), type: "error" },
-    );
+    if (outcome.status === "connected") {
+      stellaToast.add({ title: t("common.done"), type: "success" });
+      return;
+    }
+    notifyUserError(undefined, t("errors.actionFailed"));
   };
   // Capture the native challenge and remove its secret from browser history.
   // Linking still requires the Connect button's explicit user gesture.

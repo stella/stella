@@ -205,7 +205,7 @@
       "gate": "STELLA_RUN_POSTGRES_TESTS",
       "gateValue": "true",
       "runner": "scripts/run-postgres-tests.ts",
-      "testFileGlob": "src/**/*.test.{ts,tsx}"
+      "testFileGlob": "{src,scripts}/**/*.test.{ts,tsx}"
     },
     "test:valkey": {
       "gate": "STELLA_RUN_VALKEY_TESTS",

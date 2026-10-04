@@ -397,6 +397,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
     const workspaceId = createSafeId<"workspace">();
     const created = await Result.gen(() =>
       createWorkspaceHandler({
+        userEmail: context.userEmail,
         safeDb: context.safeDb,
         organizationId: context.organizationId,
         userId: context.userId,
@@ -459,6 +460,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
   ) {
     const updated = await Result.gen(() =>
       updateWorkspaceHandler({
+        userEmail: context.userEmail,
         safeDb: context.safeDb,
         organizationId: context.organizationId,
         workspaceId,

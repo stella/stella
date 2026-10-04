@@ -265,8 +265,7 @@ if (!databaseUrl || !runPostgresTests) {
                 );
               }
               return await safeDb(async (tx) => {
-                await removeOrganizationMemberInTransaction({
-                  tx,
+                await removeOrganizationMemberInTransaction(tx, {
                   organizationId,
                   memberId,
                   userId: leaverUserId,
@@ -983,13 +982,15 @@ if (!databaseUrl || !runPostgresTests) {
                     workspaceId,
                   );
                 } else {
-                  await removeOrganizationMemberInTransaction({
-                    tx: asTestRaw<Transaction>(tx),
-                    organizationId,
-                    memberId,
-                    userId,
-                    actorUserId,
-                  });
+                  await removeOrganizationMemberInTransaction(
+                    asTestRaw<Transaction>(tx),
+                    {
+                      organizationId,
+                      memberId,
+                      userId,
+                      actorUserId,
+                    },
+                  );
                 }
               }),
             catch: (error) => error,

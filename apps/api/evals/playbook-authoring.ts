@@ -1052,7 +1052,7 @@ const chatMatterTools = ({
         message: `${toolName} has nothing to read in this eval.`,
       });
       record({ name: toolName, input: args, error: error.message });
-      throw error;
+      return Result.err(error);
     }
     const result = await runRegistryReadTool({
       toolName,
@@ -1067,10 +1067,10 @@ const chatMatterTools = ({
         input: handlerArgs ?? args,
         error: `${result.error.kind}: ${result.error.message}`,
       });
-      throw result.error;
+      return result;
     }
     record({ name: toolName, input: handlerArgs ?? args });
-    return result.value;
+    return result;
   };
   const { tool, discoveryTool } = createChatCodeModeSurface({
     concurrencyKey: EVAL_SANDBOX_KEY,

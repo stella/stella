@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 
-import { env } from "@/api/env";
 import {
   createSafeRootHandler,
   type HandlerConfig,
   type SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   CONFIGURED_ACCESS_STATE,
   configuredPaymentRetry,
@@ -30,7 +30,7 @@ const getAccess = createSafeRootHandler(
     session,
     safeDb,
   }): SafeHandlerGenerator<UsageAccessResult> {
-    if (!env.FEATURE_CONFIGURED_ACCESS) {
+    if (!isDeploymentFeatureEnabled("FEATURE_CONFIGURED_ACCESS")) {
       return Result.ok({ paymentRetry: { status: "none" as const } });
     }
     const state = yield* Result.await(

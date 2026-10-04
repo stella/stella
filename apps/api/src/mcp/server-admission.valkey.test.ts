@@ -45,7 +45,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         `mcp_completed_${Bun.randomUUIDv7()}`,
       );
       const userId = toSafeId<"user">("mcp_completed_user");
-      const client = createRedisClient();
+      const client = createRedisClient({ storeClass: "cache" });
       const errors: unknown[] = [];
       const tool =
         listStaticMcpToolDefinitions().find(
@@ -155,7 +155,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         `mcp_period_${Bun.randomUUIDv7()}`,
       );
       const userId = toSafeId<"user">("mcp_period_user");
-      const client = createRedisClient();
+      const client = createRedisClient({ storeClass: "cache" });
       const errors: unknown[] = [];
       let dispatches = 0;
       const tool = listStaticMcpToolDefinitions().find(
