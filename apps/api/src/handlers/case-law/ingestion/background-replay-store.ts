@@ -38,7 +38,6 @@ import {
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
-import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { escapeLike } from "@/api/lib/escape-like";
 import { recordReplayMaintenanceAuditEvent } from "@/api/lib/legal-search/case-law-replay-audit";
@@ -46,7 +45,6 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
-import type { StoredRawReparseRejection } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
 import { getAdapter } from "./adapters/adapter-registry";
@@ -62,9 +60,11 @@ import {
   buildBackgroundReplayProbe,
   REPLAY_ROW_OUTCOME,
   replayCapability,
+  replayRowResult,
   selectReplayPage,
   selectScopeEnd,
   type ReplayRowReport,
+  type ReplayRowResult,
 } from "./replay";
 import {
   BACKGROUND_REPLAY_LIMITS,
@@ -1390,52 +1390,8 @@ const recordFailure = async (
   });
 };
 
-// Mirror #4656 replay.ts's ReplayRowResult/replayRowResult until it lands on main.
-export type ReplayRowResultMirror = {
-  decisionId: SafeId<"caseLawDecision">;
-  targetParserVersion: number;
-} & (
-  | { outcome: "changed" }
-  | { outcome: "unchanged" }
-  | {
-      outcome: "rejected";
-      reason: StoredRawReparseRejection | "missing-payload";
-    }
-);
-export const toReplayReceipt = (
-  report: ReplayRowReport,
-  targetParserVersion: number,
-): ReplayRowResultMirror | null => {
-  const identity = { decisionId: report.id, targetParserVersion };
-  switch (report.outcome) {
-    case REPLAY_ROW_OUTCOME.APPLIED:
-      return { ...identity, outcome: "changed" };
-    case REPLAY_ROW_OUTCOME.UNCHANGED:
-      return { ...identity, outcome: "unchanged" };
-    case REPLAY_ROW_OUTCOME.REJECTED:
-      return {
-        ...identity,
-        outcome: "rejected",
-        reason:
-          report.rejection ??
-          panic("Replay rejection has no classified reason"),
-      };
-    case REPLAY_ROW_OUTCOME.MISSING_PAYLOAD:
-      return { ...identity, outcome: "rejected", reason: "missing-payload" };
-    case REPLAY_ROW_OUTCOME.WOULD_APPLY:
-    case REPLAY_ROW_OUTCOME.RETRYABLE:
-    case REPLAY_ROW_OUTCOME.WITHDRAWN:
-    case REPLAY_ROW_OUTCOME.WITHDRAW_INCOMPLETE:
-    case REPLAY_ROW_OUTCOME.WOULD_WITHDRAW:
-      return null;
-    default:
-      report.outcome satisfies never;
-      return panic("Unknown replay row outcome");
-  }
-};
-
 type CheckedReplayCompletion =
-  | { type: "terminal"; receipt: ReplayRowResultMirror }
+  | { type: "terminal"; receipt: ReplayRowResult }
   | { type: "retryable" }
   | { type: "blocked" };
 type CheckReplayCompletionOptions = {
@@ -1457,14 +1413,15 @@ const checkReplayCompletion = ({
     return { type: "blocked" };
   }
   const moved = (decision.parserVersion ?? -1) >= batch.targetParserVersion;
-  if (report.outcome === REPLAY_ROW_OUTCOME.APPLIED && !moved) {
-    return { type: "retryable" };
-  }
-  const receipt = toReplayReceipt(
+  const receipt = replayRowResult(
     moved ? { ...report, outcome: REPLAY_ROW_OUTCOME.APPLIED } : report,
     batch.targetParserVersion,
   );
   if (receipt === null) {
+    return { type: "retryable" };
+  }
+  // A changed receipt is terminal only once the row reached the target version.
+  if (receipt.outcome === "changed" && !moved) {
     return { type: "retryable" };
   }
   if (
@@ -1483,7 +1440,7 @@ const checkReplayCompletion = ({
   }
   return { type: "terminal", receipt };
 };
-const completionDisposition = (receipt: ReplayRowResultMirror | null) => {
+const completionDisposition = (receipt: ReplayRowResult | null) => {
   switch (receipt?.outcome) {
     case "changed":
       return "applied";

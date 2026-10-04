@@ -4,21 +4,21 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { STORED_RAW_REPARSE_REJECTION } from "@/api/lib/legal-search/ingestion-types";
 
 import {
-  toReplayReceipt,
-  type ReplayRowResultMirror,
-} from "./background-replay-store";
-import { REPLAY_ROW_OUTCOME } from "./replay";
+  REPLAY_ROW_OUTCOME,
+  replayRowResult,
+  type ReplayRowResult,
+} from "./replay";
 
 const dispositions = {
   applied: "changed",
   unchanged: "unchanged",
-  "would-apply": null,
+  "would-apply": "changed",
   rejected: "rejected",
   "missing-payload": "rejected",
   retryable: null,
-  withdrawn: null,
+  withdrawn: "rejected",
   "withdraw-incomplete": null,
-  "would-withdraw": null,
+  "would-withdraw": "rejected",
 } as const satisfies Record<
   (typeof REPLAY_ROW_OUTCOME)[keyof typeof REPLAY_ROW_OUTCOME],
   string | null
@@ -27,7 +27,7 @@ const dispositions = {
 test("canonical receipts preserve identity and classify every replay outcome", () => {
   const decisionId = createSafeId<"caseLawDecision">();
   for (const outcome of Object.values(REPLAY_ROW_OUTCOME)) {
-    const receipt = toReplayReceipt(
+    const receipt = replayRowResult(
       {
         id: decisionId,
         caseNumber: "receipt fixture",
@@ -65,9 +65,9 @@ test("canonical rejected receipts preserve every typed parser reason", () => {
       targetParserVersion: 42,
       outcome: "rejected",
       reason,
-    } as const satisfies ReplayRowResultMirror;
+    } as const satisfies ReplayRowResult;
     expect(
-      toReplayReceipt(
+      replayRowResult(
         {
           id: decisionId,
           caseNumber: "receipt fixture",
