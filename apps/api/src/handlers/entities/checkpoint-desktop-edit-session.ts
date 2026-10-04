@@ -252,7 +252,10 @@ export const checkpointDesktopEditSessionHandler = async ({
     // a low-frequency, single-session path.
     const checkpointBytes = new Uint8Array(buffer);
     if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
-      await writeS3ObjectWithRetry({ data: checkpointBytes, key });
+      await writeS3ObjectWithRetry(
+        { data: checkpointBytes, key },
+        { type: "fixed-key", reason: "Row-locked per-session checkpoint slot" },
+      );
     } else {
       const fileWrite = await writeOrganizationFile({
         organizationId: authorizedSession.value.organizationId,
@@ -260,7 +263,13 @@ export const checkpointDesktopEditSessionHandler = async ({
         sizeBytes: checkpointBytes.byteLength,
         contentSha256Hex: sha256Hex,
         write: async () =>
-          await writeS3ObjectWithRetry({ data: checkpointBytes, key }),
+          await writeS3ObjectWithRetry(
+            { data: checkpointBytes, key },
+            {
+              type: "fixed-key",
+              reason: "Row-locked per-session checkpoint slot",
+            },
+          ),
       });
       if (Result.isError(fileWrite)) {
         let responseStatus: 409 | 413 | 503 = 503;
