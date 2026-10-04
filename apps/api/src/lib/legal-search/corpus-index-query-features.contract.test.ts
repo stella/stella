@@ -613,6 +613,9 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
         method: "POST",
         headers: { "content-type": "application/x-ndjson" },
         body: " ".repeat(1024 * 1024 + 1),
+        // The engine answers 413 before reading the body; a pooled socket
+        // would hand the next request a connection the engine resets.
+        keepalive: false,
       },
     ).then(() => panic("multi-search accepted an oversized payload"), rejected);
     expect(rejection).toMatchObject({ status: 413 });

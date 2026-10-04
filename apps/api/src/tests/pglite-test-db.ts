@@ -18,6 +18,7 @@ import {
 import {
   createSchemaPglite,
   installPgliteDecisionAliases,
+  installPgliteFlowTransitions,
   installPgliteChatRunLogRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
@@ -642,6 +643,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   for (const statement of sqlStatements) {
     await db.execute(sql.raw(statement));
   }
+  await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteDecisionAliases(db);

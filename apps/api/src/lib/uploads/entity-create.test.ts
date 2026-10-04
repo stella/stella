@@ -836,9 +836,10 @@ test("multipart upload resolves names against current root siblings", async () =
       );
     const recorded = new Set<string>();
     const refusePublication: AuditRecorder = async (tx) => {
-      const uploaded = await tx.query.fields.findMany({
-        where: { workspaceId: { eq: seeded.workspaceId } },
-      });
+      const uploaded = await tx
+        .select({ content: fields.content })
+        .from(fields)
+        .where(eq(fields.workspaceId, seeded.workspaceId));
       for (const field of uploaded) {
         if (field.content.type === "file") {
           recorded.add(field.content.fileName);

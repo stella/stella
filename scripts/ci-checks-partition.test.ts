@@ -164,6 +164,17 @@ const setupSteps = (steps: readonly Step[]) =>
     .map(withoutContinuation)
     .map(withoutStepId)
     .map(withoutActionRef);
+// Shared runners need ephemeral cache ports. Preserve every other baseline input.
+const withIsolatedCachePort = (step: Step): Step => {
+  if (usesOf(step) !== "rharkor/caching-for-turbo@<pinned>") {
+    return step;
+  }
+  const inputs = v.parse(
+    v.looseObject({ with: v.optional(v.record(v.string(), v.unknown())) }),
+    step,
+  ).with;
+  return { ...step, with: { ...inputs, "server-port": "0" } };
+};
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
@@ -323,7 +334,7 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
       ...originalScope
     } = base;
     const { steps, "timeout-minutes": timeout, ...scope } = partition;
-    const originalSetup = setupSteps(originalSteps);
+    const originalSetup = setupSteps(originalSteps).map(withIsolatedCachePort);
     if (!baseJobs["ci-checks"]) {
       const baseNames = new Set(originalSteps.map(({ name }) => name));
       expect(

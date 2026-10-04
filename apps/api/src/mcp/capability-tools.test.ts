@@ -1,14 +1,18 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
+import { encodePaginationCursor } from "@/api/lib/pagination";
 import { isRecord } from "@/api/lib/type-guards";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { MCP_ERROR_CODES, projectMcpRefusal } from "@/api/mcp/error-codes";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { MAX_LIST_LIMIT } from "@/api/mcp/tool-utils";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
@@ -217,6 +221,192 @@ describe("generated capability catalog", () => {
     for (const entry of chatEntries) {
       expect(entry.scope, entry.id).toBe("stella:chat");
     }
+  });
+});
+
+describe("capability handler refusal metadata", () => {
+  test("every refusal projection uses a closed envelope code and preserves domain issues", () => {
+    const domainCodes = Object.values(PLAYBOOK_RUN_FAILURE_CODE);
+    for (const code of domainCodes) {
+      expect(MCP_ERROR_CODES).not.toContain(code);
+    }
+    for (const status of [
+      0, 200, 400, 401, 402, 403, 404, 409, 413, 422, 429, 500, 502, 503, 999,
+    ]) {
+      for (const code of [
+        undefined,
+        ...MCP_ERROR_CODES,
+        ...domainCodes,
+        "handler_specific_code",
+      ]) {
+        const message = "Correct the request";
+        const issue = { path: "input.name", message: "Choose a valid name" };
+        const projected = projectMcpRefusal({
+          status,
+          code,
+          message,
+          issues: [issue],
+          hint: "Correct the request and call again.",
+          retryable: false,
+        });
+        expect(MCP_ERROR_CODES).toContain(projected.code);
+        expect(projected.issues).toContainEqual(issue);
+        expect(projected.hint).toBe("Correct the request and call again.");
+        expect(projected.retryable).toBe(false);
+        if (
+          code !== undefined &&
+          !MCP_ERROR_CODES.some((candidate) => candidate === code)
+        ) {
+          expect(projected.issues).toContainEqual({ path: "", code, message });
+        }
+      }
+    }
+  });
+  test("properties.update forwards the file type refusal's corrective action", async () => {
+    const matterId = "00000000-0000-4000-8000-0000000a0001";
+    const propertyId = "00000000-0000-4000-8000-0000000b0001";
+    let writes = 0;
+    const { safeDb, scopedDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: async () => [
+              {
+                id: toSafeId<"property">(propertyId),
+                name: "Documents",
+                content: { version: 1, type: "file" },
+                tool: { version: 1, type: "manual-input" },
+                system: false,
+                kinds: ["document"],
+                role: null,
+                status: "fresh",
+                playbookSourceId: null,
+              },
+            ],
+          }),
+        }),
+      }),
+      update: () => {
+        writes += 1;
+      },
+    });
+    const result = await handleMcpToolCall({
+      toolName: "invoke_capability",
+      context: createContext({ safeDb, scopedDb, workspaceIds: [matterId] }),
+      args: {
+        capability: "properties.update",
+        input: {
+          params: { matterId, propertyId },
+          body: {
+            name: "Notes",
+            content: { version: 1, type: "text" },
+            tool: { version: 1, type: "manual-input" },
+          },
+        },
+      },
+    });
+
+    const error = errorEnvelope(result);
+    expect(error).toMatchObject({
+      code: "validation_error",
+      message:
+        "File property types cannot be changed. Keep the existing type; create a custom property for other values.",
+      hint: "Keep the existing content.type in properties.update, or use properties.create to add a custom property with another type.",
+      retryable: false,
+    });
+    expect(error.code).not.toBe(FILE_PROPERTY_TYPE_IMMUTABLE_CODE);
+    expect(error.issues).toEqual([
+      {
+        path: "",
+        code: FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
+        message: error.message,
+      },
+    ]);
+    expect(writes).toBe(0);
+  });
+
+  test("time-entries.me.list forwards its invalid cursor corrective action", async () => {
+    const result = await handleMcpToolCall({
+      toolName: "invoke_capability",
+      context: createContext(),
+      args: {
+        capability: "time-entries.me.list",
+        input: {
+          query: {
+            date: "2026-10-01",
+            cursor: encodePaginationCursor(["non-uuid"]),
+          },
+        },
+      },
+    });
+
+    expect(errorEnvelope(result)).toMatchObject({
+      code: "validation_error",
+      message: "Invalid cursor",
+      hint: "Restart the list without a cursor.",
+    });
+  });
+
+  test.each([400, 401, 402, 403, 404, 409, 413, 422, 429])(
+    "status %i forwards typed hint and both retryability values",
+    (status) => {
+      for (const retryable of [false, true]) {
+        expect(
+          mappedError(
+            mapHandlerResult({
+              id: "properties.update",
+              access: "write",
+              result: new ElysiaCustomStatusResponse(status, {
+                code: "handler_specific_code",
+                message: "A corrective action is required",
+                hint: "Correct the matter and invoke the capability again.",
+                retryable,
+                issues: [
+                  {
+                    path: "input.name",
+                    code: "invalid_name",
+                    message: "Choose a valid name",
+                  },
+                ],
+              }),
+            }),
+          ),
+        ).toMatchObject({
+          hint: "Correct the matter and invoke the capability again.",
+          retryable,
+          issues: [
+            {
+              path: "",
+              code: "handler_specific_code",
+              message: "A corrective action is required",
+            },
+            {
+              path: "input.name",
+              code: "invalid_name",
+              message: "Choose a valid name",
+            },
+          ],
+        });
+      }
+    },
+  );
+
+  test("malformed response metadata is omitted", () => {
+    const error = mappedError(
+      mapHandlerResult({
+        id: "properties.update",
+        access: "write",
+        result: new ElysiaCustomStatusResponse(422, {
+          message: "Invalid input",
+          hint: { raw: "private details" },
+          retryable: "false",
+          issues: [{ path: 123, message: "Invalid shape" }],
+        }),
+      }),
+    );
+    expect(error).not.toHaveProperty("hint");
+    expect(error).not.toHaveProperty("retryable");
+    expect(error).not.toHaveProperty("issues");
   });
 });
 

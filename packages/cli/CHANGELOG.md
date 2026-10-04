@@ -1,5 +1,17 @@
 # @stll/cli
 
+## 3.7.0
+
+### Minor Changes
+
+- [#4502](https://github.com/stella/stella/pull/4502) [`ca5df32`](https://github.com/stella/stella/commit/ca5df32b4a006745b026adeb4c572da622be71ce) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add invoice PDF capability metadata and preserve exact minor-unit formatting.
+
+## 3.6.2
+
+### Patch Changes
+
+- [#4605](https://github.com/stella/stella/pull/4605) [`c9125de`](https://github.com/stella/stella/commit/c9125de1a278d7fca5934b60f09718eb17a761f8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Clarify file column update requirements and preserve playbook refusal codes and recovery hints.
+
 ## 3.6.1
 
 ### Patch Changes

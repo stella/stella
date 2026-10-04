@@ -2288,6 +2288,7 @@
       "deeplQuotaExceeded": "Selle organisatsiooni DeepL-i tähemärgikvoot on ammendatud.",
       "disposableEmailNotAllowed": "Ajutised e-posti aadressid ei ole lubatud. Kasutage püsivat e-posti aadressi.",
       "encryptedContent": "Krüpteeritud dokumendi sisu ei saa välja võtta. Eemalda faililt parool ja proovi uuesti.",
+      "filePropertyTypeImmutable": "Faili omaduse tüüpi ei saa muuta. Säilitage praegune tüüp; muude väärtuste jaoks looge kohandatud omadus.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",
@@ -3476,6 +3477,7 @@
         "approvedOn": "Heaks kiidetud {date}",
         "approvedToast": "Playbook heaks kiidetud",
         "saveBeforeApprove": "Salvestage muudatused enne selle playbooki heakskiitmist.",
+        "sourcesNotice": "Enne heakskiitmist kontrollige, et ükski seisukoht ei nimetaks dokumenti, toimikut ega vastaspoolt: seda playbooki saab lugeda kogu organisatsioon.",
         "statusApproved": "Heaks kiidetud",
         "statusDraft": "Mustand"
       },
@@ -3574,6 +3576,7 @@
       "referenceStandard": "Võrdlusdokumendist",
       "removeCheck": "Eemalda kontroll",
       "removeIdeal": "Eemalda ideaalne sõnastus",
+      "removeSource": "Eemalda allikas {documentName}",
       "reorderPosition": "Sorteeri seisukoht ümber",
       "review": {
         "changePlaybook": "Vali teine playbook",
@@ -3605,6 +3608,10 @@
         "blocker": "Blokeeriv"
       },
       "severityLabel": "Raskusaste",
+      "staleCopy": {
+        "loaded": "Sellest playbookist on laaditud uuem versioon. Enne muutmist laadige uuesti.",
+        "unavailable": "Selle playbooki uusimat versiooni ei õnnestunud laadida. See on viimati laaditud koopia ja võib olla aegunud."
+      },
       "starters": {
         "addedToast": "Playbook lisatud",
         "browseButton": "Sirvi valmis playbooke",
