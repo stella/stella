@@ -99,6 +99,7 @@ if ! docker image inspect "$base_image" >/dev/null 2>&1; then
 fi
 docker run --rm --network host \
   --env "DATABASE_URL=${base_database_url}" \
+  --env DB_LOAD_GATE_EBS_SIGNAL --env DB_LOAD_GATE_BUSY_WINDOWS \
   "$base_image" \
   bun /app/apps/api/src/db/migrate.js
 

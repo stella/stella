@@ -387,6 +387,7 @@ const addEntries = createSafeHandler(
         rateAtEntry: CentsAmount;
         narrative: string;
         invoiceNarrative: string | null;
+        noCharge: boolean;
       }[] = [];
       if (timeEntryIds && timeEntryIds.length > 0) {
         attachedTimeEntries = await tx
@@ -416,6 +417,7 @@ const addEntries = createSafeHandler(
             rateAtEntry: timeEntries.rateAtEntry,
             narrative: timeEntries.narrative,
             invoiceNarrative: timeEntries.invoiceNarrative,
+            noCharge: timeEntries.noCharge,
           });
 
         if (attachedTimeEntries.length !== timeEntryIds.length) {

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and } from "drizzle-orm";
 
-import { prorateHourlyCents } from "@stll/money";
+import { timeEntryAmount } from "@stll/money";
 
 import { timeEntries } from "@/api/db/schema";
 import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
@@ -35,6 +35,7 @@ export const exportCsvHandler = async ({
         durationMinutes: timeEntries.durationMinutes,
         billedMinutes: timeEntries.billedMinutes,
         rateAtEntry: timeEntries.rateAtEntry,
+        noCharge: timeEntries.noCharge,
         currency: timeEntries.currency,
         narrative: timeEntries.narrative,
         invoiceNarrative: timeEntries.invoiceNarrative,
@@ -77,10 +78,7 @@ export const exportCsvHandler = async ({
   const csvRows = [headers.join(",")];
 
   for (const row of rows) {
-    const amount = prorateHourlyCents({
-      billedMinutes: row.billedMinutes,
-      hourlyRateCents: row.rateAtEntry,
-    });
+    const amount = timeEntryAmount(row);
     csvRows.push(
       [
         escapeCSV(row.dateWorked),

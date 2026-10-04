@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import { refreshCaseLawSitemapShards } from "@/api/lib/case-law/sitemap-shard-refresh";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 export const REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK =
   "caseLaw.refreshSitemapShards" as const;
@@ -10,6 +11,7 @@ export const REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK =
 export const refreshCaseLawSitemapShardsTask: SchedulerTask = async ({
   db,
   logger,
+  runId,
   signal,
 }) => {
   if (signal.aborted) {
@@ -21,6 +23,10 @@ export const refreshCaseLawSitemapShardsTask: SchedulerTask = async ({
       signal,
     },
   );
+  await recordSystemAudit(db, "system:case-law-sitemap-refresh", {
+    subject: runId,
+    counts: { shards, pages },
+  });
   logger.info("scheduler.case_law_sitemap_shards_refreshed", {
     "caseLawSitemap.largestShard": largestShard,
     "caseLawSitemap.pages": pages,
