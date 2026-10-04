@@ -26,7 +26,7 @@ import {
   SIZE_LINT_RULES,
   designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
-import { OWNERSHIP } from "./scripts/ownership.ts";
+import { OWNERSHIP, STATUS_TRANSITION_OWNERSHIP } from "./scripts/ownership.ts";
 import core from "./scripts/oxlint-presets/core.mjs";
 import react from "./scripts/oxlint-presets/react.mjs";
 import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
@@ -53,7 +53,9 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
 // Only the rows that declare an enforcement kind reach the lint rule; the rest
 // document an owner that no rule can yet prove.
 const enforcedOwnershipEntries = OWNERSHIP.filter(
-  (entry) => entry.enforcement.kind !== "none",
+  (entry) =>
+    entry.enforcement.kind !== "none" &&
+    entry.enforcement.kind !== "status-set",
 );
 
 // Public route files may build handlers only from the factories whose context
@@ -598,6 +600,19 @@ const uiStandaloneImports = [
       "@stll/ui must not reach into application code; move the shared part into the package or keep the component in the app.",
   },
 ];
+
+// The all-locales folio catalog entries (and their `getFolioMessages`) bundle
+// every editor locale into the importing chunk. apps/web loads English eagerly
+// and each other locale on demand through `folioMessageLoaders`.
+const webFolioAllLocalesImports = [
+  "@stll/folio-react/messages",
+  "@stll/folio-core/i18n/messages",
+].map((name) => ({
+  name,
+  allowTypeImports: true,
+  message:
+    "Import one locale from '@stll/folio-react/messages/<locale>' (see folioMessageLoaders in '@/i18n/i18n-store'); the all-locales entry ships every folio catalog.",
+}));
 
 const webDatePickerImport = {
   // Both spellings: the grouped subpath is a deprecated alias of the flat one
@@ -1392,6 +1407,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-field-write.ts",
     "./.oxlint-plugins/no-chat-table-write.ts",
+    "./.oxlint-plugins/fill-diagnostics.ts",
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
     "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
@@ -1469,6 +1485,8 @@ export default defineConfig({
     "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-owner.ts",
+    "./.oxlint-plugins/no-direct-status-set.ts",
+    "./.oxlint-plugins/no-discarded-transition-result.ts",
     "./.oxlint-plugins/queue-worker-error-sink.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
@@ -1481,6 +1499,56 @@ export default defineConfig({
   ],
 
   overrides: [
+    {
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/scripts/**/*.test.ts",
+      ],
+      rules: {
+        "no-direct-status-set/no-direct-status-set": [
+          "error",
+          {
+            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
+          },
+        ],
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/scripts/**/*.test.ts",
+      ],
+      rules: {
+        "no-discarded-transition-result/no-discarded-transition-result":
+          "error",
+      },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/no-direct-status-set.fixture.ts"],
+      rules: {
+        "no-direct-status-set/no-direct-status-set": [
+          "error",
+          {
+            owner: STATUS_TRANSITION_OWNERSHIP.owner[0],
+            columns: STATUS_TRANSITION_OWNERSHIP.enforcement.columns,
+          },
+        ],
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-discarded-transition-result.fixture.ts",
+      ],
+      rules: {
+        "no-discarded-transition-result/no-discarded-transition-result":
+          "error",
+      },
+    },
     {
       files: ["**/*.{ts,tsx,mts,cts,js,mjs}"],
       rules: { "s3-object-boundary/no-etag-content-identity": "error" },
@@ -3182,7 +3250,11 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, webPragmaticDragAdapterImport],
+            paths: [
+              noZodImport,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+            ],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -3225,7 +3297,7 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport],
+            paths: [noZodImport, ...webFolioAllLocalesImports],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -3431,7 +3503,11 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, webPragmaticDragAdapterImport],
+            paths: [
+              noZodImport,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+            ],
             patterns: [
               {
                 group: webLocalApiImportGroup,
@@ -3456,6 +3532,7 @@ export default defineConfig({
             paths: [
               noZodImport,
               webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
               {
                 name: "@tanstack/react-router",
                 importNames: ["getRouteApi", "useRouteContext"],
@@ -3486,7 +3563,11 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, webPragmaticDragAdapterImport],
+            paths: [
+              noZodImport,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+            ],
             patterns: [
               {
                 group: webProtectedRouteImportGroup,
@@ -3530,6 +3611,7 @@ export default defineConfig({
             paths: [
               noZodImport,
               webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
               {
                 name: "@/lib/api",
                 importNames: ["api"],
@@ -3572,6 +3654,7 @@ export default defineConfig({
             paths: [
               noZodImport,
               webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
               {
                 name: "@/routes/-auth-context",
                 message:
@@ -4586,6 +4669,68 @@ export default defineConfig({
           "error",
           { allowedFiles: Object.keys(sourceFingerprintBaseline.files) },
         ],
+      },
+    },
+    {
+      // A template fill's completion comes from one decision over one record
+      // (`lib/templates/template-fill-completion.ts`): fills read the
+      // decision, diagnostic kinds are not decided on one by one, and status
+      // literals come from the owner. Existing sites are budgeted in
+      // scripts/fill-diagnostics-ledger.json.
+      files: [
+        "apps/api/src/**/*.ts",
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/fill-diagnostics.fixture.ts",
+        ".oxlint-plugins/__fixtures__/fill-diagnostics-owner-reading.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/src/**/__tests__/**",
+        "apps/web/src/**/*.test.{ts,tsx}",
+        "packages/*/src/**/*.test.{ts,tsx}",
+      ],
+      rules: {
+        "fill-diagnostics/fill-consumer-reads-decision": "error",
+        "fill-diagnostics/no-raw-diagnostic-decision": "error",
+        "fill-diagnostics/fill-status-literal-in-owner": "error",
+      },
+    },
+    {
+      // The fill pipeline: a new diagnostic channel joins the record.
+      files: [
+        "apps/api/src/lib/docx/**/*.ts",
+        "apps/api/src/lib/templates/**/*.ts",
+        "apps/api/src/lib/clauses/**/*.ts",
+        "apps/api/src/handlers/templates/**/*.ts",
+        "apps/api/src/handlers/chat/tools/template-*.ts",
+        "apps/api/src/handlers/reports/report-export-queue.ts",
+        "apps/api/src/mcp/template-*.ts",
+        ".oxlint-plugins/__fixtures__/fill-diagnostics.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/**/*.test-fixture.ts",
+        "apps/api/src/**/__tests__/**",
+      ],
+      rules: {
+        "fill-diagnostics/no-diagnostic-channel-outside-record": "error",
+      },
+    },
+    {
+      // `template_fills` rows carry the recorded status: one recorder.
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/fill-diagnostics.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "apps/api/src/**/__tests__/**",
+      ],
+      rules: {
+        "fill-diagnostics/fill-row-through-recorder": "error",
       },
     },
     {

@@ -1,5 +1,11 @@
 # @stll/money
 
+## 0.3.1
+
+### Patch Changes
+
+- [#4502](https://github.com/stella/stella/pull/4502) [`ca5df32`](https://github.com/stella/stella/commit/ca5df32b4a006745b026adeb4c572da622be71ce) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add invoice PDF capability metadata and preserve exact minor-unit formatting.
+
 ## 0.3.0
 
 ### Minor Changes

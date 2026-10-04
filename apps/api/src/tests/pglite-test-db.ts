@@ -18,6 +18,7 @@ import {
 import {
   createSchemaPglite,
   installPgliteDecisionAliases,
+  installPgliteFlowTransitions,
   installPgliteChatRunLogRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
@@ -34,6 +35,7 @@ import {
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
   installPgliteTimeEntryTimerSignals,
+  installPgliteTreeParentGuards,
   installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
 import {
@@ -642,6 +644,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   for (const statement of sqlStatements) {
     await db.execute(sql.raw(statement));
   }
+  await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteDecisionAliases(db);
@@ -657,6 +660,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteWorkspaceContactCapacity(db);
   await installPgliteChatRunLogRls(db);
   await installPgliteSchedulerJobPauseLog(db);
+  await installPgliteTreeParentGuards(db);
 
   await applyStellaTablePrivileges(client);
   for (const statement of ROLE_GRANT_STATEMENTS) {

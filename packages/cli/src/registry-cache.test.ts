@@ -43,9 +43,6 @@ const cacheFile = (
   serverOrigin: "https://api.example.com",
   fetchedAt: new Date().toISOString(),
   ttlSeconds: DEFAULT_TTL_SECONDS,
-  toolsListHash: "abc",
-  listings: [listing("list_matters")],
-  delta: { added: [], removed: [], changed: [] },
   ...over,
 });
 
@@ -85,8 +82,34 @@ describe("readCacheFile / writeCacheFile roundtrip", () => {
     await writeCacheFile(filePath, file);
     const read = await readCacheFile(filePath);
     expect(read?.serverOrigin).toBe(file.serverOrigin);
-    expect(read?.listings).toEqual(file.listings);
-    expect(read?.delta).toEqual(file.delta);
+    expect(read).toEqual(file);
+  });
+
+  test("writer serializes exactly deployment and version metadata", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "stella-cache-"));
+    tempDirs.push(dir);
+    const filePath = path.join(dir, "metadata.json");
+    const metadata = cacheFile({
+      featureOmittedTools: ["search_decisions"],
+      featureOmittedCapabilities: ["usage.entitlement.get"],
+      lastNudgedVersion: "0.2.0",
+    });
+    const callerData = {
+      ...metadata,
+      token: "caller-a",
+      credentialFingerprint:
+        "1bb2f624760cce059070bbf91a6c734f27fcd97f6c19e202dbbaa3eece237347",
+      arbitraryCredentialTransform:
+        "G7L2JHYMzgWQcLv5GmxzTyf82X9sGeIC27qj7s4jc0c=",
+      listings: [listing("caller_tool")],
+      delta: { added: ["caller_tool"], removed: [], changed: [] },
+      toolsListHash: "caller-hash",
+      grantedScopes: ["stella:read"],
+      scopeOmittedTools: ["save_document"],
+      featureAccess: { tools: ["caller_tool"], capabilities: [] },
+    };
+    await writeCacheFile(filePath, callerData);
+    expect(JSON.parse(await Bun.file(filePath).text())).toEqual(metadata);
   });
 
   test("preserves the lastNudgedVersion anti-nag key across a roundtrip", async () => {
@@ -98,22 +121,20 @@ describe("readCacheFile / writeCacheFile roundtrip", () => {
     expect(read?.lastNudgedVersion).toBe("0.2.0");
   });
 
-  test("preserves authenticated omission evidence across a roundtrip", async () => {
+  test("preserves only deployment omission evidence across a roundtrip", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "stella-cache-"));
     tempDirs.push(dir);
     const filePath = path.join(dir, "scopes.json");
     await writeCacheFile(
       filePath,
       cacheFile({
-        grantedScopes: ["stella:read", "stella:search"],
-        scopeOmittedTools: ["save_filled_template"],
         featureOmittedTools: ["search_decisions"],
         featureOmittedCapabilities: ["usage.entitlement.get"],
       }),
     );
     const read = await readCacheFile(filePath);
-    expect(read?.grantedScopes).toEqual(["stella:read", "stella:search"]);
-    expect(read?.scopeOmittedTools).toEqual(["save_filled_template"]);
+    expect(read).not.toHaveProperty("grantedScopes");
+    expect(read).not.toHaveProperty("scopeOmittedTools");
     expect(read?.featureOmittedTools).toEqual(["search_decisions"]);
     expect(read?.featureOmittedCapabilities).toEqual(["usage.entitlement.get"]);
   });
@@ -142,7 +163,7 @@ describe("readCacheFile / writeCacheFile roundtrip", () => {
     expect(await readCacheFile(filePath)).toBeUndefined();
   });
 
-  test("a tampered listing entry drops the whole file (fail closed)", async () => {
+  test("caller listing data never participates in a metadata cache read", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "stella-cache-"));
     tempDirs.push(dir);
     const filePath = path.join(dir, "t.json");
@@ -153,7 +174,7 @@ describe("readCacheFile / writeCacheFile roundtrip", () => {
         listings: [{ name: "x" /* missing inputSchema */ }],
       }),
     );
-    expect(await readCacheFile(filePath)).toBeUndefined();
+    expect(await readCacheFile(filePath)).not.toHaveProperty("listings");
   });
 });
 

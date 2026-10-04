@@ -1,7 +1,9 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { propertyConfig } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -288,5 +290,184 @@ describe("registry tool input ref hydration", () => {
         toolName: "read_document",
       }),
     ).toEqual({ entity_id: "ent_1" });
+  });
+
+  describe("a nested ref path (save_playbook position sources)", () => {
+    const OTHER_WS_UUID = "1ec54d0c-10d7-501d-897e-e801dbd0998d";
+    const DOCUMENT_UUIDS = [
+      "7d0f4b21-5c7e-4a0e-9f31-1b3a7c2d8e01",
+      "7d0f4b21-5c7e-4a0e-9f31-1b3a7c2d8e02",
+      "7d0f4b21-5c7e-4a0e-9f31-1b3a7c2d8e03",
+    ] as const;
+    // Sources span matters and the tool takes no matter param, so each
+    // document's workspace can only come from the recorded entity context.
+    const TARGETS = DOCUMENT_UUIDS.map((uuid, index) => ({
+      entityId: toSafeId<"entity">(uuid),
+      workspaceId: toSafeId<"workspace">(index === 0 ? WS_UUID : OTHER_WS_UUID),
+    }));
+    const SAVE_PLAYBOOK_INPUT_REFS =
+      WRITE_TOOL_REF_FIELD_MAP.save_playbook.inputRefs;
+
+    const persist = (
+      input: Record<string, unknown>,
+      refRegistry: ReturnType<typeof createChatRefRegistry>,
+    ) => {
+      const entityContexts: ChatEntityRefContext[] = [];
+      const unresolvedInputRefs: ChatUnresolvedInputRefContext[] = [];
+      const persisted = resolveRegistryToolInputRefs({
+        input,
+        onEntityRefResolved: (target) => {
+          entityContexts.push({
+            entity: resourceRef({
+              type: RESOURCE_TYPE.ENTITY,
+              id: target.entityId,
+            }),
+            toolCallId: "tool-1",
+            workspace: resourceRef({
+              type: RESOURCE_TYPE.WORKSPACE,
+              id: target.workspaceId,
+            }),
+          });
+        },
+        onRefUnresolved: (unresolved) => {
+          unresolvedInputRefs.push({ ...unresolved, toolCallId: "tool-1" });
+        },
+        refRegistry,
+        toolName: "save_playbook",
+      });
+      return { entityContexts, persisted, unresolvedInputRefs };
+    };
+
+    test("save, persist, and replay on a later turn dehydrate to the same document ids", () => {
+      fc.assert(
+        fc.property(
+          // Each position's sources, as indexes into TARGETS; null leaves the
+          // key out, as a position without sources does.
+          fc.array(
+            fc.option(
+              fc.array(fc.nat({ max: TARGETS.length - 1 }), { maxLength: 4 }),
+              { nil: null },
+            ),
+            { maxLength: 4 },
+          ),
+          (positionSources) => {
+            const firstTurn = createChatRefRegistry();
+            const refs = TARGETS.map((target) => firstTurn.toEntityRef(target));
+            const positionsWith = (ids: readonly string[]) =>
+              positionSources.map((sources, index) => ({
+                mode: "extract",
+                issue: `Position ${index}`,
+                ...(sources === null
+                  ? {}
+                  : { sources: sources.map((target) => ids[target]) }),
+              }));
+            const modelInput = { name: "NDA", positions: positionsWith(refs) };
+            const resolvedInput = {
+              name: "NDA",
+              positions: positionsWith(DOCUMENT_UUIDS),
+            };
+
+            // The live call: refs become the ids the handler reads.
+            expect(
+              dehydrateRefs({
+                args: modelInput,
+                inputRefs: SAVE_PLAYBOOK_INPUT_REFS,
+                refRegistry: firstTurn,
+              }).unwrap().args,
+            ).toEqual(resolvedInput);
+
+            // Persisted with ids, and no leaf left unresolved.
+            const { entityContexts, persisted, unresolvedInputRefs } = persist(
+              modelInput,
+              firstTurn,
+            );
+            expect(persisted).toEqual(resolvedInput);
+            expect(unresolvedInputRefs).toEqual([]);
+
+            // Replayed under a later turn's registry, then dehydrated again.
+            const laterTurn = createChatRefRegistry();
+            const hydrated = hydrateRegistryToolInputRefs({
+              entityContexts,
+              input: persisted,
+              inputState: CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_REFS_V2,
+              refRegistry: laterTurn,
+              toolName: "save_playbook",
+            });
+            expect(JSON.stringify(hydrated)).not.toContain("7d0f4b21");
+            expect(
+              dehydrateRefs({
+                args: asArgs(hydrated),
+                inputRefs: SAVE_PLAYBOOK_INPUT_REFS,
+                refRegistry: laterTurn,
+              }).unwrap().args,
+            ).toEqual(resolvedInput);
+          },
+        ),
+        propertyConfig({ numRuns: 200 }),
+      );
+    });
+
+    test("an unknown ref among the sources stays unresolved at its own position while its neighbours replay", () => {
+      const firstTurn = createChatRefRegistry();
+      const [knownTarget] = TARGETS;
+      if (knownTarget === undefined) {
+        throw new TypeError("expected a target");
+      }
+      const knownRef = firstTurn.toEntityRef(knownTarget);
+      const modelInput = {
+        name: "NDA",
+        positions: [
+          { issue: "Term" },
+          { issue: "Notice", sources: [knownRef, "ent_999"] },
+        ],
+      };
+
+      const { entityContexts, persisted, unresolvedInputRefs } = persist(
+        modelInput,
+        firstTurn,
+      );
+      expect(persisted).toEqual({
+        name: "NDA",
+        positions: [
+          { issue: "Term" },
+          { issue: "Notice", sources: [knownTarget.entityId, "ent_999"] },
+        ],
+      });
+      expect(unresolvedInputRefs).toEqual([
+        {
+          kind: "entity",
+          param: "positions[1].sources[1]",
+          ref: "ent_999",
+          toolCallId: "tool-1",
+        },
+      ]);
+
+      const laterTurn = createChatRefRegistry();
+      const hydrated = hydrateRegistryToolInputRefs({
+        entityContexts,
+        input: persisted,
+        inputState: CHAT_REF_INPUT_STATE.PERSISTED_RESOURCE_REFS_V2,
+        refRegistry: laterTurn,
+        toolName: "save_playbook",
+        unresolvedInputRefs,
+      });
+      expect(hydrated).toEqual({
+        name: "NDA",
+        positions: [
+          { issue: "Term" },
+          { issue: "Notice", sources: ["ent_1", "ent_999"] },
+        ],
+      });
+      // The failed call stays failed: the unknown token never became an id.
+      expect(
+        Result.isError(
+          dehydrateRefs({
+            args: asArgs(hydrated),
+            inputRefs: SAVE_PLAYBOOK_INPUT_REFS,
+            refRegistry: laterTurn,
+          }),
+        ),
+      ).toBe(true);
+    });
   });
 });

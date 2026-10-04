@@ -12,8 +12,11 @@
  * so the merge never touches a stored position the call does not address.
  */
 
+import { panic } from "better-result";
 import * as v from "valibot";
 
+import { arrayOrEmpty } from "@/api/lib/array";
+import { positionSourceKey } from "@/api/lib/workflow/playbook-position-sources";
 import {
   POSITION_LIMITS,
   POSITION_PURPOSE_MAX_LENGTH,
@@ -23,6 +26,7 @@ import type {
   FallbackEntry,
   IdealLanguage,
   Position,
+  PositionSource,
   Tiers,
   TierRule,
 } from "@/api/lib/workflow/playbook-positions";
@@ -81,6 +85,17 @@ const positionCommonInput = {
   guidance: optionalText(
     POSITION_LIMITS.guidanceMaxLength,
     "What a reviewer examines in the clause",
+  ),
+  sources: v.optional(
+    v.pipe(
+      v.array(uuidInputSchema("Document id from list_documents or a search")),
+      v.maxLength(POSITION_LIMITS.sourcesMaxItems),
+      v.description(
+        "Documents this position was taken or revised from; never name a " +
+          "document, matter, or counterparty in a text field. Omit on a " +
+          "replace to keep the stored sources",
+      ),
+    ),
   ),
   enabled: v.optional(
     v.pipe(
@@ -207,7 +222,9 @@ export type PlaybookMergeIssueCode =
   | "reference_standard"
   | "mode_change"
   | "too_many_positions"
-  | "empty_tiers";
+  | "empty_tiers"
+  | "unreadable_source"
+  | "too_many_sources";
 
 export type PlaybookMergeIssue = {
   code: PlaybookMergeIssueCode;
@@ -219,6 +236,14 @@ export type MergePlaybookPositionsArgs = {
   stored: readonly Position[];
   positions: readonly PlaybookPositionInput[];
   removeSourceIds: readonly string[];
+  /**
+   * The documents the user can read, keyed by document id, each with the
+   * matter it actually belongs to. The code calling the merge looks these up
+   * in one query covering every document id in the call and every stored
+   * source, so the merge itself needs no database access. An id missing from
+   * this map is a document the user cannot read.
+   */
+  readableSources: ReadonlyMap<string, PositionSource>;
   /** Injected so the merge is a pure function of its arguments in tests. */
   mintId: () => string;
 };
@@ -271,6 +296,67 @@ const withStableIds = <TLine extends { text: string }>({
   });
 };
 
+type ResolvedSources =
+  | { type: "resolved"; sources: PositionSource[] | undefined }
+  | { type: "unreadable"; index: number }
+  | { type: "too-many" };
+
+/**
+ * Works out the sources to store on a position being written. If the input
+ * omits `sources`, the stored list is kept. If it gives a list, that list
+ * replaces the stored sources the caller can read. Stored sources the caller
+ * cannot read are kept, since the caller cannot see or remove them. An input
+ * id the caller cannot read is rejected.
+ */
+const resolveSources = ({
+  input,
+  stored,
+  readableSources,
+}: {
+  input: readonly string[] | undefined;
+  stored: readonly PositionSource[] | undefined;
+  readableSources: ReadonlyMap<string, PositionSource>;
+}): ResolvedSources => {
+  if (input === undefined) {
+    return {
+      type: "resolved",
+      sources: stored === undefined ? undefined : [...stored],
+    };
+  }
+  const byEntityId = new Map<string, PositionSource>();
+  for (const [index, entityId] of input.entries()) {
+    const source = readableSources.get(entityId);
+    if (source === undefined) {
+      return { type: "unreadable", index };
+    }
+    byEntityId.set(entityId, source);
+  }
+  for (const source of arrayOrEmpty(stored)) {
+    const readable = readableSources.get(source.entityId);
+    const hidden =
+      readable === undefined ||
+      positionSourceKey(readable) !== positionSourceKey(source);
+    if (hidden && !byEntityId.has(source.entityId)) {
+      byEntityId.set(source.entityId, source);
+    }
+  }
+  const sources = [...byEntityId.values()];
+  if (sources.length > POSITION_LIMITS.sourcesMaxItems) {
+    return { type: "too-many" };
+  }
+  if (sources.length === 0) {
+    return { type: "resolved", sources: undefined };
+  }
+  // If the set of sources is unchanged, reuse the stored list so the order
+  // stays the same and the position still compares equal to the stored one.
+  const keys = new Set(sources.map(positionSourceKey));
+  const unchanged =
+    stored !== undefined &&
+    stored.length === sources.length &&
+    stored.every((source) => keys.has(positionSourceKey(source)));
+  return { type: "resolved", sources: unchanged ? [...stored] : sources };
+};
+
 const contentForAnswerType = (
   type: PlaybookAnswerType,
 ): ExtractPosition["ask"]["content"] => ({ version: 1, type });
@@ -279,10 +365,12 @@ const toExtractPosition = ({
   input,
   sourceId,
   stored,
+  sources,
 }: {
   input: Extract<PlaybookPositionInput, { mode: "extract" }>;
   sourceId: string;
   stored: ExtractPosition | undefined;
+  sources: PositionSource[] | undefined;
 }): ExtractPosition => {
   const guidance = presentText(input.guidance);
   return {
@@ -297,6 +385,7 @@ const toExtractPosition = ({
           : contentForAnswerType(input.ask.answer_type),
     },
     ...(guidance === undefined ? {} : { guidance }),
+    ...(sources === undefined ? {} : { sources }),
     enabled: input.enabled ?? stored?.enabled ?? true,
   };
 };
@@ -340,11 +429,13 @@ const toGradedPosition = ({
   input,
   sourceId,
   stored,
+  sources,
   mintId,
 }: {
   input: Extract<PlaybookPositionInput, { mode: "graded" }>;
   sourceId: string;
   stored: GradedPosition | undefined;
+  sources: PositionSource[] | undefined;
   mintId: () => string;
 }): GradedPosition => {
   const storedTiers =
@@ -410,6 +501,7 @@ const toGradedPosition = ({
             ...(escalation === undefined ? {} : { escalation }),
           },
         }),
+    ...(sources === undefined ? {} : { sources }),
     enabled: input.enabled ?? stored?.enabled ?? true,
   };
 };
@@ -428,6 +520,7 @@ export const mergePlaybookPositions = ({
   stored,
   positions,
   removeSourceIds,
+  readableSources,
   mintId,
 }: MergePlaybookPositionsArgs): MergePlaybookPositionsResult => {
   const issues: PlaybookMergeIssue[] = [];
@@ -520,6 +613,39 @@ export const mergePlaybookPositions = ({
       continue;
     }
 
+    const resolved = resolveSources({
+      input: input.sources,
+      stored: storedPosition?.sources,
+      readableSources,
+    });
+    let sources: PositionSource[] | undefined;
+    switch (resolved.type) {
+      case "resolved": {
+        sources = resolved.sources;
+        break;
+      }
+      case "unreadable": {
+        issues.push({
+          code: "unreadable_source",
+          path: `${path}.sources.${resolved.index}`,
+          message: "This id is not a document you can read",
+        });
+        continue;
+      }
+      case "too-many": {
+        issues.push({
+          code: "too_many_sources",
+          path: `${path}.sources`,
+          message: `A position holds at most ${POSITION_LIMITS.sourcesMaxItems} sources`,
+        });
+        continue;
+      }
+      default: {
+        resolved satisfies never;
+        return panic(`Unhandled source resolution: ${String(resolved)}`);
+      }
+    }
+
     const sourceId = input.source_id ?? mintId();
     const position =
       input.mode === "extract"
@@ -528,12 +654,14 @@ export const mergePlaybookPositions = ({
             sourceId,
             stored:
               storedPosition?.mode === "extract" ? storedPosition : undefined,
+            sources,
           })
         : toGradedPosition({
             input,
             sourceId,
             stored:
               storedPosition?.mode === "graded" ? storedPosition : undefined,
+            sources,
             mintId,
           });
 

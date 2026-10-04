@@ -18,63 +18,118 @@ const SCRIPT = fileURLToPath(
 const ZERO_OID = "0".repeat(40);
 /** A commit id no clone has: what a remote tip looks like before a fetch. */
 const UNFETCHED_OID = "1".repeat(40);
+const REAL_GIT = Bun.which("git") ?? "git";
 
 const root = mkdtempSync(path.join(tmpdir(), "pushed-secrets-"));
 afterAll(() => {
   rmSync(root, { force: true, recursive: true });
 });
 
+const spawn = (cwd: string, command: string[]) =>
+  Bun.spawnSync(command, { cwd, stderr: "pipe" });
+
 const run = (cwd: string, command: string[]): string => {
-  const result = Bun.spawnSync(command, { cwd, stderr: "pipe" });
+  const result = spawn(cwd, command);
   if (result.exitCode !== 0) {
     throw new Error(`${command.join(" ")}: ${result.stderr.toString()}`);
   }
   return result.stdout.toString().trim();
 };
 
-// The fake scanner records the range it was asked to read, one per line, and
-// every argument it received; it exits with FAKE_GITLEAKS_EXIT (default 0).
+// The fake scanner records the log options it was asked to read, one per
+// line, and every argument it received. Like gitleaks (`git log -p -U0
+// <log-opts>`), it reads the patch text Git prints for those options and
+// keeps it, so a test can see what a scan would have covered. It exits with
+// FAKE_GITLEAKS_EXIT (default 0).
 const bin = path.join(root, "bin");
 const log = path.join(root, "ranges.log");
 const argsLog = path.join(root, "args.log");
+const patchLog = path.join(root, "patch.log");
 mkdirSync(bin);
 writeFileSync(
   path.join(bin, "gitleaks"),
-  `#!/usr/bin/env bash\nfor arg in "$@"; do\n  echo "$arg" >> "${argsLog}"\n  case "$arg" in --log-opts=*) echo "\${arg#--log-opts=}" >> "${log}" ;; esac\ndone\nexit "\${FAKE_GITLEAKS_EXIT:-0}"\n`,
+  `#!/usr/bin/env bash
+for arg in "$@"; do
+  echo "$arg" >> "${argsLog}"
+  case "$arg" in
+    --log-opts=*)
+      opts="\${arg#--log-opts=}"
+      echo "$opts" >> "${log}"
+      read -r -a words <<<"$opts"
+      git log -p -U0 "\${words[@]}" >> "${patchLog}" || exit 0
+      ;;
+  esac
+done
+exit "\${FAKE_GITLEAKS_EXIT:-0}"
+`,
 );
 chmodSync(path.join(bin, "gitleaks"), 0o755);
 
-const repo = path.join(root, "repo");
-run(root, ["git", "init", "-q", repo]);
-for (const [key, value] of [
-  ["user.email", "test@example.test"],
-  ["user.name", "test"],
-  ["commit.gpgsign", "false"],
-] as const) {
-  run(repo, ["git", "config", key, value]);
-}
+// A Git older than 2.36, which rejects --remerge-diff.
+const oldGitBin = path.join(root, "old-git-bin");
+mkdirSync(oldGitBin);
+writeFileSync(
+  path.join(oldGitBin, "git"),
+  `#!/usr/bin/env bash
+for arg in "$@"; do
+  [[ "$arg" == --remerge-diff ]] && { echo "fatal: unrecognized argument: $arg" >&2; exit 128; }
+done
+exec "${REAL_GIT}" "$@"
+`,
+);
+chmodSync(path.join(oldGitBin, "git"), 0o755);
+
+const initRepo = (name: string): string => {
+  const dir = path.join(root, name);
+  run(root, ["git", "init", "-q", "-b", "main", dir]);
+  for (const [key, value] of [
+    ["user.email", "test@example.test"],
+    ["user.name", "test"],
+    ["commit.gpgsign", "false"],
+    ["rerere.enabled", "false"],
+  ] as const) {
+    run(dir, ["git", "config", key, value]);
+  }
+  return dir;
+};
+
+const repo = initRepo("repo");
 run(repo, ["git", "commit", "-q", "--allow-empty", "-m", "base"]);
 const base = run(repo, ["git", "rev-parse", "HEAD"]);
 run(repo, ["git", "commit", "-q", "--allow-empty", "-m", "change"]);
 const head = run(repo, ["git", "rev-parse", "HEAD"]);
 
-type ScanResult = { exitCode: number; ranges: string[]; stderr: string };
+/** The log options the script passes for a revision range. */
+const scanOf = (range: string): string => `--remerge-diff ${range}`;
 
-const scan = (stdin: string, scannerExit = 0): ScanResult => {
+type ScanOptions = { cwd?: string; pathPrefix?: string; scannerExit?: number };
+type ScanResult = {
+  exitCode: number;
+  patch: string;
+  ranges: string[];
+  stderr: string;
+};
+
+const scan = (
+  stdin: string,
+  { cwd = repo, pathPrefix = bin, scannerExit = 0 }: ScanOptions = {},
+): ScanResult => {
   rmSync(log, { force: true });
   rmSync(argsLog, { force: true });
+  rmSync(patchLog, { force: true });
   const result = Bun.spawnSync(["bash", SCRIPT], {
-    cwd: repo,
+    cwd,
     env: {
       ...process.env,
       FAKE_GITLEAKS_EXIT: String(scannerExit),
-      PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+      PATH: `${pathPrefix}:${bin}:${process.env["PATH"] ?? ""}`,
     },
     stdin: new TextEncoder().encode(stdin),
     stderr: "pipe",
   });
   return {
     exitCode: result.exitCode,
+    patch: existsSync(patchLog) ? readFileSync(patchLog, "utf-8") : "",
     ranges: existsSync(log)
       ? readFileSync(log, "utf-8").trim().split("\n")
       : [],
@@ -89,22 +144,22 @@ const scannedRanges = (stdin: string): string[] => {
 };
 
 describe("pushed-secret scan ranges", () => {
-  test("a known remote tip scans only the new commits", () => {
+  test("a known remote tip scans only the new unpublished commits", () => {
     expect(
       scannedRanges(`refs/heads/x ${head} refs/heads/x ${base}\n`),
-    ).toEqual([`${base}..${head}`]);
+    ).toEqual([scanOf(`${base}..${head} --not --remotes`)]);
   });
 
   test("a remote tip this clone never fetched scans everything unpublished", () => {
     expect(
       scannedRanges(`refs/heads/x ${head} refs/heads/x ${UNFETCHED_OID}\n`),
-    ).toEqual([`${head} --not --remotes`]);
+    ).toEqual([scanOf(`${head} --not --remotes`)]);
   });
 
   test("a new remote ref scans everything unpublished", () => {
     expect(
       scannedRanges(`refs/heads/x ${head} refs/heads/x ${ZERO_OID}\n`),
-    ).toEqual([`${head} --not --remotes`]);
+    ).toEqual([scanOf(`${head} --not --remotes`)]);
   });
 
   // The fake scanner exits 0 for any range, as a real scanner can when Git
@@ -122,7 +177,10 @@ describe("pushed-secret scan ranges", () => {
         `refs/heads/x ${head} refs/heads/x ${base}\n` +
           `refs/heads/y ${head} refs/heads/y ${ZERO_OID}\n`,
       ),
-    ).toEqual([`${base}..${head}`, `${head} --not --remotes`]);
+    ).toEqual([
+      scanOf(`${base}..${head} --not --remotes`),
+      scanOf(`${head} --not --remotes`),
+    ]);
   });
 
   test("a deleted ref does not stop the refs after it", () => {
@@ -131,13 +189,15 @@ describe("pushed-secret scan ranges", () => {
         `(delete) ${ZERO_OID} refs/heads/old ${base}\n` +
           `refs/heads/x ${head} refs/heads/x ${base}\n`,
       ),
-    ).toEqual([`${base}..${head}`]);
+    ).toEqual([scanOf(`${base}..${head} --not --remotes`)]);
   });
 
   test("a leak the scanner reports fails the push", () => {
-    const result = scan(`refs/heads/x ${head} refs/heads/x ${base}\n`, 1);
+    const result = scan(`refs/heads/x ${head} refs/heads/x ${base}\n`, {
+      scannerExit: 1,
+    });
     expect(result.exitCode).not.toBe(0);
-    expect(result.ranges).toEqual([`${base}..${head}`]);
+    expect(result.ranges).toEqual([scanOf(`${base}..${head} --not --remotes`)]);
   });
 
   test("the scanner keeps its failing exit code", () => {
@@ -150,6 +210,126 @@ describe("pushed-secret scan ranges", () => {
     const result = scan(
       `refs/heads/x ${head} refs/heads/x ${base}\n` +
         `refs/heads/y ${UNFETCHED_OID} refs/heads/y ${base}\n`,
+    );
+    expect(result.exitCode).toBe(1);
+    expect(result.ranges).toEqual([]);
+  });
+
+  test("a Git without --remerge-diff refuses the scan", () => {
+    const result = scan(`refs/heads/x ${head} refs/heads/x ${base}\n`, {
+      pathPrefix: oldGitBin,
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.ranges).toEqual([]);
+    expect(result.stderr).toContain("--remerge-diff is unsupported");
+  });
+});
+
+// Markers stand in for secrets: the fake scanner keeps the patch text a real
+// scan would read, so each test asserts which markers that text carries.
+const MAIN_ONLY = "MARKER_MAIN_ONLY";
+const BRANCH_BEFORE_MERGE = "MARKER_BRANCH_BEFORE_MERGE";
+const BRANCH_AFTER_MERGE = "MARKER_BRANCH_AFTER_MERGE";
+const CONFLICT_RESOLUTION = "MARKER_CONFLICT_RESOLUTION";
+const CLEAN_MERGE_ADDITION = "MARKER_CLEAN_MERGE_ADDITION";
+
+const commitFile = (
+  dir: string,
+  { file, text }: { file: string; text: string },
+): string => {
+  writeFileSync(path.join(dir, file), text);
+  run(dir, ["git", "add", file]);
+  run(dir, ["git", "commit", "-q", "-m", `edit ${file}`]);
+  return run(dir, ["git", "rev-parse", "HEAD"]);
+};
+
+/** Marks a commit as published on the remote, as a fetch would. */
+const publish = (dir: string, { ref, oid }: { ref: string; oid: string }) => {
+  run(dir, ["git", "update-ref", `refs/remotes/origin/${ref}`, oid]);
+};
+
+describe("a branch that merged main", () => {
+  const dir = initRepo("merged-main");
+  commitFile(dir, { file: "shared.txt", text: "value = base\n" });
+  run(dir, ["git", "switch", "-q", "-c", "feature"]);
+  const branchTip = commitFile(dir, {
+    file: "feature.txt",
+    text: `${BRANCH_BEFORE_MERGE}\n`,
+  });
+  run(dir, ["git", "switch", "-q", "main"]);
+  const mainTip = commitFile(dir, {
+    file: "main.txt",
+    text: `${MAIN_ONLY}\n`,
+  });
+  publish(dir, { ref: "main", oid: mainTip });
+  run(dir, ["git", "switch", "-q", "feature"]);
+  run(dir, ["git", "merge", "-q", "--no-edit", "main"]);
+  const pushedTip = commitFile(dir, {
+    file: "feature.txt",
+    text: `${BRANCH_BEFORE_MERGE}\n${BRANCH_AFTER_MERGE}\n`,
+  });
+
+  test("a new remote ref scans the branch's commits, not main's", () => {
+    const result = scan(
+      `refs/heads/feature ${pushedTip} refs/heads/feature ${ZERO_OID}\n`,
+      { cwd: dir },
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.patch).toContain(BRANCH_BEFORE_MERGE);
+    expect(result.patch).toContain(BRANCH_AFTER_MERGE);
+    expect(result.patch).not.toContain(MAIN_ONLY);
+  });
+
+  test("an update scans the branch's new commits, not the merged main", () => {
+    publish(dir, { ref: "feature", oid: branchTip });
+    const result = scan(
+      `refs/heads/feature ${pushedTip} refs/heads/feature ${branchTip}\n`,
+      { cwd: dir },
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.patch).toContain(BRANCH_AFTER_MERGE);
+    expect(result.patch).not.toContain(MAIN_ONLY);
+  });
+});
+
+describe("a merge resolution", () => {
+  const dir = initRepo("resolution");
+  commitFile(dir, { file: "shared.txt", text: "value = base\n" });
+  run(dir, ["git", "switch", "-q", "-c", "feature"]);
+  const branchTip = commitFile(dir, {
+    file: "shared.txt",
+    text: "value = feature\n",
+  });
+  publish(dir, { ref: "feature", oid: branchTip });
+  run(dir, ["git", "switch", "-q", "main"]);
+  const mainTip = commitFile(dir, {
+    file: "shared.txt",
+    text: "value = main\n",
+  });
+  publish(dir, { ref: "main", oid: mainTip });
+  run(dir, ["git", "switch", "-q", "feature"]);
+  // Conflicts exit non-zero; the resolution below completes the merge.
+  spawn(dir, ["git", "merge", "-q", "--no-edit", "main"]);
+  writeFileSync(path.join(dir, "shared.txt"), `${CONFLICT_RESOLUTION}\n`);
+  writeFileSync(path.join(dir, "added.txt"), `${CLEAN_MERGE_ADDITION}\n`);
+  run(dir, ["git", "add", "shared.txt", "added.txt"]);
+  run(dir, ["git", "commit", "-q", "--no-edit"]);
+  const mergeTip = run(dir, ["git", "rev-parse", "HEAD"]);
+
+  test("anything a merge adds while resolving it is scanned", () => {
+    const result = scan(
+      `refs/heads/feature ${mergeTip} refs/heads/feature ${branchTip}\n`,
+      { cwd: dir },
+    );
+    expect(result.exitCode).toBe(0);
+    expect(result.patch).toContain(CONFLICT_RESOLUTION);
+    expect(result.patch).toContain(CLEAN_MERGE_ADDITION);
+  });
+
+  test("an unresolvable remote range with merges fails closed", () => {
+    const result = scan(
+      `refs/heads/feature ${UNFETCHED_OID} refs/heads/feature ${branchTip}\n`,
+      { cwd: dir },
     );
     expect(result.exitCode).toBe(1);
     expect(result.ranges).toEqual([]);

@@ -18,9 +18,12 @@ export type MatterNumberHintProps = InlineProps | PopoverProps;
 
 export const MatterNumberHint = (props: MatterNumberHintProps) => {
   const t = useTranslations();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const { data: settings } = useQuery(
-    organizationSettingsOptions(activeOrganizationId),
+    organizationSettingsOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
   );
 
   if (!settings) {

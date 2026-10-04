@@ -384,7 +384,10 @@ describe("skill-documented chat reads", () => {
     } = turnProps(skill);
 
     const streaming = getChatTools(turnProps(skill));
-    const validation = getChatValidationTools(validationInputs);
+    const validation = getChatValidationTools({
+      ...validationInputs,
+      featureAccessSnapshot: validationInputs.featureAccessSnapshot,
+    });
     const bare = getChatTools(turnProps(null));
 
     expect(streaming["discover_tools"]?.description).not.toContain(
