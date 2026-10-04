@@ -1191,6 +1191,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "standard",
     permissions: {
       type: "all",
       permissions: { organizationSettings: ["update"] },

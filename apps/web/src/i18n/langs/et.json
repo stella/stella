@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Lisa numbriseeria",
       "advance": "Ettemakse",
+      "allSellers": "Kõik müüjad",
       "archiveConfirm": "Kas arhiveerida see numbriseeria? Seda ei saa enam uute dokumentide jaoks kasutada.",
       "creditNote": "Kreeditarve",
       "default": "Vaikeseeria",
@@ -562,6 +563,9 @@
       "preview": "Järgmine number",
       "previewAllocated": "See number on juba määratud.",
       "previewHelp": "Eelvaade kasutab salvestatud malli ega broneeri numbrit.",
+      "sellerProfile": "Müüja profiil",
+      "sellerUnavailable": "Müüja on arhiveeritud või pole saadaval",
+      "sellerUnavailableHelp": "See müüja on arhiveeritud või pole saadaval. Jätke määrang alles või valige teine müüja.",
       "setDefault": "Määra vaikeseeriaks",
       "title": "Numbriseeriad"
     },
@@ -1165,6 +1169,7 @@
       "noSkills": "Oskusi veel pole",
       "pinnedMatters": "Kinnitatud toimikud",
       "recentChats": "Hiljutised vestlused",
+      "skillEditedBy": "Muutis {name} · {time}",
       "skills": "Oskused"
     },
     "loadEarlierMessages": "Laadi varasemad sõnumid",
@@ -1296,6 +1301,9 @@
     },
     "tabToAsk": "→ küsimiseks: \"{prompt}\"",
     "thinking": "Töötan kontekstiga",
+    "threadFiles": {
+      "title": "Selle vestluse failid"
+    },
     "tool": {
       "add_comment": "Kommentaari lisamine",
       "apply-active-docx-edits": "Dokumendi muudatuste ettevalmistamine",
@@ -2262,6 +2270,7 @@
       "deeplKeyRejected": "Salvestatud DeepL-i võti lükati tagasi. Asendage see organisatsiooni seadetes.",
       "deeplQuotaExceeded": "Selle organisatsiooni DeepL-i tähemärgikvoot on ammendatud.",
       "disposableEmailNotAllowed": "Ajutised e-posti aadressid ei ole lubatud. Kasutage püsivat e-posti aadressi.",
+      "encryptedContent": "Krüpteeritud dokumendi sisu ei saa välja võtta. Eemalda faililt parool ja proovi uuesti.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",

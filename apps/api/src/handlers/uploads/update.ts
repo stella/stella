@@ -66,6 +66,10 @@ const finalizeParamsSchema = workspaceParams({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Verifies an upload without delivering file content.",
+  },
   description:
     "Step 3 of 3 of the file-upload flow: finalize an upload whose bytes have " +
     "already been PUT to the presigned URL from uploads.create. Verifies the " +
@@ -562,7 +566,11 @@ const runFinalize = async function* ({
       scanned,
     });
   } else if (purposeData.type === "entity_version") {
-    purposeOk = yield* finalizeEntityVersion({ ...domainArgs, purposeData });
+    purposeOk = yield* finalizeEntityVersion({
+      ...domainArgs,
+      purposeData,
+      scanned,
+    });
   } else {
     purposeOk = yield* finalizeAgentSkill({
       safeDb,

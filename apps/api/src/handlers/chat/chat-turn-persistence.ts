@@ -35,6 +35,8 @@ import type {
   ChatTurnState,
   ChatTurnView,
 } from "@/api/handlers/chat/chat-turn-state";
+import { isChatHistorySnapshotCurrentOnTx } from "@/api/handlers/chat/history-window";
+import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
 import type {
   ChatTurnOutcome,
   ChatMessageRole,
@@ -401,6 +403,45 @@ export const canAcceptChatTurnOnTx = async ({
     columns: { id: true },
   });
   return running === undefined;
+};
+
+/** Why a thread cannot take a new turn. */
+export type ChatTurnRefusal = "history-changed" | "turn-running";
+
+/**
+ * Lock the thread before a caller writes a new user message, and hold the
+ * turn to the history it was planned on. Under the lock no other turn can
+ * write the thread, so a history still current here stays current until the
+ * caller commits; one that moved since it was read means a turn settled in
+ * between, and the plan would drop that turn from the model's history or
+ * replay a turn that is no longer the latest.
+ */
+export const reservePlannedChatTurnOnTx = async ({
+  history,
+  threadId,
+  tx,
+}: {
+  history: ChatHistorySnapshot;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<ChatTurnRefusal | "reserved"> => {
+  if (!(await lockChatThreadForTurnOnTx({ threadId, tx }))) {
+    return "turn-running";
+  }
+  // Compared before `canAcceptChatTurnOnTx` ends an expired turn: that writes
+  // the message the expired turn resumed, a change this transaction makes.
+  if (
+    !(await isChatHistorySnapshotCurrentOnTx({
+      snapshot: history,
+      threadId,
+      tx,
+    }))
+  ) {
+    return "history-changed";
+  }
+  return (await canAcceptChatTurnOnTx({ threadId, tx }))
+    ? "reserved"
+    : "turn-running";
 };
 
 /**

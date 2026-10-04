@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -95,7 +96,7 @@ describe("readPublisher", () => {
   });
 
   test("a 5xx, a 204 and other 4xx answers are failures to read", async () => {
-    for (const status of [500, 502, 503, 400, 408, 429]) {
+    for (const status of [500, 502, 503, 400, 408]) {
       serve(() => new Response("error", { status }));
       expect(await readPublisher(URL_UNDER_TEST, init())).toEqual({
         type: "unavailable",
@@ -130,6 +131,37 @@ describe("readPublisher", () => {
       readPublisher(URL_UNDER_TEST, init({ signal: controller.signal })),
     );
     expect(rejection).toBeInstanceOf(DOMException);
+  });
+
+  test("a 429 halts the cycle as a typed publisher refusal after one request", async () => {
+    let requests = 0;
+    globalThis.fetch = asFetchMock(async () => {
+      requests += 1;
+      return await Promise.resolve(
+        new Response("slow down", {
+          status: 429,
+          headers: { "Retry-After": "120" },
+        }),
+      );
+    });
+    const rejection = await rejectionOf(
+      readPublisherText(URL_UNDER_TEST, init()),
+    );
+    expect(rejection).toBeInstanceOf(AdapterFetchError);
+    expect(
+      rejection instanceof AdapterFetchError
+        ? {
+            stopKind: rejection.stopKind,
+            httpStatus: rejection.httpStatus,
+            retryAfter: rejection.retryAfter,
+          }
+        : null,
+    ).toEqual({
+      stopKind: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
+      httpStatus: 429,
+      retryAfter: "120",
+    });
+    expect(requests).toBe(1);
   });
 
   test("a source-level refusal stop still ends the cycle by throwing", async () => {
@@ -187,7 +219,7 @@ test("no publisher status other than 404 and 410 reads as an absence, and only 4
     "no publisher status other than 404 and 410 reads as an absence, and only 401, 403 and 451 as a refusal",
     fc.asyncProperty(
       fc.oneof(
-        fc.integer({ min: 200, max: 599 }),
+        fc.integer({ min: 200, max: 599 }).filter((status) => status !== 429),
         fc.constantFrom(204, 401, 403, 404, 410, 451),
       ),
       fc.string({ maxLength: 8 }),

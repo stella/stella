@@ -1759,7 +1759,7 @@ describe("contributor signature workflow", () => {
       `\${{ !cancelled() && steps.credentials.outcome == 'success' }}`,
     );
     expect(workflow.jobs["verify-signatures"]?.if).toContain(
-      "(github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login == 'dependabot[bot]'))",
+      "(github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login == 'dependabot[bot]' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.path == '.github/workflows/cla-notify.yml' && github.event.workflow_run.event == 'pull_request'))",
     );
     expect(workflow.permissions).toEqual({
       contents: "read",
