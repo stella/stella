@@ -6,7 +6,6 @@ import type { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/utils";
 import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
 import type {
@@ -255,10 +254,6 @@ export const startAutomatedFlowRun = async (
       triggerType: triggerSource.type,
     });
   };
-  if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-    await createAndEnqueue();
-    return;
-  }
   const started = await Result.tryPromise({
     try: async () =>
       await kickoff({

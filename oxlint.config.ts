@@ -8,7 +8,12 @@ import {
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
+import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
+import {
+  AUDIT_MUTATION_LEDGER_SCOPE,
+  auditMutationBudgets,
+} from "./scripts/audit-mutation-ledger-scope.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
   SHADCN_LINT_JS_PLUGINS,
@@ -28,6 +33,7 @@ import {
   RESULT_CONVENTION_ENABLED_GLOBS,
   RESULT_CONVENTION_EXCLUDE_GLOBS,
 } from "./scripts/result-boundary-globs.ts";
+import sourceFingerprintBaseline from "./scripts/source-fingerprint-baseline.json" with { type: "json" };
 import {
   SQL_PERF_LINT_EXCLUDES,
   SQL_PERF_LINT_FILES,
@@ -162,6 +168,9 @@ const fixtureRuleOverrides = [
   ),
   fixtureRuleOverride("no-swallowed-item-error.fixture.test.ts", [
     "no-swallowed-item-error/no-test-swallowed-error",
+  ]),
+  fixtureRuleOverride("no-failure-as-empty.fixture.ts", [
+    "no-failure-as-empty/no-failure-as-empty",
   ]),
   fixtureRuleOverride("provider-call-error-message.fixture.ts", [
     "provider-call-error-message/provider-call-error-message",
@@ -1235,6 +1244,7 @@ export default defineConfig({
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
+    "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
     "./.oxlint-plugins/drizzle.ts",
@@ -1285,6 +1295,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-adhoc-loader.ts",
     "./.oxlint-plugins/no-shared-suspense-query.ts",
     "./.oxlint-plugins/no-bare-chrome-query.ts",
+    "./.oxlint-plugins/query-data-requires-state.ts",
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
@@ -1312,6 +1323,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-parser-validator-calls.ts",
     "./.oxlint-plugins/no-raw-parser-html.ts",
     "./.oxlint-plugins/no-swallowed-item-error.ts",
+    "./.oxlint-plugins/no-failure-as-empty.ts",
     "./.oxlint-plugins/no-raw-decision-text-fields.ts",
     "./.oxlint-plugins/no-unowned-file-version-write.ts",
     "./.oxlint-plugins/mcp-security.ts",
@@ -1914,6 +1926,14 @@ export default defineConfig({
       files: [".oxlint-plugins/__fixtures__/no-bare-chrome-query.fixture.tsx"],
       rules: {
         "no-bare-chrome-query/no-bare-chrome-query": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/query-data-requires-state.fixture.tsx",
+      ],
+      rules: {
+        "query-data-requires-state/query-data-requires-state": "error",
       },
     },
     {
@@ -3206,6 +3226,16 @@ export default defineConfig({
       rules: { "no-swallowed-item-error/no-swallowed-item-error": "error" },
     },
     {
+      // A failed read must not come back as an empty value; existing sites
+      // are held to the shrink-only baseline the rule reads.
+      files: ["apps/api/src/**/*.ts", "packages/*/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/{test,tests,__tests__,__fixtures__}/**",
+      ],
+      rules: { "no-failure-as-empty/no-failure-as-empty": "error" },
+    },
+    {
       files: [
         "{apps,packages,scripts}/**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
         "{apps,packages,scripts}/**/{tests,__tests__}/**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
@@ -3522,6 +3552,12 @@ export default defineConfig({
       },
     },
     {
+      files: ["apps/web/src/**"],
+      rules: {
+        "query-data-requires-state/query-data-requires-state": "error",
+      },
+    },
+    {
       // Persistent chrome that mounts on every route: defer cold-cache fetches
       // past mount via useChromeQuery so they cannot warn on a not-yet-mounted
       // fiber. See apps/web/src/hooks/use-chrome-query.ts.
@@ -3803,14 +3839,29 @@ export default defineConfig({
     },
     {
       // Every workspace mutation must leave an audit trail (SOC 2 /
-      // ISO 27001). Scope to handler files — DB writes elsewhere
-      // (auth lifecycle hooks, job framework internals, RLS session
-      // setup) have different audit semantics and would generate
-      // false positives.
+      // ISO 27001). Handlers are held to the full rule; the block below
+      // extends it to MCP and library code with a reasoned ledger.
       files: ["apps/api/src/handlers/**/*.ts"],
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
         "require-audit-on-mutation/require-audit-on-mutation": "error",
+      },
+    },
+    {
+      // The same rule over MCP tools and shared library code. Writes that
+      // predate this scope are budgeted per owning function by the reasoned
+      // ledger (scripts/audit-mutation-ledger.ts), which only shrinks; any
+      // other unaudited write fails like it does in a handler.
+      files: [...AUDIT_MUTATION_LEDGER_SCOPE],
+      excludeFiles: [
+        "apps/api/src/mcp/**/*.test.ts",
+        "apps/api/src/lib/**/*.test.ts",
+      ],
+      rules: {
+        "require-audit-on-mutation/require-audit-on-mutation": [
+          "error",
+          { budgets: auditMutationBudgets(auditMutationLedger) },
+        ],
       },
     },
     {
@@ -4274,11 +4325,10 @@ export default defineConfig({
       },
     },
     {
-      // A computed-key write onto an object literal sends `__proto__` through
-      // the prototype setter, so a record rebuilt from client, model or
-      // parsed-JSON keys loses that entry. Existing debt is carried per file
-      // in scripts/design-lint-baseline.json and switched off there by
-      // `designLintBacklogOverrides` below.
+      // Dynamic record writes use own-property builders; open module tables
+      // require an own-key check. Existing sites covered by these syntax checks
+      // carry count ceilings in scripts/design-lint-baseline.json and are
+      // switched off here by `designLintBacklogOverrides` below.
       files: [
         "apps/*/src/**/*.{ts,tsx}",
         "apps/*/scripts/**/*.{ts,tsx}",
@@ -4380,6 +4430,26 @@ export default defineConfig({
       ],
       rules: {
         "no-raw-cache-control/no-raw-cache-control": "error",
+      },
+    },
+    {
+      // A case-law adapter's rawHash decides whether a re-fetched decision is
+      // written, so it comes from `sourceFingerprint` over the stored source.
+      // Files that predate the owner are listed, shrink-only, in
+      // scripts/source-fingerprint-baseline.json.
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
+        ".oxlint-plugins/__fixtures__/raw-hash-from-source-fingerprint.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/handlers/case-law/ingestion/adapters/__fixtures__/**",
+      ],
+      rules: {
+        "raw-hash-from-source-fingerprint/raw-hash-from-source-fingerprint": [
+          "error",
+          { allowedFiles: Object.keys(sourceFingerprintBaseline.files) },
+        ],
       },
     },
     {

@@ -4,6 +4,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -56,9 +57,9 @@ describe("exportAuditLogs", () => {
     const context = asTestRaw<ExportAuditLogsContext>({
       memberRole: sessionMemberRole("owner"),
       query: {},
-      recordAuditEvent: async () => {
+      recordAuditEvent: auditRecorderDouble(() => {
         auditCallCount += 1;
-      },
+      }),
       request: new Request("https://example.test/v1/audit-logs/export"),
       route: "/v1/audit-logs/export",
       safeDb,
@@ -100,9 +101,9 @@ describe("exportAuditLogs", () => {
     const context = asTestRaw<ExportAuditLogsContext>({
       memberRole: sessionMemberRole("owner"),
       query: {},
-      recordAuditEvent: async () => {
+      recordAuditEvent: auditRecorderDouble(() => {
         auditCallCount += 1;
-      },
+      }),
       request: new Request("https://example.test/v1/audit-logs/export"),
       route: "/v1/audit-logs/export",
       safeDb,

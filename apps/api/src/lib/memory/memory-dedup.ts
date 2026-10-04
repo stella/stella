@@ -1,6 +1,6 @@
 import type { SafeId } from "@/api/lib/branded-types";
 
-type MemoryDedupScope =
+export type MemoryDedupScope =
   | {
       scope: "organization";
       userId: null;

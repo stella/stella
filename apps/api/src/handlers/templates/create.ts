@@ -73,6 +73,11 @@ const createTemplateHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores a template and returns its metadata rather than file bytes.",
+  },
   description:
     "Create a document template from a DOCX. Pass file and a name; the " +
     "{{field}} markers in the file become the template's fillable fields. " +

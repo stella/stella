@@ -107,6 +107,11 @@ const createTemplateFromStylesHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores a template and returns its metadata rather than file bytes.",
+  },
   description:
     "Create an empty template that takes its styles from an uploaded DOCX. " +
     "Only sanitized style resources are read and a fresh package is written, " +

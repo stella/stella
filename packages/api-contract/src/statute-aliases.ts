@@ -3,6 +3,7 @@ import {
   statuteActEliCollection,
   type StatuteAct,
 } from "./statute-acts";
+import type { StatuteQueryCountry } from "./statute-query-capability";
 
 /**
  * An act an alias names: its number in the collection that published it,
@@ -88,13 +89,10 @@ export const STATUTE_ALIASES = {
     "civilny sporovy poriadok": target(SVK.civilDisputes),
     "spravny poriadok": target(SVK.administrativeProcedure),
   },
-} as const satisfies Record<string, Record<string, StatuteAliasTarget>>;
-
-export type StatuteQueryCountry = keyof typeof STATUTE_ALIASES;
-
-export const isStatuteQueryCountry = (
-  country: string,
-): country is StatuteQueryCountry => Object.hasOwn(STATUTE_ALIASES, country);
+} as const satisfies Record<
+  StatuteQueryCountry,
+  Record<string, StatuteAliasTarget>
+>;
 
 export const resolveStatuteAlias = (
   country: StatuteQueryCountry,

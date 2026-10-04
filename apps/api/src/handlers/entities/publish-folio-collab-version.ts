@@ -403,11 +403,14 @@ const storePublicationSource = async ({
   const written = !isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
     ? await Result.tryPromise({
         try: async () =>
-          await writeS3ObjectWithRetry({
-            contentType: DOCX_MIME_TYPE,
-            data: bytes,
-            key: source.key,
-          }),
+          await writeS3ObjectWithRetry(
+            {
+              contentType: DOCX_MIME_TYPE,
+              data: bytes,
+              key: source.key,
+            },
+            { type: "cleanup-intent", intent: source.cleanupIntentId },
+          ),
         catch: (cause) => cause,
       })
     : Result.mapError(
@@ -416,11 +419,14 @@ const storePublicationSource = async ({
           objectKey: source.key,
           sizeBytes: bytes.byteLength,
           write: async () =>
-            await writeS3ObjectWithRetry({
-              contentType: DOCX_MIME_TYPE,
-              data: bytes,
-              key: source.key,
-            }),
+            await writeS3ObjectWithRetry(
+              {
+                contentType: DOCX_MIME_TYPE,
+                data: bytes,
+                key: source.key,
+              },
+              { type: "cleanup-intent", intent: source.cleanupIntentId },
+            ),
         }),
         (cause): unknown => cause,
       );
@@ -910,6 +916,10 @@ const publicationRejection = (
 
 const publishFolioCollabVersion = createSafeHandler(
   {
+    contentDelivery: {
+      type: "none",
+      reason: "Processes collaboration content without returning stored files.",
+    },
     body: publishFolioCollabVersionBodySchema,
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
