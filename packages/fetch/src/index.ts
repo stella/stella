@@ -69,7 +69,9 @@ const executeFetchWithTimeout = async (
     .then(async () => await activeFetcher(input, { ...init, signal: combined }))
     .finally(clear);
   if (combined.aborted) {
-    await response.body?.cancel(combined.reason).catch(() => undefined);
+    // The abort reason is the failure. Cancelling only releases the body, and
+    // a body the abort already errored rejects with that same stored reason.
+    await Promise.allSettled([response.body?.cancel(combined.reason)]);
     throw combined.reason;
   }
   if (timeout.type === "headers" || response.body === null) {

@@ -131,7 +131,6 @@
   "require-matter-affordance/require-matter-affordance::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "require-pagination-cursor-schema/require-pagination-cursor-schema::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "require-query-key-factory/require-query-key-factory::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
-  "require-query-limit/require-query-limit::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "require-query-options-key/require-query-options-key::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "require-query-signal/require-query-signal::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "require-relative-time-helpers/require-relative-time-helpers::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
