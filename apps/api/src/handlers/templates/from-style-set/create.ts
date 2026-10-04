@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
@@ -74,6 +74,7 @@ const config = {
     "name and an optional category. Like templates.blank.create it carries " +
     "no fields until a document is saved onto it.",
   permissions: { template: ["create"], styleSet: ["use"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

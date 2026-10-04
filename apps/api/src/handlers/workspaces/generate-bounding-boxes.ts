@@ -7,7 +7,7 @@ import type { BoundingBox } from "@/api/db/schema-validators";
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { generateBBoxes } from "@/api/lib/bbox/generate-b-boxes";
 import { generateBBoxesMock } from "@/api/lib/bbox/generate-b-boxes-mock";
@@ -21,6 +21,7 @@ const config = {
     reason: "Generates document geometry without delivering stored-file bytes.",
   },
   permissions: { workspace: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   body: t.Object({
     justificationId: tSafeId("justification"),

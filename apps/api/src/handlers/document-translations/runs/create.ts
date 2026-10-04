@@ -7,6 +7,7 @@ import { createDocumentTranslationRunBodySchema } from "@/api/handlers/document-
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
+  ACCOUNT_ACCESS,
   assertUsageAvailableForHandler,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
@@ -37,6 +38,7 @@ const config = {
   description:
     "Start a background document translation and save only the completed output as a new document.",
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

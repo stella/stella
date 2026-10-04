@@ -4,6 +4,7 @@ import { t } from "elysia";
 import nodePath from "node:path";
 
 import {
+  ACCOUNT_ACCESS,
   createSafePublicHandler,
   isSafePublicHandler,
 } from "@/api/lib/api-handlers";
@@ -481,6 +482,7 @@ describe("anonymous response text bounds", () => {
   test("top-level unconstrained schemas are not mistaken for empty status maps", () => {
     const { handler } = createSafePublicHandler(
       {
+        accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "health_infra" },
         cache: { kind: "none" },
       },

@@ -6,7 +6,10 @@ import {
   readJudgePortraitPointer,
 } from "@/api/handlers/case-law/judges/portrait";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeBoundedPublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeBoundedPublicHandler,
+} from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -17,6 +20,7 @@ const config = {
     reason: "Returns public judicial portraits.",
   },
   cache: { kind: "public", maxAge: 86_400 },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "public_indexing" },
   params: t.Object({ judgeId: tSafeId("caseLawJudge") }),
 } satisfies PublicHandlerConfig;

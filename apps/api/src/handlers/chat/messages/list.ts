@@ -17,7 +17,7 @@ import {
   isWebSearchAvailable,
 } from "@/api/handlers/chat/tools/chat-tools";
 import type { ChatMessage } from "@/api/handlers/chat/types";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
@@ -105,6 +105,7 @@ const config = {
     "allowMissingThread, a thread that does not exist yet returns an empty " +
     "draft instead of a 404. Page further back with chat.older-messages.list.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: {
     type: "capability",

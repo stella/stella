@@ -34,7 +34,7 @@ import {
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -87,6 +87,7 @@ const config = {
   // resource-appropriate grant depends on the upload's purpose, which
   // authorizeUploadPurpose (uploads/permissions.ts) checks in-handler.
   permissions: uploadRoutePermission,
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: { type: "capability", reason: "file_transport", consumesServices: true },
   params: finalizeParamsSchema,

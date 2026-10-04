@@ -3,7 +3,7 @@ import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
@@ -49,6 +49,7 @@ const config = {
     reason: "Returns previews of public external sources.",
   },
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "url_preview" },
   access: "read",
   query: t.Object({

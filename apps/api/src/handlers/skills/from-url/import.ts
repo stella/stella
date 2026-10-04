@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   authorizeSkillInstallScope,
@@ -29,6 +29,7 @@ const config = {
     "admin or owner. To pull several skills out of a repository, use " +
     "skills.discover and then skills.import instead.",
   permissions: { agentSkill: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

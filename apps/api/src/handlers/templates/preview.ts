@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -70,6 +70,7 @@ const config = {
     "structural marker errors positioned against those paragraphs, and the " +
     "names of its clause slots.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",
