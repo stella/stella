@@ -1,5 +1,7 @@
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { describe, expect, test } from "bun:test";
 import type { AnyElysia } from "elysia";
+import * as v from "valibot";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -23,9 +25,13 @@ import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
 import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
 import { featureOmittedCapabilityIds } from "@/api/mcp/capability-tools";
 import { MCP_ALL_RESOURCE_SCOPES, MCP_MODES } from "@/api/mcp/constants";
+import type { McpRequestContext } from "@/api/mcp/context";
 import { mcpOmittedToolNamesByReason } from "@/api/mcp/server-core";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
+import { FEATURE_DISABLED_MESSAGE } from "@/api/mcp/tool-utils";
+import { handleMcpToolCall } from "@/api/mcp/tools";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const FLAG = "FEATURE_TIME_BILLING";
 const PATH_ID = "00000000-0000-4000-8000-000000000001";
@@ -98,6 +104,17 @@ const disabledFlagResponse = async () => {
     env.FEATURE_LEGAL_LISTS = previous;
     restoreRuntimeMode();
   }
+};
+
+const errorOf = (result: CallToolResult) => {
+  const item = result.content.at(0);
+  const parsed = v.safeParse(
+    v.object({ error: v.object({ code: v.string(), message: v.string() }) }),
+    item?.type === "text" ? JSON.parse(item.text) : null,
+  );
+  return parsed.success
+    ? { code: parsed.output.error.code, message: parsed.output.error.message }
+    : { code: "none", message: "none" };
 };
 
 const timeBillingToolNames = (mode: (typeof MCP_MODES)[number]) =>
@@ -194,6 +211,46 @@ describe("time billing on agent surfaces", () => {
         expect(omittedCapabilities).not.toContain(id);
       }
     });
+  });
+
+  // The REST gate is a route hook invoke_capability does not pass through; the
+  // catalog's feature tag is what refuses a guessed id.
+  test("invoke_capability refuses every time billing capability while the flag is off and passes it on once on", async () => {
+    const capabilities = await featureOmittedCapabilityIds(
+      (feature) => feature !== FLAG,
+    );
+    expect(capabilities).toContain("invoices.list");
+    expect(capabilities).toContain("invoices.pdf.export");
+
+    const refusalWith = async (enabled: boolean, capability: string) =>
+      await withTimeBilling(enabled, async () =>
+        errorOf(
+          await handleMcpToolCall({
+            args: { capability, input: {} },
+            context: asTestRaw<McpRequestContext>({
+              accessibleWorkspaceIds: [PATH_ID],
+              grantedScopes: [],
+            }),
+            toolName: "invoke_capability",
+          }),
+        ),
+      );
+
+    for (const capability of capabilities) {
+      expect({
+        capability,
+        error: await refusalWith(false, capability),
+      }).toEqual({
+        capability,
+        error: { code: "feature_disabled", message: FEATURE_DISABLED_MESSAGE },
+      });
+      // Past the flag, a later gate (transport or the empty grant's scope)
+      // answers instead.
+      expect({
+        capability,
+        message: (await refusalWith(true, capability)).message,
+      }).not.toEqual({ capability, message: FEATURE_DISABLED_MESSAGE });
+    }
   });
 });
 

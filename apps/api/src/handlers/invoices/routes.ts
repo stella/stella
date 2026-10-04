@@ -79,11 +79,6 @@ export const invoicesRoute = new Elysia({
     params: deleteInvoiceLine.config.params,
     permissions: deleteInvoiceLine.config.permissions,
   })
-  .use(
-    deploymentFeatureGate(() =>
-      isDeploymentFeatureEnabled("FEATURE_TIME_BILLING"),
-    ),
-  )
   .post("/:invoiceId/pdf", exportInvoicePdf.handler, {
     params: exportInvoicePdf.config.params,
     permissions: exportInvoicePdf.config.permissions,
