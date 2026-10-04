@@ -105,8 +105,9 @@ export const caseLawSearchWarnings = ({
  *
  * - `filter_read`: the value named one known value in another spelling (a
  *   case, an abbreviation, an English name), and the search used that value.
- * - `filter_dropped`: the value named no known value, or several, so the
- *   search ran without that filter rather than returning nothing for it.
+ * - `filter_dropped`: the value named no known value, or several different
+ *   ones, so the search ran without that filter rather than returning
+ *   nothing for it.
  */
 export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_read",
@@ -122,19 +123,31 @@ export type AgentCaseLawSearchWarning = {
   readonly hint: string;
 };
 
+/**
+ * A court the corpus stores under several spellings (with and without the
+ * country, say) is one court, so a value naming it reads as every spelling,
+ * and the note lists them: the caller sees the filter that ran.
+ */
 export const filterReadWarning = ({
   filter,
   received,
-  value,
+  values: [value, ...others],
 }: {
   filter: string;
   received: string;
-  value: string;
-}): AgentCaseLawSearchWarning => ({
-  code: "filter_read",
-  message: `Read ${filter} ${received} as "${value}".`,
-  hint: `Pass ${filter} "${value}" to search the same way without this note.`,
-});
+  values: readonly [string, ...string[]];
+}): AgentCaseLawSearchWarning =>
+  others.length === 0
+    ? {
+        code: "filter_read",
+        message: `Read ${filter} ${received} as "${value}".`,
+        hint: `Pass ${filter} "${value}" to search the same way without this note.`,
+      }
+    : {
+        code: "filter_read",
+        message: `Read ${filter} ${received} as one ${filter} stored under ${String(others.length + 1)} spellings, and matched each: ${[value, ...others].map((spelling) => `"${spelling}"`).join(", ")}.`,
+        hint: `Pass ${filter} "${value}" to search the same ${filter} the same way.`,
+      };
 
 export const filterDroppedWarning = ({
   filter,
@@ -193,7 +206,7 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
     filterReadWarning({
       filter: "court",
       received: '"NS"',
-      value: "Nejvyšší soud",
+      values: ["Nejvyšší soud"],
     }),
   filter_dropped: () =>
     filterDroppedWarning({

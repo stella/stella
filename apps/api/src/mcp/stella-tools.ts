@@ -1994,7 +1994,8 @@ const facetValuesForFilters = ({
 }: {
   facets: SearchCaseLawSuccess["facets"];
   filters: {
-    court: string | undefined;
+    /** The court spellings the search narrowed by, from either court filter. */
+    court: readonly string[] | undefined;
     decisionType: string | undefined;
     language: string | undefined;
   };
@@ -2317,7 +2318,13 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     }
     const values = facetValuesForFilters({
       facets: outcome.page.facets,
-      filters: { court: courtFilter, decisionType, language },
+      filters: {
+        court:
+          courtListFilter ??
+          (courtFilter === undefined ? undefined : [courtFilter]),
+        decisionType,
+        language,
+      },
     });
     return {
       query,

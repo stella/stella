@@ -171,6 +171,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("provider-call-error-message.fixture.ts", [
     "provider-call-error-message/provider-call-error-message",
   ]),
+  fixtureRuleOverride("require-contract-domains.fixture.tsx", [
+    "require-contract-domains/require-contract-domains",
+  ]),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
     rules: publicSsrAmbientStateRules,
@@ -1233,6 +1236,7 @@ export default defineConfig({
   ],
 
   jsPlugins: [
+    "./.oxlint-plugins/require-contract-domains.ts",
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
@@ -4950,6 +4954,10 @@ export default defineConfig({
       rules: {
         "no-imported-class-constant/no-imported-class-constant": "error",
       },
+    },
+    {
+      files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/mcp/**/*.{ts,tsx}"],
+      rules: { "require-contract-domains/require-contract-domains": "error" },
     },
     ...fixtureRuleOverrides,
     // Last: oxlint resolves overrides by replacement, so a scope that enables
