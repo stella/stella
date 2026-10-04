@@ -234,7 +234,7 @@ const ratePage = () => {
 };
 
 for (const currency of ["EUR", "JPY", "KWD", null]) {
-  test(`changing currency to ${currency} discards an active hourly-rate draft`, async () => {
+  test(`changing currency to ${currency ?? "none"} discards an active hourly-rate draft`, async () => {
     const client = createClient();
     const original = {
       ...contact(A, null),
