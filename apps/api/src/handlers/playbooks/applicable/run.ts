@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { playbookRunRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -29,6 +30,7 @@ const config = {
     "many document runs opened. Use playbooks.run for a single playbook.",
   permissions: { playbook: ["apply"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: playbookRunRealtimeUpdates,
   access: "write",
   mcp: {
     type: "capability",

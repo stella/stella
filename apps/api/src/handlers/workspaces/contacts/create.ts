@@ -7,6 +7,7 @@ import { WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaceContacts } from "@/api/db/schema";
+import { workspaceContactRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -38,6 +39,7 @@ const config = {
     "other). Pass contactId with role to link.",
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: workspaceContactRealtimeUpdates,
   mcp: { type: "tool", name: "link_matter_contact" },
   body: createWorkspaceContactBodySchema,
 } satisfies WorkspaceHandlerConfig;
