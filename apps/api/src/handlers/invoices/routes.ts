@@ -14,6 +14,8 @@ import readInvoices from "@/api/handlers/invoices/list";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import updateInvoice from "@/api/handlers/invoices/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import {
   resourceRealtime,
   workspaceResourceSetUpdates,
@@ -26,6 +28,11 @@ const invoiceRealtimeUpdates = workspaceResourceSetUpdates(
 export const invoicesRoute = new Elysia({
   prefix: "/invoices/:workspaceId",
 })
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_TIME_BILLING"),
+    ),
+  )
   .use(workspaceAccessMacro)
   .use(resourceRealtime)
   .use(permissionMacro)

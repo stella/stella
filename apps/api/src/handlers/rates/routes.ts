@@ -15,6 +15,8 @@ import readRateTables from "@/api/handlers/rates/list";
 import resolveRate from "@/api/handlers/rates/resolve";
 import updateRateTable from "@/api/handlers/rates/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import {
   resourceRealtime,
   workspaceResourceSetUpdates,
@@ -28,6 +30,11 @@ const rateRealtimeUpdates = workspaceResourceSetUpdates([
 export const ratesRoute = new Elysia({
   prefix: "/rates/:workspaceId",
 })
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_TIME_BILLING"),
+    ),
+  )
   .use(workspaceAccessMacro)
   .use(resourceRealtime)
   .use(permissionMacro)
