@@ -470,7 +470,7 @@ if (!runPostgresTests || !databaseUrl) {
                   metadata,
                   schema,
                 ).unwrap();
-                expect(projected).toEqual(metadata);
+                expect(Bun.deepEquals(projected, metadata)).toBe(true);
                 await client.unsafe(
                   `INSERT INTO "${tableName}" (fixture_id, source_id, metadata) VALUES (2, $1::uuid, $2::text::jsonb)`,
                   [sourceId, JSON.stringify(projected)],
