@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
@@ -16,6 +17,10 @@ const importSkillBodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Imports skill metadata without delivering stored-file bytes.",
+  },
   description:
     "Fetch and install one agent skill from a URL pointing at a SKILL.md " +
     "file or a skill package. It is stored with a url origin, so it stays " +
@@ -26,6 +31,7 @@ const config = {
     "skills.discover and then skills.import instead.",
   permissions: { agentSkill: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

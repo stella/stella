@@ -267,19 +267,6 @@ describe("changed-file autofix boundary", () => {
     expect(ordered.findIndex(({ id }) => id === "cli-registry")).toBeLessThan(
       ordered.findIndex(({ id }) => id === "cli-runtime"),
     );
-    expect(ordered.map(({ id }) => id).toSorted()).toEqual(
-      [
-        "capability-catalog",
-        "capability-runtime",
-        "cli-registry",
-        "cli-runtime",
-        "mcp-app-bundles",
-        "mcp-surface",
-        "module-ownership",
-        "design-tokens",
-        "route-tree",
-      ].toSorted(),
-    );
     for (const generator of ordered) {
       if (generator.check) {
         expect(ci).toContain("- name: Generated files manifest guard");

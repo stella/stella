@@ -12,8 +12,8 @@
 // `.call` and `.apply`:
 //   the fetch wrappers (`fetchWithTimeout`, the case-law publisher fetches
 //     `fetchPublisher` / `fetchWithRetry`, and their typed reads
-//     `readPublisher` / `readPublisherText`) from their owning modules and
-//     the modules that re-export them
+//     `readPublisher` / `readPublisherBytes` / `readPublisherText`) from their
+//     owning modules and the modules that re-export them
 //   global `fetch` (`globalThis.fetch`, `const { fetch } = globalThis`)
 //   `undici` `fetch`, `request` and `stream`
 //   `node:http` / `node:https` `request` and `get`
@@ -51,10 +51,13 @@
 // Other runtime-configured services and explicitly trusted URL
 // producers take a narrow suppression at the call, naming the trust boundary;
 // this rule does not attempt whole-program taint analysis.
+// Soft-law handlers must use their supplied fetch capability, which owns the
+// publisher block latch; even a statically trusted destination cannot bypass it.
 
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
+  filenameForContext,
   getPropertyName,
   isAstNode,
   isIdentifier,
@@ -80,9 +83,19 @@ const FETCH_SOURCES: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ],
   [
     "apps/api/src/handlers/case-law/ingestion/adapters/publisher-read",
-    new Set(["readPublisher", "readPublisherText"]),
+    new Set(["readPublisher", "readPublisherBytes", "readPublisherText"]),
   ],
   ["undici", new Set(["fetch", "request", "stream"])],
+]);
+const SOFT_LAW_HANDLER_PATH = /(?:^|\/)apps\/api\/src\/handlers\/soft-law\//u;
+const SOFT_LAW_TRANSPORT_PATH =
+  /(?:^|\/)apps\/api\/src\/handlers\/soft-law\/publisher-access\.ts$/u;
+const SAFE_OUTBOUND_MODULE = "apps/api/src/lib/safe-outbound-fetch";
+const SAFE_OUTBOUND_FETCHES: ReadonlySet<string> = new Set([
+  "safeOutboundFetchBytes",
+  "safeOutboundFetchStream",
+  "fetchWithResolvedAddress",
+  "fetchStreamWithResolvedAddress",
 ]);
 const NODE_HTTP_MODULES: ReadonlySet<string> = new Set([
   "http",
@@ -225,6 +238,9 @@ export default eslintCompatPlugin({
       meta: {
         type: "problem",
         messages: {
+          adapterMustUseProvidedFetch:
+            "Soft-law handlers must use the supplied fetch capability so " +
+            "publisher blocks stop every later request.",
           uncheckedRedirect:
             "A provider-restricted outbound target must set redirect: " +
             '"error" so a cross-origin redirect cannot escape the validated ' +
@@ -238,6 +254,13 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const requiresSoftLawFetch = () => {
+          const filename = filenameForContext(context);
+          return (
+            SOFT_LAW_HANDLER_PATH.test(filename) &&
+            !SOFT_LAW_TRANSPORT_PATH.test(filename)
+          );
+        };
         const constInitializer = (variable: Variable): AstNode | null =>
           unwrapExpression(stableInitializer(variable));
 
@@ -419,6 +442,13 @@ export default eslintCompatPlugin({
           }
           const resolved = resolveImport(context, expression);
           if (resolved !== null) {
+            if (
+              requiresSoftLawFetch() &&
+              resolved.moduleId === SAFE_OUTBOUND_MODULE &&
+              SAFE_OUTBOUND_FETCHES.has(resolved.imported)
+            ) {
+              return "fetch";
+            }
             if (FETCH_SOURCES.get(resolved.moduleId)?.has(resolved.imported)) {
               return "fetch";
             }
@@ -1227,6 +1257,13 @@ export default eslintCompatPlugin({
           requestOptions: unknown;
           kind: SinkKind;
         }): void => {
+          if (requiresSoftLawFetch()) {
+            context.report({
+              node: call,
+              messageId: "adapterMustUseProvidedFetch",
+            });
+            return;
+          }
           const pattern =
             kind === "node-http"
               ? nodeRequestPattern(target)

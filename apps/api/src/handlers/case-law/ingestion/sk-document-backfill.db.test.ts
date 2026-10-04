@@ -41,6 +41,7 @@ import {
 import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
 import { SkDocumentNonPdfError } from "@/api/lib/legal-search/sk-document-fetch-diagnostics";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
+import { readOfResponse } from "@/api/tests/helpers/publisher-read";
 
 /**
  * Wide enough to hold the whole queue on the migrated-but-unseeded
@@ -800,7 +801,7 @@ if (!databaseUrl || !runPostgresTests) {
       ) =>
         await fetchDecisionDocument({
           decisionId: id,
-          fetchDocument: answer,
+          fetchDocument: async () => readOfResponse(await answer()),
           scopedDb,
           signal: new AbortController().signal,
         });
@@ -865,11 +866,13 @@ if (!databaseUrl || !runPostgresTests) {
             decisionId: buffered.id,
             fetchDocument: async (url) => {
               urls.push(url.href);
-              return url.href === currentUrl
-                ? new Response(bytes)
-                : new Response(oldStatus === 200 ? oldBytes : null, {
-                    status: oldStatus,
-                  });
+              return readOfResponse(
+                url.href === currentUrl
+                  ? new Response(bytes)
+                  : new Response(oldStatus === 200 ? oldBytes : null, {
+                      status: oldStatus,
+                    }),
+              );
             },
             scopedDb,
             signal: new AbortController().signal,

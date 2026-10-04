@@ -1,4 +1,5 @@
 import type { BullMqQueueName } from "@/api/lib/bullmq-queue";
+import type { RegisteredSchedulerTaskName } from "@/api/lib/scheduler/registry";
 
 /**
  * Queues whose runs act for the member who requested them.
@@ -29,9 +30,32 @@ export const MEMBER_RUN_QUEUES = [
     queue: "legal-list-verification-runs",
     module: "apps/api/src/lib/lists/verification/run-queue.ts",
   },
+  {
+    queue: "workflow",
+    module: "apps/api/src/lib/workflow-queue.ts",
+  },
+  {
+    queue: "workflow-flex",
+    module: "apps/api/src/lib/workflow-queue.ts",
+  },
 ] as const satisfies readonly { queue: BullMqQueueName; module: string }[];
 
 export type MemberRunQueue = (typeof MEMBER_RUN_QUEUES)[number]["queue"];
+
+/**
+ * Scheduler tasks that act for one member per item they process, through a
+ * `createRootRunActor` built for that member each time. `scripts/ownership.ts`
+ * allows `createRootRunActor` in these modules too.
+ */
+export const MEMBER_RUN_SCHEDULER_TASKS = [
+  {
+    task: "memory.extractor",
+    module: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
+  },
+] as const satisfies readonly {
+  task: RegisteredSchedulerTaskName;
+  module: string;
+}[];
 
 /**
  * Whose authority a queued job runs under.
@@ -74,6 +98,7 @@ export const MEMBER_RUN_REVOCATION_CASES = [
 const WORKFLOW_RUN = {
   authority: "member-run",
   worker: "apps/api/src/lib/workflow-queue.ts",
+  revocationTest: "apps/api/src/lib/workflow-queue.integration.test.ts",
   reason:
     "Started by a member (workflow start, cell retry, playbook run, MCP); follow-up runs reuse that member.",
 } as const satisfies QueueAuthorityEntry;

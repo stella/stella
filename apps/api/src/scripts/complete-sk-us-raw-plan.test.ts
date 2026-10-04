@@ -12,7 +12,10 @@ import {
   StoredRawReadError,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
-import type { readPublisher } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import {
+  readBodyText,
+  type readPublisherText,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import type { PublisherFetchInit } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   fetchSkUsListing,
@@ -78,13 +81,19 @@ const readOf = async (
   }
 };
 
-/** A publisher read that answers with the response `respond` serves. */
+/**
+ * A publisher text read that answers with the response `respond` serves; the
+ * body is read by the owner's bounded reader.
+ */
 const readWith =
   (
     respond: (url: string | URL, init: PublisherFetchInit) => Promise<Response>,
-  ): typeof readPublisher =>
+  ): typeof readPublisherText =>
   async (url, init) =>
-    await readOf(await respond(url, init), init);
+    await readBodyText(
+      await readOf(await respond(url, init), init),
+      init.signal ?? undefined,
+    );
 
 /** A fixture row that must exist; a missing one fails loudly, never as `undefined`. */
 const rowAt = <T>(items: readonly T[], index: number): T => {

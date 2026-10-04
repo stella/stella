@@ -32,6 +32,7 @@ const CONTACT_EXPORT_JSON_MEDIA_TYPE = "application/json";
 
 const config = {
   accountAccess: ACCOUNT_ACCESS.standard,
+  contentDelivery: { type: "audited" },
   description:
     "Export the contact directory as a bounded CSV or versioned JSON download.",
   permissions: { workspace: ["read"] },

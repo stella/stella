@@ -4,6 +4,7 @@ import { t } from "elysia";
 import { Temporal } from "@stll/time";
 
 import type { AGENT_SKILL_SCOPES } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
@@ -101,12 +102,17 @@ export const importSkillsBodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Imports skills without delivering stored-file bytes.",
+  },
   description:
     "Import one or more discovered skills from source URLs into the selected " +
     "scope. Each installed skill lists the package files it does not keep " +
     "(skippedFiles: path and reason).",
   permissions: { agentSkill: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

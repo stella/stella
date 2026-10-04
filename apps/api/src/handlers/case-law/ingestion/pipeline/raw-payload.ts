@@ -20,6 +20,7 @@ import type {
   RawSourceWriteWindow,
 } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
+import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
 /** Wall-clock bound on copying one file an envelope names into its decision. */
 export const RAW_OBJECT_COPY_TIMEOUT_MS = 60_000;
@@ -97,6 +98,8 @@ const planSourceRawPayload = ({
 };
 
 type WriteOwnedRawPayloadOptions = {
+  signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   result: IngestionResult;
   sourceId: SafeId<"caseLawSource">;
   /** The decision whose prefix holds the payload and the files it names. */
@@ -125,9 +128,12 @@ export const writeOwnedRawPayload = async ({
   storedContentType,
   window,
   onWriteStart,
+  signal,
+  s3Policy,
 }: WriteOwnedRawPayloadOptions): Promise<
   Result<string | undefined, RawSourceWriteFailure>
 > => {
+  signal?.throwIfAborted();
   const plan = planSourceRawPayload({ result, sourceId, decisionId: ownerId });
   if (plan === undefined) {
     return Result.ok(undefined);
@@ -159,6 +165,8 @@ export const writeOwnedRawPayload = async ({
         bytes,
         contentType: fileContentType,
         window,
+        ...(signal === undefined ? {} : { signal }),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
       });
       if (Result.isError(file)) {
         return file;
@@ -168,7 +176,14 @@ export const writeOwnedRawPayload = async ({
       const copied = await copyRawObject({
         copy,
         window,
-        signal: AbortSignal.timeout(RAW_OBJECT_COPY_TIMEOUT_MS),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
+        signal:
+          signal === undefined
+            ? AbortSignal.timeout(RAW_OBJECT_COPY_TIMEOUT_MS)
+            : AbortSignal.any([
+                signal,
+                AbortSignal.timeout(RAW_OBJECT_COPY_TIMEOUT_MS),
+              ]),
       });
       if (Result.isError(copied)) {
         return copied;
@@ -177,7 +192,10 @@ export const writeOwnedRawPayload = async ({
   }
   // Failing here holds the page cursor; see `rawWriteFailed` and
   // `writeRawSourcePayload` for why that is safe.
+  signal?.throwIfAborted();
   return await writeCaseLawRawPayload({
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
     owner,
     window,
     data: homed.value.payload,

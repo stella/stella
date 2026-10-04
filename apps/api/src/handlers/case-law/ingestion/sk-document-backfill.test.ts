@@ -24,8 +24,8 @@ import {
   remainingDocumentPredicate,
   requestedDocumentOrder,
   requestedDocumentPredicate,
-  type SkDocumentFetch,
 } from "@/api/lib/legal-search/sk-document-backfill";
+import { readOfResponse } from "@/api/tests/helpers/publisher-read";
 
 const dialect = new PgDialect();
 
@@ -71,12 +71,13 @@ describe("deferred document queue shape", () => {
 const PUBLISHER_URL =
   "https://obcan.justice.sk/content/public/item/6fe03973-7694-432b-9ebd-dfa4104ef742";
 
+/** One download through a gate that answers with what `respond` serves. */
 const download = async (
-  fetchDocument: SkDocumentFetch,
+  respond: () => Promise<Response>,
 ): Promise<PdfFetchResult> =>
   await fetchPdfBytes({
     documentUrl: PUBLISHER_URL,
-    fetchDocument,
+    fetchDocument: async () => readOfResponse(await respond()),
     signal: new AbortController().signal,
   });
 
@@ -150,6 +151,32 @@ describe("one document's download", () => {
         thrown: true,
       });
     }
+  });
+
+  test("an empty 204 is that document's own failure, not an empty document", async () => {
+    const result = await download(
+      async () => await Promise.resolve(new Response(null, { status: 204 })),
+    );
+
+    expect(result).toEqual({
+      type: "failed",
+      failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
+      detail: "http-204",
+    });
+  });
+
+  test("a URL the gate refuses is nothing to fetch", async () => {
+    const result = await fetchPdfBytes({
+      documentUrl: PUBLISHER_URL,
+      fetchDocument: async () =>
+        await Promise.resolve({
+          type: "refused-target" as const,
+          reason: "off the publisher's hosts",
+        }),
+      signal: new AbortController().signal,
+    });
+
+    expect(result).toEqual({ type: "absent" });
   });
 
   test("not found and gone mean there is nothing to fetch", async () => {
@@ -238,9 +265,9 @@ describe("one document's download", () => {
       type: "too-large",
       limitBytes: MAX_DOCUMENT_PDF_BYTES,
     });
-    expect(result.type === "too-large" ? result.prefix.byteLength : 0).toBe(
-      1024,
-    );
+    expect(
+      result.type === "too-large" ? result.prefix?.byteLength : undefined,
+    ).toBe(1024);
     expect(pulledBytes).toBeLessThan(servedBytes);
   });
 
