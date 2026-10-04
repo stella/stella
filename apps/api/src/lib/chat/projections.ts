@@ -211,6 +211,7 @@ export const LIST_MATTERS_LIST_PROJECTION = v.strictObject({
  * contact/member card mappers.
  */
 export const LIST_MATTERS_DETAIL_PROJECTION = v.strictObject({
+  contactsOverflow: v.boolean(),
   matter: v.strictObject({
     id: chatRef("matter"),
     name: v.string(),

@@ -171,6 +171,11 @@ export const TRACKED_SUPPRESSION_RULES = [
     guards: "cleanup-intent inserts that silently inherit a lifecycle state",
   },
   {
+    rule: "no-direct-clause-variant-insert/no-direct-clause-variant-insert",
+    tier: "data-volume",
+    guards: "clause variant inserts bypassing the shared capacity lock",
+  },
+  {
     rule: "require-query-limit/require-query-limit",
     tier: "data-volume",
     guards: "unbounded Drizzle list reads",

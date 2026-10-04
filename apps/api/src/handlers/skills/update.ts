@@ -8,6 +8,7 @@ import {
   RESERVED_AGENT_SKILL_COMMANDS,
   agentSkills,
 } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { requireSkillManager } from "@/api/handlers/skills/managed-skill";
 import { uniqueSlug } from "@/api/handlers/skills/slug";
 import type { SkillSlug } from "@/api/handlers/skills/slug";
@@ -61,6 +62,7 @@ const config = {
     "name; a command already taken in the organization is a 409.",
   permissions: { agentSkill: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

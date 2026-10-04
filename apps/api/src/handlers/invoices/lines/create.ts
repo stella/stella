@@ -24,6 +24,7 @@ import {
   tVatRateBps,
   tVatTreatment,
 } from "@/api/handlers/invoices/invoice-lines";
+import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -184,6 +185,7 @@ const createInvoiceLine = createSafeHandler(
       "basis points and a VAT treatment. Only draft invoices accept lines.",
     permissions: { invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: invoiceRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "billing_admin",

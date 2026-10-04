@@ -18,6 +18,7 @@ import {
   rollbackS3Copies,
   snapshotOfCurrentVersion,
 } from "@/api/handlers/entities/copy-utils";
+import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -301,6 +302,7 @@ const config = {
     "entities.copy to copy into a different matter.",
   permissions: { entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityFileRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "document_processing",

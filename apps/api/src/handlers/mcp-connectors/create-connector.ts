@@ -16,6 +16,7 @@ import {
   mcpConnectorUrlVariants,
   normalizeMcpConnectorUrl,
 } from "@/api/handlers/mcp-connectors/url-normalization";
+import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
@@ -41,6 +42,7 @@ const requestBody = t.Object({
 const config = {
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  realtime: mcpConnectorRealtimeUpdates,
   mcp: { type: "internal", reason: "mcp_transport" },
   body: requestBody,
 } satisfies HandlerConfig;
