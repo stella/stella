@@ -9,6 +9,7 @@ import {
   agentSkillProposals,
   agentSkillRevisions,
 } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
 import { lockSkillForAnchor } from "@/api/lib/agent-skills/revisions";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -45,6 +46,7 @@ const config = {
     "comment survives the text moving on.",
   permissions: { agentSkill: ["comment"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   access: "write",
   mcp: {
     type: "capability",

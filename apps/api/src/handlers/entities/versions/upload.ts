@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import { uploadVersionBodySchema } from "@/api/handlers/entities/upload-version-schema";
+import { entityVersionRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
@@ -25,6 +26,7 @@ const config = {
     "uploads.create with purpose entity_version and then uploads.update.",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityVersionRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "document_processing",

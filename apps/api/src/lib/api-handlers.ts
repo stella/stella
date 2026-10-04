@@ -65,6 +65,12 @@ import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
 import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
 import {
+  announceResourceSetUpdates,
+  type NoResourceSetUpdates,
+  type OrganizationResourceSetUpdates,
+  type ResourceSetRealtime,
+} from "@/api/lib/resource-set-realtime";
+import {
   projectPublicErrorBody,
   PUBLIC_ERROR_TEXT_BYTES,
   safePublicHandlerErrorOrStatusTextResponseSchema,
@@ -381,6 +387,12 @@ export type HandlerConfig = InputSchema &
     requiresUsage?: UsageMeteringConfig;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
     actionAdmission?: { type: "handler"; actionKind: PeriodActionKind };
+    /**
+     * Resource sets a successful call announces to open tabs. The wrapper
+     * broadcasts them for every transport (REST, `invoke_capability`, CLI);
+     * see `lib/resource-set-realtime.ts`.
+     */
+    realtime?: ResourceSetRealtime;
     mcp: McpExposure;
   };
 
@@ -429,7 +441,10 @@ export type SessionHandlerConfig = InputSchema &
   };
 
 type ConfigRouteSchema<TConfig extends HandlerConfig> = UnwrapRoute<
-  Omit<TConfig, "permissions" | "mcp" | "description" | "access" | "transport">
+  Omit<
+    TConfig,
+    "permissions" | "mcp" | "description" | "access" | "transport" | "realtime"
+  >
 >;
 
 type SessionConfigRouteSchema<TConfig extends SessionHandlerConfig> =
@@ -1036,6 +1051,7 @@ export const admitFiniteAction = async function* <
 type HandlerAdmissionDependencies = {
   admit?: typeof withActionAdmission;
   checkAccountOperation?: typeof checkDemoAccountOperation;
+  announce?: typeof announceResourceSetUpdates;
 };
 
 const createSafeScopedHandler = <
@@ -1048,6 +1064,7 @@ const createSafeScopedHandler = <
   {
     admit = withActionAdmission,
     checkAccountOperation = checkDemoAccountOperation,
+    announce = announceResourceSetUpdates,
   }: HandlerAdmissionDependencies = {},
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
@@ -1105,22 +1122,30 @@ const createSafeScopedHandler = <
     }
 
     const admission = config.actionAdmission;
-    if (
+    const result =
       admission === undefined ||
       (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION") &&
         !isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS"))
-    ) {
-      return await runSafeHandler(ctx, handler);
-    }
+        ? await runSafeHandler(ctx, handler)
+        : await runSafeHandler(ctx, (input) =>
+            runAdmittedFiniteHandler({
+              ctx: input,
+              handler,
+              admit,
+              actionKind: admission.actionKind,
+            }),
+          );
 
-    return await runSafeHandler(ctx, (input) =>
-      runAdmittedFiniteHandler({
-        ctx: input,
-        handler,
-        admit,
-        actionKind: admission.actionKind,
-      }),
-    );
+    // Every transport runs this wrapper, so the announcement lives here and
+    // not on a route hook. The handler returned, so its transaction settled;
+    // only a success is announced.
+    announce({
+      realtime: config.realtime,
+      result,
+      organizationId: ctx.session.activeOrganizationId,
+      workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : undefined,
+    });
+    return result;
   },
 });
 
@@ -1500,8 +1525,16 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   ...(error.requiredFields ? { requiredFields: error.requiredFields } : {}),
 });
 
+/**
+ * A root handler has no validated matter, so it can only announce
+ * organization-wide resource sets.
+ */
+type RootHandlerConfig = HandlerConfig & {
+  realtime?: OrganizationResourceSetUpdates | NoResourceSetUpdates;
+};
+
 export const createSafeRootHandler = <
-  TConfig extends HandlerConfig,
+  TConfig extends RootHandlerConfig,
   TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
@@ -1518,26 +1551,31 @@ export const createSafeHandler = <
   config: TConfig,
   handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult> &
     ConfiguredFiniteHandlerGuard<TConfig, TResult>,
+  dependencies?: HandlerAdmissionDependencies,
 ): SafeHandlerDefinition<TConfig, WorkspaceHandlerContext<TConfig>, TResult> =>
-  createSafeScopedHandler(config, (ctx) => {
-    // Elysia may expand validateAuth again after validateWorkspaceAccess when a
-    // route also declares permissions. That later resolve carries the root
-    // recorder and can overwrite the recorder bound by the workspace macro.
-    // Rebind here, where the context type proves workspaceId was validated, so
-    // workspace mutations cannot emit organization-only audit rows regardless
-    // of macro composition order.
-    // Direct unit tests below the Elysia boundary may intentionally use a
-    // minimal raw context. Real WorkspaceHandlerContext values always carry
-    // this factory; keep those fixture-only omissions from changing handler
-    // behavior while still rebinding every framework-produced request.
-    const recorderFactory: unknown = Reflect.get(ctx, "createAuditRecorder");
-    if (typeof recorderFactory === "function") {
-      ctx.recordAuditEvent = ctx.createAuditRecorder({
-        workspaceId: ctx.workspaceId,
-      });
-    }
-    return handler(ctx);
-  });
+  createSafeScopedHandler(
+    config,
+    (ctx) => {
+      // Elysia may expand validateAuth again after validateWorkspaceAccess when a
+      // route also declares permissions. That later resolve carries the root
+      // recorder and can overwrite the recorder bound by the workspace macro.
+      // Rebind here, where the context type proves workspaceId was validated, so
+      // workspace mutations cannot emit organization-only audit rows regardless
+      // of macro composition order.
+      // Direct unit tests below the Elysia boundary may intentionally use a
+      // minimal raw context. Real WorkspaceHandlerContext values always carry
+      // this factory; keep those fixture-only omissions from changing handler
+      // behavior while still rebinding every framework-produced request.
+      const recorderFactory: unknown = Reflect.get(ctx, "createAuditRecorder");
+      if (typeof recorderFactory === "function") {
+        ctx.recordAuditEvent = ctx.createAuditRecorder({
+          workspaceId: ctx.workspaceId,
+        });
+      }
+      return handler(ctx);
+    },
+    dependencies,
+  );
 
 export const createSafeSessionHandler = <
   TConfig extends SessionHandlerConfig,

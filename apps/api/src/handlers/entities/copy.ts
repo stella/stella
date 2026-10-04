@@ -25,6 +25,7 @@ import {
   snapshotOfCurrentVersion,
   validateMoveSourceReadLimits,
 } from "@/api/handlers/entities/copy-utils";
+import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -704,6 +705,7 @@ const config = {
     "read-only entities are refused.",
   permissions: { entity: ["create", "delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "document_processing",

@@ -27,6 +27,7 @@ import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { pendingUploads } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
+import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { finalizeAgentSkill } from "@/api/handlers/uploads/agent-skill";
 import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
@@ -84,6 +85,7 @@ const config = {
   // authorizeUploadPurpose (uploads/permissions.ts) checks in-handler.
   permissions: uploadRoutePermission,
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityUploadRealtimeUpdates,
   access: "write",
   mcp: { type: "capability", reason: "file_transport", consumesServices: true },
   params: finalizeParamsSchema,

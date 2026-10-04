@@ -11,6 +11,7 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { documentVersionRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type {
@@ -121,6 +122,7 @@ const config = {
   requestTimeoutMs: DOCUMENT_COMPARE_REQUEST_TIMEOUT_MS,
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: documentVersionRealtimeUpdates,
   mcp: { type: "tool", name: "compare_documents" },
   access: "write",
   params: workspaceParams({ documentId: tSafeId("entity") }),
