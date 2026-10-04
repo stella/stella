@@ -18,6 +18,7 @@ export const INVOICE_DETAIL_RELATIONS = {
       invoiceNarrative: true,
       noCharge: true,
       status: true,
+      invoiceAttachment: true,
     },
     with: { workItem: { columns: { id: true, name: true } } },
   },

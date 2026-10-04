@@ -23,6 +23,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FlowStep } from "@/api/lib/flows/flow-types";
+import type { MemberRole } from "@/api/lib/member-roles";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { WORK_OBLIGATION_TRANSITIONS } from "@/api/lib/work-obligations/transitions";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -201,7 +202,7 @@ const transition = async (
   action: TransitionContext["body"]["action"],
   options: {
     reason?: string;
-    role?: TransitionContext["memberRole"]["role"];
+    role?: MemberRole;
   } = {},
 ) =>
   await transitionWorkObligation.handler(

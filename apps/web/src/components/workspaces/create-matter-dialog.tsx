@@ -53,6 +53,7 @@ import { useCreateContact } from "@/lib/contacts/mutations";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
@@ -241,13 +242,13 @@ const CreateMatterDialogBody = ({
     );
 
     if (Result.isError(result)) {
-      stellaToast.add({
-        title: toActionErrorTitle({
+      notifyUserError(
+        result.error,
+        toActionErrorTitle({
           error: result.error,
           fallback: t("errors.actionFailed"),
         }),
-        type: "error",
-      });
+      );
       return;
     }
 
@@ -309,13 +310,13 @@ const CreateMatterDialogBody = ({
     );
 
     if (Result.isError(result)) {
-      stellaToast.add({
-        title: toActionErrorTitle({
+      notifyUserError(
+        result.error,
+        toActionErrorTitle({
           error: result.error,
           fallback: t("errors.actionFailed"),
         }),
-        type: "error",
-      });
+      );
       return;
     }
 
@@ -326,13 +327,13 @@ const CreateMatterDialogBody = ({
         async () => await onCreated(workspaceId),
       );
       if (Result.isError(callbackResult)) {
-        stellaToast.add({
-          title: toActionErrorTitle({
+        notifyUserError(
+          callbackResult.error,
+          toActionErrorTitle({
             error: callbackResult.error,
             fallback: t("errors.actionFailed"),
           }),
-          type: "error",
-        });
+        );
       }
     }
 

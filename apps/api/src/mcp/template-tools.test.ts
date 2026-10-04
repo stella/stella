@@ -77,6 +77,20 @@ const parseToolPayload = (
   return JSON.parse(item.text) as unknown;
 };
 
+// A role without the tool's declared permissions is refused by dispatch
+// before the handler runs.
+const roleDenied = (toolName: string) => [
+  {
+    type: "text" as const,
+    text: JSON.stringify({
+      error: {
+        code: "permission_denied",
+        message: `Your member role does not permit ${toolName}`,
+      },
+    }),
+  },
+];
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -937,6 +951,7 @@ describe("MCP template tools", () => {
       text: "Lease between ACME and Tenant.",
       unmatchedPlaceholders: [],
       unusedValues: [],
+      clauseWarnings: [],
       aiFieldErrors: [],
       structureErrors: [
         {
@@ -973,6 +988,7 @@ describe("MCP template tools", () => {
       docxBase64: docxBytes.toString("base64"),
       unmatchedPlaceholders: [],
       unusedValues: [],
+      clauseWarnings: [],
       structureErrors: [
         {
           directive: "#if signature",
@@ -1002,6 +1018,55 @@ describe("MCP template tools", () => {
     );
   });
 
+  test.each(["text", "docx"])(
+    "fill_template retains nonfatal clause warnings in %s output",
+    async (output_mode) => {
+      const warning = {
+        code: "CLAUSE_LEGACY_DIRECTIVES",
+        clauseName: "Terms",
+        version: 1,
+        message:
+          "Clause Terms version 1 retains literal legacy directive markers.",
+        issues: [{ path: "body.0", message: "Unclosed if" }],
+      };
+      fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+        conditionDecisions: [],
+        templateName: "Terms",
+        fileName: "terms.docx",
+        file: await makeDocxFile(["{% if enabled %}"]),
+        text: "{% if enabled %}",
+        unmatchedPlaceholders: [],
+        unusedValues: [],
+        clauseWarnings: [warning],
+        aiFieldErrors: [],
+        structureErrors: [],
+      });
+      const result = await handleMcpToolCall({
+        args: { template_id: TEMPLATE_ID, values: {}, output_mode },
+        context: createContext(),
+        toolName: "fill_template",
+      });
+      expect(result.isError).not.toBe(true);
+      expect(parseToolPayload(result)).toMatchObject({
+        clauseWarnings: [warning],
+      });
+    },
+  );
+
+  test("preview_template_conditions reports bounded incomplete previews", async () => {
+    const preview = { state: "incomplete", reason: "clause-limit" };
+    templateDecideConditionsLogicMock.mockResolvedValue(
+      Result.ok({ conditions: [], model: null, preview }),
+    );
+    const result = await handleMcpToolCall({
+      args: { template_id: TEMPLATE_ID, values: {} },
+      context: createContext(),
+      toolName: "preview_template_conditions",
+    });
+    expect(result.isError).not.toBe(true);
+    expect(parseToolPayload(result)).toMatchObject({ preview });
+  });
+
   test("fill_template returns rendered text and no base64 by default", async () => {
     const docxFile = await makeDocxFile([
       "Lease between ACME and Tenant.",
@@ -1015,6 +1080,7 @@ describe("MCP template tools", () => {
       text: "Lease between ACME and Tenant.\nSigned in Prague.",
       unmatchedPlaceholders: [],
       unusedValues: [],
+      clauseWarnings: [],
       aiFieldErrors: [],
       structureErrors: [],
     });
@@ -1036,6 +1102,7 @@ describe("MCP template tools", () => {
       truncated: false,
       unmatchedPlaceholders: [],
       unusedValues: [],
+      clauseWarnings: [],
       structureErrors: [],
       aiFieldErrors: [],
       decisions: [],
@@ -1050,6 +1117,7 @@ describe("MCP template tools", () => {
       text: "Lease between ACME and Tenant.",
       unmatchedPlaceholders: [],
       unusedValues: [],
+      clauseWarnings: [],
       aiFieldErrors: [],
       structureErrors: [],
       conditionDecisions: [
@@ -1310,6 +1378,7 @@ describe("MCP template tools", () => {
       text: oversized,
       unmatchedPlaceholders: [],
       unusedValues: [],
+      clauseWarnings: [],
       aiFieldErrors: [],
       structureErrors: [],
     });
@@ -1344,6 +1413,7 @@ describe("MCP template tools", () => {
       text: "Lease between ACME and {{landlord.signature}}.",
       unmatchedPlaceholders: ["landlord.signature"],
       unusedValues: [],
+      clauseWarnings: [],
       structureErrors: [],
       aiFieldErrors: [],
     });
@@ -1380,6 +1450,7 @@ describe("MCP template tools", () => {
       text: "Partial lease",
       unmatchedPlaceholders,
       unusedValues: [],
+      clauseWarnings: [],
       aiFieldErrors: [],
     });
 
@@ -1413,6 +1484,7 @@ describe("MCP template tools", () => {
       text: "Lease between ACME and {{landlord.signature}}.",
       unmatchedPlaceholders: ["landlord.signature"],
       unusedValues: [],
+      clauseWarnings: [],
       structureErrors: [],
       aiFieldErrors: [],
     });
@@ -1447,6 +1519,7 @@ describe("MCP template tools", () => {
       text: "Zakres: {{scope}}",
       unmatchedPlaceholders: ["scope"],
       unusedValues: [],
+      clauseWarnings: [],
       structureErrors: [],
       aiFieldErrors: [
         {
@@ -1487,6 +1560,7 @@ describe("MCP template tools", () => {
       text: "Zakres: {{scope}}",
       unmatchedPlaceholders: ["scope"],
       unusedValues: [],
+      clauseWarnings: [],
       structureErrors: [],
       aiFieldErrors: [
         {
@@ -1623,6 +1697,7 @@ describe("MCP template tools", () => {
       text: "Lease",
       unmatchedPlaceholders: [],
       unusedValues: ["intentional"],
+      clauseWarnings: [],
       structureErrors: [],
       aiFieldErrors: [],
     });
@@ -1639,7 +1714,10 @@ describe("MCP template tools", () => {
 
     expect(result.isError).not.toBe(true);
     expect(parseToolPayload(result)).toEqual(
-      expect.objectContaining({ unusedValues: ["intentional"] }),
+      expect.objectContaining({
+        unusedValues: ["intentional"],
+        clauseWarnings: [],
+      }),
     );
     expect(fillStoredTemplateWithTextMock).toHaveBeenCalled();
     expect(fillStoredTemplateWithTextStrictMock).not.toHaveBeenCalled();
@@ -1666,6 +1744,39 @@ describe("MCP template tools", () => {
     expect(result.content).toEqual([
       { type: "text", text: "Monthly AI usage limit reached." },
     ]);
+  });
+
+  test("fill_template names the linked clause and corrective call in a directive refusal", async () => {
+    const message =
+      'Clause "Terms" (00000000-0000-4000-8000-000000000002) in slot @clause:Terms has invalid directives.';
+    const hint =
+      "Read clause 00000000-0000-4000-8000-000000000002 with list_clauses, then correct slot @clause:Terms in the clause editor or call save_clause.";
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      error: message,
+      storedTemplateError: new HandlerError({
+        status: 422,
+        code: "clause_directives_invalid",
+        retryable: false,
+        message,
+        hint,
+        issues: [
+          { path: "@clause:Terms.1", message: "Unclosed {% if %} block" },
+        ],
+      }),
+    });
+    const result = await handleMcpToolCall({
+      args: { template_id: TEMPLATE_ID, values: {} },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+    expect(result.isError).toBe(true);
+    expect(validationEnvelope(result)).toMatchObject({
+      code: "validation_error",
+      message,
+      hint,
+      retryable: false,
+      issues: [{ path: "@clause:Terms.1", message: "Unclosed {% if %} block" }],
+    });
   });
 
   test("fill_template keeps a stored-file scanner outage retryable", async () => {
@@ -1698,6 +1809,7 @@ describe("MCP template tools", () => {
       file: testDocxFile(Buffer.from("filled docx")),
       unmatchedPlaceholders: [],
       unusedValues: ["unused"],
+      clauseWarnings: [],
       aiFieldErrors: [],
     });
     createEntityFromBufferMock.mockImplementation(async (input) => {
@@ -1765,6 +1877,7 @@ describe("MCP template tools", () => {
       fileName: "Example Lease.docx",
       unmatchedPlaceholders: [],
       unusedValues: ["unused"],
+      clauseWarnings: [],
     });
     expect(JSON.stringify(parseToolPayload(result))).not.toContain("base64");
   });
@@ -1840,6 +1953,7 @@ describe("MCP template tools", () => {
       file: testDocxFile(Buffer.from("optional field defaulted to blank")),
       unmatchedPlaceholders: [],
       unusedValues: [],
+      clauseWarnings: [],
       aiFieldErrors: [
         {
           fieldPath: "scope",
@@ -1887,6 +2001,7 @@ describe("MCP template tools", () => {
       file: testDocxFile(Buffer.from("optional field defaulted to blank")),
       unmatchedPlaceholders: [],
       unusedValues: [],
+      clauseWarnings: [],
       aiFieldErrors,
     });
     createEntityFromBufferMock.mockImplementation(async (input) => {
@@ -1943,6 +2058,7 @@ describe("MCP template tools", () => {
       file: testDocxFile(Buffer.from("optional field defaulted to blank")),
       unmatchedPlaceholders: [],
       unusedValues: [],
+      clauseWarnings: [],
       aiFieldErrors: [
         {
           fieldPath: "contracts.summary",
@@ -1982,6 +2098,7 @@ describe("MCP template tools", () => {
       file: testDocxFile(Buffer.from("optional field defaulted to blank")),
       unmatchedPlaceholders: [],
       unusedValues: [],
+      clauseWarnings: [],
       aiFieldErrors: [
         {
           fieldPath: "contracts.summary",
@@ -2055,6 +2172,7 @@ describe("MCP template tools", () => {
         text: "Summary:",
         unmatchedPlaceholders: [],
         unusedValues: [],
+        clauseWarnings: [],
         aiFieldErrors: [
           {
             fieldPath,
@@ -2098,6 +2216,7 @@ describe("MCP template tools", () => {
         file: testDocxFile(Buffer.from("filled docx")),
         unmatchedPlaceholders: [],
         unusedValues: [],
+        clauseWarnings: [],
         aiFieldErrors: [],
       };
     });
@@ -2139,6 +2258,7 @@ describe("MCP template tools", () => {
           fileName: "lease.docx",
           unmatchedPlaceholders: [],
           unusedValues: ["unused"],
+          clauseWarnings: [],
           aiFieldErrors: [
             {
               field: "contracts[0].summary",
@@ -2170,6 +2290,7 @@ describe("MCP template tools", () => {
       fileName: "lease.docx",
       unmatchedPlaceholders: [],
       unusedValues: ["unused"],
+      clauseWarnings: [],
       aiFieldErrors: [
         {
           field: "contracts[0].summary",
@@ -2242,6 +2363,7 @@ describe("MCP template tools", () => {
       file: testDocxFile(Buffer.from("filled docx v2")),
       unmatchedPlaceholders: ["signature"],
       unusedValues: [],
+      clauseWarnings: [],
       aiFieldErrors: [],
       structureErrors: [
         {
@@ -2312,6 +2434,7 @@ describe("MCP template tools", () => {
       fileName: "lease.docx",
       unmatchedPlaceholders: ["signature"],
       unusedValues: [],
+      clauseWarnings: [],
     });
   });
 
@@ -2326,6 +2449,7 @@ describe("MCP template tools", () => {
       file: testDocxFile(Buffer.from("filled docx")),
       unmatchedPlaceholders: [],
       unusedValues: [],
+      clauseWarnings: [],
       aiFieldErrors: [],
       structureErrors: [],
     });
@@ -2384,6 +2508,7 @@ describe("MCP template tools", () => {
       file: testDocxFile(Buffer.from("filled docx")),
       unmatchedPlaceholders: ["signature", "landlord.name"],
       unusedValues: [],
+      clauseWarnings: [],
       aiFieldErrors: [],
       structureErrors: [],
     });
@@ -2491,10 +2616,7 @@ describe("MCP template tools", () => {
       text: "Matter is archived; unarchive it first",
     });
     expect(forbidden.isError).toBe(true);
-    expect(forbidden.content.at(0)).toMatchObject({
-      type: "text",
-      text: "Forbidden",
-    });
+    expect(forbidden.content).toEqual(roleDenied("save_filled_template"));
     expect(validationEnvelope(malformedTemplate)).toMatchObject({
       code: "validation_error",
     });
@@ -3134,7 +3256,7 @@ describe("MCP template tools", () => {
       toolName: "create_template",
     });
     expect(creating.isError).toBe(true);
-    expect(creating.content).toEqual([{ type: "text", text: "Forbidden" }]);
+    expect(creating.content).toEqual(roleDenied("create_template"));
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
 
     const publishing = await handleMcpToolCall({
@@ -3146,7 +3268,7 @@ describe("MCP template tools", () => {
       toolName: "create_template",
     });
     expect(publishing.isError).toBe(true);
-    expect(publishing.content).toEqual([{ type: "text", text: "Forbidden" }]);
+    expect(publishing.content).toEqual(roleDenied("create_template"));
     expect(writeStoredTemplateMock).not.toHaveBeenCalled();
   });
 
@@ -3161,7 +3283,7 @@ describe("MCP template tools", () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(result.content).toEqual([{ type: "text", text: "Forbidden" }]);
+    expect(result.content).toEqual(roleDenied("create_template"));
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
@@ -4140,7 +4262,7 @@ describe("MCP template tools", () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(result.content).toEqual([{ type: "text", text: "Forbidden" }]);
+    expect(result.content).toEqual(roleDenied("configure_template_fields"));
     expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
   });
 

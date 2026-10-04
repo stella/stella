@@ -1,5 +1,8 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
+
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -12,6 +15,8 @@ import {
 import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/decisions/slug";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
+import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -22,11 +27,13 @@ import {
   absentTextField,
   presentTextField,
 } from "@/api/lib/case-law/decision-text";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   openGatedTestDatabase,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -39,20 +46,21 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const decisionAt = (
   court: string,
   sourceDocumentId: string | undefined,
-): IngestionResult => ({
-  caseNumber: "0T/42/2019",
-  sourceDocumentId,
-  court,
-  country: "SVK",
-  language: "sk",
-  decisionDate: "2019-05-14",
-  decisionType: "rozsudok",
-  fulltext: `Rozsudok ${court}`,
-  metadata: { court },
-  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  rawHash: `hash-${court}`,
-  documentAst: EMPTY_AST,
-});
+): IngestionResult =>
+  plainTextIngestionResult({
+    caseNumber: "0T/42/2019",
+    sourceDocumentId,
+    court,
+    country: "SVK",
+    language: "sk",
+    decisionDate: "2019-05-14",
+    decisionType: "rozsudok",
+    fulltext: `Rozsudok ${court}`,
+    metadata: { court },
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash: `hash-${court}`,
+    documentAst: EMPTY_AST,
+  });
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("case-law decision identity", () => {
@@ -182,10 +190,10 @@ if (!databaseUrl || !runPostgresTests) {
       await db
         .delete(caseLawDecisions)
         .where(eq(caseLawDecisions.id, retiredId));
-      const input = {
+      const input = plainTextIngestionResult({
         ...decisionAt("Najvyšší súd SR", "retired-publisher"),
         caseNumber: "1Cdo/1/2026",
-      };
+      });
       for (const observationOrder of [1n, 2n]) {
         await processDecision({
           input: {
@@ -401,10 +409,10 @@ if (!databaseUrl || !runPostgresTests) {
 
     test("uses publisher identity when a replay also carries a sheet number", async () => {
       const publisherId = "publisher-id-with-sheet";
-      const decision = {
+      const decision = plainTextIngestionResult({
         ...decisionAt("Krajský súd Brno", publisherId),
         sheetNumber: "42",
-      };
+      });
 
       await processDecision({
         input: decision,
@@ -434,10 +442,10 @@ if (!databaseUrl || !runPostgresTests) {
 
     test("adopts only the matching legacy row when a sibling arrives first", async () => {
       const legacyUrl = "https://publisher.test/legacy-document";
-      const legacy = {
+      const legacy = plainTextIngestionResult({
         ...decisionAt("Legacy identity", undefined),
         sourceUrl: legacyUrl,
-      };
+      });
       await processDecision({
         input: legacy,
         observationOrder: 1n,
@@ -503,10 +511,10 @@ if (!databaseUrl || !runPostgresTests) {
 
     test("binds a redacted legacy tombstone before inserting siblings", async () => {
       const legacyUrl = "https://publisher.test/redacted-legacy";
-      const legacy = {
+      const legacy = plainTextIngestionResult({
         ...decisionAt("Redacted legacy identity", undefined),
         sourceUrl: legacyUrl,
-      };
+      });
       await processDecision({
         input: legacy,
         observationOrder: 1n,
@@ -577,11 +585,11 @@ if (!databaseUrl || !runPostgresTests) {
 
     test("does not adopt a legacy URL when its ECLI contradicts the decision", async () => {
       const legacyUrl = "https://publisher.test/ambiguous-legacy-url";
-      const legacy = {
+      const legacy = plainTextIngestionResult({
         ...decisionAt("Ambiguous legacy identity", undefined),
         ecli: "ECLI:TEST:LEGACY",
         sourceUrl: legacyUrl,
-      };
+      });
       await processDecision({
         input: legacy,
         observationOrder: 1n,
@@ -591,13 +599,13 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...legacy,
           sourceDocumentId: "contradictory-ecli-publisher-id",
           legacySourceUrls: [legacyUrl],
           ecli: "ECLI:TEST:INCOMING",
           rawHash: "hash-contradictory-ecli",
-        },
+        }),
         observationOrder: 2n,
         sourceId,
         scopedDb,
@@ -639,11 +647,11 @@ if (!databaseUrl || !runPostgresTests) {
       ecli: string,
     ): Promise<{ id: string; sourceDocumentId: string | null }> => {
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...decisionAt(`Legacy ECLI ${caseNumber}`, undefined),
           caseNumber,
           ecli,
-        },
+        }),
         observationOrder: 1n,
         sourceId,
         scopedDb,
@@ -664,12 +672,12 @@ if (!databaseUrl || !runPostgresTests) {
       );
 
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...decisionAt(`Legacy ECLI ${caseNumber}`, "nalus-record:plenary"),
           caseNumber,
           ecli: "ECLI:CZ:US:2002:Pl.US.18.01.1",
           rawHash: "hash-nalus-plenary",
-        },
+        }),
         observationOrder: 2n,
         sourceId,
         scopedDb,
@@ -689,13 +697,13 @@ if (!databaseUrl || !runPostgresTests) {
       );
 
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...decisionAt(`Legacy ECLI ${caseNumber}`, "nalus-record:uncounted"),
           caseNumber,
           ecli: "ECLI:CZ:US:2025:2.US.1030.25",
           legacyEcli: "ECLI:CZ:US:2025:2.US.1030.25.1",
           rawHash: "hash-nalus-uncounted",
-        },
+        }),
         observationOrder: 2n,
         sourceId,
         scopedDb,
@@ -709,11 +717,11 @@ if (!databaseUrl || !runPostgresTests) {
 
     test("stores a keyed row under its docket without a trailing part marker", async () => {
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...decisionAt("Trailing marker", "trailing-marker-document"),
           caseNumber: "0T/44/2019- II.",
           metadata: { caseNumber: "0T/44/2019- II." },
-        },
+        }),
         observationOrder: 1n,
         sourceId,
         scopedDb,
@@ -742,11 +750,11 @@ if (!databaseUrl || !runPostgresTests) {
       const caseNumber = "0T/45/2019- III.";
       const legacyUrl = "https://publisher.test/uncut-docket";
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...decisionAt("Uncut docket", undefined),
           caseNumber,
           sourceUrl: legacyUrl,
-        },
+        }),
         observationOrder: 1n,
         sourceId,
         scopedDb,
@@ -758,12 +766,12 @@ if (!databaseUrl || !runPostgresTests) {
       expect(legacyRow?.sourceDocumentId).toBeNull();
 
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...decisionAt("Uncut docket", "uncut-docket-document"),
           caseNumber,
           legacySourceUrls: [legacyUrl],
           rawHash: "hash-uncut-docket-identified",
-        },
+        }),
         observationOrder: 2n,
         sourceId,
         scopedDb,
@@ -784,22 +792,22 @@ if (!databaseUrl || !runPostgresTests) {
       const siblingUrl = "https://publisher.test/cut-docket-sibling";
       const legacyUrl = "https://publisher.test/uncut-docket-legacy";
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...decisionAt("Cut docket sibling", undefined),
           caseNumber: "0T/46/2019",
           sourceUrl: siblingUrl,
-        },
+        }),
         observationOrder: 1n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:00:00.000Z"),
       });
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...decisionAt("Uncut docket legacy", undefined),
           caseNumber: uncut,
           sourceUrl: legacyUrl,
-        },
+        }),
         observationOrder: 2n,
         sourceId,
         scopedDb,
@@ -809,12 +817,12 @@ if (!databaseUrl || !runPostgresTests) {
       const [legacyRow] = await docketRows(uncut);
 
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...decisionAt("Uncut docket legacy", "uncut-docket-legacy-document"),
           caseNumber: uncut,
           legacySourceUrls: [legacyUrl],
           rawHash: "hash-uncut-docket-legacy-identified",
-        },
+        }),
         observationOrder: 3n,
         sourceId,
         scopedDb,
@@ -838,12 +846,12 @@ if (!databaseUrl || !runPostgresTests) {
       const caseNumber = "Pl.ÚS 19/01";
       const legacyUrl = "https://publisher.test/sibling-ecli-legacy";
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...decisionAt(`Legacy ECLI ${caseNumber}`, undefined),
           caseNumber,
           ecli: "ECLI:CZ:US:2002:PL.US.19.01.1",
           sourceUrl: legacyUrl,
-        },
+        }),
         observationOrder: 1n,
         sourceId,
         scopedDb,
@@ -854,14 +862,14 @@ if (!databaseUrl || !runPostgresTests) {
       // Same docket, same retrieval URL hint, but the second decision of the
       // docket: the URL alone must not pull the first decision's row over.
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...decisionAt(`Legacy ECLI ${caseNumber}`, "nalus-record:second"),
           caseNumber,
           ecli: "ECLI:CZ:US:2002:Pl.US.19.01.2",
           legacyEcli: "ECLI:CZ:US:2002:Pl.US.19.01.2",
           legacySourceUrls: [legacyUrl],
           rawHash: "hash-nalus-second",
-        },
+        }),
         observationOrder: 2n,
         sourceId,
         scopedDb,
@@ -878,11 +886,11 @@ if (!databaseUrl || !runPostgresTests) {
 
     test("replaces a listing placeholder when detail recovers the docket", async () => {
       const publisherId = "recovered-docket-publisher-id";
-      const placeholder = {
+      const placeholder = plainTextIngestionResult({
         ...decisionAt("Recovered docket identity", publisherId),
         caseNumber: "NALUS record 7301",
         rawHash: "hash-listing-placeholder",
-      };
+      });
       await processDecision({
         input: placeholder,
         observationOrder: 1n,
@@ -893,12 +901,12 @@ if (!databaseUrl || !runPostgresTests) {
 
       const recoveredCaseNumber = "III.ÚS 81/24";
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...placeholder,
           caseNumber: recoveredCaseNumber,
           metadata: { ...placeholder.metadata, recoveredDetail: true },
           rawHash: "hash-recovered-docket",
-        },
+        }),
         observationOrder: 2n,
         sourceId,
         scopedDb,
@@ -906,7 +914,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...placeholder,
           caseNumber: "NALUS record 7301",
           caseNumberIsPlaceholder: true,
@@ -916,7 +924,7 @@ if (!databaseUrl || !runPostgresTests) {
             listingDocketMissing: true,
           },
           rawHash: "hash-withdrawn-detail-placeholder",
-        },
+        }),
         observationOrder: 3n,
         sourceId,
         scopedDb,
@@ -968,12 +976,12 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...fallback,
           sourceDocumentId: canonicalId,
           sourceDocumentIdAliases: [fallbackId],
           rawHash: "hash-canonical-publisher-id",
-        },
+        }),
         observationOrder: 2n,
         sourceId,
         scopedDb,
@@ -1002,6 +1010,165 @@ if (!databaseUrl || !runPostgresTests) {
       expect(isRecord(row) ? Number(row["fallbackCount"]) : 0).toBe(0);
     });
 
+    test.each(["reserved", "legacy"] as const)(
+      "adopts a stored raw-text NALUS quarantine identity after publisher recovery (%s)",
+      async (identityState) => {
+        const caseNumber =
+          identityState === "reserved" ? "Pl.ÚS 46999/24" : "Pl.ÚS 46998/24";
+        const publisherId =
+          identityState === "reserved" ? "Pl-46999-24_1" : "Pl-46998-24_1";
+        const legacyId = `nalus-quarantine:${hashContent(
+          JSON.stringify({
+            stablePrimaryText: "Jan NovákoldPrimary()",
+            stableActionsText: "oldAction()",
+            stableDetailText: caseNumber,
+            stableCounterText: "1",
+          }),
+        )}`;
+        const listing = `<html><body>Výsledky 1 - 1 z celkem 1
+        <table>
+          <tr class="resultData0"><td></td><td>
+            <a href="ResultDetail.aspx?malformed=true&pos=1&cnt=1">${caseNumber} #1</a><br />
+            Jan Novák<script>oldPrimary()</script>
+          </td></tr>
+          <tr class="resultData0" valign="top"><td>
+            <img onclick='javascript:ShowLink("https://nalus.usoud.cz/Search/GetText.aspx?sz=${publisherId}", "Odkaz", "")' /><script>oldAction()</script>
+          </td></tr>
+        </table>Výsledky 1 - 1 z celkem 1</body></html>`;
+        const sleepSpy = spyOn(Bun, "sleep").mockResolvedValue(undefined);
+        const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
+          asFetchMock(async (input, init) => {
+            const url = new URL(
+              input instanceof Request ? input.url : String(input),
+            );
+            if (url.pathname.endsWith("/Search/Search.aspx")) {
+              if (init?.method === "POST") {
+                return new Response(null, {
+                  status: 302,
+                  headers: { Location: "/Search/Results.aspx" },
+                });
+              }
+              return new Response(`<html><body>
+            <input id="__VIEWSTATE" value="view-state" />
+            <input id="__VIEWSTATEGENERATOR" value="generator" />
+            <input id="__EVENTVALIDATION" value="validation" />
+            <select name="ctl00$MainContent$resultsPageSize" id="ctl00_MainContent_resultsPageSize">
+              <option selected="selected" value="20">20</option>
+            </select>
+          </body></html>`);
+            }
+            if (url.pathname.endsWith("/Search/Results.aspx")) {
+              return new Response(listing);
+            }
+            return new Response("missing", { status: 404 });
+          }),
+        );
+        const page = await Result.tryPromise(
+          async () =>
+            await czUsAdapter.fetchPage(
+              "search:historical:2026-08-07:2024:collect:0:0:-",
+              {},
+            ),
+        );
+        fetchSpy.mockRestore();
+        sleepSpy.mockRestore();
+        if (Result.isError(page)) {
+          panic(page.error.message);
+        }
+        if (Result.isError(page.value)) {
+          panic(page.value.error.message);
+        }
+        const recovered = page.value.value.decisions.at(0);
+        expect(page.value.value.decisions).toHaveLength(1);
+        if (!recovered?.sourceDocumentId) {
+          panic("Expected recovered NALUS observation");
+        }
+        expect(recovered.sourceDocumentId).toBe(`nalus-sz:${publisherId}`);
+        // Raw storage has its own integration tests; this suite exercises DB identity.
+        const observation = {
+          ...recovered,
+          sourceRaw: undefined,
+          sourceRawBytes: undefined,
+        };
+        expect(recovered.sourceDocumentIdRepairAliases).toContain(legacyId);
+        expect(recovered.sourceDocumentIdAliases ?? []).not.toContain(legacyId);
+        await processDecision({
+          input: {
+            ...observation,
+            sourceDocumentId: legacyId,
+            sourceDocumentIdAliases: undefined,
+            sourceDocumentIdRepairAliases: undefined,
+            rawHash: "legacy-nalus-script-quarantine",
+          },
+          observationOrder: 1n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        });
+        const [stored] = await db
+          .select({ id: caseLawDecisions.id })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              eq(caseLawDecisions.sourceDocumentId, legacyId),
+            ),
+          );
+        expect(stored).toBeDefined();
+        if (!stored) {
+          panic("Expected stored NALUS quarantine row");
+        }
+        if (identityState === "legacy") {
+          await db
+            .delete(caseLawDecisionSourceIdentities)
+            .where(
+              and(
+                eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
+                eq(caseLawDecisionSourceIdentities.decisionId, stored.id),
+              ),
+            );
+        }
+        for (const observationOrder of [2n, 3n]) {
+          await processDecision({
+            input: observation,
+            observationOrder,
+            sourceId,
+            scopedDb,
+            observedAt: new Date("2026-07-31T12:00:01.000Z"),
+          });
+        }
+        // A late identity-less listing must still resolve to the recovered row.
+        await processDecision({
+          input: {
+            ...observation,
+            sourceDocumentId: legacyId,
+            sourceDocumentIdAliases: undefined,
+            sourceDocumentIdRepairAliases: undefined,
+            rawHash: "legacy-nalus-script-quarantine",
+          },
+          observationOrder: 4n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:02.000Z"),
+        });
+        const rows = await db
+          .select({
+            id: caseLawDecisions.id,
+            sourceDocumentId: caseLawDecisions.sourceDocumentId,
+          })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              eq(caseLawDecisions.caseNumber, caseNumber),
+            ),
+          );
+        expect(rows).toEqual([
+          { id: stored.id, sourceDocumentId: recovered.sourceDocumentId },
+        ]);
+      },
+    );
+
     test("uses heuristic repair aliases only when an owner already exists", async () => {
       const quarantineId = "nalus-quarantine:known-repair";
       const recoveredId = "nalus-record:known-repair";
@@ -1014,25 +1181,25 @@ if (!databaseUrl || !runPostgresTests) {
         observedAt: new Date("2026-07-31T12:00:00.000Z"),
       });
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...quarantined,
           sourceDocumentId: recoveredId,
           sourceDocumentIdRepairAliases: [quarantineId],
           rawHash: "hash-known-repair-recovered",
-        },
+        }),
         observationOrder: 2n,
         sourceId,
         scopedDb,
         observedAt: new Date("2026-07-31T12:00:01.000Z"),
       });
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...decisionAt(
             "Distinct row after repair",
             "nalus-record:known-repair-collision",
           ),
           sourceDocumentIdRepairAliases: [quarantineId],
-        },
+        }),
         observationOrder: 3n,
         sourceId,
         scopedDb,
@@ -1044,10 +1211,10 @@ if (!databaseUrl || !runPostgresTests) {
         ["nalus-record:distinct-a", "nalus-record:distinct-b"].map(
           async (publisherId, index) =>
             await processDecision({
-              input: {
+              input: plainTextIngestionResult({
                 ...decisionAt(`Distinct repair row ${index}`, publisherId),
                 sourceDocumentIdRepairAliases: [unclaimedRepairId],
-              },
+              }),
               observationOrder: BigInt(index + 4),
               sourceId,
               scopedDb,
@@ -1098,13 +1265,76 @@ if (!databaseUrl || !runPostgresTests) {
       expect(isRecord(row) ? Number(row["unclaimedRepairCount"]) : -1).toBe(0);
     });
 
+    test.each(["reserved", "legacy"] as const)(
+      "does not adopt ambiguous quarantine owners (%s)",
+      async (identityState) => {
+        const quarantineIds = [
+          `quarantine:${identityState}:a`,
+          `quarantine:${identityState}:b`,
+        ];
+        for (const quarantineId of quarantineIds) {
+          await processDecision({
+            input: decisionAt("Ambiguous repair", quarantineId),
+            observationOrder: 1n,
+            sourceId,
+            scopedDb,
+            observedAt: new Date("2026-07-31T12:00:00.000Z"),
+          });
+        }
+        if (identityState === "legacy") {
+          await db
+            .delete(caseLawDecisionSourceIdentities)
+            .where(
+              and(
+                eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
+                inArray(
+                  caseLawDecisionSourceIdentities.sourceDocumentId,
+                  quarantineIds,
+                ),
+              ),
+            );
+        }
+        const canonicalId = `canonical:${identityState}:ambiguous`;
+        for (const observationOrder of [2n, 3n]) {
+          await processDecision({
+            input: {
+              ...decisionAt("Ambiguous repair", canonicalId),
+              sourceDocumentIdRepairAliases: quarantineIds,
+            },
+            observationOrder,
+            sourceId,
+            scopedDb,
+            observedAt: new Date("2026-07-31T12:00:01.000Z"),
+          });
+        }
+        const rows = await db
+          .select({ sourceDocumentId: caseLawDecisions.sourceDocumentId })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.sourceId, sourceId),
+              inArray(caseLawDecisions.sourceDocumentId, [
+                ...quarantineIds,
+                canonicalId,
+              ]),
+            ),
+          );
+        const storedIds = rows.map(({ sourceDocumentId }) => sourceDocumentId);
+        // The expected ids are distinct, so length plus containment is equality.
+        expect(storedIds).toHaveLength(quarantineIds.length + 1);
+        expect(storedIds).toEqual(
+          expect.arrayContaining([...quarantineIds, canonicalId]),
+        );
+      },
+    );
+
     test("keeps canonical ownership when a later observation has only a fallback", async () => {
       const canonicalId = "nalus-record:inverse-7391";
       const fallbackId = "nalus-sz:inverse-2-91-24_1";
-      const canonical = {
+      const canonical = plainTextIngestionResult({
         ...decisionAt("Inverse publisher alias", canonicalId),
         sourceDocumentIdAliases: [fallbackId],
-      };
+      });
       await processDecision({
         input: canonical,
         observationOrder: 1n,
@@ -1171,21 +1401,21 @@ if (!databaseUrl || !runPostgresTests) {
 
       const outcomes = await Promise.all([
         processDecision({
-          input: {
+          input: plainTextIngestionResult({
             ...base,
             sourceDocumentIdAliases: [fallbackId],
-          },
+          }),
           observationOrder: 1n,
           sourceId,
           scopedDb: concurrentDb,
           observedAt: new Date("2026-07-31T12:00:00.000Z"),
         }),
         processDecision({
-          input: {
+          input: plainTextIngestionResult({
             ...base,
             sourceDocumentId: fallbackId,
             rawHash: "hash-concurrent-fallback",
-          },
+          }),
           observationOrder: 2n,
           sourceId,
           scopedDb: concurrentDb,
@@ -1228,13 +1458,13 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...recovered,
           fulltext: undefined,
           isListingOnly: true,
           metadata: { listedOnly: true },
           rawHash: "degraded-listing-hash",
-        },
+        }),
         observationOrder: 2n,
         sourceId,
         scopedDb,
@@ -1274,7 +1504,7 @@ if (!databaseUrl || !runPostgresTests) {
 
     test("allows a better listing-only observation to replace an earlier partial row", async () => {
       const publisherId = "listing-only-enrichment";
-      const partial = {
+      const partial = plainTextIngestionResult({
         ...decisionAt("Partial listing court", publisherId),
         caseNumber: "NALUS record 8801",
         caseNumberIsPlaceholder: true,
@@ -1282,7 +1512,7 @@ if (!databaseUrl || !runPostgresTests) {
         isListingOnly: true,
         metadata: { listedOnly: true, listingDocketMissing: true },
         rawHash: "hash-partial-placeholder",
-      };
+      });
       await processDecision({
         input: partial,
         observationOrder: 1n,
@@ -1293,13 +1523,13 @@ if (!databaseUrl || !runPostgresTests) {
 
       const recoveredCaseNumber = "II.ÚS 8801/24";
       await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...partial,
           caseNumber: recoveredCaseNumber,
           caseNumberIsPlaceholder: undefined,
           metadata: { listedOnly: true, listingDocketMissing: false },
           rawHash: "hash-partial-with-docket",
-        },
+        }),
         observationOrder: 2n,
         sourceId,
         scopedDb,
@@ -1337,10 +1567,10 @@ if (!databaseUrl || !runPostgresTests) {
     test("binds a legacy row before a listing-only preservation return", async () => {
       const publisherId = "listing-only-legacy-binding";
       const legacyUrl = "https://publisher.test/listing-only-legacy";
-      const legacy = {
+      const legacy = plainTextIngestionResult({
         ...decisionAt("Listing-only legacy", undefined),
         sourceUrl: legacyUrl,
-      };
+      });
       await processDecision({
         input: legacy,
         observationOrder: 1n,
@@ -1500,7 +1730,8 @@ if (!databaseUrl || !runPostgresTests) {
         const call = replayCallCount;
         replayCallCount += 1;
         const value = await scopedDb(transactionWork);
-        if (call === 0) {
+        // The run reads its source schema once before reading the identity.
+        if (call === 1) {
           replayReadCompleted();
           await replayMayContinue;
         }
@@ -1551,14 +1782,15 @@ if (!databaseUrl || !runPostgresTests) {
       const decisionWithAbstract = ({
         rawHash,
         text,
-      }: DecisionWithAbstractOptions) => ({
-        ...decisionAt("Fixture court", publisherId),
-        textFields: {
-          ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-          abstract: presentTextField(text),
-        },
-        rawHash,
-      });
+      }: DecisionWithAbstractOptions) =>
+        plainTextIngestionResult({
+          ...decisionAt("Fixture court", publisherId),
+          textFields: {
+            ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+            abstract: presentTextField(text),
+          },
+          rawHash,
+        });
       const initial = decisionWithAbstract({
         rawHash: "initial-hash",
         text: "Initial abstract",
@@ -1567,14 +1799,14 @@ if (!databaseUrl || !runPostgresTests) {
         rawHash: "intervening-hash",
         text: "Intervening abstract",
       });
-      const parseFailure = {
+      const parseFailure = plainTextIngestionResult({
         ...decisionAt("Fixture court", publisherId),
         textFields: {
           ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
           abstract: absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED),
         },
         rawHash: "parse-failure-hash",
-      };
+      });
 
       await processDecision({
         input: initial,
@@ -1597,7 +1829,8 @@ if (!databaseUrl || !runPostgresTests) {
         const call = parseFailureCallCount;
         parseFailureCallCount += 1;
         const value = await scopedDb(transactionWork);
-        if (call === 0) {
+        // The run reads its source schema once before reading the identity.
+        if (call === 1) {
           parseFailureReadCompleted();
           await parseFailureMayContinue;
         }
@@ -1654,7 +1887,8 @@ if (!databaseUrl || !runPostgresTests) {
       let transactions = 0;
       const racingDb: ScopedDb = async (transactionWork) => {
         transactions += 1;
-        if (transactions === 2) {
+        // One schema lookup precedes the identity read in this standalone run.
+        if (transactions === 3) {
           await db
             .update(caseLawDecisions)
             .set({
@@ -1679,7 +1913,7 @@ if (!databaseUrl || !runPostgresTests) {
         observedAt: new Date("2026-07-31T12:04:01.000Z"),
       });
 
-      expect(transactions).toBe(3);
+      expect(transactions).toBe(4);
       expect(outcome).toEqual({
         status: "retryable",
         inserted: false,
@@ -1702,7 +1936,8 @@ if (!databaseUrl || !runPostgresTests) {
       let transactions = 0;
       const racingDb: ScopedDb = async (transactionWork) => {
         transactions += 1;
-        if (transactions === 2) {
+        // One schema lookup precedes the identity read in this standalone run.
+        if (transactions === 3) {
           await db
             .update(caseLawDecisions)
             .set({
@@ -1720,20 +1955,20 @@ if (!databaseUrl || !runPostgresTests) {
       };
 
       const outcome = await processDecision({
-        input: {
+        input: plainTextIngestionResult({
           ...initial,
           fulltext: undefined,
           isListingOnly: true,
           metadata: { listedOnly: true },
           rawHash: "hash-listing-only-watermark-race",
-        },
+        }),
         observationOrder: 51n,
         sourceId,
         scopedDb: racingDb,
         observedAt: new Date("2026-07-31T12:05:01.000Z"),
       });
 
-      expect(transactions).toBe(3);
+      expect(transactions).toBe(4);
       expect(outcome).toEqual({
         status: "retryable",
         inserted: false,
@@ -1816,10 +2051,11 @@ if (!databaseUrl || !runPostgresTests) {
     });
 
     test("concurrent inserts racing for a free base slug take it and one deterministic candidate", async () => {
-      const racer = (publisherId: string) => ({
-        ...decisionAt("Okresný súd Race", publisherId),
-        caseNumber: "7Co/31/2024",
-      });
+      const racer = (publisherId: string) =>
+        plainTextIngestionResult({
+          ...decisionAt("Okresný súd Race", publisherId),
+          caseNumber: "7Co/31/2024",
+        });
       const failures: unknown[] = [];
       const recordingDb: ScopedDb = async (transactionWork) => {
         try {
@@ -1887,7 +2123,8 @@ if (!databaseUrl || !runPostgresTests) {
         const call = firstCallCount;
         firstCallCount += 1;
         const result = await scopedDb(async (tx) => await transactionWork(tx));
-        if (call === 0) {
+        // The run reads its source schema once before reading the identity.
+        if (call === 1) {
           await synchronizeInitialRead();
         }
         return result;
@@ -1898,7 +2135,8 @@ if (!databaseUrl || !runPostgresTests) {
         const call = secondCallCount;
         secondCallCount += 1;
         const result = await scopedDb(async (tx) => await transactionWork(tx));
-        if (call === 0) {
+        // The run reads its source schema once before reading the identity.
+        if (call === 1) {
           await synchronizeInitialRead();
           await firstWriteCompleted;
         }
@@ -1995,32 +2233,38 @@ if (!databaseUrl || !runPostgresTests) {
       ).toEqual(initial);
 
       expect(
-        db
-          .insert(caseLawDecisionAliases)
-          .values({ retiredDecisionId: middle, canonicalDecisionId: first })
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .insert(caseLawDecisionAliases)
+            .values({ retiredDecisionId: middle, canonicalDecisionId: first })
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: { message: expect.stringContaining("Decision alias cycle") },
       });
       expect(
-        db
-          .insert(caseLawDecisionAliases)
-          .values({ retiredDecisionId: later, canonicalDecisionId: missing })
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .insert(caseLawDecisionAliases)
+            .values({ retiredDecisionId: later, canonicalDecisionId: missing })
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: {
           message: expect.stringContaining("Decision alias target is not live"),
         },
       });
       expect(
-        db
-          .insert(caseLawDecisionAliases)
-          .values({
-            retiredDecisionId: missing,
-            canonicalDecisionId: terminal,
-          })
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .insert(caseLawDecisionAliases)
+            .values({
+              retiredDecisionId: missing,
+              canonicalDecisionId: terminal,
+            })
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: {
           message: expect.stringContaining(
             "Register decision alias before retirement",
@@ -2033,12 +2277,14 @@ if (!databaseUrl || !runPostgresTests) {
         { createdAt: new Date("2000-01-01T00:00:00Z") },
       ]) {
         expect(
-          db
-            .update(caseLawDecisionAliases)
-            .set(patch)
-            .where(eq(caseLawDecisionAliases.retiredDecisionId, first))
-            .execute(),
-        ).rejects.toMatchObject({
+          await rejectionOf(
+            db
+              .update(caseLawDecisionAliases)
+              .set(patch)
+              .where(eq(caseLawDecisionAliases.retiredDecisionId, first))
+              .execute(),
+          ),
+        ).toMatchObject({
           cause: {
             message: expect.stringContaining(
               "canonicalDecisionId" in patch
@@ -2049,11 +2295,13 @@ if (!databaseUrl || !runPostgresTests) {
         });
       }
       expect(
-        db
-          .delete(caseLawDecisions)
-          .where(eq(caseLawDecisions.id, middle))
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .delete(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, middle))
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: {
           code: "ERR_POSTGRES_SERVER_ERROR",
           errno: "23001",
@@ -2098,11 +2346,13 @@ if (!databaseUrl || !runPostgresTests) {
         expect(rows).toContainEqual({ retired, target: terminal });
       }
       expect(
-        db
-          .delete(caseLawDecisions)
-          .where(eq(caseLawDecisions.id, terminal))
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .delete(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, terminal))
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: {
           code: "ERR_POSTGRES_SERVER_ERROR",
           errno: "23001",
@@ -2112,27 +2362,31 @@ if (!databaseUrl || !runPostgresTests) {
         },
       });
       expect(
-        db
-          .insert(caseLawDecisions)
-          .values({
-            id: first,
-            sourceId,
-            country: "SVK",
-            court: "Alias lifecycle court",
-            language: "sk",
-            caseNumber: first,
-          })
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .insert(caseLawDecisions)
+            .values({
+              id: first,
+              sourceId,
+              country: "SVK",
+              court: "Alias lifecycle court",
+              language: "sk",
+              caseNumber: first,
+            })
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: { message: expect.stringContaining("Decision UUID is retired") },
       });
       expect(
-        db
-          .update(caseLawDecisions)
-          .set({ id: first })
-          .where(eq(caseLawDecisions.id, later))
-          .execute(),
-      ).rejects.toMatchObject({
+        await rejectionOf(
+          db
+            .update(caseLawDecisions)
+            .set({ id: first })
+            .where(eq(caseLawDecisions.id, later))
+            .execute(),
+        ),
+      ).toMatchObject({
         cause: { message: expect.stringContaining("Decision UUID is retired") },
       });
     });

@@ -74,11 +74,19 @@ import {
   numPattern,
   refPattern,
   resolvePath,
+  markerPattern,
 } from "@stll/template-conditions";
 import type { LoopProperty, NamedCondition } from "@stll/template-conditions";
 import { escapeRegExp } from "@stll/text-normalize";
 
-import { ancestorByLocalName, isElement, paragraphText, W_NS } from "./ooxml";
+import {
+  ancestorByLocalName,
+  isElement,
+  paragraphText,
+  removeBlockUnit,
+  W_NS,
+} from "./ooxml";
+import { paragraphSpanText, replaceParagraphTextRanges } from "./rich-patch";
 import {
   authoredParagraphIndices,
   normalizeRowBlockMarkers,
@@ -562,44 +570,6 @@ const paragraphsInUnit = (unit: slimdom.Element): slimdom.Element[] =>
 const paragraphsInUnits = (
   units: readonly slimdom.Element[],
 ): slimdom.Element[] => units.flatMap(paragraphsInUnit);
-
-/**
- * Remove one block-level unit (a paragraph, a row, or a whole table) and repair
- * the containers the removal would leave invalid: a `w:tc` must keep at least
- * one `w:p`, and a `w:tbl` at least one `w:tr` — Word reports a document
- * violating either as corrupt. Every directive removal path routes through
- * here (marker stripping, branch pruning, row removal, and the paragraph-index
- * fallback), so no path can invent a new way to empty a cell.
- */
-const removeBlockUnit = (unit: slimdom.Node): void => {
-  const parent = unit.parentNode;
-  if (!parent) {
-    return;
-  }
-  // Resolve the containers to repair from the PARENT, not the direct
-  // parent-child relation: a row-level content control wraps its `w:tr` in
-  // `w:sdt`/`w:sdtContent`, so the enclosing table is an ancestor rather than
-  // the row's parent, and a table-shell check on `parent` alone would miss it.
-  const cell = ancestorByLocalName(parent, TAG.cell);
-  const table = ancestorByLocalName(parent, TAG.table);
-  parent.removeChild(unit);
-
-  // The last row left the table: drop the shell, then repair whatever cell the
-  // table itself lived in.
-  if (table?.getElementsByTagNameNS(W_NS, TAG.row).length === 0) {
-    removeBlockUnit(table);
-    return;
-  }
-
-  const doc = cell?.ownerDocument;
-  if (
-    cell &&
-    doc &&
-    cell.getElementsByTagNameNS(W_NS, TAG.paragraph).length === 0
-  ) {
-    cell.append(doc.createElementNS(W_NS, "w:p"));
-  }
-};
 
 /**
  * Prune an `{% if %}` block by block-level UNIT (paragraphs AND whole tables),
@@ -1251,19 +1221,19 @@ export const processBlockDirectives = (
         removeBlockUnit(closerClone);
       }
 
-      rewriteEachPlaceholders(clonedRow, {
-        alias: block.alias,
-        arrayPath: block.arrayPath,
-        index: itemIdx,
-        loopIdentity,
-      });
-      rewriteNestedEachExpr(clonedRow, {
-        alias: block.alias,
-        arrayPath: block.arrayPath,
-        index: itemIdx,
-        loopIdentity,
-      });
       const clonedContentParas = clonedParas.filter((_, i) => !isMarker(i));
+      rewriteEachPlaceholders(clonedContentParas, {
+        alias: block.alias,
+        arrayPath: block.arrayPath,
+        index: itemIdx,
+        loopIdentity,
+      });
+      rewriteNestedEachExpr(clonedContentParas, {
+        alias: block.alias,
+        arrayPath: block.arrayPath,
+        index: itemIdx,
+        loopIdentity,
+      });
       rewriteContentParagraphs(clonedContentParas, {
         tokenMask,
         localNumKeys,
@@ -1355,20 +1325,18 @@ export const processBlockDirectives = (
       const clones = contentUnits.map((u) => cloneElement(u, doc));
       const clonedParas = paragraphsInUnits(clones);
 
-      for (const clone of clones) {
-        rewriteEachPlaceholders(clone, {
-          alias: block.alias,
-          arrayPath: block.arrayPath,
-          index: itemIdx,
-          loopIdentity,
-        });
-        rewriteNestedEachExpr(clone, {
-          alias: block.alias,
-          arrayPath: block.arrayPath,
-          index: itemIdx,
-          loopIdentity,
-        });
-      }
+      rewriteEachPlaceholders(clonedParas, {
+        alias: block.alias,
+        arrayPath: block.arrayPath,
+        index: itemIdx,
+        loopIdentity,
+      });
+      rewriteNestedEachExpr(clonedParas, {
+        alias: block.alias,
+        arrayPath: block.arrayPath,
+        index: itemIdx,
+        loopIdentity,
+      });
       rewriteContentParagraphs(clonedParas, {
         tokenMask,
         localNumKeys,
@@ -1644,37 +1612,174 @@ type RewriteEachPlaceholdersOptions = {
   arrayPath: string;
   index: number;
   loopIdentity: string;
+  shadowedAliases?: ReadonlySet<string>;
 };
 
-const rewriteEachPlaceholdersWithIdentity = (
+/** Inline loop aliases bind after the opener and end at their own closer. */
+const inlineLoopScopes = (text: string) => {
+  const aliases: (string | null)[] = [];
+  const scopes: { offset: number; aliases: ReadonlySet<string> }[] = [];
+  for (const span of text.matchAll(markerPattern())) {
+    const statement = span.groups?.["statement"];
+    if (statement === undefined) {
+      continue;
+    }
+    const inner = statement.trim();
+    const marker = classifyMarker(inner, "statement");
+    if (marker?.kind === "for" || /^for(?:\s|$)/u.test(inner)) {
+      aliases.push(marker?.kind === "for" ? marker.alias : null);
+    } else if (marker?.kind === "endfor") {
+      aliases.pop();
+    } else {
+      continue;
+    }
+    scopes.push({
+      offset: span.index + span[0].length,
+      aliases: new Set(aliases.filter((alias) => alias !== null)),
+    });
+  }
+  return scopes;
+};
+
+const isInlineAliasBound = (
+  scopes: ReturnType<typeof inlineLoopScopes>,
+  offset: number,
+  alias: string,
+) =>
+  scopes.findLast((scope) => scope.offset <= offset)?.aliases.has(alias) ??
+  false;
+
+const eachPlaceholderRanges = (
   text: string,
-  { alias, arrayPath, index, loopIdentity }: RewriteEachPlaceholdersOptions,
-): string => {
-  // The alias is what an author writes; the declared array path still resolves
-  // so a template that reaches for the loop's own path keeps rendering (the
-  // `unaliased_item_path` warning names it at save time).
-  const heads = [...new Set([alias, arrayPath])].map(escapeRegExp).join("|");
+  {
+    alias,
+    arrayPath,
+    index,
+    loopIdentity,
+    shadowedAliases,
+  }: RewriteEachPlaceholdersOptions,
+) => {
+  const visibleHeads = [...new Set([alias, arrayPath])].filter(
+    (head) => !shadowedAliases?.has(head),
+  );
+  if (visibleHeads.length === 0) {
+    return [];
+  }
+  const heads = visibleHeads.map(escapeRegExp).join("|");
   const re = new RegExp(
     `\\{\\{\\s*(?:${heads})\\.(?<field>[.\\p{L}\\p{N}_-]+)\\s*(?:\\|${MARKER_OUTPUT_BODY})?\\}\\}`,
     "gu",
   );
-  return text.replace(
-    re,
-    (_match, field: string) => `{{${eachKey(loopIdentity, index, field)}}}`,
-  );
+  const scopes = inlineLoopScopes(text);
+  return [...text.matchAll(re)]
+    .filter((match) => {
+      const head = match[0].slice(2).trimStart().split(".").at(0);
+      return (
+        head !== undefined && !isInlineAliasBound(scopes, match.index, head)
+      );
+    })
+    .map((match) => {
+      const field = match.groups?.["field"];
+      if (field === undefined) {
+        return panic("Loop placeholder matched without a field");
+      }
+      return {
+        start: match.index,
+        end: match.index + match[0].length,
+        value: `{{${eachKey(loopIdentity, index, field)}}}`,
+      };
+    });
 };
 
-/**
- * Rewrite `{{ alias.field }}` → `{{__each_arrayPath_N_field}}`
- * in all `w:t` nodes of a paragraph (or any element subtree).
- */
+const rewriteEachPlaceholdersWithIdentity = (
+  text: string,
+  options: RewriteEachPlaceholdersOptions,
+): string => {
+  let result = "";
+  let cursor = 0;
+  for (const range of eachPlaceholderRanges(text, options)) {
+    result += text.slice(cursor, range.start) + range.value;
+    cursor = range.end;
+  }
+  return result + text.slice(cursor);
+};
+
+/** Visit each paragraph using the aliases already bound by enclosing loops. */
+const visitNestedLoopScopes = (
+  paragraphs: readonly slimdom.Element[],
+  visit: (
+    paragraph: slimdom.Element,
+    nestedAliases: ReadonlySet<string>,
+  ) => void,
+): void => {
+  const nestedAliases: (string | null)[] = [];
+  for (const paragraph of paragraphs) {
+    const directive = DIRECTIVE_RE.exec(paragraphSpanText(paragraph));
+    const tag = directive?.groups?.["tag"];
+    const expression = directive?.groups?.["expr"];
+    const marker =
+      tag === undefined || expression === undefined
+        ? null
+        : classifyMarker(`${tag} ${expression}`, "statement");
+    // A loop's source belongs to its enclosing scope, before its alias binds.
+    visit(paragraph, new Set(nestedAliases.filter((alias) => alias !== null)));
+    if (marker?.kind === "for" || tag === "for") {
+      nestedAliases.push(marker?.kind === "for" ? marker.alias : null);
+    }
+    if (marker?.kind === "endfor") {
+      nestedAliases.pop();
+    }
+  }
+};
+
+/** Keep authored runs intact when a scoped replacement fits in one text node. */
+const replaceScopedParagraphRanges = (
+  paragraph: slimdom.Element,
+  ranges: readonly { start: number; end: number; value: string }[],
+): void => {
+  let offset = 0;
+  const spans = [...paragraph.getElementsByTagNameNS(W_NS, "t")].map((node) => {
+    const text = node.textContent ?? "";
+    const start = offset;
+    offset += text.length;
+    return { node, text, start, end: offset };
+  });
+  if (
+    !ranges.every((range) =>
+      spans.some((span) => range.start >= span.start && range.end <= span.end),
+    )
+  ) {
+    replaceParagraphTextRanges(paragraph, ranges);
+    return;
+  }
+  for (const span of spans) {
+    let text = "";
+    let cursor = 0;
+    for (const range of ranges) {
+      if (range.start < span.start || range.end > span.end) {
+        continue;
+      }
+      text += span.text.slice(cursor, range.start - span.start) + range.value;
+      cursor = range.end - span.start;
+    }
+    span.node.textContent = text + span.text.slice(cursor);
+  }
+};
+
+/** Rewrite loop output markers across Word run boundaries. */
 const rewriteEachPlaceholders = (
-  root: slimdom.Element,
+  paragraphs: readonly slimdom.Element[],
   options: RewriteEachPlaceholdersOptions,
 ): void => {
-  rewriteTextNodes(root, (text) =>
-    rewriteEachPlaceholdersWithIdentity(text, options),
-  );
+  visitNestedLoopScopes(paragraphs, (paragraph, nestedAliases) => {
+    const text = paragraphSpanText(paragraph);
+    const scopedOptions = {
+      ...options,
+      shadowedAliases: nestedAliases,
+    };
+    const ranges = eachPlaceholderRanges(text, scopedOptions);
+    replaceScopedParagraphRanges(paragraph, ranges);
+  });
 };
 
 /**
@@ -1688,21 +1793,44 @@ const rewriteEachPlaceholders = (
  * instead of ending the match.
  */
 const rewriteNestedEachExpr = (
-  root: slimdom.Element,
+  paragraphs: readonly slimdom.Element[],
   { alias, arrayPath, index, loopIdentity }: RewriteEachPlaceholdersOptions,
 ): void => {
-  const heads = [...new Set([alias, arrayPath])].map(escapeRegExp).join("|");
-  const re = new RegExp(
-    `(\\{%(?:tr|p)?\\s*for\\s+[\\p{L}_][\\p{L}\\p{N}_-]*\\s+in\\s+)(?:${heads})\\.([.\\p{L}\\p{N}_-]+)((?:\\s*\\|${MARKER_STATEMENT_BODY})?\\s*%\\})`,
-    "gu",
-  );
-  rewriteTextNodes(root, (text) =>
-    text.replace(
-      re,
-      (_match, pre: string, sub: string, post: string) =>
-        `${pre}${eachKey(loopIdentity, index, sub)}${post}`,
-    ),
-  );
+  visitNestedLoopScopes(paragraphs, (paragraph, nestedAliases) => {
+    const visibleHeads = [...new Set([alias, arrayPath])].filter(
+      (head) => !nestedAliases.has(head),
+    );
+    if (visibleHeads.length === 0) {
+      return;
+    }
+    const heads = visibleHeads.map(escapeRegExp).join("|");
+    const re = new RegExp(
+      `(\\{%(?:tr|p)?\\s*for\\s+[\\p{L}_][\\p{L}\\p{N}_-]*\\s+in\\s+)(?:${heads})\\.([.\\p{L}\\p{N}_-]+)((?:\\s*\\|${MARKER_STATEMENT_BODY})?\\s*%\\})`,
+      "gu",
+    );
+    const text = paragraphSpanText(paragraph);
+    const scopes = inlineLoopScopes(text);
+    const ranges = [...text.matchAll(re)]
+      .filter((match) => {
+        const sourceHead = match[0]
+          .slice((match[1] ?? "").length)
+          .split(".")
+          .at(0);
+        return (
+          sourceHead !== undefined &&
+          !isInlineAliasBound(scopes, match.index, sourceHead)
+        );
+      })
+      .map((match) => ({
+        start: match.index,
+        end: match.index + match[0].length,
+        value: `${match[1] ?? panic("Nested loop source matched without an opener")}${eachKey(loopIdentity, index, match[2] ?? panic("Nested loop source matched without a path"))}${match[3] ?? panic("Nested loop source matched without a closer")}`,
+      }));
+    if (ranges.length === 0) {
+      return;
+    }
+    replaceScopedParagraphRanges(paragraph, ranges);
+  });
 };
 
 /**
@@ -1714,8 +1842,8 @@ const rewriteIterationTokens = (
   index: number,
   count: number,
 ): void => {
-  rewriteTextNodes(paragraph, (text) =>
-    rewriteIterationTokensInText(text, index, count),
+  rewriteTextNodes(paragraph, (partText) =>
+    rewriteIterationTokensInText(partText, index, count),
   );
 };
 
@@ -1875,8 +2003,8 @@ const scopeNumberingMarkers = (
   paragraph: slimdom.Element,
   options: ScopeNumberingOptions,
 ): void => {
-  rewriteTextNodes(paragraph, (text) =>
-    scopeIterationNumberingInText(text, options),
+  rewriteTextNodes(paragraph, (partText) =>
+    scopeIterationNumberingInText(partText, options),
   );
 };
 

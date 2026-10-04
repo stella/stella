@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { usageEntitlements, usagePolicies } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -29,6 +29,7 @@ const createHostedSetupBodySchema = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "hosted_billing" },
   body: createHostedSetupBodySchema,
 } satisfies HandlerConfig;

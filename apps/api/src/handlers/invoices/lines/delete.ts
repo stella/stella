@@ -6,6 +6,7 @@ import type { InvoiceTotals } from "@stll/invoicing";
 import { resultTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
+  INVOICE_ATTACHMENT,
   expenses,
   invoiceLines,
   timeEntries,
@@ -14,9 +15,10 @@ import {
   lockDraftInvoiceForLines,
   recalculateInvoiceTotals,
 } from "@/api/handlers/invoices/invoice-lines";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -36,6 +38,7 @@ const deleteInvoiceLine = createSafeHandler(
       "entry or expense line returns its entry to approved, unbilled status, " +
       "so it can be billed again. Only draft invoices can be edited.",
     permissions: { invoice: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",
@@ -101,6 +104,9 @@ const deleteInvoiceLine = createSafeHandler(
               }),
             );
           }
+          if (invoice.billingMode === "flat_fee") {
+            return Result.err(flatFeeInvoiceRefusal());
+          }
           const lineScope = and(
             eq(invoiceLines.id, params.lineId),
             eq(invoiceLines.invoiceId, params.invoiceId),
@@ -135,6 +141,7 @@ const deleteInvoiceLine = createSafeHandler(
               .update(timeEntries)
               .set({
                 invoiceId: null,
+                invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
                 status: BILLING_STATUS.APPROVED,
                 updatedAt: now,
               })

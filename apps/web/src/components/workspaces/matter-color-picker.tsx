@@ -9,10 +9,9 @@ import {
   DEFAULT_PRESETS,
 } from "@stll/ui/color-picker";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   getMatterPickerColor,
   resolveMatterColor,
@@ -170,10 +169,7 @@ const useMatterColorPicker = (matter: MatterColorIdentity) => {
         },
         {
           onError: (error) => {
-            stellaToast.add({
-              title: userErrorFromThrown(error, t("errors.actionFailed")),
-              type: "error",
-            });
+            notifyUserError(error, t("errors.actionFailed"));
           },
         },
       );

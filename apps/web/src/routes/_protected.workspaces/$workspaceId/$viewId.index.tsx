@@ -6,10 +6,12 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import { isAvtPreviewEnabled } from "@/hooks/use-avt-preview";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
+  prefetchRouteQuery,
 } from "@/lib/react-query";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import type { ViewLayout, ViewLayoutType, WorkspaceView } from "@/lib/types";
@@ -18,6 +20,11 @@ import {
   overviewActivityOptions,
   overviewOptions,
 } from "@/lib/workspaces/queries";
+import {
+  correspondenceAddressOptions,
+  correspondenceInfiniteOptions,
+  CORRESPONDENCE_PAGE_SIZE,
+} from "@/lib/workspaces/queries/correspondence";
 import {
   filesystemEntitiesOptions,
   visibleEntityFieldIds,
@@ -28,6 +35,7 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { isAvtView, isTableView } from "@/lib/workspaces/view-layout";
 import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
+import { CorrespondenceView } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { FilesystemView } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view";
 import { KanbanView } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view";
 import { OverviewView } from "@/routes/_protected.workspaces/$workspaceId/-components/overview-view";
@@ -145,6 +153,26 @@ export const Route = createFileRoute(
           ensureRouteQueryData(queryClient, workspaceFilesOptions(workspaceId)),
         ]);
       },
+      correspondence: async () => {
+        // The list suspends on its first page; the address card reads its
+        // query without suspending, so a failed prefetch only reports.
+        await Promise.all([
+          ensureRouteInfiniteQueryData(
+            queryClient,
+            correspondenceInfiniteOptions(
+              workspaceId,
+              CORRESPONDENCE_PAGE_SIZE,
+            ),
+          ),
+          prefetchRouteQuery(
+            queryClient,
+            correspondenceAddressOptions(workspaceId),
+            (error: unknown) => {
+              getAnalytics().captureError(error);
+            },
+          ),
+        ]);
+      },
     };
 
     await prefetchByViewType[activeView.layout.type]();
@@ -204,6 +232,8 @@ function RouteComponent() {
           />
         </Suspense>
       );
+    case "correspondence":
+      return <CorrespondenceView workspaceId={workspaceId} />;
     default: {
       activeView.layout satisfies never;
       return panic(`Unhandled view layout: ${String(activeView.layout)}`);

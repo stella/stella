@@ -35,8 +35,8 @@ const CLAUSE_SLOT_RE = clauseSlotPattern();
 
 // ── Scanning ─────────────────────────────────────────
 
-const scanParagraphs = (
-  doc: slimdom.Document,
+export const collectClauseSlots = (
+  doc: slimdom.Document | slimdom.Element,
   slots: Map<string, ClauseSlot>,
 ): void => {
   const paragraphs = doc.getElementsByTagNameNS(W_NS, "p");
@@ -81,7 +81,7 @@ export const discoverClauseSlots = async (
     }
 
     const xml = await entry.async("string");
-    scanParagraphs(slimdom.parseXmlDocument(xml), slots);
+    collectClauseSlots(slimdom.parseXmlDocument(xml), slots);
   }
 
   return [...slots.values()];

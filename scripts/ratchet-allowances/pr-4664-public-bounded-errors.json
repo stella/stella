@@ -1,0 +1,5 @@
+{
+  "metric": "as-casts",
+  "delta": 1,
+  "reason": "projectResponseText in apps/api/src/lib/search/project-response-text.ts returns DeepMutable<T>: its value is a fresh structuredClone deep copy (or a status/Response it maps to itself), so dropping readonly is sound by construction and keeps shared source arrays readonly."
+}

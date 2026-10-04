@@ -8,13 +8,13 @@ import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
 import { SparklesIcon, UploadIcon, AiActionIcon } from "@stll/ui/icons";
 import { TextSeparator } from "@stll/ui/separator";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { api } from "@/lib/api";
 import { DOCX_MIME, isDocxFile } from "@/lib/consts";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
 
@@ -51,9 +51,7 @@ export const TemplateUpload = ({
       onDiscovered(file, data);
     },
     onError: (error) => {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.discoveryFailed"),
+      notifyUserError(error, t("templates.discoveryFailed"), {
         description: userErrorFromThrown(error, t("common.unexpectedError")),
       });
     },
@@ -86,9 +84,7 @@ export const TemplateUpload = ({
       onDiscovered(file, data);
     },
     onError: (error) => {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.discoveryFailed"),
+      notifyUserError(error, t("templates.discoveryFailed"), {
         description: userErrorFromThrown(error, t("common.unexpectedError")),
       });
     },
@@ -99,10 +95,7 @@ export const TemplateUpload = ({
   const mutateDiscover = discoverMutation.mutate;
   const discover = (file: File) => {
     if (!isDocxFile(file)) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.invalidFileType"),
-      });
+      notifyUserError(undefined, t("templates.invalidFileType"));
       return;
     }
     mutateDiscover(file);
@@ -111,10 +104,7 @@ export const TemplateUpload = ({
   const mutatePrepare = prepareMutation.mutate;
   const prepare = (file: File) => {
     if (!isDocxFile(file)) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.invalidFileType"),
-      });
+      notifyUserError(undefined, t("templates.invalidFileType"));
       return;
     }
     mutatePrepare(file);

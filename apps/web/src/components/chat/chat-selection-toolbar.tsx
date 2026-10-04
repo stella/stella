@@ -7,7 +7,6 @@ import { useTranslations } from "use-intl";
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, CopyIcon, NewChatIcon, QuoteIcon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 
 import { useChatEditorManager } from "@/components/chat-editor-provider";
 import {
@@ -29,6 +28,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 /** `ChatThreadMessages` marks every message it renders with its id. */
 const CHAT_MESSAGE_ATTRIBUTE = "data-chat-message-id";
@@ -215,7 +215,7 @@ export const ChatSelectionToolbar = ({
     const result = await copyToClipboard(selected.quote);
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }
     setCopied(true);

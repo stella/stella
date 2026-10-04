@@ -11,20 +11,26 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  DOCUMENT_FETCH_EVENT,
+  type DocumentStageObservation,
+} from "@stll/legal-atlas/document-fetch-diagnostics";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import type {
   DecisionDocumentOutcome,
   PendingDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
-import type {
-  PendingDocumentQueue,
-  QueuedDocument,
+import type { PendingDocumentQueue } from "@/api/lib/legal-search/sk-document-queue";
+import {
+  createPendingDocumentQueue,
+  DOCUMENT_TIER,
 } from "@/api/lib/legal-search/sk-document-queue";
-import { DOCUMENT_TIER } from "@/api/lib/legal-search/sk-document-queue";
 
 import {
   DRAIN_CHECK_SLICE_MS,
+  type SkDocumentDrainOptions,
   type SkDocumentDrainSummary,
   type SkDocumentDrainTiming,
   runSkDocumentDrain,
@@ -104,12 +110,18 @@ const pending = (caseNumber: string): PendingDocument => ({
 const queueOf = (caseNumbers: readonly string[]): PendingDocumentQueue => {
   const remaining = [...caseNumbers];
   return {
-    next: async (): Promise<QueuedDocument | undefined> => {
+    next: async () => {
       const caseNumber = remaining.shift();
       return await Promise.resolve(
         caseNumber === undefined
-          ? undefined
-          : { tier: DOCUMENT_TIER.REMAINING, decision: pending(caseNumber) },
+          ? { type: "exhausted" }
+          : {
+              type: "row",
+              row: {
+                tier: DOCUMENT_TIER.REMAINING,
+                decision: pending(caseNumber),
+              },
+            },
       );
     },
   };
@@ -127,6 +139,7 @@ type DrainRun = {
 };
 
 type RunDrainOptions = {
+  documentObservations?: SkDocumentDrainOptions["documentObservations"];
   /** A queue, or one built over the run's fake clock. */
   queue: PendingDocumentQueue | ((now: () => number) => PendingDocumentQueue);
   /** Answers one fetch; throwing stands in for a transient failure. */
@@ -139,6 +152,7 @@ type RunDrainOptions = {
 };
 
 const runDrain = async ({
+  documentObservations,
   drainAtClock,
   polls,
   queue,
@@ -153,6 +167,7 @@ const runDrain = async ({
   const source = typeof queue === "function" ? queue(() => clock) : queue;
 
   await runSkDocumentDrain({
+    ...(documentObservations === undefined ? {} : { documentObservations }),
     queue: {
       next: async () => {
         events.push({ type: "poll" });
@@ -204,6 +219,113 @@ const gapsBetween = (
   return gaps;
 };
 
+describe("source-keyed deferred document observations", () => {
+  test("each drain outcome is accumulated with the five-minute discriminator and backlog probe", async () => {
+    for (const status of OUTCOME_STATUSES) {
+      const observations: DocumentStageObservation[] = [];
+      let probes = 0;
+      await runDrain({
+        queue: queueOf(["fixture"]),
+        respond: () => OUTCOMES[status],
+        polls: 1,
+        documentObservations: {
+          source: "sk-courts",
+          observe: (event) => {
+            observations.push(event);
+          },
+          hasPending: async () => {
+            probes += 1;
+            return true;
+          },
+        },
+      });
+      expect(probes).toBe(1);
+      expect(observations).toEqual([
+        {
+          event: DOCUMENT_FETCH_EVENT.window,
+          aggregation: "five_minute",
+          source: "sk-courts",
+          backlog: 1,
+          attempted: 1,
+          filled: status === "filled" ? 1 : 0,
+          failed: status === "deferred" || status === "parked" ? 1 : 0,
+          window_seconds: 0,
+        },
+      ]);
+    }
+  });
+
+  test("idle intervals report an empty backlog without producing legacy empty summaries", async () => {
+    const observations: DocumentStageObservation[] = [];
+    const run = await runDrain({
+      queue: queueOf([]),
+      respond: () => OUTCOMES.filled,
+      polls: 4,
+      timing: { ...TIMING, summaryIntervalMs: 1000 },
+      documentObservations: {
+        source: "sk-courts",
+        observe: (event) => {
+          observations.push(event);
+        },
+        hasPending: async () => false,
+      },
+    });
+    expect(run.summaries).toEqual([]);
+    expect(observations.length).toBeGreaterThan(0);
+    for (const observation of observations) {
+      expect(observation).toMatchObject({
+        event: DOCUMENT_FETCH_EVENT.window,
+        aggregation: "five_minute",
+        source: "sk-courts",
+        backlog: 0,
+        attempted: 0,
+        filled: 0,
+        failed: 0,
+      });
+      if (observation.event === DOCUMENT_FETCH_EVENT.window) {
+        expect(observation.window_seconds).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  test("backlog probe failure cannot turn a stalled source into a healthy empty source", async () => {
+    const observations: DocumentStageObservation[] = [];
+    const run = await runDrain({
+      queue: queueOf(["fixture"]),
+      respond: () => OUTCOMES.deferred,
+      polls: 1,
+      documentObservations: {
+        source: "sk-courts",
+        observe: (event) => {
+          observations.push(event);
+        },
+        hasPending: async () => {
+          throw new Error("private query context");
+        },
+      },
+    });
+    expect(observations).toEqual([
+      {
+        event: DOCUMENT_FETCH_EVENT.fetchOutcome,
+        source: "sk-courts",
+        outcome: "unknown",
+      },
+      {
+        event: DOCUMENT_FETCH_EVENT.window,
+        aggregation: "five_minute",
+        source: "sk-courts",
+        backlog: 1,
+        attempted: 1,
+        filled: 0,
+        failed: 2,
+        window_seconds: 0,
+      },
+    ]);
+    expect(run.summaries.at(0)?.failed).toBe(0);
+    expect(JSON.stringify(observations)).not.toContain("private");
+  });
+});
+
 /** Fake-clock time at which the walk fetched this document. */
 const fetchedAt = ({ events }: DrainRun, caseNumber: string): number => {
   let clock = 0;
@@ -247,12 +369,12 @@ const backlogQueue = ({
         (attemptedAt === undefined || now() - attemptedAt >= cooldownMs),
     );
     if (row === undefined) {
-      return undefined;
+      return { type: "exhausted" };
     }
     row.attemptedAt = now();
     return await Promise.resolve({
-      tier: DOCUMENT_TIER.REMAINING,
-      decision: pending(row.caseNumber),
+      type: "row",
+      row: { tier: DOCUMENT_TIER.REMAINING, decision: pending(row.caseNumber) },
     });
   },
 });
@@ -428,9 +550,62 @@ describe("sk document drain", () => {
     expect(gaps.at(-1)).toBe(TIMING.failureBackoffMaxMs);
   });
 
-  test("an empty queue backs off instead of polling at the fetch rate", async () => {
+  test("a spent scan budget continues at the fetch gap until exhaustion permits idle backoff", async () => {
+    let scans = 0;
     const run = await runDrain({
-      queue: queueOf([]),
+      queue: (now) =>
+        createPendingDocumentQueue({
+          now,
+          pageSize: 20,
+          requestedPollIntervalMs: 1000,
+          loaders: {
+            loadRequested: async () => [],
+            loadRemaining: async () => {
+              scans += 1;
+              if (scans <= 3) {
+                return { type: "budget-spent" };
+              }
+              if (scans === 4) {
+                return { type: "rows", rows: [pending("ready-after-budgets")] };
+              }
+              return { type: "exhausted" };
+            },
+          },
+        }),
+      respond: () => OUTCOMES.filled,
+      polls: 9,
+    });
+
+    expect(fetchedAt(run, "ready-after-budgets")).toBe(3 * TIMING.fetchDelayMs);
+    expect(gapsBetween(run, "poll")).toEqual([
+      TIMING.fetchDelayMs,
+      TIMING.fetchDelayMs,
+      TIMING.fetchDelayMs,
+      TIMING.fetchDelayMs,
+      1000,
+      2000,
+      4000,
+      8000,
+    ]);
+    expect(run.summaries.at(0)).toMatchObject({
+      attempted: 1,
+      filled: 1,
+      failed: 0,
+    });
+  });
+
+  test("an exhausted queue backs off instead of polling at the fetch rate", async () => {
+    const run = await runDrain({
+      queue: (now) =>
+        createPendingDocumentQueue({
+          now,
+          pageSize: 20,
+          requestedPollIntervalMs: 1000,
+          loaders: {
+            loadRequested: async () => [],
+            loadRemaining: async () => ({ type: "exhausted" }),
+          },
+        }),
       respond: () => OUTCOMES.filled,
       polls: 5,
     });
@@ -449,8 +624,11 @@ describe("sk document drain", () => {
           const decision = script.shift();
           return await Promise.resolve(
             decision === undefined
-              ? undefined
-              : { tier: DOCUMENT_TIER.REMAINING, decision },
+              ? { type: "exhausted" }
+              : {
+                  type: "row",
+                  row: { tier: DOCUMENT_TIER.REMAINING, decision },
+                },
           );
         },
       };

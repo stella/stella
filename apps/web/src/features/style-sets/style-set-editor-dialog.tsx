@@ -33,7 +33,9 @@ import {
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
+import { toAPIError } from "@/lib/errors/api";
+import type { ToAPIErrorProps } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
 type StyleSetEditorDialogProps = {
@@ -165,20 +167,14 @@ const LoadedStyleSetEditor = ({
   const [settings, setSettings] = useState(initialSettings);
   const [saving, setSaving] = useState(false);
 
-  const finishSave = async (
-    error: Parameters<typeof userErrorMessage>[0] | null,
-  ) => {
+  const finishSave = async (error: ToAPIErrorProps | null) => {
     if (error) {
       // An API error response reaches the user through the same toast as a
       // rejected request, so it has to reach analytics the same way too; the
       // catch in `handleSubmit` only ever sees the rejection.
       getAnalytics().captureError(error);
       setSaving(false);
-      stellaToast.add({
-        type: "error",
-        title: t("styleSets.editor.saveFailed"),
-        description: userErrorMessage(error, t("common.unexpectedError")),
-      });
+      notifyUserError(toAPIError(error), t("styleSets.editor.saveFailed"));
       return;
     }
 
@@ -223,11 +219,7 @@ const LoadedStyleSetEditor = ({
     save().catch((error: unknown) => {
       getAnalytics().captureError(error);
       setSaving(false);
-      stellaToast.add({
-        type: "error",
-        title: t("styleSets.editor.saveFailed"),
-        description: userErrorFromThrown(error, t("common.unexpectedError")),
-      });
+      notifyUserError(error, t("styleSets.editor.saveFailed"));
     });
   };
 

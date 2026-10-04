@@ -1,8 +1,14 @@
+// parser-output-unchanged: challenge detection removes the same script/style/noscript nodes before checking visible text.
 // parser-output-unchanged: Validation rejects invalid publisher responses without transforming parsed decision content.
 import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
+import { isTag } from "domhandler";
 import { parseXmlDocument } from "slimdom";
 
+import {
+  isExcludedHtmlTag,
+  visibleHtmlText,
+} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 type PublisherPageReason =
@@ -93,14 +99,20 @@ const isHtmlInterstitial = (text: string): boolean => {
     return true;
   }
   const content = $("body").clone();
-  content.find("script, style, noscript").remove();
+  content
+    .find("*")
+    .filter(
+      (_, node) => isTag(node) && isExcludedHtmlTag(node.name.toLowerCase()),
+    )
+    .remove();
+  content.find("noscript").remove();
   content.find("form").each((_index, form) => {
     const node = $(form);
     if (node.find("table, article, ol, ul").length === 0) {
       node.remove();
     }
   });
-  return $("form, script").length > 0 && content.text().trim() === "";
+  return $("form, script").length > 0 && visibleHtmlText(content).trim() === "";
 };
 
 const isCompleteZip = (bytes: Uint8Array): boolean => {

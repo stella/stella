@@ -53,6 +53,7 @@ import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 type AnnotationToolbarProps = {
   /** A mark the reader clicked; the bar edits it instead of the selection. */
@@ -713,10 +714,10 @@ export const AnnotationToolbar = ({
                         (async () => {
                           const copied = await copyToClipboard(text);
                           if (Result.isError(copied)) {
-                            stellaToast.add({
-                              title: t("errors.actionFailed"),
-                              type: "error",
-                            });
+                            notifyUserError(
+                              copied.error,
+                              t("errors.actionFailed"),
+                            );
                             return;
                           }
                           stellaToast.add({

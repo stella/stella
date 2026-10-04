@@ -70,6 +70,7 @@ import {
 
 import {
   inlinesToPlainText,
+  visibleHtmlText,
   stripFurniturePrefix,
   stripInlinePrefix,
 } from "./shared-inlines";
@@ -183,7 +184,7 @@ const extractHiddenMetadata = ($: cheerio.CheerioAPI): HiddenMetadata => ({
   parallelQuotation: $("input#paralellQuotationHidden").attr("value") ?? null,
   popularName: $("input#popularNameHidden").attr("value") ?? null,
   docId: $("input#docIdHidden").attr("value") ?? null,
-  decisionForm: $("span#lblDecisionForm").text().trim() || null,
+  decisionForm: visibleHtmlText($("span#lblDecisionForm")).trim() || null,
 });
 
 // ── Cross-reference extraction ────────────────────────────
@@ -204,7 +205,7 @@ const extractCrossReferences = ($: cheerio.CheerioAPI): CrossReference[] => {
       return;
     }
 
-    const text = $(el).text().trim();
+    const text = visibleHtmlText($(el)).trim();
     if (!text || seen.has(text)) {
       return;
     }
@@ -242,6 +243,14 @@ const RTF_SKIPPED_DESTINATIONS = new Set([
   "colortbl",
   "datastore",
   "fonttbl",
+  "header",
+  "headerf",
+  "headerl",
+  "headerr",
+  "footer",
+  "footerf",
+  "footerl",
+  "footerr",
   "info",
   "latentstyles",
   "listoverridetable",
@@ -667,7 +676,7 @@ const extractLinesFromDocContent = ($: cheerio.CheerioAPI): ParsedLine[] => {
   const docContent = $(".DocContent");
   const container = docContent.length > 0 ? docContent : $("body");
 
-  const fullText = container.text().trim();
+  const fullText = visibleHtmlText(container).trim();
   if (!fullText) {
     return [];
   }

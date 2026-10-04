@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeSessionHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeSessionHandler,
+} from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
@@ -27,6 +30,7 @@ export const deleteAccountVerifyBody = t.Object({
 });
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "account_lifecycle" },
   body: deleteAccountVerifyBody,
 } satisfies SessionHandlerConfig;

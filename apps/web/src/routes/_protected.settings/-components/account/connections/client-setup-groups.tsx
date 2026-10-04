@@ -44,6 +44,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 const CLI_INSTALL_COMMAND = "npm i -g @stll/cli";
 const COPIED_FEEDBACK_MS = 1600;
@@ -211,7 +212,7 @@ const CopyValueButton = ({ value }: { value: string }) => {
     const result = await copyToClipboard(value);
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }
     stellaToast.add({ title: t("common.copied"), type: "success" });
