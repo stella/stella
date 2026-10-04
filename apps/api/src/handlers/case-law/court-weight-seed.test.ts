@@ -11,6 +11,7 @@ import {
   courtWeightMapFromSeed,
   courtWeightSeedSql,
   seededCourtWeightEntries,
+  type CourtWeightSeedRow,
 } from "@/api/handlers/case-law/court-weight-seed";
 import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
 import { SK_ECLI_COURTS } from "@/api/lib/case-law/ecli-court-codes";
@@ -63,7 +64,7 @@ const HISTORICAL_SVK_SEED = [
     tierLabel: "regional",
     weight: 4,
   },
-];
+] satisfies CourtWeightSeedRow[];
 
 describe("court weight seed", () => {
   test("each seed migration is the rendering of its part of the declaration", async () => {
