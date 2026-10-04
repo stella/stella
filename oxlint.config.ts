@@ -224,6 +224,14 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-ambient-nondeterminism.fixture.ts", [
     "no-ambient-nondeterminism/no-ambient-nondeterminism",
   ]),
+  ...[
+    "calendar-day.fixture.ts",
+    "calendar-day.fixture.legacy.ts",
+    "calendar-day.fixture.stale.ts",
+  ].map((file) => fixtureRuleOverride(file, ["calendar-day/no-utc-user-day"])),
+  fixtureRuleOverride("calendar-day.fixture.scheduler.ts", [
+    "calendar-day/no-wall-clock-scheduler-decision",
+  ]),
   fixtureRuleOverride("require-cn-for-classname-composition.fixture.tsx", [
     "require-cn-for-classname-composition/require-cn-for-classname-composition",
   ]),
@@ -1277,6 +1285,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-hand-rolled-typed-character.ts",
     "./.oxlint-plugins/no-ambient-hotkey-format.ts",
     "./.oxlint-plugins/no-ambient-nondeterminism.ts",
+    "./.oxlint-plugins/calendar-day.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-layout-motion-classes.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
@@ -2481,6 +2490,48 @@ export default defineConfig({
       ],
       rules: {
         "no-ambient-nondeterminism/no-ambient-nondeterminism": "error",
+      },
+    },
+    {
+      // A user-facing "today" is the day in the user's or organization's
+      // zone, read through `todayFor(zone)`; the UTC day is another day for
+      // hours around local midnight. Existing sites are budgeted in
+      // scripts/calendar-day-ledger.json, which only shrinks.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "apps/api/src/handlers/**/*.ts",
+        "apps/api/src/lib/**/*.ts",
+      ],
+      rules: {
+        "calendar-day/no-utc-user-day": "error",
+      },
+    },
+    {
+      // Ingestion adapters and parsers read publisher calendars, whose dates
+      // are the source's own days rather than a user's; tests build fixtures
+      // on fixed UTC days.
+      files: [
+        "apps/api/src/handlers/*/ingestion/**",
+        "apps/api/src/tests/**",
+        "apps/*/src/**/*.test.{ts,tsx}",
+      ],
+      rules: {
+        "calendar-day/no-utc-user-day": "off",
+      },
+    },
+    {
+      // Scheduler tasks decide on the slot they were due for (`ctx.dueAt`),
+      // not on the wall clock when the runner got to them: a late tick would
+      // otherwise see the next day and skip or repeat the slot.
+      files: ["apps/api/src/lib/scheduler/tasks/**/*.ts"],
+      rules: {
+        "calendar-day/no-wall-clock-scheduler-decision": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/lib/scheduler/tasks/**/*.test.ts"],
+      rules: {
+        "calendar-day/no-wall-clock-scheduler-decision": "off",
       },
     },
     {
