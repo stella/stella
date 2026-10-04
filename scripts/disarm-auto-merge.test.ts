@@ -12,6 +12,7 @@ const workflow = v.parse(
     concurrency: v.optional(v.unknown()),
     jobs: v.object({
       disarm: v.looseObject({
+        if: v.string(),
         concurrency: v.optional(v.unknown()),
         steps: v.array(
           v.object({
@@ -40,6 +41,7 @@ const decision = new Script(
 const script = new Script(`(async () => { ${source} })()`);
 const trusted = { login: "autofix-ci[bot]", id: 114_827_586, type: "Bot" };
 const armed = { enabledAt: "2026-10-04T12:00:00Z" };
+const pushedAt = "2026-10-04T12:01:00Z";
 const senders = [
   { name: "trusted sender", sender: trusted, disarm: false },
   {
@@ -77,10 +79,14 @@ const senders = [
 for (const { name, sender, disarm } of senders) {
   test(`armed auto-merge requires complete trusted identity: ${name}`, () => {
     expect(
-      decision.runInNewContext({ input: { sender, autoMerge: armed } }),
+      decision.runInNewContext({
+        input: { sender, autoMerge: armed, pushedAt },
+      }),
     ).toBe(disarm);
     expect(
-      decision.runInNewContext({ input: { sender, autoMerge: null } }),
+      decision.runInNewContext({
+        input: { sender, autoMerge: null, pushedAt },
+      }),
     ).toBe(false);
   });
 }
@@ -108,6 +114,7 @@ const run = async ({
         sender,
         pull_request: {
           number: 42,
+          updated_at: pushedAt,
           user: trusted,
           auto_merge: null,
           head: { sha: "stale" },
@@ -170,6 +177,62 @@ test("already disabled auto-merge requires no mutation", async () => {
   const { calls } = await run({ current: null });
   expect(calls).toHaveLength(1);
 });
+
+for (const { enabledAt, disarm } of [
+  { enabledAt: "2026-10-04T12:00:59Z", disarm: true },
+  { enabledAt: pushedAt, disarm: true },
+  { enabledAt: "2026-10-04T12:01:01Z", disarm: false },
+]) {
+  test(`push ordering preserves only provably newer arms: ${enabledAt}`, async () => {
+    const autoMerge = { enabledAt };
+    expect(decision.runInNewContext({ input: { autoMerge, pushedAt } })).toBe(
+      disarm,
+    );
+    const { calls } = await run({ current: autoMerge });
+    expect(calls).toHaveLength(disarm ? 2 : 1);
+  });
+}
+
+for (const input of [
+  { autoMerge: { enabledAt: "invalid" }, pushedAt },
+  { autoMerge: armed, pushedAt: "invalid" },
+  { autoMerge: armed },
+]) {
+  test(`invalid ordering fails visibly: ${JSON.stringify(input)}`, () => {
+    expect(() => decision.runInNewContext({ input })).toThrow(
+      "Cannot establish auto-merge and push ordering",
+    );
+  });
+}
+
+const jobCondition = new Script(workflow.jobs.disarm.if);
+test("invalid arm ordering surfaces through the workflow script", async () => {
+  expect(
+    String(await rejectionOf(run({ current: { enabledAt: "invalid" } }))),
+  ).toContain("Cannot establish auto-merge and push ordering");
+});
+
+for (const { headRepository, actor, runs } of [
+  { headRepository: "owner/repository", actor: "contributor", runs: true },
+  { headRepository: "fork/repository", actor: "contributor", runs: false },
+  { headRepository: "owner/repository", actor: "dependabot[bot]", runs: false },
+  { headRepository: "fork/repository", actor: "dependabot[bot]", runs: false },
+  { headRepository: "owner/repository", actor: trusted.login, runs: true },
+]) {
+  test(`job token eligibility: ${headRepository}/${actor}`, () => {
+    expect(
+      jobCondition.runInNewContext({
+        github: {
+          repository: "owner/repository",
+          actor,
+          event: {
+            pull_request: { head: { repo: { full_name: headRepository } } },
+          },
+        },
+      }),
+    ).toBe(runs);
+  });
+}
 
 for (const receipt of [
   { id: "wrong_node", autoMergeRequest: null },

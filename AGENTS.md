@@ -333,8 +333,9 @@ mergeability, the required checks on the exact head SHA, unresolved review
 threads, and migration identity (no merged migration renamed or deleted) in
 one invocation, then
 arms "merge when ready" with `expectedHeadOid` checked at arm time. The
-`disarm-auto-merge.yml` synchronize workflow disables auto-merge after pushes
-from anyone except the CI autofix app. HOLD means
+`disarm-auto-merge.yml` synchronize workflow disables arms at or before the
+push event's PR update time, preserving newer arms and CI autofix pushes.
+It skips fork and Dependabot runs with read-only tokens. HOLD means
 `bun scripts/merge-bar.ts --disarm <pr>`: disable auto-merge and dequeue.
 Release pull requests queue
 normally; only an explicit `--jump` enqueues a pull request at the front.
