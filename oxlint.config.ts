@@ -14,6 +14,7 @@ import {
   AUDIT_MUTATION_LEDGER_SCOPE,
   auditMutationBudgets,
 } from "./scripts/audit-mutation-ledger-scope.ts";
+import { DERIVED_ATTRIBUTES } from "./scripts/derived-attributes.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
   SHADCN_LINT_JS_PLUGINS,
@@ -151,6 +152,17 @@ const publicSsrAmbientStateRules = {
   ],
 } satisfies NonNullable<OxlintOverride["rules"]>;
 
+// One override carries every registered derived attribute: an oxlint override
+// replaces a rule's whole configuration, so a second override for the same
+// files would silently drop the first one's attributes.
+const derivedAttributeRuleOptions = {
+  attributes: DERIVED_ATTRIBUTES.map(({ name, detector, within }) => ({
+    name,
+    detector,
+    within,
+  })),
+};
+
 const fixtureRuleOverrides = [
   fixtureRuleOverride("drizzle.fixture.ts", [
     "drizzle/enforce-delete-with-where",
@@ -211,6 +223,14 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-ambient-nondeterminism.fixture.ts", [
     "no-ambient-nondeterminism/no-ambient-nondeterminism",
+  ]),
+  ...[
+    "calendar-day.fixture.ts",
+    "calendar-day.fixture.legacy.ts",
+    "calendar-day.fixture.stale.ts",
+  ].map((file) => fixtureRuleOverride(file, ["calendar-day/no-utc-user-day"])),
+  fixtureRuleOverride("calendar-day.fixture.scheduler.ts", [
+    "calendar-day/no-wall-clock-scheduler-decision",
   ]),
   fixtureRuleOverride("require-cn-for-classname-composition.fixture.tsx", [
     "require-cn-for-classname-composition/require-cn-for-classname-composition",
@@ -1265,6 +1285,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-hand-rolled-typed-character.ts",
     "./.oxlint-plugins/no-ambient-hotkey-format.ts",
     "./.oxlint-plugins/no-ambient-nondeterminism.ts",
+    "./.oxlint-plugins/calendar-day.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-layout-motion-classes.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
@@ -1320,6 +1341,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
+    "./.oxlint-plugins/no-literal-derived-attribute.ts",
     "./.oxlint-plugins/no-parser-validator-calls.ts",
     "./.oxlint-plugins/no-raw-parser-html.ts",
     "./.oxlint-plugins/no-swallowed-item-error.ts",
@@ -2471,6 +2493,48 @@ export default defineConfig({
       },
     },
     {
+      // A user-facing "today" is the day in the user's or organization's
+      // zone, read through `todayFor(zone)`; the UTC day is another day for
+      // hours around local midnight. Existing sites are budgeted in
+      // scripts/calendar-day-ledger.json, which only shrinks.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "apps/api/src/handlers/**/*.ts",
+        "apps/api/src/lib/**/*.ts",
+      ],
+      rules: {
+        "calendar-day/no-utc-user-day": "error",
+      },
+    },
+    {
+      // Ingestion adapters and parsers read publisher calendars, whose dates
+      // are the source's own days rather than a user's; tests build fixtures
+      // on fixed UTC days.
+      files: [
+        "apps/api/src/handlers/*/ingestion/**",
+        "apps/api/src/tests/**",
+        "apps/*/src/**/*.test.{ts,tsx}",
+      ],
+      rules: {
+        "calendar-day/no-utc-user-day": "off",
+      },
+    },
+    {
+      // Scheduler tasks decide on the slot they were due for (`ctx.dueAt`),
+      // not on the wall clock when the runner got to them: a late tick would
+      // otherwise see the next day and skip or repeat the slot.
+      files: ["apps/api/src/lib/scheduler/tasks/**/*.ts"],
+      rules: {
+        "calendar-day/no-wall-clock-scheduler-decision": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/lib/scheduler/tasks/**/*.test.ts"],
+      rules: {
+        "calendar-day/no-wall-clock-scheduler-decision": "off",
+      },
+    },
+    {
       // An ambient async-context store is per-request state, and `enterWith`
       // is the one way to bind it that outlives the work it was opened for:
       // the frame it mutates stays current for whatever the runtime dispatches
@@ -3291,6 +3355,43 @@ export default defineConfig({
     },
     {
       files: [
+        ".oxlint-plugins/__fixtures__/no-literal-derived-attribute.fixture.ts",
+      ],
+      rules: {
+        "no-literal-derived-attribute/no-literal-derived-attribute": [
+          "error",
+          {
+            attributes: [
+              {
+                name: "encrypted",
+                detector: "apps/api/src/lib/files/detect-file-encryption.ts",
+                within: [".oxlint-plugins/__fixtures__/"],
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // A derived attribute (scripts/derived-attributes.ts) comes from its
+      // detector: a literal written to it elsewhere records a guess.
+      files: [
+        ...new Set(DERIVED_ATTRIBUTES.flatMap(({ within }) => within)),
+      ].map((tree) => `${tree}**/*.ts`),
+      excludeFiles: [
+        "**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-literal-derived-attribute/no-literal-derived-attribute": [
+          "error",
+          derivedAttributeRuleOptions,
+        ],
+      },
+    },
+    {
+      files: [
         ".oxlint-plugins/__fixtures__/no-raw-decision-text-fields.fixture.ts",
       ],
       rules: {
@@ -3782,9 +3883,25 @@ export default defineConfig({
       },
     },
     {
+      // Outside the API, apps and packages read their own env modules; a
+      // deployment flag is never read off the raw process environment.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "apps/*/scripts/**/*.ts",
+        "packages/*/src/**/*.{ts,tsx}",
+        "packages/*/scripts/**/*.ts",
+      ],
+      rules: {
+        "no-raw-deployment-feature-read/no-raw-deployment-feature-read": [
+          "error",
+          { processEnvOnly: true },
+        ],
+      },
+    },
+    {
       // Deployment feature flags are read through `isDeploymentFeatureEnabled`
       // so every surface shares one local-development policy per flag.
-      files: ["apps/api/src/**/*.ts"],
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
       rules: {
         "no-raw-deployment-feature-read/no-raw-deployment-feature-read": [
           "error",
@@ -4325,11 +4442,10 @@ export default defineConfig({
       },
     },
     {
-      // A computed-key write onto an object literal sends `__proto__` through
-      // the prototype setter, so a record rebuilt from client, model or
-      // parsed-JSON keys loses that entry. Existing debt is carried per file
-      // in scripts/design-lint-baseline.json and switched off there by
-      // `designLintBacklogOverrides` below.
+      // Dynamic record writes use own-property builders; open module tables
+      // require an own-key check. Existing sites covered by these syntax checks
+      // carry count ceilings in scripts/design-lint-baseline.json and are
+      // switched off here by `designLintBacklogOverrides` below.
       files: [
         "apps/*/src/**/*.{ts,tsx}",
         "apps/*/scripts/**/*.{ts,tsx}",

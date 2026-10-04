@@ -1267,6 +1267,19 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/ratchet-scan.test.ts
 
+      - name: Deployment feature guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Every declared deployment flag has a reader and every flag read is
+        # declared; no flag is read off the raw process environment; across the
+        # real route tree a capability tagged with a flag is mounted behind a
+        # gate on that flag, and every route file is classified. Existing gaps
+        # sit in apps/api/deployment-feature-baseline.json, which may only
+        # shrink against the measured base. The --self-test run first proves
+        # each detector fires on mutated copies of the real tree.
+        run: |
+          bun apps/api/scripts/deployment-feature-guard.ts --self-test
+          bun apps/api/scripts/deployment-feature-guard.ts --base "$RATCHET_BASE_REF"
+
       - name: Custom lint rule coverage
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         env:
@@ -1795,6 +1808,12 @@ jobs:
         # names has moved. Regenerate: `bun scripts/ownership.ts --write`.
         run: bun scripts/ownership.ts --check
 
+      - name: Module ownership invariants
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Invariants the ownership table cannot state itself, such as
+        # allowlists kept equal to their source lists.
+        run: bun test scripts/ownership.test.ts
+
       - name: Queue authority
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # Every BullMQ queue declares whose authority its jobs run under
@@ -1930,6 +1949,15 @@ jobs:
         run: |
           bun apps/api/scripts/mcp-coverage-guard.ts --self-test
           bun apps/api/scripts/mcp-coverage-guard.ts
+
+      - name: Content delivery declarations
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The guard follows handler imports into the gitignored capability
+        # runtime modules, so generate them first instead of skipping them.
+        run: |
+          bun apps/api/scripts/generate-capability-runtime.ts
+          bun apps/api/scripts/content-delivery-guard.ts --self-test
+          bun apps/api/scripts/content-delivery-guard.ts
 
       - name: MCP surface baseline self-test
         if: needs.ci-plan.outputs.package_checks_required == 'true'
