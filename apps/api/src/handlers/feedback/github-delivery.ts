@@ -13,6 +13,11 @@ import { Result, TaggedError } from "better-result";
 import type { FeedbackKind } from "@stll/api-contract/feedback";
 import { fetchWithTimeout } from "@stll/fetch";
 
+import type {
+  GithubSafeText,
+  GithubSafeTitle,
+} from "@/api/lib/github/outbound-text";
+
 const GITHUB_API_BASE = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
 const GITHUB_REQUEST_TIMEOUT_MS = 10_000;
@@ -38,9 +43,13 @@ export class GithubDeliveryError extends TaggedError("GithubDeliveryError")<{
 
 export type GithubDeliveryConfig = { repo: string; token: string };
 
+/**
+ * Title and body are the reporter's text, so they arrive only as values the
+ * GitHub outbound owner produced; a plain string does not type-check.
+ */
 type GithubIssueRequest = {
-  title: string;
-  body: string;
+  title: GithubSafeTitle;
+  body: GithubSafeText;
   kind: FeedbackKind;
 };
 
@@ -78,8 +87,8 @@ export const createGithubFeedbackIssue: GithubIssueCreator = async ({
           "x-github-api-version": GITHUB_API_VERSION,
         },
         body: JSON.stringify({
-          title: issue.title,
-          body: issue.body,
+          title: issue.title.text,
+          body: issue.body.markdown,
           labels: [GITHUB_LABEL_BY_KIND[issue.kind], GITHUB_FEEDBACK_LABEL],
         }),
       }),
