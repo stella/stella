@@ -1,5 +1,9 @@
 [
   {
+    "id": "apps/api/src/mcp/billing-tools.ts::listInvoicesArgsSchema::minValue:1::1",
+    "reason": "Existing listInvoicesArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
     "id": "apps/api/src/mcp/billing-tools.ts::listTimeEntriesArgsSchema::maxLength:10::1",
     "reason": "Existing listTimeEntriesArgsSchema MCP input bound; shared LIMITS migration pending."
   },
@@ -9,6 +13,10 @@
   },
   {
     "id": "apps/api/src/mcp/billing-tools.ts::listTimeEntriesArgsSchema::minLength:1::1",
+    "reason": "Existing listTimeEntriesArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/billing-tools.ts::listTimeEntriesArgsSchema::minValue:1::1",
     "reason": "Existing listTimeEntriesArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
@@ -56,12 +64,20 @@
     "reason": "Existing saveTimeEntryArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
+    "id": "apps/api/src/mcp/billing-tools.ts::saveTimeEntryArgsSchema::minValue:1::1",
+    "reason": "Existing saveTimeEntryArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
     "id": "apps/api/src/mcp/capability-tools.ts::describeCapabilityArgsSchema::minLength:1::1",
     "reason": "Existing describeCapabilityArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
     "id": "apps/api/src/mcp/capability-tools.ts::invokeCapabilityArgsSchema::minLength:1::1",
     "reason": "Existing invokeCapabilityArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/capability-tools.ts::listCapabilitiesArgsSchema::minValue:1::1",
+    "reason": "Existing listCapabilitiesArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
     "id": "apps/api/src/mcp/compat-ids.ts::compatCorpusIdInputSchema::minLength:1::1",
@@ -82,6 +98,14 @@
   {
     "id": "apps/api/src/mcp/document-compare-tool.ts::compareSourceSchema::minLength:1::1",
     "reason": "Existing compareSourceSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/document-tools.ts::listDocumentsArgsSchema::minValue:1::1",
+    "reason": "Existing listDocumentsArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/document-tools.ts::listPropertiesArgsSchema::minValue:1::1",
+    "reason": "Existing listPropertiesArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
     "id": "apps/api/src/mcp/document-tools.ts::saveDocumentArgsSchema::maxLength:1024::1",
@@ -132,6 +156,10 @@
     "reason": "Existing comparisonFileSchema MCP input bound; shared LIMITS migration pending."
   },
   {
+    "id": "apps/api/src/mcp/file-comparison-prepare-tool.ts::comparisonFileSchema::minValue:1::1",
+    "reason": "Existing comparisonFileSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
     "id": "apps/api/src/mcp/gateway/dynamic-tool-policy.ts::SKILL_TOOL_INPUT::minLength:1::1",
     "reason": "Existing SKILL_TOOL_INPUT MCP input bound; shared LIMITS migration pending."
   },
@@ -142,6 +170,14 @@
   {
     "id": "apps/api/src/mcp/knowledge-tools.ts::listClausesArgsSchema::minLength:1::1",
     "reason": "Existing listClausesArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::listClausesArgsSchema::minValue:1::1",
+    "reason": "Existing listClausesArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/knowledge-tools.ts::listPlaybooksArgsSchema::minValue:1::1",
+    "reason": "Existing listPlaybooksArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
     "id": "apps/api/src/mcp/knowledge-tools.ts::saveClauseArgsSchema::maxLength:10::1",
@@ -220,6 +256,10 @@
     "reason": "Existing languageInputSchema MCP input bound; shared LIMITS migration pending."
   },
   {
+    "id": "apps/api/src/mcp/legislation-tools.ts::readProvisionHistoryArgsSchema::minValue:1::1",
+    "reason": "Existing readProvisionHistoryArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
     "id": "apps/api/src/mcp/legislation-tools.ts::searchLegislationArgsSchema::maxLength:10::1",
     "reason": "Existing searchLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
   },
@@ -256,11 +296,23 @@
     "reason": "Existing searchLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
+    "id": "apps/api/src/mcp/legislation-tools.ts::searchLegislationArgsSchema::minValue:1::1",
+    "reason": "Existing searchLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
     "id": "apps/api/src/mcp/matter-tools.ts::birthMonthSchema::maxValue:12::1",
     "reason": "Existing birthMonthSchema MCP input bound; shared LIMITS migration pending."
   },
   {
+    "id": "apps/api/src/mcp/matter-tools.ts::birthMonthSchema::minValue:1::1",
+    "reason": "Existing birthMonthSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
     "id": "apps/api/src/mcp/matter-tools.ts::birthYearSchema::maxValue:9999::1",
+    "reason": "Existing birthYearSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::birthYearSchema::minValue:1000::1",
     "reason": "Existing birthYearSchema MCP input bound; shared LIMITS migration pending."
   },
   {
@@ -320,7 +372,15 @@
     "reason": "Existing dateOfBirthInputSchema MCP input bound; shared LIMITS migration pending."
   },
   {
+    "id": "apps/api/src/mcp/matter-tools.ts::dateOfBirthInputSchema::minValue:1::1",
+    "reason": "Existing dateOfBirthInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
     "id": "apps/api/src/mcp/matter-tools.ts::listContactsArgsSchema::maxLength:512::1",
+    "reason": "Existing listContactsArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::listContactsArgsSchema::minValue:1::1",
     "reason": "Existing listContactsArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
@@ -337,6 +397,10 @@
   },
   {
     "id": "apps/api/src/mcp/matter-tools.ts::listTasksArgsSchema::minLength:1::1",
+    "reason": "Existing listTasksArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/matter-tools.ts::listTasksArgsSchema::minValue:1::1",
     "reason": "Existing listTasksArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
@@ -432,6 +496,10 @@
     "reason": "Existing createArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
+    "id": "apps/api/src/mcp/reader-annotation-tools.ts::listArgsSchema::minValue:1::1",
+    "reason": "Existing listArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
     "id": "apps/api/src/mcp/reader-annotation-tools.ts::passageSchema::maxLength:64::1",
     "reason": "Existing passageSchema MCP input bound; shared LIMITS migration pending."
   },
@@ -464,6 +532,10 @@
     "reason": "Existing listAuditLogArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::listAuditLogArgsSchema::minValue:1::1",
+    "reason": "Existing listAuditLogArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
     "id": "apps/api/src/mcp/research-admin-tools.ts::manageOrganizationArgsSchema::maxLength:128::1",
     "reason": "Existing manageOrganizationArgsSchema MCP input bound; shared LIMITS migration pending."
   },
@@ -481,6 +553,18 @@
   },
   {
     "id": "apps/api/src/mcp/research-admin-tools.ts::manageOrganizationArgsSchema::minLength:1::2",
+    "reason": "Existing manageOrganizationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::manageOrganizationArgsSchema::minValue:0::1",
+    "reason": "Existing manageOrganizationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::manageOrganizationArgsSchema::minValue:1::1",
+    "reason": "Existing manageOrganizationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::manageOrganizationArgsSchema::minValue:1::2",
     "reason": "Existing manageOrganizationArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
@@ -544,6 +628,14 @@
     "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
+    "id": "apps/api/src/mcp/research-admin-tools.ts::searchBoeLegislationArgsSchema::minValue:1::1",
+    "reason": "Existing searchBoeLegislationArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::listMattersArgsSchema::minValue:1::1",
+    "reason": "Existing listMattersArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
     "id": "apps/api/src/mcp/stella-tools.ts::lookupCaseLawArgsSchema::minLength:1::1",
     "reason": "Existing lookupCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
   },
@@ -552,11 +644,23 @@
     "reason": "Existing lookupCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
+    "id": "apps/api/src/mcp/stella-tools.ts::readCaseLawCitationsArgsSchema::minValue:1::1",
+    "reason": "Existing readCaseLawCitationsArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
     "id": "apps/api/src/mcp/stella-tools.ts::readCaseLawDecisionArgsSchema::minLength:1::1",
     "reason": "Existing readCaseLawDecisionArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
+    "id": "apps/api/src/mcp/stella-tools.ts::readCaseLawDecisionArgsSchema::minValue:1::1",
+    "reason": "Existing readCaseLawDecisionArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
     "id": "apps/api/src/mcp/stella-tools.ts::searchAcrossMattersArgsSchema::minLength:1::1",
+    "reason": "Existing searchAcrossMattersArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchAcrossMattersArgsSchema::minValue:1::1",
     "reason": "Existing searchAcrossMattersArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
@@ -624,6 +728,10 @@
     "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
+    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minValue:1::1",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
     "id": "apps/api/src/mcp/stella-tools.ts::setPracticeJurisdictionsArgsSchema::minLength:1::1",
     "reason": "Existing setPracticeJurisdictionsArgsSchema MCP input bound; shared LIMITS migration pending."
   },
@@ -688,8 +796,16 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
+    "id": "apps/api/src/mcp/valibot-tool-definition.test.ts::inputSchema::minValue:1::1",
+    "reason": "Existing inputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
     "id": "apps/api/src/mcp/valibot-tool-definition.test.ts::leafSourceArbitrary::maxValue:9::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
+  },
+  {
+    "id": "apps/api/src/mcp/valibot-tool-definition.test.ts::leafSourceArbitrary::minValue:0::1",
+    "reason": "Existing leafSourceArbitrary MCP input bound; shared LIMITS migration pending."
   },
   {
     "id": "apps/web/src/boot-prefetch.ts::BOOT_PREFETCH_PATHS::domain:[\"/get-session\",\"/organization/get-active-member-role\"]::1",
@@ -822,6 +938,18 @@
   {
     "id": "apps/web/src/components/docx/evidence-reference.ts::evidenceReferenceSchema::maxLength:512::1",
     "reason": "Existing evidenceReferenceSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/docx/use-folio-collaboration-room.ts::flushResponseSchema::minValue:0::1",
+    "reason": "Existing flushResponseSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/docx/use-folio-collaboration-room.ts::joinResponseSchema::minValue:0::1",
+    "reason": "Existing joinResponseSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/docx/use-folio-collaboration-room.ts::refreshResponseSchema::minValue:0::1",
+    "reason": "Existing refreshResponseSchema UI validation or presentation bound; contract migration pending."
   },
   {
     "id": "apps/web/src/components/entity-views/types.ts::PROPOSAL_TYPES::domain:[\"task\",\"deadline\"]::1",
@@ -964,6 +1092,14 @@
     "reason": "Existing spanSchema UI validation or presentation bound; contract migration pending."
   },
   {
+    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.ts::spanSchema::minValue:0::1",
+    "reason": "Existing spanSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.ts::spanSchema::minValue:1::1",
+    "reason": "Existing spanSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
     "id": "apps/web/src/components/legal-reader/annotations/guest-annotation-store.logic.ts::spansSchema::minLength:1::1",
     "reason": "Existing spansSchema UI validation or presentation bound; contract migration pending."
   },
@@ -1077,6 +1213,10 @@
   },
   {
     "id": "apps/web/src/env-schema.ts::envWebClientSchema::maxValue:65535::1",
+    "reason": "Existing envWebClientSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/env-schema.ts::envWebClientSchema::minValue:1::1",
     "reason": "Existing envWebClientSchema UI validation or presentation bound; contract migration pending."
   },
   {
@@ -1724,6 +1864,10 @@
     "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
   },
   {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.logic.ts::numberSeriesFormSchema::minValue:1::1",
+    "reason": "Existing numberSeriesFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
     "id": "apps/web/src/routes/_protected.settings/-components/organization/number-series-form.tsx::NumberSeriesForm::maxLength:128::1",
     "reason": "Existing NumberSeriesForm UI validation or presentation bound; contract migration pending."
   },
@@ -1761,6 +1905,10 @@
   },
   {
     "id": "apps/web/src/routes/_protected.settings/-components/organization/time-policy.logic.ts::timePolicyFormSchema::maxValue:60::1",
+    "reason": "Existing timePolicyFormSchema UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.settings/-components/organization/time-policy.logic.ts::timePolicyFormSchema::minValue:1::1",
     "reason": "Existing timePolicyFormSchema UI validation or presentation bound; contract migration pending."
   },
   {
@@ -1822,6 +1970,18 @@
   {
     "id": "apps/web/src/routes/_protected.settings/organization.members.tsx::SKELETON_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\",\"h\"]::1",
     "reason": "Existing SKELETON_ROW_KEYS domain; contract ownership pending migration."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx::Route::minValue:1::1",
+    "reason": "Existing Route UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx::Route::minValue:1::2",
+    "reason": "Existing Route UI validation or presentation bound; contract migration pending."
+  },
+  {
+    "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx::searchSchema::minValue:1::1",
+    "reason": "Existing searchSchema UI validation or presentation bound; contract migration pending."
   },
   {
     "id": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.logic.test.ts::triggerTypes::domain:[\"direct\",\"user_dispatch\",\"agent_delegation\",\"schedule\",\"webhook\",\"credential\",\"system\"]::1",

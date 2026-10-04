@@ -310,9 +310,13 @@ const CreateRateTableForm = ({
   const t = useTranslations();
   const schema = v.strictObject({
     name: requiredTrimmedStringSchema(t("common.required")),
-    currency: v.message(
-      currencyCodeSchema,
-      t("billing.sellerProfiles.invalidCurrency"),
+    // One message per field: stop at the first failing currency check.
+    currency: v.config(
+      v.message(
+        currencyCodeSchema,
+        t("billing.sellerProfiles.invalidCurrency"),
+      ),
+      { abortPipeEarly: true },
     ),
     isDefault: v.boolean(),
   });
@@ -363,10 +367,10 @@ const CreateRateTableForm = ({
             )}
           </form.Field>
         </div>
-        <div className="flex w-24 flex-col gap-1.5">
-          <Label>{t("common.currency")}</Label>
-          <form.Field name="currency">
-            {(field) => (
+        <form.Field name="currency">
+          {(field) => (
+            <Field className="w-24 gap-1.5" name={field.name}>
+              <FieldLabel>{t("common.currency")}</FieldLabel>
               <Input
                 dir="ltr"
                 maxLength={CURRENCY_CODE_LENGTH}
@@ -375,9 +379,10 @@ const CreateRateTableForm = ({
                 }
                 value={field.state.value}
               />
-            )}
-          </form.Field>
-        </div>
+              <FieldError />
+            </Field>
+          )}
+        </form.Field>
       </div>
 
       <form.Field name="isDefault">

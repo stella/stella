@@ -85,11 +85,13 @@ describe.serial("contract domains", () => {
           "v.maxLength(200);",
           "v.minLength(1);",
           "v.maxValue(20);",
+          "v.minValue(1000);",
           "v.maxLength(LIMITS.nameMaxLength);",
+          "v.minValue(LIMITS.yearMin);",
         ].join("\n"),
         "apps/api/src/mcp/fixture.ts",
       ),
-    ).toEqual([1, 2, 3]);
+    ).toEqual([1, 2, 3, 4]);
   });
   test("scopes the guard and ignores non-domains", async () => {
     expect(

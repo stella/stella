@@ -34,6 +34,7 @@ const LIMIT_METHODS = new Set([
   "minLength",
   "maxSize",
   "maxValue",
+  "minValue",
 ]);
 const LIMIT_PROPERTIES = new Set(["maxLength", "minLength", "maxSize", "max"]);
 
@@ -300,7 +301,7 @@ export default eslintCompatPlugin({
             }
             if (
               file.startsWith(MCP_ROOT) &&
-              !["maxLength", "minLength", "maxValue"].includes(name)
+              !["maxLength", "minLength", "maxValue", "minValue"].includes(name)
             ) {
               return;
             }

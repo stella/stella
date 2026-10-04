@@ -20,7 +20,7 @@ export const parseContractDomainLedger = (
   }
   for (const [index, entry] of parsed.entries()) {
     if (
-      !/^apps\/(?:web\/src|api\/src\/mcp)\/[^:]+::[^:]+::(?:domain|maxLength|minLength|maxSize|maxValue|max):.+::[1-9]\d*$/u.test(
+      !/^apps\/(?:web\/src|api\/src\/mcp)\/[^:]+::[^:]+::(?:domain|maxLength|minLength|maxSize|maxValue|minValue|max):.+::[1-9]\d*$/u.test(
         entry.id,
       )
     ) {

@@ -69,9 +69,13 @@ export const ExpenseForm = ({
         v.check((matterId) => matterId.length > 0, t("billing.matterRequired")),
       ),
       dateIncurred: v.string(),
-      currency: v.message(
-        currencyCodeSchema,
-        t("billing.sellerProfiles.invalidCurrency"),
+      // One message per field: stop at the first failing currency check.
+      currency: v.config(
+        v.message(
+          currencyCodeSchema,
+          t("billing.sellerProfiles.invalidCurrency"),
+        ),
+        { abortPipeEarly: true },
       ),
       category: v.picklist(EXPENSE_CATEGORIES),
       description: v.string(),
@@ -230,10 +234,10 @@ export const ExpenseForm = ({
             </Field>
           )}
         </form.Field>
-        <div className="flex w-20 flex-col gap-1.5">
-          <Label>{t("common.currency")}</Label>
-          <form.Field name="currency">
-            {(field) => (
+        <form.Field name="currency">
+          {(field) => (
+            <Field className="w-20" name={field.name}>
+              <FieldLabel>{t("common.currency")}</FieldLabel>
               <Input
                 dir="ltr"
                 maxLength={CURRENCY_CODE_LENGTH}
@@ -242,9 +246,10 @@ export const ExpenseForm = ({
                 }
                 value={field.state.value}
               />
-            )}
-          </form.Field>
-        </div>
+              <FieldError />
+            </Field>
+          )}
+        </form.Field>
       </div>
 
       <div className="flex flex-col gap-1.5">
