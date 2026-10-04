@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 3.6.2
+
+### Patch Changes
+
+- [#4605](https://github.com/stella/stella/pull/4605) [`c9125de`](https://github.com/stella/stella/commit/c9125de1a278d7fca5934b60f09718eb17a761f8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Clarify file column update requirements and preserve playbook refusal codes and recovery hints.
+
 ## 3.6.1
 
 ### Patch Changes
