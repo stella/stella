@@ -246,10 +246,11 @@ export const startFlowRun = async ({
 
         return Result.ok({ runId, status: "pending" as const });
       });
-    if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-      return await createAndEnqueue();
-    }
     if (!actorId) {
+      // No caller to admit or count: run only while admission is off.
+      if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
+        return await createAndEnqueue();
+      }
       return Result.err(
         new FlowRunStartError({
           reason: "admission-refused",

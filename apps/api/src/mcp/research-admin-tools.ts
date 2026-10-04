@@ -894,6 +894,15 @@ const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  permissions: {
+    type: "any",
+    alternatives: [
+      { workspace: ["update"] },
+      { organizationSettings: ["update"] },
+    ],
+    reason:
+      "action selects matter membership changes (a matter update) or organization settings.",
+  },
   anonymized: { exposure: "excluded", reason: "write" },
   destructiveBehavior: {
     type: "input-discriminator",

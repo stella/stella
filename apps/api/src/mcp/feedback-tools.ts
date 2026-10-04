@@ -367,6 +367,7 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: {
       type: "outbound",

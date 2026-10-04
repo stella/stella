@@ -28,7 +28,7 @@ import type {
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -50,6 +50,11 @@ import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { parseUserFileId, toUserFileUrl } from "@/api/lib/user-files/types";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Copies thread attachments and returns thread metadata rather than stored-file bytes.",
+  },
   description:
     "Fork one of your own chat threads into a new thread that keeps the " +
     "history up to a chosen answer, so another direction or model can be " +
@@ -61,6 +66,7 @@ const config = {
     "either thread leaves the other's files intact. The fork records where " +
     "it came from and starts with no compaction state of its own.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: {
     type: "capability",

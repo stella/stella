@@ -14,7 +14,7 @@ import { t } from "elysia";
 
 import { documentReviewRuns, entities } from "@/api/db/schema";
 import { createPlaybookDefinitionHandler } from "@/api/handlers/playbooks/create-shared";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import type { ReviewPerspective } from "@/api/lib/document-review/contract";
@@ -39,6 +39,7 @@ const config = {
     "the draft status). Position ids are preserved, so decisions already " +
     "taken on those positions stay attached to them.",
   permissions: { playbook: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "knowledge_library_admin",

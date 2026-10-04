@@ -74,6 +74,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "MCP_READ_TENANT_USER_BYTES",
   "MCP_READ_PUBLIC_ORG_BYTES",
   "MCP_READ_PUBLIC_USER_BYTES",
+  "MCP_CASE_LAW_SEARCH_GUIDANCE",
   "AGENT_CLIENT_STORAGE_V1_ENABLED",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
@@ -88,7 +89,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "AI_MODEL_PDF",
   "AI_MODEL_REASONING",
   "TYPESAFE_MODEL",
-  "AI_PROVIDER",
   "AI_PROVIDER_BASE_URL",
   "OPENROUTER_WIF_POLICY_ID",
   "OPENROUTER_WIF_AUDIENCE",
@@ -109,13 +109,10 @@ const INTERNAL_SERVER_KEYS = new Set([
   "PUBLIC_CORPUS_SEARCH_GLOBAL_MAX",
   "PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX",
   "PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX",
-  "CORPUS_PROJECTION_OWNER",
   "CORPUS_INDEX_Q09_ENDPOINT",
   "CORPUS_INDEX_Q09_SEARCH_ENDPOINT",
   "CORPUS_INDEX_S3_BUCKET",
-  "CORPUS_MEMBER_LAYOUT",
   "CORPUS_STORAGE_ENABLED",
-  "CORPUS_STORAGE_MODE",
   "MANAGED_PROVIDER_CHECK_INTERVAL_MS",
   "MANAGED_PROVIDER_CHECK_TIMEOUT_MS",
   "DATABASE_POOL_IDLE_TIMEOUT_S",
@@ -124,11 +121,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DATABASE_RLS_POOL_MAX",
   "DATABASE_ROOT_POOL_MAX",
   "DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER",
-  "DB_LOAD_GATE_EBS_SIGNAL",
   "DB_HOST",
   "DB_NAME",
   "DB_PORT",
-  "DB_SSLMODE",
   "DB_USER",
   "DEBUG_UNREDACTED_ERRORS",
   "DEV_PUBLIC_LAW_CONNECT_COMMAND",
@@ -136,7 +131,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DOCUMENT_OCR_MODEL_DIR",
   "DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES",
   "E2E_DISABLE_AUTH_RATE_LIMIT",
-  "EMAIL_PROVIDER",
   "EXTENSION_ORIGIN",
   "FEATURE_ACTION_ADMISSION",
   "FEATURE_AGENT_ID_JAG",
@@ -160,13 +154,10 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FRONTEND_URL",
   "GOOGLE_AUTH_CLIENT_ID",
   "GOTENBERG_URL",
-  "HOSTED_USAGE_PROVIDER",
-  "HOSTED_USAGE_PROVIDER_API_VERSION",
   "HOSTED_USAGE_PROVIDER_BASE_URL",
   "HUGGINGFACE_BASE_URL",
   "INBOUND_MAIL_DOMAIN",
   "LEGAL_CORPUS_S3_BUCKET",
-  "LEGAL_SEARCH_PROVIDER",
   "MICROSOFT_AUTH_CLIENT_ID",
   "MICROSOFT_AUTH_TENANT_ID",
   "ORG_EVALUATION_PERIOD_DAYS",
@@ -178,13 +169,11 @@ const INTERNAL_SERVER_KEYS = new Set([
   "PDF_SIGNING_TSA_TRUST_PEM",
   "POSTHOG_LOCAL_DEBUG",
   "PUBLIC_URL",
-  "QUERY_EXPANSION_MODE",
   "REPORT_SPECS_DIR",
   "REPORT_SPECS_S3_PREFIX",
   "REDIS_TLS_REJECT_UNAUTHORIZED",
   "REQUIRE_PERSONAL_AI_KEY",
   "S3_BUCKET",
-  "S3_CREDENTIALS_PROVIDER",
   "S3_ENDPOINT",
   "S3_REGION",
   "S3_SCOPED_SIGNING_ROLE_ARN",
@@ -199,13 +188,10 @@ const INTERNAL_SERVER_KEYS = new Set([
   "STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS",
   "STELLA_API_PORT",
   "STELLA_API_URL",
-  "STELLA_CLIENT_ADDRESS_FORMAT",
   "STELLA_CLIENT_ADDRESS_HEADER",
-  "STELLA_COLLAB_MODE",
   "STELLA_COLLAB_PORT",
   "STELLA_COMMIT_SHA",
   "STELLA_OCR_PDF_FONT_PATH",
-  "STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE",
   "STELLA_TRUSTED_PROXY_CIDRS",
   "STELLA_USAGE_POLICY_SEEDS",
   "STELLA_VERSION",
@@ -214,8 +200,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "TEMPLATE_PACKS_CONTENT_DIR",
   "USAGE_ENFORCEMENT_ENABLED",
   "USE_MOCK_AI",
-  "WEB_FETCH_PROVIDER",
-  "WEB_SEARCH_PROVIDER",
 ]);
 
 const EXAMPLE_VALUES: Record<string, string> = {
@@ -421,6 +405,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "identifier with the build version and a contact URL; set it so a fork " +
     "does not identify as the upstream project. Browser-like values are " +
     "refused by publishers that gate bots.",
+  MCP_CASE_LAW_SEARCH_GUIDANCE:
+    'Query guidance in the search_case_law tool: "off" keeps today\'s description, "v1" explains how phrasings are matched and how the limit is shared, names apex courts per admitted country, and warns when a long phrasing fills fewer slots than it was given.',
   MICROSOFT_AUTH_CLIENT_ID:
     "Microsoft OAuth client ID; required when the matching web login flag is enabled.",
   MICROSOFT_AUTH_CLIENT_SECRET:
@@ -709,6 +695,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   LOGS_OTLP_URL: ENV_CREDENTIAL_KIND.notCredential,
   MANAGED_PROVIDER_CHECK_INTERVAL_MS: ENV_CREDENTIAL_KIND.notCredential,
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_CASE_LAW_SEARCH_GUIDANCE: ENV_CREDENTIAL_KIND.notCredential,
   MCP_READ_PUBLIC_ORG_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   MCP_READ_PUBLIC_USER_BYTES: ENV_CREDENTIAL_KIND.notCredential,
   MCP_READ_TENANT_ORG_BYTES: ENV_CREDENTIAL_KIND.notCredential,
@@ -969,11 +956,34 @@ export const requirementFor = (schema: v.GenericSchema): EnvRequirement => {
   return ENV_REQUIREMENT.optional;
 };
 
-const exposureFor = (name: string, owner: EnvOwner): EnvExposure => {
+// Every value a picklist accepts is spelled out in source, so it can never
+// hold a secret.
+const isPicklistSchema = (schema: v.GenericSchema): boolean => {
+  const inner =
+    schema.type === "optional" && "wrapped" in schema ? schema.wrapped : schema;
+  return (
+    typeof inner === "object" &&
+    inner !== null &&
+    "type" in inner &&
+    inner.type === "picklist"
+  );
+};
+
+type ExposureForOptions = {
+  name: string;
+  owner: EnvOwner;
+  schema: v.GenericSchema;
+};
+
+const exposureFor = ({
+  name,
+  owner,
+  schema,
+}: ExposureForOptions): EnvExposure => {
   if (owner === ENV_OWNER.web || name === "ACTION_LIMIT_CONTACT_URL") {
     return ENV_EXPOSURE.public;
   }
-  if (INTERNAL_SERVER_KEYS.has(name)) {
+  if (isPicklistSchema(schema) || INTERNAL_SERVER_KEYS.has(name)) {
     return ENV_EXPOSURE.internal;
   }
   return ENV_EXPOSURE.secret;
@@ -998,7 +1008,7 @@ const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
       description: DESCRIPTION_OVERRIDES[name] ?? humanizeEnvName(name),
       documented: !HIDDEN_SCHEMA_KEYS.has(name),
       example: EXAMPLE_VALUES[name],
-      exposure: exposureFor(name, owner),
+      exposure: exposureFor({ name, owner, schema: entrySchema }),
       name,
       owner,
       requirement: requirementNote
@@ -1245,6 +1255,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "RAILWAY_TEMPLATE_PROJECT_ID",
   // CI names the revision the convention ratchet measures as its base.
   "RATCHET_BASE_REF",
+  "READ_FAULT_BASELINE",
   "RECORD_ANTHROPIC_API_KEY",
   "RECORD_BEDROCK_API_KEY",
   "RECORD_GOOGLE_API_KEY",
@@ -1268,6 +1279,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "SMOKE_AI_OPENAI_API_KEY",
   "SMOKE_API_URL",
   "SMOKE_TEST",
+  // The source-fingerprint baseline generator reads the guard test's census.
+  "SOURCE_FINGERPRINT_CENSUS_OUT",
   "STAGING_STATE",
   // CI names the target-branch revision the statute recall floor compares to.
   "STATUTE_RECALL_BASE_REF",

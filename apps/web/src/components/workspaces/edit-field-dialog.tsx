@@ -22,6 +22,7 @@ import { Input } from "@stll/ui/input";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { FieldValueSelect } from "@/components/workspaces/field-value-select";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
+import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
 import { detached } from "@/lib/detached";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import type {
@@ -31,6 +32,7 @@ import type {
 } from "@/lib/types";
 import { useUpsertField } from "@/lib/workspaces/mutations/entities";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
+import { workflowActionsDisabled } from "@/lib/workspaces/queries/workspace.logic";
 
 export type EditableFieldContent = Extract<
   WorkspaceField["content"],
@@ -156,7 +158,8 @@ export const EditFieldDialog = ({
 }: EditFieldDialogProps) => {
   const t = useTranslations();
   const [isOpen, setIsOpen] = useState(false);
-  const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
+  const workflowView = useIsWorkflowRunning(workspaceId);
+  const workflowDisabled = workflowActionsDisabled(workflowView);
   const upsertField = useUpsertField();
   const startWorkflow = useStartWorkflow(workspaceId);
   const form = useForm(
@@ -226,6 +229,7 @@ export const EditFieldDialog = ({
                 </DialogTitle>
               </DialogHeader>
               <DialogPanel className="grid gap-4">
+                <WorkflowQueryFeedback view={workflowView} />
                 {fieldContent.type === "text" && (
                   <form.Field
                     children={(field) => <TextFormField field={field} />}
@@ -340,7 +344,7 @@ export const EditFieldDialog = ({
                   {t("common.cancel")}
                 </DialogClose>
                 <Button
-                  disabled={isWorkflowRunning}
+                  disabled={workflowDisabled}
                   loading={upsertField.isPending}
                   type="submit"
                 >

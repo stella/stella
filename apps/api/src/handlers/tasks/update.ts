@@ -1,4 +1,4 @@
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
   updateTaskBodySchema,
   updateTaskHandler,
@@ -16,6 +16,7 @@ const updateTask = createSafeHandler(
       "change also records a lifecycle event, and workflowReason carries the " +
       "explanation stored with it.",
     permissions: { entity: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "save_task" },
     body: updateTaskBodySchema,
   },

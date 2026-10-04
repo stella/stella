@@ -3,8 +3,11 @@ import { panic } from "better-result";
 import { and, eq, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { isStatuteQueryCountry } from "@stll/api-contract/statute-aliases";
-import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-intent";
+import { readStatuteQueryScope } from "@stll/api-contract/statute-query-capability";
+import {
+  readStatuteQueryReferences,
+  type StatuteQueryReference,
+} from "@stll/api-contract/statute-query-intent";
 import {
   splitStatuteTitleCitation,
   statuteTitleCitationMentionRegex,
@@ -457,6 +460,30 @@ export const citedKeysQuery = (
     .groupBy(legislationWorkNames.country, legislationWorkNames.citedKey)
     .limit(CITED_KEY_LIMIT);
 
+/**
+ * Act identities the query names in its jurisdiction. Without a jurisdiction,
+ * or in one with no act grammar, there are none and only titles are matched.
+ */
+const statuteQueryReferences = (
+  query: string,
+  country: string | undefined,
+): StatuteQueryReference[] => {
+  if (country === undefined) {
+    return [];
+  }
+  const scope = readStatuteQueryScope(country.toLowerCase());
+  switch (scope.type) {
+    case "supported":
+      return readStatuteQueryReferences(scope.country, query);
+    case "unsupported":
+      return [];
+    default: {
+      scope satisfies never;
+      return panic(`Unhandled statute query scope: ${String(scope)}`);
+    }
+  }
+};
+
 type ReadNamedLegislationWorksOptions = {
   query: string;
   /** Narrows the lookup to one jurisdiction's names. */
@@ -478,13 +505,7 @@ export const readNamedLegislationWorks = async (
   { query, country }: ReadNamedLegislationWorksOptions,
 ): Promise<NamedLegislationWork[]> => {
   // Explicit act identities outrank titles of amendments that mention them.
-  const countries =
-    country === undefined
-      ? []
-      : [country.toLowerCase()].filter(isStatuteQueryCountry);
-  const references = countries.flatMap((jurisdiction) =>
-    readStatuteQueryReferences(jurisdiction, query),
-  );
+  const references = statuteQueryReferences(query, country);
   if (references.length > 0) {
     const versions = await tx
       .select({
