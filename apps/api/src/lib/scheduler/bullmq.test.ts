@@ -123,13 +123,13 @@ describe("createBullMqDispatchTask target queue", () => {
   });
 
   test.each([
-    ...MEMBER_RUN_QUEUES.map(({ queue }) => queue),
-    "workflow",
-    "workflow-flex",
-    "flow-run",
+    ...MEMBER_RUN_QUEUES.map(({ queue }) => [queue, "member-run"] as const),
+    ...(["workflow", "workflow-flex", "flow-run"] as const).map(
+      (queue) => [queue, "unclassified"] as const,
+    ),
   ])(
-    "refuses member-run queue %s without constructing a queue",
-    async (queueName) => {
+    "refuses queue %s (%s) without constructing a queue",
+    async (queueName, authority) => {
       reset();
       const task = createBullMqDispatchTask({
         createConnection: createBullMqConnection,
@@ -141,7 +141,7 @@ describe("createBullMqDispatchTask target queue", () => {
 
       expect(await rejectionOf(run)).toMatchObject({
         _tag: "ConfigurationError",
-        message: expect.stringContaining(`member-run queue ${queueName}`),
+        message: expect.stringContaining(`${authority} queue ${queueName}`),
       });
       expect(constructedQueues).toEqual([]);
       expect(addCalls).toEqual([]);

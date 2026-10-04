@@ -13,8 +13,12 @@ import type { SchedulerTask } from "@/api/lib/scheduler/types";
  * target queue as data and carries no member, so it may only feed queues whose
  * jobs act for no member (`org-automation`). Total over `BullMqQueueName`, and
  * every queue in `MEMBER_RUN_QUEUES` must stay `member-run`, so a new queue
- * needs a decision here before it compiles.
+ * needs a decision here before it compiles. `unclassified` mirrors queues whose
+ * authority `scripts/ownership.ts` has not classified yet; dispatch refuses
+ * them like member runs until it does.
  */
+type QueueAuthority = "org-automation" | "member-run" | "unclassified";
+
 const SCHEDULED_DISPATCH_QUEUE_AUTHORITY = {
   "account-deletion-cleanup": "org-automation",
   "bilingual-translation-runs": "member-run",
@@ -24,13 +28,13 @@ const SCHEDULED_DISPATCH_QUEUE_AUTHORITY = {
   "document-translation-runs": "member-run",
   "entity-deletion-cleanup": "org-automation",
   "file-derivatives": "org-automation",
-  "flow-run": "member-run",
+  "flow-run": "unclassified",
   "legal-list-verification-runs": "member-run",
   "report-exports": "member-run",
   "style-set-package-cleanup": "org-automation",
-  workflow: "member-run",
-  "workflow-flex": "member-run",
-} as const satisfies Record<BullMqQueueName, "org-automation" | "member-run"> &
+  workflow: "unclassified",
+  "workflow-flex": "unclassified",
+} as const satisfies Record<BullMqQueueName, QueueAuthority> &
   Record<MemberRunQueue, "member-run">;
 
 type QueueCache = {
@@ -155,9 +159,10 @@ const parseBullMqSchedulerPayload = (
         payload: { jobName, queueName, ...(data && { data }) },
       };
     case "member-run":
+    case "unclassified":
       return {
         status: "refused",
-        reason: `names member-run queue ${queueName}; scheduled dispatch accepts org-automation queues only`,
+        reason: `names ${authority} queue ${queueName}; scheduled dispatch accepts org-automation queues only`,
       };
     default: {
       authority satisfies never;
