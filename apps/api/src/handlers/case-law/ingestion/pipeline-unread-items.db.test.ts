@@ -282,6 +282,50 @@ describe("a listed item whose read stays unavailable", () => {
     });
   });
 
+  test("a later read of unchanged content removes the recorded outcome", async () => {
+    const sourceId = await crawlSource();
+    await cycle(sourceId, { decisions: [fullDecision("back-1")] });
+    for (let n = 0; n < UNAVAILABLE_CYCLES_BEFORE_MARKING; n += 1) {
+      await db
+        .update(caseLawSources)
+        .set({ syncCursor: "page-1" })
+        .where(eq(caseLawSources.id, sourceId));
+      await cycle(sourceId, {
+        decisions: [],
+        unreadItems: [emptyServerError("back-1")],
+      });
+    }
+    const marked = (await decisionRow(sourceId, "back-1")) ?? panic("stored");
+    expect(marked.metadata?.[READ_OUTCOME_METADATA_KEY]).toBeDefined();
+    await db
+      .update(caseLawSources)
+      .set({ syncCursor: "page-1" })
+      .where(eq(caseLawSources.id, sourceId));
+
+    await cycle(sourceId, { decisions: [fullDecision("back-1")] });
+
+    const after = (await decisionRow(sourceId, "back-1")) ?? panic("stored");
+    expect(after.sourceHash).toBe(marked.sourceHash);
+    const {
+      metadata: metadataAfter,
+      sourceObservedAt: _observedAfter,
+      sourceObservationOrder: _orderAfter,
+      sourceObservationHash: _hashAfter,
+      ...restAfter
+    } = after;
+    const {
+      metadata: metadataMarked,
+      sourceObservedAt: _observedMarked,
+      sourceObservationOrder: _orderMarked,
+      sourceObservationHash: _hashMarked,
+      ...restMarked
+    } = marked;
+    expect(restAfter).toEqual(restMarked);
+    const { [READ_OUTCOME_METADATA_KEY]: _outcome, ...metadataWithout } =
+      metadataMarked ?? {};
+    expect(metadataAfter ?? {}).toEqual(metadataWithout);
+  });
+
   test("a successful read in between starts the count again", async () => {
     const sourceId = await crawlSource();
     const unread = { decisions: [], unreadItems: [noContent("flaky")] };

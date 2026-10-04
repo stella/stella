@@ -22,6 +22,7 @@ import type {
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { unreadOutcomeOf } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
+import type { PlainTextMetadataValue } from "@/api/lib/case-law/plain-text";
 import {
   corpusCarriesDocument,
   payloadCarriesDocument,
@@ -140,6 +141,30 @@ type WatermarkOptions = {
   observationOrder: bigint;
 };
 
+/** Write an unread item's typed outcome under its metadata key. */
+const recordReadOutcome = (outcome: PlainTextMetadataValue) =>
+  sql`jsonb_set(coalesce(${caseLawDecisions.metadata}, '{}'::jsonb), ${`{${READ_OUTCOME_METADATA_KEY}}`}::text[], ${JSON.stringify(outcome)}::text::jsonb)`;
+
+/**
+ * The read-outcome marker an unchanged observation leaves on its row: an
+ * unread item's outcome, or none once a read produced the item again.
+ */
+const unchangedReadOutcomeMetadata = (
+  existing: ExistingDecision,
+  result: IngestionResult,
+) => {
+  const unreadOutcome = unreadOutcomeOf(result);
+  if (unreadOutcome !== undefined) {
+    return { metadata: recordReadOutcome(unreadOutcome) };
+  }
+  if (existing.metadata?.[READ_OUTCOME_METADATA_KEY] === undefined) {
+    return {};
+  }
+  return {
+    metadata: sql`${caseLawDecisions.metadata} - ${READ_OUTCOME_METADATA_KEY}::text`,
+  };
+};
+
 /**
  * Advance only the observation watermark of a row a partial observation
  * reached, while the row's corpus mirror is settled. An observation of an
@@ -170,7 +195,7 @@ const advancePartialObservationWatermark = async ({
           ...(unreadOutcome === undefined
             ? {}
             : {
-                metadata: sql`jsonb_set(coalesce(${caseLawDecisions.metadata}, '{}'::jsonb), ${`{${READ_OUTCOME_METADATA_KEY}}`}::text[], ${JSON.stringify(unreadOutcome)}::text::jsonb)`,
+                metadata: recordReadOutcome(unreadOutcome),
               }),
           updatedAt: sql`${caseLawDecisions.updatedAt}`,
         })
@@ -199,7 +224,8 @@ const advancePartialObservationWatermark = async ({
 /**
  * Advance only the observation watermark of a row an unchanged observation
  * reached, while the row still holds the source hash and metadata the
- * refresh check compared.
+ * refresh check compared. The row's read-outcome marker follows this
+ * observation.
  */
 const advanceUnchangedObservationWatermark = async ({
   scopedDb,
@@ -221,6 +247,7 @@ const advanceUnchangedObservationWatermark = async ({
           sourceObservedAt: observedAt,
           sourceObservationOrder: observationOrder,
           sourceObservationHash: result.rawHash,
+          ...unchangedReadOutcomeMetadata(existing, result),
           // Drizzle applies the schema's on-update value unless this column is
           // explicit. A watermark-only replay is not a content modification.
           updatedAt: sql`${caseLawDecisions.updatedAt}`,
