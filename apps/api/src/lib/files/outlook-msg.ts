@@ -1,4 +1,7 @@
+import { Result } from "better-result";
+
 import { CompoundFile } from "@/api/lib/files/compound-file";
+import type { CompoundFileParseError } from "@/api/lib/files/compound-file";
 
 const UINT32_RANGE = 4_294_967_296n;
 
@@ -72,8 +75,22 @@ type MsgProperty = {
   bytes: Uint8Array;
 };
 
+/**
+ * The .msg parser's callers (`parseEmail`) convert a thrown parse error at
+ * their boundary, so a typed reader failure surfaces here as that error.
+ */
+const unwrapParse = <T>(result: Result<T, CompoundFileParseError>): T => {
+  if (Result.isError(result)) {
+    throw result.error;
+  }
+  return result.value;
+};
+
+/** @throws {CompoundFileParseError} when the container is malformed or a limit is reached */
 export const parseOutlookMsg = (fileBuffer: ArrayBuffer): OutlookMsgEmail => {
-  const compoundFile = new CompoundFile(new Uint8Array(fileBuffer));
+  const compoundFile = unwrapParse(
+    CompoundFile.parse(new Uint8Array(fileBuffer)),
+  );
   const rootProperties = collectProperties(compoundFile, []);
   const recipients = readRecipients(compoundFile);
   const attachments = readAttachments(compoundFile);
@@ -124,7 +141,7 @@ const collectProperties = (
     const property = {
       id: propertyTag.slice(0, 4),
       type: propertyTag.slice(4, 8),
-      bytes: compoundFile.readStream(streamEntry.entry),
+      bytes: unwrapParse(compoundFile.readStream(streamEntry.entry)),
     };
     properties.set(propertyTag, property);
   }

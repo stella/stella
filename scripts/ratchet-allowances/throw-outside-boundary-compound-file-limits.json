@@ -1,5 +1,0 @@
-{
-  "metric": "throw-outside-boundary",
-  "delta": 2,
-  "reason": "The compound-file reader (moved out of the Outlook parser into apps/api/src/lib/files/compound-file.ts) gained bounds that refuse a FAT larger than the file, a DIFAT chain that revisits a sector, and storages nested past the depth limit; its callers convert the typed parse error at their boundary (Result.try in encrypted-ooxml.ts, parseEmail for .msg)."
-}

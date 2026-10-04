@@ -19,9 +19,9 @@ import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import {
   CompoundFile,
-  CompoundFileParseError,
   hasCompoundFileSignature,
 } from "@/api/lib/files/compound-file";
+import type { CompoundFileParseError } from "@/api/lib/files/compound-file";
 
 /** The zip-based Office types an encrypted container can be declared as. */
 export const OOXML_MIME_TYPES: ReadonlySet<string> = new Set(
@@ -37,13 +37,13 @@ const ENCRYPTED_PACKAGE_STREAM = "ENCRYPTEDPACKAGE";
  * - `encrypted`: a CFB container whose root holds both encryption streams.
  * - `not-encrypted`: anything else, including bytes that are not a CFB
  *   container and a container the reader found malformed.
- * - `unsure`: the reader stopped at one of its limits (or failed in a way it
- *   does not describe), so the container was not read to the end.
+ * - `unsure`: the reader stopped at one of its limits, so the container was
+ *   not read to the end.
  */
 export type EncryptedOoxmlProbe =
   | { status: "encrypted" }
   | { status: "not-encrypted" }
-  | { status: "unsure"; cause: Error };
+  | { status: "unsure"; cause: CompoundFileParseError };
 
 const NOT_ENCRYPTED = { status: "not-encrypted" } as const;
 
@@ -51,19 +51,11 @@ export const probeEncryptedOoxml = (bytes: Uint8Array): EncryptedOoxmlProbe => {
   if (!hasCompoundFileSignature(bytes)) {
     return NOT_ENCRYPTED;
   }
-  const parsed = Result.try({
-    try: () => new CompoundFile(bytes),
-    catch: (cause) => cause,
-  });
+  const parsed = CompoundFile.parse(bytes);
   if (Result.isError(parsed)) {
-    const cause = parsed.error;
-    if (cause instanceof CompoundFileParseError && !cause.limitReached) {
-      return NOT_ENCRYPTED;
-    }
-    return {
-      status: "unsure",
-      cause: cause instanceof Error ? cause : new Error(String(cause)),
-    };
+    return parsed.error.limitReached
+      ? { status: "unsure", cause: parsed.error }
+      : NOT_ENCRYPTED;
   }
   // CFB names compare case-insensitively.
   const rootStreams = new Set(
@@ -134,10 +126,7 @@ export const isExactEncryptedOoxmlLayout = (
   ) {
     return false;
   }
-  const parsed = Result.try({
-    try: () => new CompoundFile(bytes),
-    catch: (cause) => cause,
-  });
+  const parsed = CompoundFile.parse(bytes);
   if (Result.isError(parsed) || parsed.value.unreachableEntryCount !== 0) {
     return false;
   }

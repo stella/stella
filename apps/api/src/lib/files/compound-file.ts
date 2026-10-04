@@ -19,7 +19,7 @@
  * caller that decides something from the parse can tell "not this" from "did
  * not finish".
  */
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 
 const CFB_SIGNATURE = new Uint8Array([
   0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1,
@@ -90,16 +90,32 @@ export const hasCompoundFileSignature = (bytes: Uint8Array): boolean => {
   return CFB_SIGNATURE.every((byte, index) => bytes[index] === byte);
 };
 
+type SectorLayout = {
+  bytes: Uint8Array;
+  view: DataView;
+  sectorSize: number;
+  /** Whole sectors after the header. */
+  fileSectorCount: number;
+};
+
+type FatLayout = SectorLayout & { fat: number[] };
+
+type ParseResult<T> = Result<T, CompoundFileParseError>;
+
+type CompoundFileParts = {
+  layout: FatLayout;
+  miniSectorSize: number;
+  miniStreamCutoff: number;
+  rootEntry: CompoundFileEntry;
+  streamEntries: CompoundFileStream[];
+  tree: CompoundFileTreeEntry[];
+  unreachableEntryCount: number;
+};
+
 export class CompoundFile {
-  private readonly bytes: Uint8Array;
-  private readonly view: DataView;
-  private readonly sectorSize: number;
+  private readonly layout: FatLayout;
   private readonly miniSectorSize: number;
   private readonly miniStreamCutoff: number;
-  /** Whole sectors after the header. */
-  private readonly fileSectorCount: number;
-  private readonly fat: number[];
-  private readonly directoryEntries: CompoundFileEntry[];
   private readonly rootEntry: CompoundFileEntry;
   private miniParts: { miniStream: Uint8Array; miniFat: number[] } | null =
     null;
@@ -112,152 +128,257 @@ export class CompoundFile {
    */
   readonly unreachableEntryCount: number;
 
-  /** @throws {CompoundFileParseError} when the bytes are malformed or a limit is reached */
-  constructor(bytes: Uint8Array) {
-    this.bytes = bytes;
-    this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    if (bytes.byteLength < HEADER_BYTES) {
-      throw malformed("Compound file is too small to contain a CFB header");
-    }
-    if (!hasCompoundFileSignature(bytes)) {
-      throw malformed("Compound file has an invalid CFB signature");
-    }
-
-    const sectorShift = this.readUint16(30);
-    const miniSectorShift = this.readUint16(32);
-    if (
-      !SUPPORTED_SECTOR_SHIFTS.has(sectorShift) ||
-      miniSectorShift !== SUPPORTED_MINI_SECTOR_SHIFT
-    ) {
-      throw malformed("Compound file uses an unsupported CFB sector size");
-    }
-
-    this.sectorSize = 2 ** sectorShift;
-    this.miniSectorSize = 2 ** miniSectorShift;
-    this.miniStreamCutoff = this.readUint32(56) || MINI_STREAM_CUTOFF_DEFAULT;
-    this.fileSectorCount = Math.max(
-      0,
-      Math.floor(bytes.byteLength / this.sectorSize) - 1,
-    );
-
-    this.fat = this.readFat(this.readDifatSectorIds());
-    this.directoryEntries = this.readDirectoryEntries();
-
-    const rootEntry = this.directoryEntries.at(0);
-    if (rootEntry?.type !== CFB_OBJECT_TYPE.root) {
-      throw malformed("Compound file is missing the root storage");
-    }
-    this.rootEntry = rootEntry;
-    const { streams, tree } = this.collectTree();
-    this.streamEntries = streams;
-    this.tree = tree;
-    const allocated = this.directoryEntries.filter(
-      (entry) =>
-        entry.type === CFB_OBJECT_TYPE.storage ||
-        entry.type === CFB_OBJECT_TYPE.stream,
-    ).length;
-    this.unreachableEntryCount = allocated - tree.length;
+  private constructor(parts: CompoundFileParts) {
+    this.layout = parts.layout;
+    this.miniSectorSize = parts.miniSectorSize;
+    this.miniStreamCutoff = parts.miniStreamCutoff;
+    this.rootEntry = parts.rootEntry;
+    this.streamEntries = parts.streamEntries;
+    this.tree = parts.tree;
+    this.unreachableEntryCount = parts.unreachableEntryCount;
   }
 
-  /** @throws {CompoundFileParseError} when the bytes are malformed or a limit is reached */
-  readStream(entry: CompoundFileEntry): Uint8Array {
+  /** Reads the header, the allocation tables and the directory tree. */
+  static parse(bytes: Uint8Array): ParseResult<CompoundFile> {
+    return parseParts(bytes).map((parts) => new CompoundFile(parts));
+  }
+
+  readStream(entry: CompoundFileEntry): ParseResult<Uint8Array> {
     if (entry.streamSize >= this.miniStreamCutoff) {
-      return this.readRegularStream(entry);
+      return readRegularStream(this.layout, entry);
     }
     return this.readMiniStream(entry);
   }
 
-  private readDifatSectorIds(): number[] {
-    const fatSectorCount = this.readUint32(44);
-    // One FAT sector maps `sectorSize / 4` sectors; a FAT that needs more
-    // sectors than the file holds cannot describe this file.
-    const maxFatSectors =
-      Math.ceil(this.fileSectorCount / (this.sectorSize / 4)) + 1;
-    if (fatSectorCount > maxFatSectors) {
-      throw malformed("Compound file FAT is larger than the file");
-    }
-
-    const difat: number[] = [];
-    for (let index = 0; index < HEADER_DIFAT_ENTRIES; index += 1) {
-      const sectorId = this.readUint32(76 + index * 4);
-      if (sectorId !== NO_STREAM) {
-        difat.push(sectorId);
-      }
-    }
-
-    let nextDifatSector = this.readUint32(68);
-    let remainingDifatSectors = this.readUint32(72);
-    const entriesPerDifatSector = this.sectorSize / 4 - 1;
-    const seen = new Set<number>();
-
-    while (
-      nextDifatSector !== END_OF_CHAIN &&
-      nextDifatSector !== NO_STREAM &&
-      remainingDifatSectors > 0 &&
-      difat.length < fatSectorCount
-    ) {
-      if (seen.has(nextDifatSector)) {
-        throw malformed("Compound file DIFAT chain revisits a sector");
-      }
-      seen.add(nextDifatSector);
-      const sector = this.readSector(nextDifatSector);
-      const view = dataViewFor(sector);
-      for (
-        let index = 0;
-        index < entriesPerDifatSector && difat.length < fatSectorCount;
-        index += 1
-      ) {
-        const sectorId = view.getUint32(index * 4, true);
-        if (sectorId !== NO_STREAM) {
-          difat.push(sectorId);
-        }
-      }
-      nextDifatSector = view.getUint32(entriesPerDifatSector * 4, true);
-      remainingDifatSectors -= 1;
-    }
-
-    return difat.slice(0, fatSectorCount);
-  }
-
-  private readFat(fatSectorIds: number[]): number[] {
-    const fat: number[] = [];
-    for (const sectorId of fatSectorIds) {
-      const sector = this.readSector(sectorId);
-      const view = dataViewFor(sector);
-      for (let offset = 0; offset < sector.byteLength; offset += 4) {
-        fat.push(view.getUint32(offset, true));
-      }
-    }
-    return fat;
-  }
-
-  private miniStreamParts(): { miniStream: Uint8Array; miniFat: number[] } {
+  private miniStreamParts(): ParseResult<{
+    miniStream: Uint8Array;
+    miniFat: number[];
+  }> {
     if (this.miniParts) {
-      return this.miniParts;
+      return Result.ok(this.miniParts);
     }
-    const miniStream = this.readRegularStream(this.rootEntry);
-    const firstMiniFatSector = this.readUint32(60);
+    const parts = readMiniStreamParts(this.layout, this.rootEntry);
+    if (Result.isOk(parts)) {
+      this.miniParts = parts.value;
+    }
+    return parts;
+  }
+
+  private readMiniStream(entry: CompoundFileEntry): ParseResult<Uint8Array> {
+    if (entry.streamSize === 0 || entry.startSector === END_OF_CHAIN) {
+      return Result.ok(new Uint8Array());
+    }
+    const parts = this.miniStreamParts();
+    if (Result.isError(parts)) {
+      return parts;
+    }
+    const { miniStream, miniFat } = parts.value;
+    const chunks: Uint8Array[] = [];
+    const seen = new Set<number>();
+    let sectorId = entry.startSector;
+
+    while (sectorId !== END_OF_CHAIN) {
+      if (sectorId === NO_STREAM || seen.has(sectorId)) {
+        return Result.err(
+          malformed("Compound file mini stream has an invalid sector chain"),
+        );
+      }
+      if (seen.size >= MAX_CHAIN_SECTORS) {
+        return Result.err(
+          limit("Compound file mini stream exceeds the sector chain limit"),
+        );
+      }
+      if (sectorId >= miniFat.length) {
+        return Result.err(
+          malformed(
+            "Compound file mini stream references a missing mini FAT entry",
+          ),
+        );
+      }
+      const offset = sectorId * this.miniSectorSize;
+      const end = offset + this.miniSectorSize;
+      if (end > miniStream.byteLength) {
+        return Result.err(
+          malformed(
+            "Compound file mini stream references bytes outside the root stream",
+          ),
+        );
+      }
+      seen.add(sectorId);
+      chunks.push(miniStream.subarray(offset, end));
+      sectorId = miniFat[sectorId] ?? END_OF_CHAIN;
+    }
+
+    return Result.ok(concatChunks(chunks).slice(0, entry.streamSize));
+  }
+}
+
+const parseParts = (bytes: Uint8Array): ParseResult<CompoundFileParts> =>
+  Result.gen(function* () {
+    if (bytes.byteLength < HEADER_BYTES) {
+      return Result.err(
+        malformed("Compound file is too small to contain a CFB header"),
+      );
+    }
+    if (!hasCompoundFileSignature(bytes)) {
+      return Result.err(
+        malformed("Compound file has an invalid CFB signature"),
+      );
+    }
+    const view = dataViewFor(bytes);
+    const sectorShift = view.getUint16(30, true);
+    const miniSectorShift = view.getUint16(32, true);
+    if (
+      !SUPPORTED_SECTOR_SHIFTS.has(sectorShift) ||
+      miniSectorShift !== SUPPORTED_MINI_SECTOR_SHIFT
+    ) {
+      return Result.err(
+        malformed("Compound file uses an unsupported CFB sector size"),
+      );
+    }
+
+    const sectorSize = 2 ** sectorShift;
+    const sectorLayout: SectorLayout = {
+      bytes,
+      view,
+      sectorSize,
+      fileSectorCount: Math.max(
+        0,
+        Math.floor(bytes.byteLength / sectorSize) - 1,
+      ),
+    };
+    const fatSectorIds = yield* readDifatSectorIds(sectorLayout);
+    const fat = yield* readFat(sectorLayout, fatSectorIds);
+    const layout: FatLayout = { ...sectorLayout, fat };
+    const directoryEntries = yield* readDirectoryEntries(layout);
+
+    const rootEntry = directoryEntries.at(0);
+    if (rootEntry?.type !== CFB_OBJECT_TYPE.root) {
+      return Result.err(malformed("Compound file is missing the root storage"));
+    }
+    const { streams, tree } = yield* collectTree(directoryEntries, rootEntry);
+    const allocated = directoryEntries.filter(
+      (entry) =>
+        entry.type === CFB_OBJECT_TYPE.storage ||
+        entry.type === CFB_OBJECT_TYPE.stream,
+    ).length;
+    return Result.ok({
+      layout,
+      miniSectorSize: 2 ** miniSectorShift,
+      miniStreamCutoff: view.getUint32(56, true) || MINI_STREAM_CUTOFF_DEFAULT,
+      rootEntry,
+      streamEntries: streams,
+      tree,
+      unreachableEntryCount: allocated - tree.length,
+    });
+  });
+
+const readMiniStreamParts = (
+  layout: FatLayout,
+  rootEntry: CompoundFileEntry,
+): ParseResult<{ miniStream: Uint8Array; miniFat: number[] }> =>
+  Result.gen(function* () {
+    const miniStream = yield* readRegularStream(layout, rootEntry);
+    const firstMiniFatSector = layout.view.getUint32(60, true);
     const miniFat: number[] = [];
     if (
       firstMiniFatSector !== END_OF_CHAIN &&
       firstMiniFatSector !== NO_STREAM
     ) {
-      const bytes = this.readSectorChain(firstMiniFatSector);
+      const bytes = yield* readSectorChain(layout, firstMiniFatSector);
       const view = dataViewFor(bytes);
       for (let offset = 0; offset + 4 <= bytes.byteLength; offset += 4) {
         miniFat.push(view.getUint32(offset, true));
       }
     }
-    this.miniParts = { miniStream, miniFat };
-    return this.miniParts;
+    return Result.ok({ miniStream, miniFat });
+  });
+
+const readDifatSectorIds = (layout: SectorLayout): ParseResult<number[]> => {
+  const { view: header, sectorSize, fileSectorCount } = layout;
+  const fatSectorCount = header.getUint32(44, true);
+  // One FAT sector maps `sectorSize / 4` sectors; a FAT that needs more
+  // sectors than the file holds cannot describe this file.
+  const maxFatSectors = Math.ceil(fileSectorCount / (sectorSize / 4)) + 1;
+  if (fatSectorCount > maxFatSectors) {
+    return Result.err(malformed("Compound file FAT is larger than the file"));
   }
 
-  private readDirectoryEntries(): CompoundFileEntry[] {
+  const difat: number[] = [];
+  for (let index = 0; index < HEADER_DIFAT_ENTRIES; index += 1) {
+    const sectorId = header.getUint32(76 + index * 4, true);
+    if (sectorId !== NO_STREAM) {
+      difat.push(sectorId);
+    }
+  }
+
+  let nextDifatSector = header.getUint32(68, true);
+  let remainingDifatSectors = header.getUint32(72, true);
+  const entriesPerDifatSector = sectorSize / 4 - 1;
+  const seen = new Set<number>();
+
+  while (
+    nextDifatSector !== END_OF_CHAIN &&
+    nextDifatSector !== NO_STREAM &&
+    remainingDifatSectors > 0 &&
+    difat.length < fatSectorCount
+  ) {
+    if (seen.has(nextDifatSector)) {
+      return Result.err(
+        malformed("Compound file DIFAT chain revisits a sector"),
+      );
+    }
+    seen.add(nextDifatSector);
+    const sector = readSector(layout, nextDifatSector);
+    if (Result.isError(sector)) {
+      return sector;
+    }
+    const view = dataViewFor(sector.value);
+    for (
+      let index = 0;
+      index < entriesPerDifatSector && difat.length < fatSectorCount;
+      index += 1
+    ) {
+      const sectorId = view.getUint32(index * 4, true);
+      if (sectorId !== NO_STREAM) {
+        difat.push(sectorId);
+      }
+    }
+    nextDifatSector = view.getUint32(entriesPerDifatSector * 4, true);
+    remainingDifatSectors -= 1;
+  }
+
+  return Result.ok(difat.slice(0, fatSectorCount));
+};
+
+const readFat = (
+  layout: SectorLayout,
+  fatSectorIds: readonly number[],
+): ParseResult<number[]> => {
+  const fat: number[] = [];
+  for (const sectorId of fatSectorIds) {
+    const sector = readSector(layout, sectorId);
+    if (Result.isError(sector)) {
+      return sector;
+    }
+    const view = dataViewFor(sector.value);
+    for (let offset = 0; offset < sector.value.byteLength; offset += 4) {
+      fat.push(view.getUint32(offset, true));
+    }
+  }
+  return Result.ok(fat);
+};
+
+const readDirectoryEntries = (
+  layout: FatLayout,
+): ParseResult<CompoundFileEntry[]> =>
+  Result.gen(function* () {
     const maxDirectorySectors = Math.ceil(
-      (MAX_DIRECTORY_ENTRIES * DIRECTORY_ENTRY_BYTES) / this.sectorSize,
+      (MAX_DIRECTORY_ENTRIES * DIRECTORY_ENTRY_BYTES) / layout.sectorSize,
     );
-    const directoryBytes = this.readSectorChain(
-      this.readUint32(48),
+    const directoryBytes = yield* readSectorChain(
+      layout,
+      layout.view.getUint32(48, true),
       maxDirectorySectors,
       "Compound file directory exceeds the entry limit",
     );
@@ -281,6 +402,7 @@ export class CompoundFile {
               directoryBytes.subarray(offset, offset + safeNameByteLength - 2),
             )
           : "";
+      const streamSize = yield* readDirectoryStreamSize(view);
 
       entries.push({
         id: entries.length,
@@ -290,165 +412,137 @@ export class CompoundFile {
         rightSiblingId: view.getUint32(72, true),
         childId: view.getUint32(76, true),
         startSector: view.getUint32(116, true),
-        streamSize: readDirectoryStreamSize(view),
+        streamSize,
       });
     }
 
-    return entries;
-  }
+    return Result.ok(entries);
+  });
 
-  /**
-   * Walks the directory's sibling trees in order (left, self, children,
-   * right) with an explicit stack. An entry is visited once, so a tree that
-   * links back to itself ends instead of looping.
-   */
-  private collectTree(): {
-    streams: CompoundFileStream[];
-    tree: CompoundFileTreeEntry[];
-  } {
-    type Task =
-      | { kind: "visit"; id: number; path: string[] }
-      | { kind: "emit"; entry: CompoundFileEntry; path: string[] };
-    const streamEntries: CompoundFileStream[] = [];
-    const tree: CompoundFileTreeEntry[] = [];
-    const visited = new Set<number>();
-    const stack: Task[] = [
-      { kind: "visit", id: this.rootEntry.childId, path: [] },
-    ];
+/**
+ * Walks the directory's sibling trees in order (left, self, children, right)
+ * with an explicit stack. An entry is visited once, so a tree that links back
+ * to itself ends instead of looping.
+ */
+const collectTree = (
+  directoryEntries: readonly CompoundFileEntry[],
+  rootEntry: CompoundFileEntry,
+): ParseResult<{
+  streams: CompoundFileStream[];
+  tree: CompoundFileTreeEntry[];
+}> => {
+  type Task =
+    | { kind: "visit"; id: number; path: string[] }
+    | { kind: "emit"; entry: CompoundFileEntry; path: string[] };
+  const streamEntries: CompoundFileStream[] = [];
+  const tree: CompoundFileTreeEntry[] = [];
+  const visited = new Set<number>();
+  const stack: Task[] = [{ kind: "visit", id: rootEntry.childId, path: [] }];
 
-    for (let task = stack.pop(); task; task = stack.pop()) {
-      if (task.kind === "emit") {
-        streamEntries.push({
-          entry: task.entry,
-          path: [...task.path, task.entry.name],
-        });
-        continue;
+  for (let task = stack.pop(); task; task = stack.pop()) {
+    if (task.kind === "emit") {
+      streamEntries.push({
+        entry: task.entry,
+        path: [...task.path, task.entry.name],
+      });
+      continue;
+    }
+    if (task.id === NO_STREAM || visited.has(task.id)) {
+      continue;
+    }
+    const entry = directoryEntries.at(task.id);
+    if (!entry) {
+      continue;
+    }
+    visited.add(task.id);
+    tree.push({
+      path: [...task.path, entry.name],
+      kind: treeEntryKind(entry.type),
+    });
+
+    stack.push({ kind: "visit", id: entry.rightSiblingId, path: task.path });
+    if (entry.type === CFB_OBJECT_TYPE.storage) {
+      if (task.path.length >= MAX_STORAGE_DEPTH) {
+        return Result.err(
+          limit("Compound file storages nest past the depth limit"),
+        );
       }
-      if (task.id === NO_STREAM || visited.has(task.id)) {
-        continue;
-      }
-      const entry = this.directoryEntries.at(task.id);
-      if (!entry) {
-        continue;
-      }
-      visited.add(task.id);
-      tree.push({
+      stack.push({
+        kind: "visit",
+        id: entry.childId,
         path: [...task.path, entry.name],
-        kind: treeEntryKind(entry.type),
       });
-
-      stack.push({ kind: "visit", id: entry.rightSiblingId, path: task.path });
-      if (entry.type === CFB_OBJECT_TYPE.storage) {
-        if (task.path.length >= MAX_STORAGE_DEPTH) {
-          throw limit("Compound file storages nest past the depth limit");
-        }
-        stack.push({
-          kind: "visit",
-          id: entry.childId,
-          path: [...task.path, entry.name],
-        });
-      }
-      if (entry.type === CFB_OBJECT_TYPE.stream) {
-        stack.push({ kind: "emit", entry, path: task.path });
-      }
-      stack.push({ kind: "visit", id: entry.leftSiblingId, path: task.path });
     }
-
-    return { streams: streamEntries, tree };
-  }
-
-  private readRegularStream(entry: CompoundFileEntry): Uint8Array {
-    if (entry.streamSize === 0 || entry.startSector === END_OF_CHAIN) {
-      return new Uint8Array();
+    if (entry.type === CFB_OBJECT_TYPE.stream) {
+      stack.push({ kind: "emit", entry, path: task.path });
     }
-    return this.readSectorChain(entry.startSector).slice(0, entry.streamSize);
+    stack.push({ kind: "visit", id: entry.leftSiblingId, path: task.path });
   }
 
-  private readMiniStream(entry: CompoundFileEntry): Uint8Array {
-    if (entry.streamSize === 0 || entry.startSector === END_OF_CHAIN) {
-      return new Uint8Array();
+  return Result.ok({ streams: streamEntries, tree });
+};
+
+const readRegularStream = (
+  layout: FatLayout,
+  entry: CompoundFileEntry,
+): ParseResult<Uint8Array> => {
+  if (entry.streamSize === 0 || entry.startSector === END_OF_CHAIN) {
+    return Result.ok(new Uint8Array());
+  }
+  return readSectorChain(layout, entry.startSector).map((bytes) =>
+    bytes.slice(0, entry.streamSize),
+  );
+};
+
+const readSectorChain = (
+  layout: FatLayout,
+  firstSector: number,
+  maxSectors = MAX_CHAIN_SECTORS,
+  limitMessage = "Compound file stream exceeds the sector chain limit",
+): ParseResult<Uint8Array> => {
+  const chunks: Uint8Array[] = [];
+  const seen = new Set<number>();
+  let sectorId = firstSector;
+
+  while (sectorId !== END_OF_CHAIN) {
+    if (sectorId === NO_STREAM || sectorId === FAT_SECTOR) {
+      return Result.err(
+        malformed("Compound file stream has an invalid sector chain"),
+      );
     }
-
-    const { miniStream, miniFat } = this.miniStreamParts();
-    const chunks: Uint8Array[] = [];
-    const seen = new Set<number>();
-    let sectorId = entry.startSector;
-
-    while (sectorId !== END_OF_CHAIN) {
-      if (sectorId === NO_STREAM || seen.has(sectorId)) {
-        throw malformed(
-          "Compound file mini stream has an invalid sector chain",
-        );
-      }
-      if (seen.size >= MAX_CHAIN_SECTORS) {
-        throw limit("Compound file mini stream exceeds the sector chain limit");
-      }
-      if (sectorId >= miniFat.length) {
-        throw malformed(
-          "Compound file mini stream references a missing mini FAT entry",
-        );
-      }
-      const offset = sectorId * this.miniSectorSize;
-      const end = offset + this.miniSectorSize;
-      if (end > miniStream.byteLength) {
-        throw malformed(
-          "Compound file mini stream references bytes outside the root stream",
-        );
-      }
-      seen.add(sectorId);
-      chunks.push(miniStream.subarray(offset, end));
-      sectorId = miniFat[sectorId] ?? END_OF_CHAIN;
+    if (sectorId >= layout.fat.length || seen.has(sectorId)) {
+      return Result.err(
+        malformed("Compound file stream references an invalid FAT sector"),
+      );
     }
-
-    return concatChunks(chunks).slice(0, entry.streamSize);
-  }
-
-  private readSectorChain(
-    firstSector: number,
-    maxSectors = MAX_CHAIN_SECTORS,
-    limitMessage = "Compound file stream exceeds the sector chain limit",
-  ): Uint8Array {
-    const chunks: Uint8Array[] = [];
-    const seen = new Set<number>();
-    let sectorId = firstSector;
-
-    while (sectorId !== END_OF_CHAIN) {
-      if (sectorId === NO_STREAM || sectorId === FAT_SECTOR) {
-        throw malformed("Compound file stream has an invalid sector chain");
-      }
-      if (sectorId >= this.fat.length || seen.has(sectorId)) {
-        throw malformed(
-          "Compound file stream references an invalid FAT sector",
-        );
-      }
-      if (seen.size >= maxSectors) {
-        throw limit(limitMessage);
-      }
-      seen.add(sectorId);
-      chunks.push(this.readSector(sectorId));
-      sectorId = this.fat[sectorId] ?? END_OF_CHAIN;
+    if (seen.size >= maxSectors) {
+      return Result.err(limit(limitMessage));
     }
-
-    return concatChunks(chunks);
-  }
-
-  private readSector(sectorId: number): Uint8Array {
-    const offset = (sectorId + 1) * this.sectorSize;
-    const end = offset + this.sectorSize;
-    if (end > this.bytes.byteLength) {
-      throw malformed("Compound file sector points outside the file");
+    seen.add(sectorId);
+    const sector = readSector(layout, sectorId);
+    if (Result.isError(sector)) {
+      return sector;
     }
-    return this.bytes.subarray(offset, end);
+    chunks.push(sector.value);
+    sectorId = layout.fat[sectorId] ?? END_OF_CHAIN;
   }
 
-  private readUint16(offset: number): number {
-    return this.view.getUint16(offset, true);
-  }
+  return Result.ok(concatChunks(chunks));
+};
 
-  private readUint32(offset: number): number {
-    return this.view.getUint32(offset, true);
+const readSector = (
+  layout: SectorLayout,
+  sectorId: number,
+): ParseResult<Uint8Array> => {
+  const offset = (sectorId + 1) * layout.sectorSize;
+  const end = offset + layout.sectorSize;
+  if (end > layout.bytes.byteLength) {
+    return Result.err(
+      malformed("Compound file sector points outside the file"),
+    );
   }
-}
+  return Result.ok(layout.bytes.subarray(offset, end));
+};
 
 const treeEntryKind = (type: number): CompoundFileTreeEntry["kind"] => {
   if (type === CFB_OBJECT_TYPE.storage) {
@@ -460,18 +554,20 @@ const treeEntryKind = (type: number): CompoundFileTreeEntry["kind"] => {
   return "other";
 };
 
-const readDirectoryStreamSize = (view: DataView): number => {
+const readDirectoryStreamSize = (view: DataView): ParseResult<number> => {
   const low = view.getUint32(120, true);
   const high = view.getUint32(124, true);
   if (high === 0) {
-    return low;
+    return Result.ok(low);
   }
 
   const size = BigInt(high) * UINT32_RANGE + BigInt(low);
   if (size > BigInt(Number.MAX_SAFE_INTEGER)) {
-    throw malformed("Compound file stream is too large to parse safely");
+    return Result.err(
+      malformed("Compound file stream is too large to parse safely"),
+    );
   }
-  return Number(size);
+  return Result.ok(Number(size));
 };
 
 const concatChunks = (chunks: Uint8Array[]): Uint8Array => {
