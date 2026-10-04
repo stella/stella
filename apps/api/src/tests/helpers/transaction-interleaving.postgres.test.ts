@@ -2,6 +2,8 @@ import { panic, TaggedError } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import type { Transaction } from "@/api/db/root";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
@@ -242,21 +244,23 @@ if (!databaseUrl || !runPostgres) {
       const refusal = new FixtureRefusal({ message: "Invariant refused" });
       let invariantCalls = 0;
       let resets = 0;
-      await expect(
-        withInterleaving({
-          databaseUrl,
-          a: { steps: [] },
-          b: { steps: [] },
-          reset: async () => {
-            resets += 1;
-          },
-          readState: async () => null,
-          invariant: async () => {
-            invariantCalls += 1;
-            throw refusal;
-          },
-        }),
-      ).rejects.toBe(refusal);
+      expect(
+        await rejectionOf(
+          withInterleaving({
+            databaseUrl,
+            a: { steps: [] },
+            b: { steps: [] },
+            reset: async () => {
+              resets += 1;
+            },
+            readState: async () => null,
+            invariant: async () => {
+              invariantCalls += 1;
+              throw refusal;
+            },
+          }),
+        ),
+      ).toBe(refusal);
       expect(invariantCalls).toBe(1);
       expect(resets).toBe(1);
     });
@@ -460,34 +464,36 @@ if (!databaseUrl || !runPostgres) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const connection = openClient();
         let stepSettled = false;
-        await expect(
-          withInterleaving({
-            databaseUrl,
-            timeoutMs: 500,
-            a: {
-              transaction: connection.db.transaction.bind(connection.db),
-              steps: [
-                {
-                  name: "query",
-                  run: async (tx) => {
-                    try {
-                      await tx.execute(
-                        sql`SET LOCAL statement_timeout = '10s'`,
-                      );
-                      await tx.execute(sql`SELECT pg_sleep(10)`);
-                    } finally {
-                      stepSettled = true;
-                    }
+        expect(
+          await rejectionOf(
+            withInterleaving({
+              databaseUrl,
+              timeoutMs: 500,
+              a: {
+                transaction: connection.db.transaction.bind(connection.db),
+                steps: [
+                  {
+                    name: "query",
+                    run: async (tx) => {
+                      try {
+                        await tx.execute(
+                          sql`SET LOCAL statement_timeout = '10s'`,
+                        );
+                        await tx.execute(sql`SELECT pg_sleep(10)`);
+                      } finally {
+                        stepSettled = true;
+                      }
+                    },
                   },
-                },
-              ],
-            },
-            b: { steps: [] },
-            reset: async () => {},
-            readState: async () => null,
-            invariant: () => panic("Timed-out query must not complete"),
-          }),
-        ).rejects.toBeInstanceOf(InterleavingTimeout);
+                ],
+              },
+              b: { steps: [] },
+              reset: async () => {},
+              readState: async () => null,
+              invariant: () => panic("Timed-out query must not complete"),
+            }),
+          ),
+        ).toBeInstanceOf(InterleavingTimeout);
         expect(stepSettled).toBe(true);
         expect(
           (await connection.db.execute(sql`SELECT 1 AS value`)).at(0)?.[
@@ -514,36 +520,38 @@ if (!databaseUrl || !runPostgres) {
               }
             });
         const started = performance.now();
-        await expect(
-          withInterleaving({
-            databaseUrl,
-            timeoutMs: 500,
-            a: {
-              transaction: transaction("a"),
-              steps: [
-                {
-                  name: "stall",
-                  run: async (_tx, signal) => {
-                    const cancelled = Promise.withResolvers<undefined>();
-                    signal.addEventListener(
-                      "abort",
-                      () => cancelled.resolve(undefined),
-                      { once: true },
-                    );
-                    await cancelled.promise;
-                    await Bun.sleep(50);
-                    cancelledStepSettled = true;
-                    signal.throwIfAborted();
+        expect(
+          await rejectionOf(
+            withInterleaving({
+              databaseUrl,
+              timeoutMs: 500,
+              a: {
+                transaction: transaction("a"),
+                steps: [
+                  {
+                    name: "stall",
+                    run: async (_tx, signal) => {
+                      const cancelled = Promise.withResolvers<undefined>();
+                      signal.addEventListener(
+                        "abort",
+                        () => cancelled.resolve(undefined),
+                        { once: true },
+                      );
+                      await cancelled.promise;
+                      await Bun.sleep(50);
+                      cancelledStepSettled = true;
+                      signal.throwIfAborted();
+                    },
                   },
-                },
-              ],
-            },
-            b: { transaction: transaction("b"), steps: [] },
-            reset: async () => {},
-            readState: async () => null,
-            invariant: () => panic("Stalled schedule must not complete"),
-          }),
-        ).rejects.toBeInstanceOf(InterleavingTimeout);
+                ],
+              },
+              b: { transaction: transaction("b"), steps: [] },
+              reset: async () => {},
+              readState: async () => null,
+              invariant: () => panic("Stalled schedule must not complete"),
+            }),
+          ),
+        ).toBeInstanceOf(InterleavingTimeout);
         expect(cancelledStepSettled).toBe(true);
         expect(activeCallbacks).toBe(0);
         expect(performance.now() - started).toBeLessThan(2000);

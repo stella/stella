@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   enumerateInterleavings,
   withInterleaving,
@@ -33,16 +35,20 @@ test("invalid and empty schedule selections fail before opening a database", asy
     readState: async () => null,
     invariant: () => {},
   };
-  await expect(withInterleaving({ ...options, schedules: [] })).rejects.toThrow(
-    "Interleaving requires at least one schedule",
-  );
-  await expect(
-    withInterleaving({
-      ...options,
-      schedules: [["b.commit", "a.commit", "a.extra"]],
-    }),
-  ).rejects.toThrow("Schedule contains unexpected steps");
-  await expect(
-    withInterleaving({ ...options, schedules: [["a.commit", "a.commit"]] }),
-  ).rejects.toThrow("Schedule must contain every step");
+  expect(
+    await rejectionOf(withInterleaving({ ...options, schedules: [] })),
+  ).toThrow("Interleaving requires at least one schedule");
+  expect(
+    await rejectionOf(
+      withInterleaving({
+        ...options,
+        schedules: [["b.commit", "a.commit", "a.extra"]],
+      }),
+    ),
+  ).toThrow("Schedule contains unexpected steps");
+  expect(
+    await rejectionOf(
+      withInterleaving({ ...options, schedules: [["a.commit", "a.commit"]] }),
+    ),
+  ).toThrow("Schedule must contain every step");
 });

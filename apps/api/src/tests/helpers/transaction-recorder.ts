@@ -143,7 +143,7 @@ const acquiredTryLock = (result: unknown, functionName: string) => {
   if (row !== null && typeof row === "object" && functionName in row) {
     return Reflect.get(row, functionName) === true;
   }
-  panic("Record advisory try-locks without a result-column alias");
+  return panic("Record advisory try-locks without a result-column alias");
 };
 
 export const assertLockRanks = (
