@@ -292,7 +292,7 @@ const compactThread = async ({
   const safeDb = holdOwnerAccess({ safeDb: memberDb, thread });
   // Checked before the AI settings load so a run for a former member stops
   // early; every later transaction holds the access again.
-  const access = await safeDb(() => Promise.resolve(null));
+  const access = await safeDb(async () => await Promise.resolve(null));
   if (Result.isError(access)) {
     const lost = ownerAccessLostOutcome(access.error);
     return lost === null ? Result.err(access.error) : Result.ok(lost);
