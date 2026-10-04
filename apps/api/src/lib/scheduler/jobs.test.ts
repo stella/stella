@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { REGISTERED_SCHEDULER_TASK_NAMES } from "@/api/lib/scheduler/registry";
 import { FLOW_RUN_TASK } from "@/api/lib/scheduler/tasks/flow-run";
+import { PURGE_SYSTEM_AUDIT_RUNS_TASK } from "@/api/lib/scheduler/tasks/system-audit-retention";
 
 /**
  * A scheduled job that never runs emits nothing: no error, no log, no metric.
@@ -44,5 +47,17 @@ describe("declared scheduler jobs", () => {
     // A zero or negative interval is either a hot loop or a job that never
     // becomes due; both are silent.
     expect(stalled).toEqual([]);
+  });
+
+  test("system audit runs are purged daily", () => {
+    expect(
+      DECLARED_SCHEDULER_JOBS.find(
+        ({ task }) => task === PURGE_SYSTEM_AUDIT_RUNS_TASK,
+      ),
+    ).toMatchObject({
+      id: "audit.purgeSystemRuns.day",
+      mode: "recurring",
+      schedule: { type: "interval", everyMs: DAY_IN_MS },
+    });
   });
 });

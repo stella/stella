@@ -392,5 +392,15 @@
         "index": "corpus_index_projection_states_erase_pending_idx"
       }
     ]
+  },
+  "system-audit.purge-candidates": {
+    "scans": [
+      {
+        "position": "root/0",
+        "relation": "system_audit_runs",
+        "nodeType": "Index Scan",
+        "index": "system_audit_runs_created_at_idx"
+      }
+    ]
   }
 }
