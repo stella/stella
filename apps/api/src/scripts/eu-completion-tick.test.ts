@@ -96,7 +96,9 @@ describe("scheduled EU completion", () => {
         await runEuCompletionTickScript({
           environment: controls,
           runEnabled,
-          log: (record) => records.push(record),
+          log: (record) => {
+            records.push(record);
+          },
         }),
       ).toBe(0);
       expect(records).toHaveLength(1);
@@ -127,7 +129,9 @@ describe("scheduled EU completion", () => {
         await runEuCompletionTickScript({
           environment,
           runEnabled: async () => ({ ...report(status), failed: 1 }),
-          log: (record) => records.push(record),
+          log: (record) => {
+            records.push(record);
+          },
         }),
       ).toBe(status === "failed" ? 1 : 0);
       expect(records.at(0)).toMatchObject({
@@ -146,7 +150,9 @@ describe("scheduled EU completion", () => {
         runEnabled: async () => {
           throw new DOMException("Fixture cancellation", "AbortError");
         },
-        log: (record) => records.push(record),
+        log: (record) => {
+          records.push(record);
+        },
       }),
     ).toBe(1);
     expect(records).toHaveLength(2);

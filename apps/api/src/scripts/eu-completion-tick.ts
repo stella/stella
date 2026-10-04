@@ -388,7 +388,7 @@ const runCompletionSession = async (
           now,
           dependencies: {
             store,
-            isEnabled: async () =>
+            isEnabled: () =>
               enabledNow(environment.CASE_LAW_EU_COMPLETION_MODE),
             readGate: preflight.readVerdict,
             fence: resources.fence,

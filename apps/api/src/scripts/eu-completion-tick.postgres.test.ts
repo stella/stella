@@ -185,7 +185,6 @@ if (!databaseUrl || !enabled) {
       expect(
         envBase.S3_CREDENTIALS_PROVIDER === "env" ||
           (envBase.S3_CREDENTIALS_PROVIDER === "auto" &&
-            endpoint !== undefined &&
             ["localhost", "127.0.0.1", "[::1]"].includes(
               new URL(endpoint).hostname,
             )),
@@ -313,9 +312,6 @@ if (!databaseUrl || !enabled) {
           .set({ retryAt: new Date(0) })
           .where(eq(euCompletionReceipts.id, fetched.value.id));
         const recovered = await store.getReceipt(fetched.value.id);
-        if (recovered === null) {
-          panic("Missing expired recovery fixture receipt");
-        }
         return recovered;
       };
       const dry = await reserveFetched("dry-run");
@@ -611,7 +607,7 @@ if (!databaseUrl || !enabled) {
               });
               expect(await healthyPublisherRows(sourceId)).toBe(0);
               expect(sent).toHaveLength(1);
-              expect((await store.getReceipt(receipt.id))?.status).toBe(
+              expect((await store.getReceipt(receipt.id)).status).toBe(
                 "publisher-refused",
               );
               expect(gate.cooldownUntil()).toBeGreaterThan(
@@ -756,7 +752,7 @@ if (!databaseUrl || !enabled) {
                 (await store.loadSourceGateState(sourceId)).holdUntil,
               ).toBeGreaterThan(Temporal.Now.instant().epochMilliseconds);
               if (status === 403) {
-                expect((await store.getReceipt(receipt.id))?.status).toBe(
+                expect((await store.getReceipt(receipt.id)).status).toBe(
                   "publisher-refused",
                 );
                 expect(gate.cooldownUntil()).toBeGreaterThan(
@@ -839,7 +835,7 @@ if (!databaseUrl || !enabled) {
             );
             expect(report.applied).toBe(0);
             expect(sent).toHaveLength(0);
-            expect((await store.getReceipt(receipt.id))?.status).toBe(
+            expect((await store.getReceipt(receipt.id)).status).toBe(
               "superseded-by-crawl",
             );
           },
@@ -996,7 +992,7 @@ if (!databaseUrl || !enabled) {
               requests: 0,
             });
             expect(sent).toHaveLength(0);
-            expect((await store.getReceipt(receipt.id))?.attempts).toBe(0);
+            expect((await store.getReceipt(receipt.id)).attempts).toBe(0);
           },
         });
       });
@@ -1212,7 +1208,7 @@ if (!databaseUrl || !enabled) {
                   .where(eq(caseLawDecisions.id, row.id))
               ).at(0),
             ).toEqual(row);
-            expect((await store.getReceipt(receipt.id))?.status).toBe(
+            expect((await store.getReceipt(receipt.id)).status).toBe(
               "review-required",
             );
             expect(
@@ -1320,8 +1316,7 @@ if (!databaseUrl || !enabled) {
                         ]);
                         expect(
                           receipts.filter(
-                            (receipt) =>
-                              receipt !== null && receipt.writtenAt !== null,
+                            (receipt) => receipt.writtenAt !== null,
                           ),
                         ).toHaveLength(1);
                         const crawl = await acquireCaseLawSourceIngestionLease({
@@ -1431,7 +1426,7 @@ if (!databaseUrl || !enabled) {
               await blocker.sql.unsafe("COMMIT");
               const report = await running;
               expect(report).toMatchObject({ attempted: 1, applied: 0 });
-              expect((await store.getReceipt(receipt.id))?.status).toBe(
+              expect((await store.getReceipt(receipt.id)).status).toBe(
                 "withdrawn",
               );
               expect(
@@ -1541,12 +1536,12 @@ if (!databaseUrl || !enabled) {
                   .where(eq(caseLawDecisions.id, row.id))
               ).at(0),
             ).toEqual(expected);
-            expect((await store.getReceipt(receipt.id))?.writtenAt).toBeNull();
+            expect((await store.getReceipt(receipt.id)).writtenAt).toBeNull();
             if (
               mutation === "fingerprint" ||
               mutation === "observation-order"
             ) {
-              expect((await store.getReceipt(receipt.id))?.status).toBe(
+              expect((await store.getReceipt(receipt.id)).status).toBe(
                 "superseded-by-crawl",
               );
             } else {
@@ -1634,8 +1629,8 @@ if (!databaseUrl || !enabled) {
               .where(eq(caseLawDecisions.id, row.id))
           ).at(0);
           const marked = await store.getReceipt(receipt.id);
-          expect(marked?.status).toBe("fetched");
-          expect(marked?.writtenAt).not.toBeNull();
+          expect(marked.status).toBe("fetched");
+          expect(marked.writtenAt).not.toBeNull();
           const versions = [...storage.versions.entries()];
           const puts = storage.requests.filter(
             (request) => request.method === "PUT",
@@ -1663,7 +1658,7 @@ if (!databaseUrl || !enabled) {
               expect(sent).toHaveLength(0);
             },
           });
-          expect((await store.getReceipt(receipt.id))?.status).toBe("applied");
+          expect((await store.getReceipt(receipt.id)).status).toBe("applied");
           expect(
             (
               await db

@@ -1876,13 +1876,12 @@ const createProbeOperations = ({ transaction, now }: StoreContext) => {
           ? null
           : decodeCheckpoint({ cursor: progress.cursor, batch: progress.batch })
               .batch;
+      const heldSince = sourceBatch?.heldSince ?? null;
       return {
         hasQueuedWork: queued,
         mirrorRepairRequired,
         sourceBackoffAgeMs:
-          sourceBatch === null || sourceBatch.heldSince === null
-            ? null
-            : Math.max(0, now() - sourceBatch.heldSince),
+          heldSince === null ? null : Math.max(0, now() - heldSince),
         oldestRetryAgeMs:
           earliest === null ? null : Math.max(0, now() - earliest.getTime()),
         lastCompletedAt: progress?.lastCompletedAt ?? null,

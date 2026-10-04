@@ -88,7 +88,7 @@ type EuCompletionDependencies = {
     | "recordTick"
     | "readSweepCursor"
   >;
-  isEnabled: () => Promise<boolean>;
+  isEnabled: () => boolean | Promise<boolean>;
   readGate: () => Promise<Verdict>;
   fence: () => Promise<void>;
   requestCount: () => number;

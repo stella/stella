@@ -93,7 +93,7 @@ describe("completion preserves stated values", () => {
     });
     expect(outcome.type).toBe("accepted");
     if (outcome.type !== "accepted") {
-      return expect.unreachable();
+      expect.unreachable();
     }
     expect(outcome.candidate.decisionDate).toBe("2024-01-01");
     const metadata: Record<string, unknown> = outcome.candidate.metadata;
@@ -163,7 +163,7 @@ describe("completion preserves stated values", () => {
     });
     expect(outcome.type).toBe("accepted");
     if (outcome.type !== "accepted") {
-      return expect.unreachable();
+      expect.unreachable();
     }
     const ecli: string | undefined = outcome.candidate.ecli;
     expect(ecli).toBe(existing.ecli);
@@ -233,7 +233,7 @@ describe("completion preserves stated values", () => {
     });
     expect(outcome.type).toBe("accepted");
     if (outcome.type !== "accepted") {
-      return expect.unreachable();
+      expect.unreachable();
     }
     expect(Object.hasOwn(outcome.candidate.metadata, "__proto__")).toBe(true);
     expect(Object.getPrototypeOf(outcome.candidate.metadata)).toBe(
@@ -472,7 +472,7 @@ describe("additional stated boundaries", () => {
       judges: [],
     });
     if (outcome.type !== "accepted") {
-      return expect.unreachable();
+      expect.unreachable();
     }
     expect(outcome.candidate.sections).toEqual(sections);
     expect(outcome.candidate.documentAst).toEqual(documentAst);
@@ -506,7 +506,7 @@ describe("additional stated boundaries", () => {
       judges,
     });
     if (outcome.type !== "accepted") {
-      return expect.unreachable();
+      expect.unreachable();
     }
     const candidateJudges: readonly DecisionJudgeInput[] | undefined =
       outcome.candidate.judges;
