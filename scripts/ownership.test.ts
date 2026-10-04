@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
-import { MEMBER_RUN_QUEUES } from "../apps/api/src/lib/member-run-queues.ts";
+import {
+  MEMBER_RUN_QUEUES,
+  MEMBER_RUN_SCHEDULER_TASKS,
+} from "../apps/api/src/lib/member-run-queues.ts";
 import type { OwnershipEntry } from "./ownership";
 import {
   OWNERSHIP,
@@ -106,7 +109,7 @@ describe("validateOwnership", () => {
   });
 });
 
-test("the run actor allowlist names exactly the member-run queues", () => {
+test("the run actor allowlist names exactly the member-run modules", () => {
   const row = OWNERSHIP.find(({ id }) => id === "member-run-actor");
   const allowed =
     row?.enforcement.kind === "import"
@@ -114,7 +117,11 @@ test("the run actor allowlist names exactly the member-run queues", () => {
       : [];
   // One module can host several queues (workflow and workflow-flex).
   const memberRunModules: string[] = [
-    ...new Set(MEMBER_RUN_QUEUES.map(({ module }) => module)),
+    ...new Set(
+      [...MEMBER_RUN_QUEUES, ...MEMBER_RUN_SCHEDULER_TASKS].map(
+        ({ module }) => module,
+      ),
+    ),
   ];
   expect(allowed).toEqual(memberRunModules);
 });

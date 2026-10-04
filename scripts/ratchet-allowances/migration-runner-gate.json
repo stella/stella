@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "apps/api/src/db/migrate.ts is the migrate CLI entrypoint: it now rejects a missing database load-gate setting before opening a connection and reports it on stderr for the deploy log, like its two existing no-console suppressions."
+}

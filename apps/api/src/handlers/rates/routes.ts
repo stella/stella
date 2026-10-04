@@ -1,7 +1,5 @@
 import Elysia from "elysia";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
-
 import readBillingArrangement from "@/api/handlers/rates/arrangement/get";
 import readMatterBillingSummary from "@/api/handlers/rates/arrangement/summary/get";
 import setBillingArrangement from "@/api/handlers/rates/arrangement/update";
@@ -17,15 +15,6 @@ import updateRateTable from "@/api/handlers/rates/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
-import {
-  resourceRealtime,
-  workspaceResourceSetUpdates,
-} from "@/api/lib/resource-realtime-macro";
-
-const rateRealtimeUpdates = workspaceResourceSetUpdates([
-  RESOURCE_TYPE.RATE_TABLE,
-  RESOURCE_TYPE.RATE_ENTRY,
-]);
 
 export const ratesRoute = new Elysia({
   prefix: "/rates/:workspaceId",
@@ -36,7 +25,6 @@ export const ratesRoute = new Elysia({
     ),
   )
   .use(workspaceAccessMacro)
-  .use(resourceRealtime)
   .use(permissionMacro)
   .guard({
     validateWorkspaceAccess: true,
@@ -47,7 +35,6 @@ export const ratesRoute = new Elysia({
   .put("/arrangement", setBillingArrangement.handler, {
     permissions: setBillingArrangement.config.permissions,
     body: setBillingArrangement.config.body,
-    resourceSetUpdated: rateRealtimeUpdates,
   })
   .get("/summary", readMatterBillingSummary.handler, {
     permissions: readMatterBillingSummary.config.permissions,
@@ -59,17 +46,14 @@ export const ratesRoute = new Elysia({
   })
   .put("/", createRateTable.handler, {
     body: createRateTable.config.body,
-    resourceSetUpdated: rateRealtimeUpdates,
     permissions: createRateTable.config.permissions,
   })
   .patch("/", updateRateTable.handler, {
     body: updateRateTable.config.body,
-    resourceSetUpdated: rateRealtimeUpdates,
     permissions: updateRateTable.config.permissions,
   })
   .delete("/", deleteRateTable.handler, {
     body: deleteRateTable.config.body,
-    resourceSetUpdated: rateRealtimeUpdates,
     permissions: deleteRateTable.config.permissions,
   })
   // Rate resolution
@@ -85,19 +69,16 @@ export const ratesRoute = new Elysia({
   })
   .put("/:rateTableId/entries", createRateEntry.handler, {
     body: createRateEntry.config.body,
-    resourceSetUpdated: rateRealtimeUpdates,
     params: createRateEntry.config.params,
     permissions: createRateEntry.config.permissions,
   })
   .patch("/:rateTableId/entries", updateRateEntry.handler, {
     body: updateRateEntry.config.body,
-    resourceSetUpdated: rateRealtimeUpdates,
     params: updateRateEntry.config.params,
     permissions: updateRateEntry.config.permissions,
   })
   .delete("/:rateTableId/entries", deleteRateEntry.handler, {
     body: deleteRateEntry.config.body,
-    resourceSetUpdated: rateRealtimeUpdates,
     params: deleteRateEntry.config.params,
     permissions: deleteRateEntry.config.permissions,
   });

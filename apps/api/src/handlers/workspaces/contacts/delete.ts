@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaceContacts } from "@/api/db/schema";
+import { workspaceContactRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -21,6 +22,7 @@ const config = {
     "organization address book; use contacts.delete to remove it from there.",
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: workspaceContactRealtimeUpdates,
   mcp: { type: "covered", by: "link_matter_contact" },
   params: workspaceParams({ workspaceContactId: tSafeId("workspaceContact") }),
 } satisfies WorkspaceHandlerConfig;

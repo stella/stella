@@ -4,6 +4,7 @@ import { DAY_IN_MS } from "@stll/time";
 
 import { AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS } from "@/api/agent-auth/id-jag-policy";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 export const SWEEP_REGISTRATIONS_TASK = "auth.sweepRegistrations" as const;
 export const REGISTRATION_RETENTION_BATCH_SIZE = 100;
@@ -185,6 +186,7 @@ export const sweepRegistrations = async ({
 
 export const sweepRegistrationRecords: SchedulerTask = async ({
   db,
+  runId,
   signal,
   scheduleContinuation,
   logger,
@@ -195,6 +197,17 @@ export const sweepRegistrationRecords: SchedulerTask = async ({
     db,
     now: new Date(),
     retentionDays: env.UNUSED_CLIENT_RETENTION_DAYS,
+  });
+  await recordSystemAudit(db, "system:registration-retention", {
+    subject: runId,
+    counts: {
+      verifications: result.verificationsDeleted,
+      assertions: result.assertionsDeleted,
+      replays: result.replaysDeleted,
+      registrations: result.registrationsDeleted,
+      clients: result.clientsDeleted,
+      budgets: result.budgetsDeleted,
+    },
   });
   logger.info("scheduler.registration_retention", result);
   if (result.hasMore && !signal.aborted) {
