@@ -79,6 +79,9 @@ const SCHEDULER_REGISTRY_FILE = "apps/api/src/lib/scheduler/registry.ts";
 /** The registry's task tables: the static one and the one that adds the
  *  tasks built at boot. */
 const SCHEDULER_REGISTRY_TABLES = ["SCHEDULER_TASKS", "schedulerTasks"];
+/** Where the process builds the scheduler registry and supplies the tasks
+ *  built at boot. */
+const SCHEDULER_BOOT_FILE = "apps/api/src/server.ts";
 
 const BASELINE_SCHEMA = v.object({
   comment: v.string(),
@@ -567,6 +570,17 @@ const callsImported = (source: string, resolver: string): boolean => {
   );
 };
 
+/** Whether the module at `from` calls a function it imports from `target`. */
+const callsInto = (from: string, source: string, target: string): boolean => {
+  const file = parseSource(from, source);
+  const imports = namedImports(file, from);
+  return findNodes(file, ts.isCallExpression).some(
+    (call) =>
+      ts.isIdentifier(call.expression) &&
+      imports.get(call.expression.text) === target,
+  );
+};
+
 /** Object literals of the registry's task tables. */
 const registryTables = (file: ts.SourceFile): ts.ObjectLiteralExpression[] => {
   const tables: ts.ObjectLiteralExpression[] = [];
@@ -605,10 +619,110 @@ const valueIdentifier = (value: ts.Expression): string | null => {
     : null;
 };
 
+type FunctionLike =
+  | ts.ArrowFunction
+  | ts.FunctionExpression
+  | ts.FunctionDeclaration;
+
+const isFunctionLike = (node: ts.Node): node is FunctionLike =>
+  ts.isArrowFunction(node) ||
+  ts.isFunctionExpression(node) ||
+  ts.isFunctionDeclaration(node);
+
+const enclosingFunction = (node: ts.Node): FunctionLike | undefined =>
+  ts.findAncestor(node.parent, isFunctionLike);
+
+/** The name a function is declared under, `const f = () => …` included. */
+const functionName = (fn: FunctionLike): string | null => {
+  if (ts.isFunctionDeclaration(fn)) {
+    return fn.name?.text ?? null;
+  }
+  return ts.isVariableDeclaration(fn.parent) && ts.isIdentifier(fn.parent.name)
+    ? fn.parent.name.text
+    : null;
+};
+
+const parameterIndex = (fn: FunctionLike | undefined, name: string): number =>
+  fn === undefined
+    ? -1
+    : fn.parameters.findIndex(
+        (parameter) =>
+          ts.isIdentifier(parameter.name) && parameter.name.text === name,
+      );
+
+/**
+ * The module implementing a task the registry receives as the parameter
+ * `value` of the table function around `property`: follow the registry
+ * factory that forwards that parameter to the boot file's call of it, and
+ * take the module the boot file imports the argument from. `null` unless
+ * every boot call resolves to the same single module.
+ */
+const injectedTaskModule = (
+  property: ts.PropertyAssignment,
+  value: string,
+  registry: { file: ts.SourceFile; path: string },
+  readFile: AuditInput["readFile"],
+): string | null => {
+  const table = enclosingFunction(property);
+  const tableName = table === undefined ? null : functionName(table);
+  const position = parameterIndex(table, value);
+  if (tableName === null || position < 0) {
+    return null;
+  }
+  const factories: { name: string; position: number }[] = [];
+  for (const call of findNodes(registry.file, ts.isCallExpression)) {
+    const argument = call.arguments[position];
+    if (
+      !ts.isIdentifier(call.expression) ||
+      call.expression.text !== tableName ||
+      argument === undefined ||
+      !ts.isIdentifier(argument)
+    ) {
+      continue;
+    }
+    const caller = enclosingFunction(call);
+    const callerName = caller === undefined ? null : functionName(caller);
+    const forwarded = parameterIndex(caller, argument.text);
+    if (callerName !== null && forwarded >= 0) {
+      factories.push({ name: callerName, position: forwarded });
+    }
+  }
+  const bootSource = readFile(SCHEDULER_BOOT_FILE);
+  if (bootSource === null || factories.length === 0) {
+    return null;
+  }
+  const boot = parseSource(SCHEDULER_BOOT_FILE, bootSource);
+  const bootImports = namedImports(boot, SCHEDULER_BOOT_FILE);
+  const bindings = importBindings(boot);
+  const modules = new Set<string>();
+  for (const call of findNodes(boot, ts.isCallExpression)) {
+    if (
+      !ts.isIdentifier(call.expression) ||
+      bootImports.get(call.expression.text) !== registry.path
+    ) {
+      continue;
+    }
+    const imported = bindings.get(call.expression.text)?.imported;
+    const factory = factories.find(({ name }) => name === imported);
+    if (factory === undefined) {
+      continue;
+    }
+    const argument = call.arguments[factory.position];
+    const supplied = argument === undefined ? null : valueIdentifier(argument);
+    modules.add(
+      (supplied === null ? undefined : bootImports.get(supplied)) ??
+        SCHEDULER_BOOT_FILE,
+    );
+  }
+  const [only, ...rest] = modules;
+  return rest.length === 0 ? (only ?? null) : null;
+};
+
 /**
  * Every task the scheduler registry runs, with the module that implements it:
- * the module the task's value is imported from, else the module that defines
- * its name (a task built at boot), else the registry itself.
+ * the module the task's value is imported from; for a task the registry
+ * receives at boot, the module the boot file imports it from; else the
+ * registry itself.
  */
 const registeredTasks = (
   registryFile: string,
@@ -650,10 +764,28 @@ const registeredTasks = (
         continue;
       }
       const value = valueIdentifier(property.initializer);
-      tasks.push({
-        name,
-        module: (value === null ? undefined : imports.get(value)) ?? keyModule,
-      });
+      const imported = value === null ? undefined : imports.get(value);
+      if (
+        value === null ||
+        imported !== undefined ||
+        parameterIndex(enclosingFunction(property), value) < 0
+      ) {
+        tasks.push({ name, module: imported ?? registryFile });
+        continue;
+      }
+      const injected = injectedTaskModule(
+        property,
+        value,
+        { file, path: registryFile },
+        readFile,
+      );
+      if (injected === null) {
+        errors.push(
+          `Scheduler task supplied at boot not traceable to one module: ${name} (${value} from ${SCHEDULER_BOOT_FILE})`,
+        );
+        continue;
+      }
+      tasks.push({ name, module: injected });
     }
   }
   return { tasks, errors };
@@ -703,6 +835,17 @@ const auditSchedulerTaskAuthority = (input: TaskAuditInput): Audit => {
         key: `task:${name}::run-actor`,
         reason: REASONS.taskRunActor,
       });
+    } else if (
+      entry.runActor.module !== entry.module &&
+      !callsInto(
+        entry.module,
+        input.readFile(entry.module) ?? "",
+        entry.runActor.module,
+      )
+    ) {
+      errors.push(
+        `Declared run actor is off the task's call path: ${name} -> ${entry.module} calls nothing from ${entry.runActor.module}`,
+      );
     } else if (
       !callsImported(
         input.readFile(entry.runActor.module) ?? "",
@@ -990,6 +1133,16 @@ const SELF_TEST_REGISTRY = `
     ...SCHEDULER_TASKS,
     [REAP_TASK]: reap,
   });
+  const NAMES = Object.keys(schedulerTasks(local));
+  export const createRegistry = (reaper: unknown) =>
+    new Map(Object.entries(schedulerTasks(reaper)));
+`;
+/** The boot file supplies the reap task from a module other than the one
+ *  that names it. */
+const SELF_TEST_BOOT = `
+  import { createRegistry } from "@/api/lib/scheduler/registry";
+  import { createReap } from "@/api/lib/scheduler/tasks/reaper";
+  startLoop({ registry: createRegistry(createReap(db)) });
 `;
 
 const selfTestSchedulerTasks = (): string[] => {
@@ -999,6 +1152,14 @@ const selfTestSchedulerTasks = (): string[] => {
     [`${SELF_TEST_TASKS}/a.ts`]: 'export const A_TASK =\n  "a.run" as const;',
     [`${SELF_TEST_TASKS}/reap.ts`]:
       'export const REAP_TASK = "a.reap" as const;',
+    [SCHEDULER_BOOT_FILE]: SELF_TEST_BOOT,
+    // The task module calls into the module that settles its member.
+    "m.ts":
+      'import { settleRun } from "./actor";\nimport { decoyRun } from "./decoy";\nawait settleRun();\ndecoyRun();',
+    "detached.ts": "export const run = () => undefined;",
+    // Importing without calling is not a call path.
+    "imported-only.ts":
+      'import { settleRun } from "./actor";\nexport const keep = settleRun;',
     "actor.ts": `import { ${MEMBER_RUN_ACTOR_RESOLVERS[1]} as settle } from "@/api/lib/auth";\nawait settle(data);`,
     // Mentions in a comment or a string, and a local function of the same
     // name, are not a call to the imported resolver.
@@ -1010,7 +1171,7 @@ const selfTestSchedulerTasks = (): string[] => {
     { name: "a.run", module: `${SELF_TEST_TASKS}/a.ts` },
     { name: "x.dispatch", module: "apps/api/src/lib/scheduler/dispatch.ts" },
     { name: "x.noop", module: SCHEDULER_REGISTRY_FILE },
-    { name: "a.reap", module: `${SELF_TEST_TASKS}/reap.ts` },
+    { name: "a.reap", module: `${SELF_TEST_TASKS}/reaper.ts` },
   ];
   if (
     JSON.stringify(resolved) !==
@@ -1019,6 +1180,27 @@ const selfTestSchedulerTasks = (): string[] => {
     failures.push(
       `registry tasks must resolve to ${JSON.stringify(expectedTasks)}; got ${JSON.stringify(resolved)}`,
     );
+  }
+  // A boot task whose supply cannot be traced, or is supplied from two
+  // modules, fails instead of falling back to the module naming it.
+  const untraced =
+    "Scheduler task supplied at boot not traceable to one module: a.reap (reap from apps/api/src/server.ts)";
+  for (const [label, boot] of [
+    ["no boot file", null],
+    ["no boot call", "export {};"],
+    [
+      "two supplying modules",
+      `${SELF_TEST_BOOT}\nimport { otherReap } from "@/api/lib/scheduler/tasks/other";\ncreateRegistry(otherReap);`,
+    ],
+  ] as const) {
+    const errors = registeredTasks(SCHEDULER_REGISTRY_FILE, (file) =>
+      file === SCHEDULER_BOOT_FILE ? boot : readFile(file),
+    ).errors;
+    if (JSON.stringify(errors) !== JSON.stringify([untraced])) {
+      failures.push(
+        `${label}: boot task must fail as untraceable; got ${JSON.stringify(errors)}`,
+      );
+    }
   }
   const task = (name: string, module = "m.ts") => ({ name, module });
   const automation = (module = "m.ts", reason = "r") =>
@@ -1029,6 +1211,8 @@ const selfTestSchedulerTasks = (): string[] => {
       task("no-actor", "pinned.ts"),
       task("lost-actor"),
       task("decoy-actor"),
+      task("detached-actor", "detached.ts"),
+      task("imported-actor", "imported-only.ts"),
       task("org"),
       task("open"),
       task("moved", "real.ts"),
@@ -1066,6 +1250,24 @@ const selfTestSchedulerTasks = (): string[] => {
           resolver: MEMBER_RUN_ACTOR_RESOLVERS[1],
         },
       },
+      "detached-actor": {
+        authority: "member-run",
+        module: "detached.ts",
+        reason: "r",
+        runActor: {
+          module: "actor.ts",
+          resolver: MEMBER_RUN_ACTOR_RESOLVERS[1],
+        },
+      },
+      "imported-actor": {
+        authority: "member-run",
+        module: "imported-only.ts",
+        reason: "r",
+        runActor: {
+          module: "actor.ts",
+          resolver: MEMBER_RUN_ACTOR_RESOLVERS[1],
+        },
+      },
       org: automation(),
       open: { authority: "unclassified", module: "m.ts", reason: "why" },
       moved: automation("stale.ts"),
@@ -1079,6 +1281,8 @@ const selfTestSchedulerTasks = (): string[] => {
     "Scheduler task without an authority row: missing",
     `Declared run actor not found: lost-actor -> m.ts does not call ${MEMBER_RUN_ACTOR_RESOLVERS[0]}`,
     `Declared run actor not found: decoy-actor -> decoy.ts does not call ${MEMBER_RUN_ACTOR_RESOLVERS[1]}`,
+    "Declared run actor is off the task's call path: detached-actor -> detached.ts calls nothing from actor.ts",
+    "Declared run actor is off the task's call path: imported-actor -> imported-only.ts calls nothing from actor.ts",
     "Declared module is not the one the registry runs: moved -> stale.ts (registry runs real.ts)",
     "Authority row without a reason: blank",
     "Authority row for a task the scheduler registry lacks: ghost",
