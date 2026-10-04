@@ -27,6 +27,14 @@ export const MEMBER_RUN_QUEUES = [
     queue: "legal-list-verification-runs",
     module: "apps/api/src/lib/lists/verification/run-queue.ts",
   },
+  {
+    queue: "workflow",
+    module: "apps/api/src/lib/workflow-queue.ts",
+  },
+  {
+    queue: "workflow-flex",
+    module: "apps/api/src/lib/workflow-queue.ts",
+  },
 ] as const;
 
 export type MemberRunQueue = (typeof MEMBER_RUN_QUEUES)[number]["queue"];

@@ -9,7 +9,7 @@ import { drainFanOut } from "@stll/concurrency";
 import { Temporal } from "@stll/time";
 
 import { jsonField } from "@/api/db/json-utils";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   cellMetadata,
   type ExtractionRunScope,
@@ -56,15 +56,13 @@ import {
   isTransientRedisConnectionError,
 } from "@/api/lib/redis-client";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
-import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
+import { createRootRunActor } from "@/api/lib/root-scoped-db";
+import type { RootRunActor } from "@/api/lib/root-scoped-db";
 import {
-  brandPersistedOrganizationId,
   brandPersistedExtractionRunId,
   brandPersistedEntityId,
   brandPersistedPropertyId,
-  brandPersistedUserId,
   brandPersistedWorkspaceId,
-  brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
 import {
@@ -158,6 +156,43 @@ type EntityJobData = {
    */
   forcePropertyIds?: string[];
 };
+
+/**
+ * The member a workflow run acts for. Its fields, documents and cell state are
+ * read through `inputDb`, under the requester's membership when the job runs;
+ * its cells, run state and successor bookkeeping are written through `writeDb`.
+ */
+type WorkflowRunActor = RootRunActor<"extractionRun">;
+
+const workflowRunActor = (data: EntityJobData): WorkflowRunActor =>
+  createRootRunActor(
+    {
+      organizationId: data.organizationId,
+      workspaceId: data.workspaceId,
+      userId: data.userId,
+      runId: data.requestId,
+    },
+    brandPersistedExtractionRunId,
+  );
+
+/** Recorded on a run whose requester can no longer open its matter. */
+const INPUTS_UNAVAILABLE_ERROR_CODE = "ExtractionRunInputsUnavailable";
+
+/**
+ * Whether the requester can still open the run's matter. The workspace row is
+ * read through `inputDb`, so a requester who lost the matter or left the
+ * organization reads nothing.
+ */
+const requesterCanOpenMatter = async (
+  actor: WorkflowRunActor,
+): Promise<boolean> =>
+  (await actor.inputDb(
+    async (tx) =>
+      await tx.query.workspaces.findFirst({
+        where: { id: { eq: actor.workspaceId } },
+        columns: { id: true },
+      }),
+  )) !== undefined;
 
 const WORKFLOW_ENTITY_JOB_NAME = "process-entity" as const;
 type WorkflowEntityJobName = typeof WORKFLOW_ENTITY_JOB_NAME;
@@ -1052,15 +1087,21 @@ const processWorkflowJob = async (
       }),
     );
   }, jobTimeoutMs);
+  const actor = workflowRunActor(job.data);
   try {
     await runBackgroundJob({
       actionKind: BACKGROUND_ACTION_KIND.extraction,
-      organizationId: brandPersistedOrganizationId(job.data.organizationId),
-      userId: brandPersistedUserId(job.data.userId),
+      organizationId: actor.organizationId,
+      userId: actor.userId,
       job,
       signal: controller.signal,
       run: async (signal) =>
-        await processEntityJob(job.data, signal, extractionRuns),
+        await processWorkflowEntityRun({
+          actor,
+          data: job.data,
+          signal,
+          extractionRuns,
+        }),
     });
     controller.signal.throwIfAborted();
   } finally {
@@ -1101,49 +1142,22 @@ const handleWorkflowJobFailed = (
     return;
   }
 
-  const branded = brandValidatedWorkflowActorKey({
-    organizationId: data.organizationId,
-    workspaceId: data.workspaceId,
-  });
+  const actor = workflowRunActor(data);
   trackFailedJobFinalization(
     (async () => {
       const isCurrentRequest = await isCurrentWorkflowRequest({
-        requestId: data.requestId,
-        workspaceId: branded.workspaceId,
+        requestId: actor.runId,
+        workspaceId: actor.workspaceId,
       });
       if (!isCurrentRequest) {
         return;
       }
 
-      await markPendingPlannedFieldsErrored(data).catch(
-        (pendingFieldsError: unknown) => {
-          captureError(pendingFieldsError, {
-            workspaceId: data.workspaceId,
-            entityId: data.entityId,
-          });
-        },
-      );
-      await extractionRuns
-        .recordFailure({
-          id: brandPersistedExtractionRunId(data.requestId),
-          organizationId: branded.organizationId,
-          workspaceId: branded.workspaceId,
-          errorCode: errorTag(error),
-        })
-        .catch((runError: unknown) =>
-          captureError(runError, {
-            workspaceId: data.workspaceId,
-            entityId: data.entityId,
-          }),
-        );
-      await onEntityCompleted({
+      await failEntity({
+        actor,
+        data,
+        errorCode: errorTag(error),
         extractionRuns,
-        workspaceId: branded.workspaceId,
-        organizationId: branded.organizationId,
-        userId: brandPersistedUserId(data.userId),
-        entityId: brandPersistedEntityId(data.entityId),
-        requestId: data.requestId,
-        runLockTtlSec: data.runLockTtlSec ?? RUNNING_LOCK_TTL_SEC,
       });
     })().catch((completionError: unknown) => {
       captureError(completionError, {
@@ -1333,25 +1347,17 @@ const getPlanPropertyIds = (
   return [...propertyIds];
 };
 
-const markPendingPlannedFieldsErrored = async (data: EntityJobData) => {
-  const branded = brandValidatedWorkflowActorKey({
-    organizationId: data.organizationId,
-    workspaceId: data.workspaceId,
-  });
+const markPendingPlannedFieldsErrored = async (
+  actor: WorkflowRunActor,
+  data: EntityJobData,
+) => {
   const entityId = brandPersistedEntityId(data.entityId);
-  const userId = brandPersistedUserId(data.userId);
   const propertyIds = getPlanPropertyIds(data.executionPlan);
   if (propertyIds.length === 0) {
     return;
   }
 
-  const scopedDb = createRootScopedDb({
-    organizationId: branded.organizationId,
-    userId,
-    workspaceIds: [branded.workspaceId],
-  });
-
-  const entityRow = await scopedDb((tx) =>
+  const entityRow = await actor.writeDb((tx) =>
     tx.query.entities.findFirst({
       where: { id: { eq: entityId } },
       columns: { currentVersionId: true },
@@ -1362,7 +1368,7 @@ const markPendingPlannedFieldsErrored = async (data: EntityJobData) => {
   }
   const entityVersionId = entityRow.currentVersionId;
 
-  await scopedDb((tx) =>
+  await actor.writeDb((tx) =>
     tx
       .update(fields)
       .set({ content: { type: "error", version: 1 } })
@@ -1375,60 +1381,105 @@ const markPendingPlannedFieldsErrored = async (data: EntityJobData) => {
       ),
   );
 
-  broadcastWorkspaceResourceSetUpdated(
-    branded.workspaceId,
-    RESOURCE_TYPE.ENTITY,
-  );
+  broadcastWorkspaceResourceSetUpdated(actor.workspaceId, RESOURCE_TYPE.ENTITY);
 };
 
-const processEntityJob = async (
-  data: EntityJobData,
-  signal: AbortSignal,
-  extractionRuns: ExtractionRunStore,
-) => {
+type FailEntityOptions = {
+  actor: WorkflowRunActor;
+  data: EntityJobData;
+  errorCode: string;
+  extractionRuns: ExtractionRunStore;
+};
+
+/**
+ * End one entity of the run in error: its pending cells become `error`, the
+ * run records the failure, and the entity counts as done so the run still
+ * finalizes.
+ */
+const failEntity = async ({
+  actor,
+  data,
+  errorCode,
+  extractionRuns,
+}: FailEntityOptions): Promise<void> => {
+  await markPendingPlannedFieldsErrored(actor, data).catch(
+    (pendingFieldsError: unknown) => {
+      captureError(pendingFieldsError, {
+        workspaceId: data.workspaceId,
+        entityId: data.entityId,
+      });
+    },
+  );
+  await extractionRuns
+    .recordFailure({
+      id: actor.runId,
+      organizationId: actor.organizationId,
+      workspaceId: actor.workspaceId,
+      errorCode,
+    })
+    .catch((runError: unknown) =>
+      captureError(runError, {
+        workspaceId: data.workspaceId,
+        entityId: data.entityId,
+      }),
+    );
+  await onEntityCompleted({
+    actor,
+    extractionRuns,
+    entityId: brandPersistedEntityId(data.entityId),
+    runLockTtlSec: data.runLockTtlSec ?? RUNNING_LOCK_TTL_SEC,
+  });
+};
+
+type ProcessWorkflowEntityRunOptions = {
+  actor: WorkflowRunActor;
+  data: EntityJobData;
+  signal: AbortSignal;
+  extractionRuns: ExtractionRunStore;
+};
+
+/**
+ * Run one entity's share of a workflow as its requester. A requester who can
+ * no longer open the matter ends the entity in error before any input is read
+ * or any model is called.
+ */
+export const processWorkflowEntityRun = async ({
+  actor,
+  data,
+  signal,
+  extractionRuns,
+}: ProcessWorkflowEntityRunOptions) => {
   const {
-    workspaceId,
-    organizationId,
-    userId: rawUserId,
     entityId,
     executionPlan,
-    requestId,
     serviceTier = "standard",
     forcePropertyIds,
   } = data;
   const forcedPropertyIds: ReadonlySet<string> = new Set(forcePropertyIds);
-
-  // Brand IDs at the boundary — job data stores plain strings (JSON).
-  const branded = brandValidatedWorkflowActorKey({
-    organizationId,
-    workspaceId,
-  });
-  const userId = brandPersistedUserId(rawUserId);
   const brandedEntityId = brandPersistedEntityId(entityId);
 
   const isCurrentRequest = await isCurrentWorkflowRequest({
-    requestId,
-    workspaceId: branded.workspaceId,
+    requestId: actor.runId,
+    workspaceId: actor.workspaceId,
   });
   if (!isCurrentRequest) {
     return;
   }
 
-  const scopedDb = createRootScopedDb({
-    organizationId: branded.organizationId,
-    userId,
-    workspaceIds: [branded.workspaceId],
-  });
-  const safeDb = createRootSafeDb({
-    organizationId: branded.organizationId,
-    userId,
-    workspaceIds: [branded.workspaceId],
-  });
+  if (!(await requesterCanOpenMatter(actor))) {
+    await failEntity({
+      actor,
+      data,
+      errorCode: INPUTS_UNAVAILABLE_ERROR_CODE,
+      extractionRuns,
+    });
+    return;
+  }
 
   for (let level = 0; level < executionPlan.length; level++) {
     const isStillCurrentRequest = await isCurrentWorkflowRequest({
-      requestId,
-      workspaceId: branded.workspaceId,
+      requestId: actor.runId,
+      workspaceId: actor.workspaceId,
     });
     if (!isStillCurrentRequest) {
       return;
@@ -1450,17 +1501,12 @@ const processEntityJob = async (
       signal,
       operation: async (batch, batchSignal) =>
         await processOneBatch({
-          workspaceId: branded.workspaceId,
-          organizationId: branded.organizationId,
+          actor,
           entityId: brandedEntityId,
           batch,
           level,
-          scopedDb,
-          safeDb,
-          requestId,
           signal: batchSignal,
           serviceTier,
-          userId,
           forcedPropertyIds,
         }),
     });
@@ -1474,34 +1520,23 @@ const processEntityJob = async (
   // owns the finalization.
   signal.throwIfAborted();
 
-  broadcastWorkspaceResourceSetUpdated(
-    branded.workspaceId,
-    RESOURCE_TYPE.ENTITY,
-  );
+  broadcastWorkspaceResourceSetUpdated(actor.workspaceId, RESOURCE_TYPE.ENTITY);
 
   await onEntityCompleted({
+    actor,
     extractionRuns,
-    workspaceId: branded.workspaceId,
-    organizationId: branded.organizationId,
-    userId,
     entityId: brandedEntityId,
-    requestId,
     runLockTtlSec: data.runLockTtlSec ?? RUNNING_LOCK_TTL_SEC,
   });
 };
 
 type ProcessOneBatchArgs = {
-  workspaceId: SafeId<"workspace">;
-  organizationId: SafeId<"organization">;
+  actor: WorkflowRunActor;
   entityId: SafeId<"entity">;
   batch: PropertyBatch;
   level: number;
-  scopedDb: ScopedDb;
-  safeDb: SafeDb;
-  requestId: string;
   signal: AbortSignal;
   serviceTier: AIRequestServiceTier;
-  userId: SafeId<"user">;
   forcedPropertyIds: ReadonlySet<string>;
 };
 
@@ -1579,19 +1614,15 @@ const createBatchPreviewPublisher = ({
 };
 
 const processOneBatch = async ({
-  workspaceId,
-  organizationId,
+  actor,
   entityId,
   batch: rawBatch,
   level,
-  scopedDb,
-  safeDb,
-  requestId,
   signal,
   serviceTier,
-  userId,
   forcedPropertyIds,
 }: ProcessOneBatchArgs) => {
+  const { workspaceId, organizationId, userId, runId: requestId } = actor;
   signal.throwIfAborted();
   const isCurrentRequest = await isCurrentWorkflowRequest({
     requestId,
@@ -1601,7 +1632,7 @@ const processOneBatch = async ({
     return;
   }
 
-  const entityRow = await scopedDb((tx) =>
+  const entityRow = await actor.inputDb((tx) =>
     tx.query.entities.findFirst({
       columns: { currentVersionId: true },
       where: { id: { eq: entityId } },
@@ -1616,7 +1647,7 @@ const processOneBatch = async ({
   const propertyIds = rawBatch.properties.map((p) => p.id);
 
   // Get existing field content for skip logic
-  const batchFields = await scopedDb((tx) =>
+  const batchFields = await actor.inputDb((tx) =>
     tx
       .select({
         propertyId: fields.propertyId,
@@ -1635,7 +1666,7 @@ const processOneBatch = async ({
     batchFields.map((f) => [f.propertyId, f.contentType]),
   );
 
-  const lockedCellRows = await scopedDb((tx) =>
+  const lockedCellRows = await actor.inputDb((tx) =>
     tx
       .select({
         propertyId: cellMetadata.propertyId,
@@ -1681,13 +1712,13 @@ const processOneBatch = async ({
       entityVersionId,
       batch,
       contentType: "pending",
-      scopedDb,
+      writeDb: actor.writeDb,
     });
 
     // Broadcast so the frontend shows pending state.
     broadcastWorkspaceResourceSetUpdated(workspaceId, RESOURCE_TYPE.ENTITY);
 
-    const settings = await scopedDb(
+    const settings = await actor.writeDb(
       async (tx) => await loadOrgAISettings(tx, { organizationId, userId }),
     );
     if (Result.isError(settings)) {
@@ -1719,7 +1750,7 @@ const processOneBatch = async ({
     const usageMetering = {
       actionType: "background" as const,
       organizationId,
-      safeDb,
+      safeDb: actor.writeSafeDb,
       serviceTier,
       userId,
       workspaceId,
@@ -1745,7 +1776,7 @@ const processOneBatch = async ({
             entityVersionId,
             organizationId,
             workspaceId,
-            scopedDb,
+            scopedDb: actor.inputDb,
             orgAIConfig,
             managedAIResidency,
             promptCachingEnabled,
@@ -1796,7 +1827,7 @@ const processOneBatch = async ({
         ]),
         organizationId,
         workspaceId,
-        scopedDb,
+        scopedDb: actor.inputDb,
         entityVersionId,
         verdictProperties,
         inputPropertyIds: batch.inputs,
@@ -1826,7 +1857,7 @@ const processOneBatch = async ({
       const recorded = await Result.tryPromise({
         try: async () =>
           await recordTableRunVerdicts({
-            scopedDb,
+            scopedDb: actor.writeDb,
             organizationId,
             workspaceId,
             entityId,
@@ -1869,7 +1900,7 @@ const processOneBatch = async ({
         entityVersionId,
         batch: { ...batch, properties: erroredProperties },
         contentType: "error",
-        scopedDb,
+        writeDb: actor.writeDb,
       });
     }
 
@@ -1887,7 +1918,7 @@ const processOneBatch = async ({
       ...processedFields.skippedPropertyIds,
     ];
 
-    await scopedDb(async (tx) => {
+    await actor.writeDb(async (tx) => {
       // Acquire per-cell advisory locks before re-checking lock state.
       // `SELECT FOR UPDATE` alone cannot block a manual edit that
       // inserts a brand-new `cell_metadata` row (READ COMMITTED takes
@@ -2003,24 +2034,19 @@ const processOneBatch = async ({
 // ── Completion tracking ────────────────────────────────
 
 type OnEntityCompletedArgs = {
+  actor: WorkflowRunActor;
   extractionRuns: ExtractionRunStore;
-  workspaceId: SafeId<"workspace">;
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
   entityId: SafeId<"entity">;
-  requestId: string;
   runLockTtlSec: number;
 };
 
 const onEntityCompleted = async ({
+  actor,
   extractionRuns,
-  workspaceId,
-  organizationId,
-  userId,
   entityId,
-  requestId,
   runLockTtlSec,
 }: OnEntityCompletedArgs) => {
+  const { workspaceId, organizationId, runId: requestId } = actor;
   const runStateStore = getRootWorkflowRunStateStore();
 
   // Atomically re-check that this job still belongs to the active workflow
@@ -2044,7 +2070,7 @@ const onEntityCompleted = async ({
   await extractionRuns
     .syncProgress({
       completed: result.completed,
-      id: brandPersistedExtractionRunId(requestId),
+      id: requestId,
       organizationId,
       total: result.total,
       workspaceId,
@@ -2052,13 +2078,7 @@ const onEntityCompleted = async ({
     .catch((error: unknown) => captureError(error, { workspaceId }));
 
   if (result.completed >= result.total) {
-    await finishWorkflow(
-      workspaceId,
-      organizationId,
-      userId,
-      requestId,
-      extractionRuns,
-    );
+    await finishWorkflow(actor, extractionRuns);
     return;
   }
 
@@ -2075,10 +2095,7 @@ type StartSuccessorWorkflow = (
 ) => Promise<StartWorkflowResult>;
 
 type MaybeRouteClassifiedDocumentsArgs = {
-  workspaceId: SafeId<"workspace">;
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-  scopedDb: ScopedDb;
+  actor: WorkflowRunActor;
   planPropertyIds: readonly SafeId<"property">[];
   startSuccessorWorkflow: StartSuccessorWorkflow;
 };
@@ -2090,18 +2107,15 @@ type MaybeRouteClassifiedDocumentsArgs = {
 // and none of those columns is the classifier, so its id is absent from their
 // plan and this short-circuits.
 const maybeRouteClassifiedDocuments = async ({
-  workspaceId,
-  organizationId,
-  userId,
-  scopedDb,
+  actor,
   planPropertyIds,
   startSuccessorWorkflow,
 }: MaybeRouteClassifiedDocumentsArgs): Promise<void> => {
   if (planPropertyIds.length === 0) {
     return;
   }
-  const classifier = await scopedDb(
-    async (tx) => await resolveDocTypeClassifier(tx, workspaceId),
+  const classifier = await actor.inputDb(
+    async (tx) => await resolveDocTypeClassifier(tx, actor.workspaceId),
   );
   if (
     !classifier ||
@@ -2114,10 +2128,10 @@ const maybeRouteClassifiedDocuments = async ({
   }
 
   await routeClassifiedDocuments({
-    workspaceId,
-    organizationId,
-    userId,
-    scopedDb,
+    workspaceId: actor.workspaceId,
+    organizationId: actor.organizationId,
+    userId: actor.userId,
+    scopedDb: actor.inputDb,
     startWorkflow: startSuccessorWorkflow,
     // Reuse the classifier already resolved above rather than having
     // resolveApplicablePlaybooks look it up a second time.
@@ -2125,13 +2139,34 @@ const maybeRouteClassifiedDocuments = async ({
   });
 };
 
+/**
+ * End the run as failed before finalization: its lock is released, and
+ * nothing is freshened or started after it.
+ */
+const failRunBeforeFinalizing = async (
+  actor: WorkflowRunActor,
+  extractionRuns: ExtractionRunStore,
+  errorCode: string,
+): Promise<void> => {
+  const { workspaceId } = actor;
+  await extractionRuns
+    .fail({
+      id: actor.runId,
+      organizationId: actor.organizationId,
+      workspaceId,
+      errorCode,
+    })
+    .catch((error: unknown) => captureError(error, { workspaceId }));
+  await getRootWorkflowRunStateStore().clear(workspaceId);
+  broadcastWorkflowStatus(workspaceId);
+  broadcastWorkspaceResourceSetUpdated(workspaceId, RESOURCE_TYPE.PROPERTY);
+};
+
 const finishWorkflow = async (
-  workspaceId: SafeId<"workspace">,
-  organizationId: SafeId<"organization">,
-  userId: SafeId<"user">,
-  requestId: string,
+  actor: WorkflowRunActor,
   extractionRuns: ExtractionRunStore,
 ) => {
+  const { workspaceId, organizationId, runId: requestId } = actor;
   const isCurrentRequest = await isCurrentWorkflowRequest({
     requestId,
     workspaceId,
@@ -2140,12 +2175,19 @@ const finishWorkflow = async (
     return;
   }
 
+  // Successor runs act for the same requester, so they start only while the
+  // requester can still open the matter; each one's planning reads go through
+  // `inputDb` again.
+  if (!(await requesterCanOpenMatter(actor))) {
+    await failRunBeforeFinalizing(
+      actor,
+      extractionRuns,
+      INPUTS_UNAVAILABLE_ERROR_CODE,
+    );
+    return;
+  }
+
   const runStateStore = getRootWorkflowRunStateStore();
-  const scopedDb = createRootScopedDb({
-    organizationId,
-    userId,
-    workspaceIds: [workspaceId],
-  });
   const startSuccessorWorkflow: StartSuccessorWorkflow = async (args) =>
     await startWorkflow({ ...args, extractionRunStore: extractionRuns });
 
@@ -2166,17 +2208,11 @@ const finishWorkflow = async (
   if (Result.isError(manifestResult)) {
     const invalidStateError = manifestResult.error;
     captureError(invalidStateError, { workspaceId });
-    await extractionRuns
-      .fail({
-        id: brandPersistedExtractionRunId(requestId),
-        organizationId,
-        workspaceId,
-        errorCode: errorTag(invalidStateError),
-      })
-      .catch((error: unknown) => captureError(error, { workspaceId }));
-    await runStateStore.clear(workspaceId);
-    broadcastWorkflowStatus(workspaceId);
-    broadcastWorkspaceResourceSetUpdated(workspaceId, RESOURCE_TYPE.PROPERTY);
+    await failRunBeforeFinalizing(
+      actor,
+      extractionRuns,
+      errorTag(invalidStateError),
+    );
     return;
   }
 
@@ -2194,7 +2230,7 @@ const finishWorkflow = async (
     // plan. Properties created mid-workflow are not in the snapshot —
     // they stay stale and trigger an automatic follow-up run below.
     try {
-      await scopedDb(async (tx) => {
+      await actor.writeDb(async (tx) => {
         await markPropertiesFresh({
           tx,
           workspaceId,
@@ -2208,7 +2244,7 @@ const finishWorkflow = async (
 
   await extractionRuns
     .complete({
-      id: brandPersistedExtractionRunId(requestId),
+      id: requestId,
       organizationId,
       workspaceId,
     })
@@ -2228,10 +2264,7 @@ const finishWorkflow = async (
   // recursion guard inside — a playbook run's materialized columns are never the
   // classifier, so they cannot re-trigger routing — keeps this from looping.
   maybeRouteClassifiedDocuments({
-    workspaceId,
-    organizationId,
-    userId,
-    scopedDb,
+    actor,
     planPropertyIds,
     startSuccessorWorkflow,
   }).catch((error: unknown) => captureError(error, { workspaceId }));
@@ -2243,8 +2276,8 @@ const finishWorkflow = async (
   await startStragglerCatchUp({
     workspaceId,
     organizationId,
-    userId,
-    scopedDb,
+    userId: actor.userId,
+    scopedDb: actor.inputDb,
     serviceTier,
     startWorkflow: startSuccessorWorkflow,
   });
@@ -2257,7 +2290,7 @@ type SetFieldsStatusArgs = {
   entityVersionId: SafeId<"entityVersion">;
   batch: PropertyBatch;
   contentType: "pending" | "error" | "unsupported";
-  scopedDb: ScopedDb;
+  writeDb: WorkflowRunActor["writeDb"];
 };
 
 const setFieldsStatus = async ({
@@ -2265,11 +2298,11 @@ const setFieldsStatus = async ({
   entityVersionId,
   batch,
   contentType,
-  scopedDb,
+  writeDb,
 }: SetFieldsStatusArgs) => {
   const propertyIds = batch.properties.map((p) => p.id);
 
-  await scopedDb(async (tx) => {
+  await writeDb(async (tx) => {
     // Re-check locks under the per-cell advisory lock. The
     // lockedPropertyIds snapshot above (line ~1007) is taken
     // outside any lock, so a manual edit that lands between that

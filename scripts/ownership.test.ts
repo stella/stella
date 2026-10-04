@@ -110,8 +110,9 @@ test("the run actor allowlist names exactly the member-run queues", () => {
     row?.enforcement.kind === "import"
       ? row.enforcement.allowed.map(({ path }) => path)
       : [];
-  const memberRunModules: string[] = MEMBER_RUN_QUEUES.map(
-    ({ module }) => module,
-  );
+  // One module can host several queues (workflow and workflow-flex).
+  const memberRunModules: string[] = [
+    ...new Set(MEMBER_RUN_QUEUES.map(({ module }) => module)),
+  ];
   expect(allowed).toEqual(memberRunModules);
 });

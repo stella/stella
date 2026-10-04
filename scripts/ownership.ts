@@ -708,11 +708,6 @@ export const OWNERSHIP = [
           path: "apps/api/src/lib/scouts/work-attention.ts",
           reason: "Takes the constructor as an injected dependency type.",
         },
-        {
-          path: "apps/api/src/lib/workflow-queue.ts",
-          reason:
-            "Workflow property generation; its authority model is still to be classified.",
-        },
       ],
     },
   },
@@ -738,6 +733,7 @@ export const OWNERSHIP = [
           "apps/api/src/lib/bilingual/run-queue.ts",
           "apps/api/src/handlers/reports/report-export-queue.ts",
           "apps/api/src/lib/lists/verification/run-queue.ts",
+          "apps/api/src/lib/workflow-queue.ts",
         ].map((modulePath) => ({
           path: modulePath,
           reason: "Member run; reads its inputs through inputDb.",
