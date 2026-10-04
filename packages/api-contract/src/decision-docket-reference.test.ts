@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import {
   DECISION_DOCKET_GRAMMARS,
@@ -13,6 +13,7 @@ import {
   DECISION_DOCKET_IDENTITY_FIXTURES,
   DOCKET_IDENTITY_FIXTURE_NUMBER_MAX,
   DOCKET_IDENTITY_PART_NUMERAL,
+  docketReaderEntryArbitrary,
 } from "./decision-docket-identity.fixtures";
 import {
   DECISION_DOCKETS_STORED_WITH_SHEETS,
@@ -1013,6 +1014,37 @@ describe.each(
       expect(canonicalOf(intent.family), stored).toBe(canonicalOf(docket));
       expect(intent.selector, stored).toEqual({ kind: "part", value: part });
     }
+  });
+
+  const readerEntryTitle = `a ${jurisdiction} reader entry reads as its file, in a spelling the grammar keeps`;
+  test(readerEntryTitle, () => {
+    // The family is what the lookup keys like a stored docket: the grammar's
+    // format of it is a fixed point, under the filed docket's case-file key,
+    // with or without a part after it.
+    assertProperty(
+      readerEntryTitle,
+      fc.property(
+        docketReaderEntryArbitrary(jurisdiction),
+        fc.boolean(),
+        ({ entry, filed: stored }, withPart) => {
+          expect(
+            parseDecisionDocket(stored, { grammar })?.formatted,
+            stored,
+          ).toBe(stored);
+          const intent = intentOf(withPart ? `${entry} - ${part}.` : entry);
+          expect(intent.jurisdiction, entry).toBe(jurisdiction);
+          expect(intent.selector, entry).toEqual(
+            withPart ? { kind: "part", value: part } : { kind: "none" },
+          );
+          expect(canonicalOf(intent.family), entry).toBe(canonicalOf(stored));
+          expect(
+            parseDecisionDocket(intent.family, { grammar })?.formatted,
+            entry,
+          ).toBe(intent.family);
+        },
+      ),
+      propertyConfig(),
+    );
   });
 
   switch (sheet.type) {

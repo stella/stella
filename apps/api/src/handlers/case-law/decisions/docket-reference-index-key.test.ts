@@ -2,17 +2,15 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import {
-  DECISION_DOCKET_GRAMMARS,
-  type DecisionDocketJurisdiction,
-} from "@stll/api-contract/decision-docket-grammar";
+import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 import {
   DECISION_DOCKET_IDENTITY_FIXTURES,
   DOCKET_IDENTITY_FIXTURE_NUMBER_MAX,
   DOCKET_IDENTITY_PART_NUMERAL,
+  docketReaderEntryArbitrary,
 } from "@stll/api-contract/decision-docket-identity.fixtures";
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { docketFamilyCitationKeys } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import { citationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -162,38 +160,6 @@ describe("the docket a query reads is keyed as the stored docket", () => {
   });
 });
 
-/**
- * Whether every reader spelling of a grammar's fixture file is read under the
- * filed docket's own `citation_key`. Where it is not, a bare docket still
- * reaches the file by its case-file key, which the docket-family identity
- * scenario holds per grammar; an entry with a selector reads by the
- * spellings alone.
- */
-const READER_SPELLING_CITATION_KEYS = {
-  AUT: { type: "supported" },
-  CZE: { type: "supported" },
-  EU: {
-    type: "unsupported",
-    reason:
-      "A lead word (`case`, `Rechtssache`) stays in the reader's family and in its key.",
-  },
-  HUN: { type: "supported" },
-  POL: {
-    type: "unsupported",
-    reason:
-      "A lower-case division (`ii csk`) keys apart from the docket `II CSK`.",
-  },
-  SVK: { type: "supported" },
-  USA: {
-    type: "unsupported",
-    reason: "A `No.` lead stays in the reader's family and in its key.",
-  },
-} as const satisfies Record<
-  DecisionDocketJurisdiction,
-  | { readonly type: "supported" }
-  | { readonly type: "unsupported"; readonly reason: string }
->;
-
 describe.each(
   Object.values(DECISION_DOCKET_GRAMMARS).map(
     ({ jurisdiction }) => jurisdiction,
@@ -204,7 +170,6 @@ describe.each(
     const grammar = DECISION_DOCKET_GRAMMARS[jurisdiction];
     const fixture = DECISION_DOCKET_IDENTITY_FIXTURES[jurisdiction];
     const { sheet } = fixture;
-    const parity = READER_SPELLING_CITATION_KEYS[jurisdiction];
     const n = DOCKET_IDENTITY_FIXTURE_NUMBER_MAX;
     const docket = fixture.filed(n);
     const part = DOCKET_IDENTITY_PART_NUMERAL;
@@ -222,38 +187,51 @@ describe.each(
       );
     });
 
-    switch (parity.type) {
-      case "supported":
-        test("every reader spelling is read under the filed docket's citation key", () => {
-          for (const entry of fixture.readerSpellings(n)) {
-            const intent = familyIn(entry);
-            expect(docketFamilyCitationKeys(intent), entry).toContain(
-              keyOf(docket),
-            );
-            expect(keyOf(intent.family), entry).toBe(keyOf(docket));
-          }
-        });
-        break;
-      case "unsupported":
-        test("some reader spelling keys apart from the filed docket, as declared", () => {
-          // Once every spelling is read under the docket key, the declaration
-          // has to become `supported`.
-          const apart = fixture
-            .readerSpellings(n)
-            .filter(
-              (entry) =>
-                !docketFamilyCitationKeys(familyIn(entry)).includes(
-                  keyOf(docket),
-                ),
-            );
-          expect(apart).not.toEqual([]);
-        });
-        break;
-      default: {
-        parity satisfies never;
-        panic("Unhandled citation-key parity");
+    test("every reader spelling is read under the filed docket's citation key", () => {
+      for (const entry of fixture.readerSpellings(n)) {
+        const intent = familyIn(entry);
+        expect(docketFamilyCitationKeys(intent), entry).toContain(
+          keyOf(docket),
+        );
+        expect(keyOf(intent.family), entry).toBe(keyOf(docket));
       }
-    }
+    });
+
+    const readerEntryTitle = `a ${jurisdiction} reader entry's family keys as the filed docket, and its part as the stored sibling`;
+    test(readerEntryTitle, () => {
+      // An entry with a part reads by the citation keys alone, never by the
+      // case-file key, so its stored sibling is reached only when the family
+      // keys exactly as the filed docket does.
+      assertProperty(
+        readerEntryTitle,
+        fc.property(
+          docketReaderEntryArbitrary(jurisdiction),
+          ({ entry, filed: stored, partSibling }) => {
+            expect(keyOf(familyIn(entry).family), entry).toBe(keyOf(stored));
+            const withPart = familyIn(`${entry} - ${part}.`);
+            expect(keyOf(withPart.family), entry).toBe(keyOf(stored));
+            // Pinned both ways: a declared gap that closes has to be
+            // redeclared, and an undeclared one fails.
+            const reached = docketFamilyCitationKeys(withPart).includes(
+              keyOf(`${stored} - ${part}.`),
+            );
+            switch (partSibling.type) {
+              case "keyed":
+                expect(reached, entry).toBe(true);
+                break;
+              case "apart":
+                expect(reached, `${entry}: ${partSibling.reason}`).toBe(false);
+                break;
+              default: {
+                partSibling satisfies never;
+                panic("Unhandled part sibling declaration");
+              }
+            }
+          },
+        ),
+        propertyConfig(),
+      );
+    });
 
     test("a member stored with a part numeral is read under its file's keys", () => {
       const keys = docketFamilyCitationKeys(familyIn(docket));
