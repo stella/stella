@@ -264,7 +264,7 @@ export const drainInboundMailQueue = async ({
         break;
       default:
         notification satisfies never;
-        return panic("Unhandled inbound queue notification");
+        panic("Unhandled inbound queue notification");
     }
     const outcome = await receive(notification.event);
     if (outcome.isErr()) {
@@ -291,7 +291,7 @@ export const drainInboundMailQueue = async ({
           break;
         default:
           delivery satisfies never;
-          return panic("Unhandled inbound delivery outcome");
+          panic("Unhandled inbound delivery outcome");
       }
       logger.info("inbound_mail.queue.received", {
         "queue.delivery_id": messageId,
@@ -313,8 +313,12 @@ export const drainInboundMailQueue = async ({
     return Result.ok(result);
   };
 
+  // Read through a call: the signal can abort during any await, so a
+  // narrowed `signal.aborted` would be stale.
+  const aborted = () => signal.aborted;
+
   for (let batch = 0; batch < MAX_BATCHES_PER_RUN; batch += 1) {
-    if (signal.aborted) {
+    if (aborted()) {
       return summary(batch, "aborted");
     }
     if (Temporal.Now.instant().epochMilliseconds >= deadline) {
@@ -322,7 +326,7 @@ export const drainInboundMailQueue = async ({
     }
     const received = await receiveBatch();
     if (received.isErr()) {
-      if (signal.aborted) {
+      if (aborted()) {
         return summary(batch, "aborted");
       }
       return received;
@@ -335,11 +339,11 @@ export const drainInboundMailQueue = async ({
     for (const message of messages) {
       // On abort the unhandled rest stay leased until their visibility
       // timeout ends; they are redelivered, never deleted.
-      if (signal.aborted) {
+      if (aborted()) {
         return summary(batch + 1, "aborted");
       }
-      // db-await-in-loop: messages are filed one at a time so an abort
-      // leaves no delivery half-acknowledged.
+      // Messages are filed one at a time so an abort leaves no delivery
+      // half-acknowledged.
       await handle(message);
     }
   }

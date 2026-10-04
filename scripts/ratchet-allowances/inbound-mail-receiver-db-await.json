@@ -1,6 +1,0 @@
-{
-  "metric": "no-db-await-in-loop-suppressions",
-  "file": "apps/api/src/lib/email/inbound/sqs.ts",
-  "delta": 1,
-  "reason": "The inbound mail queue drain files deliveries one at a time, so an abort never leaves a delivery half acknowledged: every message is either filed and deleted or left for redelivery."
-}
