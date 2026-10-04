@@ -86,6 +86,7 @@ const roleDenied = (toolName: string) => [
       error: {
         code: "permission_denied",
         message: `Your member role does not permit ${toolName}`,
+        hint: "Call tools/list for the tools your role offers, or ask an organization administrator for a role that includes this tool.",
       },
     }),
   },
