@@ -1122,6 +1122,12 @@ export const discoverTemplate = async (
       clauseFieldPaths.add(path);
       slotPaths.add(path);
     }
+    // A keyed lookup marker configures its parent field. Keep that input in
+    // the slot's scope alongside the paths the clause renders.
+    for (const [path] of foldRenderedLookups(analysis.documentFilters, [])) {
+      clauseFieldPaths.add(path);
+      slotPaths.add(path);
+    }
     for (const declaration of analysis.documentFilters.values()) {
       declaration.clause = clause;
     }

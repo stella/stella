@@ -2305,12 +2305,131 @@ describe("clause slot requiredness follows rendering", () => {
     },
   );
 
+  test.each(["linked", "override"])(
+    "a repeated %s document slot prepares clause-loop lookups once",
+    async (mode) => {
+      const body = [
+        clauseDirective("{% for p in persons %}"),
+        { text: '{{ p.company.name | lookup("krs", name="[company name]") }}' },
+        clauseDirective("{% endfor %}"),
+      ];
+      const file = await makeDocx(
+        WRAP(P('{{ clause("Terms") }}') + P('{{ clause("Terms") }}')),
+      );
+      const queries: string[] = [];
+      const result = await fillTemplateDocx({
+        source: {
+          name: "Terms",
+          fileName: "terms.docx",
+          file,
+          templateId: toSafeId<"template">("tmpl_1"),
+        },
+        scopedDb: stubScopedDb(mode === "linked" ? body : [{ text: "Stored" }]),
+        clauseOverrides:
+          mode === "override" ? { "@clause:Terms": body } : undefined,
+        organizationId,
+        requiredFields: "enforce",
+        useRecording: "caller",
+        values: {
+          persons: [{ company: "0000123457" }, { company: "0000123458" }],
+        },
+        lookupResolver: async ({ query }) => {
+          queries.push(query);
+          return {
+            type: "hit",
+            hit: {
+              registry: "krs",
+              id: query,
+              name: `Company ${query}`,
+              legalForm: null,
+              address: null,
+              registryUrl: `https://example.invalid/krs/${query}`,
+            },
+          };
+        },
+      });
+      expect(result).toHaveProperty("file");
+      expect(queries).toEqual(["0000123457", "0000123458"]);
+      expect(await filledTexts(result)).toEqual([
+        "Company 0000123457",
+        "Company 0000123458",
+        "Company 0000123457",
+        "Company 0000123458",
+      ]);
+    },
+  );
+
+  test("a repeated document slot drafts and decides clause-loop fields once per row", async () => {
+    const body = [
+      clauseDirective("{% for p in persons %}"),
+      clauseDirective('{% if p.included | checkbox | ai("Include?") %}'),
+      { text: '{{ p.summary | ai("Summarize") }}' },
+      clauseDirective("{% endif %}"),
+      clauseDirective("{% endfor %}"),
+    ];
+    const file = await makeDocx(
+      WRAP(P('{{ clause("Terms") }}') + P('{{ clause("Terms") }}')),
+    );
+    const drafts: string[] = [];
+    const decisions: string[] = [];
+    const result = await fillTemplateDocx({
+      source: {
+        name: "Terms",
+        fileName: "terms.docx",
+        file,
+        templateId: toSafeId<"template">("tmpl_1"),
+      },
+      scopedDb: stubScopedDb(body),
+      organizationId,
+      requiredFields: "enforce",
+      useRecording: "caller",
+      values: { persons: [{ name: "Ann" }, { name: "Bob", included: false }] },
+      aiCollaborators: async () => ({
+        generateAiValue: async ({ values }) => {
+          const name = values["name"];
+          if (typeof name !== "string") {
+            panic("Expected a clause-loop row");
+          }
+          drafts.push(name);
+          return { type: "drafted", value: `For ${name}` };
+        },
+        decideAiCondition: async ({ values }) => {
+          const name = values["name"];
+          if (typeof name !== "string") {
+            panic("Expected a clause-loop decision row");
+          }
+          decisions.push(name);
+          return { decidedBy: "generative_model", value: true };
+        },
+      }),
+    });
+    expect(result).toHaveProperty("file");
+    expect(drafts).toEqual(["Ann", "Bob"]);
+    expect(decisions).toEqual(["Ann"]);
+    expect(await filledTexts(result)).toEqual(["For Ann", "For Ann"]);
+    if (!("file" in result)) {
+      panic("Expected a clause-loop document");
+    }
+    expect(result.conditionDecisions).toEqual([
+      expect.objectContaining({
+        path: "persons.0.included",
+        value: true,
+        decidedBy: "generative_model",
+      }),
+      expect.objectContaining({
+        path: "persons.1.included",
+        value: false,
+        decidedBy: "user",
+      }),
+    ]);
+  });
+
   test.each(["block", "inline"])(
     "a %s loop resolves document and clause-item lookups once per input",
     async (mode) => {
       const body = [
         {
-          text: '{{ buyer | lookup("krs", name="[company name]") }} / {{ p.company | lookup("krs", name="[company name]") }}',
+          text: '{{ buyer | lookup("krs", name="[company name]") }} / {{ p.company.name | lookup("krs", name="[company name]") }}',
         },
       ];
       const file = await makeDocx(
@@ -2338,9 +2457,7 @@ describe("clause slot requiredness follows rendering", () => {
         alias: "p",
         path: "persons",
       });
-      expect(manifest.fields.map(({ path }) => path)).toContain(
-        "persons.company",
-      );
+      expect(manifest.fields.map(({ path }) => path)).toContain("p.company");
       const queries: string[] = [];
       const result = await fillTemplateDocx({
         source,
@@ -2367,12 +2484,13 @@ describe("clause slot requiredness follows rendering", () => {
           };
         },
       });
+      expect(result).toHaveProperty("file");
       expect(queries).toEqual(["0000123456", "0000123457", "0000123458"]);
       const text = (await filledTexts(result)).join(";");
       expect(text).toContain("Company 0000123456 / Company 0000123457");
       expect(text).toContain("Company 0000123456 / Company 0000123458");
       if (!("file" in result)) {
-        return panic("Expected the lookup clause document");
+        panic("Expected the lookup clause document");
       }
       expect(result.unmatchedPlaceholders).toEqual([]);
     },

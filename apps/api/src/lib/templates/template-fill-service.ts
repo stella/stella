@@ -906,6 +906,14 @@ type PreparedClauseOccurrence = {
   scope: "document" | "loop";
 };
 
+/** Linked clauses are discovered independently: their own loops use array
+ * paths, while references to a template loop retain its authored alias. */
+const isClauseLoopField = (path: string, discovered: DiscoveredTemplate) =>
+  discovered.loopAliases.some(
+    ({ alias, path: arrayPath }) =>
+      path.startsWith(`${alias}.`) || path.startsWith(`${arrayPath}.`),
+  );
+
 type DraftDocumentValuesOptions = DocumentGroundingOptions & {
   discovered: DiscoveredTemplate;
   resolveLookup: LookupResolver;
@@ -946,10 +954,7 @@ const draftDocumentValues = async ({
   const scopedPaths = clauseScopedPaths(discovered);
   const fields = manifest.fields.filter(
     ({ path }) =>
-      !scopedPaths.has(path) ||
-      !discovered.loopAliases.some(({ path: arrayPath }) =>
-        path.startsWith(`${arrayPath}.`),
-      ),
+      !scopedPaths.has(path) || !isClauseLoopField(path, discovered),
   );
   // Resolve registry lookups, evaluate formula (derived) fields, and check
   // dependent (optionsFrom) selects before any AI step or substitution sees
@@ -1027,20 +1032,16 @@ const prepareClauseOccurrences = async ({
   const aiFieldErrors: AiFieldError[] = [];
   const conditionDecisions: ResolvedAiCondition[] = [];
   const occurrenceValues: PreparedClauseOccurrence[] = [];
+  const preparedDocumentPaths = new Set<string>();
   for (const { patchKey, loopScope } of occurrences) {
-    if (loopScope === undefined) {
-      occurrenceValues.push({ patchKey, values: record, scope: "document" });
-      continue;
-    }
     const paths = new Set(
       arrayOrEmpty(discovered.clauseScopedFieldPaths?.[patchKey]),
     );
     const fields = manifest.fields.filter(
       (field) =>
         paths.has(field.path) &&
-        discovered.loopAliases.some(({ path: arrayPath }) =>
-          field.path.startsWith(`${arrayPath}.`),
-        ),
+        isClauseLoopField(field.path, discovered) &&
+        (loopScope !== undefined || !preparedDocumentPaths.has(field.path)),
     );
     // Fill steps mutate declared values; copy only those roots rather than
     // cloning every document-level array once for every item.
@@ -1049,14 +1050,17 @@ const prepareClauseOccurrences = async ({
         ({ path }) => path.split(".").at(0) ?? panic("Field path has no root"),
       ),
     );
-    const values = {
-      ...loopScope,
-      ...Object.fromEntries(
-        [...roots]
-          .filter((root) => Object.hasOwn(loopScope, root))
-          .map((root) => [root, structuredClone(loopScope[root])]),
-      ),
-    };
+    const values =
+      loopScope === undefined
+        ? record
+        : {
+            ...loopScope,
+            ...Object.fromEntries(
+              [...roots]
+                .filter((root) => Object.hasOwn(loopScope, root))
+                .map((root) => [root, structuredClone(loopScope[root])]),
+            ),
+          };
     const scopeError = await applyManifestFillSteps({
       values,
       manifest: { fields },
@@ -1083,6 +1087,18 @@ const prepareClauseOccurrences = async ({
       return panic(
         "Prepared clause scope holds values outside the template data model",
       );
+    }
+    if (loopScope === undefined) {
+      // Preserve the shared occurrence record with own-property copies.
+      Object.defineProperties(
+        record,
+        Object.getOwnPropertyDescriptors(scopedDecided.values),
+      );
+      for (const { path } of fields) {
+        preparedDocumentPaths.add(path);
+      }
+      occurrenceValues.push({ patchKey, values: record, scope: "document" });
+      continue;
     }
     occurrenceValues.push({
       patchKey,
