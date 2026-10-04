@@ -20,6 +20,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { SYSTEM_AUDIT_MODULES } from "../apps/api/src/lib/system-audit/modules.ts";
 import {
   AUDIT_MUTATION_LEDGER_REL,
   type AuditMutationLedgerRow,
@@ -95,7 +96,12 @@ const census = (): Map<string, TargetCounts> => {
       JSON.stringify({
         categories: { correctness: "off" },
         jsPlugins: [path.join(REPO_ROOT, ".oxlint-plugins", `${RULE}.ts`)],
-        rules: { [`${RULE}/${RULE}`]: ["error", { census: true }] },
+        rules: {
+          [`${RULE}/${RULE}`]: [
+            "error",
+            { census: true, systemModules: SYSTEM_AUDIT_MODULES },
+          ],
+        },
       }),
     );
     const result = Bun.spawnSync(

@@ -55,6 +55,19 @@ const readJson = async (upstream: Response | null) =>
   // oxlint-disable-next-line no-unbounded-response-body/no-unbounded-response-body -- fixture: Response-typed parameter
   await upstream?.json();
 
+// The response a publisher read outcome carries.
+declare const readPublisher: (
+  target: string,
+) => Promise<{ type: "present"; value: Response }>;
+const publisherRead = await readPublisher(url);
+// oxlint-disable-next-line no-unbounded-response-body/no-unbounded-response-body -- fixture: publisher outcome body read
+const publisherJson = await publisherRead.value.json();
+const publisherResponse = publisherRead.value;
+// oxlint-disable-next-line no-unbounded-response-body/no-unbounded-response-body -- fixture: publisher outcome bound response
+const publisherBytes = await publisherResponse.arrayBuffer();
+// expect-clean: no-unbounded-response-body/no-unbounded-response-body
+const publisherType = publisherResponse.headers.get("content-type");
+
 // Unbounded object-storage reads imported from the storage owner.
 // oxlint-disable-next-line no-unbounded-response-body/no-unbounded-response-body -- fixture: aliased unbounded S3 reader
 const object = await readWholeObject("key", signal);
@@ -106,6 +119,9 @@ export {
   localStream,
   object,
   probe,
+  publisherBytes,
+  publisherJson,
+  publisherType,
   readJson,
   reassignedText,
   requestBody,

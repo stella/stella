@@ -1578,6 +1578,10 @@ const fetchChatModelOptions = async () => {
   return unwrapEden(response);
 };
 
+export type ChatModelBenchmarkOption = Awaited<
+  ReturnType<typeof fetchChatModelOptions>
+>["benchmarkOptions"][number];
+
 // The composer (+) menu's Models submenu fetches this lazily (only once the
 // menu opens) rather than eagerly on composer mount, so opening the chat
 // surface never fires the request for users who never touch the picker.
