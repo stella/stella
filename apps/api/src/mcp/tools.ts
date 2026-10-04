@@ -356,8 +356,8 @@ export const handleMcpToolCall = async ({
     );
   }
 
-  // Discovery already withholds the tool; this keeps the refusal on the call
-  // path for any caller that reaches dispatch by name.
+  // Discovery withholds the tool; a call by name on any transport resolves it
+  // and is refused here, naming the member role or the credential.
   const authorityDenial = mcpToolAuthorityDenial(context, staticTool);
   if (authorityDenial !== null) {
     return serializeForSurface(

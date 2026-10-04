@@ -24,23 +24,25 @@ const isStaticToolAvailableToConfirmation = (
 };
 
 /**
- * A write tool is offered only to a request whose effective authority holds
- * its declared permissions; `getGatewayMcpToolDefinition` reads this too, so
- * the call path refuses what discovery withholds.
+ * A tool whose definition hides it from a member role outright: absent from
+ * discovery and, on a call by name, answered as an unknown tool.
  */
-export const isStaticToolVisibleToRole = (
+export const isStaticToolShownToMemberRole = (
   context: McpRequestContext,
   definition: McpToolDefinition,
-): boolean => {
-  if (!hasMcpToolAuthority(context, definition)) {
-    return false;
-  }
-  if (definition.isVisibleToMemberRole === undefined) {
-    return true;
-  }
+): boolean => definition.isVisibleToMemberRole?.(context.memberRole) ?? true;
 
-  return definition.isVisibleToMemberRole(context.memberRole);
-};
+/**
+ * A write tool is offered only to a request whose effective authority holds
+ * its declared permissions. A call by name still resolves it, so dispatch
+ * answers `permission_denied` naming the member role or the credential.
+ */
+const isStaticToolVisibleToRole = (
+  context: McpRequestContext,
+  definition: McpToolDefinition,
+): boolean =>
+  hasMcpToolAuthority(context, definition) &&
+  isStaticToolShownToMemberRole(context, definition);
 
 const LOOKUP_BUSINESS_REGISTRY_TOOL_NAME = "lookup_business_registry";
 

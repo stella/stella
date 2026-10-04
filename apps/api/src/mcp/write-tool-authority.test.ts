@@ -21,6 +21,7 @@ import {
   isMemberAuthorizedForMcpTool,
   type McpToolAuthorityDeclaration,
 } from "@/api/mcp/write-tool-authority";
+import { callMcpToolOverHttp } from "@/api/tests/helpers/mcp-http-tool-call";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -190,44 +191,74 @@ describe("write tool permissions", () => {
     expect(mcpOffered("owner").has("delete_matter")).toBe(true);
   });
 
-  test("dispatch refuses a write tool the role cannot hold before its handler runs", async () => {
-    const result = await handleMcpToolCall({
-      args: { matter_id: "matter_1", confirm: true },
-      context: mcpContextFor("external"),
-      toolName: "delete_matter",
-    });
-    expect(result.isError).toBe(true);
-    const item = result.content.at(0);
-    const payload: unknown =
-      item?.type === "text" ? JSON.parse(item.text) : null;
-    expect(payload).toEqual({
-      error: {
-        code: "permission_denied",
-        message: "Your member role does not permit delete_matter",
-      },
-    });
-  });
+  /**
+   * Both ways a call reaches dispatch: the direct entry point (evals, the
+   * role matrix) and the HTTP transport every MCP client and the CLI use.
+   */
+  const TRANSPORTS = {
+    dispatch: handleMcpToolCall,
+    http: async (options: Parameters<typeof handleMcpToolCall>[0]) =>
+      await callMcpToolOverHttp({ ...options, mode: "default" }),
+  } as const;
 
-  test("dispatch names the credential when only its permissions refuse the tool", async () => {
-    const result = await handleMcpToolCall({
+  const TRANSPORT_NAMES = Object.keys(TRANSPORTS).filter(
+    (name): name is keyof typeof TRANSPORTS => name in TRANSPORTS,
+  );
+
+  const refusalOver = async ({
+    context,
+    transport,
+  }: {
+    context: McpRequestContext;
+    transport: keyof typeof TRANSPORTS;
+  }): Promise<unknown> => {
+    const result = await TRANSPORTS[transport]({
       args: { matter_id: "matter_1", confirm: true },
-      context: asTestRaw<McpRequestContext>({
-        ...mcpContextFor("owner"),
-        credentialPermissions: { workspace: ["read"] },
-      }),
+      context,
       toolName: "delete_matter",
     });
     expect(result.isError).toBe(true);
     const item = result.content.at(0);
-    const payload: unknown =
-      item?.type === "text" ? JSON.parse(item.text) : null;
-    expect(payload).toMatchObject({
-      error: {
-        code: "permission_denied",
-        message: "This credential's permissions do not include delete_matter",
-      },
-    });
-  });
+    return item?.type === "text" ? JSON.parse(item.text) : null;
+  };
+
+  test.each(TRANSPORT_NAMES)(
+    "a call by name over %s refuses a write tool the role cannot hold before its handler runs",
+    async (transport) => {
+      expect(
+        await refusalOver({
+          context: mcpContextFor("external"),
+          transport,
+        }),
+      ).toEqual({
+        error: {
+          code: "permission_denied",
+          message: "Your member role does not permit delete_matter",
+        },
+      });
+    },
+  );
+
+  test.each(TRANSPORT_NAMES)(
+    "a call by name over %s names the credential when only its permissions refuse the tool",
+    async (transport) => {
+      expect(
+        await refusalOver({
+          context: asTestRaw<McpRequestContext>({
+            ...mcpContextFor("owner"),
+            credentialPermissions: { workspace: ["read"] },
+          }),
+          transport,
+        }),
+      ).toEqual({
+        error: {
+          code: "permission_denied",
+          message: "This credential's permissions do not include delete_matter",
+          hint: "Your member role allows this tool. Call it with a credential whose permissions include its grant, such as an API key minted with that permission.",
+        },
+      });
+    },
+  );
 });
 
 describe("chat write tools re-read the member's role when they run", () => {

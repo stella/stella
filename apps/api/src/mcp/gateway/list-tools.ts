@@ -24,7 +24,7 @@ import {
 import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
 import {
   hasGrantedScope,
-  isStaticToolVisibleToRole,
+  isStaticToolShownToMemberRole,
   listOfferedStaticMcpToolDefinitions,
 } from "@/api/mcp/gateway/static-tool-visibility";
 import {
@@ -161,7 +161,10 @@ export const getGatewayMcpToolDefinition = async ({
 }): Promise<McpToolDefinition | undefined> => {
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (staticTool) {
-    return isStaticToolVisibleToRole(context, staticTool)
+    // Write authority is not decided here: dispatch refuses it with a
+    // `permission_denied` that names the role or the credential, as it
+    // refuses a gated-off tool with `feature_disabled`.
+    return isStaticToolShownToMemberRole(context, staticTool)
       ? staticTool
       : undefined;
   }
