@@ -261,7 +261,10 @@ const cases: Case[] = [
     expect: { status: "resolved", rule: "sheet-number", target: "sheet" },
   },
   {
-    name: "the printed sheet on one holder's case-number identifier",
+    // A sheet known only from a docket spelling is read by a lookup through
+    // the jurisdiction's grammar; the resolver's SQL leaves it unread, so the
+    // printed sheet singles nothing out.
+    name: "the printed sheet only on one holder's case-number identifier",
     docket: "8 As 1/2020",
     reference: { hints: { sheetNumber: "12" } },
     holders: [
@@ -273,7 +276,7 @@ const cases: Case[] = [
       },
       {},
     ],
-    expect: { status: "resolved", rule: "sheet-number", target: "sheet" },
+    expect: { status: "ambiguous" },
   },
   {
     name: "the printed sheet on another file's case-number identifier",
@@ -310,17 +313,17 @@ const cases: Case[] = [
     expect: { status: "ambiguous" },
   },
   {
-    name: "the printed sheet on one holder's published reference",
+    name: "the printed sheet only on one holder's published reference",
     docket: "8 As 4/2020",
     reference: { hints: { sheetNumber: "21" } },
     holders: [
       { name: "sheet", metadata: { publishedCaseNumber: "8 As 4/2020 - 21" } },
       { metadata: { publishedCaseNumber: "8 As 4/2020 - 22" } },
     ],
-    expect: { status: "resolved", rule: "sheet-number", target: "sheet" },
+    expect: { status: "ambiguous" },
   },
   {
-    name: "the printed sheet on one holder's stored docket",
+    name: "the printed sheet only on one holder's stored docket",
     docket: "8 As 5/2020",
     reference: { hints: { sheetNumber: "7" } },
     holders: [
@@ -331,7 +334,7 @@ const cases: Case[] = [
       },
       {},
     ],
-    expect: { status: "resolved", rule: "sheet-number", target: "sheet" },
+    expect: { status: "ambiguous" },
   },
   {
     // A general court's ECLI ends on the decision's sequence number in its

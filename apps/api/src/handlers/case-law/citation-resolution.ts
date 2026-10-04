@@ -26,9 +26,11 @@
  *   file, and a court can rule in it more than once, so the docket alone
  *   leaves those decisions indistinguishable. The court names the one it
  *   means by the sheet the document sits on — "č. j. 8 As 287/2020-33" —
- *   which a candidate is known to carry from any of its sheet sources
- *   (`DECISION_SHEET_SOURCES`), the same ones a lookup reads. When exactly
- *   one time-valid candidate answers to it, the link goes there.
+ *   which a candidate is known to carry from its recorded sheet or an ECLI
+ *   in a sheet scheme (`SQL_READ_SHEET_SOURCES`), read as a lookup reads
+ *   them. A sheet known only from a docket spelling is left to a lookup.
+ *   When exactly one time-valid candidate answers to it, the link goes
+ *   there.
  * - **The text names the date.** The second adjudication rule, for the
  *   citations that print no sheet: "rozsudek … ze dne 17. 2. 2021, č. j. …".
  *   When exactly one candidate carries that date, the link goes there. Two
@@ -86,16 +88,12 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
-import { DECISION_DASH_CLASS_SOURCE } from "@stll/api-contract/decision-docket-grammar";
 import {
   DECISION_ECLI_SHEET_SCHEMES,
   DECISION_SHEET_SOURCES,
   DECISION_STATED_SHEET_MAX_DIGITS,
 } from "@stll/api-contract/decision-query-intent";
-import type {
-  DecisionSheetReading,
-  DecisionSheetSource,
-} from "@stll/api-contract/decision-query-intent";
+import type { DecisionSheetSource } from "@stll/api-contract/decision-query-intent";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
@@ -106,10 +104,7 @@ import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
 } from "@/api/db/schema";
-import {
-  courtNameKeySql,
-  foldCzechSlovakLettersSql,
-} from "@/api/handlers/case-law/citation-court-hint";
+import { courtNameKeySql } from "@/api/handlers/case-law/citation-court-hint";
 import {
   CITATION_DECISION_TYPE_HINT_FAMILIES,
   CITATION_DECISION_TYPE_HINTS,
@@ -155,37 +150,12 @@ const decisionTypeArray = (types: readonly string[]): SQL =>
 const numeralSql = (digits: SQL): SQL =>
   sql`regexp_replace(${digits}, '^0+(?=[0-9])', '')`;
 
-/**
- * Every dash style a publisher prints, as the hyphen the grammars read. The
- * grammars' own class, which PostgreSQL's regular expressions read alike.
- */
-const foldDashesSql = (text: SQL): SQL =>
-  sql`regexp_replace(${text}, ${`[${DECISION_DASH_CLASS_SOURCE}]`}, '-', 'g')`;
-
-/**
- * A docket's case file as a comparison shape, the same function on both
- * sides: letters folded, every run of letters glued across spacing and
- * punctuation, every run of digits apart (`8 As 287/2020` and the key
- * `8as/287/2020` are both `8 as 287 2020`; `II. ÚS 55/98` and `iiús55/98`
- * are both `iius 55 98`).
- */
-const docketShapeSql = (docket: SQL): SQL => sql`
-  btrim(regexp_replace(regexp_replace(regexp_replace(
-    regexp_replace(${foldCzechSlovakLettersSql(docket)}, '[^a-z0-9]+', ' ', 'g'),
-    '([a-z]) (?=[a-z])', '\\1', 'g'),
-    '([a-z])(?=[0-9])', '\\1 ', 'g'),
-    '([0-9])(?=[a-z])', '\\1 ', 'g'))`;
-
 /** A file key's numbers in order, without leading zeros: `8.287.2020`. */
 const familyNumbersSql = (familyKey: SQL): SQL => sql`
   btrim(regexp_replace(regexp_replace(
     '.' || regexp_replace(${familyKey}, '[^0-9]+', '.', 'g') || '.',
     '\\.0+(?=[0-9])', '.', 'g'),
     '\\.\\.+', '.', 'g'), '.')`;
-
-/** A docket spelling ending on a sheet: the docket, then a dash and the sheet. */
-const SHEET_TAIL_DOCKET_PATTERN = String.raw`^(.*[0-9])\s*-\s*[0-9]{1,4}$`;
-const SHEET_TAIL_SHEET_PATTERN = String.raw`^.*[0-9]\s*-\s*([0-9]{1,4})$`;
 
 const ECLI_SHEET_SCHEMES = Object.keys(DECISION_ECLI_SHEET_SCHEMES);
 
@@ -203,6 +173,92 @@ const ecliLeadingNumbersSql = (ordinal: SQL): SQL => sql`
     '\\.(?=\\.)|\\.[^.]*[^0-9.][^.]*(?=\\.)', '', 'g'),
     '\\.0+(?=[0-9])', '.', 'g')`;
 
+const identifierValuesSql = (
+  holder: SQL,
+  type: DecisionIdentifierType,
+): SQL => sql`
+  SELECT sheet_identifier.value
+    FROM ${caseLawDecisionIdentifiers} sheet_identifier
+   WHERE sheet_identifier.decision_id = ${holder}.id
+     AND sheet_identifier.type = ${type}`;
+
+/**
+ * Whether the resolver's SQL adjudicates a cited sheet from a sheet source.
+ *
+ * - `read`: `values` is where the source is stored on a candidate, as a
+ *   relation of text values, read where a lookup (`readDecisionIdentityHits`)
+ *   reads it.
+ * - `lookup-only`: the source is read by a lookup alone. A docket spelling
+ *   is read there through its jurisdiction's grammar (citation prefixes,
+ *   junk tails, case-sensitive registry marks), which SQL cannot reproduce
+ *   without mirroring the grammar by hand, so a citation is not resolved on
+ *   a sheet known only from one.
+ */
+type SheetSourceSql =
+  | { kind: "read"; values: (holder: SQL) => SQL }
+  | { kind: "lookup-only"; reason: string };
+
+const DOCKET_READ_BY_GRAMMAR =
+  "a docket spelling is read through its jurisdiction's grammar";
+
+/**
+ * Every sheet source's disposition in SQL. Total, so a source added to
+ * `DECISION_SHEET_SOURCES` must be declared read or lookup-only here. The
+ * recorded sheet is the metadata the adapter wrote, never the `sheet_number`
+ * column, which the public reader is not granted.
+ */
+const SHEET_SOURCE_SQL = {
+  "case-number": { kind: "lookup-only", reason: DOCKET_READ_BY_GRAMMAR },
+  "published-case-number": {
+    kind: "lookup-only",
+    reason: DOCKET_READ_BY_GRAMMAR,
+  },
+  "case-number-identifier": {
+    kind: "lookup-only",
+    reason: DOCKET_READ_BY_GRAMMAR,
+  },
+  "recorded-sheet": {
+    kind: "read",
+    values: (holder) => sql`VALUES (${holder}.metadata ->> 'sheetNumber')`,
+  },
+  ecli: {
+    kind: "read",
+    values: (holder) => sql`VALUES (${holder}.ecli::text)`,
+  },
+  "ecli-identifier": {
+    kind: "read",
+    values: (holder) =>
+      identifierValuesSql(holder, DECISION_IDENTIFIER_TYPES.ECLI),
+  },
+} as const satisfies Record<DecisionSheetSource, SheetSourceSql>;
+
+type SqlReadSheetSource = {
+  [
+    TSource in DecisionSheetSource
+  ]: (typeof SHEET_SOURCE_SQL)[TSource]["kind"] extends "read"
+    ? TSource
+    : never;
+}[DecisionSheetSource];
+
+type SqlReadSheetSourceEntry = Extract<
+  (typeof DECISION_SHEET_SOURCES)[number],
+  { source: SqlReadSheetSource }
+>;
+
+const SQL_READ_SHEET_SOURCE_ENTRIES = DECISION_SHEET_SOURCES.filter(
+  (entry): entry is SqlReadSheetSourceEntry =>
+    SHEET_SOURCE_SQL[entry.source].kind === "read",
+);
+
+/**
+ * The sheet sources the resolver's SQL adjudicates from, which a lookup
+ * restricted to them (`resolveDecisionIdentity`'s `sheetSources`) must agree
+ * with.
+ */
+export const SQL_READ_SHEET_SOURCES: ReadonlySet<DecisionSheetSource> = new Set(
+  SQL_READ_SHEET_SOURCE_ENTRIES.map(({ source }) => source),
+);
+
 type CitedSheet = {
   /** The printed sheet, digits only. */
   sheetNumber: SQL;
@@ -211,22 +267,14 @@ type CitedSheet = {
 };
 
 /**
- * `DECISION_SHEET_SOURCES`' readings in SQL, each the predicate that a value
- * carries the cited sheet of the cited file. The function a lookup reads them
- * by is `selectorsOfHit` in `decision-query-intent.ts`;
+ * The readings of the sources SQL reads, each the predicate that a value
+ * carries the cited sheet of the cited file. Total over exactly those
+ * readings, so declaring a docket source `read` fails typecheck until a
+ * docket reading exists here. The function a lookup reads them by is
+ * `selectorsOfHit` in `decision-query-intent.ts`;
  * `citation-sheet-sources.db.test.ts` holds the two to one answer.
  */
 const SHEET_READING_SQL = {
-  // A trailing number after a dash, on a spelling of this file and no other.
-  docket: (value, { familyKey, sheetNumber }) => {
-    const folded = sql`btrim(${foldDashesSql(value)})`;
-    return sql`(
-          ${numeralSql(sql`substring(${folded} from ${SHEET_TAIL_SHEET_PATTERN})`)}
-            = ${numeralSql(sheetNumber)}
-      AND ${docketShapeSql(sql`substring(${folded} from ${SHEET_TAIL_DOCKET_PATTERN})`)}
-            = ${docketShapeSql(familyKey)}
-    )`;
-  },
   // The segment after this file's own numbers, in a scheme that puts the
   // sheet there (`ecliSheetOf`).
   ecli: (value, { familyKey, sheetNumber }) => {
@@ -250,44 +298,15 @@ const SHEET_READING_SQL = {
     AND ${numeralSql(sql`btrim(${value})`)} = ${numeralSql(sheetNumber)}
   )`,
 } as const satisfies Record<
-  DecisionSheetReading,
+  SqlReadSheetSourceEntry["reading"],
   (value: SQL, cited: CitedSheet) => SQL
 >;
-
-const identifierValuesSql = (
-  holder: SQL,
-  type: DecisionIdentifierType,
-): SQL => sql`
-  SELECT sheet_identifier.value
-    FROM ${caseLawDecisionIdentifiers} sheet_identifier
-   WHERE sheet_identifier.decision_id = ${holder}.id
-     AND sheet_identifier.type = ${type}`;
-
-/**
- * Where each sheet source is stored on a candidate, as a relation of text
- * values. Each is read where a lookup (`readDecisionIdentityHits`) reads it,
- * so a citation resolves only on what a lookup of the same reference sees:
- * the recorded sheet is the metadata the adapter wrote, never the
- * `sheet_number` column, which the public reader is not granted.
- */
-const HOLDER_SHEET_SOURCE_VALUES_SQL = {
-  "case-number": (holder) => sql`VALUES (${holder}.case_number::text)`,
-  "published-case-number": (holder) =>
-    sql`VALUES (${holder}.metadata ->> 'publishedCaseNumber')`,
-  "case-number-identifier": (holder) =>
-    identifierValuesSql(holder, DECISION_IDENTIFIER_TYPES.CASE_NUMBER),
-  "recorded-sheet": (holder) =>
-    sql`VALUES (${holder}.metadata ->> 'sheetNumber')`,
-  ecli: (holder) => sql`VALUES (${holder}.ecli::text)`,
-  "ecli-identifier": (holder) =>
-    identifierValuesSql(holder, DECISION_IDENTIFIER_TYPES.ECLI),
-} as const satisfies Record<DecisionSheetSource, (holder: SQL) => SQL>;
 
 /**
  * The candidate columns `holderAnswersSheetSql` reads, which every relation
  * it is applied to must carry.
  */
-const HOLDER_SHEET_COLUMNS = ["case_number", "metadata"] as const;
+const HOLDER_SHEET_COLUMNS = ["metadata"] as const;
 
 const holderSheetColumnsSql = (holder: SQL): SQL =>
   sql.join(
@@ -302,10 +321,12 @@ type HolderAnswersSheetSqlOptions = CitedSheet & {
 
 /**
  * A candidate that answers to the sheet the citing text printed, known from
- * any of `DECISION_SHEET_SOURCES`, so a citation resolves as a lookup of the
- * same reference does. The court prints the sheet the document sits on
- * ("č. j. 8 As 287/2020-33"), and a publisher states it on whichever of
- * those it uses. The sheet travels as a bind parameter, never as a pattern.
+ * a sheet source SQL reads (`SQL_READ_SHEET_SOURCES`): the recorded sheet or
+ * an ECLI in a sheet scheme. The court prints the sheet the document sits on
+ * ("č. j. 8 As 287/2020-33"); a sheet known only from a docket spelling is
+ * left to a lookup, so such a citation stays unresolved rather than resolved
+ * by a reading that disagrees with the lookup's. The sheet travels as a bind
+ * parameter, never as a pattern.
  */
 export const holderAnswersSheetSql = ({
   holder,
@@ -316,10 +337,10 @@ export const holderAnswersSheetSql = ({
   return sql`(
     ${sheetNumber} IS NOT NULL
     AND (${sql.join(
-      DECISION_SHEET_SOURCES.map(
+      SQL_READ_SHEET_SOURCE_ENTRIES.map(
         ({ source, reading }) => sql`EXISTS (
           SELECT 1
-            FROM (${HOLDER_SHEET_SOURCE_VALUES_SQL[source](holder)}) AS sheet_source(value)
+            FROM (${SHEET_SOURCE_SQL[source].values(holder)}) AS sheet_source(value)
            WHERE ${SHEET_READING_SQL[reading](value, { sheetNumber, familyKey })}
         )`,
       ),

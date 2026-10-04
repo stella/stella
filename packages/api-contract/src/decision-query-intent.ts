@@ -626,10 +626,11 @@ export type DecisionSheetReading = "docket" | "ecli" | "stated";
 
 /**
  * Every place a decision's sheet can be known from, and how each is read.
- * Which of these carries the sheet never changes which decision a reference
- * names, so a lookup (`resolveDecisionIdentity`) and the citation resolver's
- * SQL each map over this one list with a total map of their own: a source
- * added here without a reader on either side fails typecheck.
+ * Which of these carries the sheet never changes which decision a lookup
+ * (`resolveDecisionIdentity`) says a reference names. The citation
+ * resolver's SQL maps this one list with a total map of its own, declaring
+ * per source whether it reads it, so a source added here without a decision
+ * on either side fails typecheck.
  *
  * - `case-number`: the stored docket, which keeps a sheet the row was
  *   written with (`DECISION_DOCKETS_STORED_WITH_SHEETS`).
@@ -727,16 +728,20 @@ type CarriedSelectors = { sheets: Set<string>; parts: Set<string> };
 
 /**
  * Every selector a hit is known to carry within the file, read from each of
- * `DECISION_SHEET_SOURCES`. A docket spelling of another file carries none of
- * this one's.
+ * `DECISION_SHEET_SOURCES` in `sources` (all of them when absent). A docket
+ * spelling of another file carries none of this one's.
  */
 const selectorsOfHit = (
   hit: DecisionHitIdentity,
   context: SheetReadingContext,
+  sources: ReadonlySet<DecisionSheetSource> | undefined,
 ): CarriedSelectors => {
   const sheets = new Set<string>();
   const parts = new Set<string>();
   for (const { source, reading } of DECISION_SHEET_SOURCES) {
+    if (sources !== undefined && !sources.has(source)) {
+      continue;
+    }
     for (const value of HIT_SHEET_SOURCE_VALUES[source](hit)) {
       const selector = SHEET_READINGS[reading](value, context, hit);
       switch (selector.kind) {
@@ -777,10 +782,19 @@ const resolvedAmong = <THit>(
  * file; a sheet or part narrows it to the decision known to carry that
  * selector, and to nothing arbitrary when none is.
  */
+type ResolveDecisionIdentityOptions = ExactDecisionMatchesOptions & {
+  /**
+   * The sheet sources a selector is read from; every one when absent. A
+   * reader that adjudicates sheets from only some of them (the citation
+   * resolver's SQL) is held to the answer a lookup gives over the same ones.
+   */
+  readonly sheetSources?: ReadonlySet<DecisionSheetSource> | undefined;
+};
+
 export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
   identifier: DecisionIdentifierIntent,
   hits: readonly THit[],
-  options: ExactDecisionMatchesOptions = {},
+  options: ResolveDecisionIdentityOptions = {},
 ): DecisionIdentityResolution<THit> => {
   const family = exactDecisionMatches(identifier, hits, options);
   if (identifier.kind !== "docket") {
@@ -813,7 +827,11 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
     grammar,
   );
   const known = family.map((hit) => {
-    const { parts, sheets } = selectorsOfHit(hit, { familyCanonical, grammar });
+    const { parts, sheets } = selectorsOfHit(
+      hit,
+      { familyCanonical, grammar },
+      options.sheetSources,
+    );
     return { hit, carried: selector.kind === "sheet" ? sheets : parts };
   });
   const selected = known

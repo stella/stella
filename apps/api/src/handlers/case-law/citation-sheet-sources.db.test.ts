@@ -1,18 +1,19 @@
 /**
  * A decision's sheet is known from any of `DECISION_SHEET_SOURCES`, and
- * which of them carries it never changes which decision a reference names.
- * The citation resolver reads the sources in SQL (`holderAnswersSheetSql`) and
- * a lookup reads them in TypeScript (`resolveDecisionIdentity`) over the rows
- * `readDecisionIdentityHits` returns as the public reader; each maps the one
- * declared list with a total map of its own, and this file holds the two
- * readings to one answer.
+ * which of them carries it never changes which decision a lookup says a
+ * reference names. The citation resolver's SQL (`holderAnswersSheetSql`)
+ * adjudicates from the sources it reads like a lookup
+ * (`SQL_READ_SHEET_SOURCES`) and leaves docket spellings, which only a
+ * jurisdiction's grammar reads, to the lookup (`resolveDecisionIdentity`,
+ * over the rows `readDecisionIdentityHits` returns as the public reader).
  *
  * Decisions are written with sheets in random sources, of this file and of
- * another, in every dash style and storage, and the set of decisions the SQL
- * admits for a printed sheet must be the set the lookup says carries it. The
- * lookup reads the rows as production does, so a sheet stored where the
- * public reader cannot see it (the `sheet_number` column) must not be
- * admitted by the SQL either.
+ * another, in every dash style, letter case, separator, prefix and storage,
+ * and the set of decisions the SQL admits for a printed sheet must be the
+ * set a lookup reading the same sources says carries it. A sheet stored
+ * where the public reader cannot see it (the `sheet_number` column) is
+ * admitted by neither, and one known only from a docket spelling is seen by
+ * the lookup alone.
  */
 
 import { panic } from "better-result";
@@ -37,7 +38,10 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
-import { holderAnswersSheetSql } from "@/api/handlers/case-law/citation-resolution";
+import {
+  holderAnswersSheetSql,
+  SQL_READ_SHEET_SOURCES,
+} from "@/api/handlers/case-law/citation-resolution";
 import { readDecisionIdentityHits } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import {
   bareCitationKey,
@@ -52,15 +56,33 @@ import {
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
 
-/** Files whose dockets and ECLIs the decisions are spelled from. */
+/**
+ * Files whose dockets and ECLIs the decisions are spelled from: senate forms,
+ * whose registry mark the grammar reads in any case, and letter-first ones,
+ * which it reads only in title case.
+ */
 const FILES = [
   "8 As 287/2020",
   "65 A 3/2025",
   "1 Az 4/2026",
   "II. ÚS 55/98",
+  "Nad 224/2014",
+  "Konf 4/2011",
 ] as const;
 
-type FileIndex = 0 | 1 | 2 | 3;
+/**
+ * How a docket's file is spelled: as the court writes it, in another letter
+ * case, with the slash as a space, or with its spaces as dashes.
+ */
+const DOCKET_FORMS = [
+  "as-written",
+  "lowercase",
+  "uppercase",
+  "slash-as-space",
+  "dash-joined",
+] as const;
+
+type DocketForm = (typeof DOCKET_FORMS)[number];
 
 /** The sheet a value carries: the printed one, or another number. */
 type SheetPick = { kind: "cited" } | { kind: "other"; value: number };
@@ -68,10 +90,15 @@ type SheetPick = { kind: "cited" } | { kind: "other"; value: number };
 type DocketSpelling = {
   /** This file, or the next one in `FILES`. */
   file: "own" | "other";
+  form: DocketForm;
+  /** A citation label before the docket. */
+  prefix: "" | "č. j. ";
   tail:
     | { kind: "none" }
     | { kind: "part" }
     | { kind: "sheet"; sheet: SheetPick; dash: string; zero: boolean };
+  /** Punctuation a publisher leaves after the reference. */
+  trailing: "" | ".";
 };
 
 type EcliSpelling = {
@@ -98,7 +125,8 @@ type DecisionSpec = {
 };
 
 type Scenario = {
-  file: FileIndex;
+  /** The cited file's index in `FILES`. */
+  file: number;
   cited: { value: number; zero: boolean };
   decisions: DecisionSpec[];
 };
@@ -112,6 +140,9 @@ const sheetPickArb: fc.Arbitrary<SheetPick> = fc.oneof(
 
 const docketSpellingArb: fc.Arbitrary<DocketSpelling> = fc.record({
   file: fc.constantFrom("own", "other"),
+  form: fc.constantFrom(...DOCKET_FORMS),
+  prefix: fc.constantFrom("", "č. j. "),
+  trailing: fc.constantFrom("", "."),
   tail: fc.oneof(
     fc.constant({ kind: "none" } as const),
     fc.constant({ kind: "part" } as const),
@@ -147,7 +178,7 @@ const decisionSpecArb: fc.Arbitrary<DecisionSpec> = fc.record({
 });
 
 const scenarioArb: fc.Arbitrary<Scenario> = fc.record({
-  file: fc.constantFrom<FileIndex>(0, 1, 2, 3),
+  file: fc.nat({ max: FILES.length - 1 }),
   // The extractor reads at most four digits after the docket.
   cited: fc.record({
     value: fc.integer({ min: 1, max: 999 }),
@@ -163,22 +194,45 @@ const fileOf = (scenario: Scenario, which: "own" | "other"): string =>
 const sheetValueOf = (scenario: Scenario, pick: SheetPick): number =>
   pick.kind === "cited" ? scenario.cited.value : pick.value;
 
-const docketOf = (scenario: Scenario, spelling: DocketSpelling): string => {
-  const docket = fileOf(scenario, spelling.file);
+const formedDocketOf = (file: string, form: DocketForm): string => {
+  switch (form) {
+    case "as-written":
+      return file;
+    case "lowercase":
+      return file.toLowerCase();
+    case "uppercase":
+      return file.toUpperCase();
+    case "slash-as-space":
+      return file.replace("/", " ");
+    case "dash-joined":
+      return file.replaceAll(" ", "-");
+    default: {
+      form satisfies never;
+      return panic("Unhandled docket form");
+    }
+  }
+};
+
+const docketTailOf = (scenario: Scenario, spelling: DocketSpelling): string => {
   switch (spelling.tail.kind) {
     case "none":
-      return docket;
+      return "";
     case "part":
-      return `${docket} - II.`;
+      return " - II.";
     case "sheet": {
       const { dash, sheet, zero } = spelling.tail;
-      return `${docket}${dash}${zero ? "0" : ""}${String(sheetValueOf(scenario, sheet))}`;
+      return `${dash}${zero ? "0" : ""}${String(sheetValueOf(scenario, sheet))}`;
     }
     default: {
       spelling.tail satisfies never;
       return panic("Unhandled docket tail");
     }
   }
+};
+
+const docketOf = (scenario: Scenario, spelling: DocketSpelling): string => {
+  const docket = formedDocketOf(fileOf(scenario, spelling.file), spelling.form);
+  return `${spelling.prefix}${docket}${docketTailOf(scenario, spelling)}${spelling.trailing}`;
 };
 
 /** The ECLI ordinal a court of the scheme gives a file's document. */
@@ -265,7 +319,13 @@ const writtenDecisionOf = (
       identifierRow(DECISION_IDENTIFIER_TYPES.ECLI, ecliOf(scenario, spelling)),
     ),
   ]) {
-    identifiers.set(JSON.stringify([row.type, row.normalizedValue]), row);
+    // One row per normalized value, as the table's key allows; the first
+    // kept, so the file's bare docket is never displaced by a spelling that
+    // normalizes alike.
+    const key = JSON.stringify([row.type, row.normalizedValue]);
+    if (!identifiers.has(key)) {
+      identifiers.set(key, row);
+    }
   }
   const metadata = {
     ...(published === null ? {} : { publishedCaseNumber: published }),
@@ -335,10 +395,14 @@ const readAsLookup = async (written: readonly WrittenDecision[]) =>
     );
   });
 
-/** The decisions a lookup of the printed reference says carry its sheet. */
+/**
+ * The decisions a lookup of the printed reference says carry its sheet, read
+ * from `sheetSources` (every source when absent).
+ */
 const carriedByLookup = async (
   scenario: Scenario,
   written: readonly WrittenDecision[],
+  sheetSources?: ReadonlySet<DecisionSheetSource>,
 ): Promise<string[]> => {
   const intent = parseDecisionQuery(
     `${fileOf(scenario, "own")}-${citedSheetOf(scenario)}`,
@@ -355,7 +419,7 @@ const carriedByLookup = async (
   if (hits.length !== written.length) {
     return panic("the public reader must see every written decision");
   }
-  const resolution = resolveDecisionIdentity(intent, hits);
+  const resolution = resolveDecisionIdentity(intent, hits, { sheetSources });
   switch (resolution.status) {
     case "none":
       return panic("every written decision holds the file's docket");
@@ -403,7 +467,13 @@ afterAll(async () => {
   await client.close();
 });
 
-const BARE: DocketSpelling = { file: "own", tail: { kind: "none" } };
+const BARE: DocketSpelling = {
+  file: "own",
+  form: "as-written",
+  prefix: "",
+  tail: { kind: "none" },
+  trailing: "",
+};
 const CITED: SheetPick = { kind: "cited" };
 const NOTHING_ELSE: DecisionSpec = {
   caseNumber: BARE,
@@ -414,7 +484,7 @@ const NOTHING_ELSE: DecisionSpec = {
   ecliIdentifiers: [],
 };
 const CITED_DOCKET: DocketSpelling = {
-  file: "own",
+  ...BARE,
   tail: { kind: "sheet", sheet: CITED, dash: " - ", zero: false },
 };
 const CITED_ECLI: EcliSpelling = {
@@ -442,8 +512,11 @@ const SINGLE_SOURCE_DECISIONS = {
   "ecli-identifier": { ...NOTHING_ELSE, ecliIdentifiers: [CITED_ECLI] },
 } as const satisfies Record<DecisionSheetSource, DecisionSpec>;
 
+const PROPERTY =
+  "the resolver's SQL admits exactly the decisions a lookup of the sources it reads says carry the printed sheet";
+
 describe("a decision's sheet from any source", () => {
-  test("each source alone carries the printed sheet for both readers", async () => {
+  test("a lookup sees each source alone carry the printed sheet, and SQL each source it reads", async () => {
     const scenario: Scenario = {
       file: 0,
       cited: { value: 33, zero: false },
@@ -458,30 +531,40 @@ describe("a decision's sheet from any source", () => {
       ]);
       const carrier =
         written.at(0)?.id ?? panic(`no decision written for ${source}`);
+      // A docket-sourced sheet is the lookup's alone: SQL leaves it unread
+      // rather than read it unlike the grammar does.
+      const readInSql = SQL_READ_SHEET_SOURCES.has(source);
       expect({
         source,
         admitted: await admittedBySql(scenario, written),
-      }).toEqual({ source, admitted: [carrier] });
-      expect({
-        source,
         carried: await carriedByLookup(scenario, written),
       }).toEqual({
         source,
+        admitted: readInSql ? [carrier] : [],
         carried: [carrier],
       });
     }
   });
 
   test(
-    "the resolver's SQL admits exactly the decisions a lookup says carry the printed sheet",
+    PROPERTY,
     async () => {
       await assertProperty(
-        "the resolver's SQL admits exactly the decisions a lookup says carry the printed sheet",
+        PROPERTY,
         fc.asyncProperty(scenarioArb, async (scenario) => {
           const written = await writeScenario(scenario, scenario.decisions);
           const admitted = await admittedBySql(scenario, written);
-          const carried = await carriedByLookup(scenario, written);
+          const carried = await carriedByLookup(
+            scenario,
+            written,
+            SQL_READ_SHEET_SOURCES,
+          );
           expect(admitted.toSorted()).toEqual(carried.toSorted());
+          // Reading fewer sources only ever leaves a carrier unseen.
+          const carriedByAny = await carriedByLookup(scenario, written);
+          expect(admitted.filter((id) => !carriedByAny.includes(id))).toEqual(
+            [],
+          );
         }),
         { numRuns: 150 },
       );

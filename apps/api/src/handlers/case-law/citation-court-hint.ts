@@ -86,15 +86,6 @@ export const detectCitationCourtHint = (
 };
 
 /**
- * Text lowercased with its Czech and Slovak diacritics stripped, by a fixed
- * table rather than the database's locale, so every server folds alike.
- */
-export const foldCzechSlovakLettersSql = (text: SQL): SQL => sql`
-  lower(translate(${text},
-    'áäčďéěíĺľňóôöřšťúůüýžÁÄČĎÉĚÍĹĽŇÓÔÖŘŠŤÚŮÜÝŽ',
-    'aacdeeillnooorstuuuyzaacdeeillnooorstuuuyz'))`;
-
-/**
  * One court name as a comparison key, in SQL so the hint from the text and
  * the court stored on a candidate are folded the same way in the same
  * statement.
@@ -110,7 +101,9 @@ export const foldCzechSlovakLettersSql = (text: SQL): SQL => sql`
 export const courtNameKeySql = (name: SQL): SQL => sql`
   regexp_replace(
     regexp_replace(
-      ${foldCzechSlovakLettersSql(name)},
+      lower(translate(${name},
+        'áäčďéěíĺľňóôöřšťúůüýžÁÄČĎÉĚÍĹĽŇÓÔÖŘŠŤÚŮÜÝŽ',
+        'aacdeeillnooorstuuuyzaacdeeillnooorstuuuyz')),
       '(ieho|ého|eho|iho|ému|emu|ymi|ych|ich|ou|em|om|u|y|i|e|a|o)\\M',
       '',
       'g'
