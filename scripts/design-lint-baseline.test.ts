@@ -22,6 +22,7 @@ const backlog = (
   "require-bounded-request-schema/require-bounded-request-schema": {},
   "no-unbounded-response-body/no-unbounded-response-body": {},
   "no-computed-key-record-assignment/no-computed-key-record-assignment": {},
+  "no-direct-status-set/no-direct-status-set": {},
   "eslint/complexity": {},
   "eslint/max-lines-per-function": {},
   "eslint/max-params": {},
@@ -108,6 +109,10 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
       "no-computed-key-record-assignment(no-computed-key-record-assignment)",
       "no-computed-key-record-assignment/no-computed-key-record-assignment",
     ],
+    [
+      "no-direct-status-set(no-direct-status-set)",
+      "no-direct-status-set/no-direct-status-set",
+    ],
     ["eslint(complexity)", "eslint/complexity"],
     ["eslint(max-lines-per-function)", "eslint/max-lines-per-function"],
     ["eslint(max-params)", "eslint/max-params"],
@@ -119,6 +124,7 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
     "require-bounded-request-schema",
     "no-unbounded-response-body",
     "no-computed-key-record-assignment",
+    "no-direct-status-set",
     "eslint",
   ]);
   expect(DESIGN_LINT_RULE_BY_DIAGNOSTIC_CODE.size).toBe(
