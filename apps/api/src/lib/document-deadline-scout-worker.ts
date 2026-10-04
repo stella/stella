@@ -25,7 +25,9 @@ export const initDocumentDeadlineScoutWorker = ({
       await runDocumentDeadlineScout({ db, sourceRunId: data.sourceRunId });
     },
     {
-      connection: createBullMqConnection(),
+      connection: createBullMqConnection({
+        storeClass: "durable-coordination",
+      }),
       concurrency: DEADLINE_SCOUT_WORKER_CONCURRENCY,
     },
   );

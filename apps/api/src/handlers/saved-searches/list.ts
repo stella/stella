@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
 
 import { savedSearches } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -16,6 +16,7 @@ import { savedSearchListQuerySchema } from "./schema";
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "search_ui" },
   query: savedSearchListQuerySchema,

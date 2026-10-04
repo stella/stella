@@ -71,6 +71,7 @@ import type {
 } from "@/api/mcp/tool-types";
 
 import { RESERVED_FLAGS } from "../../../packages/cli/src/annotations";
+import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
 import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
 import { uploadCommand } from "../../../packages/cli/src/commands/upload";
 import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
@@ -119,11 +120,6 @@ const REGISTRY_SNAPSHOT_PATH = path.join(
   import.meta.dir,
   "../../../packages/cli/src/generated/registry-snapshot.json",
 );
-const CAPABILITY_CATALOG_PATH = path.join(
-  import.meta.dir,
-  "../../../packages/cli/capability-catalog.json",
-);
-
 /**
  * Project raw JSON into `RegistryToolListing[]`, guard by guard (no cast):
  * the snapshot is committed, trusted data, but its shape still comes from
@@ -156,13 +152,11 @@ const parseRegistryListings = (raw: unknown): RegistryToolListing[] => {
 };
 
 const loadCapabilityCatalog = () => {
-  const catalogRaw: unknown = JSON.parse(
-    readFileSync(CAPABILITY_CATALOG_PATH, "utf-8"),
-  );
+  const catalogRaw = readCapabilityCatalog();
   const entries = parseCapabilityCatalog(catalogRaw);
   if (entries === null) {
     return panic(
-      "agent-orientation eval: capability-catalog.json failed parseCapabilityCatalog",
+      "agent-orientation eval: capability catalog shards failed parseCapabilityCatalog",
     );
   }
   return entries;
@@ -2565,22 +2559,28 @@ const renderReport = (runs: readonly RunRecord[]): string => {
 const resolveModels = async (
   modelIds: readonly string[],
 ): Promise<{ id: string; model: ResolvedTanStackTextModel }[]> => {
-  const { getTanStackTextModelById, hasTanStackInstanceProvider } =
+  const { resolveTanStackTextModel } =
+    await import("@/api/lib/tanstack-ai-generate");
+  const { hasTanStackInstanceProvider } =
     await import("@/api/lib/tanstack-ai-models");
   if (!hasTanStackInstanceProvider()) {
     return panic(
       "No instance AI provider is configured; set a provider key in .env",
     );
   }
-  return modelIds.map((id) => ({
-    id,
-    model: getTanStackTextModelById(id, null, {
-      dataClass: "customer",
-      managedAIResidency: "eu",
-      role: "chat",
-      organizationId: null,
-    }),
-  }));
+  return await Promise.all(
+    modelIds.map(async (id) => ({
+      id,
+      model: await resolveTanStackTextModel({
+        modelId: id,
+        orgAIConfig: null,
+        dataClass: "customer",
+        managedAIResidency: "eu",
+        role: "chat",
+        organizationId: null,
+      }),
+    })),
+  );
 };
 
 const main = async () => {

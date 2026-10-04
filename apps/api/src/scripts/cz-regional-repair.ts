@@ -4,13 +4,10 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { Temporal } from "@stll/time";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import type {
-  CzRegionalApiItem,
-  CzRegionalDayPage,
-} from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
+import type { CzRegionalDayPage } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import {
   buildCzRegionalDecision,
-  isCzRegionalApiItem,
+  czRegionalListingIdentity,
   listCzRegionalDayPage,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -181,15 +178,14 @@ if (itemsFilePath !== null && !apply) {
   process.exit(1);
 }
 
-const isCzRegionalItemArray = (value: unknown): value is CzRegionalApiItem[] =>
-  Array.isArray(value) && value.every(isCzRegionalApiItem);
+const isCzRegionalItemArray = (value: unknown): value is unknown[] =>
+  Array.isArray(value);
 
-// Read and validated here, before the lease: a malformed entry deep in the
-// file would otherwise burn the consecutive-failure budget mid-run and could
-// halt a valid recovery.
+// Keep raw members: the adapter reads their identity independently of metadata
+// shape and retains identifiable members for a later document retry.
 const supplied = await (async (): Promise<{
   path: string;
-  items: CzRegionalApiItem[];
+  items: unknown[];
 } | null> => {
   if (itemsFilePath === null) {
     return null;
@@ -302,7 +298,7 @@ const selectHeldCaseNumbers = async (
 };
 
 const heldIdentities = async (
-  items: readonly CzRegionalApiItem[],
+  items: readonly unknown[],
 ): Promise<CzRegionalHeldIdentities> => {
   const { documentIds, caseNumbers } = czRegionalListingKeys(items);
   const [heldDocumentIds, heldCaseNumbers] = await Promise.all([
@@ -321,7 +317,7 @@ const heldIdentities = async (
  * than one lookup may name.
  */
 const heldIdentitiesChunked = async (
-  items: readonly CzRegionalApiItem[],
+  items: readonly unknown[],
 ): Promise<CzRegionalHeldIdentities> => {
   const documentIds = new Set<string>();
   const caseNumbers = new Set<string>();
@@ -350,10 +346,10 @@ const INGEST_OUTCOMES = {
 type IngestOutcome = (typeof INGEST_OUTCOMES)[keyof typeof INGEST_OUTCOMES];
 
 const ingestItem = async (
-  item: CzRegionalApiItem,
+  item: unknown,
   lease: CaseLawSourceIngestionLease,
 ): Promise<IngestOutcome> => {
-  const docket = item.jednaciCislo ?? "(no docket)";
+  const docket = JSON.stringify(czRegionalListingIdentity(item));
   try {
     const built = await buildCzRegionalDecision(
       item,
@@ -444,8 +440,8 @@ const counts = {
   retryable: 0,
 };
 const reportDays: CzRegionalRepairDay[] = [];
-const missingItems: CzRegionalApiItem[] = [];
-const failedItems: CzRegionalApiItem[] = [];
+const missingItems: unknown[] = [];
+const failedItems: unknown[] = [];
 let consecutiveFailures = 0;
 let halt: Halt | null = null;
 /** Whether a listing request has already gone out, so the pause has an "each subsequent" to apply to. */
@@ -477,7 +473,7 @@ const stopReason = (): Halt | null => {
   return null;
 };
 
-const recordOutcome = (item: CzRegionalApiItem, outcome: IngestOutcome) => {
+const recordOutcome = (item: unknown, outcome: IngestOutcome) => {
   counts.processed += 1;
   switch (outcome) {
     case INGEST_OUTCOMES.WRITTEN:

@@ -13,7 +13,8 @@ import {
   statuteCitationCaseCount,
   statuteCitationCountStateJoin,
 } from "@/api/handlers/legislation/citation-count";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { projectStatuteReader } from "@/api/handlers/legislation/reader-response";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -124,7 +125,7 @@ export const readPublicLegislationHandler = async (
         step: "readLegislation.corpusText",
       });
 
-  return { ...rest, documentAst, fulltext };
+  return projectStatuteReader({ ...rest, documentAst, fulltext });
 };
 
 const config = {
@@ -136,6 +137,7 @@ const config = {
     "is null otherwise. Only documents from sources cleared for " +
     "redistribution are returned; anything else reads as not found.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "read_statute" },
   access: "read",
   params: t.Object({ documentId: tSafeId("legislationDocument") }),

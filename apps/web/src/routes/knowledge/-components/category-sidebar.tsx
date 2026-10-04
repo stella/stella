@@ -37,12 +37,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@stll/ui/menu";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import type { ToAPIErrorProps } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 // ── Types ────────────────────────────────────────────
 
@@ -85,9 +86,7 @@ export const useCategoryOps = ({
 }: CategoryApiOptions): CategoryOps => {
   const t = useTranslations();
   const reportFailure = (title: string, error: ToAPIErrorProps) => {
-    stellaToast.add({
-      type: "error",
-      title,
+    notifyUserError(toAPIError(error), title, {
       description: userErrorMessage(error, t("common.unexpectedError")),
     });
   };

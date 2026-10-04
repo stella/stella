@@ -115,8 +115,11 @@ describe("the outage under test", () => {
     expect(envBase.REDIS_URL).toBe(UNREACHABLE_REDIS_URL);
 
     const client = createRedisClient({
-      connectionTimeout: 500,
-      enableOfflineQueue: false,
+      storeClass: "cache",
+      overrides: {
+        connectionTimeout: 500,
+        enableOfflineQueue: false,
+      },
     });
     const result = await settle(client.send("PING", []));
     expect(result.status).toBe("error");

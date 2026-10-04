@@ -70,6 +70,50 @@ describe("queued action admission", () => {
     }
   });
 
+  test("defers a daily refusal until its budget resets, not by the capped backoff", async () => {
+    const nowMs = Date.UTC(2026, 0, 15, 9);
+    const retryAtMs = Date.UTC(2026, 0, 16);
+    for (const random of [0, 0.5, 0.999]) {
+      let ran = false;
+      const delays: number[] = [];
+      const operation = runBackgroundJob({
+        actionKind: BACKGROUND_ACTION_KIND.extraction,
+        organizationId,
+        userId,
+        job: {
+          attemptsStarted: 1,
+          moveToDelayed: async (timestamp) => {
+            delays.push(timestamp);
+          },
+        },
+        signal: new AbortController().signal,
+        now: () => nowMs,
+        random: () => random,
+        admission: async () =>
+          Result.err(
+            new ActionAdmissionError({
+              message: "Daily action limit reached",
+              reason: "daily_exhausted",
+              retryAtMs,
+            }),
+          ),
+        run: async () => {
+          ran = true;
+        },
+      });
+
+      expect(await operation.catch((error: unknown) => error)).toBeInstanceOf(
+        DelayedError,
+      );
+      expect(ran).toBe(false);
+      const delayedUntil = delays.at(0) ?? 0;
+      expect(delays).toHaveLength(1);
+      expect(delayedUntil).toBeGreaterThanOrEqual(retryAtMs);
+      // Resumption spreads over one initial backoff (10 s) after the reset.
+      expect(delayedUntil).toBeLessThan(retryAtMs + 10_000);
+    }
+  });
+
   test("propagates lease loss after execution starts without delaying the job", async () => {
     let renew = (): void => {
       throw new Error("Expected lease renewal to be scheduled");

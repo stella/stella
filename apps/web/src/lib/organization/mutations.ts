@@ -7,7 +7,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import type { Role } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { organizationKeys } from "@/lib/organization/queries";
 
 export const useRemoveMember = () => {
@@ -22,13 +22,10 @@ export const useRemoveMember = () => {
       });
 
       if (result.error) {
-        stellaToast.add({
-          title: userErrorFromThrown(
-            toAuthClientError(result.error),
-            t("errors.actionFailed"),
-          ),
-          type: "error",
-        });
+        notifyUserError(
+          toAuthClientError(result.error),
+          t("errors.actionFailed"),
+        );
         throw toAuthClientError(result.error);
       }
 
@@ -92,13 +89,10 @@ export const useCancelInvitation = () => {
       });
 
       if (result.error) {
-        stellaToast.add({
-          title: userErrorFromThrown(
-            toAuthClientError(result.error),
-            t("errors.actionFailed"),
-          ),
-          type: "error",
-        });
+        notifyUserError(
+          toAuthClientError(result.error),
+          t("errors.actionFailed"),
+        );
         throw toAuthClientError(result.error);
       }
 
@@ -113,6 +107,34 @@ export const useCancelInvitation = () => {
     },
     onError: (error) => {
       analytics.captureError(error);
+    },
+  });
+};
+
+export const useUpdateMemberRole = (memberId: string) => {
+  const t = useTranslations();
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (role: Role) => {
+      const result = await authClient.organization.updateMemberRole({
+        memberId,
+        role,
+      });
+
+      if (result.error) {
+        analytics.captureError(toAuthClientError(result.error));
+        notifyUserError(
+          toAuthClientError(result.error),
+          t("errors.actionFailed"),
+        );
+        throw toAuthClientError(result.error);
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: organizationKeys.all });
+      stellaToast.add({ title: t("success.roleUpdated"), type: "success" });
     },
   });
 };

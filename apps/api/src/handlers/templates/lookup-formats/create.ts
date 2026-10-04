@@ -6,7 +6,7 @@ import {
   FORMAT_LIMITS,
   toResponse,
 } from "@/api/handlers/templates/lookup-formats/projection";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
@@ -16,6 +16,7 @@ const config = {
   description:
     "Save a reusable company specification format for colleagues in the active organization.",
   permissions: { template: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

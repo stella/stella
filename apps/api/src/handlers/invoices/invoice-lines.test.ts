@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { INVOICE_ATTACHMENT } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 
@@ -106,6 +107,7 @@ describe("readInvoiceDocumentLines", () => {
           rateAtEntry: cents(200_000),
           narrative: "Already lined",
           invoiceNarrative: null,
+          invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
         },
         {
           id: timeEntryId,
@@ -113,6 +115,7 @@ describe("readInvoiceDocumentLines", () => {
           rateAtEntry: cents(300_000),
           narrative: "Hearing",
           invoiceNarrative: null,
+          invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
         },
       ],
       expenses: [

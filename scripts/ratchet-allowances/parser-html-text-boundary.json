@@ -1,0 +1,5 @@
+{
+  "metric": "lib-to-handler-imports",
+  "delta": 1,
+  "reason": "The HTML AST validator replaces duplicated exclusion logic with the shared HTML text owner under handlers/case-law/ingestion/parsers/shared-inlines.ts. Moving that owner into lib/legal-search/parsers would require a coordinated relocation of existing parser consumers; this change adds exactly one validator-to-owner import."
+}

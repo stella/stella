@@ -88,7 +88,7 @@ const REPAIR_TAIL_SQL = `
 `;
 
 const readBatchBoundary = async (
-  connection: OnlineMigrationConnection,
+  connection: Pick<OnlineMigrationConnection, "query">,
   cursor: string,
   size: number,
 ): Promise<string | null> => {

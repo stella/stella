@@ -20,16 +20,19 @@ import officeCitationEndpoint from "@/api/handlers/files/office-citation";
 import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
 import readFileThumbnailEndpoint from "@/api/handlers/files/thumbnail";
 import { updateDocumentProperties } from "@/api/handlers/files/update-document-properties";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
-const readFileEndpoint = createSafeHandler(
+export const readFileEndpoint = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
     query: t.Object({
       purpose: t.UnionEnum(["download", "display", "native-display"]),
@@ -39,11 +42,15 @@ const readFileEndpoint = createSafeHandler(
   async function* ({
     params: { fieldId },
     query: { purpose },
+    user,
     scopedDb,
     session,
     workspaceId,
     recordAuditEvent,
   }) {
+    if (purpose === "download") {
+      yield* checkDemoAccountOperation(user.email);
+    }
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -62,13 +69,21 @@ const readFileEndpoint = createSafeHandler(
   },
 );
 
-const readEmailHtmlPreviewEndpoint = createSafeHandler(
+export const readEmailHtmlPreviewEndpoint = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
   } satisfies WorkspaceHandlerConfig,
-  async function* ({ params: { fieldId }, scopedDb, session, workspaceId }) {
+  async function* ({
+    params: { fieldId },
+    scopedDb,
+    session,
+    workspaceId,
+    recordAuditEvent,
+  }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -77,6 +92,7 @@ const readEmailHtmlPreviewEndpoint = createSafeHandler(
             organizationId: session.activeOrganizationId,
             workspaceId,
             scopedDb,
+            recordAuditEvent,
           }),
       ),
     );
@@ -85,9 +101,11 @@ const readEmailHtmlPreviewEndpoint = createSafeHandler(
   },
 );
 
-const printPdfEndpoint = createSafeHandler(
+export const printPdfEndpoint = createSafeHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.standard,
     permissions: { workspace: ["read"] },
+    access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
   } satisfies WorkspaceHandlerConfig,
@@ -115,9 +133,11 @@ const printPdfEndpoint = createSafeHandler(
   },
 );
 
-const stampedDownloadEndpoint = createSafeHandler(
+export const stampedDownloadEndpoint = createSafeHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.standard,
     permissions: { workspace: ["read"] },
+    access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
     query: t.Object({ metadata: t.UnionEnum(STAMPED_DOWNLOAD_METADATA) }),
@@ -151,6 +171,7 @@ const stampedDownloadEndpoint = createSafeHandler(
 export const readDocumentPropertiesEndpoint = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",
     params: workspaceParams({ fieldId: tSafeId("field") }),
@@ -215,6 +236,7 @@ const AUTHORED_PROPERTY_BODY = {
 export const updateDocumentPropertiesEndpoint = createSafeHandler(
   {
     permissions: { entity: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
     // A partial patch: only the named properties change, and an empty string
@@ -255,6 +277,7 @@ export const updateDocumentPropertiesEndpoint = createSafeHandler(
 
 export const scrubbedDownloadEndpoint = createSafeHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.standard,
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",
@@ -286,6 +309,7 @@ export const scrubbedDownloadEndpoint = createSafeHandler(
 
 export const ocrExportEndpoint = createSafeHandler(
   {
+    accountAccess: ACCOUNT_ACCESS.standard,
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",

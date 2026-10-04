@@ -1,6 +1,10 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
+import {
+  DOCUMENT_FETCH_EVENT,
+  type DocumentStageObservation,
+} from "@stll/legal-atlas/document-fetch-diagnostics";
 import { DAY_IN_MS } from "@stll/time";
 
 import {
@@ -10,6 +14,8 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import { NALUS_DAILY_REQUEST_LIMIT } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { rejectionOf } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import { withDocumentStageWindow } from "@/api/lib/legal-search/document-stage-observation";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 type GateTrace = {
@@ -45,6 +51,65 @@ describe("the NALUS publisher budget", () => {
     globalThis.fetch = originalFetch;
   });
 
+  test("document requests emit typed publisher refusals while listing requests stay outside document accounting", async () => {
+    for (const fetchStage of ["document", "listing"] as const) {
+      const observations: DocumentStageObservation[] = [];
+      globalThis.fetch = asFetchMock(
+        mock(
+          async () =>
+            new Response(null, {
+              status: 302,
+              headers: {
+                Location: "https://nalus.usoud.cz/limit-exceeded.html",
+              },
+            }),
+        ),
+      );
+      const { fetchNalus } = gatedFetch();
+      await withDocumentStageWindow({
+        source: ADAPTER_KEYS.CZ_US,
+        now: () => 0,
+        observe: (event) => {
+          observations.push(event);
+        },
+        fetchPage: async () => {
+          const result = await fetchNalus(
+            "https://nalus.usoud.cz/Search/GetText.aspx?sz=fixture",
+            { fetchStage },
+          );
+          expect(Result.isError(result)).toBe(true);
+          return Result.ok({ decisions: [], nextCursor: null });
+        },
+      });
+      if (fetchStage === "document") {
+        expect(observations.at(0)).toEqual({
+          event: DOCUMENT_FETCH_EVENT.fetchOutcome,
+          source: ADAPTER_KEYS.CZ_US,
+          outcome: "rate_limited",
+          http_status: 302,
+        });
+        expect(observations.at(-1)).toMatchObject({
+          aggregation: "page",
+          attempted: 1,
+          failed: 1,
+        });
+      } else {
+        expect(observations).toEqual([
+          {
+            event: DOCUMENT_FETCH_EVENT.window,
+            aggregation: "page",
+            source: ADAPTER_KEYS.CZ_US,
+            backlog: 0,
+            attempted: 0,
+            filled: 0,
+            failed: 0,
+            window_seconds: 0,
+          },
+        ]);
+      }
+    }
+  });
+
   test("spends fewer requests a day than the court states it allows", () => {
     const requestsPerDay = DAY_IN_MS / NALUS_REQUEST_INTERVAL_MS;
 
@@ -55,10 +120,15 @@ describe("the NALUS publisher budget", () => {
     globalThis.fetch = asFetchMock(mock(async () => new Response()));
     const { fetchNalus, trace } = gatedFetch();
 
-    await fetchNalus("https://nalus.usoud.cz/Search/Search.aspx");
-    await fetchNalus("https://nalus.usoud.cz/Search/GetText.aspx?sz=1-1-93_1");
+    await fetchNalus("https://nalus.usoud.cz/Search/Search.aspx", {
+      fetchStage: "listing",
+    });
+    await fetchNalus("https://nalus.usoud.cz/Search/GetText.aspx?sz=1-1-93_1", {
+      fetchStage: "document",
+    });
     await fetchNalus(
       "https://nalus.usoud.cz/Search/GetAbstract.aspx?sz=1-1-93_1",
+      { fetchStage: "document" },
     );
 
     expect(trace.reservations).toHaveLength(3);
@@ -86,7 +156,9 @@ describe("the NALUS publisher budget", () => {
       },
     });
 
-    await fetchNalus("https://nalus.usoud.cz/Search/Search.aspx");
+    await fetchNalus("https://nalus.usoud.cz/Search/Search.aspx", {
+      fetchStage: "listing",
+    });
 
     expect(order).toEqual(["sleep:18000", "fetch"]);
   });
@@ -105,6 +177,7 @@ describe("the NALUS publisher budget", () => {
 
     const refusal = await fetchNalus(
       "https://nalus.usoud.cz/Search/Search.aspx",
+      { fetchStage: "listing" },
     );
 
     expect(Result.isError(refusal)).toBe(true);
@@ -124,6 +197,7 @@ describe("the NALUS publisher budget", () => {
 
     const refusal = await fetchNalus(
       "https://nalus.usoud.cz/Search/GetText.aspx?sz=1-1-93_1",
+      { fetchStage: "document" },
     );
 
     expect(Result.isError(refusal)).toBe(true);
@@ -146,7 +220,11 @@ describe("the NALUS publisher budget", () => {
 
     const response = await fetchNalus(
       "https://nalus.usoud.cz/Search/Search.aspx",
-      { method: "POST", body: "ctl00%24MainContent%24but_search=Vyhledat" },
+      {
+        fetchStage: "listing",
+        method: "POST",
+        body: "ctl00%24MainContent%24but_search=Vyhledat",
+      },
     );
 
     expect(Result.isOk(response) && response.value.status).toBe(302);
@@ -161,7 +239,9 @@ describe("the NALUS publisher budget", () => {
     const { fetchNalus, trace } = gatedFetch();
 
     const rejection = await rejectionOf(
-      fetchNalus("https://nalus.usoud.cz.attacker.example/Search/Search.aspx"),
+      fetchNalus("https://nalus.usoud.cz.attacker.example/Search/Search.aspx", {
+        fetchStage: "listing",
+      }),
     );
 
     expect(rejection).toBeInstanceOf(Error);

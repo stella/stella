@@ -30,6 +30,12 @@ const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
  */
 const WHOLESALE_ROLES = new Set(["stella", "public"]);
 
+/**
+ * Column grants are compared for every role but `public`: the harness narrows
+ * `stella` table by table, and those column lists must match the deployment.
+ */
+const COLUMN_UNSCOPED_ROLES = new Set(["public"]);
+
 const GRANT_STATEMENT =
   /\bGRANT\b([\s\S]*?)\bTO\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:;|$)/gu;
 
@@ -72,6 +78,37 @@ const COLUMN_GRANT =
   /\b(SELECT|INSERT|UPDATE|REFERENCES)\s*\(([^)]*)\)[\s\S]*?\bON\s+(?:TABLE\s+)?("?[a-zA-Z_][a-zA-Z0-9_]*"?)/giu;
 
 const unquote = (value: string): string => value.replaceAll('"', "");
+
+const REVOKE_FROM_STELLA =
+  /\bREVOKE\s+([A-Z,\s]+?)\s+ON\s+(?:TABLE\s+)?([^;]*?)\bFROM\s+stella\b/giu;
+
+const COLUMN_PRIVILEGES = ["SELECT", "INSERT", "UPDATE", "REFERENCES"];
+
+/**
+ * Every table-level `stella` privilege the given SQL revokes, as
+ * `table:PRIVILEGE`; `ALL` stands for each privilege a column grant can hold.
+ */
+const tablePrivilegesRevokedFromStella = (sqlText: string): Set<string> => {
+  const revoked = new Set<string>();
+  for (const match of sqlText.matchAll(REVOKE_FROM_STELLA)) {
+    const [, privilegeList = "", objects = ""] = match;
+    const privileges = privilegeList
+      .split(",")
+      .map((privilege) => privilege.trim().toUpperCase());
+    const expanded = privileges.some((privilege) => privilege.startsWith("ALL"))
+      ? COLUMN_PRIVILEGES
+      : privileges;
+    for (const identifier of objects.matchAll(IDENTIFIER)) {
+      const name = identifier[1] ?? identifier[2] ?? "";
+      if (name.length > 0 && !PRIVILEGE_WORDS.has(name.toLowerCase())) {
+        for (const privilege of expanded) {
+          revoked.add(`${name}:${privilege}`);
+        }
+      }
+    }
+  }
+  return revoked;
+};
 
 /** Every `(role, table)` pair the given SQL grants, as `role:table`. */
 const grantedPairs = (sqlText: string): Set<string> => {
@@ -174,12 +211,15 @@ describe("pglite role grants mirror the committed migrations", () => {
    * the pair check above sees only `stella_ingestion:case_law_sources`.
    *
    * So this compares the sets, both ways. The tables the schema still defines
-   * and the roles the harness does not grant wholesale are the scope.
+   * are the scope, for every role including `stella`: its wholesale table
+   * grant is narrowed table by table (see the next test), and a column it
+   * holds in the harness but not in the deployment would let a scoped suite
+   * pass on a statement production refuses.
    */
   test("the migration and harness column grants are the same set", async () => {
     const inScope = (pair: string): boolean => {
       const [role = "", table = ""] = pair.split(":");
-      return !WHOLESALE_ROLES.has(role) && schemaTableNames.has(table);
+      return !COLUMN_UNSCOPED_ROLES.has(role) && schemaTableNames.has(table);
     };
     const migrationColumns = [
       ...grantedColumnPairs(await readMigrationSql()),
@@ -189,6 +229,39 @@ describe("pglite role grants mirror the committed migrations", () => {
     ].filter(inScope);
 
     expect(harnessColumns.toSorted()).toEqual(migrationColumns.toSorted());
+  });
+
+  /**
+   * The harness grants `stella` every table and narrows it afterwards. A table
+   * the migrations hold `stella` to column by column must be narrowed here
+   * too, or the harness column list is decoration and a scoped suite writes a
+   * column the deployment refuses: the cleanup claim on
+   * `buffer_object_cleanup_intents` updates its retry schedule, which the
+   * request role may write only through an explicit column grant.
+   */
+  test("tables the migrations hold stella to by column are narrowed in the harness", async () => {
+    const migrationColumns = grantedColumnPairs(await readMigrationSql());
+    const columnScopedPrivileges = new Set(
+      [...migrationColumns]
+        .map((pair) => pair.split(":"))
+        .filter(
+          ([role = "", table = ""]) =>
+            role === "stella" && schemaTableNames.has(table),
+        )
+        .map(([, table = "", , privilege = ""]) => `${table}:${privilege}`),
+    );
+    const harnessRevoked = tablePrivilegesRevokedFromStella(
+      ROLE_GRANT_STATEMENTS.join(";\n"),
+    );
+
+    const notNarrowed = [...columnScopedPrivileges]
+      .filter((tablePrivilege) => !harnessRevoked.has(tablePrivilege))
+      .toSorted();
+
+    expect(
+      columnScopedPrivileges.has("buffer_object_cleanup_intents:UPDATE"),
+    ).toBe(true);
+    expect(notNarrowed).toEqual([]);
   });
 
   test("the parser reads both migration and harness grant spellings", async () => {
