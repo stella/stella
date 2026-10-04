@@ -37,7 +37,7 @@ test("invalid and empty schedule selections fail before opening a database", asy
   };
   expect(
     await rejectionOf(withInterleaving({ ...options, schedules: [] })),
-  ).toThrow("Interleaving requires at least one schedule");
+  ).toMatchObject({ message: "Interleaving requires at least one schedule" });
   expect(
     await rejectionOf(
       withInterleaving({
@@ -45,10 +45,12 @@ test("invalid and empty schedule selections fail before opening a database", asy
         schedules: [["b.commit", "a.commit", "a.extra"]],
       }),
     ),
-  ).toThrow("Schedule contains unexpected steps");
+  ).toMatchObject({ message: "Schedule contains unexpected steps" });
   expect(
     await rejectionOf(
       withInterleaving({ ...options, schedules: [["a.commit", "a.commit"]] }),
     ),
-  ).toThrow("Schedule must contain every step");
+  ).toMatchObject({
+    message: expect.stringContaining("Schedule must contain every step"),
+  });
 });
