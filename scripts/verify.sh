@@ -178,8 +178,8 @@ run_desktop_rust_inputs_guard() {
 }
 
 run_queue_authority_guard() {
-  # Every BullMQ queue has a declared authority; member-run queues build
-  # their handles with the run actor. Shrink-only baseline.
+  # Every BullMQ queue and scheduler task has a declared authority; member
+  # runs settle their member's access when they run. Shrink-only baselines.
   bun scripts/queue-authority.ts --self-test || return 1
   BASE_SHA="$base_ref" bun scripts/queue-authority.ts --check
 }

@@ -732,11 +732,13 @@ export const OWNERSHIP = [
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.ts",
-          reason: "Compacts a user's own chat threads.",
+          reason:
+            "Compacts a user's own chat threads; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
-          reason: "Extracts a user's own chat memory.",
+          reason:
+            "Extracts a user's own chat memory; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts",
