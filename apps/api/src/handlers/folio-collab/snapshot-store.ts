@@ -31,6 +31,11 @@ const SNAPSHOT_STORE_FAILURE_SINK = failureSink({
 
 const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores collaboration protocol state without delivering stored-file bytes.",
+  },
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: permissiveBodySchema({
     keys: [

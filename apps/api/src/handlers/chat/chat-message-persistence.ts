@@ -19,6 +19,7 @@ import {
   ChatTurnStopRequestedError,
   claimChatTurnForExecutionOnTx,
   insertChatTurnAcceptanceOnTx,
+  reservePlannedChatTurnOnTx,
   settleChatTurnOnTx,
   USER_STOP_OUTCOME,
   withClaimedChatTurnExecution,
@@ -27,6 +28,7 @@ import type {
   ChatTurnAcceptance,
   ChatTurnExecution,
   ChatTurnExecutionClaim,
+  ChatTurnRefusal,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import {
   ChatTurnDroppedPartsError,
@@ -37,6 +39,7 @@ import {
   settleOpenToolCallsForOutcome,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
+import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
 import { planAssistantFinishPersistence } from "@/api/handlers/chat/persist-message";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import { reconcileChatCompactionChainOnTx } from "@/api/handlers/chat/persistent-compaction";
@@ -1127,6 +1130,9 @@ const safeDbOnTransaction = (tx: Transaction): SafeDb =>
   };
 
 type PersistAcceptedMessageWithClaimProps = PersistMessageProps & {
+  /** The history the message's plan read: its persistence plan, deletions,
+   *  and the run's model history. */
+  plannedOnHistory: ChatHistorySnapshot;
   turnAcceptance: ChatTurnAcceptance;
 };
 
@@ -1136,12 +1142,20 @@ type AcceptedMessageClaim = ChatTurnWrites & {
   execution: ChatTurnExecution;
 };
 
+const CHAT_TURN_REFUSAL_MESSAGE = {
+  "history-changed":
+    "The chat changed while this message was being sent; send it again",
+  "turn-running": "A chat turn is already running",
+} as const satisfies Record<ChatTurnRefusal, string>;
+
 /**
  * Persist a new user message, create its durable turn, and claim execution
  * before releasing the thread lock. No other sender can observe and supersede
- * an accepted-but-unclaimed turn between these operations.
+ * an accepted-but-unclaimed turn between these operations, and the history
+ * the message was planned on is the thread's history when the lock is taken.
  */
 export const persistAcceptedMessageWithClaim = async ({
+  plannedOnHistory,
   safeDb,
   turnAcceptance,
   ...persistenceProps
@@ -1149,6 +1163,19 @@ export const persistAcceptedMessageWithClaim = async ({
   Result<AcceptedMessageClaim, HandlerError<409> | SafeDbError>
 > => {
   const result = await safeDb(async (tx) => {
+    const reservation = await reservePlannedChatTurnOnTx({
+      history: plannedOnHistory,
+      threadId: turnAcceptance.threadId,
+      tx,
+    });
+    if (reservation !== "reserved") {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: CHAT_TURN_REFUSAL_MESSAGE[reservation],
+        }),
+      );
+    }
     const persistenceResult = await runPersistMessage({
       ...persistenceProps,
       safeDb: safeDbOnTransaction(tx),

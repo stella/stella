@@ -87,6 +87,7 @@ const externalMcpToolAccess = ({
       };
       destructiveBehavior: { type: "upstream" };
       permissions: McpWriteToolPermissions;
+      accountAccess: "standard";
     } =>
   readOnlyHint === true
     ? {
@@ -113,6 +114,9 @@ const externalMcpToolAccess = ({
           reason:
             "The connector's upstream server authorizes the call under the connection's own credentials.",
         },
+        // Connector administration is reserved to standard accounts over
+        // REST; a connector's tools follow it.
+        accountAccess: "standard",
       };
 
 export const listGatewayMcpToolDefinitions = async ({

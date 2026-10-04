@@ -15,6 +15,11 @@ import {
 } from "@/api/lib/style-sets";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores a style package and returns its metadata rather than file bytes.",
+  },
   description:
     "Create an organization style set from explicit editor settings applied " +
     "to the built-in stella preset, with no DOCX involved. Returns the new " +

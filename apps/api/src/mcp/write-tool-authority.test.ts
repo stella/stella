@@ -3,8 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { roles } from "@stll/permissions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { env } from "@/api/env";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { buildChatWriteTools } from "@/api/handlers/chat/tools/registry-write-tools";
+import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
@@ -18,6 +20,7 @@ import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions"
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import {
+  isAccountAuthorizedForMcpTool,
   isMemberAuthorizedForMcpTool,
   type McpToolAuthorityDeclaration,
 } from "@/api/mcp/write-tool-authority";
@@ -47,6 +50,7 @@ const writeDefinitions = (): McpToolDefinition[] => {
 
 const mcpContextFor = (role: MemberRole): McpRequestContext =>
   asTestRaw<McpRequestContext>({
+    accessibleWorkspaceIds: [],
     enabledRegistrySlugs: undefined,
     grantedScopes: [],
     memberRole: role,
@@ -139,7 +143,9 @@ const ledgerId = (definition: McpToolDefinition): string | null => {
     return null;
   }
   const { type } = definition.permissions;
-  return type === "all" ? null : `${definition.name}::${type}`;
+  return type === "all" || type === "input"
+    ? null
+    : `${definition.name}::${type}`;
 };
 
 describe("write tool permissions", () => {
@@ -151,8 +157,9 @@ describe("write tool permissions", () => {
         continue;
       }
       const { permissions } = definition;
-      expect(["all", "any", "delegated"]).toContain(permissions.type);
-      if (permissions.type !== "all") {
+      expect(["all", "input", "any", "delegated"]).toContain(permissions.type);
+      expect(["standard", "sandbox"]).toContain(definition.accountAccess);
+      if (permissions.type === "any" || permissions.type === "delegated") {
         expect(permissions.reason.trim().length).toBeGreaterThan(0);
       }
       // An unsatisfiable declaration would hide the tool from everyone.
@@ -349,6 +356,7 @@ describe("write tool permissions self-test", () => {
     access: "write",
     name: "fixture_update_entity",
     permissions: { type: "all", permissions: { entity: ["update"] } },
+    accountAccess: "sandbox",
   } as const satisfies McpToolAuthorityDeclaration & { name: string };
 
   test("a surface offering a write tool to a role without its grant fails the guard", () => {
@@ -375,6 +383,7 @@ describe("write tool permissions self-test", () => {
       inputSchema: { type: "object" },
       name: "fixture_write",
       permissions: fixture.permissions,
+      accountAccess: fixture.accountAccess,
       scope: "stella:read",
     };
     // @ts-expect-error -- the write branch requires `permissions`
@@ -391,8 +400,252 @@ describe("write tool permissions self-test", () => {
       description: "Fixture write tool",
       inputSchema: { type: "object" },
       name: "fixture_write",
+      accountAccess: fixture.accountAccess,
+      scope: "stella:read",
+    };
+    // @ts-expect-error -- the write branch requires `accountAccess`
+    const undeclaredAccount: McpToolDefinition = {
+      access: "write",
+      annotations: {
+        title: "Fixture",
+        destructiveHint: false,
+        openWorldHint: false,
+        readOnlyHint: false,
+      },
+      anonymized: { exposure: "excluded", reason: "write" },
+      consumesServices: false,
+      description: "Fixture write tool",
+      inputSchema: { type: "object" },
+      name: "fixture_write",
+      permissions: fixture.permissions,
       scope: "stella:read",
     };
     expect(undeclared.name).toBe(declared.name);
+    expect(undeclaredAccount.name).toBe(declared.name);
+  });
+});
+
+/** The JSON payload of an MCP tool result. */
+const payloadOf = (result: Awaited<ReturnType<typeof handleMcpToolCall>>) => {
+  const item = result.content.at(0);
+  return item?.type === "text" ? (JSON.parse(item.text) as unknown) : null;
+};
+
+const OPERATION_DENIED = (tool: string) => ({
+  error: {
+    code: "permission_denied",
+    message: `Your member role does not permit this ${tool} operation`,
+    hint: "Call tools/list for the tools your role offers, or ask an organization administrator for a role that includes this tool.",
+  },
+});
+
+// The role allows the operation; only the credential's own set refuses it.
+const CREDENTIAL_OPERATION_DENIED = (tool: string) => ({
+  error: {
+    code: "permission_denied",
+    message: `This credential's permissions do not include this ${tool} operation`,
+    hint: "Your member role allows this tool. Call it with a credential whose permissions include its grant, such as an API key minted with that permission.",
+  },
+});
+
+describe("write tools whose input selects the operation", () => {
+  test("each selector reads a declared optional input, and a value selector covers its enum exactly", () => {
+    const problems: string[] = [];
+    for (const definition of writeDefinitions()) {
+      if (
+        definition.access !== "write" ||
+        definition.permissions.type !== "input"
+      ) {
+        continue;
+      }
+      const { select } = definition.permissions;
+      const property: unknown =
+        definition.inputSchema.properties?.[select.property];
+      if (property === undefined) {
+        problems.push(`${definition.name}: no input ${select.property}`);
+        continue;
+      }
+      const required: unknown = definition.inputSchema["required"];
+      if (
+        select.by === "presence" &&
+        Array.isArray(required) &&
+        required.includes(select.property)
+      ) {
+        problems.push(`${definition.name}: ${select.property} is required`);
+      }
+      if (select.by === "value") {
+        const values =
+          typeof property === "object" &&
+          property !== null &&
+          "enum" in property
+            ? property.enum
+            : undefined;
+        expect({
+          name: definition.name,
+          values: Array.isArray(values)
+            ? values
+                .map(String)
+                .toSorted((left, right) => (left < right ? -1 : 1))
+            : values,
+        }).toEqual({
+          name: definition.name,
+          values: Object.keys(select.values).toSorted(),
+        });
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
+  test("dispatch checks the grant of the selected operation before the handler runs", async () => {
+    // A member may change matter membership but not organization settings.
+    const settings = await handleMcpToolCall({
+      args: { action: "update_org_settings", prompt_caching_enabled: true },
+      context: mcpContextFor("member"),
+      toolName: "manage_organization",
+    });
+    expect(payloadOf(settings)).toEqual(
+      OPERATION_DENIED("manage_organization"),
+    );
+
+    const membership = await handleMcpToolCall({
+      args: {
+        action: "add_member",
+        matter_id: "00000000-0000-4000-8000-000000000001",
+        user_id: "user_2",
+      },
+      context: mcpContextFor("member"),
+      toolName: "manage_organization",
+    });
+    expect(payloadOf(membership)).not.toEqual(
+      OPERATION_DENIED("manage_organization"),
+    );
+  });
+
+  test("dispatch refuses deleting a document to a credential that may only update it", async () => {
+    const updateOnly = asTestRaw<McpRequestContext>({
+      accessibleWorkspaceIds: [],
+      credentialPermissions: { entity: ["update"] },
+      enabledRegistrySlugs: undefined,
+      grantedScopes: [],
+      memberRole: "owner",
+    });
+    const document = await handleMcpToolCall({
+      args: {
+        entity_id: "00000000-0000-4000-8000-000000000001",
+        confirm: true,
+      },
+      context: updateOnly,
+      toolName: "delete_document",
+    });
+    expect(payloadOf(document)).toEqual(
+      CREDENTIAL_OPERATION_DENIED("delete_document"),
+    );
+
+    const version = await handleMcpToolCall({
+      args: {
+        entity_id: "00000000-0000-4000-8000-000000000001",
+        version_id: "00000000-0000-4000-8000-000000000002",
+        confirm: true,
+      },
+      context: updateOnly,
+      toolName: "delete_document",
+    });
+    expect(payloadOf(version)).not.toEqual(
+      CREDENTIAL_OPERATION_DENIED("delete_document"),
+    );
+  });
+
+  test("chat execution checks the grant of the selected operation", async () => {
+    const failure = await chatExecutionFailure({
+      args: { action: "update_org_settings", prompt_caching_enabled: true },
+      currentRole: "member",
+      registeredRole: "member",
+      tool: "manage_organization",
+    });
+    expect(failure).toBeInstanceOf(ChatToolError);
+    expect(failure).toMatchObject({
+      kind: "unavailable",
+      message:
+        "Your member role does not permit this manage_organization operation.",
+    });
+  });
+});
+
+describe("write tool account access", () => {
+  const limited = (email: string) =>
+    checkDemoAccountAccess({
+      email,
+      config: { email: "limited@example.test", organizationId: "org_1" },
+      operation: "growth",
+    });
+
+  test("a standard tool refuses the limited account and admits others; a sandbox tool admits both", () => {
+    const definitions = writeDefinitions();
+    const standard = definitions.filter(
+      (definition) =>
+        definition.access === "write" &&
+        definition.accountAccess === "standard",
+    );
+    expect(standard.map((definition) => definition.name).toSorted()).toEqual([
+      "fill_template",
+      "manage_organization",
+      "save_filled_template",
+      "set_practice_jurisdictions",
+      "submit_feedback",
+    ]);
+    for (const definition of definitions) {
+      expect({
+        name: definition.name,
+        limited: isAccountAuthorizedForMcpTool(
+          "limited@example.test",
+          definition,
+          limited,
+        ),
+        other: isAccountAuthorizedForMcpTool(
+          "member@example.test",
+          definition,
+          limited,
+        ),
+      }).toEqual({
+        name: definition.name,
+        limited: !standard.includes(definition),
+        other: true,
+      });
+    }
+  });
+
+  test("discovery and dispatch read the declared account access", async () => {
+    const previousEmail = env.DEMO_ACCOUNT_EMAIL;
+    env.DEMO_ACCOUNT_EMAIL = "limited@example.test";
+    try {
+      const context = asTestRaw<McpRequestContext>({
+        enabledRegistrySlugs: undefined,
+        grantedScopes: [],
+        memberRole: "owner",
+        userEmail: "limited@example.test",
+      });
+      const offered = new Set(
+        listOfferedStaticMcpToolDefinitions({ context, mode: "default" }).map(
+          (definition) => definition.name,
+        ),
+      );
+      expect(offered.has("manage_organization")).toBe(false);
+      expect(offered.has("set_practice_jurisdictions")).toBe(false);
+      expect(offered.has("save_matter")).toBe(true);
+
+      const result = await handleMcpToolCall({
+        args: { action: "update_org_settings", prompt_caching_enabled: true },
+        context,
+        toolName: "manage_organization",
+      });
+      expect(payloadOf(result)).toEqual({
+        error: {
+          code: "permission_denied",
+          message: "This operation is unavailable for this account.",
+        },
+      });
+    } finally {
+      env.DEMO_ACCOUNT_EMAIL = previousEmail;
+    }
   });
 });

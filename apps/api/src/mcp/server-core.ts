@@ -882,6 +882,7 @@ export const createMcpHttpRequestHandler = ({
         authority: context,
         definition,
         toolName,
+        userEmail: context.userEmail,
       });
       if (authorityRefusal !== null) {
         return mcpStructuredErrorResult(authorityRefusal);

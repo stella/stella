@@ -13,6 +13,7 @@ import { entities, entityVersions, fields } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { writeDocumentProperties } from "@/api/lib/files/document-properties";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
@@ -155,6 +156,7 @@ export const updateDocumentProperties = async ({
     entityId: row.entityId,
     fileName: content.fileName,
     mimeType: content.mimeType,
+    encryption: serverBuiltFileEncryption(),
     organizationId,
     recordAuditEvent,
     safeDb,

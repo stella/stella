@@ -5,7 +5,10 @@ import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
 import { enumProp } from "@/api/mcp/tool-utils";
-import { hasMcpToolAuthority } from "@/api/mcp/write-tool-authority";
+import {
+  hasMcpToolAuthority,
+  isAccountAuthorizedForMcpTool,
+} from "@/api/mcp/write-tool-authority";
 
 /**
  * A session that cannot confirm is not offered tools that always need
@@ -34,14 +37,16 @@ export const isStaticToolShownToMemberRole = (
 
 /**
  * A write tool is offered only to a request whose effective authority holds
- * its declared permissions. A call by name still resolves it, so dispatch
- * answers `permission_denied` naming the member role or the credential.
+ * its declared permissions and whose account its declared account access
+ * admits. A call by name still resolves it, so dispatch answers
+ * `permission_denied` naming the member role, the credential, or the account.
  */
 const isStaticToolVisibleToRole = (
   context: McpRequestContext,
   definition: McpToolDefinition,
 ): boolean =>
   hasMcpToolAuthority(context, definition) &&
+  isAccountAuthorizedForMcpTool(context.userEmail, definition) &&
   isStaticToolShownToMemberRole(context, definition);
 
 const LOOKUP_BUSINESS_REGISTRY_TOOL_NAME = "lookup_business_registry";
