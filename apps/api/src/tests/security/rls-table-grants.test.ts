@@ -147,6 +147,10 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
 // later requests. The role needs SELECT and INSERT, never UPDATE or DELETE.
 const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set(["chat_thread_names"]);
 
+// Audit trails the request role may only append to: INSERT, nothing else.
+// The table owner reads them and purges rows past retention.
+const POST_BOOTSTRAP_INSERT_ONLY_TABLES = new Set(["system_audit_runs"]);
+
 // Invoker-maintained projections may track state changes; deletion is owned
 // by the source row's cascading foreign key, never the request role.
 const POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES = new Set([
@@ -169,6 +173,12 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 // deliberately grant stella nothing, so the grant requirement does not
 // apply. Their migration must REVOKE ALL from stella instead.
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
+  // Guidance ingestion is owner-only until a read capability is introduced.
+  "soft_law_sources",
+  "soft_law_ingestion_attempts",
+  "soft_law_documents",
+  "soft_law_document_versions",
+  "soft_law_document_locators",
   // Maintenance checkpoints belong to the database owner, never request roles.
   "database_backfill_states",
   "action_cost_records",
@@ -331,6 +341,9 @@ const grantsRequiredPrivileges = ({
       privileges.has("insert") &&
       privileges.isDisjointFrom(APPEND_ONLY_FORBIDDEN_PRIVILEGES)
     );
+  }
+  if (POST_BOOTSTRAP_INSERT_ONLY_TABLES.has(table)) {
+    return privileges.size === 1 && privileges.has("insert");
   }
   if (POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES.has(table)) {
     return (
@@ -793,6 +806,7 @@ describe("RLS table grants", () => {
       [
         ...POST_BOOTSTRAP_SELECT_ONLY_TABLES,
         ...POST_BOOTSTRAP_APPEND_ONLY_TABLES,
+        ...POST_BOOTSTRAP_INSERT_ONLY_TABLES,
         ...POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES,
         ...POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES,
         ...POST_BOOTSTRAP_DENY_STELLA_TABLES,

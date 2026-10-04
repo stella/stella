@@ -509,14 +509,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/case-law/sitemap-shard-refresh.ts::swapSnapshot",
-    "writes": {
-      "delete:caseLawSitemapShards": 1,
-      "insert:?": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/chat/run-log.ts::closeChatRunLogOnTx",
     "writes": {
       "update:chatRunLogs": 1
@@ -570,14 +562,6 @@
       "insert:verification": 1
     },
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
-  },
-  {
-    "id": "apps/api/src/lib/corpus-ingestion-checkpoint.ts::advanceCorpusIngestionCheckpoint",
-    "writes": {
-      "update:caseLawSources": 1,
-      "update:legislationSources": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
     "id": "apps/api/src/lib/db/account-row.ts::anonymizeDeletedAccountRow",
@@ -1124,13 +1108,6 @@
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
   {
-    "id": "apps/api/src/lib/hosted-usage-provider/webhook-retention.ts::redactCompletedWebhookEvents",
-    "writes": {
-      "update:usage_provider_webhook_events": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
     "id": "apps/api/src/lib/hosted-usage-provider/webhook-store.ts::insertWebhookEventInTx",
     "writes": {
       "insert:hostedUsageWebhookEvents": 1
@@ -1518,86 +1495,9 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/pg-fts-browse-facet-refresh.ts::refreshPgFtsBrowseFacets",
-    "writes": {
-      "delete:caseLawBrowseFacetCounts": 1,
-      "insert:?": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/reconciliation-store.ts::refreshTrackedReconciliationItems",
     "writes": {
       "update:?": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/statute-sitemap-shard-refresh.ts::refreshStatuteSitemapShards",
-    "writes": {
-      "delete:statuteSitemapShards": 1,
-      "insert:?": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/refresh.ts::activateStagedEdition",
-    "writes": {
-      "update:sanctionsEditions": 4,
-      "update:sanctionsSources": 2
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/refresh.ts::markFailure",
-    "writes": {
-      "update:sanctionsSources": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/refresh.ts::markVerifiedUnchanged",
-    "writes": {
-      "update:sanctionsSources": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/refresh.ts::recordRejectedReplacement",
-    "writes": {
-      "insert:sanctionsEditions": 1,
-      "update:sanctionsEditions": 1,
-      "update:sanctionsSources": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/refresh.ts::recordUnexpectedSanctionsFailure",
-    "writes": {
-      "insert:sanctionsSources": 1,
-      "update:sanctionsSources": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/refresh.ts::refreshSanctionsSource",
-    "writes": {
-      "insert:sanctionsSources": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/refresh.ts::stageAcceptedEdition",
-    "writes": {
-      "insert:sanctionsEditions": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/lists/sanctions/refresh.ts::stageAcceptedEdition.persistNextBatch",
-    "writes": {
-      "insert:sanctionsEditionEntries": 1,
-      "insert:sanctionsEntryPayloads": 1
     },
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
@@ -1717,41 +1617,6 @@
     "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
   },
   {
-    "id": "apps/api/src/lib/scheduler/tasks/case-law-raw-storage.ts::censusCaseLawRawObjectsTask",
-    "writes": {
-      "update:schedulerJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
-    "id": "apps/api/src/lib/scheduler/tasks/case-law-raw-storage.ts::reconcileCaseLawRawRowsTask",
-    "writes": {
-      "update:schedulerJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
-    "id": "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts::backfillCorpusIndexJobDetail.try",
-    "writes": {
-      "update:schedulerJobs": 2
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
-    "id": "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts::caseLawDetailBatch",
-    "writes": {
-      "update:caseLawIndexJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
-    "id": "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts::legislationDetailBatch",
-    "writes": {
-      "update:legislationIndexJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
     "id": "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts::publishAndMarkExpiryNotifications",
     "writes": {
       "update:desktopEditSessions": 1
@@ -1780,13 +1645,6 @@
     "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
   },
   {
-    "id": "apps/api/src/lib/scheduler/tasks/legislation-expression-id-backfill.ts::claimExpressionIdsQuery",
-    "writes": {
-      "update:legislationDocuments": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
     "id": "apps/api/src/lib/scheduler/tasks/memory-curator.ts::sweepLifecyclePhase.transitionBatch",
     "writes": {
       "update:aiMemories": 1
@@ -1805,18 +1663,6 @@
     "id": "apps/api/src/lib/scheduler/tasks/memory-extractor.ts::recordMemoryExtractionFailure",
     "writes": {
       "update:chatThreadCompactions": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
-    "id": "apps/api/src/lib/scheduler/tasks/registration-retention.ts::sweepRegistrations",
-    "writes": {
-      "delete:agent_assertion_replay": 1,
-      "delete:agent_registration": 1,
-      "delete:oauth_client": 1,
-      "delete:oauth_client_assertion": 1,
-      "delete:registration_daily_budget": 1,
-      "delete:verification": 1
     },
     "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
   },
@@ -1996,13 +1842,6 @@
       "insert:session": 1
     },
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
-  },
-  {
-    "id": "apps/api/src/lib/uploads/file-comparison/sweep.ts::sweepExpiredFileComparisonUploads",
-    "writes": {
-      "delete:fileComparisonUploads": 1
-    },
-    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
   {
     "id": "apps/api/src/lib/usage/action-costs/store.ts::actionCostWriteQueries",
