@@ -270,7 +270,7 @@ describe("set_practice_jurisdictions MCP tool", () => {
     const item = result.content.at(0);
     expect(item?.type).toBe("text");
     if (item?.type === "text") {
-      expect(item.text).toContain("Forbidden");
+      expect(item.text).toContain("permission_denied");
     }
     expect(insertMock).not.toHaveBeenCalled();
     expect(recordAuditEvent).not.toHaveBeenCalled();

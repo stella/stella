@@ -221,11 +221,14 @@ const backfillChatFilePage = async (
     return 0;
   }
   const write = async (thumbnail: PreparedThumbnail) =>
-    await writeS3ObjectWithRetry({
-      contentType: THUMBNAIL_MIME_TYPE,
-      data: thumbnail.webp,
-      key: thumbnail.thumbnailKey,
-    });
+    await writeS3ObjectWithRetry(
+      {
+        contentType: THUMBNAIL_MIME_TYPE,
+        data: thumbnail.webp,
+        key: thumbnail.thumbnailKey,
+      },
+      { type: "derivative", source: thumbnail.rowId },
+    );
   const written = await (async () => {
     if (env.FEATURE_FILE_USAGE_LIMITS) {
       return await writeOrganizationFiles(

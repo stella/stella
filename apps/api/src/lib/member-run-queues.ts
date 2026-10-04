@@ -51,7 +51,7 @@ export type MemberRunQueue = (typeof MEMBER_RUN_QUEUES)[number]["queue"];
  *   or the platform's own work and returns nothing to a member that the
  *   member could not already read.
  */
-type QueueAuthority = "member-run" | "org-automation";
+export type QueueAuthority = "member-run" | "org-automation";
 
 export type QueueAuthorityEntry = {
   authority: QueueAuthority;

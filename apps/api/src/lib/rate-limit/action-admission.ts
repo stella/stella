@@ -35,6 +35,11 @@ import {
   type ActionPeriodBudget,
   type ActionPeriodPolicy,
 } from "@/api/lib/rate-limit/action-period-budget";
+import {
+  configuredDemoActionBudget,
+  withDemoActionBudget,
+  type DemoActionBudget,
+} from "@/api/lib/rate-limit/demo-action-budget";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
 import {
@@ -216,6 +221,7 @@ type ActionAdmissionOptions<T = unknown> = {
   createId?: () => string;
   timing?: AdmissionTiming;
   costRecorder?: ActionCostRecorder | null;
+  demoActionBudget?: DemoActionBudget;
 } & ActionAdmissionReservation &
   (
     | {
@@ -1162,32 +1168,56 @@ export const withActionAdmission = async <T>(
     costRecorder: options.costRecorder,
     run: options.run,
   });
-  if (
-    !(options.enabled ?? isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION"))
-  ) {
-    return await Result.tryPromise({
-      try: async () =>
-        await observedRun(new AbortController().signal, disabledControl),
-      catch: (error: unknown) => error,
-    });
-  }
-  return await withEnabledActionAdmission({
-    ...options,
-    run: observedRun,
-    organizationBudgetOptions: {
-      organizationId: options.organizationId,
-      userId: options.userId,
-      periodIdentity: options.periodIdentity,
-      periodPolicy: options.periodPolicy,
-      serviceBudgetsEnabled:
-        options.serviceBudgetsEnabled ??
-        isDeploymentFeatureEnabled("FEATURE_ORG_SERVICE_BUDGETS"),
-      serviceBudgetConfig:
-        options.serviceBudgetConfig ?? configuredServiceBudgets(),
-      organizationStateDb: options.organizationStateDb,
-      readOrganizationState: options.readOrganizationState,
-      budgetNow:
-        options.budgetNow ?? (() => Temporal.Now.instant().epochMilliseconds),
+  // The demo account's daily budget holds whether or not admission is
+  // enabled, so it wraps both branches.
+  return await withDemoActionBudget({
+    budget: options.demoActionBudget ?? configuredDemoActionBudget,
+    organizationId: options.organizationId,
+    userId: options.userId,
+    scope:
+      options.execution === "background-job"
+        ? "independent"
+        : (options.scope ?? "inherit"),
+    run: async (markStarted) => {
+      const startedRun = async (
+        signal: AbortSignal,
+        control: ActionAdmissionControl,
+      ) => {
+        markStarted();
+        return await observedRun(signal, control);
+      };
+      if (
+        !(
+          options.enabled ??
+          isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")
+        )
+      ) {
+        return await Result.tryPromise({
+          try: async () =>
+            await startedRun(new AbortController().signal, disabledControl),
+          catch: (error: unknown) => error,
+        });
+      }
+      return await withEnabledActionAdmission({
+        ...options,
+        run: startedRun,
+        organizationBudgetOptions: {
+          organizationId: options.organizationId,
+          userId: options.userId,
+          periodIdentity: options.periodIdentity,
+          periodPolicy: options.periodPolicy,
+          serviceBudgetsEnabled:
+            options.serviceBudgetsEnabled ??
+            isDeploymentFeatureEnabled("FEATURE_ORG_SERVICE_BUDGETS"),
+          serviceBudgetConfig:
+            options.serviceBudgetConfig ?? configuredServiceBudgets(),
+          organizationStateDb: options.organizationStateDb,
+          readOrganizationState: options.readOrganizationState,
+          budgetNow:
+            options.budgetNow ??
+            (() => Temporal.Now.instant().epochMilliseconds),
+        },
+      });
     },
   });
 };

@@ -25,7 +25,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { acquireCellLocks } from "@/api/lib/cell-lock";
 import { chunked } from "@/api/lib/chunked";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { recordTableRunVerdicts } from "@/api/lib/document-review/table-run-findings";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -766,9 +765,6 @@ export const startWorkflow = async ({
       },
       signal,
     );
-  if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-    return await planAndEnqueue();
-  }
   const started = await Result.tryPromise({
     try: async () =>
       await kickoff({

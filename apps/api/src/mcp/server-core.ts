@@ -902,13 +902,6 @@ export const createMcpHttpRequestHandler = ({
           captureError,
         });
       };
-      if (
-        !isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION") &&
-        !isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS")
-      ) {
-        return await run();
-      }
-
       let consumesServices = definition.consumesServices;
       if (toolName === "invoke_capability") {
         const classified = await invokedCapabilityConsumesServices(
