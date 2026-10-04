@@ -10,7 +10,6 @@ import {
 
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
-import sourceFingerprintBaseline from "./scripts/source-fingerprint-baseline.json" with { type: "json" };
 import {
   SHADCN_LINT_JS_PLUGINS,
   SHADCN_LINT_POLICY_OVERRIDES,
@@ -29,6 +28,7 @@ import {
   RESULT_CONVENTION_ENABLED_GLOBS,
   RESULT_CONVENTION_EXCLUDE_GLOBS,
 } from "./scripts/result-boundary-globs.ts";
+import sourceFingerprintBaseline from "./scripts/source-fingerprint-baseline.json" with { type: "json" };
 import {
   SQL_PERF_LINT_EXCLUDES,
   SQL_PERF_LINT_FILES,
