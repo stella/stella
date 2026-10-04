@@ -1,3 +1,5 @@
+import type { SystemRunActor } from "@/api/lib/system-audit/actors";
+
 import { jsonb, p, sql, stella, timestamptz } from "./common";
 
 const OWNER_ONLY = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.system_audit_runs'::regclass)`;
@@ -17,8 +19,12 @@ export const systemAuditRuns = p.pgTable.withRLS(
   "system_audit_runs",
   {
     id: p.uuid().primaryKey(),
-    /** A `SystemRunActor`; the CHECK pins its shape, the type pins the set. */
-    actor: p.text().notNull(),
+    /**
+     * The CHECK pins the shape; the column type pins the declared set, so an
+     * insert of an undeclared actor does not compile. Listing the set in the
+     * CHECK would put a migration on every new actor.
+     */
+    actor: p.text().$type<SystemRunActor>().notNull(),
     /** The scheduler run that made the change. Ids only, never content. */
     subject: p.text().notNull(),
     /** What the run changed, keyed by the counts its actor declares. */

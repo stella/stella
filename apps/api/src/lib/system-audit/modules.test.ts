@@ -14,9 +14,12 @@ const API_SOURCE = path.join(REPO_ROOT, "apps/api/src");
 const RECORD_CALL =
   /\brecordSystemAudit\(\s*[A-Za-z_$][\w$]*,\s*"(?<actor>system:[a-z0-9-]+)"/gu;
 
-/** Every run actor some production module records through `recordSystemAudit`. */
-const recordedActors = (): Set<string> => {
-  const actors = new Set<string>();
+/** Each production file that records through `recordSystemAudit`, by actor. */
+const recordersByActor = (): Map<
+  string,
+  { file: string; source: string }[]
+> => {
+  const recorders = new Map<string, { file: string; source: string }[]>();
   const glob = new Bun.Glob("**/*.ts");
   for (const file of glob.scanSync({ cwd: API_SOURCE })) {
     if (file.endsWith(".test.ts")) {
@@ -26,11 +29,13 @@ const recordedActors = (): Set<string> => {
     for (const match of source.matchAll(RECORD_CALL)) {
       const actor = match.groups?.["actor"];
       if (actor !== undefined) {
-        actors.add(actor);
+        const files = recorders.get(actor) ?? [];
+        files.push({ file: `apps/api/src/${file}`, source });
+        recorders.set(actor, files);
       }
     }
   }
-  return actors;
+  return recorders;
 };
 
 test("every registered system module exists", () => {
@@ -48,10 +53,28 @@ test("member-run modules are never system modules", () => {
 });
 
 test("every run actor records its runs, so a registered module is never silent", () => {
-  const recorded = recordedActors();
+  const recorders = recordersByActor();
   expect(
     Object.keys(SYSTEM_RUN_ACTOR_COUNTS).filter(
-      (actor) => !recorded.has(actor),
+      (actor) => !recorders.has(actor),
     ),
   ).toEqual([]);
+});
+
+// The lint rule exempts a registered module's writes on the strength of its
+// actor's record, so the record must come from the module itself or from a
+// file that imports it: a swapped or unrelated actor fails here.
+test("every registered module is recorded by its own actor", () => {
+  const recorders = recordersByActor();
+  const unbound = Object.entries(SYSTEM_AUDIT_MODULES).flatMap(
+    ([file, actor]) => {
+      const specifier = `"@/api/${file.slice("apps/api/src/".length, -".ts".length)}"`;
+      const bound = (recorders.get(actor) ?? []).some(
+        (recorder) =>
+          recorder.file === file || recorder.source.includes(specifier),
+      );
+      return bound ? [] : [`${file}: ${actor}`];
+    },
+  );
+  expect(unbound).toEqual([]);
 });

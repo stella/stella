@@ -115,19 +115,23 @@ export const reconcileCaseLawRawRowsTask: SchedulerTask = async ({
     mode: RAW_LAYOUT_MODE.APPLY,
     signal,
   });
-  // Checkpoint last, and only as far as every row before it is settled.
-  await db
-    .update(schedulerJobs)
-    .set({ payload: { cursor: page.resumeAfter } })
-    .where(leaseFence(job));
-  await recordSystemAudit(db, "system:case-law-raw-storage", {
-    subject: runId,
-    counts: {
-      sweptPrefixes: 0,
-      failedSweeps: 0,
-      migratedRows: page.counts.migrated,
-      queuedSweeps: 0,
-    },
+  // Checkpoint last, and only as far as every row before it is settled. The
+  // audit row commits with the checkpoint: a cursor never passes a page whose
+  // changes went unrecorded.
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schedulerJobs)
+      .set({ payload: { cursor: page.resumeAfter } })
+      .where(leaseFence(job));
+    await recordSystemAudit(tx, "system:case-law-raw-storage", {
+      subject: runId,
+      counts: {
+        sweptPrefixes: 0,
+        failedSweeps: 0,
+        migratedRows: page.counts.migrated,
+        queuedSweeps: 0,
+      },
+    });
   });
   logger.info("scheduler.case_law_raw_rows_reconciled", {
     "caseLawRawRows.current": page.counts.current,
@@ -196,23 +200,29 @@ export const censusCaseLawRawObjectsTask: SchedulerTask = async ({
     mode: RAW_CENSUS_MODE.APPLY,
     signal,
   });
-  await db
-    .update(schedulerJobs)
-    .set({
-      payload:
-        page.next === null
-          ? null
-          : { sourceId: page.next.sourceId, startAfter: page.next.startAfter },
-    })
-    .where(leaseFence(job));
-  await recordSystemAudit(db, "system:case-law-raw-storage", {
-    subject: runId,
-    counts: {
-      sweptPrefixes: 0,
-      failedSweeps: 0,
-      migratedRows: 0,
-      queuedSweeps: page.counts.queued,
-    },
+  // The audit row commits with the checkpoint, as in the row pass.
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schedulerJobs)
+      .set({
+        payload:
+          page.next === null
+            ? null
+            : {
+                sourceId: page.next.sourceId,
+                startAfter: page.next.startAfter,
+              },
+      })
+      .where(leaseFence(job));
+    await recordSystemAudit(tx, "system:case-law-raw-storage", {
+      subject: runId,
+      counts: {
+        sweptPrefixes: 0,
+        failedSweeps: 0,
+        migratedRows: 0,
+        queuedSweeps: page.counts.queued,
+      },
+    });
   });
   logger.info("scheduler.case_law_raw_objects_censused", {
     "caseLawRawObjects.live": page.counts.live,
