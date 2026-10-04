@@ -18,6 +18,10 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
 // ── Schemas ─────────────────────────────────────────
 
@@ -39,6 +43,37 @@ type UpdateCategoryBody = Static<typeof updateCategoryBodySchema>;
 
 // ── List ────────────────────────────────────────────
 
+type CategoryRow = typeof clauseCategories.$inferSelect;
+
+const UNPROJECTED_CATEGORY_COLUMNS = [
+  // Tenant scope is fixed by the active organization.
+  "organizationId",
+] as const satisfies readonly (keyof CategoryRow)[];
+
+const CATEGORY_LIST_COLUMNS = {
+  id: true,
+  parentId: true,
+  name: true,
+  description: true,
+  sortOrder: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+type MissingCategoryListColumn = UnprojectedColumns<
+  CategoryRow,
+  typeof CATEGORY_LIST_COLUMNS,
+  (typeof UNPROJECTED_CATEGORY_COLUMNS)[number]
+>;
+type UnexpectedCategoryListColumn = UnbackedProjectionKeys<
+  CategoryRow,
+  typeof CATEGORY_LIST_COLUMNS,
+  (typeof UNPROJECTED_CATEGORY_COLUMNS)[number]
+>;
+
+true satisfies MissingCategoryListColumn extends never ? true : never;
+true satisfies UnexpectedCategoryListColumn extends never ? true : never;
+
 type ListCategoriesProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
@@ -52,15 +87,7 @@ export const listCategoriesHandler = async function* ({
     safeDb((tx) =>
       tx.query.clauseCategories.findMany({
         where: { organizationId: { eq: organizationId } },
-        columns: {
-          id: true,
-          parentId: true,
-          name: true,
-          description: true,
-          sortOrder: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+        columns: CATEGORY_LIST_COLUMNS,
         orderBy: { sortOrder: "asc" },
         limit: LIMITS.clauseCategoriesCount,
       }),
