@@ -118,6 +118,8 @@ export const TRANSITIONS = {
   playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },
   properties: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   reportExports: { unmanaged: UNMANAGED_REASONS.workerRun },
+  sanctionsContactMatches: { unmanaged: UNMANAGED_REASONS.projection },
+  sanctionsContactScreenings: { unmanaged: UNMANAGED_REASONS.projection },
   sanctionsEditions: { unmanaged: UNMANAGED_REASONS.corpusEdition },
   schedulerJobRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   scoutRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
