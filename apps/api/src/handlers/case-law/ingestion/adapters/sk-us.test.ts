@@ -21,7 +21,11 @@ import {
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { errorTag } from "@/api/lib/errors/error-tag";
-import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
+import {
+  READ_OUTCOME_METADATA_KEY,
+  readAbsent,
+  readPresent,
+} from "@/api/lib/errors/read-outcome";
 import {
   AdapterFetchError,
   UNPERSISTABLE_DECISION_FIELDS,
@@ -935,14 +939,16 @@ describe("sk-us buildDecision", () => {
         collectionListing: async ({ caseNumber, decisionDate }) => {
           expect(caseNumber).toBe(PLENARY_OPINION.mkRSAPNumberOfFile);
           expect(decisionDate).toBe("2020-03-12");
-          return await Promise.resolve(collectionJson);
+          return await Promise.resolve(readPresent(collectionJson));
         },
         facets: async () =>
           await Promise.resolve(
-            JSON.stringify({ documents: [PLENARY_OPINION], numFound: 1 }),
+            readPresent(
+              JSON.stringify({ documents: [PLENARY_OPINION], numFound: 1 }),
+            ),
           ),
-        courtFile: async () => await Promise.resolve(undefined),
-        codelist: async () => await Promise.resolve(undefined),
+        courtFile: async () => await Promise.resolve(readAbsent("http-404")),
+        codelist: async () => await Promise.resolve(readAbsent("http-404")),
       },
     });
     if (built.type !== "built") {

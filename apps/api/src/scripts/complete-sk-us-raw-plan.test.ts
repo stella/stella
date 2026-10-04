@@ -44,14 +44,32 @@ import {
 } from "@/api/scripts/complete-sk-us-raw-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 
-/** A served response as the publisher read types it. */
-const readOf = (response: Response): ReadOutcome<Response> => {
-  const outcome = readOutcomeOfStatus(response.status);
+/**
+ * A served response as the publisher read types it; a 429 rejects as the
+ * read's typed rate-limit stop.
+ */
+const readOf = async (
+  response: Response,
+  init: PublisherFetchInit,
+): Promise<ReadOutcome<Response>> => {
+  if (response.status === 429) {
+    return await Promise.reject(
+      new AdapterFetchError({
+        message: "Publisher request refused: 429",
+        adapterKey: init.adapterKey,
+        cursor: null,
+        httpStatus: response.status,
+      }),
+    );
+  }
+  const outcome = readOutcomeOfStatus(response.status, "document");
   switch (outcome.type) {
     case "present":
       return readPresent(response);
     case "absent":
       return readAbsent(outcome.evidence);
+    case "refused":
+      return outcome;
     case "unavailable":
       return readUnavailable(outcome.cause);
     default:
@@ -66,7 +84,7 @@ const readWith =
     respond: (url: string | URL, init: PublisherFetchInit) => Promise<Response>,
   ): typeof readPublisher =>
   async (url, init) =>
-    readOf(await respond(url, init));
+    await readOf(await respond(url, init), init);
 
 /** A fixture row that must exist; a missing one fails loudly, never as `undefined`. */
 const rowAt = <T>(items: readonly T[], index: number): T => {
