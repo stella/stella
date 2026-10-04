@@ -2135,6 +2135,9 @@ jobs:
       - name: Test install-free CI commands
         run: bun test scripts/install-free-ci.test.ts
 
+      - name: Test pre-push secret scan ranges
+        run: bun test scripts/check-pushed-secrets.test.ts
+
       - name: Test merge-base network comparison
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/network-baseline-comparison.test.ts
