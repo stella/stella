@@ -15,6 +15,7 @@ import {
   extractFormattingLocale,
   extractLangFromRequest,
 } from "@/api/lib/locale";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -38,6 +39,9 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
         consumesServices: false,
       },
       params: workspaceParams({ invoiceId: tSafeId("invoice") }),
+      realtime: noResourceSetUpdates(
+        "Stores a generated PDF download; nothing a web view lists changes.",
+      ),
     },
     async function* ({
       safeDb,
