@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 
 /**
  * RFC 8935 Security Event Token (SET) receiver. Full SET signature
@@ -16,6 +19,7 @@ const config = {
   // A SET is a signed JWT delivered as application/secevent+jwt. We accept
   // the compact serialization as an opaque string and bound its size.
   body: t.String({ minLength: 1, maxLength: 16_384 }),
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },
 } satisfies PublicHandlerConfig;

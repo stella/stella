@@ -7,6 +7,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./currency-code": "./src/currency-code.ts",
+    "./limits": "./src/limits.ts",
     "./action-admission": "./src/action-admission.ts",
     "./browser-control": "./src/browser-control.ts",
     "./browser-control-json-schema": "./src/browser-control-json-schema.ts",
@@ -27,6 +29,7 @@
     "./decision-document-role": "./src/decision-document-role.ts",
     "./decision-ruling-identity": "./src/decision-ruling-identity.ts",
     "./decision-docket-grammar": "./src/decision-docket-grammar.ts",
+    "./decision-docket-identity.fixtures": "./src/decision-docket-identity.fixtures.ts",
     "./decision-docket-reference": "./src/decision-docket-reference.ts",
     "./decision-query-intent": "./src/decision-query-intent.ts",
     "./desktop-registry": "./src/desktop-registry.ts",

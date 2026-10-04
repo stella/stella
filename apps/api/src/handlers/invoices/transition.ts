@@ -19,7 +19,7 @@ import {
   recalculateInvoiceTotals,
 } from "@/api/handlers/invoices/invoice-lines";
 import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder, AuditEvent } from "@/api/lib/audit-log";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
@@ -220,6 +220,7 @@ const transitionInvoice = createSafeHandler(
       "reference an eligible original and cannot exceed its total. Voiding releases " +
       "attached entries and clears the paid timestamp.",
     permissions: { invoice: ["update"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",

@@ -19,7 +19,7 @@ import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 import { prepareReferenceProposal } from "@/api/handlers/document-reviews/prepare-proposal";
 import { streamReferenceProposal } from "@/api/handlers/document-reviews/reference-positions";
 import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
 import { sseResponse } from "@/api/lib/sse";
@@ -28,6 +28,7 @@ const config = {
   description:
     "Stream proposed review positions from one or more reference documents as they are produced: the target's parties first, then each verified position (its kind, severity, what the term is for and what to compare, and the reference passages that state the standard), then what was read and deliberately not compared.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "realtime_stream" },
   body: proposeReviewPositionsBodySchema,

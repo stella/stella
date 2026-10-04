@@ -5,6 +5,10 @@ import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import {
+  CURRENCY_CODE_LENGTH,
+  currencyCodeSchema,
+} from "@stll/api-contract/currency-code";
 import { tryToMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -306,7 +310,14 @@ const CreateRateTableForm = ({
   const t = useTranslations();
   const schema = v.strictObject({
     name: requiredTrimmedStringSchema(t("common.required")),
-    currency: v.string(),
+    // One message per field: stop at the first failing currency check.
+    currency: v.config(
+      v.message(
+        currencyCodeSchema,
+        t("billing.sellerProfiles.invalidCurrency"),
+      ),
+      { abortPipeEarly: true },
+    ),
     isDefault: v.boolean(),
   });
 
@@ -356,21 +367,22 @@ const CreateRateTableForm = ({
             )}
           </form.Field>
         </div>
-        <div className="flex w-24 flex-col gap-1.5">
-          <Label>{t("common.currency")}</Label>
-          <form.Field name="currency">
-            {(field) => (
+        <form.Field name="currency">
+          {(field) => (
+            <Field className="w-24 gap-1.5" name={field.name}>
+              <FieldLabel>{t("common.currency")}</FieldLabel>
               <Input
                 dir="ltr"
-                maxLength={3}
+                maxLength={CURRENCY_CODE_LENGTH}
                 onChange={(e) =>
                   field.handleChange(e.currentTarget.value.toUpperCase())
                 }
                 value={field.state.value}
               />
-            )}
-          </form.Field>
-        </div>
+              <FieldError />
+            </Field>
+          )}
+        </form.Field>
       </div>
 
       <form.Field name="isDefault">
