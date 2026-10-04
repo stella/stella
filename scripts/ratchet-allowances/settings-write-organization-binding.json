@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 1,
+  "reason": "apps/web/src/routes/_protected.settings/-hooks/use-settings-mutation.ts: the TanStack mutationFn (framework boundary) rejects with the typed SettingsOrganizationChangedError from a Result check so the hook's onError toast and callbacks run; the write is never sent."
+}

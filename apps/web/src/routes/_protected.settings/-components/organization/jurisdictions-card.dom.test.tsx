@@ -40,6 +40,12 @@ globalThis.fetch = Object.assign(
   async (input: string | URL | Request, init?: RequestInit) => {
     const request = new Request(input, init);
     const path = new URL(request.url).pathname;
+    if (request.method === "GET" && path.endsWith("/api/auth/get-session")) {
+      return Response.json({
+        session: { userId: "user", activeOrganizationId: ORGANIZATION },
+        user: { id: "user", email: "admin@example.com", name: "Admin" },
+      });
+    }
     if (request.method === "GET" && path.endsWith("/organization-settings")) {
       settingsReads += 1;
       return Response.json(settingsBody());

@@ -8,12 +8,45 @@ import { assertProperty } from "@stll/property-testing";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/settings" });
 
+const ORGANIZATION = "settings-org-a";
+const OTHER_ORGANIZATION = "settings-org-b";
+
+// The organization the server resolves for this session when a write is sent.
+const server = { activeOrganizationId: ORGANIZATION };
+
+const originalFetch = globalThis.fetch;
+globalThis.fetch = Object.assign(
+  async (input: string | URL | Request, init?: RequestInit) => {
+    const request = new Request(input, init);
+    if (new URL(request.url).pathname.endsWith("/api/auth/get-session")) {
+      return Response.json({
+        session: {
+          userId: "user",
+          activeOrganizationId: server.activeOrganizationId,
+        },
+        user: { id: "user", email: "admin@example.com", name: "Admin" },
+      });
+    }
+    throw new Error(`Unexpected request: ${request.method} ${request.url}`);
+  },
+  { preconnect: () => undefined },
+);
+
 const query = await import("@tanstack/react-query");
 const testing = await import("@testing-library/react");
-const { useSettingsMutation } = await import("./use-settings-mutation");
+const { AuthenticatedUserProvider } =
+  await import("@/lib/authenticated-user-context");
+const { SettingsOrganizationChangedError, useSettingsMutation } =
+  await import("./use-settings-mutation");
 
-afterEach(() => testing.cleanup());
-afterAll(async () => GlobalRegistrator.unregister());
+afterEach(() => {
+  testing.cleanup();
+  server.activeOrganizationId = ORGANIZATION;
+});
+afterAll(async () => {
+  globalThis.fetch = originalFetch;
+  await GlobalRegistrator.unregister();
+});
 
 const SETTINGS_KEY = ["settings-mutation-order-test"] as const;
 
@@ -55,9 +88,24 @@ const mountSettingsMutation = () => {
   // Values in the order the transport sent them.
   const sent: number[] = [];
   let maxConcurrent = 0;
+  // Errors the hook reported through `onError`, in order.
+  const errors: unknown[] = [];
   const wrapper = ({ children }: { children: ReactNode }) => (
     <query.QueryClientProvider client={client}>
-      {children}
+      <AuthenticatedUserProvider
+        user={{
+          activeOrganizationId: ORGANIZATION,
+          email: "admin@example.com",
+          id: "user",
+          image: null,
+          name: "Admin",
+          preferredName: null,
+          timezoneId: "UTC",
+          wordEditShortcut: null,
+        }}
+      >
+        {children}
+      </AuthenticatedUserProvider>
     </query.QueryClientProvider>
   );
   const { result, unmount } = testing.renderHook(
@@ -71,6 +119,9 @@ const mountSettingsMutation = () => {
           return await settle.promise;
         },
         invalidate: SETTINGS_KEY,
+        onError: (error) => {
+          errors.push(error);
+        },
       }),
     { wrapper },
   );
@@ -95,6 +146,7 @@ const mountSettingsMutation = () => {
     inFlight,
     applied,
     sent,
+    errors,
     maxConcurrent: () => maxConcurrent,
     submit: async (value: number) => {
       testing.act(() => {
@@ -110,7 +162,7 @@ const mountSettingsMutation = () => {
 
 test("settings writes to one resource reach the server in submission order", async () => {
   await assertProperty(
-    "settings-mutation-submission-order",
+    "settings writes to one resource reach the server in submission order",
     fc.asyncProperty(
       fc.array(step, { minLength: 1, maxLength: 16 }),
       fc.array(fc.boolean(), { maxLength: 8 }),
@@ -172,6 +224,36 @@ test("a write submitted while another is in flight waits until it settles", asyn
   await harness.settle(0, true);
   expect(harness.applied).toEqual([1]);
   expect(harness.client.isMutating()).toBe(0);
+  harness.unmount();
+  harness.client.clear();
+});
+
+test("a queued write is not sent once the active organization has changed", async () => {
+  const harness = mountSettingsMutation();
+  await harness.submit(0);
+  await harness.submit(1);
+  expect(harness.sent).toEqual([0]);
+  // The member switches organization while write 0 is in flight.
+  server.activeOrganizationId = OTHER_ORGANIZATION;
+  await harness.settle(0, true);
+  // Write 0 was already sent for the submitting organization; write 1 is not.
+  expect(harness.sent).toEqual([0]);
+  expect(harness.applied).toEqual([0]);
+  expect(harness.inFlight).toEqual([]);
+  expect(harness.errors).toHaveLength(1);
+  expect(SettingsOrganizationChangedError.is(harness.errors[0])).toBe(true);
+  expect(harness.client.isMutating()).toBe(0);
+  harness.unmount();
+  harness.client.clear();
+});
+
+test("a write is not sent when the active organization changed before submission", async () => {
+  const harness = mountSettingsMutation();
+  server.activeOrganizationId = OTHER_ORGANIZATION;
+  await harness.submit(0);
+  expect(harness.sent).toEqual([]);
+  expect(harness.errors).toHaveLength(1);
+  expect(SettingsOrganizationChangedError.is(harness.errors[0])).toBe(true);
   harness.unmount();
   harness.client.clear();
 });
