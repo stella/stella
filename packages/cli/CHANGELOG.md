@@ -1,5 +1,15 @@
 # @stll/cli
 
+## 3.6.1
+
+### Patch Changes
+
+- [#4716](https://github.com/stella/stella/pull/4716) [`b64acc4`](https://github.com/stella/stella/commit/b64acc48136876e2a638c8994d6f1664875d3fd7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Clarify matter contact capacity requirements.
+
+- [#4528](https://github.com/stella/stella/pull/4528) [`8e5a77d`](https://github.com/stella/stella/commit/8e5a77d0c78131dd1551b8be3480901e14488aa1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe edit attribution returned by the skill listing command.
+
+- [#4732](https://github.com/stella/stella/pull/4732) [`2e3ed99`](https://github.com/stella/stella/commit/2e3ed993016a296132301badca5717596b7f32a9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Template fills report undecided AI conditions, and the completion gate grades every fill diagnostic.
+
 ## 3.6.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.41.1
+
+### Patch Changes
+
+- [#4528](https://github.com/stella/stella/pull/4528) [`8e5a77d`](https://github.com/stella/stella/commit/8e5a77d0c78131dd1551b8be3480901e14488aa1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Landing column headings use sentence case, and row text lines up with the heading label.
+
 ## 0.41.0
 
 ### Minor Changes
