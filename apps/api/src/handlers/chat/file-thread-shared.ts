@@ -22,6 +22,11 @@ import type { ClientMessage } from "@/api/handlers/chat/message-page";
 import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
 import { readLatestChatCompactionOnTx } from "@/api/handlers/chat/persistent-compaction";
 import {
+  EMPTY_CHAT_THREAD_ATTACHED_FILES,
+  readChatThreadAttachedFiles,
+} from "@/api/handlers/chat/threads/list-context";
+import type { ChatThreadAttachedFiles } from "@/api/handlers/chat/threads/list-context";
+import {
   areSubagentToolsRegistered,
   isWebSearchAvailable,
 } from "@/api/handlers/chat/tools/chat-tools";
@@ -81,6 +86,7 @@ type ThreadMetadata = {
 export type FileThreadMessagePage = {
   /** See `ChatMessagePage.activeTurnId`. */
   activeTurnId: SafeId<"chatTurn"> | null;
+  attachedFiles: ChatThreadAttachedFiles;
   messages: ClientMessage[];
   olderCursor: string | null;
   contextMatterIds: SafeId<"workspace">[];
@@ -99,6 +105,7 @@ export const emptyMessagePage = (
   webSearchAvailable: boolean,
 ): FileThreadMessagePage => ({
   activeTurnId: null,
+  attachedFiles: EMPTY_CHAT_THREAD_ATTACHED_FILES,
   messages: [],
   olderCursor: null,
   contextMatterIds: [],
@@ -186,6 +193,7 @@ export const loadResolvedThreadMessagePage = async ({
   const page = unwrapTxRead(
     await loadChatMessagePage({ tx, threadId, userId }),
   );
+  const attachedFiles = await readChatThreadAttachedFiles({ threadId, tx });
 
   const checkpoint = await readLatestChatCompactionOnTx({ threadId, tx });
   const windowedMessages = unwrapTxRead(
@@ -241,6 +249,7 @@ export const loadResolvedThreadMessagePage = async ({
 
   return {
     activeTurnId: page.activeTurnId,
+    attachedFiles,
     messages: page.messages,
     olderCursor: page.olderCursor,
     contextMatterIds,

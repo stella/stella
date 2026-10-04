@@ -1165,6 +1165,7 @@
       "noSkills": "لا توجد مهارات بعد",
       "pinnedMatters": "الملفات القانونية المثبّتة",
       "recentChats": "الدردشات الحديثة",
+      "skillEditedBy": "عُدِّل بواسطة {name} · {time}",
       "skills": "المهارات"
     },
     "loadEarlierMessages": "تحميل الرسائل السابقة",
@@ -1296,6 +1297,9 @@
     },
     "tabToAsk": "→ للسؤال: «{prompt}»",
     "thinking": "العمل مع السياق",
+    "threadFiles": {
+      "title": "الملفات في هذه الدردشة"
+    },
     "tool": {
       "add_comment": "إضافة تعليق",
       "apply-active-docx-edits": "جارٍ تجهيز تعديلات المستند",

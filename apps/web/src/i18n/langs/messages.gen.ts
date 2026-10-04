@@ -1168,6 +1168,7 @@ type Messages = {
       "noSkills": "No skills yet";
       "pinnedMatters": "Pinned matters";
       "recentChats": "Recent chats";
+      "skillEditedBy": "Edited by {name} · {time}";
       "skills": "Skills";
     };
     "loadEarlierMessages": "Load earlier messages";
@@ -1299,6 +1300,9 @@ type Messages = {
     };
     "tabToAsk": "→ to ask: \"{prompt}\"";
     "thinking": "Working with context";
+    "threadFiles": {
+      "title": "Files in this chat";
+    };
     "tool": {
       "add_comment": "Adding comment";
       "apply-active-docx-edits": "Preparing document edits";

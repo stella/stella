@@ -1165,6 +1165,7 @@
       "noSkills": "Įgūdžių dar nėra",
       "pinnedMatters": "Prisegtos bylos",
       "recentChats": "Neseniai naudoti pokalbiai",
+      "skillEditedBy": "Redagavo {name} · {time}",
       "skills": "Įgūdžiai"
     },
     "loadEarlierMessages": "Įkelti ankstesnes žinutes",
@@ -1296,6 +1297,9 @@
     },
     "tabToAsk": "→, kad paklaustumėte: „{prompt}“",
     "thinking": "Dirbama su kontekstu",
+    "threadFiles": {
+      "title": "Šio pokalbio failai"
+    },
     "tool": {
       "add_comment": "Pridedamas komentaras",
       "apply-active-docx-edits": "Ruošiami dokumento pakeitimai",
