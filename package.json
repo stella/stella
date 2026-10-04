@@ -99,6 +99,7 @@
     "check:query-cache-types": "bun run generate && bun --filter @stll/scripts test -- src/query-cache-types.test.ts && bun packages/scripts/src/query-cache-types.ts",
     "check:query-data-state": "bun scripts/query-data-state-baseline.ts --check",
     "check:docs-sources": "bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error .claude/mcp/doc-sources.ts",
+    "check:office-fixture-metadata": "bun --filter @stll/docx-utils check:office-fixture-metadata",
     "check:instruction-references": "bun scripts/check-instruction-references.ts --check",
     "check:railway-template-draft": "bun scripts/check-railway-template-draft.ts",
     "check:railway-template": "bun scripts/check-railway-template-shape.ts",

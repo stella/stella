@@ -325,6 +325,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-direct-field-write.fixture.ts", [
     "no-direct-field-write/no-direct-field-write",
   ]),
+  fixtureRuleOverride("no-chat-table-write.fixture.ts", [
+    "no-chat-table-write/no-chat-table-write",
+  ]),
   fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
     "no-direct-pdf-save/no-direct-pdf-save",
   ]),
@@ -1339,6 +1342,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-field-write.ts",
+    "./.oxlint-plugins/no-chat-table-write.ts",
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
     "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
@@ -2460,6 +2464,15 @@ export default defineConfig({
       ],
       rules: {
         "no-async-context-enter-with/no-async-context-enter-with": "error",
+      },
+    },
+    {
+      // Chat tools write rows through the shared write primitives in
+      // `apps/api/src/lib`, which own each write's checks and audit event.
+      files: ["apps/api/src/handlers/chat/tools/**/*.ts"],
+      excludeFiles: ["apps/api/src/handlers/chat/tools/**/*.test.ts"],
+      rules: {
+        "no-chat-table-write/no-chat-table-write": "error",
       },
     },
     {
