@@ -713,7 +713,12 @@ describe("sk document drain", () => {
       parked: 1,
       filled: 1,
       failed: 0,
-      failures: { "publisher-status": 1, network: 0, unparseable: 1 },
+      failures: {
+        "publisher-status": 1,
+        network: 0,
+        "too-large": 0,
+        unparseable: 1,
+      },
       lastFailureDetail: OUTCOMES.parked.detail,
     });
   });
