@@ -33,7 +33,10 @@ import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
 } from "@/api/mcp/static-tool-definitions";
-import { hasMcpToolAuthority } from "@/api/mcp/write-tool-authority";
+import {
+  hasMcpToolAuthority,
+  isAccountAuthorizedForMcpTool,
+} from "@/api/mcp/write-tool-authority";
 
 /**
  * Chat's write surface, projected from the `access: "write"` slice of the MCP
@@ -171,8 +174,12 @@ export const buildChatWriteTools = (
     const definition =
       getStaticMcpToolDefinition(toolName) ??
       panic(`Chat write tool ${toolName} is missing from the static registry`);
+    // The same declared gates MCP discovery applies: a member who cannot run
+    // any of the tool's operations, or an account its declared account
+    // access refuses, is not offered it.
     if (
       !hasMcpToolAuthority(context, definition) ||
+      !isAccountAuthorizedForMcpTool(context.userEmail, definition) ||
       !isMcpDescriptorFeatureEnabled({
         context,
         kind: "tools",

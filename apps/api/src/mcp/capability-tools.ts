@@ -12,6 +12,7 @@ import {
 import type { PermissionInput } from "@stll/permissions";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
@@ -385,6 +386,7 @@ type EndpointConfig = {
   params?: TSchema;
   query?: TSchema;
   permissions?: PermissionInput;
+  accountAccess?: AccountAccess;
 };
 
 type EndpointDefinition = {
@@ -2270,6 +2272,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: "invoke_capability",
     access: "write",
+    accountAccess: "sandbox",
     permissions: {
       type: "delegated",
       reason:

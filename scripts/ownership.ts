@@ -425,6 +425,11 @@ export const OWNERSHIP = [
             "Schema export or full-schema test introspection; no production receipt writer.",
         },
         {
+          path: "apps/api/src/db/code-owned-tables.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
           path: "apps/api/src/db/high-volume-tables.test.ts",
           reason:
             "Schema export or full-schema test introspection; no production receipt writer.",
@@ -755,11 +760,6 @@ export const OWNERSHIP = [
             "Persists a collaboration room re-checked on every token use.",
         },
         {
-          path: "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.ts",
-          reason:
-            "Compacts a user's own chat threads; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
-        },
-        {
           path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
           reason:
             "Extracts a user's own chat memory; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
@@ -775,11 +775,6 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/scouts/work-attention.ts",
           reason: "Takes the constructor as an injected dependency type.",
-        },
-        {
-          path: "apps/api/src/lib/workflow-queue.ts",
-          reason:
-            "Workflow property generation, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
         },
       ],
     },
@@ -806,6 +801,7 @@ export const OWNERSHIP = [
           "apps/api/src/lib/bilingual/run-queue.ts",
           "apps/api/src/handlers/reports/report-export-queue.ts",
           "apps/api/src/lib/lists/verification/run-queue.ts",
+          "apps/api/src/lib/workflow-queue.ts",
         ].map((modulePath) => ({
           path: modulePath,
           reason: "Member run; reads its inputs through inputDb.",
@@ -1735,6 +1731,24 @@ export const OWNERSHIP = [
       "reads the same wherever it appears. The `require-relative-time-helpers` " +
       "rule enforces it.",
     enforcement: { kind: "none" },
+  },
+  {
+    id: "file-encryption",
+    capability: "Deciding a stored file's `encrypted` attribute",
+    owner: ["apps/api/src/lib/files/detect-file-encryption.ts"],
+    summary:
+      "Every file content writer takes a `FileEncryption`, which only this " +
+      "module makes: from the bytes (PDFs go through the PDF worker), from an " +
+      "Office editor's output, from bytes the server built, or from a stored " +
+      "copy. The PDF probe is confined here, `no-literal-derived-attribute` " +
+      "rejects a literal written to `encrypted` elsewhere in the API, and " +
+      "`file-encryption-writers.test.ts` enumerates the writers.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/files/pdf-utils"],
+      names: ["isEncryptedPdf"],
+      allowed: [],
+    },
   },
   {
     id: "money-arithmetic",

@@ -29,6 +29,14 @@ export const MEMBER_RUN_QUEUES = [
     queue: "legal-list-verification-runs",
     module: "apps/api/src/lib/lists/verification/run-queue.ts",
   },
+  {
+    queue: "workflow",
+    module: "apps/api/src/lib/workflow-queue.ts",
+  },
+  {
+    queue: "workflow-flex",
+    module: "apps/api/src/lib/workflow-queue.ts",
+  },
 ] as const satisfies readonly { queue: BullMqQueueName; module: string }[];
 
 export type MemberRunQueue = (typeof MEMBER_RUN_QUEUES)[number]["queue"];
@@ -74,6 +82,7 @@ export const MEMBER_RUN_REVOCATION_CASES = [
 const WORKFLOW_RUN = {
   authority: "member-run",
   worker: "apps/api/src/lib/workflow-queue.ts",
+  revocationTest: "apps/api/src/lib/workflow-queue.integration.test.ts",
   reason:
     "Started by a member (workflow start, cell retry, playbook run, MCP); follow-up runs reuse that member.",
 } as const satisfies QueueAuthorityEntry;

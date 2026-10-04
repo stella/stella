@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { agentSkillResources } from "@/api/db/schema";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { loadSkillForNewResource } from "@/api/handlers/skills/resources/new-resource-skill";
 import {
   lockSkillForResourceWrite,
@@ -64,6 +65,7 @@ const config = {
     "skills.resources.create, which takes the text directly as JSON.",
   permissions: { agentSkill: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

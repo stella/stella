@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
@@ -71,6 +71,7 @@ import { projectToolMapForSubagent } from "@/api/handlers/chat/tools/subagent-to
 import {
   createTemplateAuthoringTools,
   createTemplateTools,
+  FILL_TEMPLATE_TOOL_NAME,
 } from "@/api/handlers/chat/tools/template-tools";
 import {
   applyChatToolPolicies,
@@ -114,6 +115,7 @@ import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
+import { isAccountAuthorizedForMcpTool } from "@/api/mcp/write-tool-authority";
 
 const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
 
@@ -326,6 +328,27 @@ type CurrentSkillEditTools = Partial<
   Record<CurrentSkillEditToolName, NonNullable<ChatToolMap[string]>>
 >;
 type TemplateTools = ReturnType<typeof createTemplateTools>;
+
+/**
+ * `fill_template` declares `standard` account access on its MCP definition,
+ * as its REST route does: the configured demo account is refused it. Chat
+ * reads the same declaration, so that account keeps only the read tools.
+ */
+const withAccountAuthorizedTemplateFill = (
+  tools: TemplateTools,
+  userEmail: string,
+) => {
+  const { [FILL_TEMPLATE_TOOL_NAME]: fillTemplate, ...readTools } = tools;
+  const definition =
+    getStaticMcpToolDefinition(FILL_TEMPLATE_TOOL_NAME) ??
+    panic(`${FILL_TEMPLATE_TOOL_NAME} is missing from the static registry`);
+  return {
+    ...readTools,
+    ...(isAccountAuthorizedForMcpTool(userEmail, definition)
+      ? { [FILL_TEMPLATE_TOOL_NAME]: fillTemplate }
+      : {}),
+  };
+};
 type TemplateAuthoringTools = ReturnType<typeof createTemplateAuthoringTools>;
 type FolderConsistencyReviewTools = ReturnType<
   typeof createFolderConsistencyReviewTools
@@ -1052,16 +1075,19 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     template: ["use"],
   });
   const templateTools = canUseTemplates
-    ? createTemplateTools({
-        scopedDb,
-        safeDb,
-        organizationId,
-        userId,
-        orgAIConfig,
-        managedAIResidency,
-        recordAuditEvent,
-        thirdPartyBoundary,
-      })
+    ? withAccountAuthorizedTemplateFill(
+        createTemplateTools({
+          scopedDb,
+          safeDb,
+          organizationId,
+          userId,
+          orgAIConfig,
+          managedAIResidency,
+          recordAuditEvent,
+          thirdPartyBoundary,
+        }),
+        userEmail,
+      )
     : {};
 
   // `suggest_template_fields` proposes turning literals into {{field}}

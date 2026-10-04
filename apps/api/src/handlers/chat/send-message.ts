@@ -1177,6 +1177,8 @@ const acceptIncomingTurn = async ({
 
     let messagesForPersistence: ChatThreadState["data"]["messages"] =
       thread.data.messages;
+    // Every decision below reads this history; acceptance holds the turn to it.
+    let plannedOnHistory = thread.data.historySnapshot;
     let deleteMessageIdsBeforeLatest: SafeId<"chatMessage">[] = [];
     let incomingMessageExists = false;
     if (replayTargetMessageId !== undefined) {
@@ -1204,6 +1206,7 @@ const acceptIncomingTurn = async ({
         );
       }
       messagesForPersistence = truncationTarget.messagesForPersistence;
+      plannedOnHistory = truncationTarget.snapshot;
       deleteMessageIdsBeforeLatest =
         truncationTarget.deleteMessageIdsBeforeLatest;
       if (isExplicitRegeneration && truncationTarget.hasLaterUserMessage) {
@@ -1412,6 +1415,7 @@ const acceptIncomingTurn = async ({
     } else {
       const persistenceResult = await persistAcceptedMessageWithClaim({
         ...persistenceProps,
+        plannedOnHistory,
         turnAcceptance,
       });
       if (Result.isError(persistenceResult)) {

@@ -6,6 +6,7 @@ import { Temporal } from "@stll/time";
 
 import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { expenses } from "@/api/db/schema";
+import { expenseRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -42,6 +43,7 @@ const config = {
     "as a draft.",
   permissions: { expense: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: expenseRealtimeUpdates,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createExpenseBodySchema,
 } satisfies WorkspaceHandlerConfig;

@@ -284,6 +284,25 @@ export const GENERATORS = [
     after: [],
   },
   {
+    id: "model-benchmarks",
+    outputKind: "committed",
+    outputs: ["packages/ai-catalog/src/benchmarks.gen.ts"],
+    inputs: [
+      "packages/ai-catalog/package.json",
+      "packages/ai-catalog/src/benchmark-sources.ts",
+      "packages/ai-catalog/src/benchmarks.ts",
+      "packages/ai-catalog/src/index.ts",
+      "packages/scripts/src/model-catalog-benchmarks-gen.ts",
+      "packages/scripts/src/model-catalog-rates-gen.ts",
+    ],
+    write: ["bun", "--filter", "@stll/ai-catalog", "gen:benchmarks"],
+    check: null,
+    unchecked:
+      "The Text Arena snapshot is refreshed on demand; its network check is not a pull request gate",
+    autofix: false,
+    after: [],
+  },
+  {
     id: "i18n-messages-web",
     outputKind: "committed",
     outputs: ["apps/web/src/i18n/langs/messages.gen.ts"],

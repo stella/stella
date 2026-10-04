@@ -1,8 +1,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { CLAUSE_WARNINGS_HEADER } from "@stll/api-contract/template-fill-headers";
-
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { templateFills } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -15,11 +13,16 @@ import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+import { fillDiagnosticHeaders } from "@/api/lib/templates/fill-diagnostic-headers";
 import {
   scanTemplateUpload,
   templateUploadRejectionResponse,
 } from "@/api/lib/templates/scan-template-upload";
 import { containsNull } from "@/api/lib/templates/template-data";
+import {
+  fillDiagnosticsOf,
+  templateFillStatus,
+} from "@/api/lib/templates/template-fill-completion";
 import { fillTemplateDocx } from "@/api/lib/templates/template-fill-service";
 import { buildTemplateFillAiWiring } from "@/api/lib/templates/template-fill-usage";
 import { scanTemplateOutput } from "@/api/lib/templates/validate-template-output";
@@ -168,13 +171,12 @@ export const fillHandler = async ({
   }
 
   const { unusedValues } = result;
+  const diagnostics = fillDiagnosticsOf(result);
 
-  // A failed AI draft leaves its field unfilled, so it counts against the fill
+  // The completion decision over every diagnostic: a failed AI draft, an
+  // undecided AI condition or an unresolved clause counts against the fill
   // the same way an unmatched placeholder does.
-  const fillStatus =
-    result.unmatchedPlaceholders.length > 0 || result.aiFieldErrors.length > 0
-      ? "partial"
-      : "success";
+  const fillStatus = templateFillStatus(diagnostics);
 
   // Best-effort analytics; don't block the download.
   // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
@@ -200,19 +202,7 @@ export const fillHandler = async ({
     });
   });
 
-  const additionalHeaders = new Headers();
-  if (result.clauseWarnings.length > 0) {
-    additionalHeaders.set(
-      CLAUSE_WARNINGS_HEADER,
-      String(result.clauseWarnings.length),
-    );
-  }
-  if (result.aiFieldErrors.length > 0) {
-    additionalHeaders.set(
-      "X-Ai-Field-Errors",
-      encodeURIComponent(JSON.stringify(result.aiFieldErrors)),
-    );
-  }
+  const additionalHeaders = fillDiagnosticHeaders({ diagnostics, format });
 
   // PDF conversion via Gotenberg
   if (format === "pdf") {
@@ -250,26 +240,6 @@ export const fillHandler = async ({
     });
   }
 
-  if (result.unmatchedPlaceholders.length > 0) {
-    additionalHeaders.set(
-      "X-Unmatched-Placeholders",
-      // Headers are ISO-8859-1; field paths carry diacritics (Polish/Czech),
-      // so the diagnostic lists travel URI-encoded.
-      encodeURIComponent(result.unmatchedPlaceholders.join(",")),
-    );
-  }
-  if (unusedValues.length > 0) {
-    additionalHeaders.set(
-      "X-Unused-Values",
-      encodeURIComponent(unusedValues.join(",")),
-    );
-  }
-  if (result.structureErrors.length > 0) {
-    additionalHeaders.set(
-      "X-Structure-Errors",
-      JSON.stringify(result.structureErrors),
-    );
-  }
   return secureDocumentResponse({
     additionalHeaders,
     body: new Uint8Array(result.file.bytes),

@@ -529,11 +529,14 @@ export const exactDecisionMatches = <THit extends DecisionHitIdentity>(
  *   is siblings in one file, or one number at several courts;
  *   `selector_unmatched` is a sheet or part that no candidate is known to
  *   carry, so the file's decisions come back rather than one of them, even
- *   when the file shows one; `file_incomplete` is a bare docket finding one
+ *   when the file shows one; for a sheet, only those whose sheet is unknown,
+ *   since one known under another sheet is not the decision named.
+ *   `file_incomplete` is a bare docket finding one
  *   decision where stored dockets can still carry their sheet
  *   (`DECISION_DOCKETS_STORED_WITH_SHEETS`), so the file may hold members the
  *   read did not reach.
- * - `none`: nothing answers to it.
+ * - `none`: nothing answers to it, which includes a sheet where every
+ *   candidate is known under another sheet.
  *
  * A docket, a court and a date together are still not a decision: two
  * decisions of one file can be issued on one day, so nothing here ever
@@ -617,11 +620,38 @@ const ECLI_IDENTIFIER = "ecli";
 type CarriedSelectors = { sheets: Set<string>; parts: Set<string> };
 
 /**
+ * The sheet a hit's source recorded, as a sheet of the file asked about, or
+ * null. Ingestion splits the recorded sheet off the reference as the court
+ * published it, or off the stored docket where none was kept
+ * (`splitCaseReference`), so it is a sheet of that docket's file only: a hit
+ * reached through a parallel file number does not carry it in that file.
+ */
+const statedSheetOf = (
+  hit: DecisionHitIdentity,
+  familyCanonical: string,
+  grammar: DecisionDocketGrammar,
+): string | null => {
+  const stated = hit.sheetNumber?.trim();
+  if (stated === undefined || !/^\d{1,8}$/u.test(stated)) {
+    return null;
+  }
+  const source = readDecisionDocketReference(
+    hit.publishedCaseNumber ?? hit.caseNumber,
+    { grammar },
+  );
+  return source?.family.canonical === familyCanonical ? numeral(stated) : null;
+};
+
+/**
  * Every selector a hit is known to carry within the file: from each docket
- * spelling of the file it stores (its own, the reference as the court
- * published it, and a full file number a publisher supplied beside it), from
- * the sheet its source recorded, and from each ECLI whose scheme ends on the
- * sheet.
+ * spelling of the file it stores (its own stored docket, which keeps a sheet
+ * the row was written with, the reference as the court published it, and a
+ * full file number a publisher supplied beside it), from the sheet its source
+ * recorded off a docket of this file, and from each ECLI whose scheme ends on
+ * the sheet.
+ *
+ * The one place a sibling's known sheet is derived: every source counts
+ * alike, so where a sheet is stored never changes what a sheet selects.
  */
 const selectorsOfHit = (
   hit: DecisionHitIdentity,
@@ -660,9 +690,9 @@ const selectorsOfHit = (
       sheets.add(sheet);
     }
   }
-  const stated = hit.sheetNumber?.trim();
-  if (stated !== undefined && /^\d{1,8}$/u.test(stated)) {
-    sheets.add(numeral(stated));
+  const stated = statedSheetOf(hit, familyCanonical, grammar);
+  if (stated !== null) {
+    sheets.add(stated);
   }
   return { sheets, parts };
 };
@@ -733,9 +763,21 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
   }
   // Nothing known to carry what the reference printed: the file comes back,
   // even when it shows one decision, which may be a sibling of the one named.
+  // A sibling known under another sheet is not it, whichever source states
+  // that sheet; the read never reaches a row stored under another sheet, so
+  // counting the others in would let storage decide the answer. Where every
+  // candidate is known under another sheet nothing answers (`none`), as when
+  // the read reaches no row at all. A part selector keeps the whole file.
+  const open =
+    selector.kind === "sheet"
+      ? known.filter(({ carried }) => carried.size === 0).map(({ hit }) => hit)
+      : family;
+  if (open.length === 0) {
+    return { status: "none" };
+  }
   return {
     status: "ambiguous",
-    candidates: family,
+    candidates: open,
     reason: "selector_unmatched",
   };
 };
