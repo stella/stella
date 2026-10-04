@@ -103,7 +103,6 @@
     "apps/web/src/components/workspaces/lead-section.tsx::LeadSection::members": "pending migration to useQueryView",
     "apps/web/src/components/workspaces/lead-section.tsx::LeadSection::workspace": "pending migration to useQueryView",
     "apps/web/src/components/workspaces/members-section.tsx::MembersSection::members": "pending migration to useQueryView",
-    "apps/web/src/components/workspaces/parties-section.tsx::PartiesSection::parties": "pending migration to useQueryView",
     "apps/web/src/components/workspaces/row-actions.tsx::RowActions::properties": "pending migration to useQueryView",
     "apps/web/src/components/workspaces/row-actions.tsx::useAvailableTranslationTarget::deepLAvailability": "pending migration to useQueryView",
     "apps/web/src/components/workspaces/tasks/task-metadata.tsx::AssigneePicker::members": "pending migration to useQueryView",

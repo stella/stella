@@ -198,6 +198,8 @@ run_module_mock_ledger_guard() {
   bun scripts/check-write-tool-authority-ledger.ts --base "$base_ref" || return 1
   bun scripts/check-contract-domain-ledger.ts --self-test || return 1
   bun scripts/check-contract-domain-ledger.ts --base "$base_ref" || return 1
+  bun scripts/calendar-day-ledger.ts --self-test || return 1
+  bun scripts/calendar-day-ledger.ts --base "$base_ref" || return 1
   # Case-law rawHash files and external-id writers: exact sets, shrink-only.
   # The registration (drivers) section is checked by the API guard test.
   bun scripts/source-fingerprint-baseline.ts --self-test || return 1

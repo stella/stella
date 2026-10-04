@@ -4,6 +4,7 @@ import { t } from "elysia";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 
 import { legalListItemComments } from "@/api/db/schema";
+import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -28,6 +29,7 @@ const config = {
     "and shows up in its activity trail.",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: legalListRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

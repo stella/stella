@@ -31,6 +31,11 @@ import { recordTemplateExecution } from "@/api/lib/templates/record-use";
 import { suggestTemplateFields } from "@/api/lib/templates/suggest-template-fields";
 import type { SuggestedTemplateField } from "@/api/lib/templates/suggest-template-fields";
 import {
+  decideTemplateFillCompletion,
+  fillDiagnosticsOf,
+  fillShortfallIssues,
+} from "@/api/lib/templates/template-fill-completion";
+import {
   describeStoredTemplate,
   fillStoredTemplate,
 } from "@/api/lib/templates/template-fill-service";
@@ -82,9 +87,11 @@ export const FILL_TEMPLATE_DESCRIPTION =
   "omitting or emptying it rejects the fill with the exact missing " +
   "fields instead of guessing a value or leaving a placeholder unfilled " +
   "— ask the user for those values and retry. Returns the rendered text " +
-  "plus any placeholders left unfilled, and `unrestoredFields` naming any " +
-  "field whose value could not be filled with real values; ask the user to " +
-  "review those.";
+  "plus any placeholders left unfilled, `completionStatus` (`partial` " +
+  "with a `shortfall` list when a placeholder, an AI draft or an " +
+  "AI-decided condition was left open; supply those and retry), and " +
+  "`unrestoredFields` naming any field whose value could not be filled " +
+  "with real values; ask the user to review those.";
 
 type CreateTemplateToolsArgs = {
   scopedDb: ScopedDb;
@@ -289,34 +296,53 @@ export const createTemplateTools = ({
           missingFields: result.requiredFieldsRejection,
         };
       }
-      if (!("error" in result)) {
-        // The text reaches the model only once the fill is recorded (use
-        // count, fill row, EXECUTE audit); a recording failure fails the call.
-        const recorded = await recordTemplateExecution({
-          scopedDb,
-          templateId: branded,
-          organizationId,
-          userId,
-          format: "text",
-          unmatchedCount: result.unmatchedPlaceholders.length,
-          aiFieldErrorCount: result.aiFieldErrors.length,
-          unusedCount: result.unusedValues.length,
-          recordAuditEvent,
-        });
-        if (Result.isError(recorded)) {
-          observeFailure(recorded.error, { sink: RECORD_FILL_FAILED_SINK });
-          return raiseChatToolError(
-            new ChatToolError({
-              kind: "server-defect",
-              message: "The template fill could not be recorded.",
-              cause: recorded.error,
-            }),
-          );
-        }
+      if ("error" in result) {
+        return result;
       }
-      return unrestoredFields.size === 0
-        ? result
-        : { ...result, unrestoredFields: [...unrestoredFields].toSorted() };
+      // A value or AI draft that kept a placeholder put the placeholder into
+      // the document: a blocking diagnostic, so the fill is partial.
+      const diagnostics = fillDiagnosticsOf(result, {
+        unrestoredFields: [...unrestoredFields].toSorted(),
+      });
+      const recorded = await recordTemplateExecution({
+        scopedDb,
+        templateId: branded,
+        organizationId,
+        userId,
+        format: "text",
+        diagnostics,
+        recordAuditEvent,
+      });
+      if (Result.isError(recorded)) {
+        observeFailure(recorded.error, { sink: RECORD_FILL_FAILED_SINK });
+        return raiseChatToolError(
+          new ChatToolError({
+            kind: "server-defect",
+            message: "The template fill could not be recorded.",
+            cause: recorded.error,
+          }),
+        );
+      }
+      // The completion decision over the whole diagnostics record: a fill
+      // with an unfilled placeholder, a failed AI draft, an undecided AI
+      // condition or an unrestored placeholder is partial, and each
+      // shortfall names what to supply.
+      const completion = decideTemplateFillCompletion({
+        mode: "allow_partial",
+        diagnostics,
+      });
+      const graded = {
+        ...result,
+        ...(completion.type === "complete"
+          ? { completionStatus: "complete" as const }
+          : {
+              completionStatus: "partial" as const,
+              shortfall: fillShortfallIssues(completion.blocking),
+            }),
+      };
+      return diagnostics.unrestoredFields.length === 0
+        ? graded
+        : { ...graded, unrestoredFields: diagnostics.unrestoredFields };
     }),
   };
 };

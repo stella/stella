@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Dodaj serię numeracji",
       "advance": "Zaliczka",
+      "allSellers": "Wszyscy sprzedawcy",
       "archiveConfirm": "Zarchiwizować tę serię numeracji? Nie będzie już dostępna dla nowych dokumentów.",
       "creditNote": "Nota kredytowa",
       "default": "Seria domyślna",
@@ -562,6 +563,9 @@
       "preview": "Następny numer",
       "previewAllocated": "Ten numer został już przydzielony.",
       "previewHelp": "Podgląd używa zapisanego szablonu i nie rezerwuje numeru.",
+      "sellerProfile": "Profil sprzedawcy",
+      "sellerUnavailable": "Sprzedawca zarchiwizowany lub niedostępny",
+      "sellerUnavailableHelp": "Ten sprzedawca został zarchiwizowany lub jest niedostępny. Zachowaj przypisanie lub wybierz innego sprzedawcę.",
       "setDefault": "Ustaw jako serię domyślną",
       "title": "Serie numeracji"
     },
@@ -1165,6 +1169,7 @@
       "noSkills": "Nie ma jeszcze umiejętności",
       "pinnedMatters": "Przypięte sprawy",
       "recentChats": "Ostatnie czaty",
+      "skillEditedBy": "Edytował(a) {name} · {time}",
       "skills": "Umiejętności"
     },
     "loadEarlierMessages": "Załaduj wcześniejsze wiadomości",
@@ -1296,6 +1301,9 @@
     },
     "tabToAsk": "→, aby zapytać: „{prompt}”",
     "thinking": "Pracuję z kontekstem",
+    "threadFiles": {
+      "title": "Pliki w tym czacie"
+    },
     "tool": {
       "add_comment": "Dodawanie komentarza",
       "apply-active-docx-edits": "Przygotowywanie zmian w dokumencie",
@@ -1608,15 +1616,6 @@
     "currency": "Waluta",
     "currentPage": "Bieżąca strona",
     "date": "Data",
-    "datePicker": {
-      "label": "Wybór daty",
-      "nextDecade": "Następna dekada",
-      "nextMonth": "Następny miesiąc",
-      "nextYear": "Następny rok",
-      "previousDecade": "Poprzednia dekada",
-      "previousMonth": "Poprzedni miesiąc",
-      "previousYear": "Poprzedni rok"
-    },
     "decisions": "Orzeczenia",
     "decline": "Odrzuć",
     "delete": "Usuń",
@@ -2271,10 +2270,13 @@
       "deeplKeyRejected": "Zapisany klucz DeepL został odrzucony. Zastąp go w ustawieniach organizacji.",
       "deeplQuotaExceeded": "Limit znaków DeepL dla tej organizacji został wyczerpany.",
       "disposableEmailNotAllowed": "Tymczasowe adresy e-mail są niedozwolone. Użyj stałego adresu e-mail.",
+      "encryptedContent": "Nie można wyodrębnić zawartości zaszyfrowanego dokumentu. Usuń hasło z pliku i spróbuj ponownie.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit elementów, dlatego nie można było utworzyć dokumentu.",
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
+      "matterContactCapacityExceeded": "Ta sprawa zawiera więcej kontaktów, niż można wyświetlić. Usuń widoczne powiązania z kontaktami, aby wyświetlić pozostałe kontakty.",
+      "matterContactCapacityReached": "Ta sprawa osiągnęła limit kontaktów. Usuń jedno powiązanie z kontaktem przed dodaniem kolejnego.",
       "mcpAuthorizationApprovalRequired": "Administrator musi zatwierdzić ten konektor, zanim będzie można się połączyć.",
       "notOrganizationMember": "Nie jesteś członkiem tej organizacji.",
       "providerKeyRejected": "Dostawca odrzucił klucz API.",
@@ -4835,6 +4837,7 @@
     "addPart": "Dodaj część",
     "addTag": "Dodaj tag",
     "aiAdaptHint": "AI dostosuje to sformułowanie do każdego miejsca w dokumencie, w którym się pojawia.",
+    "aiConditionsUndecided": "AI nie zdołała rozstrzygnąć tych warunków, więc ich sekcje wypełniono tak, jakby nie miały zastosowania: {list}",
     "aiDecidedConditions": "Decyduje AI",
     "aiFieldsNotDrafted": "AI nie zdołała przygotować tych pól: {list}",
     "allTemplates": "Wszystkie szablony",
@@ -4926,6 +4929,7 @@
     "directiveFor": "Pętla: {expression}",
     "directiveIf": "Jeśli: {expression}",
     "discoveryFailed": "Nie udało się przeanalizować szablonu",
+    "documentCreatedIncomplete": "Dokument utworzono, ale wypełnienie jest niekompletne",
     "downloadAnyway": "Pobierz mimo to",
     "downloadDocx": "Pobierz DOCX",
     "downloadPdf": "Pobierz PDF",
@@ -5021,6 +5025,7 @@
     "saveFailed": "Nie udało się zapisać szablonu",
     "savedLookupFormats": "Zapisane formaty wyjściowe",
     "searchTemplates": "Szukaj szablonów…",
+    "structureErrorsInDocument": "Dyrektywy szablonu, których nie udało się zastosować: {count}. Sprawdź dokument.",
     "structureWarningParagraph": "Akapit {paragraph, number}",
     "structureWarnings": "{count, plural, one {# ostrzeżenie struktury} few {# ostrzeżenia struktury} many {# ostrzeżeń struktury} other {# ostrzeżeń struktury}}",
     "studio": {

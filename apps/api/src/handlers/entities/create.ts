@@ -6,6 +6,7 @@ import type { Static } from "elysia";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
+import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -165,6 +166,7 @@ const config = {
     "parent is not a usable folder in this matter.",
   permissions: { entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityRealtimeUpdates,
   mcp: { type: "tool", name: "save_document" },
   body: createEntityBodySchema,
 } satisfies WorkspaceHandlerConfig;

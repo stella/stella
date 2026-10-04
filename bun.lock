@@ -658,7 +658,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.1.35",
+      "version": "0.1.36",
       "dependencies": {
         "@stll/ai-catalog": "workspace:^",
         "@stll/ui": "workspace:^",
@@ -777,7 +777,7 @@
     },
     "packages/docx-utils": {
       "name": "@stll/docx-utils",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
         "better-result": "catalog:",
         "jszip": "catalog:",
@@ -1142,7 +1142,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.40.2",
+      "version": "0.41.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1221,7 +1221,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.11.18",
+      "version": "0.11.19",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
@@ -1280,6 +1280,7 @@
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",
     "@tanstack/ai-gemini@0.33.1": "patches/@tanstack%2Fai-gemini@0.33.1.patch",
     "@tanstack/ai@0.61.0": "patches/@tanstack%2Fai@0.61.0.patch",
+    "@tanstack/ai-code-mode@0.4.16": "patches/@tanstack%2Fai-code-mode@0.4.16.patch",
   },
   "overrides": {
     "@atlaskit/pragmatic-drag-and-drop": "3.1.0",
