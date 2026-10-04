@@ -8,7 +8,12 @@ import {
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
+import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
+import {
+  AUDIT_MUTATION_LEDGER_SCOPE,
+  auditMutationBudgets,
+} from "./scripts/audit-mutation-ledger-scope.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
   SHADCN_LINT_JS_PLUGINS,
@@ -3817,14 +3822,29 @@ export default defineConfig({
     },
     {
       // Every workspace mutation must leave an audit trail (SOC 2 /
-      // ISO 27001). Scope to handler files — DB writes elsewhere
-      // (auth lifecycle hooks, job framework internals, RLS session
-      // setup) have different audit semantics and would generate
-      // false positives.
+      // ISO 27001). Handlers are held to the full rule; the block below
+      // extends it to MCP and library code with a reasoned ledger.
       files: ["apps/api/src/handlers/**/*.ts"],
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
         "require-audit-on-mutation/require-audit-on-mutation": "error",
+      },
+    },
+    {
+      // The same rule over MCP tools and shared library code. Writes that
+      // predate this scope are budgeted per owning function by the reasoned
+      // ledger (scripts/audit-mutation-ledger.ts), which only shrinks; any
+      // other unaudited write fails like it does in a handler.
+      files: [...AUDIT_MUTATION_LEDGER_SCOPE],
+      excludeFiles: [
+        "apps/api/src/mcp/**/*.test.ts",
+        "apps/api/src/lib/**/*.test.ts",
+      ],
+      rules: {
+        "require-audit-on-mutation/require-audit-on-mutation": [
+          "error",
+          { budgets: auditMutationBudgets(auditMutationLedger) },
+        ],
       },
     },
     {

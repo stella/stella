@@ -426,6 +426,13 @@ export type GetChatToolsProps = {
    */
   toolDefectMemo: ChatToolDefectMemo;
   /**
+   * Reads the caller's membership when an approved write runs. Tests inject
+   * it; production uses the credential-boundary read.
+   */
+  resolveCurrentMembership?: Parameters<
+    typeof buildChatWriteTools
+  >[0]["resolveCurrentMembership"];
+  /**
    * The turn's anonymization boundary. Threaded into
    * `createSpawnSubagentsTool` so each subagent's own model calls cross
    * the same anonymize/deanonymize boundary as the parent turn; the
@@ -742,6 +749,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     activeFile,
     refRegistry,
     toolDefectMemo,
+    resolveCurrentMembership,
     thirdPartyBoundary,
     hasActiveDocxEditClient,
     hasActiveDocxFileClient,
@@ -1095,8 +1103,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // organization with no matter yet still manages its library, templates,
   // contacts and settings, and creates its first matter here. A write that
   // acts inside a matter answers with a recoverable needs-a-matter result
-  // (`matterRequiredResult`) instead of disappearing. Role checks stay in the
-  // handlers. Real per-workspace statuses are threaded through so the
+  // (`matterRequiredResult`) instead of disappearing. Each tool's declared
+  // write permissions gate its registration; handlers keep their
+  // input-specific role checks. Real per-workspace statuses are threaded through so the
   // handlers' `ensureActiveWorkspace` gate keeps archived matters read-only.
   const registryWriteTools = buildChatWriteTools({
     memberRole,
@@ -1104,6 +1113,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     pinServerValidatedWorkspaceId,
     recordAuditEvent,
     refRegistry,
+    ...(resolveCurrentMembership === undefined
+      ? {}
+      : { resolveCurrentMembership }),
     safeDb,
     scopedDb,
     toolDefectMemo,
