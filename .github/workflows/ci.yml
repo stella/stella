@@ -1267,13 +1267,19 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/ratchet-scan.test.ts
 
+      - name: Custom lint rule coverage
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        run: |
+          bun test scripts/check-oxlint-rule-coverage.test.ts
+          bun scripts/check-oxlint-rule-coverage.ts
+
       - name: Documentation source policy rule
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # Every direct dependency must have an exact llms.txt source or a
         # time-bounded, explained quarantine.
-        run: |
-          bun test ./.oxlint-plugins/__tests__
-          bun run check:docs-sources
+        run: bun run check:docs-sources
 
       - name: Instruction references
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1677,6 +1683,14 @@ jobs:
           bun test scripts/design-lint-baseline.test.ts scripts/oxlint-config-inputs.test.ts
           bun scripts/design-lint-baseline.ts --check
 
+      - name: Query data state baseline
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        run: |
+          bun test scripts/query-data-state-baseline.test.ts
+          bun run check:query-data-state
+
       - name: SQL performance baseline
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         env:
@@ -1684,6 +1698,14 @@ jobs:
         run: |
           bun test scripts/sql-perf-detector.test.ts scripts/sql-perf-baseline.test.ts
           bun scripts/sql-perf-baseline.ts --check
+
+      - name: Failure-as-empty baseline
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        run: |
+          bun test scripts/failure-as-empty-baseline.test.ts
+          bun run check:failure-as-empty
 
       - name: Oxlint override union guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1772,6 +1794,20 @@ jobs:
         # check fails when the doc is stale, an id repeats, or a path a row
         # names has moved. Regenerate: `bun scripts/ownership.ts --write`.
         run: bun scripts/ownership.ts --check
+
+      - name: Queue authority
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Every BullMQ queue declares whose authority its jobs run under
+        # (apps/api/src/lib/member-run-queues.ts), and a member-run queue
+        # builds its handles with the run actor; scheduler tasks are held the
+        # same way (apps/api/src/lib/scheduler/task-authority.ts). Existing
+        # gaps are listed in shrink-only baselines:
+        # `bun scripts/queue-authority.ts --write`.
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        run: |
+          bun scripts/queue-authority.ts --self-test
+          bun scripts/queue-authority.ts --check
 
       - name: Design token docs
         if: needs.ci-plan.outputs.package_checks_required == 'true'

@@ -1,5 +1,5 @@
 import { isPublicLegislationCountry } from "@stll/api-contract/legislation-publication";
-import type { StatuteQueryCountry } from "@stll/api-contract/statute-aliases";
+import type { StatuteQueryCountry } from "@stll/api-contract/statute-query-capability";
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
 import type { StatuteRouteInput } from "@stll/api-contract/statute-route";
 

@@ -7,6 +7,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./currency-code": "./src/currency-code.ts",
+    "./limits": "./src/limits.ts",
     "./action-admission": "./src/action-admission.ts",
     "./browser-control": "./src/browser-control.ts",
     "./browser-control-json-schema": "./src/browser-control-json-schema.ts",
@@ -63,6 +65,7 @@
     "./statute-gazette": "./src/statute-gazette.ts",
     "./statute-acts": "./src/statute-acts.ts",
     "./statute-aliases": "./src/statute-aliases.ts",
+    "./statute-query-capability": "./src/statute-query-capability.ts",
     "./statute-query-intent": "./src/statute-query-intent.ts"
   },
   "scripts": {

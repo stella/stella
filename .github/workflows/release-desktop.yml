@@ -50,7 +50,17 @@ jobs:
     # Skip `cancelled` (a newer release.yml run replaced it; that newer run
     # will trigger us instead) and `skipped` (release.yml never actually ran,
     # so there's nothing for us to release).
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v')) }}
+    #
+    # A workflow_run trigger is accepted only from this repository's own
+    # release workflow, started by a tag push or a manual dispatch. Signing
+    # builds restore no caches.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event.workflow_run.conclusion == 'success'
+      && startsWith(github.event.workflow_run.head_branch, 'v')
+      && github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -252,6 +262,7 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
+          no-cache: true
 
       - name: Install dependencies
         run: bun ci --ignore-scripts
@@ -269,11 +280,6 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix.rust_targets }}
-
-      - name: Cache cargo registry
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          workspaces: apps/desktop/src-tauri -> target
 
       - name: Stamp release version into tauri.conf.json + Cargo.toml
         shell: bash

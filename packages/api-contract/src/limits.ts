@@ -106,3 +106,6 @@ export const CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX = 20;
  * their published headnotes.
  */
 export const CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX = 5;
+
+/** Shared search bounds enforced by the API and its clients. */
+export const SEARCH_QUERY_MAX_LENGTH = 500;
