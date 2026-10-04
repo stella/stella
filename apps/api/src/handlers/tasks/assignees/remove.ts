@@ -3,6 +3,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { taskRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -87,6 +88,7 @@ const removeAssignee = createSafeHandler(
       "no assignee; a read-only task is refused.",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: taskRealtimeUpdates,
     mcp: { type: "covered", by: "save_task" },
     body: removeAssigneeBodySchema,
   },

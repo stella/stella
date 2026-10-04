@@ -7,6 +7,7 @@ import type { ReviewFlag } from "@stll/api-contract";
 
 import { cellMetadata, entities, properties } from "@/api/db/schema";
 import type { CellMetadata } from "@/api/db/schema-validators";
+import { fieldRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -35,6 +36,7 @@ const config = {
     entity: ["update"],
   },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: fieldRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

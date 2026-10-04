@@ -15,6 +15,7 @@ import {
   workspaceViews,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -80,6 +81,7 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
   accountAccess: ACCOUNT_ACCESS.standard,
+  realtime: organizationWorkspaceRealtimeUpdates,
   contentDelivery: {
     type: "none",
     reason:

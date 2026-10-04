@@ -1,8 +1,6 @@
 import { Result } from "better-result";
 import Elysia from "elysia";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
-
 import createWorkspaceAnonymizationAllowlistEntry from "@/api/handlers/workspaces/anonymization-allowlist/create";
 import deleteWorkspaceAnonymizationAllowlistEntry from "@/api/handlers/workspaces/anonymization-allowlist/delete";
 import readWorkspaceAnonymizationAllowlist from "@/api/handlers/workspaces/anonymization-allowlist/list";
@@ -53,24 +51,6 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { workspaceParams } from "@/api/lib/custom-schema";
-import {
-  organizationResourceSetUpdates,
-  resourceRealtime,
-  workspaceResourceSetUpdates,
-} from "@/api/lib/resource-realtime-macro";
-
-const organizationWorkspaceRealtimeUpdates = organizationResourceSetUpdates(
-  RESOURCE_TYPE.WORKSPACE,
-);
-const workspaceContactRealtimeUpdates = workspaceResourceSetUpdates(
-  RESOURCE_TYPE.CONTACT,
-);
-const workspaceEntityRealtimeUpdates = workspaceResourceSetUpdates(
-  RESOURCE_TYPE.ENTITY,
-);
-const workspaceRealtimeUpdates = workspaceResourceSetUpdates(
-  RESOURCE_TYPE.WORKSPACE,
-);
 
 const readWorkspace = createSafeHandler(
   {
@@ -123,13 +103,7 @@ const readWorkspaceContacts = createSafeHandler(
   } satisfies WorkspaceHandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
     const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await readWorkspaceContactsHandler({
-            workspaceId,
-            scopedDb,
-          }),
-      ),
+      readWorkspaceContactsHandler({ workspaceId, scopedDb }),
     );
 
     return Result.ok(response);
@@ -159,7 +133,6 @@ const readWorkspaceMembers = createSafeHandler(
 
 export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   .use(workspaceAccessMacro)
-  .use(resourceRealtime)
   .use(permissionMacro)
   // Kept deliberately: this guard is the type-level carrier of
   // `validateAuth` for Elysia's context composition. `permissions` is a
@@ -186,7 +159,6 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   })
   .put("/", createWorkspaces.handler, {
     body: createWorkspaces.config.body,
-    resourceSetUpdated: organizationWorkspaceRealtimeUpdates,
     permissions: createWorkspaces.config.permissions,
   })
   .get("/active", readActiveWorkspace.handler, {
@@ -224,7 +196,6 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         })
         .post("/bounding-boxes", generateBoundingBoxes.handler, {
           body: generateBoundingBoxes.config.body,
-          resourceSetUpdated: workspaceRealtimeUpdates,
           permissions: generateBoundingBoxes.config.permissions,
         })
         .get("/infosoud/courts", infosoudCourts.handler, {
@@ -236,7 +207,6 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         })
         .post("/infosoud/import-agenda", infosoudImportAgenda.handler, {
           body: infosoudImportAgenda.config.body,
-          resourceSetUpdated: workspaceEntityRealtimeUpdates,
           permissions: infosoudImportAgenda.config.permissions,
         })
         .get("/activity", readWorkspaceActivity.handler, {
@@ -267,23 +237,19 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         })
         .post("/", updateWorkspace.handler, {
           body: updateWorkspace.config.body,
-          resourceSetUpdated: workspaceRealtimeUpdates,
           permissions: updateWorkspace.config.permissions,
         })
         .post("/duplicate", duplicateWorkspace.handler, {
           body: duplicateWorkspace.config.body,
-          resourceSetUpdated: organizationWorkspaceRealtimeUpdates,
           permissions: duplicateWorkspace.config.permissions,
         })
         .post("/active", updateActiveWorkspace.handler, {
           permissions: updateActiveWorkspace.config.permissions,
         })
         .delete("/", deleteWorkspace.handler, {
-          resourceSetUpdated: organizationWorkspaceRealtimeUpdates,
           permissions: deleteWorkspace.config.permissions,
         })
         .post("/archive", archiveWorkspace.handler, {
-          resourceSetUpdated: organizationWorkspaceRealtimeUpdates,
           permissions: archiveWorkspace.config.permissions,
         })
         // Unarchive is mounted below, outside the active-only group.
@@ -292,14 +258,12 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         })
         .put("/contacts", createWorkspaceContact.handler, {
           body: createWorkspaceContact.config.body,
-          resourceSetUpdated: workspaceContactRealtimeUpdates,
           permissions: createWorkspaceContact.config.permissions,
         })
         .delete(
           "/contacts/:workspaceContactId",
           deleteWorkspaceContact.handler,
           {
-            resourceSetUpdated: workspaceContactRealtimeUpdates,
             params: deleteWorkspaceContact.config.params,
             permissions: deleteWorkspaceContact.config.permissions,
           },
@@ -312,7 +276,6 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
           createWorkspaceAnonymizationTerms.handler,
           {
             body: createWorkspaceAnonymizationTerms.config.body,
-            resourceSetUpdated: workspaceRealtimeUpdates,
             permissions: createWorkspaceAnonymizationTerms.config.permissions,
           },
         )
@@ -320,7 +283,6 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
           "/anonymization-terms/:entryId",
           deleteWorkspaceAnonymizationTerm.handler,
           {
-            resourceSetUpdated: workspaceRealtimeUpdates,
             params: deleteWorkspaceAnonymizationTerm.config.params,
             permissions: deleteWorkspaceAnonymizationTerm.config.permissions,
           },
@@ -338,7 +300,6 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
           createWorkspaceAnonymizationAllowlistEntry.handler,
           {
             body: createWorkspaceAnonymizationAllowlistEntry.config.body,
-            resourceSetUpdated: workspaceRealtimeUpdates,
             permissions:
               createWorkspaceAnonymizationAllowlistEntry.config.permissions,
           },
@@ -347,7 +308,6 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
           "/anonymization-allowlist/:entryId",
           deleteWorkspaceAnonymizationAllowlistEntry.handler,
           {
-            resourceSetUpdated: workspaceRealtimeUpdates,
             params: deleteWorkspaceAnonymizationAllowlistEntry.config.params,
             permissions:
               deleteWorkspaceAnonymizationAllowlistEntry.config.permissions,
@@ -384,18 +344,15 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         })
         .put("/members", addWorkspaceMember.handler, {
           body: addWorkspaceMember.config.body,
-          resourceSetUpdated: workspaceRealtimeUpdates,
           permissions: addWorkspaceMember.config.permissions,
         })
         .delete("/members/:userId", removeWorkspaceMember.handler, {
           body: removeWorkspaceMember.config.body,
-          resourceSetUpdated: workspaceRealtimeUpdates,
           params: removeWorkspaceMember.config.params,
           permissions: removeWorkspaceMember.config.permissions,
         }),
   )
   .post("/:workspaceId/unarchive", unarchiveWorkspace.handler, {
-    resourceSetUpdated: organizationWorkspaceRealtimeUpdates,
     permissions: unarchiveWorkspace.config.permissions,
     validateWorkspaceAccessIncludingArchived: true,
   });

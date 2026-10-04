@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
 
+import messages from "@/i18n/langs/en.json";
+
 import {
   APIError,
   internalToolErrorMessage,
@@ -62,6 +64,25 @@ describe("toAPIError", () => {
     );
   });
 
+  test.each([
+    [
+      "matter_contact_capacity_reached",
+      messages.errors.apiCodes.matterContactCapacityReached,
+    ],
+    [
+      "matter_contact_capacity_exceeded",
+      messages.errors.apiCodes.matterContactCapacityExceeded,
+    ],
+  ])("localizes matter contact capacity code %s", (code, expected) => {
+    const error = toAPIError({
+      status: 422,
+      value: { code, message: "Raw capacity refusal", retryable: false },
+    });
+    expect(error.code).toBe(code);
+    expect(error.message).toBe(expected);
+    expect(error.rawMessage).toBe("Raw capacity refusal");
+    expect(shouldRetryAPIRequest(0, error)).toBe(false);
+  });
   test("localizes string payloads by status and preserves the raw message", () => {
     const error = toAPIError({
       status: 400,

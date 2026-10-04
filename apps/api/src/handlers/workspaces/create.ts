@@ -14,6 +14,7 @@ import {
   workspaces,
   workspaceViews,
 } from "@/api/db/schema";
+import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -65,6 +66,7 @@ const config = {
     "contact). Returns the matter ID.",
   permissions: { workspace: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: organizationWorkspaceRealtimeUpdates,
   mcp: { type: "tool", name: "save_matter" },
   body: createWorkspaceBodySchema,
 } satisfies HandlerConfig;

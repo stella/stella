@@ -94,7 +94,10 @@ export {
   CHAT_TURN_INTENT,
   REQUEST_ID_HEADER,
 } from "./chat";
-export { CLAUSE_WARNINGS_HEADER } from "./template-fill-headers";
+export {
+  CLAUSE_WARNINGS_HEADER,
+  UNDECIDED_CONDITIONS_HEADER,
+} from "./template-fill-headers";
 export {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   CHAT_TOOL_POLICY_KIND,
@@ -495,6 +498,7 @@ export {
 export type { ResourceName, ResourceRef, ResourceType } from "./resource-ref";
 export {
   CHAT_DECISION_HREF_TEMPLATE,
+  CHAT_MENTION_UUID_HREF_PATTERN,
   CHAT_RESOURCE_HREF_PREFIX,
   CHAT_RESOURCE_LINK_DISPOSITION,
   CHAT_USER_HREF_TEMPLATE,

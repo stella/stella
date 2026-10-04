@@ -51,7 +51,11 @@ import {
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
-import { mcpToolAuthorityDenial } from "@/api/mcp/write-tool-authority";
+import {
+  mcpToolAuthorityDenialRefusal,
+  mcpToolAuthorityRefusal,
+  mcpToolInputAuthorityDenial,
+} from "@/api/mcp/write-tool-authority";
 
 const DOCUMENTS_MCP_CAPABILITY_IDS: ReadonlySet<string> = new Set(
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
@@ -247,25 +251,12 @@ const isStaticToolCallable = ({
   );
 };
 
-/**
- * The refusal for a tool the request's authority does not cover. A credential
- * narrower than the role needs a different credential, not a role change, so
- * the two are told apart.
- */
-const authorityRefusal = (
-  toolName: string,
-  denial: "member-role" | "credential",
-) =>
-  denial === "member-role"
-    ? {
-        code: "permission_denied" as const,
-        message: `Your member role does not permit ${toolName}`,
-      }
-    : {
-        code: "permission_denied" as const,
-        message: `This credential's permissions do not include ${toolName}`,
-        hint: "Your member role allows this tool. Call it with a credential whose permissions include its grant, such as an API key minted with that permission.",
-      };
+const unknownToolResult = (toolName: string) =>
+  structuredErrorResult({
+    code: "unknown_tool",
+    message: `Unknown tool: ${toolName}`,
+    hint: "Call tools/list for the tools available to this session.",
+  });
 
 export const handleMcpToolCall = async ({
   args,
@@ -315,13 +306,7 @@ export const handleMcpToolCall = async ({
 
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (!staticTool) {
-    return serializeForSurface(
-      structuredErrorResult({
-        code: "unknown_tool",
-        message: `Unknown tool: ${toolName}`,
-        hint: "Call tools/list for the tools available to this session.",
-      }),
-    );
+    return serializeForSurface(unknownToolResult(toolName));
   }
   const outputContract = resolveMcpToolOutputContract(toolName, mode);
   if (outputContract === undefined) {
@@ -356,13 +341,16 @@ export const handleMcpToolCall = async ({
     );
   }
 
-  // Discovery already withholds the tool; this keeps the refusal on the call
-  // path for any caller that reaches dispatch by name.
-  const authorityDenial = mcpToolAuthorityDenial(context, staticTool);
-  if (authorityDenial !== null) {
-    return serializeForSurface(
-      structuredErrorResult(authorityRefusal(toolName, authorityDenial)),
-    );
+  // Discovery withholds the tool; a call by name resolves it and is refused
+  // here, naming the member role, the credential, or the account.
+  const toolRefusal = mcpToolAuthorityRefusal({
+    authority: context,
+    definition: staticTool,
+    toolName,
+    userEmail: context.userEmail,
+  });
+  if (toolRefusal !== null) {
+    return serializeForSurface(structuredErrorResult(toolRefusal));
   }
 
   const unknownArgs = findUndeclaredArguments({
@@ -400,6 +388,20 @@ export const handleMcpToolCall = async ({
   }
   const normalizedArgs = normalized.value;
   const inputNotes = normalized.notes;
+
+  // With the input: the exact grant of the operation it selects.
+  const inputDenial = mcpToolInputAuthorityDenial(
+    context,
+    staticTool,
+    normalizedArgs,
+  );
+  if (inputDenial !== null) {
+    const refusal = mcpToolAuthorityDenialRefusal(
+      `this ${toolName} operation`,
+      inputDenial,
+    );
+    return serializeForSurface(structuredErrorResult(refusal));
+  }
 
   // Before confirmation: asking a human to approve a call that cannot run
   // would only defer the same answer.
@@ -443,13 +445,7 @@ export const handleMcpToolCall = async ({
 
   const handler = getStaticMcpToolHandler(toolName, mode);
   if (!handler) {
-    return serializeForSurface(
-      structuredErrorResult({
-        code: "unknown_tool",
-        message: `Unknown tool: ${toolName}`,
-        hint: "Call tools/list for the tools available to this session.",
-      }),
-    );
+    return serializeForSurface(unknownToolResult(toolName));
   }
 
   const executionContext = requiresConfirmation

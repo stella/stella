@@ -1,8 +1,11 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { currencyMinorUnitDigits } from "@stll/money";
+
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
 import {
@@ -83,6 +86,72 @@ export type UpdateContactHandlerProps = {
   body: Static<typeof updateContactBodySchema>;
 };
 
+type ContactRateUpdatesOptions = {
+  tx: Transaction;
+  contactId: SafeId<"contact">;
+  organizationId: SafeId<"organization">;
+  sourceCurrency: string | null;
+  storedRate: number | null;
+  currency: string | null | undefined;
+  defaultHourlyRate: number | null | undefined;
+};
+
+const contactRateUpdates = async ({
+  tx,
+  contactId,
+  organizationId,
+  sourceCurrency,
+  storedRate,
+  currency,
+  defaultHourlyRate,
+}: ContactRateUpdatesOptions) => {
+  if (defaultHourlyRate !== undefined) {
+    return Result.ok({
+      defaultHourlyRate:
+        defaultHourlyRate === null ? null : cents(defaultHourlyRate),
+    });
+  }
+  const exponentShift =
+    storedRate !== null &&
+    sourceCurrency &&
+    currency &&
+    currency !== sourceCurrency
+      ? currencyMinorUnitDigits(currency) -
+        currencyMinorUnitDigits(sourceCurrency)
+      : 0;
+
+  // Numeric arithmetic preserves integer precision before the API's safe
+  // number boundary; refuse the entire update before any field is written.
+  if (exponentShift > 0) {
+    const beyondRange = await tx
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.id, contactId),
+          eq(contacts.organizationId, organizationId),
+          sql`ABS(ROUND(${contacts.defaultHourlyRate} * power(10::numeric, ${exponentShift}))) > ${Number.MAX_SAFE_INTEGER}`,
+        ),
+      )
+      .limit(1);
+    if (beyondRange.length > 0) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Currency change would put the contact rate out of range",
+        }),
+      );
+    }
+  }
+
+  if (exponentShift === 0) {
+    return Result.ok({});
+  }
+  return Result.ok({
+    defaultHourlyRate: sql`ROUND(${contacts.defaultHourlyRate} * power(10::numeric, ${exponentShift}))::bigint`,
+  });
+};
+
 // Shared contact-update logic reused by the HTTP handler and the
 // `save_contact` MCP tool, so both emit identical audit events and
 // search-index writes.
@@ -130,6 +199,8 @@ export const updateContactHandler = async function* ({
           id: contacts.id,
           type: contacts.type,
           metadata: contacts.metadata,
+          currency: contacts.currency,
+          defaultHourlyRate: contacts.defaultHourlyRate,
           dateOfBirthYear: contacts.dateOfBirthYear,
           dateOfBirthMonth: contacts.dateOfBirthMonth,
           dateOfBirthDay: contacts.dateOfBirthDay,
@@ -162,6 +233,19 @@ export const updateContactHandler = async function* ({
       });
       if (error) {
         return { kind: "invalid" as const, error };
+      }
+
+      const rateUpdates = await contactRateUpdates({
+        tx,
+        contactId,
+        organizationId,
+        sourceCurrency: existing.currency,
+        storedRate: existing.defaultHourlyRate,
+        currency: body.currency,
+        defaultHourlyRate,
+      });
+      if (rateUpdates.isErr()) {
+        return { kind: "invalid" as const, error: rateUpdates.error };
       }
 
       const updates = {
@@ -200,12 +284,7 @@ export const updateContactHandler = async function* ({
                 ? nationalityCodes
                 : [],
             }),
-        ...(defaultHourlyRate === undefined
-          ? {}
-          : {
-              defaultHourlyRate:
-                defaultHourlyRate === null ? null : cents(defaultHourlyRate),
-            }),
+        ...rateUpdates.value,
       };
       if (Object.keys(updates).length === 0) {
         return {

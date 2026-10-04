@@ -62,7 +62,7 @@ export type SanctionsScreeningSubject =
       nationalityCodes: readonly CountryCode[];
     };
 
-type SanctionsPossibleMatch = {
+export type SanctionsPossibleMatch = {
   sourceEntryId: string;
   editionId: string;
   /** 0..1, at or above the cutoff. A possible match needs human review. */
@@ -287,6 +287,7 @@ type ScreenListProps = {
   query: ScreeningQuery;
   base: ListOutcomeBase;
   indexCache: SanctionsIndexCache;
+  resultMode: "bounded" | "complete";
 };
 
 const screenList = async ({
@@ -295,6 +296,7 @@ const screenList = async ({
   query,
   base,
   indexCache,
+  resultMode,
 }: ScreenListProps): Promise<SanctionsListOutcome> => {
   const { edition, lastSuccessfulVerifiedAt } = freshness;
   // Stale or missing data never answers: only a fresh edition can be clear.
@@ -318,7 +320,10 @@ const screenList = async ({
   }
   const screened = screen(index.value.value, query, {
     cutoff: DEFAULT_CUTOFF,
-    limit: SANCTIONS_MATCH_LIMIT,
+    limit:
+      resultMode === "complete"
+        ? Math.max(1, edition.entryCount)
+        : SANCTIONS_MATCH_LIMIT,
   });
   if (screened.isErr()) {
     // The query was validated against an empty index first, and these
@@ -361,6 +366,8 @@ type ScreenSanctionsSubjectProps = {
   subject: SanctionsScreeningSubject;
   /** The firm's practice jurisdictions; empty labels every list informational. */
   practiceJurisdictions: readonly CountryCode[];
+  /** Internal monitoring must diff the complete hit set. */
+  resultMode?: "bounded" | "complete";
   now?: Date | undefined;
   indexCache?: SanctionsIndexCache | undefined;
 };
@@ -375,6 +382,7 @@ export const screenSanctionsSubject = async ({
   subject,
   practiceJurisdictions,
   now = new Date(),
+  resultMode = "bounded",
   indexCache = sharedSanctionsIndexCache,
 }: ScreenSanctionsSubjectProps): Promise<
   Result<SanctionsScreening, SanctionsSubjectError>
@@ -416,6 +424,7 @@ export const screenSanctionsSubject = async ({
             heldUpdate: sourceFreshness.heldUpdate,
           }),
           indexCache,
+          resultMode,
         }),
     ),
   );

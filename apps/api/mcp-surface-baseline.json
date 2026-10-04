@@ -53,7 +53,7 @@
       "law": {"title": 5, "description": 363, "inputSchema": 512, "outputSchema": 549, "annotations": 83, "payloadUtf8Bytes": 1602}
     },
     "fill_template": {
-      "default": {"title": 13, "description": 485, "inputSchema": 877, "outputSchema": 2098, "annotations": 114, "payloadUtf8Bytes": 3685}
+      "default": {"title": 13, "description": 485, "inputSchema": 970, "outputSchema": 2098, "annotations": 114, "payloadUtf8Bytes": 3778}
     },
     "get_usage": {
       "anonymized": {"title": 9, "description": 259, "inputSchema": 76, "outputSchema": 795, "annotations": 87, "payloadUtf8Bytes": 1320},
@@ -208,7 +208,7 @@
       "documents": {"title": 13, "description": 516, "inputSchema": 1455, "outputSchema": 133, "annotations": 115, "payloadUtf8Bytes": 2330}
     },
     "save_filled_template": {
-      "default": {"title": 20, "description": 391, "inputSchema": 1344, "outputSchema": 1197, "annotations": 121, "payloadUtf8Bytes": 3178}
+      "default": {"title": 20, "description": 391, "inputSchema": 1437, "outputSchema": 1920, "annotations": 121, "payloadUtf8Bytes": 3994}
     },
     "save_matter": {
       "default": {"title": 11, "description": 328, "inputSchema": 891, "outputSchema": 157, "annotations": 113, "payloadUtf8Bytes": 1596}

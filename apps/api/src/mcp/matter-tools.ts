@@ -2378,11 +2378,18 @@ export const MATTER_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
     permissions: {
-      type: "any",
-      alternatives: [{ workspace: ["create"] }, { workspace: ["update"] }],
-      reason:
-        "matter_id selects update, archive or unarchive; without it the call creates.",
+      type: "input",
+      select: {
+        by: "presence",
+        property: "matter_id",
+        present: {
+          operation: "update",
+          permissions: { workspace: ["update"] },
+        },
+        absent: { operation: "create", permissions: { workspace: ["create"] } },
+      },
     },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_matter",
@@ -2402,6 +2409,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "chat history. This is irreversible.",
     inputSchema: deleteMatterArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
     permissions: { type: "all", permissions: { workspace: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
@@ -2459,10 +2467,15 @@ export const MATTER_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
     permissions: {
-      type: "any",
-      alternatives: [{ contact: ["create"] }, { contact: ["update"] }],
-      reason: "contact_id selects update; without it the call creates.",
+      type: "input",
+      select: {
+        by: "presence",
+        property: "contact_id",
+        present: { operation: "update", permissions: { contact: ["update"] } },
+        absent: { operation: "create", permissions: { contact: ["create"] } },
+      },
     },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_contact",
@@ -2483,6 +2496,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "irreversible.",
     inputSchema: deleteContactArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
     permissions: { type: "all", permissions: { contact: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
@@ -2605,10 +2619,15 @@ export const MATTER_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
     permissions: {
-      type: "any",
-      alternatives: [{ entity: ["create"] }, { entity: ["update"] }],
-      reason: "task_id selects update; without it the call creates.",
+      type: "input",
+      select: {
+        by: "presence",
+        property: "task_id",
+        present: { operation: "update", permissions: { entity: ["update"] } },
+        absent: { operation: "create", permissions: { entity: ["create"] } },
+      },
     },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_task",
@@ -2629,6 +2648,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "archived. This is irreversible.",
     inputSchema: deleteTaskArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
     permissions: { type: "all", permissions: { entity: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
@@ -2643,7 +2663,8 @@ export const MATTER_TOOL_DEFINITIONS = [
       "other), or remove such a link. Pass contact_id with role to link. To " +
       "unlink, pass matter_contact_id (precise, from list_matters) " +
       "or contact_id alone; contact_id alone is rejected when the contact " +
-      "holds several roles on the matter.",
+      "holds several roles on the matter. At the contact limit, unlink an existing " +
+      "matter_contact_id (without role) before linking another contact.",
     inputSchema: linkMatterContactArgsSchema,
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["partial_check"],
@@ -2658,6 +2679,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
     permissions: { type: "all", permissions: { workspace: ["update"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "link_matter_contact",

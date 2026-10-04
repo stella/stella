@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { entities, workspaces } from "@/api/db/schema";
 import type { LinkMetadata } from "@/api/db/schema";
+import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -36,6 +37,7 @@ export default createSafeHandler(
     body: clipBodySchema,
     permissions: { entity: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: entityFileRealtimeUpdates,
     mcp: {
       type: "capability",
       reason: "document_processing",

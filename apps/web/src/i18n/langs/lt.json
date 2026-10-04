@@ -545,6 +545,7 @@
     "numberSeries": {
       "add": "Pridėti numerių seriją",
       "advance": "Avansas",
+      "allSellers": "Visi pardavėjai",
       "archiveConfirm": "Archyvuoti šią numerių seriją? Ji nebebus prieinama naujiems dokumentams.",
       "creditNote": "Kreditinė sąskaita",
       "default": "Numatytoji serija",
@@ -562,6 +563,9 @@
       "preview": "Kitas numeris",
       "previewAllocated": "Šis numeris jau priskirtas.",
       "previewHelp": "Peržiūroje naudojamas išsaugotas šablonas, numeris nerezervuojamas.",
+      "sellerProfile": "Pardavėjo profilis",
+      "sellerUnavailable": "Pardavėjas archyvuotas arba nepasiekiamas",
+      "sellerUnavailableHelp": "Šis pardavėjas yra archyvuotas arba nepasiekiamas. Palikite priskyrimą arba pasirinkite kitą pardavėją.",
       "setDefault": "Nustatyti kaip numatytąją seriją",
       "title": "Numerių serijos"
     },
@@ -976,7 +980,6 @@
     "packPartial": "Įdiegta {installed}, {failed} nepavyko",
     "removed": "Šis įrankis nebepasiekiamas.",
     "sectionOthers": "Kiti",
-    "sectionRecommended": "Rekomenduojami",
     "settings": {
       "packTitle": "Rekomenduojamas paketas"
     },
@@ -1165,6 +1168,7 @@
       "noSkills": "Įgūdžių dar nėra",
       "pinnedMatters": "Prisegtos bylos",
       "recentChats": "Neseniai naudoti pokalbiai",
+      "skillEditedBy": "Redagavo {name} · {time}",
       "skills": "Įgūdžiai"
     },
     "loadEarlierMessages": "Įkelti ankstesnes žinutes",
@@ -1183,8 +1187,10 @@
       "label": "Imituojamas DI"
     },
     "modelSelector": {
+      "allModels": "Visi modeliai ({count, number})",
       "autoDescription": "Automatiškai parenka modelį ir samprotavimo lygį.",
       "autoLabel": "Automatinis",
+      "belowFrontier": "Žemiau geriausių kompromisų",
       "effortHelpDescription": "Nustato, kiek samprotavimo modelis naudoja prieš atsakydamas. Aukštesni lygiai gali padėti atliekant sudėtingas užduotis, tačiau paprastai užtrunka ilgiau. Taškas žymi šio modelio teikėjo numatytąjį lygį.",
       "effortHelpLabel": "Apie samprotavimo lygį",
       "effortLabel": "Samprotavimo lygis",
@@ -1198,6 +1204,10 @@
         "providerDefault": "Numatytasis",
         "xhigh": "Labai aukštas"
       },
+      "newModel": "Naujas",
+      "premiumCost": "Neįprastai didelė kaina",
+      "recommendedHelpDescription": "Joks kitas prieinamas modelis nėra kartu pigesnis ir geriau įvertintas. Modeliai, kurie per nauji, kad būtų įvertinti, pažymėti kaip nauji. Kokybė: <link>LMArena {benchmark}</link> ({licence}); kaina: kainoraščio kainos.",
+      "recommendedHelpLabel": "Apie rekomenduojamus modelius",
       "selectionLabel": "{model} | {effort}",
       "title": "Pasirinkti pokalbių modelį",
       "viaProvider": "per {provider}"
@@ -1296,6 +1306,9 @@
     },
     "tabToAsk": "→, kad paklaustumėte: „{prompt}“",
     "thinking": "Dirbama su kontekstu",
+    "threadFiles": {
+      "title": "Šio pokalbio failai"
+    },
     "tool": {
       "add_comment": "Pridedamas komentaras",
       "apply-active-docx-edits": "Ruošiami dokumento pakeitimai",
@@ -1608,6 +1621,16 @@
     "currency": "Valiuta",
     "currentPage": "Dabartinis puslapis",
     "date": "Data",
+    "datePicker": {
+      "label": "Datos parinkiklis",
+      "nextDecade": "Kitas dešimtmetis",
+      "nextMonth": "Kitas mėnuo",
+      "nextYear": "Kiti metai",
+      "previousDecade": "Ankstesnis dešimtmetis",
+      "previousMonth": "Ankstesnis mėnuo",
+      "previousYear": "Ankstesni metai",
+      "time": "Laikas"
+    },
     "decisions": "Sprendimai",
     "decline": "Atmesti",
     "delete": "Ištrinti",
@@ -1768,6 +1791,7 @@
     "properties": "Savybės",
     "queued": "Eilėje",
     "reason": "Priežastis",
+    "recommended": "Rekomenduojami",
     "reconnecting": "Jungiamasi iš naujo…",
     "reference": "Nuoroda",
     "refresh": "Atnaujinti",
@@ -1893,6 +1917,7 @@
       "addBankAccount": "Pridėti banko sąskaitą",
       "noBillingData": "Atsiskaitymo duomenų nėra.",
       "removeBankAccount": "Pašalinti banko sąskaitą",
+      "selectCurrencyForRate": "Norėdami nustatyti valandinį įkainį, pasirinkite valiutą.",
       "title": "Atsiskaitymo duomenys"
     },
     "columns": {
@@ -2267,6 +2292,8 @@
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
       "legalSourceEntityLimitReached": "Šioje byloje pasiektas elementų limitas, todėl dokumento sukurti nepavyko.",
       "legalSourceFilePropertyMissing": "Šioje byloje trūksta failo ypatybės, todėl dokumento sukurti nepavyko.",
+      "matterContactCapacityExceeded": "Šioje byloje yra daugiau kontaktų, nei galima parodyti. Pašalinkite matomus kontaktų susiejimus, kad būtų parodyti likę kontaktai.",
+      "matterContactCapacityReached": "Ši byla pasiekė kontaktų skaičiaus ribą. Prieš pridėdami kitą kontaktą, pašalinkite vieną kontaktų susiejimą.",
       "mcpAuthorizationApprovalRequired": "Kad galėtumėte prisijungti, administratorius turi patvirtinti šią jungtį.",
       "notOrganizationMember": "Nesate šios organizacijos narys.",
       "providerKeyRejected": "Teikėjas atmetė API raktą.",
@@ -4828,6 +4855,7 @@
     "addPart": "Pridėti dalį",
     "addTag": "Pridėti žymą",
     "aiAdaptHint": "DI pritaikys šią formuluotę kiekvienai dokumento vietai, kurioje ji pasirodo.",
+    "aiConditionsUndecided": "DI nepavyko nuspręsti šių sąlygų, todėl jų dalys užpildytos taip, lyg jos būtų netaikomos: {list}",
     "aiDecidedConditions": "Sprendžia DI",
     "aiFieldsNotDrafted": "DI nepavyko parengti šių laukų: {list}",
     "allTemplates": "Visi šablonai",
@@ -4919,6 +4947,7 @@
     "directiveFor": "Kilpa: {expression}",
     "directiveIf": "Jei: {expression}",
     "discoveryFailed": "Nepavyko išanalizuoti šablono",
+    "documentCreatedIncomplete": "Dokumentas sukurtas, bet užpildymas neužbaigtas",
     "downloadAnyway": "Vis tiek atsisiųsti",
     "downloadDocx": "Atsisiųsti DOCX",
     "downloadPdf": "Atsisiųsti PDF",
@@ -5014,6 +5043,7 @@
     "saveFailed": "Nepavyko išsaugoti šablono",
     "savedLookupFormats": "Išsaugoti išvesties formatai",
     "searchTemplates": "Ieškoti šablonų…",
+    "structureErrorsInDocument": "Šablono direktyvos, kurių nepavyko pritaikyti: {count}. Patikrinkite dokumentą.",
     "structureWarningParagraph": "Pastraipa {paragraph, number}",
     "structureWarnings": "{count, plural, one {# struktūros įspėjimas} few {# struktūros įspėjimai} many {# struktūros įspėjimo} other {# struktūros įspėjimų}}",
     "studio": {

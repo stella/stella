@@ -1,7 +1,5 @@
 import Elysia from "elysia";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
-
 import listSkillCommands from "@/api/handlers/skills/commands/list";
 import createSkillComment from "@/api/handlers/skills/comments/create";
 import deleteSkillComment from "@/api/handlers/skills/comments/delete";
@@ -40,23 +38,10 @@ import uploadSkill from "@/api/handlers/skills/upload";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
-import {
-  organizationResourceSetUpdates,
-  resourceRealtime,
-} from "@/api/lib/resource-realtime-macro";
-
-const skillRealtimeUpdates = organizationResourceSetUpdates([
-  RESOURCE_TYPE.AGENT_SKILL,
-  RESOURCE_TYPE.AGENT_SKILL_COMMENT,
-  RESOURCE_TYPE.AGENT_SKILL_PROPOSAL,
-  RESOURCE_TYPE.AGENT_SKILL_RESOURCE,
-  RESOURCE_TYPE.AGENT_SKILL_REVISION,
-]);
 
 export const skillsRoute = new Elysia({ prefix: "/skills" })
   .use(authMacro)
   .use(permissionMacro)
-  .use(resourceRealtime)
   .use(
     rateLimit({
       duration: API_RATE_LIMITS.skillSource.duration,
@@ -79,22 +64,18 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
   })
   .post("/", createSkill.handler, {
     body: createSkill.config.body,
-    resourceSetUpdated: skillRealtimeUpdates,
     permissions: createSkill.config.permissions,
   })
   .post("/from-blueprint", fromBlueprint.handler, {
     body: fromBlueprint.config.body,
-    resourceSetUpdated: skillRealtimeUpdates,
     permissions: fromBlueprint.config.permissions,
   })
   .post("/upload", uploadSkill.handler, {
     body: uploadSkill.config.body,
-    resourceSetUpdated: skillRealtimeUpdates,
     permissions: uploadSkill.config.permissions,
   })
   .post("/import-url", importSkillFromUrl.handler, {
     body: importSkillFromUrl.config.body,
-    resourceSetUpdated: skillRealtimeUpdates,
     permissions: importSkillFromUrl.config.permissions,
   })
   .post("/discover-url", discoverSkillUrl.handler, {
@@ -103,7 +84,6 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
   })
   .post("/import-urls", importSkillsFromUrls.handler, {
     body: importSkillsFromUrls.config.body,
-    resourceSetUpdated: skillRealtimeUpdates,
     permissions: importSkillsFromUrls.config.permissions,
   })
   .post("/generate-draft", generateSkillDraft.handler, {
@@ -112,37 +92,31 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
   })
   .patch("/:skillId", updateSkill.handler, {
     body: updateSkill.config.body,
-    resourceSetUpdated: skillRealtimeUpdates,
     params: updateSkill.config.params,
     permissions: updateSkill.config.permissions,
   })
   .patch("/:skillId/resources", updateSkillResource.handler, {
     body: updateSkillResource.config.body,
-    resourceSetUpdated: skillRealtimeUpdates,
     params: updateSkillResource.config.params,
     permissions: updateSkillResource.config.permissions,
   })
   .post("/:skillId/resources", createSkillResource.handler, {
     body: createSkillResource.config.body,
-    resourceSetUpdated: skillRealtimeUpdates,
     params: createSkillResource.config.params,
     permissions: createSkillResource.config.permissions,
   })
   .delete("/:skillId/resources", deleteSkillResource.handler, {
     body: deleteSkillResource.config.body,
-    resourceSetUpdated: skillRealtimeUpdates,
     params: deleteSkillResource.config.params,
     permissions: deleteSkillResource.config.permissions,
   })
   .post("/:skillId/resources/rename", renameSkillResource.handler, {
     body: renameSkillResource.config.body,
-    resourceSetUpdated: skillRealtimeUpdates,
     params: renameSkillResource.config.params,
     permissions: renameSkillResource.config.permissions,
   })
   .post("/:skillId/resources/upload", uploadSkillResource.handler, {
     body: uploadSkillResource.config.body,
-    resourceSetUpdated: skillRealtimeUpdates,
     params: uploadSkillResource.config.params,
     permissions: uploadSkillResource.config.permissions,
   })
@@ -169,7 +143,6 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
   })
   .post("/:skillId/proposals", createSkillProposal.handler, {
     body: createSkillProposal.config.body,
-    resourceSetUpdated: skillRealtimeUpdates,
     params: createSkillProposal.config.params,
     permissions: createSkillProposal.config.permissions,
   })
@@ -178,25 +151,21 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
     createSkillProposalFromComments.handler,
     {
       body: createSkillProposalFromComments.config.body,
-      resourceSetUpdated: skillRealtimeUpdates,
       params: createSkillProposalFromComments.config.params,
       permissions: createSkillProposalFromComments.config.permissions,
     },
   )
   .patch("/:skillId/proposals/:proposalId", updateSkillProposal.handler, {
     body: updateSkillProposal.config.body,
-    resourceSetUpdated: skillRealtimeUpdates,
     params: updateSkillProposal.config.params,
     permissions: updateSkillProposal.config.permissions,
   })
   .post("/:skillId/proposals/:proposalId/review", reviewSkillProposal.handler, {
     body: reviewSkillProposal.config.body,
-    resourceSetUpdated: skillRealtimeUpdates,
     params: reviewSkillProposal.config.params,
     permissions: reviewSkillProposal.config.permissions,
   })
   .delete("/:skillId/proposals/:proposalId", deleteSkillProposal.handler, {
-    resourceSetUpdated: skillRealtimeUpdates,
     params: deleteSkillProposal.config.params,
     permissions: deleteSkillProposal.config.permissions,
   })
@@ -206,23 +175,19 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
   })
   .post("/:skillId/comments", createSkillComment.handler, {
     body: createSkillComment.config.body,
-    resourceSetUpdated: skillRealtimeUpdates,
     params: createSkillComment.config.params,
     permissions: createSkillComment.config.permissions,
   })
   .patch("/:skillId/comments/:commentId", updateSkillComment.handler, {
     body: updateSkillComment.config.body,
-    resourceSetUpdated: skillRealtimeUpdates,
     params: updateSkillComment.config.params,
     permissions: updateSkillComment.config.permissions,
   })
   .delete("/:skillId/comments/:commentId", deleteSkillComment.handler, {
-    resourceSetUpdated: skillRealtimeUpdates,
     params: deleteSkillComment.config.params,
     permissions: deleteSkillComment.config.permissions,
   })
   .delete("/:skillId", deleteSkill.handler, {
-    resourceSetUpdated: skillRealtimeUpdates,
     params: deleteSkill.config.params,
     permissions: deleteSkill.config.permissions,
   });
