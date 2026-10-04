@@ -300,6 +300,22 @@ export const installPgliteAgentSkillRevisionTrigger = async (
   });
 };
 
+const TREE_PARENT_CYCLE_GUARD_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261004003000_tree_parent_cycle_guard",
+  "migration.sql",
+);
+
+/** Install the self-referencing tree triggers omitted by declarative schema push. */
+export const installPgliteTreeParentGuards = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  await installPgliteMigration({
+    db,
+    migrationPath: TREE_PARENT_CYCLE_GUARD_MIGRATION_PATH,
+  });
+};
+
 /** Install the scheduler pause audit trigger omitted by declarative schema push. */
 export const installPgliteSchedulerJobPauseLog = async (
   db: PgliteSchemaDb,

@@ -32,6 +32,7 @@ import {
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
   installPgliteTimeEntryTimerSignals,
+  installPgliteTreeParentGuards,
   installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
 
@@ -731,6 +732,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteOrganizationMemberCapacity(db);
   await installPgliteChatRunLogRls(db);
   await installPgliteSchedulerJobPauseLog(db);
+  await installPgliteTreeParentGuards(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));
