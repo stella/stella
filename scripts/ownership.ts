@@ -458,6 +458,11 @@ export const OWNERSHIP = [
             "Schema export or full-schema test introspection; no production receipt writer.",
         },
         {
+          path: "apps/api/src/db/code-owned-tables.test.ts",
+          reason:
+            "Schema export or full-schema test introspection; no production receipt writer.",
+        },
+        {
           path: "apps/api/src/db/high-volume-tables.test.ts",
           reason:
             "Schema export or full-schema test introspection; no production receipt writer.",
@@ -809,11 +814,6 @@ export const OWNERSHIP = [
           path: "apps/api/src/lib/scouts/work-attention.ts",
           reason: "Takes the constructor as an injected dependency type.",
         },
-        {
-          path: "apps/api/src/lib/workflow-queue.ts",
-          reason:
-            "Workflow property generation, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
-        },
       ],
     },
   },
@@ -839,6 +839,7 @@ export const OWNERSHIP = [
           "apps/api/src/lib/bilingual/run-queue.ts",
           "apps/api/src/handlers/reports/report-export-queue.ts",
           "apps/api/src/lib/lists/verification/run-queue.ts",
+          "apps/api/src/lib/workflow-queue.ts",
         ].map((modulePath) => ({
           path: modulePath,
           reason: "Member run; reads its inputs through inputDb.",

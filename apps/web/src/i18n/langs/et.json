@@ -1608,15 +1608,6 @@
     "currency": "Valuuta",
     "currentPage": "Praegune lehekülg",
     "date": "Kuupäev",
-    "datePicker": {
-      "label": "Kuupäevavalija",
-      "nextDecade": "Järgmine kümnend",
-      "nextMonth": "Järgmine kuu",
-      "nextYear": "Järgmine aasta",
-      "previousDecade": "Eelmine kümnend",
-      "previousMonth": "Eelmine kuu",
-      "previousYear": "Eelmine aasta"
-    },
     "decisions": "Lahendid",
     "decline": "Keeldu",
     "delete": "Kustuta",
