@@ -80,12 +80,12 @@ export type Finding =
   | { kind: "process-env-read"; flag: string; file: string }
   | { kind: "undeclared-gate-flag"; flag: string; file: string }
   | {
-      kind: "ungated-capability";
+      kind: "flagged-capability";
       capability: string;
       flag: string;
       routeFile: string;
     }
-  | { kind: "unclassified-route"; routeFile: string }
+  | { kind: "route-file"; routeFile: string }
   | { kind: "unattributed-mount"; routeFile: string; handler: string };
 
 /** Stable key for a finding: no line numbers, so edits elsewhere never churn it. */
@@ -99,10 +99,10 @@ export const findingKey = (finding: Finding): string => {
       return `process-env-read:${finding.flag}:${finding.file}`;
     case "undeclared-gate-flag":
       return `undeclared-gate-flag:${finding.flag}:${finding.file}`;
-    case "ungated-capability":
-      return `ungated-capability:${finding.capability}@${finding.routeFile}`;
-    case "unclassified-route":
-      return `unclassified-route:${finding.routeFile}`;
+    case "flagged-capability":
+      return `flagged-capability:${finding.capability}@${finding.routeFile}`;
+    case "route-file":
+      return `route-file:${finding.routeFile}`;
     case "unattributed-mount":
       return `unattributed-mount:${finding.handler}@${finding.routeFile}`;
     default:
@@ -118,8 +118,8 @@ export const findingKey = (finding: Finding): string => {
  */
 export const BASELINABLE_KINDS: ReadonlySet<Finding["kind"]> = new Set([
   "dead-flag",
-  "ungated-capability",
-  "unclassified-route",
+  "flagged-capability",
+  "route-file",
 ]);
 
 // --- AST helpers -------------------------------------------------------------
@@ -1230,7 +1230,7 @@ const intersect = (sets: readonly ReadonlySet<string>[]): Set<string> => {
 
 /**
  * Gates an instance inherits from where it is mounted: the intersection over
- * every mount point (a child mounted once without the gate is ungated there).
+ * every mount point (a gate counts for a child only if every mount has it).
  * A continuation (`const b = a.get(...)`) is mounted wherever its base is.
  */
 const inheritedGates = (graph: RouteGraph) => {
@@ -1344,7 +1344,7 @@ const scanMounts = (
       continue;
     }
     scan.findings.push({
-      kind: "ungated-capability",
+      kind: "flagged-capability",
       capability,
       flag,
       routeFile: mount.file,
@@ -1413,7 +1413,7 @@ const scanClassification = ({
       !flaggedFiles.has(record.file) &&
       !input.alwaysOnRouteFiles.has(record.file)
     ) {
-      findings.push({ kind: "unclassified-route", routeFile: record.file });
+      findings.push({ kind: "route-file", routeFile: record.file });
     }
   }
   return findings;

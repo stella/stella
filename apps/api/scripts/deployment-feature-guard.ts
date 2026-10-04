@@ -133,14 +133,15 @@ export const loadRealInput = (): ScanInput => {
 
 type BaselineRow = { key: string; reason: string };
 
+/** The one reason every generated baseline row carries. */
+export const BASELINE_REASON = "pending gate classification";
+
 const reasonFor = (finding: Finding): string => {
   switch (finding.kind) {
     case "dead-flag":
-      return "Declared, read by no gate. Delete the flag or wire it to a gate.";
-    case "ungated-capability":
-      return `Catalog entry carries ${finding.flag}; the route mount applies no ${finding.flag} gate.`;
-    case "unclassified-route":
-      return "No deployment flag gates this route file and none of its capabilities carries one. Gate it or declare it always-on.";
+    case "flagged-capability":
+    case "route-file":
+      return BASELINE_REASON;
     case "undeclared-read":
     case "process-env-read":
     case "undeclared-gate-flag":
@@ -171,11 +172,10 @@ const parseBaseline = (raw: unknown, origin: string): BaselineRow[] => {
     if (
       !isRecord(row) ||
       typeof row["key"] !== "string" ||
-      typeof row["reason"] !== "string" ||
-      row["reason"].trim().length === 0
+      row["reason"] !== BASELINE_REASON
     ) {
       return panic(
-        `deployment-feature-guard: ${origin} rows are { key, reason } with a non-empty reason`,
+        `deployment-feature-guard: ${origin} rows are { key, reason } with reason "${BASELINE_REASON}"`,
       );
     }
     return { key: row["key"], reason: row["reason"] };
@@ -337,7 +337,7 @@ export const SELF_TEST_CASES: readonly SelfTestCase[] = [
       ),
   },
   {
-    name: "a flagged capability's real route without its gate fails",
+    name: "removing a real route's flag check is reported",
     mutate: (input) =>
       replaceRouteSource(input, GATED_ROUTE_FILE, (source) =>
         source.replace(
@@ -351,7 +351,7 @@ export const SELF_TEST_CASES: readonly SelfTestCase[] = [
       return (
         expected.length > 0 &&
         expected.every((id) =>
-          hasKey(result, `ungated-capability:${id}@${GATED_ROUTE_FILE}`),
+          hasKey(result, `flagged-capability:${id}@${GATED_ROUTE_FILE}`),
         )
       );
     },
@@ -373,7 +373,7 @@ export const SELF_TEST_CASES: readonly SelfTestCase[] = [
     expect: (result) =>
       result.findings.some(
         (finding) =>
-          finding.kind === "ungated-capability" &&
+          finding.kind === "flagged-capability" &&
           finding.routeFile === GATED_ROUTE_FILE,
       ),
   },
@@ -404,8 +404,7 @@ export const SELF_TEST_CASES: readonly SelfTestCase[] = [
         },
       ],
     }),
-    expect: (result) =>
-      hasKey(result, `unclassified-route:${SELF_TEST_ROUTE_FILE}`),
+    expect: (result) => hasKey(result, `route-file:${SELF_TEST_ROUTE_FILE}`),
   },
   {
     name: "a mount outside any walked chain fails",

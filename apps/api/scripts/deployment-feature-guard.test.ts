@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  BASELINE_REASON,
   buildBaseline,
   diffBaseline,
   loadRealInput,
@@ -66,7 +67,7 @@ const input = ({
 const keys = (scanInput: ScanInput): string[] =>
   scanDeploymentFeatures(scanInput).findings.map(findingKey);
 
-const UNGATED = `ungated-capability:things.list@${ROUTE}`;
+const FLAGGED_KEY = `flagged-capability:things.list@${ROUTE}`;
 
 describe("route gates", () => {
   test("a gate before the route covers it", () => {
@@ -90,7 +91,7 @@ describe("route gates", () => {
           },
         }),
       ),
-    ).toContain(UNGATED);
+    ).toContain(FLAGGED_KEY);
   });
 
   test("a gate on another flag does not", () => {
@@ -102,7 +103,7 @@ describe("route gates", () => {
           },
         }),
       ),
-    ).toContain(UNGATED);
+    ).toContain(FLAGGED_KEY);
   });
 
   test("a child inherits the gate of every parent it is mounted under", () => {
@@ -126,7 +127,7 @@ describe("route gates", () => {
           },
         }),
       ),
-    ).toContain(`ungated-capability:things.list@${CHILD}`);
+    ).toContain(`flagged-capability:things.list@${CHILD}`);
   });
 
   test("a group's hook stays inside the group", () => {
@@ -138,7 +139,7 @@ describe("route gates", () => {
           },
         }),
       ),
-    ).toContain(UNGATED);
+    ).toContain(FLAGGED_KEY);
   });
 
   test("hook, guard, route-level and in-handler checks count as gates", () => {
@@ -205,7 +206,7 @@ describe("route gates", () => {
     ).toEqual([`unattributed-mount:list.handler@${ROUTE}`]);
   });
 
-  test("a route file with no gate and no flagged capability is unclassified", () => {
+  test("a route file outside every class is reported", () => {
     const scanInput = input({
       routes: {
         [ROUTE]: `${IMPORTS}export const r = new Elysia().get("/", list.handler);`,
@@ -218,7 +219,7 @@ describe("route gates", () => {
         },
       ],
     });
-    expect(keys(scanInput)).toEqual([`unclassified-route:${ROUTE}`]);
+    expect(keys(scanInput)).toEqual([`route-file:${ROUTE}`]);
     expect(
       keys({ ...scanInput, alwaysOnRouteFiles: new Map([[ROUTE, "core"]]) }),
     ).toEqual([]);
@@ -315,12 +316,12 @@ describe("baseline", () => {
   ).findings;
   const rows = buildBaseline(findings);
 
-  test("rows carry a reason and sort by key", () => {
+  test("rows carry the one generic reason and sort by key", () => {
     expect(rows.map(({ key }) => key)).toEqual([
       "dead-flag:FEATURE_B",
-      UNGATED,
+      FLAGGED_KEY,
     ]);
-    expect(rows.every(({ reason }) => reason.length > 0)).toBe(true);
+    expect(rows.every(({ reason }) => reason === BASELINE_REASON)).toBe(true);
   });
 
   test("new, stale, grown and unsorted rows fail", () => {
