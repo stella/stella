@@ -747,11 +747,6 @@ export const OWNERSHIP = [
             "Persists a collaboration room re-checked on every token use.",
         },
         {
-          path: "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.ts",
-          reason:
-            "Compacts a user's own chat threads; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
-        },
-        {
           path: "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts",
           reason: "Scheduled organization automation.",
         },

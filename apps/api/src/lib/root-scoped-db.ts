@@ -121,9 +121,10 @@ export const createRootMembershipScopedDb = (
     { [MEMBERSHIP_SCOPE]: true as const },
   );
 
-const createRootMembershipSafeDb = (
+/** The `Result` form of `createRootMembershipScopedDb`. */
+export const createRootMembershipSafeDb = (
   { organizationId, userId }: MembershipOptions,
-  database: RlsDatabase<Transaction> | undefined,
+  database?: RlsDatabase<Transaction>,
 ): MembershipSafeDb =>
   Object.assign(
     createRootSafeDb(

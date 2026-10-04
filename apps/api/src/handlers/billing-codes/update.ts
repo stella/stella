@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { billingCodes } from "@/api/db/schema";
+import { billingCodeRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -28,6 +29,7 @@ const config = {
     "being offered without rewriting entries already recorded under it.",
   permissions: { billingCode: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: billingCodeRealtimeUpdates,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: updateBillingCodeBodySchema,
 } satisfies WorkspaceHandlerConfig;
