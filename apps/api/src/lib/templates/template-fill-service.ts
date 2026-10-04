@@ -561,6 +561,8 @@ type FillServiceOptions<TRejection = never> = {
   /** Deferred builder for the AI collaborators; omitted by a caller that never
    *  drafts (the fill then leaves AI fields unresolved). */
   aiCollaborators?: AiFillCollaboratorProvider | undefined;
+  /** Registry transport seam; ordinary callers use the organization's dispatch. */
+  lookupResolver?: LookupResolver | undefined;
   /** Optional usage preflight run only when the manifest declares AI fields,
    *  before any model call. A non-null return aborts the fill with a
    *  `{ usageRejection }` result the caller surfaces as its own response. */
@@ -945,7 +947,9 @@ const draftDocumentValues = async ({
   const fields = manifest.fields.filter(
     ({ path }) =>
       !scopedPaths.has(path) ||
-      !discovered.loopAliases.some(({ alias }) => path.startsWith(`${alias}.`)),
+      !discovered.loopAliases.some(({ path: arrayPath }) =>
+        path.startsWith(`${arrayPath}.`),
+      ),
   );
   // Resolve registry lookups, evaluate formula (derived) fields, and check
   // dependent (optionsFrom) selects before any AI step or substitution sees
@@ -1031,7 +1035,13 @@ const prepareClauseOccurrences = async ({
     const paths = new Set(
       arrayOrEmpty(discovered.clauseScopedFieldPaths?.[patchKey]),
     );
-    const fields = manifest.fields.filter((field) => paths.has(field.path));
+    const fields = manifest.fields.filter(
+      (field) =>
+        paths.has(field.path) &&
+        discovered.loopAliases.some(({ path: arrayPath }) =>
+          field.path.startsWith(`${arrayPath}.`),
+        ),
+    );
     // Fill steps mutate declared values; copy only those roots rather than
     // cloning every document-level array once for every item.
     const roots = new Set(
@@ -1420,6 +1430,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   requiredFields,
   clauseOverrides,
   aiCollaborators,
+  lookupResolver,
   assertUsageAvailable,
   useRecording = "after-fill",
   workspaceId,
@@ -1427,15 +1438,10 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 }: FillDocxWithPolicyOptions<TRejection>): Promise<
   FilledDocx | FillRejection<TRejection>
 > => {
-  const observer = actionRequestObserver(
-    organizationId,
-    ACTION_COST_CALL_KIND.registryRequest,
-  );
-  const loaded = source;
   const { templateId } = source;
   const { manifest, discovered, slots, bodies, clauses } =
     await discoverTemplateSource({
-      source: loaded,
+      source,
       scopedDb,
       organizationId,
       clauseOverrides,
@@ -1485,18 +1491,14 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     fields: manifest.fields,
     policy: requiredFields,
     values: record,
-    scoped: await clauseRequirements.early(loaded.file, record),
+    scoped: await clauseRequirements.early(source.file, record),
   });
   if (missingRequiredFields.length > 0) {
     return { requiredFieldsRejection: missingRequiredFields };
   }
 
-  // Draft AI-fillable fields (manifest fields with an aiPrompt) before fill.
-  // Gate the AI usage preflight and the collaborator build on a model call
-  // actually running: both cost the caller quota or an org AI config read,
-  // and a deterministic fill must spend neither. Runs before the manifest
-  // fill steps so an over-quota fill rejects without first calling out to a
-  // registry for its lookup fields.
+  // Gate AI preflight and collaborators on declared model work: deterministic
+  // fills spend neither quota nor config reads, and refusals precede lookups.
   const hasAiFields = manifest.fields.some(
     (field) => Boolean(field.aiPrompt) || field.aiAdapt === true,
   );
@@ -1509,16 +1511,21 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   const { generateAiValue, decideAiCondition, adaptAiValue } =
     aiCollaborators && hasAiFields ? await aiCollaborators() : {};
 
-  const resolveLookup = createDispatchLookupResolver({
-    observer,
-    dispatch: await getOrganizationRegistryDispatch({
-      scopedDb,
-      organizationId,
-    }),
-  });
+  const resolveLookup =
+    lookupResolver ??
+    createDispatchLookupResolver({
+      observer: actionRequestObserver(
+        organizationId,
+        ACTION_COST_CALL_KIND.registryRequest,
+      ),
+      dispatch: await getOrganizationRegistryDispatch({
+        scopedDb,
+        organizationId,
+      }),
+    });
 
   const drafting = await draftDocumentValues({
-    file: loaded.file,
+    file: source.file,
     manifest,
     bodies,
     record,
@@ -1545,7 +1552,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   // the stub stays in `record` so uncovered occurrences still get the
   // plain global substitution below.
   const adapted = await adaptAiFields({
-    file: loaded.file,
+    file: source.file,
     fields: manifest.fields,
     values: record,
     adapt: adaptAiValue,
@@ -1620,8 +1627,8 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   }
 
   return {
-    templateName: loaded.name,
-    fileName: loaded.fileName,
+    templateName: source.name,
+    fileName: source.fileName,
     file: result.file,
     unmatchedPlaceholders: result.unmatchedPlaceholders,
     // Adapted stubs no longer match a marker (each occurrence was already

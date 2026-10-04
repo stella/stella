@@ -2305,6 +2305,79 @@ describe("clause slot requiredness follows rendering", () => {
     },
   );
 
+  test.each(["block", "inline"])(
+    "a %s loop resolves document and clause-item lookups once per input",
+    async (mode) => {
+      const body = [
+        {
+          text: '{{ buyer | lookup("krs", name="[company name]") }} / {{ p.company | lookup("krs", name="[company name]") }}',
+        },
+      ];
+      const file = await makeDocx(
+        WRAP(
+          mode === "block"
+            ? P("{% for p in persons %}") +
+                P('{{ clause("Terms") }}') +
+                P("{% endfor %}")
+            : P('{% for p in persons %}{{ clause("Terms") }}{% endfor %}'),
+        ),
+      );
+      const source = {
+        name: "Terms",
+        fileName: "terms.docx",
+        file,
+        templateId: toSafeId<"template">("tmpl_1"),
+      };
+      const scopedDb = stubScopedDb(body);
+      const { manifest, discovered } = await discoverTemplateSource({
+        source,
+        scopedDb,
+        organizationId,
+      });
+      expect(discovered.loopAliases).toContainEqual({
+        alias: "p",
+        path: "persons",
+      });
+      expect(manifest.fields.map(({ path }) => path)).toContain(
+        "persons.company",
+      );
+      const queries: string[] = [];
+      const result = await fillTemplateDocx({
+        source,
+        scopedDb,
+        organizationId,
+        requiredFields: "enforce",
+        useRecording: "caller",
+        values: {
+          buyer: "0000123456",
+          persons: [{ company: "0000123457" }, { company: "0000123458" }],
+        },
+        lookupResolver: async ({ query }) => {
+          queries.push(query);
+          return {
+            type: "hit",
+            hit: {
+              registry: "krs",
+              id: query,
+              name: `Company ${query}`,
+              legalForm: null,
+              address: null,
+              registryUrl: `https://example.invalid/krs/${query}`,
+            },
+          };
+        },
+      });
+      expect(queries).toEqual(["0000123456", "0000123457", "0000123458"]);
+      const text = (await filledTexts(result)).join(";");
+      expect(text).toContain("Company 0000123456 / Company 0000123457");
+      expect(text).toContain("Company 0000123456 / Company 0000123458");
+      if (!("file" in result)) {
+        return panic("Expected the lookup clause document");
+      }
+      expect(result.unmatchedPlaceholders).toEqual([]);
+    },
+  );
+
   test("nested inline slots inherit outer bindings and innermost loop counters", async () => {
     const body = [
       {
