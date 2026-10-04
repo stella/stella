@@ -6,6 +6,8 @@ import { env as apiConfig } from "@/api/env";
 declare const env: Record<string, boolean>;
 declare const envDocumentProcessingWorker: Record<string, boolean>;
 declare const isDeploymentFeatureEnabled: (flag: string) => boolean;
+declare const process: { env: Record<string, string | undefined> };
+declare const Bun: { env: Record<string, string | undefined> };
 
 // MUST flag: a raw member read skips the owner's local-development policy.
 // oxlint-disable-next-line no-raw-deployment-feature-read/no-raw-deployment-feature-read -- fixture: raw flag reads go through the owner
@@ -39,3 +41,10 @@ void destructured;
 // MUST flag: an aliased import of the API env is the same object.
 // oxlint-disable-next-line no-raw-deployment-feature-read/no-raw-deployment-feature-read -- fixture: aliased env reads go through the owner
 export const rawAliased = apiConfig.FEATURE_LEGAL_LISTS;
+
+// MUST flag: the process environment skips the env schema and the owner.
+// oxlint-disable-next-line no-raw-deployment-feature-read/no-raw-deployment-feature-read -- fixture: raw process-env flag reads go through the owner
+export const rawProcess = process.env.FEATURE_LEGAL_LISTS;
+
+// oxlint-disable-next-line no-raw-deployment-feature-read/no-raw-deployment-feature-read -- fixture: raw Bun env flag reads go through the owner
+export const rawBun = Bun.env.FEATURE_USAGE;

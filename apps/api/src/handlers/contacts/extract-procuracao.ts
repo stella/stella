@@ -79,6 +79,10 @@ const buildPrompt = (documentText: string): string =>
   `Document (procuração):\n---\n${documentText}\n---`;
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Extracts contact fields without returning the source file.",
+  },
   permissions: { contact: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },

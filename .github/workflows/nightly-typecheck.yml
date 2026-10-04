@@ -74,6 +74,7 @@ jobs:
         # This job calls the compiler directly rather than the Turbo
         # typecheck graph, so materialize its ignored API contract first.
         run: |
+          bun --filter @stll/api generate:capability-runtime
           bun run generate
           bun run typegen
 

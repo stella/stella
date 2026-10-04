@@ -78,6 +78,11 @@ const createBlankTemplateHandler = async function* ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores a template and returns its metadata rather than file bytes.",
+  },
   description:
     "Create an empty template from the stella base DOCX, with a name and an " +
     "optional category. It carries no fields yet: add markers by editing the " +
