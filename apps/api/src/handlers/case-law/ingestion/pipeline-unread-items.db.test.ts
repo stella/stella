@@ -352,6 +352,44 @@ describe("a listed item whose read stays unavailable", () => {
     }
   });
 
+  test("a page of only unread items writes under the database slot", async () => {
+    const sourceId = await crawlSource();
+    const sourceLease =
+      (await acquireCaseLawSourceIngestionLease({ scopedDb, sourceId })) ??
+      panic("expected the source lease to be free");
+    czNsAdapter.fetchPage = async () =>
+      await Promise.resolve(
+        Result.ok({
+          decisions: [],
+          unreadItems: [forbidden("slotted")],
+          nextCursor: "page-2",
+        }),
+      );
+    const slot = { acquired: 0, released: 0 };
+
+    await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
+      source: sourceLease.source,
+      sourceLease,
+      scopedDb,
+      maxPages: 1,
+      corpus,
+      dbSlot: {
+        acquire: async () => {
+          slot.acquired += 1;
+          await Promise.resolve();
+        },
+        release: () => {
+          slot.released += 1;
+        },
+      },
+    });
+    await sourceLease.release();
+
+    expect(slot).toEqual({ acquired: 1, released: 1 });
+    expect(await decisionRow(sourceId, "slotted")).toBeDefined();
+  });
+
   test("a refusal is stored typed at once and holds nothing", async () => {
     const sourceId = await crawlSource();
 

@@ -207,9 +207,16 @@ const batchStopKind = (
   }
 };
 
-/** What a page asks the database to write: its decisions and supplements. */
-const pageItemCount = ({ decisions, supplements }: SyncPage): number =>
-  decisions.length + (supplements?.length ?? 0);
+/**
+ * What a page asks the database to write: its decisions, supplements and
+ * unread items.
+ */
+const pageItemCount = ({
+  decisions,
+  supplements,
+  unreadItems,
+}: SyncPage): number =>
+  decisions.length + (supplements?.length ?? 0) + (unreadItems?.length ?? 0);
 
 const PAGE_SLOT = {
   HELD: "held",
