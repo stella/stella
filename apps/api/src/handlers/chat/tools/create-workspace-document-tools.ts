@@ -13,6 +13,7 @@ import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { ChatToolError, unreachable } from "@/api/lib/errors/tagged-errors";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   OrganizationFileUsageError,
   organizationFileUsageHandlerError,
@@ -198,6 +199,7 @@ export const createCreateWorkspaceDocumentTools = ({
       buffer: docxResult.value,
       fileName,
       mimeType: DOCX_MIME_TYPE,
+      encryption: serverBuiltFileEncryption(),
       parentId: null,
     });
 

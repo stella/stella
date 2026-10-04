@@ -47,6 +47,7 @@ import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { errorTag } from "@/api/lib/errors/utils";
 import { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
@@ -473,6 +474,7 @@ const runExport = async ({
       buffer: delivery.buffer,
       fileName,
       mimeType: delivery.mimeType,
+      encryption: serverBuiltFileEncryption(),
     });
     if (Result.isError(created)) {
       await markExportFailedRow(actor, created.error.message);

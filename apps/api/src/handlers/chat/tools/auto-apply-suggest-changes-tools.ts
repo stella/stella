@@ -41,6 +41,7 @@ import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { openScannedDocxReviewer } from "@/api/lib/file-scan/document-parsers";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { getScanWarnings } from "@/api/lib/file-scan/warnings";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -454,6 +455,7 @@ export const createAutoApplySuggestChangesTools = ({
               buffer: edited,
               fileName: loaded.fileName,
               mimeType: DOCX_MIME_TYPE,
+              encryption: serverBuiltFileEncryption(),
               source: null,
               writePolicy: {
                 type: "automatic-docx-edit",

@@ -6,6 +6,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { validateParentId } from "@/api/lib/entities/validate-parent-id";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   OrganizationFileUsageError,
   organizationFileUsageHandlerError,
@@ -53,6 +54,7 @@ export const createBlankDocument = async ({
     buffer,
     fileName: `${name}.docx`,
     mimeType: DOCX_MIME_TYPE,
+    encryption: serverBuiltFileEncryption(),
     parentId,
   }).then((result) => Result.mapError(result, toHandlerError));
 };

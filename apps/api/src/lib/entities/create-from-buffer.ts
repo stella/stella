@@ -35,6 +35,7 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import type { FileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -77,7 +78,8 @@ type CreateEntityFromBufferInput = {
   buffer: Uint8Array | ArrayBuffer;
   fileName: string;
   mimeType: string;
-  encrypted?: boolean | undefined;
+  /** From `detect-file-encryption.ts`, for these bytes. */
+  encryption: FileEncryption;
   parentId?: SafeId<"entity"> | null | undefined;
   scanWarnings?: string[] | undefined;
   provenance?:
@@ -160,7 +162,7 @@ export const createEntityFromBuffer = async ({
   buffer,
   fileName: rawFileName,
   mimeType,
-  encrypted = false,
+  encryption,
   parentId,
   scanWarnings,
   provenance,
@@ -421,16 +423,16 @@ export const createEntityFromBuffer = async ({
             fileName,
             mimeType,
             sizeBytes: bytes.byteLength,
-            encrypted,
+            encryption,
             sha256Hex,
             pdfFileId: null,
             pdfDerivative: pdfDerivativeStateForFile({
-              encrypted,
+              encrypted: encryption.encrypted,
               mimeType,
             }),
             thumbnailFileId: null,
             thumbnailDerivative: thumbnailDerivativeStateForFile({
-              encrypted,
+              encrypted: encryption.encrypted,
               mimeType,
             }),
             ...(scanWarnings !== undefined && { scanWarnings }),
@@ -563,7 +565,7 @@ export const createEntityFromBuffer = async ({
 
   dependencies
     .enqueuePdfDerivativeOrMarkFailed({
-      encrypted,
+      encrypted: encryption.encrypted,
       entityId,
       fieldId,
       mimeType,
@@ -575,7 +577,7 @@ export const createEntityFromBuffer = async ({
 
   dependencies
     .enqueueImageThumbnailOrMarkFailed({
-      encrypted,
+      encrypted: encryption.encrypted,
       entityId,
       fieldId,
       mimeType,

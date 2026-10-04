@@ -20,6 +20,7 @@ import {
   FileScanRejectedError,
 } from "@/api/lib/file-scan/scan-upload";
 import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
+import { detectFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 class InboundAttachmentAlreadyLinked extends TaggedError(
@@ -183,6 +184,12 @@ const finishInboundAttachments = async ({
     const aborted: {
       error: InboundPersistenceError | InboundAttachmentAlreadyLinked | null;
     } = { error: null };
+    // Filing keeps every attachment, so an unreadable or unsure PDF is still
+    // stored; the detection only decides what its row records.
+    const { encryption } = await detectFileEncryption({
+      mimeType: file.mimeType,
+      scanned: file,
+    });
     const written = await Result.tryPromise({
       try: async () =>
         // db-await-in-loop: one stored document and ordinal claim per attachment, each in its own transaction so a retry resumes at the missing ordinals; bounded by CORRESPONDENCE_MAX_ATTACHMENTS
@@ -193,6 +200,7 @@ const finishInboundAttachments = async ({
           buffer: file.bytes,
           fileName: sanitizeFilename(file.fileName),
           mimeType: file.mimeType,
+          encryption,
           scanWarnings: file.scanWarnings ?? undefined,
           afterCreate: async (tx, document) => {
             const attachmentLink = await linkInboundAttachment({

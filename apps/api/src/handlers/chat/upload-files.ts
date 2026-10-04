@@ -55,7 +55,7 @@ import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   generateImageThumbnail,
-  shouldGenerateImageThumbnail,
+  isThumbnailableMimeType,
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
 import {
@@ -797,7 +797,8 @@ export const uploadUserFile = async ({
       key: string;
       placeholder: string;
     } | null = null;
-    if (shouldGenerateImageThumbnail({ mimeType: file.mimeType })) {
+    // Image types carry no encryption, so the type alone decides here.
+    if (isThumbnailableMimeType(file.mimeType)) {
       const thumbnailResult = await generateThumbnail(file.bytes);
       if (Result.isError(thumbnailResult)) {
         captureError(thumbnailResult.error, {

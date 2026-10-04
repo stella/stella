@@ -13,13 +13,15 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import {
+  detectFileEncryption,
+  uploadFileEncryption,
+} from "@/api/lib/files/detect-file-encryption";
+import {
   OrganizationFileUsageError,
   organizationFileUsageHandlerError,
 } from "@/api/lib/files/organization-file-usage";
-import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { broadcastOrganizationResourceSetUpdated } from "@/api/lib/resource-realtime";
-import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 import {
   EMAIL_ATTACHMENT_LOAD_STATUS,
@@ -124,22 +126,20 @@ export default createSafeHandler(
       }),
     );
 
-    let encrypted = false;
-    if (attachment.mimeType === PDF_MIME_TYPE) {
-      const encryptedResult = await isEncryptedPdf(scanned);
-      if (Result.isError(encryptedResult)) {
-        captureError(encryptedResult.error, {
-          mimeType: PDF_MIME_TYPE,
-          sizeBytes: String(attachment.bytes.byteLength),
-        });
-        return Result.err(
-          new HandlerError({
-            status: 422,
-            message: "Failed to open PDF: file appears corrupted",
-          }),
-        );
-      }
-      encrypted = encryptedResult.value;
+    const encryption = uploadFileEncryption(
+      await detectFileEncryption({ mimeType: attachment.mimeType, scanned }),
+      {
+        mimeType: attachment.mimeType,
+        sizeBytes: String(attachment.bytes.byteLength),
+      },
+    );
+    if (encryption === null) {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: "Failed to open PDF: file appears corrupted",
+        }),
+      );
     }
 
     const created = yield* Result.await(
@@ -154,7 +154,7 @@ export default createSafeHandler(
         buffer: attachment.bytes,
         fileName: attachment.fileName,
         mimeType: attachment.mimeType,
-        encrypted,
+        encryption,
         parentId,
         provenance: {
           type: "email_attachment",

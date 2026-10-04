@@ -29,6 +29,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
+import { storedFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -495,6 +496,7 @@ const remapFieldFileId = ({
   }
 
   const {
+    encrypted: _encrypted,
     pdfDerivative: _pdfDerivative,
     placeholder: _placeholder,
     thumbnailDerivative: _thumbnailDerivative,
@@ -505,6 +507,8 @@ const remapFieldFileId = ({
     ...field,
     content: fileContentWithMintedObject({
       ...restContent,
+      // A copy holds the same bytes, so the stored attribute carries over.
+      encryption: storedFileEncryption(field.content),
       id: newFileId,
       pdfFileId: null,
       pdfDerivative: pdfDerivativeStateForFile({

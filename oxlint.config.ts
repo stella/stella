@@ -9,6 +9,7 @@ import {
 } from "@stll/oxlint-config";
 
 import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
+import { DERIVED_ATTRIBUTES } from "./scripts/derived-attributes.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
   SHADCN_LINT_JS_PLUGINS,
@@ -144,6 +145,17 @@ const publicSsrAmbientStateRules = {
     ...publicSsrAmbientProperties,
   ],
 } satisfies NonNullable<OxlintOverride["rules"]>;
+
+// One override carries every registered derived attribute: an oxlint override
+// replaces a rule's whole configuration, so a second override for the same
+// files would silently drop the first one's attributes.
+const derivedAttributeRuleOptions = {
+  attributes: DERIVED_ATTRIBUTES.map(({ name, detector, within }) => ({
+    name,
+    detector,
+    within,
+  })),
+};
 
 const fixtureRuleOverrides = [
   fixtureRuleOverride("drizzle.fixture.ts", [
@@ -1298,6 +1310,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
+    "./.oxlint-plugins/no-literal-derived-attribute.ts",
     "./.oxlint-plugins/no-parser-validator-calls.ts",
     "./.oxlint-plugins/no-raw-parser-html.ts",
     "./.oxlint-plugins/no-swallowed-item-error.ts",
@@ -3235,6 +3248,43 @@ export default defineConfig({
       ],
       rules: {
         "no-literal-decision-court/no-literal-decision-court": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-literal-derived-attribute.fixture.ts",
+      ],
+      rules: {
+        "no-literal-derived-attribute/no-literal-derived-attribute": [
+          "error",
+          {
+            attributes: [
+              {
+                name: "encrypted",
+                detector: "apps/api/src/lib/files/detect-file-encryption.ts",
+                within: [".oxlint-plugins/__fixtures__/"],
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // A derived attribute (scripts/derived-attributes.ts) comes from its
+      // detector: a literal written to it elsewhere records a guess.
+      files: [
+        ...new Set(DERIVED_ATTRIBUTES.flatMap(({ within }) => within)),
+      ].map((tree) => `${tree}**/*.ts`),
+      excludeFiles: [
+        "**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-literal-derived-attribute/no-literal-derived-attribute": [
+          "error",
+          derivedAttributeRuleOptions,
+        ],
       },
     },
     {

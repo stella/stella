@@ -26,6 +26,7 @@ import { createEntityVersionFromBuffer as createEntityVersionFromBufferWithDepen
 import type { CreateEntityVersionFromBufferDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import type { ScanResult } from "@/api/lib/file-scan/types";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -366,6 +367,7 @@ describe("createAutoApplySuggestChangesTools", () => {
       fileName: "oversized.docx",
       mimeType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      encryption: serverBuiltFileEncryption(),
       source: null,
       writePolicy: {
         type: "automatic-docx-edit",
