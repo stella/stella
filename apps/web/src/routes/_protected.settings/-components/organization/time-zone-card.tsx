@@ -1,8 +1,10 @@
 import { useId } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
 import {
@@ -16,8 +18,10 @@ import {
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
+import { useQueryView } from "@/lib/use-query-view";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
@@ -35,8 +39,8 @@ export const OrganizationTimeZoneCard = () => {
   const selectId = useId();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const canEdit = usePermissions({ organizationSettings: ["update"] });
-  const { data: settings } = useQuery(
-    organizationSettingsOptions(activeOrganizationId),
+  const view = useQueryView(
+    useQuery(organizationSettingsOptions(activeOrganizationId)),
   );
 
   const mutation = useSettingsMutation({
@@ -47,9 +51,36 @@ export const OrganizationTimeZoneCard = () => {
     errorToast: { title: t("errors.actionFailed") },
   });
 
-  if (!settings) {
-    return null;
+  switch (view.type) {
+    case "pending":
+    case "empty":
+      return null;
+    case "error":
+      return (
+        <Frame>
+          <FramePanel>
+            <p className="text-muted-foreground text-sm">
+              {t("errors.actionFailed")}
+            </p>
+            <Button
+              className="mt-3"
+              onClick={() => {
+                detached(view.retry(), "organization-time-zone.refetch");
+              }}
+              variant="ghost"
+            >
+              {t("common.retry")}
+            </Button>
+          </FramePanel>
+        </Frame>
+      );
+    case "items":
+      break;
+    default:
+      view satisfies never;
+      return panic("Unhandled organization settings query state");
   }
+  const settings = view.items;
 
   return (
     <Frame>
