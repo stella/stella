@@ -319,11 +319,26 @@ if (!databaseUrl || !runPostgres) {
       expect(receipts.map((row) => row.number).toSorted()).toEqual(
         numbers.toSorted(),
       );
+      const finalizeEvents = events.flatMap((event) => {
+        if (event.resourceType !== AUDIT_RESOURCE_TYPE.INVOICE) {
+          return [];
+        }
+        if (event.changes?.["action"]?.new !== "finalize") {
+          return [];
+        }
+        return [
+          {
+            invoiceId: event.resourceId,
+            invoiceNumber: event.changes["invoiceNumber"]?.new,
+          },
+        ];
+      });
       expect(
-        events.filter(
-          (event) => event.resourceType === AUDIT_RESOURCE_TYPE.INVOICE,
-        ),
-      ).toHaveLength(invoiceIds.length);
+        finalizeEvents.map(({ invoiceId }) => invoiceId).toSorted(),
+      ).toEqual(invoiceIds.toSorted());
+      expect(
+        finalizeEvents.map(({ invoiceNumber }) => invoiceNumber).toSorted(),
+      ).toEqual(numbers.toSorted());
     });
 
     test("competing finalizations of one invoice allocate only once", async () => {
