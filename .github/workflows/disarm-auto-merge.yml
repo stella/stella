@@ -7,6 +7,11 @@ on:
 permissions:
   pull-requests: write
 
+# Each push invalidation must run, including one followed by an autofix push.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   disarm:
     runs-on: ubuntu-latest

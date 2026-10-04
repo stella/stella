@@ -193,7 +193,10 @@ for (const failure of ["read", "disable"] as const) {
 test("workflow limits its trigger, token and executable code", () => {
   expect(workflow.on).toEqual({ pull_request: { types: ["synchronize"] } });
   expect(workflow.permissions).toEqual({ "pull-requests": "write" });
-  expect(workflow.concurrency).toBeUndefined();
+  expect(workflow.concurrency).toEqual({
+    group: `\${{ github.workflow }}-\${{ github.run_id }}`,
+    "cancel-in-progress": false,
+  });
   expect(workflow.jobs.disarm.concurrency).toBeUndefined();
   expect(workflow.jobs.disarm.steps).toHaveLength(1);
   expect(workflow.jobs.disarm.steps.at(0)?.uses).toMatch(
