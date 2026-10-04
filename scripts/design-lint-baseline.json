@@ -479,7 +479,6 @@
     "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts": 2,
     "apps/api/src/handlers/case-law/ingestion/adapters/pl-courts.ts": 3,
     "apps/api/src/handlers/case-law/ingestion/adapters/pl-sn.ts": 1,
-    "apps/api/src/handlers/case-law/ingestion/adapters/sk-courts.ts": 3,
     "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts": 3,
     "apps/api/src/handlers/chat/chat-prompt.ts": 1,
     "apps/api/src/handlers/entities/checkpoint-folio-collab-room.ts": 1,
