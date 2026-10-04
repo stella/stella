@@ -4,12 +4,18 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 
 import type { Transaction } from "@/api/db/root";
+import exportTimeEntriesCsv from "@/api/handlers/time-entries/csv/export";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { isRecord } from "@/api/lib/type-guards";
+import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { MCP_ERROR_CODES, projectMcpRefusal } from "@/api/mcp/error-codes";
@@ -2599,3 +2605,256 @@ describe("status-to-envelope mapping", () => {
     expect(error.message).not.toContain("10.0.3.7");
   });
 });
+
+describe("feature access discovery guard: real capability catalog", () => {
+  const featureId = "fixture-access";
+  const registry = { [featureId]: { enrolment: "invitation" } } as const;
+  const bindings = {
+    capabilities: new Map(capabilityCatalog.map(({ id }) => [id, featureId])),
+    tools: new Map<string, string>(),
+    resources: new Map<string, string>(),
+  };
+  const fixtureContext = (userId: string, organizationId: string) => {
+    const context = createContext();
+    context.userId = toSafeId<"user">(userId);
+    context.organizationId = toSafeId<"organization">(organizationId);
+    context.testDependencies = {
+      ...context.testDependencies,
+      featureAccessBindings: bindings,
+      featureAccessSnapshot: createFeatureAccessSnapshot({
+        organizationId,
+        userId,
+        decisions: new Map([
+          [
+            featureId,
+            decideFeatureAccess({
+              registry,
+              grants: {
+                [featureId]: [
+                  {
+                    type: "member",
+                    organizationId: "org_1",
+                    email: "invited@example.test",
+                  },
+                ],
+              },
+              featureId,
+              organizationId,
+              userId,
+              user: {
+                email:
+                  userId === "user_1"
+                    ? "invited@example.test"
+                    : "colleague@example.test",
+                emailVerified: true,
+              },
+              membership: true,
+            }),
+          ],
+        ]),
+      }),
+    };
+    return context;
+  };
+  test.each([
+    ["user_2", "org_1"],
+    ["user_1", "org_2"],
+  ])(
+    "catalog and schema discovery hide without caller grant: %s %s",
+    async (userId, organizationId) => {
+      const context = fixtureContext(userId, organizationId);
+      const list = await handleMcpToolCall({
+        toolName: "list_capabilities",
+        args: { limit: 50 },
+        context,
+      });
+      expect(parseToolPayload<{ items: unknown[] }>(list).items).toHaveLength(
+        0,
+      );
+      for (const { id } of capabilityCatalog) {
+        const described = await handleMcpToolCall({
+          toolName: "describe_capability",
+          args: { capability: id },
+          context,
+        });
+        expect(errorEnvelope(described).code, id).toBe("not_found");
+        const invoked = await handleMcpToolCall({
+          toolName: "invoke_capability",
+          args: { capability: id, validate_only: true },
+          context,
+        });
+        expect(errorEnvelope(invoked).code, id).toBe("not_found");
+      }
+      expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+      const typo = await handleMcpToolCall({
+        toolName: "describe_capability",
+        args: { capability: "time-entries.creat" },
+        context,
+      });
+      expect(errorEnvelope(typo).hint).not.toContain("time-entries.create");
+    },
+  );
+  test("caller grant permits real catalog and live schema discovery", async () => {
+    const context = fixtureContext("user_1", "org_1");
+    const list = await handleMcpToolCall({
+      toolName: "list_capabilities",
+      args: { limit: 50 },
+      context,
+    });
+    expect(
+      parseToolPayload<{ items: unknown[] }>(list).items.length,
+    ).toBeGreaterThan(0);
+    const described = await handleMcpToolCall({
+      toolName: "describe_capability",
+      args: { capability: "time-entries.create" },
+      context,
+    });
+    expect(parseToolPayload<{ id: string }>(described).id).toBe(
+      "time-entries.create",
+    );
+  });
+});
+
+test.each(["default-deny", "granted", "colleague"] as const)(
+  "MCP conditional query admission for %s",
+  async (kind) => {
+    const featureId = "fixture-query-access";
+    const organizationId = toSafeId<"organization">("org_1");
+    const userId = toSafeId<"user">(kind === "colleague" ? "user_2" : "user_1");
+    const workspaceId = "11111111-1111-4111-8111-111111111111";
+    const checkedQueries: unknown[] = [];
+    const select = mock(() => ({
+      from: () => ({
+        where: () => ({ orderBy: () => ({ limit: async () => [] }) }),
+      }),
+    }));
+    const insert = mock(() => undefined);
+    const database = createScopedDbMock({ select, insert });
+    const context = createContext({
+      workspaceIds: [workspaceId],
+      safeDb: database.safeDb,
+      scopedDb: database.scopedDb,
+    });
+    context.userId = userId;
+    context.featureAccessSnapshot = createFeatureAccessSnapshot({
+      organizationId,
+      userId,
+      decisions: new Map([
+        [
+          featureId,
+          decideFeatureAccess({
+            registry: { [featureId]: { enrolment: "invitation" } },
+            featureId,
+            organizationId,
+            userId,
+            user: {
+              email:
+                kind === "colleague"
+                  ? "colleague@example.test"
+                  : "member@example.test",
+              emailVerified: true,
+            },
+            membership: true,
+            grants:
+              kind === "default-deny"
+                ? {}
+                : {
+                    [featureId]: [
+                      {
+                        type: "member",
+                        organizationId,
+                        email: "member@example.test",
+                      },
+                    ],
+                  },
+          }),
+        ],
+      ]),
+    });
+    const previous = Object.getOwnPropertyDescriptor(
+      exportTimeEntriesCsv.config,
+      "featureAccess",
+    );
+    Object.defineProperty(exportTimeEntriesCsv.config, "featureAccess", {
+      configurable: true,
+      value: {
+        type: "conditional",
+        featureId,
+        usesFeature: async ({ query }: { query: unknown }) => {
+          checkedQueries.push(query);
+          return isRecord(query) && query["dateFrom"] === "2026-10-02";
+        },
+        projectInputSchema: (schemas: AdvertisedSchemas) => schemas,
+      },
+    });
+    try {
+      for (const validate_only of [true, false]) {
+        const result = await handleMcpToolCall({
+          toolName: "invoke_capability",
+          context,
+          args: {
+            capability: "time-entries.csv.export",
+            validate_only,
+            input: {
+              params: { matterId: workspaceId },
+              query: { dateFrom: "2026-10-02", status: "approved" },
+            },
+          },
+        });
+        if (kind === "granted") {
+          expect(result.isError).not.toBe(true);
+          if (validate_only) {
+            expect(
+              parseToolPayload<{ valid: boolean; capability: string }>(result),
+            ).toEqual({
+              valid: true,
+              capability: "time-entries.csv.export",
+            });
+          }
+        } else {
+          expect(errorEnvelope(result)).toMatchObject({
+            code: "not_found",
+            message: "Not found",
+          });
+          expect(select).not.toHaveBeenCalled();
+          expect(insert).not.toHaveBeenCalled();
+          expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+          expect(consumeRateLimitMock).not.toHaveBeenCalled();
+        }
+      }
+      expect(checkedQueries).toEqual(
+        kind === "granted"
+          ? []
+          : [
+              { dateFrom: "2026-10-02", status: "approved" },
+              { dateFrom: "2026-10-02", status: "approved" },
+            ],
+      );
+      const ordinary = await handleMcpToolCall({
+        toolName: "invoke_capability",
+        context,
+        args: {
+          capability: "time-entries.csv.export",
+          validate_only: false,
+          input: {
+            params: { matterId: workspaceId },
+            query: { dateFrom: "2026-10-01", status: "approved" },
+          },
+        },
+      });
+      expect(ordinary.isError).not.toBe(true);
+      expect(select).toHaveBeenCalledTimes(kind === "granted" ? 2 : 1);
+      expect(insert).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) {
+        Reflect.deleteProperty(exportTimeEntriesCsv.config, "featureAccess");
+      } else {
+        Object.defineProperty(
+          exportTimeEntriesCsv.config,
+          "featureAccess",
+          previous,
+        );
+      }
+    }
+  },
+);

@@ -45,7 +45,10 @@ export const TimePolicyCard = () => {
   const t = useTranslations();
   const user = useAuthenticatedUser();
   const query = useQuery(
-    organizationSettingsOptions(user.activeOrganizationId),
+    organizationSettingsOptions({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }),
   );
   const canEdit = usePermissions({ organizationSettings: ["update"] });
   if (query.error !== null) {

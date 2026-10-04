@@ -8,7 +8,7 @@
 // document marked unavailable on a listing-only decision. A part marker never
 // excuses a failed main text, and a fault is never an absence. Otherwise a
 // build that succeeds with different content stored a failed read as missing
-// or empty fields. Adapters in FAULTS_MUST_FAIL admit only a failure.
+// or empty fields.
 //
 // Refusals (401, 403) are a separate class: the build must state the refusal
 // typed (a `refused` marker on the decision, a withheld part typed as refused
@@ -124,17 +124,6 @@ const READ_FAULT_COVERAGE = {
   [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,
 } as const satisfies Record<AdapterKey, () => EnrolledAdapterFixture>;
 
-/**
- * Adapters whose build must fail on every fault. An empty answer, a 204, a 5xx
- * or a timeout from the SK general-courts portal is transient: the page fails
- * and the shared pipeline's consecutive-unavailable count, not the adapter,
- * marks the item. Only an explicit served answer with no record is a stated
- * absence (listing-only), and no fault here serves one.
- */
-const FAULTS_MUST_FAIL: ReadonlySet<string> = new Set<AdapterKey>([
-  ADAPTER_KEYS.SK_COURTS,
-]);
-
 const UNDRIVEN_REASON =
   "The enrolled fixture assembles the decision from served payloads; no publisher read is driven.";
 
@@ -235,7 +224,6 @@ for (const adapter of listAdapters()) {
             control: control.value,
             faulted: await buildWithFault({ stage, fault, build }),
             volatile,
-            requireFailure: FAULTS_MUST_FAIL.has(adapter.key),
           });
           if (outcome.type === "degraded") {
             rows.push(

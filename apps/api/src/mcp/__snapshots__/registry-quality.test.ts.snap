@@ -4118,6 +4118,16 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     "maxLength": 2000,
                     "description": "What a reviewer examines in the clause"
                   },
+                  "sources": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Document id from list_documents or a search"
+                    },
+                    "maxItems": 20,
+                    "description": "Documents this position was taken or revised from; never name a document, matter, or counterparty in a text field. Omit on a replace to keep the stored sources"
+                  },
                   "enabled": {
                     "type": "boolean",
                     "description": "false skips the position in runs. Defaults to true; omit on a replace to keep the stored value"
@@ -4182,6 +4192,16 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     "type": "string",
                     "maxLength": 2000,
                     "description": "What a reviewer examines in the clause"
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Document id from list_documents or a search"
+                    },
+                    "maxItems": 20,
+                    "description": "Documents this position was taken or revised from; never name a document, matter, or counterparty in a text field. Omit on a replace to keep the stored sources"
                   },
                   "enabled": {
                     "type": "boolean",

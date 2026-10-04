@@ -1,4 +1,4 @@
-import type { QueryKey } from "@tanstack/react-query";
+import { QueryClient, skipToken, type QueryKey } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -37,6 +37,10 @@ import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
+import {
+  organizationSettingsOptions,
+  optionalOrganizationSettingsOptions,
+} from "@/queries/organization-settings";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 
@@ -93,6 +97,21 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "organization-settings/get.ts": {
+    kind: "keyed",
+    calls: ['api["organization-settings"].get'],
+    files: ["queries/organization-settings.ts"],
+    keys: () => [
+      organizationSettingsOptions({ organizationId: ORG, userId: USER })
+        .queryKey,
+      optionalOrganizationSettingsOptions({ organizationId: ORG, userId: USER })
+        .queryKey,
+      optionalOrganizationSettingsOptions({
+        organizationId: null,
+        userId: USER,
+      }).queryKey,
+    ],
+  },
   "audit-logs/export.ts": { kind: "not-per-user", reason: DOWNLOAD },
   "catalogue/list.ts": {
     kind: "keyed",
@@ -899,6 +918,62 @@ describe("per-user reads", () => {
 
     expect(unkeyed).toEqual([]);
   });
+});
+
+test("organization settings isolate caller capabilities by user and organization", () => {
+  const caller = { organizationId: ORG, userId: USER };
+  const colleague = { organizationId: ORG, userId: "colleague-probe" };
+  const otherOrganization = { organizationId: "other-org-probe", userId: USER };
+  const queryClient = new QueryClient();
+  const callerKey = Array.from(organizationSettingsOptions(caller).queryKey);
+  const colleagueKey = Array.from(
+    organizationSettingsOptions(colleague).queryKey,
+  );
+  const otherOrganizationKey = Array.from(
+    organizationSettingsOptions(otherOrganization).queryKey,
+  );
+  const enabled = { capabilities: { fixture: { status: "enabled" } } };
+  const hidden = { capabilities: { fixture: { status: "hidden" } } };
+  queryClient.setQueryData(callerKey, enabled);
+  expect(
+    queryClient.getQueryCache().find({ queryKey: callerKey })?.state.data,
+  ).toEqual(enabled);
+  expect(
+    queryClient.getQueryCache().find({ queryKey: colleagueKey })?.state.data,
+  ).toBeUndefined();
+  expect(
+    queryClient.getQueryCache().find({ queryKey: otherOrganizationKey })?.state
+      .data,
+  ).toBeUndefined();
+  queryClient.setQueryData(colleagueKey, hidden);
+  expect(
+    queryClient.getQueryCache().find({ queryKey: colleagueKey })?.state.data,
+  ).toEqual(hidden);
+  expect(
+    queryClient.getQueryCache().find({ queryKey: callerKey })?.state.data,
+  ).toEqual(enabled);
+});
+
+test("organization settings skip authenticated reads until an organization is selected", () => {
+  const unselected = optionalOrganizationSettingsOptions({
+    organizationId: null,
+    userId: USER,
+  });
+  expect(unselected.queryFn).toBe(skipToken);
+  expect(unselected.queryKey).toContain(USER);
+  expect(unselected.queryKey).toContain(null);
+  const selected = organizationSettingsOptions({
+    organizationId: ORG,
+    userId: USER,
+  });
+  expect(typeof selected.queryFn).toBe("function");
+  expect(selected.queryKey).not.toEqual(unselected.queryKey);
+  const selectedOptional = optionalOrganizationSettingsOptions({
+    organizationId: ORG,
+    userId: USER,
+  });
+  expect(selectedOptional.queryKey).toEqual(selected.queryKey);
+  expect(selectedOptional.queryFn).toBe(selected.queryFn);
 });
 
 describe("the per-user read scan", () => {

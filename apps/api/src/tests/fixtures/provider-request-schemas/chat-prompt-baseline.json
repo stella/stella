@@ -14,8 +14,12 @@
         "tokens": 33513
       },
       {
+        "reason": "Position sources on save_playbook",
+        "tokens": 33744
+      },
+      {
         "reason": "Organization time-zone setting",
-        "tokens": 33720
+        "tokens": 33953
       }
     ],
     "anthropic/extended": [
@@ -32,8 +36,12 @@
         "tokens": 34002
       },
       {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34235
+      },
+      {
         "reason": "Organization time-zone setting",
-        "tokens": 34211
+        "tokens": 34442
       }
     ],
     "bedrock/default": [
@@ -50,8 +58,12 @@
         "tokens": 33746
       },
       {
+        "reason": "Position sources on save_playbook",
+        "tokens": 33977
+      },
+      {
         "reason": "Organization time-zone setting",
-        "tokens": 33953
+        "tokens": 34186
       }
     ],
     "bedrock/extended": [
@@ -68,8 +80,12 @@
         "tokens": 34234
       },
       {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34467
+      },
+      {
         "reason": "Organization time-zone setting",
-        "tokens": 34442
+        "tokens": 34674
       }
     ],
     "google/default": [
@@ -84,6 +100,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 32682
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 32913
       }
     ],
     "google/extended": [
@@ -98,6 +118,10 @@
       {
         "reason": "Linked clause directive guidance and published-source discovery",
         "tokens": 33159
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 33392
       }
     ],
     "mistral/default": [
@@ -114,8 +138,12 @@
         "tokens": 35118
       },
       {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35349
+      },
+      {
         "reason": "Organization time-zone setting",
-        "tokens": 35331
+        "tokens": 35563
       }
     ],
     "mistral/extended": [
@@ -132,8 +160,12 @@
         "tokens": 35644
       },
       {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35877
+      },
+      {
         "reason": "Organization time-zone setting",
-        "tokens": 35857
+        "tokens": 36089
       }
     ],
     "openai/default": [
@@ -150,8 +182,12 @@
         "tokens": 34721
       },
       {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34952
+      },
+      {
         "reason": "Organization time-zone setting",
-        "tokens": 34933
+        "tokens": 35166
       }
     ],
     "openai/extended": [
@@ -168,8 +204,12 @@
         "tokens": 35236
       },
       {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35468
+      },
+      {
         "reason": "Organization time-zone setting",
-        "tokens": 35449
+        "tokens": 35681
       }
     ],
     "openrouter-anthropic/default": [
@@ -186,8 +226,12 @@
         "tokens": 34587
       },
       {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34826
+      },
+      {
         "reason": "Organization time-zone setting",
-        "tokens": 34795
+        "tokens": 35035
       }
     ],
     "openrouter-anthropic/extended": [
@@ -204,8 +248,12 @@
         "tokens": 35086
       },
       {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35326
+      },
+      {
         "reason": "Organization time-zone setting",
-        "tokens": 35295
+        "tokens": 35534
       }
     ],
     "openrouter/default": [
@@ -222,8 +270,12 @@
         "tokens": 34587
       },
       {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34826
+      },
+      {
         "reason": "Organization time-zone setting",
-        "tokens": 34795
+        "tokens": 35035
       }
     ],
     "openrouter/extended": [
@@ -240,8 +292,12 @@
         "tokens": 35086
       },
       {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35326
+      },
+      {
         "reason": "Organization time-zone setting",
-        "tokens": 35295
+        "tokens": 35534
       }
     ]
   },
