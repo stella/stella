@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import { env } from "@/env";
 import {
@@ -11,6 +12,7 @@ import type { TimeBillingSource } from "@/hooks/use-time-billing-preview.logic";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useDevStore } from "@/lib/dev-store";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
+import { useQueryView } from "@/lib/use-query-view";
 import { deploymentFeaturesOptions } from "@/queries/deployment-features";
 
 // Navigation surfaces (sidebar, timer, palette, settings cards) follow the
@@ -80,11 +82,25 @@ export const isTimeBillingRouteEnabled = async (
   await resolveOffered(queryClient, TIME_BILLING_SCOPE.route);
 
 const useOffered = (source: TimeBillingSource): boolean => {
-  const { data } = useQuery({
-    ...deploymentFeaturesOptions,
-    enabled: source === TIME_BILLING_SOURCE.preview,
-  });
-  return isTimeBillingOffered(source, data?.timeBilling);
+  const view = useQueryView(
+    useQuery({
+      ...deploymentFeaturesOptions,
+      enabled: source === TIME_BILLING_SOURCE.preview,
+    }),
+  );
+  // A pending or failed answer is unknown and offers nothing. A failed
+  // refetch keeps the answer the server already gave.
+  switch (view.type) {
+    case "pending":
+    case "error":
+    case "empty":
+      return isTimeBillingOffered(source, undefined);
+    case "items":
+      return isTimeBillingOffered(source, view.items.timeBilling);
+    default:
+      view satisfies never;
+      return panic(`Unknown query view: ${String(view)}`);
+  }
 };
 
 export const useTimeBillingPreviewEnabled = (): boolean => {

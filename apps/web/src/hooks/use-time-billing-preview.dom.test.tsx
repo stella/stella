@@ -56,15 +56,15 @@ afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
-/** Serves the server's time-billing flag and records every request path. */
-const serveServer = (timeBilling: boolean) => {
+/** Serves the deployment-features answer and records every request path. */
+const serve = (deploymentFeatures: () => Response) => {
   const paths: string[] = [];
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       paths.push(url.pathname);
       if (url.pathname === DEPLOYMENT_FEATURES_PATH) {
-        return Response.json({ timeBilling });
+        return deploymentFeatures();
       }
       if (url.pathname === TIME_TIMERS_PATH) {
         return Response.json({ items: [], nextCursor: null });
@@ -75,6 +75,9 @@ const serveServer = (timeBilling: boolean) => {
   );
   return paths;
 };
+
+const serveServer = (timeBilling: boolean) =>
+  serve(() => Response.json({ timeBilling }));
 
 const newQueryClient = () => {
   const queryClient = new QueryClient({
@@ -215,5 +218,22 @@ describe("time billing with the server flag on", () => {
     );
     expect(view.getByTestId("offer").textContent).toBe("false");
     expect(paths).not.toContain(TIME_TIMERS_PATH);
+  });
+});
+
+describe("time billing when the server answer fails", () => {
+  test("a ticked preview offers nothing, never polls timers, and hides the toggle", async () => {
+    useDevStore.getState().setTimeBillingPreview(true);
+    const paths = serve(() =>
+      Response.json({ message: "unavailable" }, { status: 503 }),
+    );
+    const view = renderShell(newQueryClient());
+
+    await waitFor(() => expect(paths).toContain(DEPLOYMENT_FEATURES_PATH));
+    await settle();
+
+    expect(view.getByTestId("offer").textContent).toBe("false");
+    expect(paths).not.toContain(TIME_TIMERS_PATH);
+    expect(view.queryAllByText(messages.common.timeBilling)).toHaveLength(0);
   });
 });
