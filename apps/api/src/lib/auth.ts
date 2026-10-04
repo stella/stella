@@ -148,7 +148,10 @@ import {
   LIMITS,
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
-import { CLIENT_MATTER_ADMIN_ROLES, isMemberRole } from "@/api/lib/member-roles";
+import {
+  CLIENT_MATTER_ADMIN_ROLES,
+  isMemberRole,
+} from "@/api/lib/member-roles";
 import {
   mapMembershipInvariantError,
   ownerRequiredError,
