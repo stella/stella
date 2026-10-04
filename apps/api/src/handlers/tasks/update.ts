@@ -1,3 +1,4 @@
+import { taskRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
   updateTaskBodySchema,
@@ -17,6 +18,7 @@ const updateTask = createSafeHandler(
       "explanation stored with it.",
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: taskRealtimeUpdates,
     mcp: { type: "covered", by: "save_task" },
     body: updateTaskBodySchema,
   },

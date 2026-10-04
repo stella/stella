@@ -980,7 +980,6 @@
     "packPartial": "{installed} instaladas, {failed} com falha",
     "removed": "Esta ferramenta não está mais disponível.",
     "sectionOthers": "Outros",
-    "sectionRecommended": "Recomendados",
     "settings": {
       "packTitle": "Pacote recomendado"
     },
@@ -1188,8 +1187,10 @@
       "label": "IA simulada"
     },
     "modelSelector": {
+      "allModels": "Todos os modelos ({count, number})",
       "autoDescription": "Escolhe automaticamente o modelo e o nível de raciocínio.",
       "autoLabel": "Automático",
+      "belowFrontier": "Abaixo dos melhores equilíbrios",
       "effortHelpDescription": "Controla quanto raciocínio o modelo usa antes de responder. Níveis mais altos podem ajudar em tarefas complexas, mas geralmente levam mais tempo. O ponto marca o nível padrão do provedor para este modelo.",
       "effortHelpLabel": "Sobre o nível de raciocínio",
       "effortLabel": "Nível de raciocínio",
@@ -1203,6 +1204,10 @@
         "providerDefault": "Padrão",
         "xhigh": "Muito alto"
       },
+      "newModel": "Novo",
+      "premiumCost": "Custo incomumente alto",
+      "recommendedHelpDescription": "Nenhum outro modelo disponível é ao mesmo tempo mais barato e mais bem avaliado. Modelos novos demais para ter avaliação aparecem como novos. Qualidade: <link>{benchmark} da LMArena</link> ({licence}); custo: preços de tabela.",
+      "recommendedHelpLabel": "Sobre os modelos recomendados",
       "selectionLabel": "{model} | {effort}",
       "title": "Selecionar modelo de chat",
       "viaProvider": "pelo provedor {provider}"
@@ -1616,6 +1621,16 @@
     "currency": "Moeda",
     "currentPage": "Página atual",
     "date": "Data",
+    "datePicker": {
+      "label": "Seletor de data",
+      "nextDecade": "Próxima década",
+      "nextMonth": "Próximo mês",
+      "nextYear": "Próximo ano",
+      "previousDecade": "Década anterior",
+      "previousMonth": "Mês anterior",
+      "previousYear": "Ano anterior",
+      "time": "Horário"
+    },
     "decisions": "Decisões",
     "decline": "Recusar",
     "delete": "Excluir",
@@ -1776,6 +1791,7 @@
     "properties": "Propriedades",
     "queued": "Na fila",
     "reason": "Motivo",
+    "recommended": "Recomendados",
     "reconnecting": "Reconectando…",
     "reference": "Referência",
     "refresh": "Atualizar",
@@ -1901,6 +1917,7 @@
       "addBankAccount": "Adicionar conta bancária",
       "noBillingData": "Nenhum detalhe de faturamento definido.",
       "removeBankAccount": "Remover conta bancária",
+      "selectCurrencyForRate": "Selecione uma moeda para definir o valor por hora.",
       "title": "Dados de faturamento"
     },
     "columns": {
@@ -2275,6 +2292,8 @@
       "internalServerError": "Algo deu errado. Tente novamente.",
       "legalSourceEntityLimitReached": "Este assunto atingiu o limite de itens, portanto não foi possível criar o documento.",
       "legalSourceFilePropertyMissing": "Este assunto não tem uma propriedade de arquivo, portanto não foi possível criar o documento.",
+      "matterContactCapacityExceeded": "Este caso tem mais contatos do que é possível exibir. Remova vínculos visíveis com contatos para exibir os contatos restantes.",
+      "matterContactCapacityReached": "Este caso atingiu o limite de contatos. Remova um vínculo com um contato antes de adicionar outro.",
       "mcpAuthorizationApprovalRequired": "Um administrador precisa aprovar este conector antes que você possa se conectar.",
       "notOrganizationMember": "Você não é membro desta organização.",
       "providerKeyRejected": "O provedor rejeitou a chave de API.",
