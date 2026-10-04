@@ -128,7 +128,7 @@ describe("a matter handler's declared resource sets", () => {
       const { session: _session, ...context } = requestContext();
       let attempts = 0;
       const endpoint = createSafeHandler(
-        { ...baseConfig, realtime },
+        realtime === undefined ? baseConfig : { ...baseConfig, realtime },
         async function* () {
           return Result.ok({ ok: true });
         },
