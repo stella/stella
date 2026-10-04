@@ -155,7 +155,7 @@ describe("completion request boundary", () => {
       });
       expect(response.isErr()).toBe(true);
       if (response.isOk()) {
-        return expect.unreachable();
+        expect.unreachable();
       }
       expect(response.error).toBeInstanceOf(PublisherRateLimitRefusalError);
       expect(sent).toBe(1);
@@ -225,19 +225,21 @@ describe("completion request boundary", () => {
       dependencies: state.dependencies,
       controls: state.controls,
       operation: async () => {
-        const first = await Result.tryPromise(() =>
-          fetchPublisher(target, {
-            adapterKey: ADAPTER_KEYS.EU_ECJ,
-            fetchStage: "document",
-            timeoutMs: 1000,
-          }),
+        const first = await Result.tryPromise(
+          async () =>
+            await fetchPublisher(target, {
+              adapterKey: ADAPTER_KEYS.EU_ECJ,
+              fetchStage: "document",
+              timeoutMs: 1000,
+            }),
         );
-        const second = await Result.tryPromise(() =>
-          fetchPublisher(target, {
-            adapterKey: ADAPTER_KEYS.EU_ECJ,
-            fetchStage: "document",
-            timeoutMs: 1000,
-          }),
+        const second = await Result.tryPromise(
+          async () =>
+            await fetchPublisher(target, {
+              adapterKey: ADAPTER_KEYS.EU_ECJ,
+              fetchStage: "document",
+              timeoutMs: 1000,
+            }),
         );
         expect(first.isErr()).toBe(true);
         expect(second.isErr()).toBe(true);
@@ -277,7 +279,7 @@ describe("completion request boundary", () => {
     });
     expect(result.isErr()).toBe(true);
     if (result.isOk()) {
-      return expect.unreachable();
+      expect.unreachable();
     }
     expect(result.error).toBeInstanceOf(PublisherRateLimitRefusalError);
     expect(requests).toBe(1);
