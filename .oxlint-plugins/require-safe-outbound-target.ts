@@ -10,9 +10,10 @@
 // Outbound requests are recognised by what the callee is bound to, following
 // aliased imports, namespace members, destructuring, local aliases, `.bind`,
 // `.call` and `.apply`:
-//   the fetch wrappers (`fetchWithTimeout`, and the case-law publisher
-//     fetches `fetchPublisher` / `fetchWithRetry`) from their owning modules
-//     and the modules that re-export them
+//   the fetch wrappers (`fetchWithTimeout`, the case-law publisher fetches
+//     `fetchPublisher` / `fetchWithRetry`, and their typed reads
+//     `readPublisher` / `readPublisherText`) from their owning modules and
+//     the modules that re-export them
 //   global `fetch` (`globalThis.fetch`, `const { fetch } = globalThis`)
 //   `undici` `fetch`, `request` and `stream`
 //   `node:http` / `node:https` `request` and `get`
@@ -79,6 +80,10 @@ const FETCH_SOURCES: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   [
     "apps/api/src/handlers/case-law/ingestion/adapters/retry",
     new Set(["fetchPublisher", "fetchWithRetry"]),
+  ],
+  [
+    "apps/api/src/handlers/case-law/ingestion/adapters/publisher-read",
+    new Set(["readPublisher", "readPublisherText"]),
   ],
   ["undici", new Set(["fetch", "request", "stream"])],
 ]);

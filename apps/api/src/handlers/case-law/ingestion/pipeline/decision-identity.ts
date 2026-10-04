@@ -80,6 +80,7 @@ export type ObservedDecision = {
 };
 
 type ObserveDecisionOptions = {
+  metadataUrlSchema?: unknown;
   input: IngestionResult;
   sourceId: SafeId<"caseLawSource">;
 };
@@ -89,10 +90,11 @@ type ObserveDecisionOptions = {
  * may already own it. Logs a stated date the row cannot carry.
  */
 export const observeDecision = ({
+  metadataUrlSchema,
   input,
   sourceId,
 }: ObserveDecisionOptions): ObservedDecision => {
-  const observed = sanitizeResult(input);
+  const observed = sanitizeResult(input, metadataUrlSchema);
   const docket = observedDocketOf(input);
   if (docket.type !== "kept") {
     // The row is written either way; the event is the flag an operator
@@ -344,12 +346,34 @@ const findExistingDecisionTx = async (
         })
       : undefined);
 
+  // Older rows predate identity reservations. A repair digest may adopt only
+  // one row still stored under that digest, never a retained audit mapping.
+  const repairCandidates =
+    identified ||
+    claimedDecisionId !== undefined ||
+    repairSourceIdentityCandidates.length === 0
+      ? []
+      : await tx.query.caseLawDecisions.findMany({
+          where: {
+            sourceId: { eq: sourceId },
+            sourceDocumentId: { in: repairSourceIdentityCandidates },
+          },
+          columns: IDENTITY_COLUMNS,
+          extras: IDENTITY_EXTRAS,
+          limit: MAX_SOURCE_IDENTITY_CANDIDATES,
+        });
+  const repairIdentified =
+    repairCandidates.length === 1 ? repairCandidates.at(0) : undefined;
+
   // Adapters that learned the publisher's document id after their first
   // release may adopt a legacy null-id row, but only after proving which
   // publisher document produced it. A docket can publish siblings, so
   // encounter order is not identity.
   const legacyCandidates =
-    identified || !observed.sourceDocumentId || claimedDecisionId !== undefined
+    identified ||
+    repairIdentified ||
+    !observed.sourceDocumentId ||
+    claimedDecisionId !== undefined
       ? []
       : await tx.query.caseLawDecisions.findMany({
           where: {
@@ -388,7 +412,8 @@ const findExistingDecisionTx = async (
       observed.legacySourceUrls?.includes(legacy.sourceUrl) === true;
     return ecliMatches || sourceUrlMatches;
   };
-  const existing = identified ?? legacyCandidates.find(legacyMatches);
+  const existing =
+    identified ?? repairIdentified ?? legacyCandidates.find(legacyMatches);
   return {
     claimedDecisionId,
     existing,
@@ -423,7 +448,7 @@ export const resolveDecisionIdentityTx = async (
   }: ResolveDecisionIdentityOptions,
 ) => {
   for (const identity of sourceIdentityCandidates) {
-    // SAFETY: candidates are hard-capped at eight above; sorted sequential
+    // SAFETY: candidates are hard-capped above; sorted sequential
     // acquisition prevents deadlocks between overlapping identity sets.
     // db-await-in-loop: bounded identity lock set must be sequential
     await tx.execute(
@@ -520,12 +545,21 @@ export const resolveDecisionIdentityTx = async (
       .where(eq(caseLawDecisions.id, existing.id));
   }
 
-  if (exactSourceIdentityCandidates.length > 0) {
+  const identitiesToReserve = [...exactSourceIdentityCandidates];
+  if (
+    existingIdentity !== undefined &&
+    incomingSupersedesExisting &&
+    repairSourceIdentityCandidates.includes(existingIdentity)
+  ) {
+    // Adoption proves this digest's owner; retain it for inverse fallback replay.
+    identitiesToReserve.push(existingIdentity);
+  }
+  if (identitiesToReserve.length > 0) {
     // audit: skip — background publisher-identity ownership; public data
     await tx
       .insert(caseLawDecisionSourceIdentities)
       .values(
-        exactSourceIdentityCandidates.map((sourceDocumentId) => ({
+        identitiesToReserve.map((sourceDocumentId) => ({
           sourceId,
           sourceDocumentId,
           decisionId,

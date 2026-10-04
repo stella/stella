@@ -2,9 +2,9 @@ import { Result, TaggedError } from "better-result";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
-import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
 import type {
@@ -246,10 +246,11 @@ export const startFlowRun = async ({
 
         return Result.ok({ runId, status: "pending" as const });
       });
-    if (!env.FEATURE_ACTION_ADMISSION) {
-      return await createAndEnqueue();
-    }
     if (!actorId) {
+      // No caller to admit or count: run only while admission is off.
+      if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
+        return await createAndEnqueue();
+      }
       return Result.err(
         new FlowRunStartError({
           reason: "admission-refused",

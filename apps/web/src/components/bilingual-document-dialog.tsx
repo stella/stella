@@ -1,3 +1,4 @@
+import { useState } from "react";
 /**
  * Bilingual-version trigger + dialog.
  *
@@ -5,8 +6,6 @@
  * and a target language, asks the API for a two-column copy of the document
  * (source text left, a copy to translate right) and links to the new document.
  */
-
-import { useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
@@ -37,6 +36,7 @@ import type { DeepLTargetLanguageCode } from "@/lib/deepl/languages";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
@@ -117,10 +117,8 @@ export const BilingualDocumentDialog = ({
     },
     onError: (error: unknown) => {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("bilingual.error.title"),
+      notifyUserError(error, t("bilingual.error.title"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
       });
     },
   });

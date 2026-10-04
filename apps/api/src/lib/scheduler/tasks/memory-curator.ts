@@ -4,13 +4,13 @@ import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { aiMemories } from "@/api/db/schema";
-import { env } from "@/api/env";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { drainMemoryLifecyclePhase } from "@/api/lib/memory/drain-lifecycle-phase";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 
@@ -45,7 +45,7 @@ export const curateAiMemories: SchedulerTask = async ({
   logger,
   signal,
 }) => {
-  if (!env.FEATURE_AI_MEMORY) {
+  if (!isDeploymentFeatureEnabled("FEATURE_AI_MEMORY")) {
     return;
   }
 

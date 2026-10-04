@@ -45,7 +45,8 @@ export type DecisionRowWriteStatus =
   (typeof DECISION_ROW_WRITE_STATUS)[keyof typeof DECISION_ROW_WRITE_STATUS];
 
 /** One canonical identity plus a small, explicit set of publisher aliases. */
-export const MAX_SOURCE_IDENTITY_CANDIDATES = 8;
+// NALUS can name three exact publisher IDs and eight visible/legacy repair digests.
+export const MAX_SOURCE_IDENTITY_CANDIDATES = 11;
 
 /**
  * Legacy null-id rows one docket may hold. A docket publishes a handful of
@@ -98,6 +99,7 @@ export type DecisionRefresh =
   (typeof DECISION_REFRESH)[keyof typeof DECISION_REFRESH];
 
 export type ProcessDecisionAttemptOptions = {
+  metadataUrlSchema?: unknown;
   input: IngestionResult;
   judges: CaseLawJudgeDependencies;
   sourceId: SafeId<"caseLawSource">;
@@ -124,7 +126,11 @@ export type ProcessDecisionAttemptOptions = {
 
 export type ProcessDecisionOptions = Omit<
   ProcessDecisionAttemptOptions,
-  "contentionReconciliation" | "corpus" | "judges" | "refresh"
+  | "contentionReconciliation"
+  | "corpus"
+  | "judges"
+  | "refresh"
+  | "metadataUrlSchema"
 > & {
   /** Defaults to `WHEN_SOURCE_CHANGED`, which is what a crawl wants. */
   refresh?: DecisionRefresh;

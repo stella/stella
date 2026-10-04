@@ -71,6 +71,56 @@ rejected handlers return a generic `internal_error`; `onError(cause, event)` can
 record the original cause in host telemetry. The observer runs synchronously;
 its own failures cannot expose exception messages on the wire.
 
+## Downstream discovery options
+
+The default wire format stays unchanged. Downstream CLIs can select an outline
+format with short guidance and bare examples, a described full schema, and
+unwrapped capability results:
+
+```ts
+const surface = createToolSurface({
+  tools,
+  discovery: { type: "outline" },
+  fullSchema: "described",
+  capabilityResult: "payload",
+  validationResult: "input",
+  capabilityList: "minimal",
+  metaDescriptions: "enumerated",
+});
+```
+
+`brief` is appended to the summary in both discovery formats; bounded discovery
+retains its size limits, while outline discovery preserves the complete brief.
+`guide` remains full-only.
+Parameters are a name-to-type map with required markers, and `exampleInput`, when
+present, is returned as bare `example` arguments. Outline discovery has no byte
+budget. Full descriptions omit `domain` in this format; `fullSchema: "described"`
+selects `describedSchema ?? inputSchema` without changing invocation validation.
+`capabilityResult: "payload"` returns successful handler payloads directly.
+`validationResult: "input"` returns `{ valid: true, input }` with normalized
+arguments; this checks argument reading, not full-schema validity.
+`capabilityList: "minimal"` omits `limit`, item `description`, and false
+`destructive` fields. `metaDescriptions: "enumerated"` lists lazy tool names in
+the discovery tool description. Each option is independent.
+
+Use `compactSchema(schema, { omitMaxSafeInteger: true, schemaDialect: "omit" })`
+to omit safe-integer maximum bounds and dialect declarations in advertised
+schemas. These transformations only visit schema positions; enum, const and
+extension data remain intact. Prepare `direct.inputSchema` and `describedSchema`
+only when the host separately enforces the omitted ceiling and the transport
+already fixes the dialect. A safe-integer maximum is a real validation constraint;
+JSON Schema integer alone does not imply it. Preserve bounds and dialects in
+validation schemas and full discovery. A `describedSchema` selected for full
+discovery must preserve canonical validation constraints; the kit does not prove
+equivalence. Hoisting still preserves reference scopes and existing definitions.
+`hoistRepeatedSchemas(schema, { definitionNames: "property" })` names repeated
+union and item branches after their nearest property; the default uses the schema
+keyword. This changes definition and reference names without changing traversal
+or reference-scope safeguards.
+
+Published artifacts contain the bundled module and declarations; source contract
+tests run in this repository.
+
 ## What does not
 
 MCP transport/server wiring, strict JSON Schema validation, authorization,

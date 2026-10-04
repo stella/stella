@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -25,7 +26,7 @@ const createContext = ({
     route: "/v1/contacts/:contactId",
     safeDb,
     scopedDb,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     session: {
       activeOrganizationId: toSafeId<"organization">("org_test123"),
     },

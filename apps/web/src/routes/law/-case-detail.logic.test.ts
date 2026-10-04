@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { decisionBySlugOptions } from "@/features/case-law/queries/decisions";
 import { createPublicLawHead } from "@/lib/public-law-seo";
@@ -169,22 +170,24 @@ test("a readable decision omits textless language variants from alternate links"
 });
 
 describe("public case-law decision route readiness", () => {
-  test("rejects a route outside the generated country list", () => {
+  test("rejects a route outside the generated country list", async () => {
     expect(
-      loadPublicCaseLawDecisionRoute({
-        hash: "",
-        params: {
-          country: "xaa",
-          court: "synthetic-court",
-          slug: "synthetic-decision",
-        },
-        queryClient: new QueryClient(),
-        search: {},
-      }),
-    ).rejects.toMatchObject({ isNotFound: true });
+      await rejectionOf(
+        loadPublicCaseLawDecisionRoute({
+          hash: "",
+          params: {
+            country: "xaa",
+            court: "synthetic-court",
+            slug: "synthetic-decision",
+          },
+          queryClient: new QueryClient(),
+          search: {},
+        }),
+      ),
+    ).toMatchObject({ isNotFound: true });
   });
 
-  test("rejects a fetched decision outside the generated country list", () => {
+  test("rejects a fetched decision outside the generated country list", async () => {
     const queryClient = new QueryClient();
     const options = decisionBySlugOptions({
       country: PUBLIC_COUNTRY,
@@ -193,17 +196,19 @@ describe("public case-law decision route readiness", () => {
     queryClient.setQueryData(options.queryKey, UNPUBLISHED_DECISION);
 
     expect(
-      loadPublicCaseLawDecisionRoute({
-        hash: "",
-        params: {
-          country: "cze",
-          court: "synthetic-court",
-          slug: "synthetic-decision",
-        },
-        queryClient,
-        search: {},
-      }),
-    ).rejects.toMatchObject({ isNotFound: true });
+      await rejectionOf(
+        loadPublicCaseLawDecisionRoute({
+          hash: "",
+          params: {
+            country: "cze",
+            court: "synthetic-court",
+            slug: "synthetic-decision",
+          },
+          queryClient,
+          search: {},
+        }),
+      ),
+    ).toMatchObject({ isNotFound: true });
   });
 });
 

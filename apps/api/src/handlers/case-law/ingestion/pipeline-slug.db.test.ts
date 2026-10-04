@@ -20,6 +20,7 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -39,20 +40,21 @@ const decisionAt = (
   caseNumber: string,
   sourceDocumentId: string | undefined,
   language = "sk",
-): IngestionResult => ({
-  caseNumber,
-  sourceDocumentId,
-  court: "Okresný súd Prievidza",
-  country: "SVK",
-  language,
-  decisionDate: "2019-05-14",
-  decisionType: "rozsudok",
-  fulltext: `Rozsudok ${caseNumber} ${sourceDocumentId ?? language}`,
-  metadata: {},
-  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  rawHash: `hash-${caseNumber}-${sourceDocumentId ?? language}`,
-  documentAst: EMPTY_AST,
-});
+): IngestionResult =>
+  plainTextIngestionResult({
+    caseNumber,
+    sourceDocumentId,
+    court: "Okresný súd Prievidza",
+    country: "SVK",
+    language,
+    decisionDate: "2019-05-14",
+    decisionType: "rozsudok",
+    fulltext: `Rozsudok ${caseNumber} ${sourceDocumentId ?? language}`,
+    metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash: `hash-${caseNumber}-${sourceDocumentId ?? language}`,
+    documentAst: EMPTY_AST,
+  });
 
 type TransactionLog = { started: number; failures: unknown[] };
 

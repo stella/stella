@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * A SAOS judgment whose detail read failed, carried through the store and the
  * reconciliation engine: the crawl keeps the dump's text in public and states
@@ -5,8 +6,6 @@
  * that row although it is held, and a detail read that succeeds restates the
  * row as read and enriched.
  */
-
-import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -56,6 +55,7 @@ import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { planLines } from "@/api/tests/helpers/explain-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -244,7 +244,7 @@ const seedTextlessListing = async (
     throw new Error("expected the listing to build the judgment");
   }
   await processDecision({
-    input: {
+    input: plainTextIngestionResult({
       ...crawled,
       fulltext: undefined,
       sections: undefined,
@@ -255,7 +255,7 @@ const seedTextlessListing = async (
         ...crawled.metadata,
         detailReadState: "read",
       },
-    },
+    }),
     sourceId,
     scopedDb,
     observedAt: updatedAt,
@@ -359,9 +359,9 @@ test("a judgment whose detail read failed is read again by the reconciliation an
   expect(stored.status).toBe("complete");
   const before = await storedRow(sourceId);
   expect(before.fulltext).toContain("oddalić wniosek");
-  expect(partialObservationFromMetadata(before.metadata).isListingOnly).toBe(
-    false,
-  );
+  expect(
+    partialObservationFromMetadata(before.metadata).detail === "listing-only",
+  ).toBe(false);
   expect(before.metadata["detailReadState"]).toBe("failed");
 
   // The walk of the judgment's date: SAOS now answers the detail.
@@ -420,9 +420,9 @@ test("textless listing-only rows become due after seven days and publish recover
   const restored = await storedRow(sourceId);
   expect(restored.textlessDetailRecheckedAt).toEqual(NOW);
   expect(restored.fulltext).toContain("oddalić wniosek");
-  expect(partialObservationFromMetadata(restored.metadata).isListingOnly).toBe(
-    false,
-  );
+  expect(
+    partialObservationFromMetadata(restored.metadata).detail === "listing-only",
+  ).toBe(false);
   expect(getCaseLawIngestionMetadata(restored.metadata)?.sourceTier).toBe(
     "detail",
   );

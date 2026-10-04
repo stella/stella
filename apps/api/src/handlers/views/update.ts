@@ -2,16 +2,16 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
-import { roles } from "@stll/permissions";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { workspaceViews } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { legalListsDeployed } from "@/api/lib/lists/deployment";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import {
@@ -38,6 +38,7 @@ const config = {
     "created when your role may create columns, and references to deleted " +
     "columns are dropped.",
   permissions: { view: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "workspace_schema",
@@ -124,7 +125,9 @@ const updateView = createSafeHandler(
             tx,
             workspaceId,
             layout: parsedLayout,
-            legalListsEnabled: legalListsDeployed(),
+            legalListsEnabled: isDeploymentFeatureEnabled(
+              "FEATURE_LEGAL_LISTS",
+            ),
           });
           if (rejection !== null) {
             return rejection;
@@ -135,9 +138,9 @@ const updateView = createSafeHandler(
             workspaceId,
             layout: parsedLayout,
             templateProperties: body.templateProperties,
-            canCreateProperties: roles[memberRole.role].authorize({
+            canCreateProperties: hasMemberPermission(memberRole, {
               property: ["create"],
-            }).success,
+            }),
             recordAuditEvent,
           });
           // Throwing aborts the transaction; `abortableTx` hands the HandlerError

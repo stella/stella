@@ -27,6 +27,17 @@
 //            block of its own, so the skipped and the real registration of
 //            one suite may share a title.
 //
+// no-promise-matchers
+//   Flagged: expect(promise).rejects.*, expect(promise).resolves.*, also
+//            after `.not`, on the `bun:test` `expect` (named, aliased, or a
+//            namespace member).
+//            An `expect(...).rejects` that is not awaited can settle after the
+//            test ends, so its failure lands on a later test or is lost.
+//   Allowed: `expect(await promise)...` for a resolved value, and
+//            `expect(await rejectionOf(promise))...` (from
+//            `@stll/property-testing/rejection`) for a rejection. Another
+//            framework's `expect` (Playwright) is not considered.
+//
 // no-unmanaged-database-client
 //   Flagged: constructing a database client, called or with `new`, through
 //            its import: `SQL` from `bun` (and `Bun.SQL`), `drizzle(url)` or
@@ -53,6 +64,7 @@ import {
 import type { AstNode, ScopeContext } from "./utils.ts";
 
 const BUN_TEST_MODULE = "bun:test";
+const EXPECT_EXPORT = "expect";
 
 const TEST_KIND = { describe: "describe", test: "test" } as const;
 type TestKind = (typeof TEST_KIND)[keyof typeof TEST_KIND];
@@ -69,6 +81,9 @@ const TEST_FUNCTIONS: ReadonlyMap<string, TestKind> = new Map([
 
 // Exports that are the disabled form of a test function themselves.
 const DISABLED_FUNCTIONS = new Set(["xdescribe", "xit", "xtest"]);
+
+const PROMISE_MATCHER_PROPERTIES = new Set(["rejects", "resolves"]);
+const NEGATION_MODIFIER = "not";
 
 const FOCUS_MODIFIER = "only";
 const DISABLE_MODIFIERS = new Set(["skip", "todo"]);
@@ -470,6 +485,63 @@ export default eslintCompatPlugin({
               node,
               messageId: "disabled",
               data: { call: describeRegistration(registration) },
+            });
+          },
+        };
+      },
+    },
+    "no-promise-matchers": {
+      meta: {
+        type: "problem",
+        messages: {
+          promiseMatcher:
+            "`expect(...).{{property}}` can settle after the test ends when " +
+            "it is not awaited. `await` the promise instead " +
+            "(`expect(await promise)...`), or capture the rejection with " +
+            "`rejectionOf` from `@stll/property-testing/rejection` " +
+            "(`expect(await rejectionOf(promise))...`).",
+        },
+      },
+      createOnce(context) {
+        return {
+          before() {
+            return mentionsBunTest(context.sourceCode.text);
+          },
+          MemberExpression(node) {
+            if (!isAstNode(node)) {
+              return;
+            }
+            const property = memberPropertyName(node);
+            if (
+              property === null ||
+              !PROMISE_MATCHER_PROPERTIES.has(property)
+            ) {
+              return;
+            }
+            // `expect(p).not.rejects` puts the modifier between the call and
+            // the matcher property.
+            let subject = unwrapExpression(node.object);
+            while (
+              isAstNode(subject) &&
+              subject.type === "MemberExpression" &&
+              memberPropertyName(subject) === NEGATION_MODIFIER
+            ) {
+              subject = unwrapExpression(subject.object);
+            }
+            if (!isAstNode(subject) || subject.type !== "CallExpression") {
+              return;
+            }
+            const binding = resolveImportedExpression(context, subject.callee);
+            if (
+              binding?.source !== BUN_TEST_MODULE ||
+              binding.imported !== EXPECT_EXPORT
+            ) {
+              return;
+            }
+            context.report({
+              node,
+              messageId: "promiseMatcher",
+              data: { property },
             });
           },
         };

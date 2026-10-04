@@ -9,7 +9,7 @@ import { Result } from "better-result";
 
 import { prepareBilingualTranslationBodySchema } from "@/api/handlers/bilingual-translations/schemas";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { decideDispositions, proposeGlossary } from "@/api/lib/bilingual/ai";
 import type { BilingualAIDocumentContext } from "@/api/lib/bilingual/ai";
@@ -29,6 +29,7 @@ const config = {
   description:
     "Read the rows of a bilingual (two-column) document and propose, for review, what to do with each row and which glossary renderings to use.",
   permissions: { entity: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: { type: "internal", reason: "document_processing" },
   params: workspaceParams({}),

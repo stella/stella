@@ -3,6 +3,7 @@ import { createAccessControl } from "better-auth/plugins/access";
 import {
   BETTER_AUTH_ORGANIZATION_ROLE_GRANTS,
   BETTER_AUTH_ORGANIZATION_STATEMENTS,
+  ORGANIZATION_ROLE_NAMES,
 } from "@stll/auth-model";
 import type { OrganizationRoleName } from "@stll/auth-model";
 
@@ -223,3 +224,15 @@ export const roles = {
     ...externalStellaGrants,
   }),
 } satisfies Record<OrganizationRoleName, unknown>;
+
+/** Single product roles an actor can assign through membership management. */
+export const assignableRoles = (
+  actorRole: keyof typeof roles,
+): readonly OrganizationRoleName[] => {
+  if (!isOrganizationManagementRole(actorRole)) {
+    return [];
+  }
+  return ORGANIZATION_ROLE_NAMES.filter(
+    (role) => role !== "owner" || actorRole === "owner",
+  );
+};

@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { timeEntries, timeTimers } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
   deleteLegacyTimerDraft,
@@ -19,6 +19,7 @@ const discardTimer = createSafeRootHandler(
     description:
       "Discard your timer and its unconfirmed time. This creates no time entry.",
     permissions: { timeEntry: ["delete"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",

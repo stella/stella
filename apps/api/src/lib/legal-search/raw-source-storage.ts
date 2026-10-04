@@ -199,7 +199,10 @@ const putRawSourcePayload = async ({
     await createS3ObjectIfAbsent({ contentType, data, key });
     return;
   }
-  await writeS3ObjectWithRetry({ contentType, data, key });
+  await writeS3ObjectWithRetry(
+    { contentType, data, key },
+    { type: "public-corpus" },
+  );
 };
 
 /**

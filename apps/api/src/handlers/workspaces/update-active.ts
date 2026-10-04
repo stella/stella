@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import { detached } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { prewarmScopedDownloadSigning } from "@/api/lib/s3-presign";
 
@@ -13,6 +13,7 @@ const config = {
   // sees. Every role that may open a matter may move its own pointer, so
   // workspace:read is the grant, not a floor under a missing one.
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "write",
 } satisfies WorkspaceHandlerConfig;

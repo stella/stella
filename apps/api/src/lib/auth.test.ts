@@ -861,10 +861,11 @@ describe("session freshness", () => {
     // security decision, not a tuning knob: widen it deliberately, in both
     // this test and the SESSION_COOKIE_CACHE_MAX_AGE_SECONDS constant,
     // never by dependency-default drift (better-auth defaults to 300s).
-    expect(getAuth().options.session.cookieCache).toEqual({
+    expect(getAuth().options.session.cookieCache).toMatchObject({
       enabled: true,
       maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
     });
+    expect(typeof getAuth().options.session.cookieCache.version).toBe("string");
     expect(SESSION_COOKIE_CACHE_MAX_AGE_SECONDS).toBe(60);
   });
 });

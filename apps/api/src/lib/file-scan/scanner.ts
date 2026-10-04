@@ -11,6 +11,9 @@ export type Match = {
   rule: string;
   severity?: Severity;
   meta?: Record<string, unknown>;
+  /** The error behind a finding raised because inspection itself failed.
+   *  Scanners stay free of telemetry; the handler that answers reports it. */
+  failure?: unknown;
 };
 
 export type Scanner = {
