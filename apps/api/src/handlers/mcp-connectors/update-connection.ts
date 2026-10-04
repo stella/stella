@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { mcpUserConnections } from "@/api/db/schema";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -18,6 +18,7 @@ const requestBody = t.Object({
 
 const config = {
   permissions: { integration: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "mcp_transport" },
   params: routeParams,
   body: requestBody,

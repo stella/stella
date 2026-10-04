@@ -5,7 +5,7 @@ import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -40,6 +40,7 @@ export const createUpdateKanbanPlacement = ({
         "Move one entity across writable Kanban axes in one transaction. " +
         "The request may change a task status, up to two property values, or both.",
       permissions: FIELD_VALUE_WRITE_PERMISSIONS,
+      accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: {
         type: "capability",
         reason: "workspace_schema",

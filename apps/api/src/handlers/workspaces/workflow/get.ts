@@ -3,7 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { extractionRuns } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isWorkflowRunning } from "@/api/lib/workflow-queue";
@@ -58,6 +58,7 @@ const config = {
     "describe its most recent run: scope, status, how many targets it covers " +
     "and how many are done, error code, and start and finish times.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     readClass: "tenant",

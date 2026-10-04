@@ -745,6 +745,7 @@ if (!databaseUrl || !runPostgresTests) {
             entityVersionId: createSafeId<"entityVersion">(),
             fieldId: createSafeId<"field">(),
             fileName,
+            renamed: false,
           };
           await scopedDb(async (tx) => {
             await tx.insert(entities).values({
