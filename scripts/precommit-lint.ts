@@ -123,7 +123,7 @@ export const runPrecommitLint = (
   if (changed.length > 0 && !apply) {
     return { exitCode: 1, changed, diff };
   }
-  return { exitCode: lint.exitCode ?? 1, changed, diff };
+  return { exitCode: lint.exitCode, changed, diff };
 };
 
 const main = () => {
