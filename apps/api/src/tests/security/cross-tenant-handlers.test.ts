@@ -22,6 +22,7 @@ import {
 import { member } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  billingArrangements,
   caseLawResearchAnswers,
   caseLawResearchColumns,
   chatMessages,
@@ -100,6 +101,7 @@ import listMemories from "@/api/handlers/memories/list";
 import listNotifications from "@/api/handlers/notifications/list";
 import getNumberSeries from "@/api/handlers/number-series/get";
 import listNumberSeries from "@/api/handlers/number-series/list";
+import getBillingArrangement from "@/api/handlers/rates/arrangement/get";
 import readRateEntries from "@/api/handlers/rates/entries/list";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
 import listSavedTimeNarratives from "@/api/handlers/saved-time-narratives/list";
@@ -683,6 +685,7 @@ const isolationCases: IsolationCase[] = [
         fieldId: testIds.fieldB1,
         organizationId: testIds.orgA,
         workspaceId: testIds.wsA1,
+        recordAuditEvent: noopAuditRecorder,
       }),
     runBPositive: async ({ ids: testIds, workspaceB }) =>
       await runHandler(readEmailHtmlPreviewHandler, workspaceB, {
@@ -690,6 +693,7 @@ const isolationCases: IsolationCase[] = [
         fieldId: testIds.fieldB1,
         organizationId: testIds.orgB,
         workspaceId: testIds.wsB1,
+        recordAuditEvent: noopAuditRecorder,
       }),
     expectDenied: expectStatus(404),
     // The shared isolation fixture has a text field. A same-workspace lookup
@@ -1033,6 +1037,22 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => {
       expect(getStatusCode(result)).toBeNull();
       expect(result).toHaveProperty("id");
+    },
+  },
+  {
+    name: "matter billing arrangement read",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(getBillingArrangement, workspaceA, {
+        workspaceId: testIds.wsB1,
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(getBillingArrangement, workspaceB, {}),
+    expectDenied: (result) => expect(result).toEqual({ arrangement: null }),
+    expectPositive: (result) => {
+      expect(getStatusCode(result)).toBeNull();
+      expect(result).toMatchObject({
+        arrangement: { mode: "hourly", currency: "USD" },
+      });
     },
   },
   {
@@ -1798,6 +1818,12 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  await testDb.insert(billingArrangements).values({
+    workspaceId: ids.wsB1,
+    organizationId: ids.orgB,
+    mode: "hourly",
+    currency: "USD",
+  });
   await testDb.insert(invoices).values({
     id: creditOriginalB,
     organizationId: ids.orgB,

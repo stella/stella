@@ -1,5 +1,13 @@
 # @stll/workspace-ui
 
+## 0.11.18
+
+### Patch Changes
+
+- [#4505](https://github.com/stella/stella/pull/4505) [`20902c2`](https://github.com/stella/stella/commit/20902c2f6c7adc4899504538e2ce701b51eb08e5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Declare React type packages as optional peers so isolated and global-store installs resolve React types.
+- Updated dependencies [[`7511562`](https://github.com/stella/stella/commit/75115627f781b29b63f3dc7cd92ae82506a89367), [`20902c2`](https://github.com/stella/stella/commit/20902c2f6c7adc4899504538e2ce701b51eb08e5)]:
+  - @stll/ui@0.40.2
+
 ## 0.11.17
 
 ### Patch Changes

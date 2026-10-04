@@ -6,7 +6,6 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
-import { env } from "@/api/env";
 import {
   attachTerminalTurnOutcome,
   chatMessageContentFromMessage,
@@ -40,10 +39,7 @@ import {
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { planAssistantFinishPersistence } from "@/api/handlers/chat/persist-message";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
-import {
-  invalidateChatCompactionChain,
-  shouldInvalidateChatCompactionCheckpoint,
-} from "@/api/handlers/chat/persistent-compaction";
+import { reconcileChatCompactionChainOnTx } from "@/api/handlers/chat/persistent-compaction";
 import { shouldMarkThreadUsedAnonymization } from "@/api/handlers/chat/thread-anonymization";
 import type {
   ChatMessageMetadata,
@@ -65,6 +61,7 @@ import {
   type ChatThreadNamesRead,
   recordChatThreadNamesOnTx,
 } from "@/api/lib/chat/thread-names";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError, TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -276,7 +273,8 @@ const insertMessages = async ({
         userId,
         role: persistedMessage.role,
         content: chatMessageContentFromMessage(persistedMessage),
-        memoryExtractionEligible: env.FEATURE_AI_MEMORY,
+        memoryExtractionEligible:
+          isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
       })),
     );
     await tx
@@ -912,14 +910,12 @@ const runPersistMessage = async ({
         );
       }
 
-      if (
-        shouldInvalidateChatCompactionCheckpoint({
-          deletedMessageCount: deleteMessageIds.length,
-          persistencePlan,
-        })
-      ) {
-        await invalidateChatCompactionChain({ threadId, tx });
-      }
+      await reconcileChatCompactionChainOnTx({
+        deletedMessageIds: deleteMessageIds,
+        persistencePlan,
+        threadId,
+        tx,
+      });
 
       const updatedMessageId = persistencePlan.messageId;
       await tx
@@ -927,7 +923,9 @@ const runPersistMessage = async ({
         .set({
           role: persistencePlan.message.role,
           content: chatMessageContentFromMessage(persistencePlan.message),
-          ...(!env.FEATURE_AI_MEMORY && { memoryExtractionEligible: false }),
+          ...(!isDeploymentFeatureEnabled("FEATURE_AI_MEMORY") && {
+            memoryExtractionEligible: false,
+          }),
         })
         .where(eq(chatMessages.id, updatedMessageId));
       await tx
@@ -1055,14 +1053,12 @@ const runPersistMessage = async ({
         ),
       );
 
-    if (
-      shouldInvalidateChatCompactionCheckpoint({
-        deletedMessageCount: 1,
-        persistencePlan,
-      })
-    ) {
-      await invalidateChatCompactionChain({ threadId, tx });
-    }
+    await reconcileChatCompactionChainOnTx({
+      deletedMessageIds: [deletedMessageId],
+      persistencePlan,
+      threadId,
+      tx,
+    });
 
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.DELETE,
@@ -1080,7 +1076,7 @@ const runPersistMessage = async ({
       threadId,
       userId,
       workspaceId,
-      memoryExtractionEligible: env.FEATURE_AI_MEMORY,
+      memoryExtractionEligible: isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
     });
     await tx
       .update(chatThreads)

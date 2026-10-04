@@ -68,7 +68,7 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { getTanStackTextModelForRole } from "@/api/lib/tanstack-ai-models";
+import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 import {
   decodeSystemOneAnswers,
   planSystemOneAnswers,
@@ -353,12 +353,11 @@ const answerDecision = async (
 
   const generated = await Result.tryPromise({
     try: async () => {
-      const { modelId } = getTanStackTextModelForRole(
+      const { modelId } = getTanStackTextModelInfoForRole(
         "fast",
         input.orgAIConfig,
         {
           dataClass: "customer",
-          managedAIResidency: input.managedAIResidency,
           organizationId: input.organizationId,
         },
       );

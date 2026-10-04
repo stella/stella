@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { summarizeVersionChange } from "@/api/lib/entity-versions/version-change-summary";
@@ -21,6 +21,7 @@ const config = {
     "Returns summary null when the two are identical, skipping the model " +
     "call. Consumes AI usage.",
   permissions: { workspace: ["read"], chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
     type: "capability",
     reason: "template_authoring_ui",

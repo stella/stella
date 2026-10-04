@@ -10,6 +10,7 @@ import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
+import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -128,6 +129,8 @@ export const createVariantHandler = async function* ({
   body,
   recordAuditEvent,
 }: CreateVariantProps) {
+  yield* validateClauseBodyDirectives(body.body);
+
   const inserted = yield* Result.await(
     resultTx(
       safeDb,
@@ -172,6 +175,10 @@ export const updateVariantHandler = async function* ({
   body,
   recordAuditEvent,
 }: UpdateVariantProps) {
+  if (body.body !== undefined) {
+    yield* validateClauseBodyDirectives(body.body);
+  }
+
   const clauseResult = await verifyClauseOwnership(
     safeDb,
     clauseId,

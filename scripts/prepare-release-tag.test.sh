@@ -9,11 +9,16 @@ mkdir "$fixture/bin"
 cat > "$fixture/bin/gh" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ "$*" != *"/commits/$TEST_CANDIDATE/statuses?per_page=100"* ]]; then
-  echo '[[]]'
-else
-  printf '%s\n' "$TEST_STATUSES"
-fi
+[[ "${TEST_API_ERROR:-}" != "$*" ]] || { echo "API unavailable" >&2; exit 1; }
+case "$*" in
+  *"/commits/$TEST_CANDIDATE/statuses?per_page=100"*)
+    jq --argjson heavy "$TEST_HEAVY_STATUS" '.[0] += [$heavy]' <<< "$TEST_STATUSES" ;;
+  *"/statuses?per_page=100"*) echo '[[]]' ;;
+  *"/actions/runs/7"*) printf '%s\n' "$TEST_HEAVY_RUN" ;;
+  *"/compare/$TEST_CANDIDATE...main"*) printf '%s\n' "$TEST_COMPARISON" ;;
+  *"/issues?"*) printf '%s\n' "$TEST_INCIDENTS" ;;
+  *) echo "unexpected API request: $*" >&2; exit 1 ;;
+esac
 STUB
 chmod +x "$fixture/bin/gh"
 export PATH="$fixture/bin:$PATH"
@@ -31,6 +36,13 @@ git commit -qm candidate
 export TEST_CANDIDATE=$(git rev-parse HEAD)
 git commit --allow-empty -qm later
 main=$(git rev-parse HEAD)
+reset_health() {
+  export TEST_HEAVY_STATUS='{"context":"main/heavy","state":"success","creator":{"login":"github-actions[bot]","type":"Bot"},"target_url":"https://github.com/stella/stella/actions/runs/7"}'
+  export TEST_HEAVY_RUN=$(jq -nc --arg sha "$TEST_CANDIDATE" '{id:7,html_url:"https://github.com/stella/stella/actions/runs/7",repository:{full_name:"stella/stella"},path:".github/workflows/main-heavy.yml",head_branch:"main",event:"push",display_title:("Main heavy suites " + $sha),head_sha:$sha,status:"completed",conclusion:"success"}')
+  export TEST_COMPARISON=$(jq -nc --arg sha "$TEST_CANDIDATE" '{status:"ahead",merge_base_commit:{sha:$sha}}')
+  export TEST_INCIDENTS='[[]]' TEST_API_ERROR=''
+}
+reset_health
 git update-ref refs/remotes/origin/main "$main"
 
 expect_failure() {
@@ -50,6 +62,37 @@ done
 export TEST_STATUSES='[[{"context":"staging/verified","state":"failure"}],[{"context":"staging/verified","state":"success"}]]'
 expect_failure 'new failure invalidates old success' 'staging/verified = failure' "$TEST_CANDIDATE"
 export TEST_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
+# Each metadata dimension independently invalidates otherwise green evidence.
+for expression in '.state="failure"' '.state="pending"' '.creator.login="other"' '.creator.type="User"' '.context="other"' '.target_url="https://github.com/other/repo/actions/runs/7"'; do
+  reset_health
+  export TEST_HEAVY_STATUS=$(jq "$expression" <<< "$TEST_HEAVY_STATUS")
+  expect_failure "heavy status $expression" 'RELEASE_HEAVY_NOT_GREEN' "$TEST_CANDIDATE"
+done
+for expression in '.id=8' '.html_url="other"' '.repository.full_name="other/repo"' '.path=".github/workflows/other.yml"' '.head_branch="other"' '.event="pull_request"' '.display_title += " suffix"' '.head_sha="0000000000000000000000000000000000000000"' '.status="in_progress"' '.conclusion="failure"' '.conclusion="skipped"' '.conclusion="neutral"' '.conclusion="timed_out"'; do
+  reset_health
+  export TEST_HEAVY_RUN=$(jq "$expression" <<< "$TEST_HEAVY_RUN")
+  expect_failure "heavy run $expression" 'RELEASE_HEAVY_NOT_GREEN' "$TEST_CANDIDATE"
+done
+reset_health
+export TEST_COMPARISON='{"status":"diverged","merge_base_commit":{"sha":"other"}}'
+expect_failure 'heavy candidate ancestry' 'RELEASE_HEAVY_NOT_GREEN' "$TEST_CANDIDATE"
+reset_health
+export TEST_INCIDENTS='[[],[{"number":1}]]'
+expect_failure 'open incident on later page' 'RELEASE_OPEN_MAIN_INCIDENT' "$TEST_CANDIDATE"
+for endpoint in "--paginate --slurp repos/stella/stella/commits/$TEST_CANDIDATE/statuses?per_page=100" 'repos/stella/stella/actions/runs/7' "repos/stella/stella/compare/$TEST_CANDIDATE...main" '--paginate --slurp repos/stella/stella/issues?state=open&labels=main-health-incident&per_page=100'; do
+  reset_health
+  export TEST_API_ERROR="api $endpoint"
+  expect_failure "API failure $endpoint" 'API unavailable' "$TEST_CANDIDATE"
+done
+reset_health
+export TEST_STATUSES=$(jq --argjson old "$TEST_HEAVY_STATUS" '.[0] += [($old | .state="failure"), $old]' <<< "$TEST_STATUSES")
+expect_failure 'new heavy failure invalidates old success' 'RELEASE_HEAVY_NOT_GREEN' "$TEST_CANDIDATE"
+export TEST_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
+reset_health
+# Dispatch may test an older main SHA; the title binds the tested SHA.
+export TEST_HEAVY_RUN=$(jq '.event="workflow_dispatch" | .head_sha="0000000000000000000000000000000000000000"' <<< "$TEST_HEAVY_RUN")
+bash "$subject" --repo stella/stella --sha "$TEST_CANDIDATE" > "$fixture/output"
+reset_health
 git tag v1.2.3 "$TEST_CANDIDATE"
 expect_failure 'existing tag' 'already exists' "$TEST_CANDIDATE"
 git tag -d v1.2.3 >/dev/null
@@ -78,9 +121,25 @@ fi
 exec "$TEST_REAL_GIT" "$@"
 STUB
 chmod +x "$fixture/bin/git"
+export RUNNER_TEMP="$fixture" RELEASE_HEALTH_TOKEN=fixture
+cp "$script_dir/check-release-main-health.sh" "$RUNNER_TEMP/check-release-main-health.sh"
 export TAG=v1.2.3 RELEASE_SHA="$TEST_CANDIDATE" GH_TOKEN=fixture GITHUB_REPOSITORY=stella/stella
-sed -n '/^          git config user.name/,$p' "$workflow" | sed 's/^          //' > "$fixture/push.sh"
-bash "$fixture/push.sh"
+# The run block ends at the first line outside its indentation; later jobs are
+# YAML, not shell.
+awk '/GH_TOKEN=.*bash.*check-release-main-health/ { block = 1 }
+  block && !/^          / { exit }
+  block { sub(/^          /, ""); print }' "$workflow" > "$fixture/push.sh"
+[[ -s "$fixture/push.sh" ]]
+grep -q '^git push ' "$fixture/push.sh"
+export TEST_INCIDENTS='[[{"number":1}]]'
+if bash -e "$fixture/push.sh" > "$fixture/output" 2> "$fixture/error"; then
+  echo 'FAIL incident appeared before tag push' >&2; exit 1
+fi
+grep -q RELEASE_OPEN_MAIN_INCIDENT "$fixture/error"
+! "$TEST_REAL_GIT" show-ref --verify --quiet refs/tags/v1.2.3
+! "$TEST_REAL_GIT" --git-dir="$fixture/remote" show-ref --verify --quiet refs/tags/v1.2.3
+reset_health
+bash -e "$fixture/push.sh"
 [[ "$(git --git-dir="$fixture/remote" rev-parse 'refs/tags/v1.2.3^{}')" == "$TEST_CANDIDATE" ]]
 echo 'ok   workflow tags exactly the candidate rather than HEAD'
 git tag -d v1.2.3 >/dev/null
@@ -89,6 +148,7 @@ git add .changeset/pending.md
 git commit -qm changeset
 export TEST_CANDIDATE=$(git rev-parse HEAD)
 git update-ref refs/remotes/origin/main HEAD
+reset_health
 bash "$subject" --repo stella/stella --sha "$TEST_CANDIDATE" > "$fixture/output" 2> "$fixture/error"
 grep -q '::warning::.*unconsumed changesets' "$fixture/error"
 echo 'ok   unconsumed changesets warn without refusing'

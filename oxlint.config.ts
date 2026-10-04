@@ -8,6 +8,12 @@ import {
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
+import auditMutationLedger from "./.oxlint-plugins/require-audit-on-mutation-ledger.json" with { type: "json" };
+import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
+import {
+  AUDIT_MUTATION_LEDGER_SCOPE,
+  auditMutationBudgets,
+} from "./scripts/audit-mutation-ledger-scope.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
   SHADCN_LINT_JS_PLUGINS,
@@ -27,6 +33,7 @@ import {
   RESULT_CONVENTION_ENABLED_GLOBS,
   RESULT_CONVENTION_EXCLUDE_GLOBS,
 } from "./scripts/result-boundary-globs.ts";
+import sourceFingerprintBaseline from "./scripts/source-fingerprint-baseline.json" with { type: "json" };
 import {
   SQL_PERF_LINT_EXCLUDES,
   SQL_PERF_LINT_FILES,
@@ -45,6 +52,16 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
 // document an owner that no rule can yet prove.
 const enforcedOwnershipEntries = OWNERSHIP.filter(
   (entry) => entry.enforcement.kind !== "none",
+);
+
+// Public route files may build handlers only from the factories whose context
+// is anonymous. The ban lists every other factory, so a new one is banned
+// until its scope says otherwise.
+const anonymousHandlerFactories = factoriesWhere(
+  ({ context }) => context === "anonymous",
+);
+const nonAnonymousHandlerFactories = factoriesWhere(
+  ({ context }) => context !== "anonymous",
 );
 
 const PUBLIC_SSR_AMBIENT_STATE_MESSAGE =
@@ -138,6 +155,7 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("drizzle.fixture.ts", [
     "drizzle/enforce-delete-with-where",
     "drizzle/enforce-update-with-where",
+    "drizzle/no-direct-entity-reparent",
   ]),
   ...[
     "no-swallowed-item-error.fixture.ts",
@@ -151,12 +169,21 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-swallowed-item-error.fixture.test.ts", [
     "no-swallowed-item-error/no-test-swallowed-error",
   ]),
+  fixtureRuleOverride("no-failure-as-empty.fixture.ts", [
+    "no-failure-as-empty/no-failure-as-empty",
+  ]),
+  fixtureRuleOverride("provider-call-error-message.fixture.ts", [
+    "provider-call-error-message/provider-call-error-message",
+  ]),
+  fixtureRuleOverride("require-contract-domains.fixture.tsx", [
+    "require-contract-domains/require-contract-domains",
+  ]),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
     rules: publicSsrAmbientStateRules,
   },
   fixtureRuleOverride("auth-lifecycle.fixture.ts", [
-    "auth-lifecycle/after-remove-member-revokes-artifacts",
+    "auth-lifecycle/member-removal-revokes-artifacts",
     "auth-lifecycle/no-direct-auth-artifact-delete",
   ]),
   fixtureRuleOverride("forbid-process-env-outside-env-ts.fixture.ts", [
@@ -165,6 +192,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("forbid-dev-runner-config-reads.fixture.ts", [
     "forbid-dev-runner-config-reads/forbid-dev-runner-config-reads",
+  ]),
+  fixtureRuleOverride("no-raw-deployment-feature-read.fixture.ts", [
+    "no-raw-deployment-feature-read/no-raw-deployment-feature-read",
   ]),
   fixtureRuleOverride("docs-source-policy.fixture.ts", [
     "docs-source-policy/docs-source-policy",
@@ -215,6 +245,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-tenant-page-limit.fixture.tsx", [
     "require-tenant-page-limit/require-tenant-page-limit",
   ]),
+  fixtureRuleOverride("require-tenant-page-limit.fixture.impostor.ts", [
+    "require-tenant-page-limit/require-tenant-page-limit",
+  ]),
   fixtureRuleOverride("no-optional-mutation-command.fixture.ts", [
     "no-optional-mutation-command/no-optional-mutation-command",
   ]),
@@ -249,6 +282,12 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-raw-public-law-seo.fixture.ts", [
     "no-raw-public-law-seo/no-raw-public-law-seo",
+  ]),
+  fixtureRuleOverride("no-discarded-toast-error.fixture.ts", [
+    "no-discarded-toast-error/no-discarded-toast-error",
+  ]),
+  fixtureRuleOverride("no-direct-error-toast.fixture.ts", [
+    "no-direct-error-toast/no-direct-error-toast",
   ]),
   fixtureRuleOverride("no-raw-router-invalidation.fixture.ts", [
     "no-raw-router-invalidation/no-raw-router-invalidation",
@@ -295,8 +334,23 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-direct-property-table-write.fixture.ts", [
     "no-direct-property-table-write/no-direct-property-table-write",
   ]),
+  fixtureRuleOverride("no-direct-field-write.fixture.ts", [
+    "no-direct-field-write/no-direct-field-write",
+  ]),
+  fixtureRuleOverride("no-chat-table-write.fixture.ts", [
+    "no-chat-table-write/no-chat-table-write",
+  ]),
   fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
     "no-direct-pdf-save/no-direct-pdf-save",
+  ]),
+  fixtureRuleOverride("no-direct-entity-insert.fixture.ts", [
+    "no-direct-entity-insert/no-direct-entity-insert",
+  ]),
+  fixtureRuleOverride("no-unvalidated-clause-write.fixture.ts", [
+    "no-unvalidated-clause-write/no-unvalidated-clause-write",
+  ]),
+  fixtureRuleOverride("no-unvalidated-clause-write.fixture.unowned.ts", [
+    "no-unvalidated-clause-write/no-unvalidated-clause-write",
   ]),
   fixtureRuleOverride("no-direct-template-version-write.fixture.ts", [
     "no-direct-template-version-write/no-direct-template-version-write",
@@ -313,6 +367,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-unjustified-double-assertion.fixture.ts", [
     "no-unjustified-double-assertion/no-unjustified-double-assertion",
   ]),
+  fixtureRuleOverride("no-forged-plain-text.fixture.ts", [
+    "no-forged-plain-text/no-forged-plain-text",
+  ]),
   fixtureRuleOverride("no-untranslated-jsx-literal.fixture.tsx", [
     "no-untranslated-jsx-literal/no-untranslated-jsx-literal",
   ]),
@@ -320,6 +377,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-focused-tests",
     "bun-test-hygiene/no-disabled-tests",
     "bun-test-hygiene/no-identical-title",
+    "bun-test-hygiene/no-promise-matchers",
     "bun-test-hygiene/no-unmanaged-database-client",
   ]),
   fixtureRuleOverride("no-untyped-updates.fixture.ts", [
@@ -334,6 +392,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("public-law-read-boundary.fixture.ts", [
     "public-law-read-boundary/require-language-alternate-counts",
     "public-law-read-boundary/require-configured-read-transaction",
+  ]),
+  fixtureRuleOverride("require-billing-cap-crossings.fixture.ts", [
+    "require-billing-cap-crossings/require-billing-cap-crossings",
   ]),
   fixtureRuleOverride("require-running-entry-guard.fixture.ts", [
     "require-running-entry-guard/require-running-entry-guard",
@@ -358,6 +419,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-unbounded-response-body.fixture.ts", [
     "no-unbounded-response-body/no-unbounded-response-body",
+  ]),
+  fixtureRuleOverride("no-computed-key-record-assignment.fixture.ts", [
+    "no-computed-key-record-assignment/no-computed-key-record-assignment",
   ]),
   fixtureRuleOverride("no-hand-rolled-execute-rows.fixture.ts", [
     "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows",
@@ -894,6 +958,7 @@ export default defineConfig({
       "error",
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
     "tagged-error-requires-message/tagged-error-requires-message": "error",
+    "provider-call-error-message/provider-call-error-message": "error",
     "require-custom-jsonb-column/require-custom-jsonb-column": "error",
     // The column-cast allowlist lives in per-file overrides below, scoped to
     // the files that own the schema objects, so the same spelling elsewhere
@@ -912,6 +977,11 @@ export default defineConfig({
     "scanned-file-boundary/scanned-file-boundary": "error",
     "no-raw-zip-load/no-raw-zip-load": "error",
     "no-direct-property-table-write/no-direct-property-table-write": "error",
+    "no-direct-entity-insert/no-direct-entity-insert": "error",
+    "no-direct-field-write/no-direct-field-write": "error",
+    "no-direct-legislation-revision-write/no-direct-legislation-revision-write":
+      "error",
+    "no-unvalidated-clause-write/no-unvalidated-clause-write": "error",
     "no-direct-template-version-write/no-direct-template-version-write":
       "error",
     "no-condition-combinator-outside-conditions/no-condition-combinator-outside-conditions":
@@ -984,6 +1054,7 @@ export default defineConfig({
     "no-raw-date-input/no-raw-date-input": "error",
     "no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast": "error",
     "no-unjustified-double-assertion/no-unjustified-double-assertion": "error",
+    "no-forged-plain-text/no-forged-plain-text": "error",
     "no-partial-record-satisfies/no-partial-record-satisfies": "error",
     "require-contained-handler/no-portal-under-interactive-ancestor": "error",
     "require-contained-handler/require-contained-handler": "error",
@@ -1170,9 +1241,11 @@ export default defineConfig({
   ],
 
   jsPlugins: [
+    "./.oxlint-plugins/require-contract-domains.ts",
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
+    "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
     "./.oxlint-plugins/drizzle.ts",
@@ -1229,6 +1302,8 @@ export default defineConfig({
     "./.oxlint-plugins/require-loader-prefetch.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
+    "./.oxlint-plugins/no-discarded-toast-error.ts",
+    "./.oxlint-plugins/no-direct-error-toast.ts",
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
     "./.oxlint-plugins/no-beforeload-redirect.ts",
@@ -1238,6 +1313,7 @@ export default defineConfig({
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
     "./.oxlint-plugins/no-unjustified-double-assertion.ts",
+    "./.oxlint-plugins/no-forged-plain-text.ts",
     "./.oxlint-plugins/no-raw-user-id-schema.ts",
     "./.oxlint-plugins/no-offset-pagination.ts",
     "./.oxlint-plugins/require-query-limit.ts",
@@ -1245,7 +1321,9 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-parser-validator-calls.ts",
+    "./.oxlint-plugins/no-raw-parser-html.ts",
     "./.oxlint-plugins/no-swallowed-item-error.ts",
+    "./.oxlint-plugins/no-failure-as-empty.ts",
     "./.oxlint-plugins/no-raw-decision-text-fields.ts",
     "./.oxlint-plugins/no-unowned-file-version-write.ts",
     "./.oxlint-plugins/mcp-security.ts",
@@ -1254,6 +1332,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-untranslated-jsx-literal.ts",
     "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
     "./.oxlint-plugins/forbid-dev-runner-config-reads.ts",
+    "./.oxlint-plugins/no-raw-deployment-feature-read.ts",
     "./.oxlint-plugins/docs-source-policy.ts",
     "./.oxlint-plugins/confine-server-reads.ts",
     "./.oxlint-plugins/no-facade-imports.ts",
@@ -1274,6 +1353,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-complete-compaction-generation.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-running-entry-guard.ts",
+    "./.oxlint-plugins/require-billing-cap-crossings.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
     "./.oxlint-plugins/no-direct-clause-variant-insert.ts",
@@ -1281,7 +1361,12 @@ export default defineConfig({
     "./.oxlint-plugins/scanned-file-boundary.ts",
     "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
+    "./.oxlint-plugins/no-direct-field-write.ts",
+    "./.oxlint-plugins/no-chat-table-write.ts",
+    "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
+    "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
+    "./.oxlint-plugins/no-direct-entity-insert.ts",
     "./.oxlint-plugins/no-direct-pdf-save.ts",
     "./.oxlint-plugins/no-condition-combinator-outside-conditions.ts",
     "./.oxlint-plugins/no-direct-buffer-cleanup-intent-delete.ts",
@@ -1293,7 +1378,9 @@ export default defineConfig({
     "./.oxlint-plugins/require-contained-handler.ts",
     "./.oxlint-plugins/suppression-hygiene.ts",
     "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
+    "./.oxlint-plugins/no-array-built-typebox-union.ts",
     "./.oxlint-plugins/tagged-error-requires-message.ts",
+    "./.oxlint-plugins/provider-call-error-message.ts",
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
     "./.oxlint-plugins/no-bare-jsonb-cast.ts",
     "./.oxlint-plugins/no-hand-rolled-sql-case.ts",
@@ -1308,6 +1395,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-pagination-cursor-schema.ts",
     "./.oxlint-plugins/require-bounded-request-schema.ts",
     "./.oxlint-plugins/no-unbounded-response-body.ts",
+    "./.oxlint-plugins/no-computed-key-record-assignment.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/require-query-key-factory.ts",
@@ -1383,6 +1471,7 @@ export default defineConfig({
         "bun-test-hygiene/no-focused-tests": "error",
         "bun-test-hygiene/no-disabled-tests": "error",
         "bun-test-hygiene/no-identical-title": "error",
+        "bun-test-hygiene/no-promise-matchers": "error",
       },
     },
     {
@@ -2270,6 +2359,18 @@ export default defineConfig({
       },
     },
     {
+      // A union over a computed array has a non-tuple type, so its `Static`
+      // collapses while the runtime schema still validates.
+      files: [
+        "apps/api/src/**/*.ts",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-array-built-typebox-union.fixture.ts",
+      ],
+      rules: {
+        "no-array-built-typebox-union/no-array-built-typebox-union": "error",
+      },
+    },
+    {
       // The other half of the detached-promise guard: `.catch(() => null)`
       // passes every floating-promise check while discarding the rejection,
       // which is what the `void` ban exists to prevent. Product code only;
@@ -2376,6 +2477,15 @@ export default defineConfig({
       ],
       rules: {
         "no-async-context-enter-with/no-async-context-enter-with": "error",
+      },
+    },
+    {
+      // Chat tools write rows through the shared write primitives in
+      // `apps/api/src/lib`, which own each write's checks and audit event.
+      files: ["apps/api/src/handlers/chat/tools/**/*.ts"],
+      excludeFiles: ["apps/api/src/handlers/chat/tools/**/*.test.ts"],
+      rules: {
+        "no-chat-table-write/no-chat-table-write": "error",
       },
     },
     {
@@ -3015,6 +3125,8 @@ export default defineConfig({
         ],
         "require-router-select/require-router-select": "error",
         "no-optional-mutation-command/no-optional-mutation-command": "error",
+        "no-discarded-toast-error/no-discarded-toast-error": "error",
+        "no-direct-error-toast/no-direct-error-toast": "error",
         "no-raw-router-invalidation/no-raw-router-invalidation": "error",
         "require-matter-affordance/require-matter-affordance": "error",
         "security-guards/no-unsanitized-href": "error",
@@ -3107,12 +3219,42 @@ export default defineConfig({
       rules: { "no-swallowed-item-error/no-swallowed-item-error": "error" },
     },
     {
+      // A failed read must not come back as an empty value; existing sites
+      // are held to the shrink-only baseline the rule reads.
+      files: ["apps/api/src/**/*.ts", "packages/*/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/{test,tests,__tests__,__fixtures__}/**",
+      ],
+      rules: { "no-failure-as-empty/no-failure-as-empty": "error" },
+    },
+    {
       files: [
         "{apps,packages,scripts}/**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
         "{apps,packages,scripts}/**/{tests,__tests__}/**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
         ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture.test.ts",
       ],
       rules: { "no-swallowed-item-error/no-test-swallowed-error": "error" },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/parsers/**/*.ts",
+        "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
+        "apps/api/src/lib/legal-search/parsers/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-raw-parser-html.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.ts",
+        "**/__fixtures__/**",
+        // This test support oracle checks retention independently of the
+        // production HTML helpers; sharing their reads would make it vacuous.
+        "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/test-oracle.ts",
+      ],
+      rules: { "no-raw-parser-html/no-raw-parser-html": "error" },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/no-raw-parser-html.fixture.ts"],
+      rules: { "no-raw-parser-html/no-raw-parser-html": "error" },
     },
     {
       files: [
@@ -3627,6 +3769,47 @@ export default defineConfig({
       },
     },
     {
+      // Deployment feature flags are read through `isDeploymentFeatureEnabled`
+      // so every surface shares one local-development policy per flag.
+      files: ["apps/api/src/**/*.ts"],
+      rules: {
+        "no-raw-deployment-feature-read/no-raw-deployment-feature-read": [
+          "error",
+          {
+            allowedReads: [
+              // Scheduled governed-workflow work follows the raw flag: local
+              // development opens the work-obligation routes, not background
+              // jobs that write obligations on a timer.
+              {
+                file: "apps/api/src/lib/scheduler/jobs.ts",
+                flags: ["FEATURE_GOVERNED_WORKFLOW"],
+              },
+              {
+                file: "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts",
+                flags: ["FEATURE_GOVERNED_WORKFLOW"],
+              },
+              {
+                file: "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts",
+                flags: ["FEATURE_GOVERNED_WORKFLOW"],
+              },
+              // Unresolved: agent billing tools open FEATURE_USAGE in local
+              // development while the usage routes and the hosted usage
+              // provider follow the raw flag. Kept raw until one policy is
+              // chosen; production reads the flag either way.
+              {
+                file: "apps/api/src/handlers/usage/routes.ts",
+                flags: ["FEATURE_USAGE"],
+              },
+              {
+                file: "apps/api/src/lib/hosted-usage-provider/config.ts",
+                flags: ["FEATURE_USAGE"],
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
       // fetch() without a timeout is allowed in throwaway / non-runtime
       // surfaces: sandbox playground, load tests, tooling scripts, build
       // configs, unit tests. Product runtime code (apps/api including its
@@ -3643,14 +3826,29 @@ export default defineConfig({
     },
     {
       // Every workspace mutation must leave an audit trail (SOC 2 /
-      // ISO 27001). Scope to handler files — DB writes elsewhere
-      // (auth lifecycle hooks, job framework internals, RLS session
-      // setup) have different audit semantics and would generate
-      // false positives.
+      // ISO 27001). Handlers are held to the full rule; the block below
+      // extends it to MCP and library code with a reasoned ledger.
       files: ["apps/api/src/handlers/**/*.ts"],
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
         "require-audit-on-mutation/require-audit-on-mutation": "error",
+      },
+    },
+    {
+      // The same rule over MCP tools and shared library code. Writes that
+      // predate this scope are budgeted per owning function by the reasoned
+      // ledger (scripts/audit-mutation-ledger.ts), which only shrinks; any
+      // other unaudited write fails like it does in a handler.
+      files: [...AUDIT_MUTATION_LEDGER_SCOPE],
+      excludeFiles: [
+        "apps/api/src/mcp/**/*.test.ts",
+        "apps/api/src/lib/**/*.test.ts",
+      ],
+      rules: {
+        "require-audit-on-mutation/require-audit-on-mutation": [
+          "error",
+          { budgets: auditMutationBudgets(auditMutationLedger) },
+        ],
       },
     },
     {
@@ -3662,6 +3860,17 @@ export default defineConfig({
       ],
       rules: {
         "require-running-entry-guard/require-running-entry-guard": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/time-entries/**/*.ts",
+        "apps/api/src/lib/billing/time-entry-approval.ts",
+        "apps/api/src/lib/time-entry-offboarding.ts",
+      ],
+      excludeFiles: ["**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "require-billing-cap-crossings/require-billing-cap-crossings": "error",
       },
     },
     {
@@ -3796,6 +4005,10 @@ export default defineConfig({
     },
     {
       files: ["apps/api/src/**/*.{ts,tsx}"],
+      rules: { "drizzle/no-direct-entity-reparent": "error" },
+    },
+    {
+      files: ["apps/api/src/**/*.{ts,tsx}"],
       excludeFiles: [
         "apps/api/src/**/*.test.{ts,tsx}",
         "apps/api/src/tests/**/*.{ts,tsx}",
@@ -3871,7 +4084,7 @@ export default defineConfig({
     {
       files: ["apps/api/src/**/*.{ts,tsx}"],
       rules: {
-        "auth-lifecycle/after-remove-member-revokes-artifacts": "error",
+        "auth-lifecycle/member-removal-revokes-artifacts": "error",
         "auth-lifecycle/no-direct-auth-artifact-delete": "error",
         "mcp-security/no-direct-oauth-client-join": "error",
         "no-raw-error-logging/no-raw-error-logging": "error",
@@ -4099,6 +4312,29 @@ export default defineConfig({
       },
     },
     {
+      // A computed-key write onto an object literal sends `__proto__` through
+      // the prototype setter, so a record rebuilt from client, model or
+      // parsed-JSON keys loses that entry. Existing debt is carried per file
+      // in scripts/design-lint-baseline.json and switched off there by
+      // `designLintBacklogOverrides` below.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "apps/*/scripts/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        "packages/*/scripts/**/*.{ts,tsx}",
+        "scripts/*.ts",
+      ],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/tests/**",
+        "**/__tests__/**",
+      ],
+      rules: {
+        "no-computed-key-record-assignment/no-computed-key-record-assignment":
+          "error",
+      },
+    },
+    {
       // `execute` answers in the driver's shape (rows, or PGlite's `{ rows }`),
       // so rows are read through the one reader that handles both and panics
       // on a third. Tests read PGlite results directly, knowing the driver.
@@ -4182,6 +4418,26 @@ export default defineConfig({
       ],
       rules: {
         "no-raw-cache-control/no-raw-cache-control": "error",
+      },
+    },
+    {
+      // A case-law adapter's rawHash decides whether a re-fetched decision is
+      // written, so it comes from `sourceFingerprint` over the stored source.
+      // Files that predate the owner are listed, shrink-only, in
+      // scripts/source-fingerprint-baseline.json.
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
+        ".oxlint-plugins/__fixtures__/raw-hash-from-source-fingerprint.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/handlers/case-law/ingestion/adapters/__fixtures__/**",
+      ],
+      rules: {
+        "raw-hash-from-source-fingerprint/raw-hash-from-source-fingerprint": [
+          "error",
+          { allowedFiles: Object.keys(sourceFingerprintBaseline.files) },
+        ],
       },
     },
     {
@@ -4328,12 +4584,6 @@ export default defineConfig({
               noZodImport,
               apiValibotJsonSchemaImport,
               {
-                name: "@/api/lib/api-handlers",
-                importNames: ["createHandler", "createRootHandler"],
-                message:
-                  "Use 'createSafeHandler' or 'createSafeRootHandler' instead.",
-              },
-              {
                 name: "@/api/lib/branded-types",
                 importNames: ["toSafeId"],
                 message:
@@ -4453,15 +4703,8 @@ export default defineConfig({
               ...apiProviderAdapterImports,
               {
                 name: "@/api/lib/api-handlers",
-                importNames: ["createHandler", "createRootHandler"],
-                message:
-                  "Use 'createSafeHandler' or 'createSafeRootHandler' instead.",
-              },
-              {
-                name: "@/api/lib/api-handlers",
-                importNames: ["createSafeHandler", "createSafeRootHandler"],
-                message:
-                  "Public route files must use createSafePublicHandler and must not receive authenticated handler context.",
+                importNames: nonAnonymousHandlerFactories,
+                message: `Public route files may use only the anonymous handler factories (${anonymousHandlerFactories.join(", ")}) and must not receive authenticated handler context.`,
               },
               {
                 name: "@/api/lib/auth",
@@ -4749,6 +4992,10 @@ export default defineConfig({
       rules: {
         "no-imported-class-constant/no-imported-class-constant": "error",
       },
+    },
+    {
+      files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/mcp/**/*.{ts,tsx}"],
+      rules: { "require-contract-domains/require-contract-domains": "error" },
     },
     ...fixtureRuleOverrides,
     // Last: oxlint resolves overrides by replacement, so a scope that enables

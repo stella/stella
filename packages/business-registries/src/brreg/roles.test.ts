@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import bankruptFixture from "./__fixtures__/roles-bankrupt.json" with { type: "json" };
 import brregFixture from "./__fixtures__/roles-brreg.json" with { type: "json" };
 import equinorFixture from "./__fixtures__/roles-equinor.json" with { type: "json" };
@@ -151,16 +153,20 @@ describe("parseRolesResponse", () => {
 });
 
 describe("lookupOfficersByOrgnr validation", () => {
-  test("throws BrregValidationError for malformed input", () => {
+  test("throws BrregValidationError for malformed input", async () => {
     expect(
-      lookupOfficersByOrgnr("12345678", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(BrregValidationError);
+      await rejectionOf(
+        lookupOfficersByOrgnr("12345678", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(BrregValidationError);
   });
 
-  test("throws BrregValidationError for bad checksum", () => {
+  test("throws BrregValidationError for bad checksum", async () => {
     expect(
-      lookupOfficersByOrgnr("974760674", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(BrregValidationError);
+      await rejectionOf(
+        lookupOfficersByOrgnr("974760674", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(BrregValidationError);
   });
 });
 
@@ -202,7 +208,7 @@ describe("lookupOfficersByOrgnr fetch", () => {
     ).toEqual([]);
   });
 
-  test("preserves API status when non-JSON error bodies are returned", () => {
+  test("preserves API status when non-JSON error bodies are returned", async () => {
     restore = installFetchStub(
       async () =>
         new Response("<html>bad gateway</html>", {
@@ -211,15 +217,17 @@ describe("lookupOfficersByOrgnr fetch", () => {
         }),
     );
     expect(
-      lookupOfficersByOrgnr("974760673", { observer: "unobserved" }),
-    ).rejects.toMatchObject({
+      await rejectionOf(
+        lookupOfficersByOrgnr("974760673", { observer: "unobserved" }),
+      ),
+    ).toMatchObject({
       name: "BrregAPIError",
       httpStatus: 502,
       upstreamMessage: null,
     });
   });
 
-  test("surfaces malformed 200 JSON as BrregAPIError", () => {
+  test("surfaces malformed 200 JSON as BrregAPIError", async () => {
     restore = installFetchStub(
       async () =>
         new Response("{", {
@@ -228,8 +236,10 @@ describe("lookupOfficersByOrgnr fetch", () => {
         }),
     );
     expect(
-      lookupOfficersByOrgnr("974760673", { observer: "unobserved" }),
-    ).rejects.toBeInstanceOf(BrregAPIError);
+      await rejectionOf(
+        lookupOfficersByOrgnr("974760673", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(BrregAPIError);
   });
 
   test("normalises spaces and dashes before hitting the API", async () => {

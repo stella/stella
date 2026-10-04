@@ -17,7 +17,7 @@ import {
   type ChatSkillContext,
 } from "@/api/handlers/chat/skill-availability/offered-tools";
 import { resolvesToBuiltInSkill } from "@/api/lib/agent-skills/skills";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -28,6 +28,7 @@ const config = {
   // The composer menus read this beside the skill list; it names skill ids
   // and tool names only.
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   /**
    * The composer's chat, to decide over instead of the widest chat the

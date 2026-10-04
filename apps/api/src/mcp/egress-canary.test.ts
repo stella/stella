@@ -2,6 +2,8 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { Result } from "better-result";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { SEARCH_PAGINATION_COMPLETE } from "@stll/api-contract/search";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -259,11 +261,23 @@ const buildContext = ({
       // asks the public corpus, whose hits carry no tenant text at all, so
       // both corpora answer an empty page here.
       searchDecisionsHandler: asTestRaw(
-        mock(async () => await Promise.resolve({ hits: [], nextCursor: null })),
+        mock(
+          async () =>
+            await Promise.resolve({
+              hits: [],
+              nextCursor: null,
+              paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+            }),
+        ),
       ),
       searchLegislationHandler: asTestRaw(
         mock(
-          async () => await Promise.resolve({ items: [], nextCursor: null }),
+          async () =>
+            await Promise.resolve({
+              items: [],
+              nextCursor: null,
+              paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+            }),
         ),
       ),
       readWorkspaceHandler: readWorkspaceHandlerMock,

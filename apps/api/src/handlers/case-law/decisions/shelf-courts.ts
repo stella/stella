@@ -22,10 +22,14 @@ import type { FacetBucket } from "@/api/lib/search/types";
  * largest docket cannot own the page.
  */
 
-const SHELF_TIER_LABELS: ReadonlySet<string> = new Set([
-  "constitutional",
-  "supreme",
-]);
+export const SHELF_TIER_LABEL_VALUES = ["constitutional", "supreme"] as const;
+
+type ShelfTierLabel = (typeof SHELF_TIER_LABEL_VALUES)[number];
+
+const SHELF_TIER_LABELS: ReadonlySet<string> = new Set(SHELF_TIER_LABEL_VALUES);
+
+const isShelfTierLabel = (label: string): label is ShelfTierLabel =>
+  SHELF_TIER_LABELS.has(label);
 
 /** How many stored spellings of one apex court the candidate bound allows for. */
 const SHELF_SPELLINGS_PER_COURT = 3;
@@ -44,7 +48,7 @@ export type CourtCount = {
 
 export type ShelfCourt = {
   court: string;
-  tierLabel: string;
+  tierLabel: ShelfTierLabel;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -175,9 +179,10 @@ export const selectShelfCourts = ({
   counts
     .flatMap(({ court, count }) => {
       const rank = rankOf(court, country, entries);
-      return rank !== undefined && SHELF_TIER_LABELS.has(rank.tierLabel)
-        ? [{ court, count, tier: rank.tier, tierLabel: rank.tierLabel }]
-        : [];
+      if (rank === undefined || !isShelfTierLabel(rank.tierLabel)) {
+        return [];
+      }
+      return [{ court, count, tier: rank.tier, tierLabel: rank.tierLabel }];
     })
     .toSorted(
       (a, b) =>

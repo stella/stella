@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
+  SEARCH_PAGINATION_COMPLETE,
   countedSearchTotal,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
@@ -269,7 +270,7 @@ describe("set_practice_jurisdictions MCP tool", () => {
     const item = result.content.at(0);
     expect(item?.type).toBe("text");
     if (item?.type === "text") {
-      expect(item.text).toContain("Forbidden");
+      expect(item.text).toContain("permission_denied");
     }
     expect(insertMock).not.toHaveBeenCalled();
     expect(recordAuditEvent).not.toHaveBeenCalled();
@@ -481,6 +482,7 @@ describe("empty-result onboarding next step", () => {
 
   test("search_case_law returns the onboarding next step when empty and jurisdictions are missing", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: null,
       hits: [],
       nextCursor: null,
@@ -509,6 +511,7 @@ describe("empty-result onboarding next step", () => {
 
   test("search_case_law returns no next step when results are non-empty", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: null,
       hits: [
         {
@@ -551,6 +554,7 @@ describe("empty-result onboarding next step", () => {
 
   test("search_case_law returns no next step when jurisdictions are configured", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       facets: null,
       hits: [],
       nextCursor: null,
