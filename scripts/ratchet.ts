@@ -4805,6 +4805,7 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "no-direct-buffer-cleanup-intent-delete/no-direct-buffer-cleanup-intent-delete": 0,
   "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write": 0,
   "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status": 0,
+  "no-direct-clause-variant-insert/no-direct-clause-variant-insert": 0,
   "require-query-limit/require-query-limit": 6,
   "no-network-await-in-loop/no-network-await-in-loop": 0,
   "require-bounded-request-schema/require-bounded-request-schema": 0,
