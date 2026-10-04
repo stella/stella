@@ -6,16 +6,37 @@ import {
   type ActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
 
+type ActionAdmissionReason =
+  | "busy"
+  | "period_exhausted"
+  | "daily_exhausted"
+  | "not_enabled"
+  | "unavailable";
+
+// A daily refusal knows when its budget resets; no other refusal may claim one.
+type ActionAdmissionErrorProps = { message: string; cause?: unknown } & (
+  | { reason: "daily_exhausted"; retryAtMs: number }
+  | {
+      reason: Exclude<ActionAdmissionReason, "daily_exhausted">;
+      retryAtMs?: never;
+    }
+);
+
+// TaggedError cannot take a union of props, so the constructor binds
+// `retryAtMs` to the daily reason and the base keeps the shared fields.
 export class ActionAdmissionError extends TaggedError("ActionAdmissionError")<{
   message: string;
-  reason:
-    | "busy"
-    | "period_exhausted"
-    | "daily_exhausted"
-    | "not_enabled"
-    | "unavailable";
+  reason: ActionAdmissionReason;
   cause?: unknown;
 }> {
+  /** Epoch milliseconds at which a `daily_exhausted` budget resets. */
+  readonly retryAtMs: number | undefined;
+
+  constructor({ retryAtMs, ...props }: ActionAdmissionErrorProps) {
+    super(props);
+    this.retryAtMs = retryAtMs;
+  }
+
   get code() {
     return ADMISSION_REASON_CODES[this.reason];
   }

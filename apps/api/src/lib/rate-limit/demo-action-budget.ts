@@ -24,6 +24,10 @@ const REFUND_FAILURE = failureSink({
   event: "action_admission.demo_refund_failed",
   expected: [],
 });
+const COUNTER_FAILURE = failureSink({
+  event: "action_admission.demo_counter_failed",
+  expected: [],
+});
 
 type DemoActionCounter = Pick<RateLimitContext, "increment" | "decrement">;
 
@@ -72,6 +76,15 @@ let demoActionCounter: RedisRateLimitContext | undefined;
 const getDemoActionCounter = () => {
   demoActionCounter ??= new RedisRateLimitContext({
     failurePolicy: "fail_open_local",
+    // The store reports a failed refund here instead of rejecting. The lost
+    // refund costs one action until the day's counter expires at reset.
+    onRedisError: (error, operation) => {
+      if (operation === "decrement") {
+        observeFailure(error, { sink: REFUND_FAILURE });
+        return;
+      }
+      observeFailure(error, { sink: COUNTER_FAILURE });
+    },
   });
   return demoActionCounter;
 };
@@ -88,10 +101,21 @@ type WithDemoActionBudgetOptions<T> = DemoActionCaller & {
   run: (markStarted: () => void) => Promise<Result<T, unknown>>;
 };
 
+const refund = async (counter: DemoActionCounter, key: string) => {
+  const refunded = await Result.tryPromise({
+    try: async () => await counter.decrement(key),
+    catch: (cause: unknown) => cause,
+  });
+  if (Result.isError(refunded)) {
+    observeFailure(refunded.error, { sink: REFUND_FAILURE });
+  }
+};
+
 /**
  * Counts each action the configured demo account starts per UTC day. A nested
  * same-caller admission belongs to its enclosing action and is not counted
- * again; an attempt refused before its work starts is refunded.
+ * again; an attempt refused by this budget or before its work starts is
+ * refunded, so refusals never consume budget.
  */
 export const withDemoActionBudget = async <T>({
   budget,
@@ -146,10 +170,12 @@ export const withDemoActionBudget = async <T>({
     return counted;
   }
   if (counted.value.count > DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max) {
+    await refund(counter, key);
     return Result.err(
       new ActionAdmissionError({
         message: "Daily action limit reached",
         reason: "daily_exhausted",
+        retryAtMs: dayEndMs,
       }),
     );
   }
@@ -171,13 +197,7 @@ export const withDemoActionBudget = async <T>({
   } finally {
     executionScope.status = "settled";
     if (execution.phase === "waiting") {
-      const refunded = await Result.tryPromise({
-        try: async () => await counter.decrement(key),
-        catch: (cause: unknown) => cause,
-      });
-      if (Result.isError(refunded)) {
-        observeFailure(refunded.error, { sink: REFUND_FAILURE });
-      }
+      await refund(counter, key);
     }
   }
 };

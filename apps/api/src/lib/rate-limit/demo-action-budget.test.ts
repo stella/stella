@@ -7,7 +7,7 @@ import {
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 import { DEMO_ACCOUNT_DAILY_ACTION_BUDGET } from "@/api/lib/rate-limit/demo-action-budget";
-import { createRedisRateLimitRequestKey } from "@/api/lib/rate-limit/redis-context";
+import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
 
 const organizationId = toSafeId<"organization">("org_demo");
 const demoUser = toSafeId<"user">("user_demo");
@@ -21,63 +21,8 @@ const policy = {
   leaseMs: 120_000,
 };
 
-const REQUEST_KEY_SEPARATOR = createRedisRateLimitRequestKey({
-  counterKey: "",
-  requestId: "",
-});
-
-// Fixed windows keyed like the shared store: one counter per counter key,
-// expiring at the requested time, with refunds addressed by request key.
-const windowCounter = () => {
-  const windows = new Map<string, { count: number; expiresAt: number }>();
-  const counterKeyOf = (key: string) =>
-    key.slice(0, key.lastIndexOf(REQUEST_KEY_SEPARATOR));
-  return {
-    increment: (key: string, duration = 0, requestTime = 0) => {
-      const counterKey = counterKeyOf(key);
-      const current = windows.get(counterKey);
-      const window =
-        current !== undefined && current.expiresAt > requestTime
-          ? { count: current.count + 1, expiresAt: current.expiresAt }
-          : { count: 1, expiresAt: requestTime + duration };
-      windows.set(counterKey, window);
-      return {
-        count: window.count,
-        nextReset: new Date(window.expiresAt),
-        start: requestTime,
-      };
-    },
-    decrement: (key: string) => {
-      const window = windows.get(counterKeyOf(key));
-      if (window !== undefined && window.count > 0) {
-        window.count -= 1;
-      }
-    },
-  };
-};
-
-const demoBudget = () => {
-  const counter = windowCounter();
-  let now = DAY_START_MS;
-  let increments = 0;
-  return {
-    setNow: (time: number) => {
-      now = time;
-    },
-    increments: () => increments,
-    budget: {
-      resolveDemoUserId: async () => await Promise.resolve(demoUser),
-      counter: () => ({
-        increment: (key: string, duration?: number, requestTime?: number) => {
-          increments += 1;
-          return counter.increment(key, duration, requestTime);
-        },
-        decrement: counter.decrement,
-      }),
-      now: () => now,
-    },
-  };
-};
+const demoBudget = () =>
+  createTestDemoActionBudget({ demoUserId: demoUser, nowMs: DAY_START_MS });
 
 type Budget = ReturnType<typeof demoBudget>["budget"];
 
@@ -113,7 +58,10 @@ const exhaustWith = async (
   }
 };
 
-const expectDailyRefusal = (result: Result<string, unknown>) => {
+const expectDailyRefusal = (
+  result: Result<string, unknown>,
+  retryAtMs = NEXT_DAY_START_MS,
+) => {
   if (Result.isOk(result)) {
     throw new Error("Expected the daily budget to refuse the action");
   }
@@ -121,6 +69,7 @@ const expectDailyRefusal = (result: Result<string, unknown>) => {
   expect(result.error).toMatchObject({
     reason: "daily_exhausted",
     code: "action_period_exhausted",
+    retryAtMs,
   });
 };
 
@@ -210,5 +159,54 @@ describe("demo account daily action budget", () => {
     }
     await exhaustWith(budget, disabledAction);
     expectDailyRefusal(await disabledAction(budget));
+  });
+
+  test("refused attempts never consume budget, even concurrently", async () => {
+    const tracked = demoBudget();
+    await exhaustWith(tracked.budget, disabledAction);
+    let calls = 0;
+    const attempts = await Promise.all(
+      Array.from(
+        { length: 25 },
+        async () =>
+          await withActionAdmission({
+            organizationId,
+            userId: demoUser,
+            enabled: false,
+            demoActionBudget: tracked.budget,
+            run: async () => {
+              calls += 1;
+              return await Promise.resolve("served");
+            },
+          }),
+      ),
+    );
+    for (const attempt of attempts) {
+      expectDailyRefusal(attempt);
+    }
+    expect(calls).toBe(0);
+    expect(tracked.count()).toBe(DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max);
+  });
+
+  test("concurrent attempts around the limit admit exactly the remaining budget", async () => {
+    const tracked = demoBudget();
+    const remaining = 3;
+    for (
+      let index = 0;
+      index < DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max - remaining;
+      index++
+    ) {
+      expect(Result.isOk(await disabledAction(tracked.budget))).toBe(true);
+    }
+    const attempts = await Promise.all(
+      Array.from(
+        { length: 10 },
+        async () => await disabledAction(tracked.budget),
+      ),
+    );
+    expect(attempts.filter((attempt) => Result.isOk(attempt))).toHaveLength(
+      remaining,
+    );
+    expect(tracked.count()).toBe(DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max);
   });
 });
