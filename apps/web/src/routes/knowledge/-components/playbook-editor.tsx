@@ -85,6 +85,7 @@ import {
   playbookDetailOptions,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 import { LeaveConfirmDialog } from "@/routes/knowledge/-components/leave-confirm-dialog";
 import type {
   FresherDetail,
@@ -195,6 +196,9 @@ const PlaybookEditorLoader = ({
     gate: detailSeedGate(queryClient.getQueryState(detailOptions.queryKey)),
   }));
   const detailQuery = useQuery(detailOptions);
+  const detailView = useQueryView(detailQuery, {
+    isEmpty: (detail) => !("positions" in detail),
+  });
   const seed = resolveDetailSeed({
     gate: seedState.gate,
     dataUpdatedAt: detailQuery.dataUpdatedAt,
@@ -225,7 +229,47 @@ const PlaybookEditorLoader = ({
     setSeedState((current) => ({ reloadKey: current.reloadKey + 1, gate }));
   };
 
-  if (detailQuery.isPending || seed.type === "wait") {
+  const readFailure = (
+    <div className="flex items-center justify-center gap-2 p-4" role="alert">
+      <p className="text-destructive text-sm">
+        {t("common.somethingWentWrong")}
+      </p>
+      <Button onClick={refetchDetail} size="sm" variant="ghost">
+        {t("common.retry")}
+      </Button>
+    </div>
+  );
+
+  switch (detailView.type) {
+    case "pending":
+      return (
+        <div
+          className="flex flex-1 items-center justify-center p-8"
+          role="status"
+        >
+          <p className="text-muted-foreground text-sm">
+            {t("knowledge.playbooks.loading")}
+          </p>
+        </div>
+      );
+    case "error":
+      return readFailure;
+    case "empty":
+      return (
+        <div className="flex flex-1 items-center justify-center p-8">
+          <Button onClick={onBack} variant="ghost">
+            {t("common.goBack")}
+          </Button>
+        </div>
+      );
+    case "items":
+      break;
+    default:
+      detailView satisfies never;
+      return panic("Unhandled playbook detail query state");
+  }
+
+  if (seed.type === "wait") {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">
@@ -235,47 +279,46 @@ const PlaybookEditorLoader = ({
     );
   }
 
-  // After a failed refetch the previous detail is still cached, and it is
-  // shown. The load only counts as failed when nothing is cached.
-  const detail = detailQuery.data;
-  if (!detail || !("positions" in detail)) {
+  const detail = detailView.items;
+  if (!("positions" in detail)) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">
-          {t("knowledge.playbooks.loadFailed")}
-        </p>
+        {readFailure}
       </div>
     );
   }
 
   return (
-    <PlaybookEditorForm
-      initialApprovedAt={detail.approvedAt}
-      initialDescription={detail.description ?? ""}
-      initialDocumentTypeKey={detail.scope?.documentTypeKey ?? null}
-      initialName={detail.name}
-      initialPerspective={detail.scope?.perspective ?? null}
-      initialStatus={detail.status}
-      initialTrigger={detail.scope?.trigger ?? null}
-      initialPositions={detail.positions.items}
-      key={seedState.reloadKey}
-      onBack={onBack}
-      // Derived from the org's findings on every read, so it tracks the cache
-      // rather than freezing at mount like the `initial*` seeds.
-      positionDecisions={readPositionDecisions(detail.positionDecisions)}
-      // Looked up for this reader on every read, like the decisions above.
-      positionSources={toPositionSourceLookup(detail.positionSources)}
-      onReload={reload}
-      onSaved={onSaved}
-      organizationId={organizationId}
-      playbookId={playbookId}
-      initialUpdatedAt={detail.updatedAt}
-      staleDetail={
-        seed.type === "stale"
-          ? { fresher: seed.fresher, onRetry: refetchDetail }
-          : undefined
-      }
-    />
+    <>
+      {detailView.refetchError !== undefined && readFailure}
+      <PlaybookEditorForm
+        initialApprovedAt={detail.approvedAt}
+        initialDescription={detail.description ?? ""}
+        initialDocumentTypeKey={detail.scope?.documentTypeKey ?? null}
+        initialName={detail.name}
+        initialPerspective={detail.scope?.perspective ?? null}
+        initialStatus={detail.status}
+        initialTrigger={detail.scope?.trigger ?? null}
+        initialPositions={detail.positions.items}
+        key={seedState.reloadKey}
+        onBack={onBack}
+        // Derived from the org's findings on every read, so it tracks the cache
+        // rather than freezing at mount like the `initial*` seeds.
+        positionDecisions={readPositionDecisions(detail.positionDecisions)}
+        // Looked up for this reader on every read, like the decisions above.
+        positionSources={toPositionSourceLookup(detail.positionSources)}
+        onReload={reload}
+        onSaved={onSaved}
+        organizationId={organizationId}
+        playbookId={playbookId}
+        initialUpdatedAt={detail.updatedAt}
+        staleDetail={
+          seed.type === "stale"
+            ? { fresher: seed.fresher, onRetry: refetchDetail }
+            : undefined
+        }
+      />
+    </>
   );
 };
 
