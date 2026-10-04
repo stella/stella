@@ -255,11 +255,12 @@ export const getChatModelBenchmarkOptions = (
   orgAIConfig: OrgAIConfig | null,
 ): ChatModelBenchmarkOption[] => {
   const configuredProviders = new Set(configuredChatProviders(orgAIConfig));
-  const routes = TANSTACK_AI_PROVIDERS.flatMap((provider) => {
+  const routes: BenchmarkRouteOption[] = [];
+  for (const provider of TANSTACK_AI_PROVIDERS) {
     const availability = configuredProviders.has(provider)
       ? "available"
       : "provider_unconfigured";
-    return BYOK_MODEL_OPTIONS[provider].map((modelId) => {
+    for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
       const option = chatModelOption(provider, modelId);
       const benchmark = {
         availability,
@@ -271,9 +272,9 @@ export const getChatModelBenchmarkOptions = (
         ),
         unratedReason: getModelUnratedReason(modelId),
       } satisfies Omit<BenchmarkRouteOption, keyof BYOKChatModelOption>;
-      return Object.assign(option, benchmark);
-    });
-  });
+      routes.push({ ...option, ...benchmark });
+    }
+  }
   return classifyBenchmarkModelOptions(routes);
 };
 
