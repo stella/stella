@@ -372,11 +372,12 @@ export const createEntityFromBuffer = async ({
         // Callers authorize the matter before producing the bytes; the status
         // is read again under the lock so a matter archived or scheduled for
         // deletion in between receives nothing.
-        if (workspaceStatus === undefined) {
-          throw documentWriteRefusal("workspace-not-found");
-        }
         if (workspaceStatus !== "active") {
-          throw documentWriteRefusal("workspace-not-active");
+          throw documentWriteRefusal(
+            workspaceStatus === undefined
+              ? "workspace-not-found"
+              : "workspace-not-active",
+          );
         }
         if (publication.type === "service") {
           await lockObjectCleanupIntentsForWriter(tx, [publication.id]);

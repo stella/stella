@@ -6,6 +6,7 @@ import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { CREATE_MATTER_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import { buildCreatedDocumentToolOutput } from "@/api/handlers/chat/tools/workspace-tools";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -217,7 +218,7 @@ export const createCreateWorkspaceDocumentTools = ({
       safeDb: safeDbFromScoped(scopedDb),
     });
     if (Result.isError(authorized)) {
-      throw toChatToolError(authorized.error);
+      return raiseChatToolError(toChatToolError(authorized.error));
     }
 
     const created = await createEntity({
@@ -232,7 +233,7 @@ export const createCreateWorkspaceDocumentTools = ({
       parentId: null,
     });
     if (Result.isError(created)) {
-      throw toChatToolError(created.error);
+      return raiseChatToolError(toChatToolError(created.error));
     }
 
     return buildCreatedDocumentToolOutput({
