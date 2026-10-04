@@ -197,7 +197,11 @@ run_module_mock_ledger_guard() {
   bun scripts/check-write-tool-authority-ledger.ts --self-test || return 1
   bun scripts/check-write-tool-authority-ledger.ts --base "$base_ref" || return 1
   bun scripts/check-contract-domain-ledger.ts --self-test || return 1
-  bun scripts/check-contract-domain-ledger.ts --base "$base_ref"
+  bun scripts/check-contract-domain-ledger.ts --base "$base_ref" || return 1
+  # Case-law rawHash files and external-id writers: exact sets, shrink-only.
+  # The registration (drivers) section is checked by the API guard test.
+  bun scripts/source-fingerprint-baseline.ts --self-test || return 1
+  bun scripts/source-fingerprint-baseline.ts --check --base "$base_ref"
 }
 
 run_suppression_waiver_guard() {
@@ -401,6 +405,11 @@ run_design_system_backlog_guard() {
   bun scripts/design-lint-baseline.ts --check
 }
 run_step "Design-system lint backlog" run_design_system_backlog_guard
+run_query_data_state_guard() {
+  bun test scripts/query-data-state-baseline.test.ts || return 1
+  BASE_SHA="$base_ref" bun run check:query-data-state
+}
+run_step "Query data state baseline" run_query_data_state_guard
 run_failure_as_empty_guard() {
   bun test scripts/failure-as-empty-baseline.test.ts || return 1
   BASE_SHA="$base_ref" bun run check:failure-as-empty
