@@ -29,13 +29,13 @@ import { Input } from "@stll/ui/input";
 import { Loader } from "@stll/ui/loader";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { stellaToast } from "@stll/ui/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { stringCursorSeed } from "@/lib/infinite-query";
 
 const PAGE_SIZE = 25;
@@ -92,7 +92,7 @@ export const SavedTimeNarratives = ({
 
   const reportError = (error: Error) => {
     analytics.captureError(error);
-    stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
+    notifyUserError(error, t("common.somethingWentWrong"));
   };
   const create = useMutation({
     mutationFn: async (savedName: string) =>

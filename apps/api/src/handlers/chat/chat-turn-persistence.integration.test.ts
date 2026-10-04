@@ -2,6 +2,11 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
@@ -27,7 +32,7 @@ import {
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecutionClaim } from "@/api/handlers/chat/chat-turn-persistence";
 import { clientMessageFromPageRow } from "@/api/handlers/chat/message-page";
-import type { ChatPart } from "@/api/handlers/chat/types";
+import type { ChatPart, ChatTurnOutcome } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { EMPTY_CHAT_THREAD_NAMES_READ } from "@/api/lib/chat/thread-names";
@@ -204,6 +209,113 @@ const seedAwaitingTurn = async () => {
 };
 
 describe("durable chat turn persistence", () => {
+  test("all admission refusals preserve their contract through settlement and reload", async () => {
+    const fixtureIds = ids;
+    const fixtureSafeDb = safeDb;
+    for (const code of Object.values(ACTION_ADMISSION_CODES)) {
+      const { assistantMessageId, threadId, userMessageId } =
+        await seedThread();
+      const acceptance = createChatTurnAcceptance({
+        organizationId: fixtureIds.orgA,
+        threadId,
+        userId: fixtureIds.userA1,
+        userMessageId,
+        workspaceId: fixtureIds.wsA1,
+      });
+      unwrap(
+        await fixtureSafeDb(async (tx) => {
+          await tx.insert(chatMessages).values({
+            content: {
+              data: [{ text: "Draft a response", type: "text" }],
+              version: 1,
+            },
+            id: userMessageId,
+            role: "user",
+            threadId,
+            userId: fixtureIds.userA1,
+            workspaceId: fixtureIds.wsA1,
+          });
+          expect(
+            await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+          ).toMatchObject({
+            type: "accepted",
+          });
+        }),
+      );
+      const execution = unwrap(
+        await claimChatTurnForExecution({
+          acceptedTurnId: acceptance.id,
+          incomingMessageId: userMessageId,
+          incomingMessageRole: "user",
+          organizationId: fixtureIds.orgA,
+          safeDb: fixtureSafeDb,
+          threadId,
+          userId: fixtureIds.userA1,
+          workspaceId: fixtureIds.wsA1,
+        }),
+      );
+      if (execution === null) {
+        throw new Error("Expected the accepted turn to be claimed");
+      }
+      const canonical = ACTION_ADMISSION_REFUSALS[code];
+      const refusal = {
+        code,
+        message: canonical.message,
+        hint: canonical.hint,
+        retryable: canonical.retryable,
+        contactUrl: "https://example.test/contact",
+      };
+      const outcome = {
+        error: "unknown",
+        refusal,
+        type: "failed",
+      } as const satisfies ChatTurnOutcome;
+      unwrap(
+        await fixtureSafeDb(async (tx) => {
+          await tx.insert(chatMessages).values({
+            content: toChatMessageContent({
+              data: [],
+              metadata: { turnOutcome: outcome },
+              version: 2,
+            }),
+            id: assistantMessageId,
+            role: "assistant",
+            threadId,
+            userId: fixtureIds.userA1,
+            workspaceId: fixtureIds.wsA1,
+          });
+          return await settleChatTurnOnTx({
+            assistantMessageId,
+            execution,
+            failureCode: "unsupported-input",
+            failureRetryable: !canonical.retryable,
+            outcome,
+            tx,
+          });
+        }),
+      );
+      const turn = await testDb.query.chatTurns.findFirst({
+        where: { id: { eq: execution.id } },
+      });
+      expect(turn).toMatchObject({
+        assistantMessageId,
+        failureCode: "boundary-refusal",
+        failureRetryable: false,
+        status: "failed",
+      });
+      const assistant = await testDb.query.chatMessages.findFirst({
+        where: { id: { eq: assistantMessageId } },
+        columns: { content: true, createdAt: true, id: true, role: true },
+      });
+      if (assistant === undefined) {
+        throw new Error("Expected the failed assistant message to persist");
+      }
+      expect(
+        clientMessageFromPageRow(assistant, new Map()).metadata?.turnOutcome,
+      ).toEqual(outcome);
+    }
+  });
+
   test("terminalizes a failed continuation on its owning assistant", async () => {
     const { acceptance, assistantMessageId, threadId } =
       await seedAwaitingTurn();
@@ -259,6 +371,7 @@ describe("durable chat turn persistence", () => {
 
     unwrap(
       await persistFailedChatTurn({
+        indexThread: async () => await Promise.resolve(),
         code: "connector-discovery",
         execution,
         owningAssistantMessage,
@@ -354,6 +467,7 @@ describe("durable chat turn persistence", () => {
     // owning id, no parts, and only this run's metadata.
     unwrap(
       await finalizeAssistantTurn({
+        indexThread: async () => await Promise.resolve(),
         acceptedSendMode: null,
         threadNames: NO_THREAD_NAMES,
         existingIds: new Set([userMessageId, assistantMessageId]),
@@ -457,6 +571,7 @@ describe("durable chat turn persistence", () => {
     }
 
     const result = await finalizeAssistantTurn({
+      indexThread: async () => await Promise.resolve(),
       acceptedSendMode: null,
       threadNames: NO_THREAD_NAMES,
       dataScopeExpansion: { newWorkspaceIds: [ids.wsA1] },
@@ -545,6 +660,7 @@ describe("durable chat turn persistence", () => {
     let auditCalls = 0;
 
     const result = await finalizeAssistantTurn({
+      indexThread: async () => await Promise.resolve(),
       acceptedSendMode: null,
       threadNames: NO_THREAD_NAMES,
       dataScopeExpansion: { newWorkspaceIds: [ids.wsA1] },
@@ -1929,6 +2045,7 @@ describe("settling a continuation reports a stored message that breaks the rules
     const analytics = installRecordingAnalytics();
     try {
       const result = await finalizeAssistantTurn({
+        indexThread: async () => await Promise.resolve(),
         acceptedSendMode: null,
         threadNames: NO_THREAD_NAMES,
         existingIds: new Set([userMessageId, assistantMessageId]),

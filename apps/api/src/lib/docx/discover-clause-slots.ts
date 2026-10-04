@@ -7,11 +7,11 @@
  *   `{{ clause("Name", "v3") }}`      — use version 3
  */
 
-import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import { clauseSlotKey, clauseSlotPattern } from "@stll/template-conditions";
 
+import { loadDocx } from "@/api/lib/docx-archive";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
 import { paragraphText, templateContentPartPaths, W_NS } from "./ooxml";
@@ -35,8 +35,8 @@ const CLAUSE_SLOT_RE = clauseSlotPattern();
 
 // ── Scanning ─────────────────────────────────────────
 
-const scanParagraphs = (
-  doc: slimdom.Document,
+export const collectClauseSlots = (
+  doc: slimdom.Document | slimdom.Element,
   slots: Map<string, ClauseSlot>,
 ): void => {
   const paragraphs = doc.getElementsByTagNameNS(W_NS, "p");
@@ -71,8 +71,7 @@ const scanParagraphs = (
 export const discoverClauseSlots = async (
   file: ScannedFile,
 ): Promise<ClauseSlot[]> => {
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(file.bytes);
+  const zip = await loadDocx(file.bytes);
   const slots = new Map<string, ClauseSlot>();
 
   for (const path of templateContentPartPaths(Object.keys(zip.files))) {
@@ -82,7 +81,7 @@ export const discoverClauseSlots = async (
     }
 
     const xml = await entry.async("string");
-    scanParagraphs(slimdom.parseXmlDocument(xml), slots);
+    collectClauseSlots(slimdom.parseXmlDocument(xml), slots);
   }
 
   return [...slots.values()];

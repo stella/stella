@@ -6,7 +6,7 @@ import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { templates } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
@@ -22,6 +22,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 
 type TemplateRow = typeof templates.$inferSelect;
@@ -174,7 +175,9 @@ export const listTemplatesHandler = async function* ({
   organizationId,
   query,
 }: ListTemplatesProps) {
-  const limit = query.limit ?? LIMITS.templatesPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.templatesPageSizeDefault,
+  );
   const conditions = [eq(templates.organizationId, organizationId)];
 
   if (query.categoryId === UNCATEGORIZED) {
@@ -230,6 +233,7 @@ const config = {
     "usage guidance (whenToUse / whenNotToUse); prefer a template whose " +
     "whenToUse matches the request and skip any whose whenNotToUse applies.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "list_templates" },
   access: "read",
   query: listTemplatesQuerySchema,

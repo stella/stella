@@ -7,7 +7,6 @@ import { getStorageKey } from "@/consts";
 type State = {
   tanstackDevtools: boolean;
   sourceInspector: boolean;
-  reactGrab: boolean;
   publicLawPreview: boolean;
   workflowsPreview: boolean;
   inboxPreview: boolean;
@@ -19,7 +18,6 @@ type State = {
 type Actions = {
   setTanstackDevtools: (value: boolean) => void;
   setSourceInspector: (value: boolean) => void;
-  setReactGrab: (value: boolean) => void;
   setPublicLawPreview: (value: boolean) => void;
   setWorkflowsPreview: (value: boolean) => void;
   setInboxPreview: (value: boolean) => void;
@@ -39,7 +37,6 @@ export const useDevStore = create<State & Actions>()(
     (set) => ({
       tanstackDevtools: false,
       sourceInspector: false,
-      reactGrab: false,
       publicLawPreview: false,
       workflowsPreview: false,
       inboxPreview: false,
@@ -52,9 +49,6 @@ export const useDevStore = create<State & Actions>()(
       },
       setSourceInspector: (sourceInspector) => {
         set({ sourceInspector });
-      },
-      setReactGrab: (reactGrab) => {
-        set({ reactGrab });
       },
       setPublicLawPreview: (publicLawPreview) => {
         set({ publicLawPreview });

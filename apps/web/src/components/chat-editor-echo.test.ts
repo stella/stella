@@ -1,6 +1,6 @@
+import { Schema } from "@tiptap/pm/model";
 import { EditorState } from "@tiptap/pm/state";
 import { describe, expect, test } from "bun:test";
-import { Schema } from "prosemirror-model";
 
 import {
   CHAT_DRAFT_ECHO_META,

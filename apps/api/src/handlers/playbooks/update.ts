@@ -3,7 +3,7 @@ import {
   updatePlaybookDefinitionBodySchema,
 } from "@/api/handlers/playbooks/schema";
 import { updatePlaybookDefinitionHandler } from "@/api/handlers/playbooks/update-shared";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
@@ -17,6 +17,7 @@ const config = {
     "you read it is a conflict, and the new updatedAt comes back for the " +
     "next save.",
   permissions: { playbook: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "save_playbook" },
   params: playbookDefinitionParamsSchema,
   body: updatePlaybookDefinitionBodySchema,
@@ -31,6 +32,7 @@ const updatePlaybookDefinition = createSafeRootHandler(
     body,
     recordAuditEvent,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
   }) {
@@ -39,6 +41,7 @@ const updatePlaybookDefinition = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
       playbookId: params.playbookId,
       orgAIConfig,
+      managedAIResidency,
       orgAIConfigStatus,
       promptCachingEnabled,
       recordAuditEvent,

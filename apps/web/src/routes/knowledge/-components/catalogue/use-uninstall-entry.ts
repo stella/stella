@@ -6,7 +6,8 @@ import { stellaToast } from "@stll/ui/toast";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import type { CatalogueDisplayEntry } from "@/lib/knowledge/catalogue-types";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import {
@@ -15,15 +16,13 @@ import {
 } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
-import type { CatalogueEntry } from "./catalogue-types";
-
 /**
  * Uninstalls a catalogue entry by routing to the right backend
  * mutation per kind. Mirrors `useInstallEntry` so detail surfaces
  * (settings list + inspector view) can share the same hook.
  */
 export const useUninstallEntry = (
-  entry: CatalogueEntry,
+  entry: CatalogueDisplayEntry,
   organizationId: string,
 ) => {
   const t = useTranslations();
@@ -89,10 +88,7 @@ export const useUninstallEntry = (
       });
     },
     onError: (error) => {
-      stellaToast.add({
-        title: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
-      });
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };

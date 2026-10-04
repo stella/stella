@@ -17,9 +17,12 @@ import { ToolDetailPanelView } from "@/features/knowledge/views/tools/tool-detai
 import type { KnowledgeToolDetail } from "@/features/knowledge/views/tools/tools-seam";
 import { SIDE_RAIL_TAB_ICON_SIZE_PX, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import {
+  isEffectivelyInstalled,
+  type CatalogueDisplayEntry,
+} from "@/lib/knowledge/catalogue-types";
 
-import { isEffectivelyInstalled, type CatalogueEntry } from "./catalogue-types";
 import { useCatalogueRemoval } from "./use-catalogue-removal";
 import { useInstallEntry } from "./use-install-entry";
 import { useUninstallEntry } from "./use-uninstall-entry";
@@ -74,7 +77,7 @@ export const ToolDetailView = ({
   const { kind, slug, organizationId } = tab.payload;
   const { data } = memberKnowledgeSource.useToolsCatalogue(organizationId);
   const entry = data.entries.find(
-    (candidate: CatalogueEntry) =>
+    (candidate: CatalogueDisplayEntry) =>
       candidate.kind === kind && candidate.slug === slug,
   );
 
@@ -124,7 +127,7 @@ const RemovedToolPlaceholder = ({ onClose }: { onClose: () => void }) => {
 };
 
 type ToolDetailContentProps = {
-  entry: CatalogueEntry;
+  entry: CatalogueDisplayEntry;
   onClose: () => void;
   organizationId: string;
 };
@@ -161,10 +164,7 @@ const ToolDetailContent = ({
         });
       },
       onError: (error) => {
-        stellaToast.add({
-          title: userErrorFromThrown(error, t("catalogue.installFailed")),
-          type: "error",
-        });
+        notifyUserError(error, t("catalogue.installFailed"));
       },
     });
   };
@@ -243,7 +243,7 @@ const ToolDetailContent = ({
 
 /** The detail the shared panel shows. A server's settings appear only once
  *  it is connected for this organization. */
-const toToolDetail = (entry: CatalogueEntry): KnowledgeToolDetail => ({
+const toToolDetail = (entry: CatalogueDisplayEntry): KnowledgeToolDetail => ({
   ...entry,
   connection:
     entry.kind === "mcp" && isEffectivelyInstalled(entry)

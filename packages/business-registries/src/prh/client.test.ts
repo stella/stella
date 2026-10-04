@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { lookupByBusinessId, searchByName } from "./client.js";
 import { PrhRequestError, PrhValidationError } from "./errors.js";
 import type { PrhCompaniesResponse } from "./types.js";
@@ -62,7 +64,9 @@ describe("lookupByBusinessId (fixture)", () => {
         }),
     );
 
-    const company = await lookupByBusinessId("0112038-9");
+    const company = await lookupByBusinessId("0112038-9", {
+      observer: "unobserved",
+    });
     expect(company).not.toBeNull();
     expect(company?.businessId).toBe("0112038-9");
     expect(company?.name).toBe("Nokia Oyj");
@@ -96,7 +100,9 @@ describe("lookupByBusinessId (fixture)", () => {
         }),
     );
 
-    const company = await lookupByBusinessId("0112038-9");
+    const company = await lookupByBusinessId("0112038-9", {
+      observer: "unobserved",
+    });
     expect(company).toBeNull();
   });
 
@@ -116,7 +122,11 @@ describe("lookupByBusinessId (fixture)", () => {
         ),
     );
 
-    expect(lookupByBusinessId("0112038-9")).rejects.toMatchObject({
+    expect(
+      await rejectionOf(
+        lookupByBusinessId("0112038-9", { observer: "unobserved" }),
+      ),
+    ).toMatchObject({
       name: "PrhAPIError",
       httpStatus: 400,
       upstreamCode: 1005,
@@ -132,9 +142,11 @@ describe("lookupByBusinessId (fixture)", () => {
         }),
     );
 
-    expect(lookupByBusinessId("0112038-9")).rejects.toBeInstanceOf(
-      PrhRequestError,
-    );
+    expect(
+      await rejectionOf(
+        lookupByBusinessId("0112038-9", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(PrhRequestError);
   });
 });
 
@@ -159,7 +171,7 @@ describe("searchByName (fixture)", () => {
         }),
     );
 
-    const results = await searchByName("Supercell");
+    const results = await searchByName("Supercell", { observer: "unobserved" });
     expect(results.length).toBeGreaterThan(0);
     const supercell = results.find((entry) => entry.name === "Supercell Oy");
     expect(supercell).toBeDefined();
@@ -178,7 +190,10 @@ describe("searchByName (fixture)", () => {
       });
     });
 
-    const results = await searchByName("Supercell", { limit: 1 });
+    const results = await searchByName("Supercell", {
+      observer: "unobserved",
+      limit: 1,
+    });
     expect(results).toHaveLength(1);
     expect(requestedUrls.at(0)).toContain("maxResults=1");
   });
@@ -188,26 +203,36 @@ describe("searchByName (fixture)", () => {
 // Validation
 // ---------------------------------------------------------------------------
 describe("lookupByBusinessId validation", () => {
-  test("rejects format violations", () => {
-    expect(lookupByBusinessId("01120389")).rejects.toBeInstanceOf(
-      PrhValidationError,
-    );
-    expect(lookupByBusinessId("abcdefg-1")).rejects.toBeInstanceOf(
-      PrhValidationError,
-    );
+  test("rejects format violations", async () => {
+    expect(
+      await rejectionOf(
+        lookupByBusinessId("01120389", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(PrhValidationError);
+    expect(
+      await rejectionOf(
+        lookupByBusinessId("abcdefg-1", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(PrhValidationError);
   });
 
-  test("rejects bad checksum", () => {
+  test("rejects bad checksum", async () => {
     // 0112038-9 is valid; bump the check digit and it should fail.
-    expect(lookupByBusinessId("0112038-0")).rejects.toBeInstanceOf(
-      PrhValidationError,
-    );
+    expect(
+      await rejectionOf(
+        lookupByBusinessId("0112038-0", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(PrhValidationError);
   });
 });
 
 describe("searchByName validation", () => {
-  test("rejects empty input", () => {
-    expect(searchByName("")).rejects.toBeInstanceOf(PrhValidationError);
-    expect(searchByName("  ")).rejects.toBeInstanceOf(PrhValidationError);
+  test("rejects empty input", async () => {
+    expect(
+      await rejectionOf(searchByName("", { observer: "unobserved" })),
+    ).toBeInstanceOf(PrhValidationError);
+    expect(
+      await rejectionOf(searchByName("  ", { observer: "unobserved" })),
+    ).toBeInstanceOf(PrhValidationError);
   });
 });

@@ -5,10 +5,15 @@ import { describe, expect, test } from "bun:test";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { decisionBySlugOptions } from "@/features/case-law/queries/decisions";
+import { createPublicLawHead } from "@/lib/public-law-seo";
 import { toSafeId } from "@/lib/safe-id";
-import { loadPublicCaseLawDecisionRoute } from "@/routes/law/-case-detail.logic";
+import {
+  createPublicCaseLawDecisionHead,
+  loadPublicCaseLawDecisionRoute,
+} from "@/routes/law/-case-detail.logic";
 
 const ABSENT_TEXT_FIELD = {
   reason: "not_published",
@@ -38,6 +43,7 @@ const UNPUBLISHED_DECISION = {
   documentAst: null,
   documentAstSource: null,
   projectionDigest: null,
+  hasDocument: false,
   documentPending: false,
   documentReadFailed: false,
   documentUnavailable: false,
@@ -82,23 +88,106 @@ const PUBLISHED_DECISION = {
   country: PUBLIC_COUNTRY,
 } satisfies DecisionBySlug;
 
+test("textless decision heads stay noindex until the text arrives", async () => {
+  for (const country of ["CZE", "SVK", "POL"]) {
+    const params = {
+      country: country.toLowerCase(),
+      court: "synthetic-court",
+      slug: "synthetic-decision",
+    };
+    const decision = { ...PUBLISHED_DECISION, country };
+    const emptyHead = await createPublicCaseLawDecisionHead({
+      decision,
+      params,
+    });
+    expect(emptyHead.meta.at(1)).toEqual(
+      createPublicLawHead({
+        indexing: "noindex",
+        path: "/law/cases",
+        title: "Test",
+        type: "article",
+      }).meta.at(1),
+    );
+    expect(emptyHead.links).toEqual([]);
+    const textHead = await createPublicCaseLawDecisionHead({
+      decision: {
+        ...decision,
+        fulltext: "Published judgment",
+        hasDocument: true,
+      },
+      params,
+    });
+    const existingHead = createPublicLawHead({
+      path: "/law/cases",
+      title: "Test",
+      type: "article",
+    });
+    expect(textHead.meta.at(1)).toEqual(existingHead.meta.at(1));
+    for (const flags of [
+      { hasDocument: true, documentPending: false, documentReadFailed: true },
+      { hasDocument: false, documentPending: true, documentReadFailed: false },
+      { hasDocument: false, documentPending: false, documentReadFailed: true },
+    ]) {
+      const transientHead = await createPublicCaseLawDecisionHead({
+        decision: { ...decision, ...flags },
+        params,
+      });
+      expect(transientHead.meta.at(1)).toEqual(existingHead.meta.at(1));
+      expect(transientHead.links).toEqual(textHead.links);
+    }
+  }
+});
+
+test("a readable decision omits textless language variants from alternate links", async () => {
+  const variant = {
+    caseNumber: "1",
+    country: "CZE",
+    court: "Synthetic court",
+    decisionDate: null,
+    id: PUBLISHED_DECISION.id,
+    slug: "synthetic-decision",
+  };
+  const decision = {
+    ...PUBLISHED_DECISION,
+    hasDocument: true,
+    languageAlternates: [
+      { ...variant, language: "cs", hasDocument: true },
+      { ...variant, language: "en", hasDocument: true },
+      { ...variant, language: "de", hasDocument: false },
+    ],
+  };
+  const head = await createPublicCaseLawDecisionHead({
+    decision,
+    params: {
+      country: "cze",
+      court: "synthetic-court",
+      slug: "synthetic-decision",
+    },
+  });
+  expect(
+    head.links.flatMap((link) => ("hreflang" in link ? [link.hreflang] : [])),
+  ).toEqual(["cs", "en", "x-default"]);
+});
+
 describe("public case-law decision route readiness", () => {
-  test("rejects a route outside the generated country list", () => {
+  test("rejects a route outside the generated country list", async () => {
     expect(
-      loadPublicCaseLawDecisionRoute({
-        hash: "",
-        params: {
-          country: "xaa",
-          court: "synthetic-court",
-          slug: "synthetic-decision",
-        },
-        queryClient: new QueryClient(),
-        search: {},
-      }),
-    ).rejects.toMatchObject({ isNotFound: true });
+      await rejectionOf(
+        loadPublicCaseLawDecisionRoute({
+          hash: "",
+          params: {
+            country: "xaa",
+            court: "synthetic-court",
+            slug: "synthetic-decision",
+          },
+          queryClient: new QueryClient(),
+          search: {},
+        }),
+      ),
+    ).toMatchObject({ isNotFound: true });
   });
 
-  test("rejects a fetched decision outside the generated country list", () => {
+  test("rejects a fetched decision outside the generated country list", async () => {
     const queryClient = new QueryClient();
     const options = decisionBySlugOptions({
       country: PUBLIC_COUNTRY,
@@ -107,17 +196,19 @@ describe("public case-law decision route readiness", () => {
     queryClient.setQueryData(options.queryKey, UNPUBLISHED_DECISION);
 
     expect(
-      loadPublicCaseLawDecisionRoute({
-        hash: "",
-        params: {
-          country: "cze",
-          court: "synthetic-court",
-          slug: "synthetic-decision",
-        },
-        queryClient,
-        search: {},
-      }),
-    ).rejects.toMatchObject({ isNotFound: true });
+      await rejectionOf(
+        loadPublicCaseLawDecisionRoute({
+          hash: "",
+          params: {
+            country: "cze",
+            court: "synthetic-court",
+            slug: "synthetic-decision",
+          },
+          queryClient,
+          search: {},
+        }),
+      ),
+    ).toMatchObject({ isNotFound: true });
   });
 });
 

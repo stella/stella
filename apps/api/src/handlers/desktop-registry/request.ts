@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
+import type { Static } from "elysia";
 
 import { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
 import type {
@@ -19,17 +20,25 @@ import {
   searchDesktopRegistry,
   setDesktopRegistryDefaultFormat,
 } from "@/api/handlers/desktop-registry/service";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
-import { authorizeDesktopRegistry } from "@/api/lib/business-registries/desktop/auth";
+import {
+  authorizeDesktopAccount,
+  authorizeDesktopRegistry,
+} from "@/api/lib/business-registries/desktop/auth";
 import { revokeDesktopRegistryCredential } from "@/api/lib/business-registries/desktop/revocation";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const registry = t.UnionEnum(BUSINESS_REGISTRY_SLUGS);
 const config = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
+  cache: { kind: "none" },
   body: t.Union([
     t.Object({ type: t.Literal("config") }, { additionalProperties: false }),
     t.Object({ type: t.Literal("revoke") }, { additionalProperties: false }),
@@ -61,6 +70,17 @@ const config = {
   ]),
 } as const;
 
+export const desktopRequestAuthorization = {
+  config: authorizeDesktopAccount,
+  revoke: authorizeDesktopAccount,
+  search: authorizeDesktopRegistry,
+  format: authorizeDesktopRegistry,
+  setDefaultFormat: authorizeDesktopRegistry,
+} as const satisfies Record<
+  Static<typeof config.body>["type"],
+  typeof authorizeDesktopAccount
+>;
+
 // A dedicated bearer boundary, not an unauthenticated registry proxy. The
 // ordinary session middleware intentionally does not recognize these keys.
 type RegistryReply =
@@ -75,13 +95,10 @@ type RegistryReply =
 
 export default createSafePublicHandler(
   config,
-  async function* ({
-    request,
-    body,
-    set,
-  }): SafeHandlerGenerator<RegistryReply> {
-    set.headers["cache-control"] = "no-store";
-    const context = yield* Result.await(authorizeDesktopRegistry(request));
+  async function* ({ request, body }): SafeHandlerGenerator<RegistryReply> {
+    const context = yield* Result.await(
+      desktopRequestAuthorization[body.type](request),
+    );
     switch (body.type) {
       case "revoke": {
         const record = createAuditRecorder({

@@ -28,6 +28,13 @@ import type {
   HandlerOutputsMatchByName,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
+import {
+  ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
+  type AccountOperationCheck,
+  hasMcpToolAuthority,
+  hasMcpToolInputAuthority,
+  isAccountAuthorizedForMcpTool,
+} from "@/api/mcp/write-tool-authority";
 
 import type {
   ChatProjectableToolName,
@@ -129,6 +136,7 @@ export type RunRegistryWriteToolProps = {
 
 export type RunRegistryWriteToolDependencies = {
   isMcpToolFeatureEnabled: typeof isMcpToolFeatureEnabled;
+  checkAccountOperation?: AccountOperationCheck;
 };
 
 const defaultRunRegistryWriteToolDependencies = {
@@ -159,9 +167,10 @@ export const applyChatApprovalConfirmation = ({
  *   `context.recordAuditEvent`. Chat threads its real audit recorder into
  *   `buildMcpContextFromChat`, so a projected write leaves the same audit trail
  *   an MCP or REST write would; there is no separate audit step here.
- * - Role and workspace-status gating are the handler's own (`roles[...]
- *   .authorize`, `ensureActiveWorkspace`), exactly as MCP dispatch relies on;
- *   this orchestrator adds only the feature-flag gate MCP dispatch also applies.
+ * - The definition's declared write permissions are enforced here exactly as
+ *   MCP dispatch enforces them; the handler keeps its input-specific role and
+ *   workspace-status checks (`ensureActiveWorkspace`). This orchestrator also
+ *   applies the feature-flag gate MCP dispatch applies.
  * - Approval is enforced upstream by the chat tool policy (`mutation` ->
  *   `needsApproval`), not here. Because the MCP handler re-validates existence
  *   and access against current state at execution time, a stale approval (the
@@ -184,6 +193,24 @@ export const runRegistryWriteTool = async (
       }),
     );
   }
+  const staticDefinition =
+    getStaticMcpToolDefinition(toolName) ??
+    panic(`Write tool ${toolName} is missing from the static registry`);
+  // The tool's declared account access, as its REST counterpart declares it.
+  if (
+    !isAccountAuthorizedForMcpTool(
+      context.userEmail,
+      staticDefinition,
+      dependencies.checkAccountOperation,
+    )
+  ) {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: ACCOUNT_ACCESS_UNAVAILABLE_MESSAGE,
+      }),
+    );
+  }
   const entry = WRITE_TOOL_REF_FIELD_MAP[toolName];
 
   if ("unavailableInputParams" in entry) {
@@ -199,14 +226,21 @@ export const runRegistryWriteTool = async (
     }
   }
 
-  const staticDefinition =
-    getStaticMcpToolDefinition(toolName) ??
-    panic(`Write tool ${toolName} is missing from the static registry`);
   if (!dependencies.isMcpToolFeatureEnabled(staticDefinition.feature)) {
     return Result.err(
       new ChatToolError({
         kind: "unavailable",
         message: "This feature is not enabled on this deployment.",
+      }),
+    );
+  }
+  // Registration already withholds the tool from a member without its
+  // declared permissions; this keeps the refusal on the execution path.
+  if (!hasMcpToolAuthority(context, staticDefinition)) {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: `Your member role does not permit ${toolName}.`,
       }),
     );
   }
@@ -234,6 +268,16 @@ export const runRegistryWriteTool = async (
           subject: `${toolName} arguments`,
         }).error,
       ),
+    );
+  }
+
+  // The exact grant of the operation the normalized input selects.
+  if (!hasMcpToolInputAuthority(context, staticDefinition, normalized.value)) {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: `Your member role does not permit this ${toolName} operation.`,
+      }),
     );
   }
 

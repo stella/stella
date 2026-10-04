@@ -43,6 +43,7 @@
  *   Judge name + title
  */
 
+import { panic } from "better-result";
 import * as cheerio from "cheerio";
 
 import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
@@ -59,12 +60,17 @@ import type {
   ParagraphRole,
 } from "@/api/handlers/case-law/document-ast";
 import {
+  RTF_EMBEDDED_CONTAINERS,
+  RTF_VISIBLE_BLOCK_DESTINATIONS,
+} from "@/api/lib/legal-search/parsers/rtf-destinations";
+import {
   buildValidationHtml,
   validateAndLog,
 } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
   inlinesToPlainText,
+  visibleHtmlText,
   stripFurniturePrefix,
   stripInlinePrefix,
 } from "./shared-inlines";
@@ -178,7 +184,7 @@ const extractHiddenMetadata = ($: cheerio.CheerioAPI): HiddenMetadata => ({
   parallelQuotation: $("input#paralellQuotationHidden").attr("value") ?? null,
   popularName: $("input#popularNameHidden").attr("value") ?? null,
   docId: $("input#docIdHidden").attr("value") ?? null,
-  decisionForm: $("span#lblDecisionForm").text().trim() || null,
+  decisionForm: visibleHtmlText($("span#lblDecisionForm")).trim() || null,
 });
 
 // ── Cross-reference extraction ────────────────────────────
@@ -199,7 +205,7 @@ const extractCrossReferences = ($: cheerio.CheerioAPI): CrossReference[] => {
       return;
     }
 
-    const text = $(el).text().trim();
+    const text = visibleHtmlText($(el)).trim();
     if (!text || seen.has(text)) {
       return;
     }
@@ -221,7 +227,8 @@ const textInline = (text: string): Inline[] => [{ type: "text", text }];
  *
  * RTF 1.9 ignores an unknown `{\*\...}` destination whole, and these named
  * ones hold a picture's payload, the font and colour tables, the
- * revision-save-id table or the document properties. Read as text instead,
+ * revision-save-id table or the document properties. Drawing and object
+ * wrappers are walked for their visible text destinations. Read as text instead,
  * a picture group puts its own control words and hundreds of hex digits
  * into the decision: Pl.ÚS-st. 27/09 prints a horizontal rule between the
  * majority opinion and the dissent, and the `\shppict`/`\nonshppict` pair
@@ -236,17 +243,27 @@ const RTF_SKIPPED_DESTINATIONS = new Set([
   "colortbl",
   "datastore",
   "fonttbl",
+  "header",
+  "headerf",
+  "headerl",
+  "headerr",
+  "footer",
+  "footerf",
+  "footerl",
+  "footerr",
   "info",
   "latentstyles",
   "listoverridetable",
   "listtable",
   "nonshppict",
-  "object",
   "objdata",
+  "objclass",
+  "objname",
+  "shprslt",
+  "sp",
   "pgptbl",
   "pict",
   "rsidtbl",
-  "shp",
   "shppict",
   "stylesheet",
   "themedata",
@@ -275,7 +292,16 @@ const RTF_SYMBOL_TEXT = new Map([
 type RtfRun = { text: string; bold: boolean };
 
 /** Formatting a group inherits from its parent and restores on close. */
-type RtfGroupState = { bold: boolean; unicodeSkip: number };
+type RtfDestination =
+  | { type: "body" }
+  | { type: "container"; paragraphs: RtfRun[][] }
+  | { type: "text"; paragraphs: RtfRun[][] };
+type RtfGroupState = {
+  bold: boolean;
+  unicodeSkip: number;
+  destination: RtfDestination;
+};
+type RtfParagraph = { runs: RtfRun[]; following: RtfRun[][] };
 
 /**
  * A control word with its optional numeric argument and the single space
@@ -333,7 +359,19 @@ const rtfGroupEnd = (rtf: string, start: number): number | undefined => {
   for (let i = start; i < rtf.length; i++) {
     const char = rtf.charAt(i);
     if (char === "\\") {
-      i += 1;
+      RTF_CONTROL_RE.lastIndex = i;
+      const control = RTF_CONTROL_RE.exec(rtf);
+      if (control === null) {
+        i += 1;
+        continue;
+      }
+      i = RTF_CONTROL_RE.lastIndex - 1;
+      if (control.groups?.["word"] === "bin") {
+        const size = Number.parseInt(control.groups["value"] ?? "0", 10);
+        if (size >= 0) {
+          i = Math.min(rtf.length, i + size);
+        }
+      }
       continue;
     }
     if (char === "{") {
@@ -361,7 +399,12 @@ const rtfGroupEnd = (rtf: string, start: number): number | undefined => {
  */
 const skippedGroupEnd = (rtf: string, open: number): number | undefined => {
   const head = rtfGroupHead(rtf, open);
-  if (!head) {
+  if (
+    !head ||
+    (head.word !== undefined &&
+      (RTF_EMBEDDED_CONTAINERS.has(head.word) ||
+        RTF_VISIBLE_BLOCK_DESTINATIONS.has(head.word)))
+  ) {
     return undefined;
   }
   if (
@@ -400,25 +443,46 @@ const skipUnicodeFallback = (
  */
 const readRtfRuns = (rtf: string): RtfRun[][] => {
   const paragraphs: RtfRun[][] = [];
-  const stack: RtfGroupState[] = [];
-  const state: RtfGroupState = { bold: false, unicodeSkip: 1 };
-  let runs: RtfRun[] = [];
+  const stack: { state: RtfGroupState; heldParagraph: RtfParagraph | null }[] =
+    [];
+  const state: RtfGroupState = {
+    bold: false,
+    unicodeSkip: 1,
+    destination: { type: "body" },
+  };
+  let paragraph: RtfParagraph = { runs: [], following: [] };
 
   const emit = (text: string): void => {
-    if (!text) {
+    if (!text || state.destination.type === "container") {
       return;
     }
-    const last = runs.at(-1);
+    const last = paragraph.runs.at(-1);
     if (last && last.bold === state.bold) {
       last.text += text;
       return;
     }
-    runs.push({ text, bold: state.bold });
+    paragraph.runs.push({ text, bold: state.bold });
   };
 
   const breakParagraph = (): void => {
-    paragraphs.push(runs);
-    runs = [];
+    switch (state.destination.type) {
+      case "body":
+        paragraphs.push(paragraph.runs, ...paragraph.following);
+        break;
+      case "text":
+        state.destination.paragraphs.push(
+          paragraph.runs,
+          ...paragraph.following,
+        );
+        break;
+      case "container":
+        state.destination.paragraphs.push(...paragraph.following);
+        break;
+      default:
+        state.destination satisfies never;
+        panic("Unhandled RTF destination");
+    }
+    paragraph = { runs: [], following: [] };
   };
 
   /** Apply the control at `index`; returns the index just past it. */
@@ -462,6 +526,9 @@ const readRtfRuns = (rtf: string): RtfRun[][] => {
     const value =
       argument === undefined ? undefined : Number.parseInt(argument, 10);
 
+    if (word === "bin" && value !== undefined && value >= 0) {
+      return Math.min(rtf.length, next + value);
+    }
     if (RTF_BREAK_WORDS.has(word)) {
       breakParagraph();
       return next;
@@ -479,9 +546,6 @@ const readRtfRuns = (rtf: string): RtfRun[][] => {
       state.unicodeSkip = value === undefined || value < 0 ? 1 : value;
       return next;
     }
-    if (word === "bin") {
-      return value === undefined || value < 0 ? next : next + value;
-    }
     if (word === "u" && value !== undefined) {
       emit(String.fromCodePoint(value < 0 ? value + 0x01_00_00 : value));
       return skipUnicodeFallback(rtf, next, state.unicodeSkip);
@@ -498,15 +562,44 @@ const readRtfRuns = (rtf: string): RtfRun[][] => {
         index = skipTo;
         continue;
       }
-      stack.push({ ...state });
+      const frame: {
+        state: RtfGroupState;
+        heldParagraph: RtfParagraph | null;
+      } = { state: { ...state }, heldParagraph: null };
+      stack.push(frame);
+      const head = rtfGroupHead(rtf, index);
+      if (
+        head?.word !== undefined &&
+        (RTF_EMBEDDED_CONTAINERS.has(head.word) ||
+          RTF_VISIBLE_BLOCK_DESTINATIONS.has(head.word))
+      ) {
+        frame.heldParagraph = paragraph;
+        paragraph = { runs: [], following: [] };
+        state.destination = {
+          type: RTF_EMBEDDED_CONTAINERS.has(head.word) ? "container" : "text",
+          paragraphs: [],
+        };
+      }
       index += 1;
       continue;
     }
     if (char === "}") {
       const popped = stack.pop();
       if (popped) {
-        state.bold = popped.bold;
-        state.unicodeSkip = popped.unicodeSkip;
+        if (popped.heldParagraph !== null) {
+          if (paragraph.runs.length > 0 || paragraph.following.length > 0) {
+            breakParagraph();
+          }
+          const embedded =
+            state.destination.type === "body"
+              ? []
+              : state.destination.paragraphs;
+          paragraph = popped.heldParagraph;
+          paragraph.following.push(...embedded);
+        }
+        state.bold = popped.state.bold;
+        state.unicodeSkip = popped.state.unicodeSkip;
+        state.destination = popped.state.destination;
       }
       index += 1;
       continue;
@@ -583,7 +676,7 @@ const extractLinesFromDocContent = ($: cheerio.CheerioAPI): ParsedLine[] => {
   const docContent = $(".DocContent");
   const container = docContent.length > 0 ? docContent : $("body");
 
-  const fullText = container.text().trim();
+  const fullText = visibleHtmlText(container).trim();
   if (!fullText) {
     return [];
   }

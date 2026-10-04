@@ -1,3 +1,4 @@
+import { useState, type ReactNode } from "react";
 /**
  * Shared inline-editable field component.
  *
@@ -9,14 +10,11 @@
  * Used in: PDF right panel, table cells, inspector, kanban cards.
  */
 
-import { useState, type ReactNode } from "react";
-
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Input } from "@stll/ui/input";
-import { stellaToast } from "@stll/ui/toast";
 import { contentDir } from "@stll/ui/use-content-dir";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -24,6 +22,7 @@ import { DocumentIcon } from "@/components/document-icon";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
 import type { EditableFieldContent } from "@/components/workspaces/edit-field-dialog";
+import { fileHasThumbnail } from "@/components/workspaces/entity-utils";
 import {
   FieldValue,
   type FieldValueVariant,
@@ -35,6 +34,7 @@ import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type {
@@ -211,11 +211,8 @@ const InlineEditor = ({
         "editable-field.start-workflow",
       );
     },
-    onError: () => {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 
@@ -732,6 +729,11 @@ const TableFileField = ({
     encrypted: content.encrypted,
   });
   const openFile = useInspectorTabsStore((s) => s.openFile);
+  const thumbnail = {
+    fieldId,
+    hasThumbnail: fileHasThumbnail(content),
+    workspaceId,
+  };
 
   if (isDisplayable) {
     return (
@@ -760,6 +762,7 @@ const TableFileField = ({
           className="size-3.5 shrink-0"
           fileName={content.fileName}
           mimeType={content.mimeType}
+          thumbnail={thumbnail}
         />
         <BidiText as="span" className="min-w-0 truncate text-start">
           <HighlightedText columnId={propertyId} text={content.fileName} />
@@ -779,6 +782,7 @@ const TableFileField = ({
         className="size-3.5 shrink-0"
         fileName={content.fileName}
         mimeType={content.mimeType}
+        thumbnail={thumbnail}
       />
       <BidiText as="span" className="min-w-0 truncate text-start">
         <HighlightedText columnId={propertyId} text={content.fileName} />

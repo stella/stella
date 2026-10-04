@@ -667,6 +667,13 @@ export const createInspectorTabsSlice = (
       state.flashSeq += 1;
     }),
 
+  clearTabFlash: (tabId) =>
+    set((state) => {
+      if (state.flashTabId === tabId) {
+        state.flashTabId = null;
+      }
+    }),
+
   closeTabsOutsideRoutes: (routeIds) =>
     set((state) => {
       const removed = new Set<string>();
@@ -871,6 +878,17 @@ export const createInspectorTabsSlice = (
         tab.facetPulseSeq = (tab.facetPulseSeq ?? 0) + 1;
         state.minimized = false;
       }
+    }),
+
+  updateFileMetadata: (tabId, { label, fileName }) =>
+    set((state) => {
+      const tab = state.tabs.find((candidate) => candidate.id === tabId);
+      if (tab?.type !== "pdf") {
+        return;
+      }
+      tab.label = label;
+      tab.fileName = fileName;
+      normalizeFileTabFacet(tab);
     }),
 
   updateLabel: (tabId, label) =>

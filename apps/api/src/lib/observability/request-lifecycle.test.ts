@@ -19,7 +19,10 @@ import {
   resetAnalyticsForTesting,
   setAnalyticsForTesting,
 } from "@/api/lib/analytics/client";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import {
   DatabaseError,
@@ -36,11 +39,14 @@ import {
   answerRequestError,
   completeRequest,
   flushAnalytics,
+  withFinalResponseCompletion,
 } from "@/api/lib/observability/request-lifecycle";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import { ActionSizeError } from "@/api/lib/rate-limit/action-size-limits";
+import { runTenantHttpAction } from "@/api/lib/rate-limit/tenant-action-boundary";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -51,7 +57,9 @@ import type {
 } from "@/api/tests/helpers/recording-telemetry";
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "health_infra" },
+  cache: { kind: "none" },
 } satisfies PublicHandlerConfig;
 
 const pgFailover = (): Error =>
@@ -306,6 +314,77 @@ describe("the request lifecycle", () => {
     logs.restore();
     resetMetricLineSinkForTesting();
     resetFailureObservationsForTesting();
+  });
+
+  test("records final bounded responses once, including pre-dispatch refusals", async () => {
+    for (const mode of [
+      "read",
+      "mutation",
+      "request_refusal",
+      "configuration",
+    ] as const) {
+      logs.records.length = 0;
+      metricLines.length = 0;
+      const method = mode === "read" ? "GET" : "POST";
+      const request = new Request("http://localhost/action", {
+        method,
+        ...(mode === "request_refusal" ? { body: "body" } : {}),
+      });
+      const app = new Elysia()
+        .onRequest(({ request: received }) => initRequestContext(received))
+        .onAfterHandle(async (context) => await completeRequest(context))
+        .all("/action", () => ({ value: "é".repeat(300) }));
+      const response = await withFinalResponseCompletion(request, async () =>
+        runTenantHttpAction(request, {
+          enabled: true,
+          isTenantAction: () => true,
+          policy: () =>
+            mode === "configuration"
+              ? Result.err(
+                  new ActionSizeError({
+                    message: "Unconfigured",
+                    reason: "configuration",
+                  }),
+                )
+              : Result.ok({ requestBytes: 1, responseBytes: 512, pageSize: 3 }),
+          handleRequest: async (received) => app.handle(received),
+          decorateRefusal: (refusal, received) => {
+            initRequestContext(received);
+            return refusal;
+          },
+        }),
+      );
+      const expectedByMode = {
+        read: 413,
+        mutation: 200,
+        request_refusal: 413,
+        configuration: 503,
+      } as const;
+      const expected = expectedByMode[mode];
+      expect(response.status).toBe(expected);
+      const completions = logs.records.filter(
+        (record) => record.message === "request.completed",
+      );
+      expect(completions).toHaveLength(1);
+      expect(completions.at(0)?.attributes?.["http.status_code"]).toBe(
+        expected,
+      );
+      const metrics = metricLines.map((line) => JSON.parse(line));
+      expect(
+        metrics.filter((record) => "RequestDuration" in record),
+      ).toHaveLength(1);
+      expect(
+        metrics.find((record) => "RequestDuration" in record)?.[
+          "http.status_code"
+        ],
+      ).toBe(expected);
+      expect(
+        metrics.filter((record) => "ActionResponseOversize" in record),
+      ).toHaveLength(mode === "mutation" ? 1 : 0);
+      if (mode === "mutation") {
+        expect(await response.json()).toEqual({ value: "é".repeat(300) });
+      }
+    }
   });
 
   test.each(CASES.map((lifecycle) => [lifecycle.name, lifecycle] as const))(

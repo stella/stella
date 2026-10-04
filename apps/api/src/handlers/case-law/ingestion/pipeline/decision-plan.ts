@@ -14,7 +14,6 @@ import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   bareCitationKey,
-  decisionCitationKeyOf,
   decisionIdentifiersFromMetadata,
   extractDecisionCitations,
   isSelfCitation,
@@ -43,15 +42,17 @@ import type {
   CorpusWritePayload,
   CorpusWritePlan,
 } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
+import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { RECONCILE_CONTENTION } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
+import type { SafeId } from "@/api/lib/branded-types";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import {
   corpusCarriesDocument,
   payloadCarriesDocument,
-} from "@/api/handlers/case-law/stored-payload";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/case-law/stored-payload";
 import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
@@ -74,6 +75,7 @@ import {
   storedDecisionSignal,
 } from "@/api/lib/legal-search/parsers/validate-ast";
 import { logger } from "@/api/lib/observability/logger";
+import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 import { sortDeep } from "@/api/lib/sort-deep";
 
 type PendingMirrorPayload = Awaited<
@@ -99,6 +101,8 @@ const storedScopeRow = async (
 };
 
 type StoredScopeStateOptions = {
+  signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
   corpus: CaseLawCorpusDependencies;
@@ -108,11 +112,15 @@ const storedScopeState = async ({
   decisionId,
   scopedDb,
   corpus,
+  signal,
+  s3Policy,
 }: StoredScopeStateOptions) => {
   const row = await storedScopeRow(decisionId, scopedDb);
   const ast = row?.astS3Key
     ? await readCorpusAst(row.astS3Key, {
         ...corpus.readBytes,
+        ...(signal === undefined ? {} : { signal }),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
         readTombstones: async (locations) =>
           await scopedDb(
             async (tx) => await corpusTombstoneReaderForTx(tx)(locations),
@@ -137,11 +145,15 @@ const verifyStoredCitationScopes = async ({
   reusedCitationScopeEnvelope,
   scopedDb,
   corpus,
+  signal,
+  s3Policy,
 }: VerifyStoredCitationScopesOptions) => {
   if (existing === undefined || reusedCitationScopeEnvelope === undefined) {
     return Result.ok(false);
   }
   const snapshot = await storedScopeState({
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
     decisionId: existing.id,
     scopedDb,
     corpus,
@@ -461,6 +473,9 @@ const planCorpusPayload = ({
 };
 
 type PlanDecisionWriteOptions = {
+  signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
+  metadataUrlSchema?: unknown;
   result: IngestionResult;
   existing: ExistingDecision | undefined;
   decisionId: SafeId<"caseLawDecision">;
@@ -477,6 +492,7 @@ type PlanDecisionWriteOptions = {
  * read out of the document.
  */
 export const planDecisionWrite = async ({
+  metadataUrlSchema,
   result,
   existing,
   decisionId,
@@ -485,6 +501,8 @@ export const planDecisionWrite = async ({
   corpus,
   incomingCarriesDocument,
   polarityRules,
+  signal,
+  s3Policy,
 }: PlanDecisionWriteOptions) => {
   const sections = decisionSections(result);
 
@@ -514,6 +532,8 @@ export const planDecisionWrite = async ({
       ? existing.metadata[CITATION_SCOPE_METADATA_KEY]
       : undefined;
   const verified = await verifyStoredCitationScopes({
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
     scopedDb,
     corpus,
     existing,
@@ -562,10 +582,17 @@ export const planDecisionWrite = async ({
           ),
         }
       : ordinaryMetadata;
+  const plainMetadata = toPlainTextMetadataObject(
+    preparedMetadata,
+    metadataUrlSchema,
+  );
+  if (plainMetadata.isErr()) {
+    return Result.err(plainMetadata.error);
+  }
   const preparedResult = {
     ...result,
     documentAst: finalAst,
-    metadata: preparedMetadata,
+    metadata: plainMetadata.value,
   };
 
   reportStoredDocumentQuality({
@@ -629,10 +656,12 @@ export const planDecisionWrite = async ({
     pendingMirrorPayload,
   });
 
-  const incomingCitationKey = decisionCitationKeyOf({
+  const docketColumns = decisionDocketColumns({
     caseNumber: result.caseNumber,
     caseNumberType,
+    country: result.country,
   });
+  const incomingCitationKey = docketColumns.citationKey;
   return Result.ok({
     // Built here, outside the write transaction: classifying a citation
     // reads the polarity rules, and the write path must not hold a row
@@ -651,6 +680,7 @@ export const planDecisionWrite = async ({
           sections,
         }),
     caseNumberType,
+    docketColumns,
     preparedMetadata,
     preparedResult,
     reusedCitationScopeEnvelope,

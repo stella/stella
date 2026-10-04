@@ -19,7 +19,7 @@ import * as v from "valibot";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import type { ClauseBody } from "@/api/lib/clauses/types";
@@ -96,14 +96,26 @@ const config = {
     "one that carries markers. A changed paragraph loses its inline " +
     "formatting. Consumes AI usage.",
   permissions: { clause: ["update"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: true,
+  },
   body: rewriteClauseBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 const rewriteClause = createSafeRootHandler(
   config,
-  async function* ({ session, body, safeDb, user, orgAIConfig }) {
+  async function* ({
+    session,
+    body,
+    safeDb,
+    user,
+    orgAIConfig,
+    managedAIResidency,
+  }) {
     const organizationId = session.activeOrganizationId;
 
     // Editable paragraphs = non-directive with non-empty text; directives and
@@ -121,6 +133,7 @@ const rewriteClause = createSafeRootHandler(
     const numbered = editable.map((p) => `[${p.index}] ${p.text}`).join("\n");
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId,
@@ -140,8 +153,10 @@ const rewriteClause = createSafeRootHandler(
       Result.tryPromise({
         try: async () =>
           await generateTanStackObjectForRole({
+            dataClass: "customer",
             role: "fast",
             orgAIConfig,
+            managedAIResidency,
             organizationId,
             // Root-scoped handler: no workspace id is available here.
             tenantWorkspaceIds: [],

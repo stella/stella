@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { queryEntities } from "@/api/lib/entities/query-entities";
@@ -11,6 +11,7 @@ import {
 } from "@/api/lib/entities/window-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const config = {
   description:
@@ -20,6 +21,7 @@ const config = {
     "(200 rows by default). Prefer entities.list unless you are filling a " +
     "table viewport.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "read_content_across_matters" },
   access: "read",
   body: entityQueryWindowBodySchema,
@@ -33,7 +35,9 @@ const readEntitiesWindow = createSafeHandler(
       return Result.err(cursorResult.error);
     }
 
-    const limit = body.limit ?? LIMITS.entitiesWindowSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      body.limit ?? LIMITS.entitiesWindowSizeDefault,
+    );
     const result = yield* Result.await(
       queryEntities({
         safeDb,

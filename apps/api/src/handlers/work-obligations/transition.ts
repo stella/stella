@@ -1,13 +1,14 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
-import { WORK_OBLIGATION_SOURCE } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { workObligationRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   decideGateForTask,
   gateDecisionForTransition,
+  reviewGateForTask,
 } from "@/api/lib/flows/review-gate-task";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 import { settleWorkObligation } from "@/api/lib/work-obligations/settle-work-obligation";
@@ -28,7 +29,13 @@ const transitionWorkObligation = createSafeHandler(
     description:
       "Complete, cancel, or reopen governed work while preserving its lifecycle history. Completing or cancelling the task a workflow review gate raised approves or rejects that gate.",
     permissions: { entity: ["update"] },
-    mcp: { type: "capability", reason: "workflow_orchestration" },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: workObligationRealtimeUpdates,
+    mcp: {
+      type: "capability",
+      reason: "workflow_orchestration",
+      consumesServices: false,
+    },
     params: transitionParams,
     body: transitionBody,
   },
@@ -43,15 +50,20 @@ const transitionWorkObligation = createSafeHandler(
     const reason = body.reason?.trim() || undefined;
     const result = yield* Result.await(
       safeDb(async (tx) => {
+        if (
+          await reviewGateForTask(tx, {
+            workspaceId,
+            taskEntityId: params.entityId,
+          })
+        ) {
+          return { status: "flow_review" as const };
+        }
         const existing = await lockWorkObligation(tx, {
           entityId: params.entityId,
           workspaceId,
         });
         if (!existing) {
           return { status: "not_found" as const };
-        }
-        if (existing.sourceType === WORK_OBLIGATION_SOURCE.FLOW) {
-          return { status: "flow_review" as const };
         }
         const transition = resolveWorkObligationTransition(
           body.action,

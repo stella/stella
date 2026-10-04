@@ -4,8 +4,13 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 
 import { legislationDocuments, statuteSitemapShards } from "@/api/db/schema";
+import {
+  projectStatuteSitemapShard,
+  projectStatuteSitemapStatute,
+} from "@/api/handlers/legislation/catalog-response";
 import {
   SITEMAP_ALL_BUCKET,
   statuteBucketSql,
@@ -70,11 +75,13 @@ export const listStatuteSitemapShardsHandler = async (
   }
 
   return {
-    items: shards.map((shard) => ({
-      bucket: shard.bucket,
-      country: getCountryPathSegment(shard.country),
-      lastmod: shard.lastmod,
-    })),
+    items: shards.map((shard) =>
+      projectStatuteSitemapShard({
+        bucket: shard.bucket,
+        country: getCountryPathSegment(shard.country),
+        lastmod: shard.lastmod,
+      }),
+    ),
     limit: LIMITS.statuteSitemapIndexEntryLimit,
     nextCursor: null,
   };
@@ -128,6 +135,11 @@ export const listStatuteSitemapStatutesHandler = async (
   query: SitemapShardStatutesQuery,
   legislationDb: LegislationReadDb,
 ) => {
+  const unavailable = publicCountryUnavailable(query.country);
+  if (unavailable !== null) {
+    return status(503, unavailable);
+  }
+
   const rows = await legislationDb(
     async (tx) => await statuteSitemapShardQuery({ query, tx }),
   );
@@ -139,7 +151,7 @@ export const listStatuteSitemapStatutesHandler = async (
   }
 
   return {
-    items: rows,
+    items: rows.map(projectStatuteSitemapStatute),
     limit: LIMITS.statuteSitemapShardUrlLimit,
     nextCursor: null,
   };

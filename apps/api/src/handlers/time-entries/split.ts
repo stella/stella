@@ -3,8 +3,9 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
+import { timeEntryRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { apportionSplitDurations } from "@/api/handlers/time-entries/split-durations";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import {
@@ -12,6 +13,7 @@ import {
   readTimePolicy,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
+import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -41,7 +43,13 @@ const splitEntry = createSafeHandler(
       "apportioned and re-rounded to the billing increment. A billed or " +
       "written-off entry, and a duration too short to divide, are refused.",
     permissions: { timeEntry: ["approve"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: timeEntryRealtimeUpdates,
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "write",
     body: splitEntryBodySchema,
   },
@@ -190,7 +198,17 @@ const splitEntry = createSafeHandler(
         }
 
         const [current] = await tx
-          .select({ id: timeEntries.id })
+          .select({
+            id: timeEntries.id,
+            status: timeEntries.status,
+            updatedAt: timeEntries.updatedAt,
+            approverUserId: timeEntries.approverUserId,
+            approvedByUserId: timeEntries.approvedByUserId,
+            approvedAt: timeEntries.approvedAt,
+            returnedByUserId: timeEntries.returnedByUserId,
+            returnedAt: timeEntries.returnedAt,
+            returnComment: timeEntries.returnComment,
+          })
           .from(timeEntries)
           .where(
             and(
@@ -198,8 +216,19 @@ const splitEntry = createSafeHandler(
               eq(timeEntries.workspaceId, workspaceId),
             ),
           )
-          .limit(1);
-        if (!current) {
+          .limit(1)
+          .for("update");
+        if (
+          !current ||
+          current.status !== original.status ||
+          current.updatedAt?.getTime() !== original.updatedAt?.getTime() ||
+          current.approverUserId !== original.approverUserId ||
+          current.approvedByUserId !== original.approvedByUserId ||
+          current.approvedAt?.getTime() !== original.approvedAt?.getTime() ||
+          current.returnedByUserId !== original.returnedByUserId ||
+          current.returnedAt?.getTime() !== original.returnedAt?.getTime() ||
+          current.returnComment !== original.returnComment
+        ) {
           return {
             ok: false as const,
             error: new HandlerError({
@@ -248,6 +277,12 @@ const splitEntry = createSafeHandler(
             organizationId: original.organizationId,
             workspaceId,
             userId: original.userId,
+            approverUserId: current.approverUserId,
+            approvedByUserId: current.approvedByUserId,
+            approvedAt: current.approvedAt,
+            returnedByUserId: current.returnedByUserId,
+            returnedAt: current.returnedAt,
+            returnComment: current.returnComment,
             workItemId: split.workItemId,
             dateWorked: original.dateWorked,
             timezoneId: original.timezoneId,
@@ -320,6 +355,7 @@ const splitEntry = createSafeHandler(
         ];
 
         await recordAuditEvent(tx, events);
+        await recordBillingCapCrossings(tx, { workspaceId, recordAuditEvent });
 
         return { ok: true as const };
       }),

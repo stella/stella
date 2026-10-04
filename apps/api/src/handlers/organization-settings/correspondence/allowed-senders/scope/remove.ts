@@ -6,7 +6,7 @@ import {
   correspondenceAllowedSenderMatters,
   correspondenceAllowedSenders,
 } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -19,7 +19,12 @@ const paramsSchema = t.Object({
 const config = {
   description: "Remove one matter from a shared mailbox sender's filing scope.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "correspondence" },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  mcp: {
+    type: "capability",
+    reason: "correspondence",
+    consumesServices: false,
+  },
   params: paramsSchema,
   body: bodySchema,
 } satisfies HandlerConfig;

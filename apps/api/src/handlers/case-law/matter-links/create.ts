@@ -4,7 +4,7 @@ import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { linkDecisionsToMatter } from "@/api/handlers/case-law/matter-links/link-writes";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -72,7 +72,12 @@ const config = {
     "link past the matter's maximum. To link a selection at once, use the " +
     "batch call instead of repeating this one.",
   permissions: { entity: ["create"] },
-  mcp: { type: "capability", reason: "legal_corpus_admin" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    reason: "legal_corpus_admin",
+    consumesServices: false,
+  },
   body: createMatterLinkBodySchema,
 } satisfies WorkspaceHandlerConfig;
 

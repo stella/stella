@@ -2,8 +2,10 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { resultTx } from "@/api/db/safe-db";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { expenseRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -20,52 +22,48 @@ const config = {
     "excluded from billing). A billed expense is refused until its invoice is " +
     "reverted; the return value says which of the two happened.",
   permissions: { expense: ["delete"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: expenseRealtimeUpdates,
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: deleteExpenseBodySchema,
 } satisfies WorkspaceHandlerConfig;
 
 const deleteExpense = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
-    const existing = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.expenses.findFirst({
-          where: {
-            id: { eq: body.id },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: {
-            status: true,
-            amount: true,
-            currency: true,
-            category: true,
-            matterId: true,
-            dateIncurred: true,
-          },
-        }),
-      ),
-    );
+    const result = yield* Result.await(
+      resultTx(safeDb, async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(expenses)
+          .where(
+            and(
+              eq(expenses.id, body.id),
+              eq(expenses.workspaceId, workspaceId),
+            ),
+          )
+          .limit(1)
+          .for("update");
 
-    if (!existing) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Expense not found" }),
-      );
-    }
+        if (!existing) {
+          return Result.err(
+            new HandlerError({ status: 404, message: "Expense not found" }),
+          );
+        }
 
-    // A billed expense is attached to an invoice; writing it off here would
-    // leave the invoice total stale. Match batch-delete, which excludes BILLED.
-    if (existing.status === BILLING_STATUS.BILLED) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Cannot delete a billed expense; revert the invoice first",
-        }),
-      );
-    }
+        // A billed expense is attached to an invoice; writing it off here would
+        // leave the invoice total stale. Match batch-delete, which excludes BILLED.
+        if (existing.status === BILLING_STATUS.BILLED) {
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message:
+                "Cannot delete a billed expense; revert the invoice first",
+            }),
+          );
+        }
 
-    if (existing.status === BILLING_STATUS.DRAFT) {
-      yield* Result.await(
-        safeDb(async (tx) => {
+        if (existing.status === BILLING_STATUS.DRAFT) {
           await tx
             .delete(expenses)
             .where(
@@ -92,14 +90,10 @@ const deleteExpense = createSafeHandler(
               },
             },
           });
-        }),
-      );
-      return Result.ok({ deleted: true });
-    }
+          return Result.ok({ deleted: true });
+        }
 
-    // Non-draft expenses get written off instead of deleted
-    yield* Result.await(
-      safeDb(async (tx) => {
+        // Non-draft expenses get written off instead of deleted
         await tx
           .update(expenses)
           .set({
@@ -124,10 +118,10 @@ const deleteExpense = createSafeHandler(
             },
           },
         });
+        return Result.ok({ deleted: false });
       }),
     );
-
-    return Result.ok({ deleted: false });
+    return Result.ok(result);
   },
 );
 

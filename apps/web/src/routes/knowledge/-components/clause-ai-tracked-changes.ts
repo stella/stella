@@ -1,5 +1,5 @@
+import type { Transaction } from "@tiptap/pm/state";
 import type { JSONContent } from "@tiptap/react";
-import type { Transaction } from "prosemirror-state";
 
 import { diffWordSegments } from "@stll/folio-react";
 import { Temporal } from "@stll/time";
@@ -22,22 +22,6 @@ const REVISION_IDS_PER_MILLISECOND = 1000;
 // actually reaching the server: version-save actions must keep treating it
 // as unsafe, exactly like "pending", until it settles back to "resolved".
 export type ClauseEditorReviewStatus = "resolved" | "pending" | "persisting";
-
-/**
- * Whether the clause body's `Tabs.Panel` must stay mounted even while
- * another tab (Variants/History) is active. Everything except "resolved"
- * needs this — Base UI's `Tabs.Panel` unmounts hidden panels by default, and
- * losing that `ClauseEditor` instance strands the review with no UI left to
- * recover it. "pending" has a live, interactive review UI (the AI edit bar
- * and hunk menu) that resolves the review. "persisting" has none, but its
- * save outcome is still unknown: if the save fails, the accepted body that
- * would let the user retry exists only in that `ClauseEditor` instance
- * (see `settleReviewPersist`), so unmounting it there is unrecoverable
- * client-side.
- */
-export const shouldKeepBodyPanelMounted = (
-  status: ClauseEditorReviewStatus,
-): boolean => status !== "resolved";
 
 type InlineMark = NonNullable<JSONContent["marks"]>[number];
 
@@ -210,126 +194,6 @@ export const settleReviewPersist = async (
     reportFailure(error);
   }
 };
-
-/**
- * Whether a settling `saveBody` call may report the review gate "resolved".
- *
- * `saveBody` is the single persist path behind three very different
- * triggers: the keystroke-debounced autosave, blur, and the review's own
- * flush (`onReviewResolved`). Only the last of those may clear the review
- * gate. Without this guard, a normal autosave that started *before* a review
- * began but settles *after* the editor has already reported
- * "pending"/"persisting" hits `saveBody`'s unconditional success path and
- * flips the gate back to "resolved" while tracked-change hunks are still
- * open (or the real review persist is still in flight) — version-save and
- * leave actions read that gate, so they'd unblock against a stale body.
- *
- * The caller captures a fresh `reviewFlushToken` (an incrementing epoch,
- * same shape as `rewriteRequestIdRef` in `ClauseEditor`) inside
- * `onReviewResolved`, or reads a pending retry token armed by an earlier
- * failed flush (see {@link nextRetryPendingToken}), and threads it into a
- * `saveBody` invocation. Ordinary autosaves that carry neither always
- * resolve to `false` here. Comparing against the *current* epoch (not just
- * checking the token is present) also means a superseded review flush — one
- * review resolves, then a second starts and resolves again before the
- * first's persist settles — can't win a race against the newer one.
- */
-export const canReviewFlushReportResolved = (
-  reviewFlushToken: number | undefined,
-  currentReviewFlushEpoch: number,
-): boolean =>
-  reviewFlushToken !== undefined &&
-  reviewFlushToken === currentReviewFlushEpoch;
-
-/**
- * The token a `saveBody` call should actually carry: its own explicit token
- * if it has one (the review's own flush, minted fresh in `onReviewResolved`),
- * otherwise a pending retry token armed by an earlier failed flush (see
- * {@link nextRetryPendingToken}) — so a later save through *any* trigger
- * (blur, the keystroke debounce) can still be the one that clears the gate.
- *
- * Read this once, synchronously, at the very start of `saveBody`, before the
- * request goes out. That ordering is what keeps the stale-autosave race
- * fixed: an autosave already in flight when a flush fails captured its own
- * `explicitToken` argument (`undefined`) earlier in its call and can't
- * retroactively see a retry token armed after it already started — only a
- * save that starts after the arming reads it.
- */
-export const reviewFlushTokenForSave = (
-  explicitToken: number | undefined,
-  retryPendingToken: number | undefined,
-): number | undefined => explicitToken ?? retryPendingToken;
-
-/**
- * The retry token to arm after a `saveBody` call fails, or `undefined` to
- * clear it.
- *
- * Only a failure of a save that was itself allowed to report the gate
- * resolved — the review's own flush, or an earlier armed retry of it — re-
- * arms: a plain autosave failing outside of any review persist has no gate
- * to unblock and must not manufacture one. Re-arming with the *current*
- * epoch (not the failed token verbatim) means a review superseded by a
- * newer one while its retry is still pending can't have a stale retry token
- * wrongly clear the newer review's gate — the newer flush's own explicit
- * token wins instead (see {@link reviewFlushTokenForSave}), and the stale
- * retry token is discarded because it can never match a bumped epoch again.
- *
- * This is what turns a single failed flush into a self-healing gate: fail →
- * arm → next save (any trigger) may resolve; if that save also fails, arm
- * again, repeating until one succeeds.
- */
-export const nextRetryPendingToken = (
-  reviewFlushToken: number | undefined,
-  currentReviewFlushEpoch: number,
-): number | undefined =>
-  canReviewFlushReportResolved(reviewFlushToken, currentReviewFlushEpoch)
-    ? currentReviewFlushEpoch
-    : undefined;
-
-/**
- * Write-ordering guard for `ClauseBodyEditor.saveBody`, covering the
- * complementary write-side race to the gate machinery above: a body
- * autosave that started *before* an AI review is accepted can still be in
- * flight when the review's own flush persists the accepted body. If that
- * stale autosave's POST settles on the server *after* the accepted-body
- * POST, the server's last-write-wins semantics let it silently restore the
- * pre-AI body underneath the gate the caller already reported "resolved".
- *
- * `saveBody` mints a strictly increasing `sequence` for every call (any
- * trigger — debounce, blur, or review flush) and aborts the previous
- * in-flight call's `AbortController` before issuing its own request. Abort
- * is the fast path: cancelling the fetch stops that older call from ever
- * reaching this guard's caller with a response to act on. It is
- * deliberately not the *only* guard, though — an aborted signal races the
- * network independently of the server: if the older request had already
- * reached the server and applied its write before `abort()` ran, cancelling
- * the client's view of it can't recall that write. `isStaleSaveSettlement`
- * is the guard that holds regardless of how that race resolves: it looks
- * purely at settlement order (does a strictly newer save's sequence appear
- * in `latestSettledSequence` already?), which is unaffected by whether the
- * older request's connection was actually torn down in time.
- */
-export const isStaleSaveSettlement = (
-  settlingSequence: number,
-  latestSettledSequence: number | undefined,
-): boolean =>
-  latestSettledSequence !== undefined &&
-  latestSettledSequence > settlingSequence;
-
-/**
- * Whether a stale settlement needs the newer body defensively re-persisted.
- * A stale settlement that failed (aborted before completing, or a genuine
- * network error) never reached the server, so there's nothing to repair.
- * A stale settlement that *succeeded* proves its write did land — after the
- * accepted body's own write, per `isStaleSaveSettlement` — so the caller
- * must re-issue the last known-good body once to make the server's last
- * write match the UI again. The server payload itself can't be recalled;
- * only a fresh write can undo it.
- */
-export const shouldReissueAfterStaleSettlement = (
-  isStale: boolean,
-  staleSettlementSucceeded: boolean,
-): boolean => isStale && staleSettlementSucceeded;
 
 /** Stable identity of a body for detecting external resets vs. the editor's
  *  own round-tripped edits (text + formatting + directive kind/expression). */

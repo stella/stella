@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { discoverSkillPackagesFromUrl } from "@/api/lib/skills/skill-package";
 
@@ -10,10 +10,19 @@ const discoverSkillUrlBodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Returns skill discovery metadata from an external source.",
+  },
   description:
     "Discover importable skills from a GitHub repository or SKILL.md URL.",
   permissions: { agentSkill: ["create"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   body: discoverSkillUrlBodySchema,
 } satisfies HandlerConfig;
 

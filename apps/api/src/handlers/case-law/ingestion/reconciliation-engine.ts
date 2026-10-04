@@ -37,8 +37,12 @@ import {
   min,
   notInArray,
   sql,
+  asc,
 } from "drizzle-orm";
 
+import { DAY_IN_MS } from "@stll/time";
+
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCoverageSlices,
@@ -54,6 +58,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/coverage-ledger";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import {
+  createSourceMetadataUrlSchemaResolver,
+  type SourceMetadataUrlSchemaResolver,
+} from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
@@ -76,9 +84,9 @@ import {
   listReconciliationSlice,
   MAX_SLICE_PAGES,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
-import { rowHoldsDocument } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
+import { rowHoldsDocument } from "@/api/lib/case-law/stored-payload";
 import {
   errorFingerprint,
   errorSystemFields,
@@ -93,12 +101,17 @@ import type {
   ReconciliationListingItem,
   SourceAdapter,
   SourceReconciliation,
+  StoredRawReparseInput,
+  StoredRawResultReader,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
   listingIdentityKey,
   parseListingIdentityKey,
 } from "@/api/lib/legal-search/ingestion-types";
-import { storedObservationHasDetail } from "@/api/lib/legal-search/partial-observation-sql";
+import {
+  storedObservationHasDetail,
+  storedObservationIsListingOnly,
+} from "@/api/lib/legal-search/partial-observation-sql";
 import {
   countTerminalReconciliationItemsBySlice,
   parkReconciliationItem,
@@ -107,9 +120,11 @@ import {
   resolveReconciliationItems,
   retireReconciliationItem,
   selectDueReconciliationItems,
-  selectTrackedIdentityKeys,
+  refreshTrackedReconciliationItems,
 } from "@/api/lib/legal-search/reconciliation-store";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
 /** Parked items rebuilt in one unit; each costs a publisher fetch. */
@@ -320,6 +335,8 @@ export type ReconciliationWorkUnitOptions = {
   sleep: (ms: number) => Promise<void>;
   /** Read and updated in place; see `SliceRetrySchedule`. */
   sliceRetries: SliceRetrySchedule;
+  /** Stored-raw reader; injectable for bounded repair work. */
+  readStoredRaw?: StoredRawResultReader | undefined;
 };
 
 type KeyedListingItem = ReconciliationListingItem & {
@@ -382,6 +399,189 @@ const detailCondition = (
           ),
         );
   return settledRecord === undefined ? held : and(held, settledRecord);
+};
+
+const MAX_TEXTLESS_DETAIL_RECHECKS_PER_WORK_UNIT = 200;
+
+type TextlessHeldDueWhereOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  before: Date;
+  recheck: NonNullable<SourceReconciliation["textlessHeldRecheck"]>;
+};
+
+const textlessHeldDueWhere = ({
+  sourceId,
+  before,
+  recheck,
+}: TextlessHeldDueWhereOptions) =>
+  and(
+    eq(caseLawDecisions.sourceId, sourceId),
+    isNull(caseLawDecisions.fulltext),
+    storedObservationIsListingOnly(caseLawDecisions.metadata),
+    inArray(
+      sql<string>`jsonb_extract_path_text(${caseLawDecisions.metadata}, ${recheck.metadataKey})`,
+      [...recheck.values],
+    ),
+    or(
+      isNotNull(caseLawDecisions.sourceRawS3Key),
+      isNotNull(caseLawDecisions.sourceRaw),
+    ),
+    isNull(caseLawDecisions.redactedAt),
+    sql`${decisionAbsorptionSql(caseLawDecisions.metadata)} IS NULL`,
+    lt(
+      sql<Date>`coalesce(${caseLawDecisions.textlessDetailRecheckedAt}, ${caseLawDecisions.updatedAt})`,
+      before,
+    ),
+  );
+
+const textlessHeldRecheckCutoff = (
+  now: Date,
+  recheck: NonNullable<SourceReconciliation["textlessHeldRecheck"]>,
+): Date => {
+  if (!Number.isInteger(recheck.minimumAgeDays) || recheck.minimumAgeDays < 7) {
+    panic(`textless detail minimum age must be at least seven days`);
+  }
+  if (
+    !Number.isInteger(recheck.perWorkUnitLimit) ||
+    recheck.perWorkUnitLimit < 1 ||
+    recheck.perWorkUnitLimit > MAX_TEXTLESS_DETAIL_RECHECKS_PER_WORK_UNIT
+  ) {
+    panic(
+      `textless detail recheck limit must be in 1..${MAX_TEXTLESS_DETAIL_RECHECKS_PER_WORK_UNIT}`,
+    );
+  }
+  return new Date(now.getTime() - recheck.minimumAgeDays * DAY_IN_MS);
+};
+
+type TextlessHeldRecheckQueryOptions = {
+  scopedDb: ScopedDb;
+  sourceId: SafeId<"caseLawSource">;
+  now: Date;
+  recheck: NonNullable<SourceReconciliation["textlessHeldRecheck"]>;
+};
+
+type TextlessHeldSelectionOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  recheck: NonNullable<SourceReconciliation["textlessHeldRecheck"]>;
+  tx: Transaction;
+  before: Date;
+  limit: number;
+};
+
+export const textlessHeldRecheckSelection = ({
+  tx,
+  sourceId,
+  before,
+  recheck,
+  limit,
+}: TextlessHeldSelectionOptions) =>
+  tx
+    .select({
+      id: caseLawDecisions.id,
+      sourceDocumentId: caseLawDecisions.sourceDocumentId,
+      caseNumber: caseLawDecisions.caseNumber,
+      language: caseLawDecisions.language,
+      court: caseLawDecisions.court,
+      ecli: caseLawDecisions.ecli,
+      decisionDate: caseLawDecisions.decisionDate,
+      decisionType: caseLawDecisions.decisionType,
+      sourceUrl: caseLawDecisions.sourceUrl,
+      documentUrl: caseLawDecisions.documentUrl,
+      metadata: caseLawDecisions.metadata,
+      sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+      sourceRawContentType: caseLawDecisions.sourceRawContentType,
+      sourceRaw: caseLawDecisions.sourceRaw,
+      updatedAt: caseLawDecisions.updatedAt,
+    })
+    .from(caseLawDecisions)
+    .where(textlessHeldDueWhere({ sourceId, before, recheck }))
+    .orderBy(
+      asc(
+        sql`coalesce(${caseLawDecisions.textlessDetailRecheckedAt}, ${caseLawDecisions.updatedAt})`,
+      ),
+      asc(caseLawDecisions.id),
+    )
+    .limit(limit);
+
+const hasDueTextlessHeldRecheck = async ({
+  scopedDb,
+  sourceId,
+  now,
+  recheck,
+}: TextlessHeldRecheckQueryOptions): Promise<boolean> => {
+  const before = textlessHeldRecheckCutoff(now, recheck);
+  const rows = await scopedDb(
+    async (tx) =>
+      await tx
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(textlessHeldDueWhere({ sourceId, before, recheck }))
+        .orderBy(
+          asc(
+            sql`coalesce(${caseLawDecisions.textlessDetailRecheckedAt}, ${caseLawDecisions.updatedAt})`,
+          ),
+          asc(caseLawDecisions.id),
+        )
+        .limit(1),
+  );
+  return rows.length > 0;
+};
+
+const selectDueTextlessHeldRechecks = async ({
+  scopedDb,
+  sourceId,
+  now,
+  recheck,
+}: TextlessHeldRecheckQueryOptions) => {
+  const before = textlessHeldRecheckCutoff(now, recheck);
+  return await scopedDb(
+    async (tx) =>
+      await textlessHeldRecheckSelection({
+        tx,
+        sourceId,
+        before,
+        recheck,
+        limit: recheck.perWorkUnitLimit,
+      }),
+  );
+};
+
+type ClaimTextlessHeldRecheckOptions = TextlessHeldRecheckQueryOptions & {
+  decisionIds: readonly SafeId<"caseLawDecision">[];
+};
+
+const claimTextlessHeldRechecks = async ({
+  scopedDb,
+  sourceId,
+  now,
+  recheck,
+  decisionIds,
+}: ClaimTextlessHeldRecheckOptions) => {
+  if (decisionIds.length === 0) {
+    return new Set(decisionIds);
+  }
+  const before = textlessHeldRecheckCutoff(now, recheck);
+  const claimed = await scopedDb(
+    async (tx) =>
+      // audit: skip - durable per-row scheduler backoff bookkeeping
+      await tx
+        .update(caseLawDecisions)
+        .set({
+          textlessDetailRecheckedAt: now,
+          updatedAt: sql`${caseLawDecisions.updatedAt}`,
+        })
+        .where(
+          and(
+            sql`${caseLawDecisions.id} = ANY(ARRAY[${sql.join(
+              decisionIds.map((id) => sql`${id}`),
+              sql`, `,
+            )}]::uuid[])`,
+            textlessHeldDueWhere({ sourceId, before, recheck }),
+          ),
+        )
+        .returning({ id: caseLawDecisions.id }),
+  );
+  return new Set(claimed.map(({ id }) => id));
 };
 
 type HeldDocumentIdsOptions = {
@@ -1006,12 +1206,15 @@ type IngestItemOptions = {
   item: KeyedListingItem;
   lease: CaseLawSourceIngestionLease;
   now: Date;
+  buildDecision: SourceReconciliation["buildDecision"];
   reconciliation: SourceReconciliation;
   reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
+  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
   slice: string;
   sourceId: SafeId<"caseLawSource">;
   summary: ReconciliationUnitSummary;
+  failureDisposition?: "park" | "hold";
 };
 
 /**
@@ -1027,22 +1230,36 @@ const ingestListedItem = async ({
   item,
   lease,
   now,
+  buildDecision,
   reconciliation,
   reparseStoredRaw,
   scopedDb,
+  resolveMetadataUrlSchema,
   slice,
   sourceId,
   summary,
+  failureDisposition = "park",
 }: IngestItemOptions): Promise<void> => {
   const park = async (tag: string): Promise<void> => {
+    if (failureDisposition === "hold") {
+      summary.failed += 1;
+      return;
+    }
+    await lease.beforeDatabaseMark();
     const parked = await parkReconciliationItem(scopedDb, {
+      revisionOf: reconciliation.revisionOf,
       sourceId,
+      leaseToken: lease.leaseToken,
       slice,
       identityKey: item.identityKey,
       payload: item.payload,
       errorTag: tag,
       now,
     });
+    if (parked.outcome === "superseded") {
+      summary.deferred += 1;
+      return;
+    }
     if (parked.status === RECONCILIATION_ITEM_STATUS.TERMINAL) {
       summary.terminal += 1;
     } else {
@@ -1051,24 +1268,35 @@ const ingestListedItem = async ({
   };
 
   try {
-    const built = await reconciliation.buildDecision(
+    const built = await buildDecision(
       item.payload,
       AbortSignal.timeout(ITEM_FETCH_TIMEOUT_MS),
     );
     switch (built.type) {
       case "unkeyable": {
+        if (failureDisposition === "hold") {
+          await park("unkeyable");
+          return;
+        }
         // The identity rule keyed this item and the build cannot: the two
         // disagree, and no retry resolves that, so it is retired straight
         // away rather than spending the whole schedule proving it.
-        await retireReconciliationItem(scopedDb, {
+        await lease.beforeDatabaseMark();
+        const retired = await retireReconciliationItem(scopedDb, {
+          revisionOf: reconciliation.revisionOf,
           sourceId,
+          leaseToken: lease.leaseToken,
           slice,
           identityKey: item.identityKey,
           payload: item.payload,
           errorTag: "unkeyable",
           now,
         });
-        summary.terminal += 1;
+        if (retired.outcome === "recorded") {
+          summary.terminal += 1;
+        } else {
+          summary.deferred += 1;
+        }
         return;
       }
       case "detail-unavailable": {
@@ -1086,13 +1314,16 @@ const ingestListedItem = async ({
             scopedDb,
             sourceId,
           });
-          return await processDecision({
-            input,
-            sourceId,
-            scopedDb,
-            observedAt: now,
-            observationOrder,
-          });
+          return await processDecision(
+            {
+              input,
+              sourceId,
+              scopedDb,
+              observedAt: now,
+              observationOrder,
+            },
+            resolveMetadataUrlSchema,
+          );
         };
         // The decision first, then what its page states beside it. A
         // companion that cannot be written parks the item: a rebuild writes
@@ -1108,8 +1339,11 @@ const ingestListedItem = async ({
           return;
         }
         summary.written += 1;
+        await lease.beforeDatabaseMark();
         await resolveReconciliationItem(scopedDb, {
           sourceId,
+          leaseToken: lease.leaseToken,
+          payload: item.payload,
           identityKey: item.identityKey,
         });
         return;
@@ -1128,15 +1362,18 @@ const ingestListedItem = async ({
             sourceId,
           });
         };
-        const placed = await processSupplement({
-          supplement: built.supplement,
-          sourceId,
-          scopedDb,
-          observedAt: now,
-          nextObservationOrder,
-          reparseStoredRaw,
-          readStoredRaw: readStoredRawFromS3,
-        });
+        const placed = await processSupplement(
+          {
+            supplement: built.supplement,
+            sourceId,
+            scopedDb,
+            observedAt: now,
+            nextObservationOrder,
+            reparseStoredRaw,
+            readStoredRaw: readStoredRawFromS3,
+          },
+          resolveMetadataUrlSchema,
+        );
         if (placed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
           await park(`retryable:${placed.reason}`);
           return;
@@ -1158,8 +1395,11 @@ const ingestListedItem = async ({
           return;
         }
         summary.written += 1;
+        await lease.beforeDatabaseMark();
         await resolveReconciliationItem(scopedDb, {
           sourceId,
+          leaseToken: lease.leaseToken,
+          payload: item.payload,
           identityKey: item.identityKey,
         });
         return;
@@ -1196,6 +1436,9 @@ const ingestListedItem = async ({
       ...errorSystemFields(error),
       ...pgErrorFields(error),
     });
+    if (failureDisposition === "hold") {
+      return;
+    }
     await park(errorTag(error));
   }
 };
@@ -1210,6 +1453,7 @@ type WalkSliceOptions = {
   reconciliation: SourceReconciliation;
   reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
+  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
   slice: string;
   sleep: (ms: number) => Promise<void>;
   sourceId: SafeId<"caseLawSource">;
@@ -1233,6 +1477,7 @@ const walkSlice = async ({
   reconciliation,
   reparseStoredRaw,
   scopedDb,
+  resolveMetadataUrlSchema,
   slice,
   sleep,
   sourceId,
@@ -1269,6 +1514,19 @@ const walkSlice = async ({
   }));
   summary.keyable = items.length;
   const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
+  await lease.beforeDatabaseMark();
+  const refresh = await refreshTrackedReconciliationItems(scopedDb, {
+    revisionOf: reconciliation.revisionOf,
+    sourceId,
+    leaseToken: lease.leaseToken,
+    items,
+    now: now(),
+  });
+  if (refresh.outcome === "superseded") {
+    summary.deferred = items.length;
+    return summary;
+  }
+  const tracked = refresh.trackedIdentityKeys;
   const held = await selectHeldIdentityKeys(scopedDb, {
     sourceId,
     identities: items.map(({ identity }) => identity),
@@ -1282,21 +1540,16 @@ const walkSlice = async ({
   const missing = items.filter(({ identityKey }) => !held.has(identityKey));
   summary.heldBefore = items.length - missing.length;
 
-  // A missing identity the store already tracks belongs to the due-retry path,
-  // not to this walk. Re-fetching it here would serve none of its backoff —
-  // a tip slice is re-walked daily, so every parked item would be asked for
-  // daily whatever its schedule said — and a terminal item would be pulled
-  // back into the hunt it has already left. They would also spend the unit's
-  // budget ahead of misses nothing is tracking yet.
-  const tracked = await selectTrackedIdentityKeys(scopedDb, {
-    sourceId,
-    identityKeys: missing.map(({ identityKey }) => identityKey),
-  });
+  // A tracked revision keeps its backoff; a changed revision was reopened
+  // above and belongs to the bounded due-retry path, even when this walk's
+  // ingest budget is exhausted.
   const untracked = missing.filter(
     ({ identityKey }) => !tracked.has(identityKey),
   );
   summary.scheduled = missing.length - untracked.length;
 
+  const buildDecision =
+    reconciliation.createSliceBuildDecision?.() ?? reconciliation.buildDecision;
   const fillable = untracked.slice(0, ingestBudget);
   summary.deferred = untracked.length - fillable.length;
   for (const [index, item] of fillable.entries()) {
@@ -1318,9 +1571,11 @@ const walkSlice = async ({
       item,
       lease,
       now: now(),
+      buildDecision,
       reconciliation,
       reparseStoredRaw,
       scopedDb,
+      resolveMetadataUrlSchema,
       slice,
       sourceId,
       summary,
@@ -1333,12 +1588,18 @@ const walkSlice = async ({
   // against `reported`/`collected`, and those two describe the listing as it is
   // now. Only reachable on a complete walk — a listing that failed part way
   // through throws above and never gets here.
-  summary.pruned = await pruneUnlistedTerminalItems(scopedDb, {
+  await lease.beforeDatabaseMark();
+  const prune = await pruneUnlistedTerminalItems(scopedDb, {
     sourceId,
+    leaseToken: lease.leaseToken,
     slice,
     listedIdentityKeys: items.map(({ identityKey }) => identityKey),
     limit: PRUNE_ROW_LIMIT,
   });
+  if (prune.outcome === "superseded") {
+    return summary;
+  }
+  summary.pruned = prune.removed;
 
   await recordSliceCoverage(scopedDb, {
     sourceId,
@@ -1351,6 +1612,159 @@ const walkSlice = async ({
   return summary;
 };
 
+const TEXTLESS_RECHECK_RAW_FAILURE_SINK = failureSink({
+  event: "case_law.reconciliation.textless_recheck_raw_unavailable",
+  expected: [],
+});
+
+type RecheckTextlessHeldOptions = {
+  adapterKey: string;
+  fetchDelayMs: number;
+  lease: CaseLawSourceIngestionLease;
+  now: () => Date;
+  readStoredRaw: StoredRawResultReader;
+  reconciliation: SourceReconciliation;
+  reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
+  scopedDb: ScopedDb;
+  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
+  sleep: (ms: number) => Promise<void>;
+  sourceId: SafeId<"caseLawSource">;
+};
+
+const recheckTextlessHeldRows = async ({
+  adapterKey,
+  fetchDelayMs,
+  lease,
+  now,
+  readStoredRaw,
+  reconciliation,
+  reparseStoredRaw,
+  scopedDb,
+  resolveMetadataUrlSchema,
+  sleep,
+  sourceId,
+}: RecheckTextlessHeldOptions): Promise<ReconciliationUnitSummary> => {
+  const summary = emptySummary("textless-detail-rechecks");
+  const recheck = reconciliation.textlessHeldRecheck;
+  if (recheck === undefined) {
+    return summary;
+  }
+  const candidates = await selectDueTextlessHeldRechecks({
+    scopedDb,
+    sourceId,
+    now: now(),
+    recheck,
+  });
+  summary.keyable = candidates.length;
+  await lease.beforeDatabaseMark();
+  // Claim the page once before external I/O. If the run dies before reaching
+  // a claimed row, that row retries after the seven-day backoff; this delay
+  // is acceptable for a completeness sweep and prevents rapid retry loops.
+  const claimed = await claimTextlessHeldRechecks({
+    scopedDb,
+    sourceId,
+    now: now(),
+    recheck,
+    decisionIds: candidates.map(({ id }) => id),
+  });
+
+  const rows = candidates.filter(({ id }) => claimed.has(id));
+  const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
+  for (const [index, row] of rows.entries()) {
+    if (index > 0) {
+      await sleep(fetchDelayMs);
+    }
+    const attemptedAt = now();
+    if (attemptedAt.getTime() >= ingestEndsAtMs) {
+      summary.deferred += rows.length - index;
+      break;
+    }
+    // Renew even when missing raw or unavailable detail causes no domain write.
+    await lease.beforeDatabaseMark();
+    let raw: Uint8Array;
+    if (row.sourceRaw !== null) {
+      raw = new TextEncoder().encode(row.sourceRaw);
+    } else if (row.sourceRawS3Key !== null) {
+      const stored = await readStoredRaw(row.sourceRawS3Key);
+      if (Result.isError(stored) || stored.value === null) {
+        summary.failed += 1;
+        if (Result.isError(stored)) {
+          observeFailure(stored.error, {
+            sink: TEXTLESS_RECHECK_RAW_FAILURE_SINK,
+            ctx: { adapterKey, decisionId: row.id },
+          });
+        } else {
+          logger.warn(
+            "case_law.reconciliation.textless_recheck_raw_unavailable",
+            {
+              adapterKey,
+              decisionId: row.id,
+              phase: "missing",
+            },
+          );
+        }
+        continue;
+      }
+      raw = stored.value;
+    } else {
+      summary.failed += 1;
+      continue;
+    }
+
+    const identity: ListingIdentity =
+      row.sourceDocumentId === null
+        ? {
+            type: "case-number",
+            caseNumber: row.caseNumber,
+            language: row.language,
+          }
+        : { type: "document", sourceDocumentId: row.sourceDocumentId };
+    const identityKey = listingIdentityKey(identity);
+    if (identityKey === null) {
+      summary.failed += 1;
+      continue;
+    }
+    const item: KeyedListingItem = {
+      identity,
+      identityKey,
+      payload: null,
+      slice: reconciliation.sliceOf(row.updatedAt),
+    };
+    const stored: StoredRawReparseInput = {
+      raw,
+      contentType: row.sourceRawContentType,
+      caseNumber: row.caseNumber,
+      sourceDocumentId: row.sourceDocumentId,
+      language: row.language,
+      court: row.court,
+      ecli: row.ecli,
+      decisionDate: row.decisionDate,
+      decisionType: row.decisionType,
+      sourceUrl: row.sourceUrl,
+      documentUrl: row.documentUrl,
+      metadata: row.metadata ?? {},
+    };
+    // db-await-in-loop: ingest after each paced publisher fetch; bounded to 200 rows under the source lease
+    await ingestListedItem({
+      adapterKey,
+      item,
+      lease,
+      now: attemptedAt,
+      reconciliation,
+      reparseStoredRaw,
+      scopedDb,
+      resolveMetadataUrlSchema,
+      slice: item.slice,
+      sourceId,
+      summary,
+      buildDecision: async (_payload, signal) =>
+        await recheck.buildDecisionFromStored(stored, signal),
+      failureDisposition: "hold",
+    });
+  }
+  return summary;
+};
+
 type RetryParkedOptions = {
   adapterKey: string;
   fetchDelayMs: number;
@@ -1359,6 +1773,7 @@ type RetryParkedOptions = {
   reconciliation: SourceReconciliation;
   reparseStoredRaw: SourceAdapter["reparseStoredRaw"];
   scopedDb: ScopedDb;
+  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
   sleep: (ms: number) => Promise<void>;
   sourceId: SafeId<"caseLawSource">;
 };
@@ -1366,11 +1781,8 @@ type RetryParkedOptions = {
 /**
  * Re-attempt the parked items that have come due.
  *
- * The batch is checked against what is held first: the crawl keeps running,
- * and an item it stored since parking needs no publisher fetch at all — only
- * the row forgetting. A key no current rule produces reads as
- * `unidentifiable`, which no held row can match, so such an item is
- * re-attempted rather than assumed held.
+ * A complete held identity resolves the queue without a publisher fetch;
+ * remaining retries consume the latest recorded listing payload.
  */
 const retryParkedItems = async ({
   adapterKey,
@@ -1380,6 +1792,7 @@ const retryParkedItems = async ({
   reconciliation,
   reparseStoredRaw,
   scopedDb,
+  resolveMetadataUrlSchema,
   sleep,
   sourceId,
 }: RetryParkedOptions): Promise<ReconciliationUnitSummary> => {
@@ -1391,7 +1804,7 @@ const retryParkedItems = async ({
   });
   summary.keyable = due.length;
 
-  const outstanding: KeyedListingItem[] = due.map(
+  const candidates: KeyedListingItem[] = due.map(
     ({ identityKey, payload, slice }) => ({
       identity: parseListingIdentityKey(identityKey) ?? {
         type: "unidentifiable",
@@ -1404,7 +1817,7 @@ const retryParkedItems = async ({
 
   const held = await selectHeldIdentityKeys(scopedDb, {
     sourceId,
-    identities: outstanding.map(({ identity }) => identity),
+    identities: candidates.map(({ identity }) => identity),
     requireDetail: reconciliation.heldRequiresDetail === true,
     heldWithoutDetail: reconciliation.heldWithoutDetail,
     rowRules: {
@@ -1412,22 +1825,30 @@ const retryParkedItems = async ({
       recheck: reconciliation.recheckHeld,
     },
   });
-  const settled = outstanding.filter(({ identityKey }) =>
-    held.has(identityKey),
-  );
-  summary.heldBefore = settled.length;
-  summary.resolved = settled.length;
-  await resolveReconciliationItems(scopedDb, {
-    sourceId,
-    identityKeys: settled.map(({ identityKey }) => identityKey),
-  });
-
-  const unheld = outstanding.filter(
+  const heldItems = due.filter(({ identityKey }) => held.has(identityKey));
+  summary.heldBefore = heldItems.length;
+  if (heldItems.length > 0) {
+    await lease.beforeDatabaseMark();
+    const resolved = await resolveReconciliationItems(scopedDb, {
+      sourceId,
+      leaseToken: lease.leaseToken,
+      items: heldItems,
+    });
+    if (resolved.outcome === "superseded") {
+      summary.deferred = candidates.length;
+      return summary;
+    }
+  }
+  const outstanding = candidates.filter(
     ({ identityKey }) => !held.has(identityKey),
   );
   const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
+  const sliceBuilders = new Map<
+    string,
+    SourceReconciliation["buildDecision"]
+  >();
   let fetched = 0;
-  for (const [index, item] of unheld.entries()) {
+  for (const [index, item] of outstanding.entries()) {
     if (fetched > 0) {
       await sleep(fetchDelayMs);
     }
@@ -1435,8 +1856,15 @@ const retryParkedItems = async ({
     // already decides when each is asked again, so the ones this unit did not
     // reach simply stay due for the next.
     if (now().getTime() >= ingestEndsAtMs) {
-      summary.deferred += unheld.length - index;
+      summary.deferred += outstanding.length - index;
       break;
+    }
+    let buildDecision = sliceBuilders.get(item.slice);
+    if (buildDecision === undefined) {
+      buildDecision =
+        reconciliation.createSliceBuildDecision?.() ??
+        reconciliation.buildDecision;
+      sliceBuilders.set(item.slice, buildDecision);
     }
     fetched += 1;
     // db-await-in-loop: paced publisher fetch per due item, under a lease and a clock budget
@@ -1445,15 +1873,162 @@ const retryParkedItems = async ({
       item,
       lease,
       now: now(),
+      buildDecision,
       reconciliation,
       reparseStoredRaw,
       scopedDb,
+      resolveMetadataUrlSchema,
       slice: item.slice,
       sourceId,
       summary,
     });
   }
   return summary;
+};
+
+type ExecuteReconciliationUnitOptions = Pick<
+  ReconciliationWorkUnitOptions,
+  | "adapterKey"
+  | "fetchDelayMs"
+  | "now"
+  | "reparseStoredRaw"
+  | "scopedDb"
+  | "sleep"
+  | "sourceId"
+> & {
+  readStoredRaw: StoredRawResultReader;
+  reconciliation: SourceReconciliation;
+  sliceIngestBudget: number;
+  sliceRetries: SliceRetrySchedule;
+  unit: ReconciliationWorkUnit;
+};
+
+const executeReconciliationUnit = async ({
+  adapterKey,
+  fetchDelayMs,
+  now,
+  reparseStoredRaw,
+  readStoredRaw,
+  reconciliation,
+  scopedDb,
+  sliceIngestBudget,
+  sliceRetries,
+  sleep,
+  sourceId,
+  unit,
+}: ExecuteReconciliationUnitOptions): Promise<ReconciliationUnitOutcome> => {
+  if (unit.type === "idle") {
+    return { type: "idle" };
+  }
+  const lease = await acquireCaseLawSourceIngestionLease({
+    scopedDb,
+    sourceId,
+  });
+  if (lease === null) {
+    return { type: "leased" };
+  }
+
+  const resolveMetadataUrlSchema =
+    createSourceMetadataUrlSchemaResolver(scopedDb);
+  try {
+    switch (unit.type) {
+      case "parked-retries":
+        return {
+          type: "worked",
+          summary: await retryParkedItems({
+            adapterKey,
+            fetchDelayMs,
+            lease,
+            now,
+            reconciliation,
+            reparseStoredRaw,
+            scopedDb,
+            resolveMetadataUrlSchema,
+            sleep,
+            sourceId,
+          }),
+        };
+      case "textless-detail-rechecks":
+        return {
+          type: "worked",
+          summary: await recheckTextlessHeldRows({
+            adapterKey,
+            fetchDelayMs,
+            lease,
+            now,
+            readStoredRaw,
+            reconciliation,
+            reparseStoredRaw,
+            scopedDb,
+            resolveMetadataUrlSchema,
+            sleep,
+            sourceId,
+          }),
+        };
+      case "slice":
+        return {
+          type: "worked",
+          summary: await walkSlice({
+            adapterKey,
+            fetchDelayMs,
+            ingestBudget: sliceIngestBudget,
+            lease,
+            now,
+            reason: unit.reason,
+            reconciliation,
+            reparseStoredRaw,
+            scopedDb,
+            resolveMetadataUrlSchema,
+            slice: unit.slice,
+            sleep,
+            sourceId,
+          }).catch(async (error: unknown) => {
+            // The walk is all-or-nothing by design: a listing that failed part
+            // way through writes no counts, so the slice is owed exactly as
+            // much as before. Recorded as failed, so the sweep's frontier and
+            // the backlog move past it and the retry arm owns it; and held in
+            // this process for its retry, because the tip is re-derived from
+            // the clock and would otherwise be handed straight back. Named
+            // here because the loop's window tally reports how many turns
+            // threw without saying over what; the slice a source cannot walk
+            // is the one fact that turns a standing error rate into something
+            // an operator can reproduce. Measured from the failure, not from
+            // the unit's start: a slice is several paginated requests and a
+            // walk can spend most of the runner's deadline before it throws,
+            // which would leave the hold shorter than it says or already
+            // expired.
+            sliceRetries.set(
+              unit.slice,
+              now().getTime() + RECONCILIATION_SLICE_RETRY_MS,
+            );
+            await recordSliceWalkFailure(scopedDb, {
+              sourceId,
+              slice: unit.slice,
+              walkError: describeWalkError(error),
+            });
+            logger.warn("case_law.reconciliation.slice_failed", {
+              adapterKey,
+              slice: unit.slice,
+              reason: unit.reason,
+              // Same reason as the item sink above: a walk that throws
+              // without a code is otherwise reported as a bare tag.
+              ...errorFingerprint(error),
+              ...errorSystemFields(error),
+              ...pgErrorFields(error),
+            });
+            throw error;
+          }),
+        };
+      default: {
+        unit satisfies never;
+        return panic(
+          `Unhandled reconciliation work unit: ${JSON.stringify(unit)}`,
+        );
+      }
+    }
+  } finally {
+    await lease.release();
+  }
 };
 
 /**
@@ -1470,6 +2045,7 @@ export const runReconciliationWorkUnit = async ({
   now,
   reconciliation: adapterReconciliation,
   reparseStoredRaw,
+  readStoredRaw = readStoredRawFromS3,
   scopedDb,
   sleep,
   sliceIngestBudget = DEFAULT_SLICE_INGEST_BUDGET,
@@ -1542,6 +2118,7 @@ export const runReconciliationWorkUnit = async ({
     dueParked,
     recheckCandidate,
     failedCandidate,
+    dueTextlessHeldRechecks,
   ] = await Promise.all([
     selectTipCheckedAt(scopedDb, sourceId, tipSlices),
     selectStaleShortSlices(scopedDb, {
@@ -1563,6 +2140,14 @@ export const runReconciliationWorkUnit = async ({
       fromSlice,
     }),
     selectFailedSliceCandidate(scopedDb, { sourceId, heldSlices, fromSlice }),
+    reconciliation.textlessHeldRecheck === undefined
+      ? Promise.resolve(false)
+      : hasDueTextlessHeldRecheck({
+          scopedDb,
+          sourceId,
+          now: startedAt,
+          recheck: reconciliation.textlessHeldRecheck,
+        }),
   ]);
 
   const terminalBySlice = await countTerminalReconciliationItemsBySlice(
@@ -1608,6 +2193,7 @@ export const runReconciliationWorkUnit = async ({
   const unit = selectReconciliationWorkUnit({
     now: startedAt,
     hasDueParkedItems: dueParked,
+    hasDueTextlessDetailRechecks: dueTextlessHeldRechecks,
     tipSlices,
     tipCheckedAt: new Map(
       tipCheckedAt.map(({ slice, checkedAt }) => [slice, checkedAt]),
@@ -1626,92 +2212,18 @@ export const runReconciliationWorkUnit = async ({
     return { type: "idle" };
   }
 
-  const lease = await acquireCaseLawSourceIngestionLease({
+  return await executeReconciliationUnit({
+    adapterKey,
+    fetchDelayMs,
+    now,
+    reparseStoredRaw,
+    readStoredRaw,
+    reconciliation,
     scopedDb,
+    sliceIngestBudget,
+    sliceRetries,
+    sleep,
     sourceId,
+    unit,
   });
-  if (lease === null) {
-    return { type: "leased" };
-  }
-
-  try {
-    switch (unit.type) {
-      case "parked-retries":
-        return {
-          type: "worked",
-          summary: await retryParkedItems({
-            adapterKey,
-            fetchDelayMs,
-            lease,
-            now,
-            reconciliation,
-            reparseStoredRaw,
-            scopedDb,
-            sleep,
-            sourceId,
-          }),
-        };
-      case "slice":
-        return {
-          type: "worked",
-          summary: await walkSlice({
-            adapterKey,
-            fetchDelayMs,
-            ingestBudget: sliceIngestBudget,
-            lease,
-            now,
-            reason: unit.reason,
-            reconciliation,
-            reparseStoredRaw,
-            scopedDb,
-            slice: unit.slice,
-            sleep,
-            sourceId,
-          }).catch(async (error: unknown) => {
-            // The walk is all-or-nothing by design: a listing that failed part
-            // way through writes no counts, so the slice is owed exactly as
-            // much as before. Recorded as failed, so the sweep's frontier and
-            // the backlog move past it and the retry arm owns it; and held in
-            // this process for its retry, because the tip is re-derived from
-            // the clock and would otherwise be handed straight back. Named
-            // here because the loop's window tally reports how many turns
-            // threw without saying over what; the slice a source cannot walk
-            // is the one fact that turns a standing error rate into something
-            // an operator can reproduce. Measured from the failure, not from
-            // the unit's start: a slice is several paginated requests and a
-            // walk can spend most of the runner's deadline before it throws,
-            // which would leave the hold shorter than it says or already
-            // expired.
-            sliceRetries.set(
-              unit.slice,
-              now().getTime() + RECONCILIATION_SLICE_RETRY_MS,
-            );
-            await recordSliceWalkFailure(scopedDb, {
-              sourceId,
-              slice: unit.slice,
-              walkError: describeWalkError(error),
-            });
-            logger.warn("case_law.reconciliation.slice_failed", {
-              adapterKey,
-              slice: unit.slice,
-              reason: unit.reason,
-              // Same reason as the item sink above: a walk that throws
-              // without a code is otherwise reported as a bare tag.
-              ...errorFingerprint(error),
-              ...errorSystemFields(error),
-              ...pgErrorFields(error),
-            });
-            throw error;
-          }),
-        };
-      default: {
-        unit satisfies never;
-        return panic(
-          `Unhandled reconciliation work unit: ${JSON.stringify(unit)}`,
-        );
-      }
-    }
-  } finally {
-    await lease.release();
-  }
 };

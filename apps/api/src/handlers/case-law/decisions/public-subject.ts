@@ -1,13 +1,16 @@
-/** Public route factories and the census of handlers they gate. */
 import { Result } from "better-result";
 import { status } from "elysia";
 
+/** Public route factories and the census of handlers they gate. */
+import type { PublicCountryUnavailable } from "@stll/api-contract/public-country-capability";
+
 import type {
+  ExactSuccessSchemaGuard,
   PublicHandlerConfig,
   PublicHandlerContext,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import { createSafeUncheckedBoundedPublicHandler } from "@/api/lib/api-handlers";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type {
@@ -26,7 +29,13 @@ type NotFoundStatus = ReturnType<typeof notFound>;
  * correct, so it carries the reader's ask instead of joining the one answer
  * missing and restricted subjects share.
  */
-type UnreadableSubjectAddress = { kind: "unreadable"; message: string };
+type UnreadableSubjectAddress =
+  | { kind: "unreadable"; message: string }
+  | { kind: "unavailable"; response: PublicCountryUnavailable };
+
+const unavailableAddress = (response: PublicCountryUnavailable) =>
+  status(503, response);
+type UnavailableAddressStatus = ReturnType<typeof unavailableAddress>;
 
 const unreadableAddress = (message: string) => status(400, { message });
 type UnreadableAddressStatus = ReturnType<typeof unreadableAddress>;
@@ -78,14 +87,20 @@ const buildGatedSubjectHandler = <
   followUp,
 }: SubjectHandlerOptions<TConfig, TRead> &
   FollowUpOptions<TConfig, TRead, TResult>) => {
-  const definition = createSafePublicHandler(
+  const definition = createSafeUncheckedBoundedPublicHandler(
     config,
     async function* (
       ctx: PublicHandlerContext<TConfig>,
     ): SafeHandlerGenerator<
-      TResult | NotFoundStatus | UnreadableAddressStatus
+      | TResult
+      | NotFoundStatus
+      | UnreadableAddressStatus
+      | UnavailableAddressStatus
     > {
       const located = locate(ctx);
+      if (located.kind === "unavailable") {
+        return Result.ok(unavailableAddress(located.response));
+      }
       if (located.kind === "unreadable") {
         return Result.ok(unreadableAddress(located.message));
       }
@@ -130,7 +145,8 @@ export const createSafePublicSubjectFollowUpHandler = <
   TResult extends NonNullable<unknown>,
 >(
   options: SubjectHandlerOptions<TConfig, TRead> &
-    FollowUpOptions<TConfig, TRead, TResult>,
+    FollowUpOptions<TConfig, TRead, TResult> &
+    NoInfer<ExactSuccessSchemaGuard<TConfig, TResult>>,
 ) => buildGatedSubjectHandler(options);
 
 /** The follow-up of a handler whose gated read is already the response. */
@@ -149,7 +165,8 @@ export const createSafePublicSubjectHandler = <
   TConfig extends PublicHandlerConfig,
   TRead extends NonNullable<unknown>,
 >(
-  options: SubjectHandlerOptions<TConfig, TRead>,
+  options: SubjectHandlerOptions<TConfig, TRead> &
+    NoInfer<ExactSuccessSchemaGuard<TConfig, TRead>>,
 ) =>
   buildGatedSubjectHandler({
     ...options,

@@ -111,7 +111,7 @@ describe("server module graph verification", () => {
       "export const route = 'catalogue';",
     );
 
-    expect(verifyServerModuleGraph({ serverDirectoryUrl })).resolves.toEqual({
+    expect(await verifyServerModuleGraph({ serverDirectoryUrl })).toEqual({
       loadedModuleCount: 2,
       toleratedFailures: [],
     });

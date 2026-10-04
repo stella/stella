@@ -10,6 +10,7 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 
 import { LIMITS } from "@/api/lib/limits";
+import { boundedString } from "@/api/lib/search/response-text-bounds";
 
 type DecisionHeadnoteSchemaByType = {
   readonly [Type in DecisionHeadnotePreview["type"]]: TSchema & {
@@ -29,8 +30,8 @@ const DECISION_HEADNOTE_SCHEMAS = {
     {
       type: t.Literal(TEXT_FIELD_TYPE.PRESENT),
       text: t.String({
+        ...boundedString(LIMITS.caseLawHeadnoteMaxChars * 4),
         minLength: 1,
-        maxLength: LIMITS.caseLawHeadnoteMaxChars,
       }),
       truncated: t.Boolean(),
     },
@@ -41,10 +42,13 @@ const DECISION_HEADNOTE_SCHEMAS = {
       type: t.Literal(DECISION_HEADNOTE_KEYWORDS),
       // The terms share the prose budget: a row is one row either way.
       items: t.Array(
-        t.String({ minLength: 1, maxLength: LIMITS.caseLawHeadnoteMaxChars }),
+        t.String({
+          ...boundedString(LIMITS.caseLawHeadnoteMaxChars * 4),
+          minLength: 1,
+        }),
         { minItems: 1, maxItems: LIMITS.caseLawHeadnoteKeywords },
       ),
-      omitted: t.Integer({ minimum: 0 }),
+      omitted: Type.Integer({ minimum: 0 }),
     },
     { additionalProperties: false },
   ),

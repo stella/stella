@@ -115,9 +115,6 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   auth: WAIVER_REASON.noTenantReadSurface,
   dev: WAIVER_REASON.noTenantReadSurface,
   "external-preview": WAIVER_REASON.noTenantReadSurface,
-  // Deployment-token-gated instance observability; reads the instance-wide
-  // registration list, so there is no per-tenant boundary to isolate.
-  operator: WAIVER_REASON.noTenantReadSurface,
   feedback: WAIVER_REASON.noTenantReadSurface,
   "folio-collab": WAIVER_REASON.noTenantReadSurface,
   health: WAIVER_REASON.noTenantReadSurface,
@@ -134,6 +131,8 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // workspace-scoped surface the A-vs-B RLS matrix can meaningfully isolate.
   sharepoint: WAIVER_REASON.noTenantReadSurface,
   smoke: WAIVER_REASON.noTenantReadSurface,
+  // Public corpus ingestion has no tenant data or tenant-facing read surface.
+  "soft-law": WAIVER_REASON.noTenantReadSurface,
   uploads: WAIVER_REASON.noTenantReadSurface,
   verify: WAIVER_REASON.noTenantReadSurface,
   // Static plain-text host-verification token from env; no database access.

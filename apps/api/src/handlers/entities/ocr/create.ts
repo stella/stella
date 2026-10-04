@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type {
   SafeHandlerGenerator,
   WorkspaceHandlerConfig,
@@ -35,7 +35,12 @@ const config = {
     "recognition batch. Returns the durable run and reports when that source " +
     "was already processed.",
   permissions: { entity: ["update"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: true,
+  },
   access: "write",
   body: createOcrBody,
   params: createOcrParams,

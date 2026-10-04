@@ -3,6 +3,10 @@ import * as v from "valibot";
 
 import packageJson from "../package.json" with { type: "json" };
 import {
+  readHttpActionAdmissionRefusal,
+  type CliActionAdmissionRefusal,
+} from "./action-admission-refusal.js";
+import {
   AUTH_FETCH_TIMEOUT_MS,
   CLI_REQUIRED_RESOURCE_SCOPES,
 } from "./auth/constants.js";
@@ -81,6 +85,7 @@ const CompatibilityCheckErrorBase: TaggedErrorClass<"CompatibilityCheckError"> =
 
 export class CompatibilityCheckError extends CompatibilityCheckErrorBase<{
   message: string;
+  admission?: CliActionAdmissionRefusal;
   cause?: unknown;
 }> {}
 
@@ -341,6 +346,13 @@ export const checkServerCompatibility = async (
         signal: AbortSignal.timeout(AUTH_FETCH_TIMEOUT_MS),
       });
       if (!response.ok) {
+        const admission = await readHttpActionAdmissionRefusal(response);
+        if (admission !== undefined) {
+          throw new CompatibilityCheckError({
+            message: admission.message,
+            admission,
+          });
+        }
         throw new CompatibilityCheckError({
           message: `Stella compatibility discovery responded ${response.status} at ${discoveryUrl.toString()}. Deploy an API that exposes the public compatibility contract before publishing this CLI.`,
         });

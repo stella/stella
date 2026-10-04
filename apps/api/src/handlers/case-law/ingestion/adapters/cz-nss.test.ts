@@ -19,6 +19,11 @@ import {
   test,
 } from "bun:test";
 
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_FIELD_KEYS,
+  TEXT_ABSENCE_REASONS,
+} from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
@@ -37,11 +42,15 @@ import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-ns
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
   absentDecisionTextFields,
+  storeDecisionTextFields,
+  readDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import {
   decodeSourceRawEnvelope,
   listingIdentityKey,
@@ -1103,7 +1112,176 @@ describe("cz-nss fetchPage", () => {
     setSystemTime();
   });
 
-  test("a full continuation page moves the cursor on within the day", async () => {
+  test("an uncounted search checkpoints its retry and refreshes the session", async () => {
+    const { requests } = installStub({
+      search: [
+        htmlResponse(SESSION_PAGE),
+        htmlResponse(
+          searchPage({ statedCount: 0, rows: [], withScript: false }),
+        ),
+      ],
+    });
+    const cursor = `${SLICE}:0`;
+    const failed = (await czNssAdapter.fetchPage(cursor, {})).unwrap();
+    expect(JSON.parse(failed.nextCursor ?? "")).toEqual({
+      date: SLICE,
+      page: 0,
+      missingCountAttempts: 1,
+    });
+    const sessionReads = requests.filter(
+      ({ method }) => method === "GET",
+    ).length;
+    const retried = await czNssAdapter.fetchPage(failed.nextCursor, {});
+    expect(Result.isError(retried)).toBe(false);
+    expect(Result.isError(retried) ? null : retried.value.nextCursor).toBe(
+      "2026-06-11:0",
+    );
+    expect(requests.filter(({ method }) => method === "GET").length).toBe(
+      sessionReads + 1,
+    );
+  });
+
+  test("persistent uncounted days reset their durable budget and return to plain cursors", async () => {
+    const recording = installRecordingLogger();
+    try {
+      installStub({
+        search: Array.from({ length: 7 }, () => htmlResponse(SESSION_PAGE)),
+      });
+      const cursor: { current: string | null } = { current: `${SLICE}:0` };
+      for (const attempt of [1, 2]) {
+        const result = (
+          await czNssAdapter.fetchPage(cursor.current, {})
+        ).unwrap();
+        cursor.current = result.nextCursor;
+        expect(JSON.parse(cursor.current ?? "")).toEqual({
+          date: SLICE,
+          page: 0,
+          missingCountAttempts: attempt,
+        });
+      }
+      const skipped = (
+        await czNssAdapter.fetchPage(cursor.current, {})
+      ).unwrap();
+      expect(skipped.nextCursor).toBe("2026-06-11:0");
+      expect(skipped.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 1,
+      });
+      cursor.current = skipped.nextCursor;
+      for (const attempt of [1, 2]) {
+        const result = (
+          await czNssAdapter.fetchPage(cursor.current, {})
+        ).unwrap();
+        cursor.current = result.nextCursor;
+        expect(JSON.parse(cursor.current ?? "")).toEqual({
+          date: "2026-06-11",
+          page: 0,
+          missingCountAttempts: attempt,
+        });
+      }
+      const nextDaySkipped = (
+        await czNssAdapter.fetchPage(cursor.current, {})
+      ).unwrap();
+      expect(nextDaySkipped.nextCursor).toBe("2026-06-12:0");
+      expect(
+        recording.records.filter(
+          ({ message }) => message === "case_law.ingestion.nss_unsettled_day",
+        ),
+      ).toHaveLength(2);
+      // The plain checkpoint remains usable after the retry budget resets.
+      installStub({
+        search: [
+          htmlResponse(
+            searchPage({ statedCount: 0, rows: [], withScript: false }),
+          ),
+        ],
+      });
+      const empty = (
+        await czNssAdapter.fetchPage(nextDaySkipped.nextCursor, {})
+      ).unwrap();
+      expect(empty.nextCursor).toBe("2026-06-13:0");
+    } finally {
+      recording.restore();
+    }
+  });
+
+  test("short parsed pages account for their gaps and advance across the whole stated day", async () => {
+    const recording = installRecordingLogger();
+    try {
+      const malformed = rowBlock({
+        ...MUNICIPAL_ROW,
+        displayedCaseNumber: "X".repeat(101),
+      });
+      expect(parseResultRows(malformed)).toHaveLength(0);
+      installStub({
+        search: [
+          htmlResponse(
+            searchPage({ statedCount: 2, rows: [MUNICIPAL_ROW] }) + malformed,
+          ),
+        ],
+      });
+      const short = (await czNssAdapter.fetchPage(`${SLICE}:0`, {})).unwrap();
+      expect(
+        short.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+      ).toEqual([MUNICIPAL_ROW.documentId]);
+      expect(short.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 1,
+      });
+      expect(short.nextCursor).toBe("2026-06-11:0");
+
+      installStub({
+        search: Array.from({ length: 3 }, () =>
+          htmlResponse(searchPage({ statedCount: 61, rows: [MUNICIPAL_ROW] })),
+        ),
+        continuation: [
+          htmlResponse(rowBlock(MUNICIPAL_ROW) + malformed),
+          htmlResponse(rowBlock(MUNICIPAL_ROW)),
+        ],
+      });
+      const first = (await czNssAdapter.fetchPage(`${SLICE}:0`, {})).unwrap();
+      expect(first.itemBuildFailures?.count).toBe(39);
+      expect(first.nextCursor).toBe(`${SLICE}:1`);
+      const second = (
+        await czNssAdapter.fetchPage(first.nextCursor, {})
+      ).unwrap();
+      expect(second.itemBuildFailures?.count).toBe(19);
+      expect(second.nextCursor).toBe(`${SLICE}:2`);
+      const third = (
+        await czNssAdapter.fetchPage(second.nextCursor, {})
+      ).unwrap();
+      expect(third.itemBuildFailures?.count).toBe(0);
+      expect(third.nextCursor).toBe("2026-06-11:0");
+      expect(
+        recording.records.filter(
+          ({ message }) => message === "case_law.ingestion.nss_listing_gap",
+        ),
+      ).toHaveLength(3);
+    } finally {
+      recording.restore();
+    }
+  }, 30_000);
+
+  test("a counted day without pagination state fails", async () => {
+    installStub({
+      search: [
+        htmlResponse(
+          searchPage({
+            statedCount: 1,
+            rows: [MUNICIPAL_ROW],
+            withScript: false,
+          }),
+        ),
+      ],
+    });
+    const result = await czNssAdapter.fetchPage(`${SLICE}:0`, {});
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.message).toContain("carried no pagination state");
+    }
+  });
+
+  test("a persisted plain cursor resumes its date and continuation page", async () => {
     // A continuation page is full at half the inline page's size, so a crawl
     // measuring it against the inline size ends the day here and never asks
     // for the records past it.
@@ -1127,10 +1305,15 @@ describe("cz-nss fetchPage", () => {
 
     const page = await czNssAdapter.fetchPage(`${SLICE}:1`, {});
 
-    expect(Result.isError(page)).toBe(false);
-    expect(Result.isError(page) ? null : page.value.nextCursor).toBe(
-      `${SLICE}:2`,
+    const resumed = page.unwrap();
+    expect(
+      resumed.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual(
+      fullPageRows(CZ_NSS_CONTINUATION_PAGE_ROWS).map(
+        ({ documentId }) => documentId,
+      ),
     );
+    expect(resumed.nextCursor).toBe(`${SLICE}:2`);
   }, 30_000);
 
   test("an empty continuation body fails the page instead of ending the day", async () => {
@@ -1244,18 +1427,20 @@ describe("cz-nss buildDecision", () => {
     if (built.type !== "built") {
       return;
     }
-    expect(built.decision.caseNumber).toBe("1 Az 4/2026");
+    expect(built.decision.caseNumber === "1 Az 4/2026").toBe(true);
     // The sheet is stored beside the docket, with the reference as published,
     // so nothing has to guess how the court set the two together.
-    expect(built.decision.sheetNumber).toBe("79");
-    expect(built.decision.metadata["publishedCaseNumber"]).toBe(
-      "1 Az 4/2026 - 79",
-    );
+    expect(built.decision.sheetNumber === "79").toBe(true);
+    expect(
+      built.decision.metadata["publishedCaseNumber"] === "1 Az 4/2026 - 79",
+    ).toBe(true);
     expect(built.decision.language).toBe("cs");
     // The portal lists the city court's decision; the ECLI names the court,
     // so the row is stored under it rather than under the portal's own.
-    expect(built.decision.court).toBe("Městský soud v Praze");
-    expect(built.decision.ecli).toBe("ECLI:CZ:MSPH:2026:1.Az.4.2026.79");
+    expect(built.decision.court === "Městský soud v Praze").toBe(true);
+    expect(built.decision.ecli === "ECLI:CZ:MSPH:2026:1.Az.4.2026.79").toBe(
+      true,
+    );
     expect(built.decision.fulltext ?? "").not.toBe("");
     // Silent drift here is the whole failure mode: a walk that keys a row one
     // way and a build that stores it another leaves the slice permanently
@@ -1290,12 +1475,14 @@ describe("cz-nss buildDecision", () => {
     if (built.type !== "built") {
       return;
     }
-    expect(built.decision.identifiers).toEqual([
-      {
-        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-        value: "č. 4600/2026 Sb. NSS",
-      },
-    ]);
+    expect(
+      Bun.deepEquals(built.decision.identifiers, [
+        {
+          type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+          value: "č. 4600/2026 Sb. NSS",
+        },
+      ]),
+    ).toBe(true);
   });
 
   test("a payload parked before the sheet was kept still builds", async () => {
@@ -1319,9 +1506,11 @@ describe("cz-nss buildDecision", () => {
     if (built.type !== "built") {
       return;
     }
-    expect(built.decision.caseNumber).toBe("1 Az 4/2026");
+    expect(built.decision.caseNumber === "1 Az 4/2026").toBe(true);
     expect(built.decision.sheetNumber).toBeUndefined();
-    expect(built.decision.metadata["publishedCaseNumber"]).toBe("1 Az 4/2026");
+    expect(
+      built.decision.metadata["publishedCaseNumber"] === "1 Az 4/2026",
+    ).toBe(true);
   });
 
   /**
@@ -1333,7 +1522,7 @@ describe("cz-nss buildDecision", () => {
     const withSheet = await crawledWithReference("1 Az 4/2026-79");
     const withoutSheet = await crawledWithReference("1 Az 4/2026");
 
-    expect(withSheet.sheetNumber).toBe("79");
+    expect(withSheet.sheetNumber === "79").toBe(true);
     expect(withoutSheet.sheetNumber).toBeUndefined();
     expect(withSheet.rawHash).not.toBe(withoutSheet.rawHash);
   });
@@ -1360,7 +1549,9 @@ describe("cz-nss buildDecision", () => {
     // re-spacing its citations would rewrite its whole corpus, and a legacy
     // row would never agree with the crawl that re-reads it.
     expect(spaced.rawHash).toBe(tight.rawHash);
-    expect(spaced.metadata["publishedCaseNumber"]).toBe("1 Az 4/2026 - 79");
+    expect(spaced.metadata["publishedCaseNumber"] === "1 Az 4/2026 - 79").toBe(
+      true,
+    );
   });
 
   test("replays stored HTML to the same result without contacting the court", async () => {
@@ -1404,7 +1595,7 @@ describe("cz-nss buildDecision", () => {
     // Named as well as covered by the equality above: the replay reads the
     // sheet back off the stored reference, and a replay that dropped it would
     // clear the column on every row it touched.
-    expect(outcome.result.sheetNumber).toBe("79");
+    expect(outcome.result.sheetNumber === "79").toBe(true);
   });
 
   /** Replay one stored row, stated as the database holds it. */
@@ -1457,10 +1648,10 @@ describe("cz-nss buildDecision", () => {
     if (outcome.type !== "parsed") {
       return;
     }
-    expect(outcome.result.sheetNumber).toBe("79");
-    expect(outcome.result.metadata["publishedCaseNumber"]).toBe(
-      "1 Az 4/2026 - 79",
-    );
+    expect(outcome.result.sheetNumber === "79").toBe(true);
+    expect(
+      outcome.result.metadata["publishedCaseNumber"] === "1 Az 4/2026 - 79",
+    ).toBe(true);
     // The reference is stored as the court set it, spacing and all, and the
     // row still hashes as the crawl that re-reads it would hash it.
     expect(outcome.result.rawHash).toBe(crawled.rawHash);
@@ -1478,8 +1669,8 @@ describe("cz-nss buildDecision", () => {
     }
     // The case number is left exactly as stored: the replay's identity check
     // compares it against the row, and the backfill owns that rewrite.
-    expect(outcome.result.caseNumber).toBe("1 Az 4/2026 - 79");
-    expect(outcome.result.sheetNumber).toBe("79");
+    expect(outcome.result.caseNumber === "1 Az 4/2026 - 79").toBe(true);
+    expect(outcome.result.sheetNumber === "79").toBe(true);
   });
 
   test("a replay leaves a metadata reference naming another case alone", async () => {
@@ -1495,7 +1686,9 @@ describe("cz-nss buildDecision", () => {
     // Metadata is the publisher's, not ours: a field naming another docket
     // buys this row no sheet.
     expect(outcome.result.sheetNumber).toBeUndefined();
-    expect(outcome.result.metadata["publishedCaseNumber"]).toBe("1 Az 4/2026");
+    expect(
+      outcome.result.metadata["publishedCaseNumber"] === "1 Az 4/2026",
+    ).toBe(true);
   });
 
   /** The court's own words, as it writes them under `Právní věta (text)`. */
@@ -1529,11 +1722,201 @@ describe("cz-nss buildDecision", () => {
   test("the court's headnote reaches the decision text fields", async () => {
     const decision = await crawledWithHeadnote(HEADNOTE);
 
-    expect(decision.textFields).toEqual({
-      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: HEADNOTE },
-    });
+    expect(
+      Bun.deepEquals(decision.textFields, {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: HEADNOTE },
+      }),
+    ).toBe(true);
     expect(decision.metadata).not.toHaveProperty("legalSentence");
+  });
+
+  test.each(["-", "–", "—", "−", "  --  ", "", " \n\t ", "\u00a0"])(
+    "crawl and replay retain a publisher placeholder (%j) as typed absence",
+    async (placeholder) => {
+      const decision = await crawledWithHeadnote(placeholder);
+      const expected = {
+        type: TEXT_FIELD_TYPE.ABSENT,
+        reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+      };
+      expect(decision.textFields.legalSentence).toEqual(expected);
+      const storedMetadata = storeDecisionTextFields(decision);
+      expect(storedMetadata).not.toHaveProperty("legalSentence");
+      expect(
+        readDecisionTextMetadata(storedMetadata).textFields.legalSentence,
+      ).toEqual(expected);
+
+      const reparse = czNssAdapter.reparseStoredRaw;
+      if (reparse === undefined) {
+        throw new TypeError("Expected cz-nss to implement stored-raw replay");
+      }
+      const replay = await reparse({
+        raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+        contentType: decision.sourceRawContentType ?? null,
+        metadata: { ...decision.metadata, legalSentence: HEADNOTE },
+        caseNumber: decision.caseNumber,
+        sourceDocumentId: decision.sourceDocumentId ?? null,
+        language: decision.language,
+        court: decision.court,
+        ecli: decision.ecli ?? null,
+        decisionDate: decision.decisionDate ?? null,
+        decisionType: decision.decisionType ?? null,
+        sourceUrl: decision.sourceUrl ?? null,
+        documentUrl: decision.documentUrl ?? null,
+      });
+      expect(replay.type).toBe("parsed");
+      if (replay.type !== "parsed") {
+        throw new TypeError("Expected the placeholder fixture to replay");
+      }
+      expect(replay.result.textFields.legalSentence).toEqual(expected);
+      expect(replay.result.rawHash).toBe(decision.rawHash);
+    },
+  );
+
+  test.each(DECISION_TEXT_FIELD_KEYS)(
+    "legacy replay classifies placeholders in %s without changing real text",
+    async (field) => {
+      for (const placeholder of ["-", "–", "—", "−", "", " \n\t ", "\u00a0"]) {
+        const { outcome } = await replayStored({
+          caseNumber: "1 Az 4/2026",
+          metadata: { [field]: placeholder },
+        });
+        expect(outcome.type).toBe("parsed");
+        if (outcome.type !== "parsed") {
+          throw new TypeError("Expected the placeholder fixture to replay");
+        }
+        expect(outcome.result.textFields[field]).toEqual({
+          type: TEXT_FIELD_TYPE.ABSENT,
+          reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+        });
+        expect(storeDecisionTextFields(outcome.result)).not.toHaveProperty(
+          field,
+        );
+      }
+
+      const real = await replayStored({
+        caseNumber: "1 Az 4/2026",
+        metadata: { [field]: HEADNOTE },
+      });
+      expect(real.outcome.type).toBe("parsed");
+      if (real.outcome.type !== "parsed") {
+        throw new TypeError("Expected the real-text fixture to replay");
+      }
+      expect(real.outcome.result.textFields[field]).toEqual({
+        type: TEXT_FIELD_TYPE.PRESENT,
+        text: toPlainText(HEADNOTE).unwrap(),
+      });
+    },
+  );
+
+  test.each(DECISION_TEXT_FIELD_KEYS)(
+    "replay preserves typed absence and malformed sidecars for %s",
+    async (field) => {
+      const sidecars = [
+        ...TEXT_ABSENCE_REASONS.filter(
+          (reason) => reason !== TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        ).map((reason) => ({ value: [{ field, reason }], reason })),
+        { value: "malformed", reason: TEXT_ABSENCE_REASON.PARSE_FAILED },
+        {
+          value: [{ field, reason: "invalid" }],
+          reason: TEXT_ABSENCE_REASON.PARSE_FAILED,
+        },
+      ];
+      for (const { value, reason } of sidecars) {
+        for (const text of [HEADNOTE, "—", " \n\t "]) {
+          const metadata = {
+            [field]: text,
+            [DECISION_TEXT_ABSENCE_METADATA_KEY]: value,
+          };
+          const before = readDecisionTextMetadata(metadata).textFields[field];
+          expect(before).toEqual({ type: TEXT_FIELD_TYPE.ABSENT, reason });
+          if (before.type !== TEXT_FIELD_TYPE.ABSENT) {
+            throw new TypeError(
+              "Expected the sidecar fixture to classify absence",
+            );
+          }
+          const { outcome } = await replayStored({
+            caseNumber: "1 Az 4/2026",
+            metadata,
+          });
+          expect(outcome.type).toBe("parsed");
+          if (outcome.type !== "parsed") {
+            throw new TypeError("Expected the typed-absence fixture to replay");
+          }
+          expect(outcome.result.textFields[field]).toEqual(before);
+        }
+      }
+    },
+  );
+
+  test("captured publisher detail recovers a quarantined legacy sentence", async () => {
+    const decision = await crawledWithHeadnote(HEADNOTE);
+    const metadata = {
+      ...decision.metadata,
+      legalSentence: "Quarantined legacy text.",
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+        {
+          field: "legalSentence",
+          reason: TEXT_ABSENCE_REASON.PARSE_FAILED,
+        },
+      ],
+    };
+    expect(readDecisionTextMetadata(metadata).textFields.legalSentence).toEqual(
+      {
+        type: TEXT_FIELD_TYPE.ABSENT,
+        reason: TEXT_ABSENCE_REASON.PARSE_FAILED,
+      },
+    );
+    const reparse = czNssAdapter.reparseStoredRaw;
+    if (reparse === undefined) {
+      throw new TypeError("Expected cz-nss to implement stored-raw replay");
+    }
+    const replay = await reparse({
+      raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+      contentType: decision.sourceRawContentType ?? null,
+      metadata,
+      caseNumber: decision.caseNumber,
+      sourceDocumentId: decision.sourceDocumentId ?? null,
+      language: decision.language,
+      court: decision.court,
+      ecli: decision.ecli ?? null,
+      decisionDate: decision.decisionDate ?? null,
+      decisionType: decision.decisionType ?? null,
+      sourceUrl: decision.sourceUrl ?? null,
+      documentUrl: decision.documentUrl ?? null,
+    });
+    expect(replay.type).toBe("parsed");
+    if (replay.type !== "parsed") {
+      throw new TypeError("Expected the captured detail fixture to replay");
+    }
+    expect(replay.result.textFields.legalSentence).toEqual(
+      decision.textFields.legalSentence,
+    );
+    expect(replay.result.rawHash).toBe(decision.rawHash);
+  });
+
+  test("placeholder and missing sentences refresh in both directions", async () => {
+    const missing = await crawledWithHeadnote();
+    for (const marker of ["", " \n\t ", "-", "—"]) {
+      const placeholder = await crawledWithHeadnote(marker);
+      expect(placeholder.textFields.legalSentence).not.toEqual(
+        missing.textFields.legalSentence,
+      );
+      expect(placeholder.rawHash).not.toBe(missing.rawHash);
+      for (const { existing, incoming } of [
+        { existing: missing, incoming: placeholder },
+        { existing: placeholder, incoming: missing },
+      ]) {
+        expect(
+          shouldSkipRefresh({
+            existingMetadata: storeDecisionTextFields(existing),
+            existingSourceHash: existing.rawHash,
+            incomingMetadata: storeDecisionTextFields(incoming),
+            incomingRawHash: incoming.rawHash,
+          }),
+        ).toBe(false);
+      }
+    }
   });
 
   test("the ano/ne flag beside the headnote is not the headnote", async () => {
@@ -1543,13 +1926,18 @@ describe("cz-nss buildDecision", () => {
     // `pravnivetaanv` states ano/ne for every decision and sits beside
     // `pravnivetaupravena`; a reader keyed on the shared prefix would store
     // "ne" as the sentence for the whole corpus.
-    expect(withHeadnote.textFields).toEqual({
-      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: HEADNOTE },
-    });
-    expect(without.textFields).toEqual(
-      absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    );
+    expect(
+      Bun.deepEquals(withHeadnote.textFields, {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: HEADNOTE },
+      }),
+    ).toBe(true);
+    expect(
+      Bun.deepEquals(
+        without.textFields,
+        absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      ),
+    ).toBe(true);
     expect(without.metadata).not.toHaveProperty("legalSentence");
   });
 
@@ -1614,17 +2002,24 @@ describe("cz-nss buildDecision", () => {
     ) {
       return;
     }
-    expect(recovered.result.textFields).toEqual({
-      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: HEADNOTE },
-    });
-    expect(legacy.result.textFields).toEqual(
-      absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    );
-    expect(storedText.result.textFields).toEqual({
-      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: HEADNOTE },
-    });
+    expect(
+      Bun.deepEquals(recovered.result.textFields, {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: HEADNOTE },
+      }),
+    ).toBe(true);
+    expect(
+      Bun.deepEquals(
+        legacy.result.textFields,
+        absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      ),
+    ).toBe(true);
+    expect(
+      Bun.deepEquals(storedText.result.textFields, {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        legalSentence: { type: TEXT_FIELD_TYPE.PRESENT, text: HEADNOTE },
+      }),
+    ).toBe(true);
     expect(recovered.result.metadata).not.toHaveProperty("legalSentence");
     expect(legacy.result.metadata).not.toHaveProperty("legalSentence");
     expect(storedText.result.metadata).not.toHaveProperty("legalSentence");
@@ -1750,7 +2145,7 @@ describe("cz-nss buildDecision", () => {
       return;
     }
     expect(built.decision.ecli).toBeUndefined();
-    expect(built.decision.court).toBe("Nejvyšší správní soud");
+    expect(built.decision.court === "Nejvyšší správní soud").toBe(true);
   });
 
   test("refuses a row that names no document at all", async () => {
@@ -1799,7 +2194,7 @@ describe("cz-nss buildDecision", () => {
     // Same call, one outcome, two dispositions: the crawl stores the decision
     // this carries as listing-only, the reconciliation parks it.
     expect(built.type).toBe("detail-unavailable");
-    expect(built.decision.caseNumber).toBe("1 Az 4/2026");
+    expect(built.decision.caseNumber === "1 Az 4/2026").toBe(true);
     expect(built.decision.isListingOnly).toBe(true);
   });
 });
@@ -2086,7 +2481,9 @@ describe("cz-nss reads the portal did not answer", () => {
     expect(built.type).toBe("detail-unavailable");
     expect(built.decision.isListingOnly).toBe(true);
     // The detail page was read and stays on the row.
-    expect(built.decision.ecli).toBe("ECLI:CZ:MSPH:2026:1.Az.4.2026.79");
+    expect(built.decision.ecli === "ECLI:CZ:MSPH:2026:1.Az.4.2026.79").toBe(
+      true,
+    );
     expect(
       warnings("case_law.ingestion.document_fetch_failed").at(0)?.attributes,
     ).toMatchObject({

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { lookupByKrsNumber } from "./client.js";
 import { KrsValidationError } from "./errors.js";
 import type { KrsLookupResponse } from "./types.js";
@@ -72,6 +74,7 @@ describe("lookupByKrsNumber (fixture)", () => {
 
     const controller = new AbortController();
     const lookup = lookupByKrsNumber("0000006865", {
+      observer: "unobserved",
       signal: controller.signal,
     });
     expect(signal?.aborted).toBe(false);
@@ -91,6 +94,8 @@ describe("lookupByKrsNumber (fixture)", () => {
   test("falls back to the RejS probe on a RejP 404", async () => {
     const associationBody = await readFixture("lookup-caritas.json");
     const seen: string[] = [];
+    let observedRequests = 0;
+    const observationErrors: unknown[] = [];
     restore = installFetchStub(async (input) => {
       const url = urlString(input);
       seen.push(url);
@@ -106,10 +111,21 @@ describe("lookupByKrsNumber (fixture)", () => {
       });
     });
 
-    const entity = await lookupByKrsNumber("0000198645");
+    const entity = await lookupByKrsNumber("0000198645", {
+      observer: {
+        onRequest: () => {
+          observedRequests += 1;
+        },
+        onError: (cause) => {
+          observationErrors.push(cause);
+        },
+      },
+    });
     expect(entity).not.toBeNull();
     expect(entity?.register).toBe("RejS");
     expect(seen).toHaveLength(2);
+    expect(observedRequests).toBe(seen.length);
+    expect(observationErrors).toEqual([]);
     expect(seen.at(0)).toContain("rejestr=P");
     expect(seen.at(1)).toContain("rejestr=S");
   });
@@ -122,7 +138,9 @@ describe("lookupByKrsNumber (fixture)", () => {
           headers: { "Content-Type": "application/json" },
         }),
     );
-    const entity = await lookupByKrsNumber("0000000001");
+    const entity = await lookupByKrsNumber("0000000001", {
+      observer: "unobserved",
+    });
     expect(entity).toBeNull();
   });
 
@@ -138,7 +156,10 @@ describe("lookupByKrsNumber (fixture)", () => {
       });
     });
 
-    await lookupByKrsNumber("0000198645", { register: "RejS" });
+    await lookupByKrsNumber("0000198645", {
+      observer: "unobserved",
+      register: "RejS",
+    });
     expect(seen).toHaveLength(1);
     expect(seen.at(0)).toContain("rejestr=S");
   });
@@ -160,7 +181,11 @@ describe("lookupByKrsNumber (fixture)", () => {
         ),
     );
 
-    expect(lookupByKrsNumber("0000006865")).rejects.toMatchObject({
+    expect(
+      await rejectionOf(
+        lookupByKrsNumber("0000006865", { observer: "unobserved" }),
+      ),
+    ).toMatchObject({
       name: "KrsAPIError",
       httpStatus: 500,
       upstreamTitle: "Internal Server Error",
@@ -173,21 +198,27 @@ describe("lookupByKrsNumber (fixture)", () => {
 // Validation
 // ---------------------------------------------------------------------------
 describe("lookupByKrsNumber validation", () => {
-  test("rejects shorter inputs (no implicit padding)", () => {
-    expect(lookupByKrsNumber("6865")).rejects.toBeInstanceOf(
-      KrsValidationError,
-    );
-    expect(lookupByKrsNumber("000006865")).rejects.toBeInstanceOf(
-      KrsValidationError,
-    );
+  test("rejects shorter inputs (no implicit padding)", async () => {
+    expect(
+      await rejectionOf(lookupByKrsNumber("6865", { observer: "unobserved" })),
+    ).toBeInstanceOf(KrsValidationError);
+    expect(
+      await rejectionOf(
+        lookupByKrsNumber("000006865", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(KrsValidationError);
   });
 
-  test("rejects non-digit inputs", () => {
-    expect(lookupByKrsNumber("000000abcd")).rejects.toBeInstanceOf(
-      KrsValidationError,
-    );
-    expect(lookupByKrsNumber("0000-006865")).rejects.toBeInstanceOf(
-      KrsValidationError,
-    );
+  test("rejects non-digit inputs", async () => {
+    expect(
+      await rejectionOf(
+        lookupByKrsNumber("000000abcd", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(KrsValidationError);
+    expect(
+      await rejectionOf(
+        lookupByKrsNumber("0000-006865", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(KrsValidationError);
   });
 });

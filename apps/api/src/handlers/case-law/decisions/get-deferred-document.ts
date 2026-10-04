@@ -84,6 +84,7 @@ const reparsedForDev = async (
           wireAst: documentAst,
         })),
         documentPending: false,
+        hasDocument: true,
         fulltext: null,
       };
 };
@@ -127,6 +128,7 @@ const hydrate = async (
   }
 
   const document = await readThroughDeferredDocument({
+    adapterKey: decision.source.adapterKey,
     decision: {
       id: decision.id,
       caseNumber: decision.caseNumber,
@@ -157,6 +159,7 @@ const hydrate = async (
       wireAst: omitDerivablePlainText(document.documentAst),
     })),
     documentPending: false,
+    hasDocument: true,
     // Mirrors the read: text is the fallback for a decision without a
     // usable AST, and a parsed document always has one.
     fulltext: null,

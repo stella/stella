@@ -1,5 +1,62 @@
 # @stll/workspace-ui
 
+## 0.11.21
+
+### Patch Changes
+
+- Updated dependencies [[`b8a1d41`](https://github.com/stella/stella/commit/b8a1d41da558c4c148fd696a714d56621ecb2db3)]:
+  - @stll/money@0.3.0
+  - @stll/calculations@0.1.2
+
+## 0.11.20
+
+### Patch Changes
+
+- Updated dependencies [[`019d735`](https://github.com/stella/stella/commit/019d735308d3baec6d4143c61b3b5a5e38fe8ce9)]:
+  - @stll/ui@0.42.0
+
+## 0.11.19
+
+### Patch Changes
+
+- Updated dependencies [[`9669e8a`](https://github.com/stella/stella/commit/9669e8acbb6460e3fbf32478eb0dd2c0a0c1c185)]:
+  - @stll/ui@0.41.0
+
+## 0.11.18
+
+### Patch Changes
+
+- [#4505](https://github.com/stella/stella/pull/4505) [`20902c2`](https://github.com/stella/stella/commit/20902c2f6c7adc4899504538e2ce701b51eb08e5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Declare React type packages as optional peers so isolated and global-store installs resolve React types.
+- Updated dependencies [[`7511562`](https://github.com/stella/stella/commit/75115627f781b29b63f3dc7cd92ae82506a89367), [`20902c2`](https://github.com/stella/stella/commit/20902c2f6c7adc4899504538e2ce701b51eb08e5)]:
+  - @stll/ui@0.40.2
+
+## 0.11.17
+
+### Patch Changes
+
+- Updated dependencies [[`96a31ab`](https://github.com/stella/stella/commit/96a31abbb7f6ddae0aa4c1ea857559b714190ff1)]:
+  - @stll/ui@0.40.0
+
+## 0.11.16
+
+### Patch Changes
+
+- Updated dependencies [[`8c81796`](https://github.com/stella/stella/commit/8c81796e512762094793acc16eb13f3e49c7cc61), [`deb3ce4`](https://github.com/stella/stella/commit/deb3ce49c36f89c6371731d6706e777ad8fbed3b)]:
+  - @stll/ui@0.39.0
+
+## 0.11.15
+
+### Patch Changes
+
+- Updated dependencies [[`3f1bdaf`](https://github.com/stella/stella/commit/3f1bdafb817d599f49d21c5d853ea76720278236), [`f215762`](https://github.com/stella/stella/commit/f2157623605b1a08efbed05866773da8b8618d93)]:
+  - @stll/ui@0.38.0
+
+## 0.11.14
+
+### Patch Changes
+
+- [#4203](https://github.com/stella/stella/pull/4203) [`a78e2c4`](https://github.com/stella/stella/commit/a78e2c4172bfb9b61d120cb635248dc70e4f0178) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove unused dependency declarations.
+
 ## 0.11.13
 
 ### Patch Changes

@@ -29,7 +29,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 512,
+          "maxLength": 9784,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -165,7 +165,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:search",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` carries phrasings of one question and merges their results; matchedQueries names the phrasings behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). Facets and total describe ONE query's whole set: first page of a single-query call only, null otherwise. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Each hit carries citationAuthority (the score ranking blends in), matchingPassages, a route-independent resourceName and caseNumber, its citable reference: not always a docket. read_case_law_decision types it; read_case_law_citations gives citing polarity.",
+    "description": "Search case law within one country. \`queries\` carries phrasings of one question and merges their results; matchedQueries names the phrasings behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is not counted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Each hit carries citationAuthority (the score ranking blends in), matchingPassages, a route-independent resourceName and caseNumber, its citable reference: not always a docket. read_case_law_decision types it; read_case_law_citations gives citing polarity.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -204,7 +204,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1623,
+          "maxLength": 12450,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
@@ -215,6 +215,33 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "x-stella-agent-input": {
             "kind": "filter"
           }
+        },
+        "courts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "minItems": 1,
+          "maxItems": 16,
+          "description": "Match any listed court. For Czech apex courts use [\\"NS\\", \\"NSS\\", \\"ÚS\\"]. Combined with court, both filters must match. Use a JSON array of strings; a single string is read as a one-item list.",
+          "x-stella-agent-input": {
+            "kind": "string-list"
+          }
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Exact publisher category from metadata.category, for example \\"A\\" or \\"B\\"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
+        "has_legal_sentence": {
+          "type": "boolean",
+          "description": "True requires a non-empty stored legal sentence (právní věta); false selects decisions without one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable."
         },
         "country": {
           "type": "string",
@@ -375,7 +402,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read case-law decisions by id. Every \`decision_ids[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries the decision (metadata, text fields, plain text, source URLs, resourceName, citation ids), while \`not_found\` (no such public decision) and \`pending\` (its publisher document is not stored yet) carry a message. Prefer one batched call over one per decision; the call's text budget is shared, so read one id alone for a whole decision's text. It does NOT say how the citing courts treated a decision: its citation entries carry no treatment and no surrounding text. For that call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Long text and citation lists come back in windows; pass an entry's nextCursor back as cursor with that one id.",
+    "description": "Read decisions by \`decision_ids[]\`, answered in input order. Batch ids share the text budget; \`max_chars\` sizes one id’s text window. Static details appear only on the cursor-less window. A single id also gets up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to jump there. \`include\` selects optional fields on any window; [] returns text and identity only. Text and unfinished citation lists are paged: pass nextCursor with that one id. Citation ids carry neither treatment nor surrounding text; for those call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }).",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -400,11 +427,39 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "maxItems": 20,
           "description": "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest."
         },
+        "max_chars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8000,
+          "description": "Text window size, 1–8000 characters. Accepted only alongside a single decision id. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
         "cursor": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id."
+        },
+        "include": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "details",
+              "metadata",
+              "textFields",
+              "source",
+              "citations",
+              "outline"
+            ],
+            "type": "string"
+          },
+          "description": "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions), outline (single decision only). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
+          "x-stella-agent-input": {
+            "kind": "string-list"
+          }
         }
       }
     }
@@ -893,7 +948,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1844,
+          "maxLength": 5364,
           "description": "Opaque cursor from a previous search_legislation call"
         }
       }
@@ -986,7 +1041,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number."
+                "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
               },
               "as_of": {
                 "type": "string",
@@ -1047,7 +1102,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number."
+          "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
         },
         "language": {
           "type": "string",
@@ -1144,7 +1199,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "allow_partial"
           ],
           "type": "string",
-          "description": "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+          "description": "Require a complete fill by default (every placeholder filled, every AI-drafted field written, every AI-decided condition decided); use allow_partial only for an intentionally incomplete document.",
           "default": "require_complete"
         },
         "output_mode": {
@@ -1236,7 +1291,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "allow_partial"
           ],
           "type": "string",
-          "description": "Require every placeholder by default; use allow_partial only for an intentionally incomplete document.",
+          "description": "Require a complete fill by default (every placeholder filled, every AI-drafted field written, every AI-decided condition decided); use allow_partial only for an intentionally incomplete document.",
           "default": "require_complete"
         }
       }
@@ -2782,7 +2837,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 512,
+          "maxLength": 4154,
           "description": "Opaque cursor from the previous page"
         },
         "limit": {
@@ -3083,7 +3138,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "check_counterparty",
     "scope": "stella:read",
     "access": "read",
-    "description": "Screen a company or a person against an official register for due diligence. \`check\` picks the source; \`subject\` is a company ID, a tax ID or a person by name and birth date. Returns one outcome: clear (the source answered and lists nothing adverse), found (the adverse records), not-registered (the source holds no record, e.g. not a VAT payer; not a clearance), unavailable (the source did not answer: the subject is NOT cleared; retry later or say the check could not run), or not-covered (the source cannot screen this subject type, or needs the tax ID because one derived from the company ID was not on file). Person matches rely on name and birth date: compare the record before relying on one.",
+    "description": "Screen a company or person for due diligence. \`check\` picks the source. A register check returns one outcome: clear, found (adverse records), not-registered (no record; not a clearance), unavailable (no answer: NOT cleared) or not-covered (cannot screen this subject, or needs the tax ID). The sanctions check returns one outcome per list in \`lists\`, with whether it binds the firm: clear or possible-match (resembling entries with score and conflicting fields; each needs human review, none is confirmed), naming the edition screened; or unavailable (stale, not loaded, or the company name unreadable: NOT cleared), whose edition fields name the latest edition on file, not one screened. Top-level status is clear only when every list is. Person matches rest on name and birth date: compare the record first.",
     "annotations": {
       "title": "Check counterparty",
       "destructiveHint": false,
@@ -3101,16 +3156,17 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "check": {
           "enum": [
             "cz-insolvency",
-            "cz-vat-reliability"
+            "cz-vat-reliability",
+            "sanctions"
           ],
           "type": "string",
-          "description": "Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings; takes a company or a person. cz-vat-reliability: the Czech VAT register, unreliable-payer status and published bank accounts; takes a tax ID, or a company ID sent as CZ + IČO and marked derived. Use an advertised value; case and surrounding whitespace are normalized.",
+          "description": "cz-insolvency: ISIR proceedings, company ID or person with full birth date. cz-vat-reliability: unreliable payer and bank accounts, tax ID or derived CZ+IČO. sanctions: all EU, UN and national lists; company ID, organization name, or person with any known birth date and nationalities. Use an advertised value; case and surrounding whitespace are normalized.",
           "x-stella-agent-input": {
             "kind": "enum"
           }
         },
         "subject": {
-          "description": "The company or person to screen",
+          "description": "Subject to screen",
           "anyOf": [
             {
               "type": "object",
@@ -3119,14 +3175,30 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   "enum": [
                     "company-id"
                   ],
-                  "description": "A registered business, by its national business ID.",
+                  "description": "Business ID",
                   "type": "string"
                 },
                 "company_id": {
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 32,
-                  "description": "National business ID in the check's country, e.g. the Czech IČO 26863154"
+                  "description": "Business ID (e.g. IČO 26863154); sanctions resolves its registered name."
+                },
+                "country": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "description": "ID country: CZ (default) or SK; register checks cover CZ only. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+                  "x-stella-agent-input": {
+                    "kind": "country",
+                    "country": {
+                      "spelling": "alpha-2",
+                      "admitted": [
+                        "CZ",
+                        "SK"
+                      ],
+                      "tool": "check_counterparty"
+                    }
+                  }
                 }
               },
               "required": [
@@ -3142,14 +3214,14 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   "enum": [
                     "tax-id"
                   ],
-                  "description": "A taxpayer, by its tax ID.",
+                  "description": "Taxpayer",
                   "type": "string"
                 },
                 "tax_id": {
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 32,
-                  "description": "Tax ID in the check's country, e.g. the Czech DIČ CZ45274649"
+                  "description": "Tax ID, e.g. DIČ CZ45274649"
                 }
               },
               "required": [
@@ -3165,7 +3237,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   "enum": [
                     "person"
                   ],
-                  "description": "A natural person, by name and birth date.",
+                  "description": "Person",
                   "type": "string"
                 },
                 "first_name": {
@@ -3178,23 +3250,154 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   "type": "string",
                   "minLength": 2,
                   "maxLength": 100,
-                  "description": "Last name (surname)"
+                  "description": "Surname"
                 },
                 "birth_date": {
                   "type": "string",
                   "format": "date",
                   "maxLength": 10,
-                  "description": "Birth date. Use ISO YYYY-MM-DD; unambiguous localized calendar dates are normalized.",
+                  "description": "Full birth date; use date_of_birth for partial dates, never invent a day. Use ISO YYYY-MM-DD; unambiguous localized calendar dates are normalized.",
                   "x-stella-agent-input": {
                     "kind": "date"
                   }
+                },
+                "date_of_birth": {
+                  "description": "Birth date at known precision, as read_contact returns.",
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "precision": {
+                          "enum": [
+                            "year"
+                          ],
+                          "type": "string"
+                        },
+                        "year": {
+                          "type": "integer",
+                          "minimum": 1000,
+                          "maximum": 9999
+                        }
+                      },
+                      "required": [
+                        "precision",
+                        "year"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "precision": {
+                          "enum": [
+                            "month"
+                          ],
+                          "type": "string"
+                        },
+                        "year": {
+                          "type": "integer",
+                          "minimum": 1000,
+                          "maximum": 9999
+                        },
+                        "month": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 12
+                        }
+                      },
+                      "required": [
+                        "precision",
+                        "year",
+                        "month"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "precision": {
+                          "enum": [
+                            "day"
+                          ],
+                          "type": "string"
+                        },
+                        "year": {
+                          "type": "integer",
+                          "minimum": 1000,
+                          "maximum": 9999
+                        },
+                        "month": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 12
+                        },
+                        "day": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 31
+                        }
+                      },
+                      "required": [
+                        "precision",
+                        "year",
+                        "month",
+                        "day"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "nationality_codes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "description": "Nationality country. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+                    "x-stella-agent-input": {
+                      "kind": "country",
+                      "country": {
+                        "spelling": "alpha-2",
+                        "tool": "check_counterparty"
+                      }
+                    }
+                  },
+                  "maxItems": 250,
+                  "description": "Known nationalities for sanctions"
                 }
               },
               "required": [
                 "type",
                 "first_name",
-                "last_name",
-                "birth_date"
+                "last_name"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "organization"
+                  ],
+                  "description": "Organization name (sanctions only)",
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512,
+                  "description": "Registered name"
+                },
+                "company_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32,
+                  "description": "Known registration number; screened with the name"
+                }
+              },
+              "required": [
+                "type",
+                "name"
               ],
               "additionalProperties": false
             }
@@ -3447,7 +3650,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "link_matter_contact",
     "scope": "stella:matters_write",
     "access": "write",
-    "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass matter_contact_id (precise, from list_matters) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter.",
+    "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass matter_contact_id (precise, from list_matters) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter. At the contact limit, unlink an existing matter_contact_id (without role) before linking another contact.",
     "annotations": {
       "title": "Link contact to matter",
       "destructiveHint": false,
@@ -3558,7 +3761,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "save_clause",
     "scope": "stella:knowledge_write",
     "access": "write",
-    "description": "Create or update a clause in the organization's clause library. Omit clause_id to create (title and body required); pass clause_id to update. body is an ordered array of paragraphs, each with text and optional style, level, runs, list_kind, list_level, is_directive, directive_kind, and directive_expression. category_id, language, description, usage_notes, and metadata accept null to clear them on update. Set snapshot_version true on an update to also append a version snapshot of the body. Returns the clause id.",
+    "description": "Create or update a clause in the organization's clause library. Omit clause_id to create (title and body required); pass clause_id to update. body is an ordered array of paragraphs, each with text and optional style, level, runs, list_kind, list_level, is_directive, directive_kind, and directive_expression. Use balanced {% ... %} tags. Keep num(), ref(), clause() and ai(adapt=true) in the template body. category_id, language, description, usage_notes, and metadata accept null to clear them on update. Set snapshot_version true on an update to also append a version snapshot of the body. Returns the clause id.",
     "annotations": {
       "title": "Save clause",
       "destructiveHint": false,
@@ -3589,7 +3792,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "properties": {
               "text": {
                 "type": "string",
-                "description": "Paragraph plain text"
+                "description": "Paragraph text; directive paragraphs use balanced literal tags, e.g. {% if enabled %} ... {% endif %}."
               },
               "style": {
                 "type": "string",
@@ -3664,6 +3867,24 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           },
           "minItems": 1,
           "description": "Ordered clause body paragraphs; required when creating. Each paragraph carries text and optional formatting."
+        },
+        "expected_body": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "Paragraph text from the read body"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "additionalProperties": {}
+          },
+          "minItems": 1,
+          "description": "Body from your last read; update only if the current body still matches. On conflict, read the clause again before saving."
         },
         "category_id": {
           "anyOf": [
@@ -6455,7 +6676,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 512,
+          "maxLength": 9784,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -6591,7 +6812,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "scope": "stella:search_anonymized",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` carries phrasings of one question and merges their results; matchedQueries names the phrasings behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). Facets and total describe ONE query's whole set: first page of a single-query call only, null otherwise. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Each hit carries citationAuthority (the score ranking blends in), matchingPassages, a route-independent resourceName and caseNumber, its citable reference: not always a docket. read_case_law_decision types it; read_case_law_citations gives citing polarity.",
+    "description": "Search case law within one country. \`queries\` carries phrasings of one question and merges their results; matchedQueries names the phrasings behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is not counted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Each hit carries citationAuthority (the score ranking blends in), matchingPassages, a route-independent resourceName and caseNumber, its citable reference: not always a docket. read_case_law_decision types it; read_case_law_citations gives citing polarity.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -6630,7 +6851,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1623,
+          "maxLength": 12450,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
@@ -6641,6 +6862,33 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "x-stella-agent-input": {
             "kind": "filter"
           }
+        },
+        "courts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "minItems": 1,
+          "maxItems": 16,
+          "description": "Match any listed court. For Czech apex courts use [\\"NS\\", \\"NSS\\", \\"ÚS\\"]. Combined with court, both filters must match. Use a JSON array of strings; a single string is read as a one-item list.",
+          "x-stella-agent-input": {
+            "kind": "string-list"
+          }
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Exact publisher category from metadata.category, for example \\"A\\" or \\"B\\"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
+        "has_legal_sentence": {
+          "type": "boolean",
+          "description": "True requires a non-empty stored legal sentence (právní věta); false selects decisions without one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable."
         },
         "country": {
           "type": "string",
@@ -6801,7 +7049,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "scope": "stella:read_anonymized",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read case-law decisions by id. Every \`decision_ids[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries the decision (metadata, text fields, plain text, source URLs, resourceName, citation ids), while \`not_found\` (no such public decision) and \`pending\` (its publisher document is not stored yet) carry a message. Prefer one batched call over one per decision; the call's text budget is shared, so read one id alone for a whole decision's text. It does NOT say how the citing courts treated a decision: its citation entries carry no treatment and no surrounding text. For that call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Long text and citation lists come back in windows; pass an entry's nextCursor back as cursor with that one id.",
+    "description": "Read decisions by \`decision_ids[]\`, answered in input order. Batch ids share the text budget; \`max_chars\` sizes one id’s text window. Static details appear only on the cursor-less window. A single id also gets up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to jump there. \`include\` selects optional fields on any window; [] returns text and identity only. Text and unfinished citation lists are paged: pass nextCursor with that one id. Citation ids carry neither treatment nor surrounding text; for those call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }).",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -6826,11 +7074,39 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "maxItems": 20,
           "description": "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest."
         },
+        "max_chars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8000,
+          "description": "Text window size, 1–8000 characters. Accepted only alongside a single decision id. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
         "cursor": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id."
+        },
+        "include": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "details",
+              "metadata",
+              "textFields",
+              "source",
+              "citations",
+              "outline"
+            ],
+            "type": "string"
+          },
+          "description": "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions), outline (single decision only). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
+          "x-stella-agent-input": {
+            "kind": "string-list"
+          }
         }
       }
     }
@@ -7014,7 +7290,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1844,
+          "maxLength": 5364,
           "description": "Opaque cursor from a previous search_legislation call"
         }
       }
@@ -7107,7 +7383,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number."
+                "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
               },
               "as_of": {
                 "type": "string",
@@ -7168,7 +7444,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number."
+          "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
         },
         "language": {
           "type": "string",
@@ -8008,7 +8284,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 512,
+          "maxLength": 9675,
           "description": "Opaque cursor from a previous search call to fetch the next page"
         }
       }
@@ -8054,7 +8330,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     "scope": "stella:search",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` carries phrasings of one question and merges their results; matchedQueries names the phrasings behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). Facets and total describe ONE query's whole set: first page of a single-query call only, null otherwise. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Each hit carries citationAuthority (the score ranking blends in), matchingPassages, a route-independent resourceName and caseNumber, its citable reference: not always a docket. read_case_law_decision types it; read_case_law_citations gives citing polarity.",
+    "description": "Search case law within one country. \`queries\` carries phrasings of one question and merges their results; matchedQueries names the phrasings behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is not counted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Each hit carries citationAuthority (the score ranking blends in), matchingPassages, a route-independent resourceName and caseNumber, its citable reference: not always a docket. read_case_law_decision types it; read_case_law_citations gives citing polarity.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -8093,7 +8369,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1623,
+          "maxLength": 12450,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
@@ -8104,6 +8380,33 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "x-stella-agent-input": {
             "kind": "filter"
           }
+        },
+        "courts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "minItems": 1,
+          "maxItems": 16,
+          "description": "Match any listed court. For Czech apex courts use [\\"NS\\", \\"NSS\\", \\"ÚS\\"]. Combined with court, both filters must match. Use a JSON array of strings; a single string is read as a one-item list.",
+          "x-stella-agent-input": {
+            "kind": "string-list"
+          }
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Exact publisher category from metadata.category, for example \\"A\\" or \\"B\\"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable. Omit it to search without this filter; a placeholder such as \\"all\\" or \\"-\\" reads as no filter.",
+          "x-stella-agent-input": {
+            "kind": "filter"
+          }
+        },
+        "has_legal_sentence": {
+          "type": "boolean",
+          "description": "True requires a non-empty stored legal sentence (právní věta); false selects decisions without one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable."
         },
         "country": {
           "type": "string",
@@ -8232,7 +8535,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read case-law decisions by id. Every \`decision_ids[]\` entry is answered on its own, in input order, under \`status\`: \`found\` carries the decision (metadata, text fields, plain text, source URLs, resourceName, citation ids), while \`not_found\` (no such public decision) and \`pending\` (its publisher document is not stored yet) carry a message. Prefer one batched call over one per decision; the call's text budget is shared, so read one id alone for a whole decision's text. It does NOT say how the citing courts treated a decision: its citation entries carry no treatment and no surrounding text. For that call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). Long text and citation lists come back in windows; pass an entry's nextCursor back as cursor with that one id.",
+    "description": "Read decisions by \`decision_ids[]\`, answered in input order. Batch ids share the text budget; \`max_chars\` sizes one id’s text window. Static details appear only on the cursor-less window. A single id also gets up to 100 outline headings or numbered paragraphs: pass an outline cursor with that id to jump there. \`include\` selects optional fields on any window; [] returns text and identity only. Text and unfinished citation lists are paged: pass nextCursor with that one id. Citation ids carry neither treatment nor surrounding text; for those call read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }).",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -8257,11 +8560,39 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "maxItems": 20,
           "description": "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest."
         },
+        "max_chars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8000,
+          "description": "Text window size, 1–8000 characters. Accepted only alongside a single decision id. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
         "cursor": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id."
+        },
+        "include": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "details",
+              "metadata",
+              "textFields",
+              "source",
+              "citations",
+              "outline"
+            ],
+            "type": "string"
+          },
+          "description": "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions), outline (single decision only). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
+          "x-stella-agent-input": {
+            "kind": "string-list"
+          }
         }
       }
     }
@@ -8419,7 +8750,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1844,
+          "maxLength": 5364,
           "description": "Opaque cursor from a previous search_legislation call"
         }
       }
@@ -8512,7 +8843,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 256,
-                "description": "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number."
+                "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
               },
               "as_of": {
                 "type": "string",
@@ -8573,7 +8904,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number."
+          "description": "Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes."
         },
         "language": {
           "type": "string",

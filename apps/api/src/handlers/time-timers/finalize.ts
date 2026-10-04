@@ -1,5 +1,9 @@
 import { Result } from "better-result";
+import type { InferOk } from "better-result";
 import { and, eq } from "drizzle-orm";
+
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import type { TimeEntryActivityGroup } from "@stll/api-contract";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -14,10 +18,14 @@ import {
 } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { readTimePolicy } from "@/api/lib/billing-time";
+import { lockTimePolicy } from "@/api/lib/billing-time";
+import type { TimePolicy } from "@/api/lib/billing-time";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import {
+  insertPreparedInternalTimeEntry,
   insertPreparedTimeEntry,
+  lockInternalTimeEntryCapacity,
+  prepareInternalTimeEntryInsert,
   lockTimeEntryCapacity,
   prepareTimeEntryInsert,
 } from "@/api/lib/billing/time-entry-insert";
@@ -41,10 +49,73 @@ import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const CONFIRMED_ENTRY_COLUMNS = {
   id: timeEntries.id,
+  activityGroup: timeEntries.activityGroup,
   durationMinutes: timeEntries.durationMinutes,
   billedMinutes: timeEntries.billedMinutes,
 };
 type TimeEntryRow = typeof timeEntries.$inferSelect;
+// Exact legacy values travel together; every persisted field is either here
+// or explicitly classified as contextual, recomputed, or reset below.
+// The no-charge disposition and invoice wording were written for the draft's
+// own matter; completing it in another matter starts them over, as it does the
+// rate snapshot.
+const preservedLegacyBilling = (legacy: TimeEntryRow, sameMatter: boolean) => ({
+  dateWorked: legacy.dateWorked,
+  timezoneId: legacy.timezoneId,
+  narrativeLanguage: legacy.narrativeLanguage,
+  noCharge: sameMatter ? legacy.noCharge : false,
+  invoiceNarrative: sameMatter ? legacy.invoiceNarrative : null,
+  taskCode: legacy.taskCode,
+  activityCode: legacy.activityCode,
+});
+const CONTEXTUAL_OR_RESET_LEGACY_FIELDS = [
+  // Identity, matter context and owner are validated for the replacement.
+  "id",
+  "organizationId",
+  "workspaceId",
+  "userId",
+  "activityGroup",
+  "workItemId",
+  // Rate and currency retain their snapshot only in the same matter; the owner
+  // can override billability, and completion supplies the timer narrative.
+  "rateAtEntry",
+  "currency",
+  "billable",
+  "narrative",
+  // Elapsed time, lifecycle and approval provenance belong to the new entry.
+  "durationMinutes",
+  "billedMinutes",
+  "status",
+  "source",
+  "invoiceId",
+  "invoiceAttachment",
+  "splitGroupId",
+  "timerStartedAt",
+  "timerStoppedAt",
+  "createdAt",
+  "updatedAt",
+  "approverUserId",
+  "approvedByUserId",
+  "approvedAt",
+  "returnedByUserId",
+  "returnedAt",
+  "returnComment",
+] as const satisfies readonly (keyof TimeEntryRow)[];
+true satisfies UnprojectedColumns<
+  TimeEntryRow,
+  ReturnType<typeof preservedLegacyBilling>,
+  (typeof CONTEXTUAL_OR_RESET_LEGACY_FIELDS)[number]
+> extends never
+  ? true
+  : never;
+true satisfies UnbackedProjectionKeys<
+  TimeEntryRow,
+  ReturnType<typeof preservedLegacyBilling>,
+  (typeof CONTEXTUAL_OR_RESET_LEGACY_FIELDS)[number]
+> extends never
+  ? true
+  : never;
+
 const UNPROJECTED_CONFIRMED_ENTRY_COLUMNS = [
   // Scope and attribution remain on the owner's draft, not this completion receipt.
   "organizationId",
@@ -67,11 +138,19 @@ const UNPROJECTED_CONFIRMED_ENTRY_COLUMNS = [
   "taskCode",
   "activityCode",
   "invoiceId",
+  "invoiceAttachment",
   "splitGroupId",
   "timerStartedAt",
   "timerStoppedAt",
   "createdAt",
   "updatedAt",
+  // The approval queue owns approval and return metadata.
+  "approverUserId",
+  "approvedByUserId",
+  "approvedAt",
+  "returnedByUserId",
+  "returnedAt",
+  "returnComment",
 ] as const satisfies readonly (keyof TimeEntryRow)[];
 type MissingConfirmedEntryColumn = UnprojectedColumns<
   TimeEntryRow,
@@ -145,7 +224,12 @@ const readConfirmation = async ({ tx, owner, id }: ReadConfirmationOptions) => {
 };
 
 type TimerCompletion =
-  | { type: "owner"; timezoneId: string; billable?: boolean | undefined }
+  | {
+      type: "owner";
+      timezoneId: string;
+      billable?: boolean | undefined;
+      activityGroup?: TimeEntryActivityGroup | undefined;
+    }
   | {
       type: "admin";
       actorId: TimerOwner["userId"];
@@ -168,7 +252,8 @@ type PrepareTimerOptions = {
   legacy: typeof timeEntries.$inferSelect | undefined;
   memberRole: AuthorizedMemberRole;
   narrative: string;
-  workspaceId: NonNullable<typeof timeTimers.$inferSelect.workspaceId>;
+  workspaceId: typeof timeTimers.$inferSelect.workspaceId;
+  policy: TimePolicy;
   now: Date;
   completion: TimerCompletion;
 };
@@ -219,6 +304,7 @@ const prepareTimer = async ({
   memberRole,
   narrative,
   workspaceId,
+  policy,
   now,
   completion,
 }: PrepareTimerOptions) => {
@@ -245,12 +331,25 @@ const prepareTimer = async ({
   );
   const preparedResult = await Result.gen(async function* () {
     const handle = transactionHandle(tx);
-    const policy = yield* Result.await(
-      readTimePolicy({
-        safeDb: handle,
-        organizationId: owner.organizationId,
-      }),
-    );
+    if (workspaceId === null) {
+      const prepared = yield* prepareInternalTimeEntryInsert({
+        policy,
+        canApprove: canApproveTimeEntries(memberRole),
+        dateWindow: "timer_completion",
+        body: {
+          dateWorked: legacy?.dateWorked ?? dateResult.value,
+          timezoneId,
+          durationMinutes,
+          narrative,
+          narrativeLanguage: legacy?.narrativeLanguage,
+        },
+      });
+      return Result.ok({
+        activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+        prepared,
+        durationMinutes,
+      } as const);
+    }
     const prepared = yield* prepareTimeEntryInsert({
       safeDb: handle,
       policy,
@@ -263,8 +362,11 @@ const prepareTimer = async ({
           ? { hourlyRate: legacy.rateAtEntry, currency: legacy.currency }
           : undefined,
       body: {
-        dateWorked: legacy?.dateWorked ?? dateResult.value,
+        dateWorked: dateResult.value,
         timezoneId,
+        ...(legacy
+          ? preservedLegacyBilling(legacy, legacy.workspaceId === workspaceId)
+          : {}),
         durationMinutes,
         narrative,
         billable:
@@ -273,17 +375,152 @@ const prepareTimer = async ({
             : legacy?.billable,
         workItemId:
           legacy?.workspaceId === workspaceId ? legacy.workItemId : null,
-        narrativeLanguage: legacy?.narrativeLanguage,
-        taskCode: legacy?.taskCode,
-        activityCode: legacy?.activityCode,
       },
     });
-    return Result.ok(prepared);
+    return Result.ok({
+      activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
+      prepared,
+      durationMinutes,
+    } as const);
   });
   if (preparedResult.isErr()) {
     return Result.err(preparedResult.error);
   }
-  return Result.ok({ prepared: preparedResult.value, durationMinutes });
+  return preparedResult;
+};
+
+type InsertTimerEntryOptions = {
+  tx: Transaction;
+  owner: TimerOwner;
+  workspaceId: typeof timeTimers.$inferSelect.workspaceId;
+  legacy: typeof timeEntries.$inferSelect | undefined;
+  preparedEntry: InferOk<Awaited<ReturnType<typeof prepareTimer>>>;
+  recordAuditEvent: AuditRecorder;
+};
+const insertTimerEntry = async ({
+  tx,
+  owner,
+  workspaceId,
+  legacy,
+  preparedEntry,
+  recordAuditEvent,
+}: InsertTimerEntryOptions) => {
+  if (preparedEntry.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.INTERNAL) {
+    const capacity = await lockInternalTimeEntryCapacity({ tx, ...owner });
+    if (capacity.isErr()) {
+      return capacity;
+    }
+    return Result.ok(
+      await insertPreparedInternalTimeEntry({
+        tx,
+        ...owner,
+        prepared: preparedEntry.prepared,
+        source: TIME_ENTRY_SOURCE.TIMER,
+        recordAuditEvent,
+      }),
+    );
+  }
+  if (!workspaceId) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Client timer requires a matter",
+      }),
+    );
+  }
+  const capacity = await lockTimeEntryCapacity({
+    tx,
+    workspaceId,
+    replacedEntryId:
+      legacy?.workspaceId === workspaceId ? legacy.id : undefined,
+  });
+  if (capacity.isErr()) {
+    return capacity;
+  }
+  return Result.ok(
+    await insertPreparedTimeEntry({
+      tx,
+      ...owner,
+      workspaceId,
+      source: TIME_ENTRY_SOURCE.TIMER,
+      prepared: preparedEntry.prepared,
+      recordAuditEvent,
+    }),
+  );
+};
+
+type FinishTimerConfirmationOptions = Pick<
+  FinalizeTimerOptions,
+  "tx" | "owner" | "recordAuditEvent" | "completion"
+> & {
+  timer: typeof timeTimers.$inferSelect;
+  legacy: typeof timeEntries.$inferSelect | undefined;
+  workspaceId: typeof timeTimers.$inferSelect.workspaceId;
+  entryId: typeof timeEntries.$inferSelect.id;
+  preparedEntry: InferOk<Awaited<ReturnType<typeof prepareTimer>>>;
+  narrativeFromAdmin: boolean;
+};
+const finishTimerConfirmation = async ({
+  tx,
+  owner,
+  recordAuditEvent,
+  completion,
+  timer,
+  legacy,
+  workspaceId,
+  entryId,
+  preparedEntry,
+  narrativeFromAdmin,
+}: FinishTimerConfirmationOptions) => {
+  await tx
+    .insert(timeTimerConfirmations)
+    .values({ ...owner, timerId: timer.id, timeEntryId: entryId });
+  const deleted = await tx
+    .delete(timeTimers)
+    .where(and(ownedTimers(owner), eq(timeTimers.id, timer.id)))
+    .returning({ id: timeTimers.id });
+  if (deleted.length !== 1) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        code: "timer_completion_changed",
+        message: "Timer could not be ended",
+        hint: "Reload running timers and retry.",
+      }),
+    );
+  }
+  if (legacy) {
+    await deleteLegacyTimerDraft({
+      tx,
+      owner,
+      entry: legacy,
+      timerId: timer.id,
+      recordAuditEvent,
+    });
+  }
+
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.DELETE,
+    resourceType: AUDIT_RESOURCE_TYPE.TIME_TIMER,
+    resourceId: timer.id,
+    workspaceId,
+    changes: {
+      confirmedEntryId: { old: null, new: entryId },
+      ...(completion.type === "admin"
+        ? {
+            endedByAdmin: { old: null, new: completion.actorId },
+            ownerId: { old: owner.userId, new: owner.userId },
+            narrativeFromAdmin: { old: null, new: narrativeFromAdmin },
+          }
+        : {}),
+    },
+  });
+  return Result.ok({
+    id: entryId,
+    activityGroup: preparedEntry.activityGroup,
+    durationMinutes: preparedEntry.durationMinutes,
+    billedMinutes: preparedEntry.prepared.billedMinutes,
+  });
 };
 
 const finalizeTimerInSavepoint = async ({
@@ -294,6 +531,7 @@ const finalizeTimerInSavepoint = async ({
   recordAuditEvent,
   completion,
 }: FinalizeTimerOptions) => {
+  const policy = await lockTimePolicy(tx, owner.organizationId);
   await lockTimerOwner(tx, owner);
   const replay = await readConfirmation({ tx, owner, id });
   if (replay) {
@@ -309,7 +547,23 @@ const finalizeTimerInSavepoint = async ({
     return Result.err(timerNotFound(completion.type));
   }
   const workspaceId = timer.workspaceId;
-  if (!workspaceId) {
+  const internalRequested =
+    completion.type === "owner" &&
+    completion.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.INTERNAL;
+  if (
+    internalRequested &&
+    (workspaceId !== null || completion.billable === true)
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        code: "invalid_internal_timer",
+        message: "Internal timers must have no matter and cannot be billable",
+        hint: "Remove the timer's matter and omit billable or set it to false.",
+      }),
+    );
+  }
+  if (!workspaceId && !internalRequested) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -323,7 +577,10 @@ const finalizeTimerInSavepoint = async ({
       }),
     );
   }
-  if (!(await hasCurrentTimerMatterAccess({ tx, ...owner, workspaceId }))) {
+  if (
+    workspaceId &&
+    !(await hasCurrentTimerMatterAccess({ tx, ...owner, workspaceId }))
+  ) {
     return Result.err(
       new HandlerError({
         status: 404,
@@ -412,77 +669,37 @@ const finalizeTimerInSavepoint = async ({
     memberRole,
     narrative,
     workspaceId,
+    policy,
     now: new Date(),
     completion,
   });
   if (preparedResult.isErr()) {
     return Result.err(preparedResult.error);
   }
-  const { prepared, durationMinutes } = preparedResult.value;
-  const capacity = await lockTimeEntryCapacity({
+  const preparedEntry = preparedResult.value;
+  const entryResult = await insertTimerEntry({
     tx,
+    owner,
     workspaceId,
-    replacedEntryId:
-      legacy?.workspaceId === workspaceId ? legacy.id : undefined,
-  });
-  if (capacity.isErr()) {
-    return Result.err(capacity.error);
-  }
-  const entry = await insertPreparedTimeEntry({
-    tx,
-    ...owner,
-    workspaceId,
-    source: TIME_ENTRY_SOURCE.TIMER,
-    prepared,
+    legacy,
+    preparedEntry,
     recordAuditEvent,
   });
-  await tx
-    .insert(timeTimerConfirmations)
-    .values({ ...owner, timerId: timer.id, timeEntryId: entry.id });
-  const deleted = await tx
-    .delete(timeTimers)
-    .where(and(ownedTimers(owner), eq(timeTimers.id, timer.id)))
-    .returning({ id: timeTimers.id });
-  if (deleted.length !== 1) {
-    return Result.err(
-      new HandlerError({
-        status: 409,
-        code: "timer_completion_changed",
-        message: "Timer could not be ended",
-        hint: "Reload running timers and retry.",
-      }),
-    );
+  if (entryResult.isErr()) {
+    return entryResult;
   }
-  if (legacy) {
-    await deleteLegacyTimerDraft({
-      tx,
-      owner,
-      entry: legacy,
-      timerId: timer.id,
-      recordAuditEvent,
-    });
-  }
-
-  await recordAuditEvent(tx, {
-    action: AUDIT_ACTION.DELETE,
-    resourceType: AUDIT_RESOURCE_TYPE.TIME_TIMER,
-    resourceId: timer.id,
+  const entry = entryResult.value;
+  return await finishTimerConfirmation({
+    tx,
+    owner,
+    recordAuditEvent,
+    completion,
+    timer,
+    legacy,
     workspaceId,
-    changes: {
-      confirmedEntryId: { old: null, new: entry.id },
-      ...(completion.type === "admin"
-        ? {
-            endedByAdmin: { old: null, new: completion.actorId },
-            ownerId: { old: owner.userId, new: owner.userId },
-            narrativeFromAdmin: { old: null, new: narrativeFromAdmin },
-          }
-        : {}),
-    },
-  });
-  return Result.ok({
-    id: entry.id,
-    durationMinutes,
-    billedMinutes: prepared.billedMinutes,
+    entryId: entry.id,
+    preparedEntry,
+    narrativeFromAdmin,
   });
 };
 

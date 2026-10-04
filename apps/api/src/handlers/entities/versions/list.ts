@@ -8,12 +8,13 @@ import {
   decodeVersionCursor,
   encodeVersionCursor,
 } from "@/api/handlers/entities/version-cursor";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const readVersionsParamsSchema = workspaceParams({
   entityId: tSafeId("entity"),
@@ -46,7 +47,7 @@ const readVersionsHandler = async function* ({
     );
   }
 
-  const pageSize = LIMITS.versionsPageSizeDefault;
+  const pageSize = normalizeTenantPageLimit(LIMITS.versionsPageSizeDefault);
 
   const keyset = cursor
     ? or(
@@ -330,6 +331,7 @@ const config = {
     "author, and the file attached to it; tombstoned versions are left out. " +
     "The response also names the entity's current version.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "read_document" },
   access: "read",
   params: readVersionsParamsSchema,

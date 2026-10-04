@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import {
   brandPersistedChatMessageId,
@@ -41,7 +43,6 @@ type MemoryExtractionQueueRow = {
   compactionId: SafeId<"chatThreadCompaction"> | null;
   firstSummarizedMessageId: SafeId<"chatMessage"> | null;
   organizationId: SafeId<"organization">;
-  queueScheduledAt: Date;
   sourceMessageId: SafeId<"chatMessage"> | null;
   summaryMarkdown: string | null;
   threadDataWorkspaceIds: SafeId<"workspace">[] | null;
@@ -88,9 +89,13 @@ export const buildClaimMemoryExtractionQueueQuery = ({
   )
   SELECT
     due.organization_id AS "organizationId",
-    due.memory_extraction_scheduled_at AS "queueScheduledAt",
     candidate.compaction_id AS "compactionId",
-    candidate.compaction_created_at AS "compactionCreatedAt",
+    -- Rendered as UTC ISO text at millisecond precision so every driver
+    -- returns the same value a Drizzle timestamp column would.
+    to_char(
+      candidate.compaction_created_at AT TIME ZONE 'UTC',
+      'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+    ) AS "compactionCreatedAt",
     candidate.source_message_id AS "sourceMessageId",
     candidate.first_summarized_message_id AS "firstSummarizedMessageId",
     candidate.summary_markdown AS "summaryMarkdown",
@@ -120,6 +125,9 @@ export const buildClaimMemoryExtractionQueueQuery = ({
       AND compaction.memory_extracted_at IS NULL
       AND compaction.status = 'active'
       AND compaction.created_at >= due.memory_extraction_enabled_at
+      -- Extraction has no anonymization step, so it never reads a thread
+      -- that used anonymized mode.
+      AND thread.used_anonymization = false
     ORDER BY
       compaction.memory_extraction_attempted_at ASC NULLS FIRST,
       compaction.created_at,
@@ -162,13 +170,17 @@ export const buildSettleMemoryExtractionQueueQuery = ({
     WHEN EXISTS (
       SELECT 1
       FROM chat_thread_compactions AS compaction
+      INNER JOIN chat_threads AS thread ON thread.id = compaction.thread_id
       WHERE compaction.memory_extraction_organization_id = settings.organization_id
         AND compaction.memory_extraction_consent_at = settings.memory_extraction_enabled_at
         AND compaction.memory_extracted_at IS NULL
         AND compaction.status = 'active'
         AND compaction.created_at >= settings.memory_extraction_enabled_at
+        -- The same set the claim reads, or a tenant whose only pending work
+        -- is on such a thread would be woken on every pass.
+        AND thread.used_anonymization = false
       LIMIT 1
-    ) THEN ${now}
+    ) THEN ${now}::timestamptz
     ELSE NULL
   END
   WHERE settings.organization_id = ANY(${sql.param([...organizationIds])}::text[])
@@ -208,10 +220,13 @@ const optionalString = (value: unknown): string | null => {
 };
 
 const optionalDate = (value: unknown): Date | null => {
-  if (value === null || value instanceof Date) {
-    return value;
+  if (value === null) {
+    return null;
   }
-  return panic("Memory extraction queue returned an invalid date field");
+  if (typeof value !== "string") {
+    return panic("Memory extraction queue returned an invalid date field");
+  }
+  return new Date(Temporal.Instant.from(value).epochMilliseconds);
 };
 
 const optionalSafeId = <T extends SafeIdType>(
@@ -231,12 +246,7 @@ const parseMemoryExtractionQueueRow = (
 
   const organizationId =
     "organizationId" in value ? value.organizationId : undefined;
-  const queueScheduledAt =
-    "queueScheduledAt" in value ? value.queueScheduledAt : undefined;
-  if (
-    typeof organizationId !== "string" ||
-    !(queueScheduledAt instanceof Date)
-  ) {
+  if (typeof organizationId !== "string") {
     return panic("Memory extraction queue returned invalid tenant metadata");
   }
 
@@ -267,7 +277,6 @@ const parseMemoryExtractionQueueRow = (
       brandPersistedChatMessageId,
     ),
     organizationId: brandPersistedOrganizationId(organizationId),
-    queueScheduledAt,
     sourceMessageId: optionalSafeId(
       "sourceMessageId" in value ? value.sourceMessageId : undefined,
       brandPersistedChatMessageId,

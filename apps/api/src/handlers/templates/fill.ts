@@ -4,7 +4,7 @@ import { t } from "elysia";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { templateFills } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isTemplateData } from "@/api/lib/docx/types";
@@ -13,11 +13,16 @@ import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+import { fillDiagnosticHeaders } from "@/api/lib/templates/fill-diagnostic-headers";
 import {
   scanTemplateUpload,
   templateUploadRejectionResponse,
 } from "@/api/lib/templates/scan-template-upload";
 import { containsNull } from "@/api/lib/templates/template-data";
+import {
+  fillDiagnosticsOf,
+  templateFillStatus,
+} from "@/api/lib/templates/template-fill-completion";
 import { fillTemplateDocx } from "@/api/lib/templates/template-fill-service";
 import { buildTemplateFillAiWiring } from "@/api/lib/templates/template-fill-usage";
 import { scanTemplateOutput } from "@/api/lib/templates/validate-template-output";
@@ -166,13 +171,12 @@ export const fillHandler = async ({
   }
 
   const { unusedValues } = result;
+  const diagnostics = fillDiagnosticsOf(result);
 
-  // A failed AI draft leaves its field unfilled, so it counts against the fill
+  // The completion decision over every diagnostic: a failed AI draft, an
+  // undecided AI condition or an unresolved clause counts against the fill
   // the same way an unmatched placeholder does.
-  const fillStatus =
-    result.unmatchedPlaceholders.length > 0 || result.aiFieldErrors.length > 0
-      ? "partial"
-      : "success";
+  const fillStatus = templateFillStatus(diagnostics);
 
   // Best-effort analytics; don't block the download.
   // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
@@ -198,13 +202,7 @@ export const fillHandler = async ({
     });
   });
 
-  const additionalHeaders = new Headers();
-  if (result.aiFieldErrors.length > 0) {
-    additionalHeaders.set(
-      "X-Ai-Field-Errors",
-      encodeURIComponent(JSON.stringify(result.aiFieldErrors)),
-    );
-  }
+  const additionalHeaders = fillDiagnosticHeaders({ diagnostics, format });
 
   // PDF conversion via Gotenberg
   if (format === "pdf") {
@@ -242,26 +240,6 @@ export const fillHandler = async ({
     });
   }
 
-  if (result.unmatchedPlaceholders.length > 0) {
-    additionalHeaders.set(
-      "X-Unmatched-Placeholders",
-      // Headers are ISO-8859-1; field paths carry diacritics (Polish/Czech),
-      // so the diagnostic lists travel URI-encoded.
-      encodeURIComponent(result.unmatchedPlaceholders.join(",")),
-    );
-  }
-  if (unusedValues.length > 0) {
-    additionalHeaders.set(
-      "X-Unused-Values",
-      encodeURIComponent(unusedValues.join(",")),
-    );
-  }
-  if (result.structureErrors.length > 0) {
-    additionalHeaders.set(
-      "X-Structure-Errors",
-      JSON.stringify(result.structureErrors),
-    );
-  }
   return secureDocumentResponse({
     additionalHeaders,
     body: new Uint8Array(result.file.bytes),
@@ -275,6 +253,10 @@ export const fillHandler = async ({
 };
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Renders the template uploaded in this request.",
+  },
   description:
     "Fill a template with values. 'values' maps each field path to its " +
     'value, e.g. {"tenant.name": "ACME Sp. z o.o.", "signing_date": ' +
@@ -282,6 +264,7 @@ const config = {
     "and AI-fillable fields are resolved automatically; AI-fillable fields " +
     "are drafted when you omit them.",
   permissions: { template: ["use"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   access: "write",
   mcp: { type: "tool", name: "fill_template" },
   transport: {

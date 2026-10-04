@@ -1,9 +1,13 @@
 import { panic, Result } from "better-result";
 import { eq, isNotNull } from "drizzle-orm";
 
+import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { playbookDefinitions } from "@/api/db/schema";
-import { assertPlaybookDocumentType } from "@/api/handlers/playbooks/assert-document-type";
+import {
+  assertPlaybookDocumentType,
+  mapPlaybookDocumentTypeError,
+} from "@/api/handlers/playbooks/assert-document-type";
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
@@ -12,6 +16,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type {
@@ -47,6 +52,7 @@ type CreatePlaybookDefinitionArgs = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   recordAuditEvent: AuditRecorder;
@@ -58,6 +64,7 @@ export const createPlaybookDefinitionHandler = async function* ({
   safeDb,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   orgAIConfigStatus,
   promptCachingEnabled,
   recordAuditEvent,
@@ -95,13 +102,10 @@ export const createPlaybookDefinitionHandler = async function* ({
   const positions = await deriveAutoAsks(body.positions, {
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
   });
-
-  yield* Result.await(
-    assertPlaybookDocumentType({ safeDb, organizationId, scope: body.scope }),
-  );
 
   const existingCount = yield* Result.await(
     safeDb((tx) =>
@@ -121,70 +125,83 @@ export const createPlaybookDefinitionHandler = async function* ({
   const playbookId = createSafeId<"playbookDefinition">();
 
   const persisted = yield* Result.await(
-    safeDb(async (tx) => {
-      const values = {
-        id: playbookId,
-        organizationId,
-        name: body.name,
-        starterId: origin.type === "starter" ? origin.starterId : null,
-        description: body.description ?? null,
-        scope: body.scope ?? null,
-        positions,
-      };
-      const rows =
-        origin.type === "starter"
-          ? await tx
-              .insert(playbookDefinitions)
-              .values(values)
-              .onConflictDoNothing({
-                target: [
-                  playbookDefinitions.organizationId,
-                  playbookDefinitions.starterId,
-                ],
-                where: isNotNull(playbookDefinitions.starterId),
-              })
-              .returning({ id: playbookDefinitions.id })
-          : await tx
-              .insert(playbookDefinitions)
-              .values(values)
-              .returning({ id: playbookDefinitions.id });
-      const row = rows.at(0);
-
-      if (!row && origin.type === "starter") {
-        const existing = await tx.query.playbookDefinitions.findFirst({
-          where: {
-            organizationId: { eq: organizationId },
-            starterId: { eq: origin.starterId },
-          },
-          columns: { id: true },
+    resultTx(
+      safeDb,
+      async (
+        tx,
+      ): Promise<Result<CreatePlaybookDefinitionResult, HandlerError>> => {
+        const documentType = await assertPlaybookDocumentType({
+          tx,
+          organizationId,
+          scope: body.scope,
         });
-        if (!existing) {
-          panic("Starter playbook insert conflicted without a matching row");
+        if (documentType.isErr()) {
+          return Result.err(documentType.error);
         }
-        return { id: existing.id, outcome: "existing" as const };
-      }
+        const values = {
+          id: playbookId,
+          organizationId,
+          name: body.name,
+          starterId: origin.type === "starter" ? origin.starterId : null,
+          description: body.description ?? null,
+          scope: body.scope ?? null,
+          positions,
+        };
+        const rows =
+          origin.type === "starter"
+            ? await tx
+                .insert(playbookDefinitions)
+                .values(values)
+                .onConflictDoNothing({
+                  target: [
+                    playbookDefinitions.organizationId,
+                    playbookDefinitions.starterId,
+                  ],
+                  where: isNotNull(playbookDefinitions.starterId),
+                })
+                .returning({ id: playbookDefinitions.id })
+            : await tx
+                .insert(playbookDefinitions)
+                .values(values)
+                .returning({ id: playbookDefinitions.id });
+        const row = rows.at(0);
 
-      if (!row) {
-        panic("Failed to create playbook definition");
-      }
+        if (!row && origin.type === "starter") {
+          const existing = await tx.query.playbookDefinitions.findFirst({
+            where: {
+              organizationId: { eq: organizationId },
+              starterId: { eq: origin.starterId },
+            },
+            columns: { id: true },
+          });
+          if (!existing) {
+            panic("Starter playbook insert conflicted without a matching row");
+          }
+          return Result.ok({ id: existing.id, outcome: "existing" as const });
+        }
 
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.CREATE,
-        resourceType: AUDIT_RESOURCE_TYPE.PLAYBOOK,
-        resourceId: playbookId,
-        changes: {
-          created: {
-            old: null,
-            new: {
-              name: body.name,
-              positionCount: body.positions.items.length,
+        if (!row) {
+          panic("Failed to create playbook definition");
+        }
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.PLAYBOOK,
+          resourceId: playbookId,
+          changes: {
+            created: {
+              old: null,
+              new: {
+                name: body.name,
+                positionCount: body.positions.items.length,
+              },
             },
           },
-        },
-      });
+        });
 
-      return { id: row.id, outcome: "created" as const };
-    }),
+        return Result.ok({ id: row.id, outcome: "created" as const });
+      },
+    ).then((result) => result.mapError(mapPlaybookDocumentTypeError)),
   );
 
   return Result.ok(persisted);

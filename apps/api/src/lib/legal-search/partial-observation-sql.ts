@@ -1,3 +1,4 @@
+// parser-output-unchanged: Pipeline-owned quality ranks and marker writes change; publisher fields and parsed documents are unchanged.
 /**
  * The quality marker the ingestion pipeline persists with a partial source
  * observation, and the SQL that reads it.
@@ -13,10 +14,35 @@ import { sql } from "drizzle-orm";
 /** Pipeline-owned quality marker persisted with partial source observations. */
 export const PARTIAL_OBSERVATION_KEY = "_stellaPartialObservation";
 
+export const OBSERVATION_DETAIL = {
+  COMPLETE: "complete",
+  LISTING_ONLY: "listing-only",
+  SECONDARY_REFUSED: "secondary-refused",
+} as const;
+
+export type ObservationDetail =
+  (typeof OBSERVATION_DETAIL)[keyof typeof OBSERVATION_DETAIL];
+
+/** More recovered detail must survive a later, poorer observation. */
+export const OBSERVATION_DETAIL_RANK = {
+  [OBSERVATION_DETAIL.COMPLETE]: 2,
+  [OBSERVATION_DETAIL.SECONDARY_REFUSED]: 1,
+  [OBSERVATION_DETAIL.LISTING_ONLY]: 0,
+} as const satisfies Record<ObservationDetail, number>;
+
 export type PartialObservation = {
   caseNumberIsPlaceholder: boolean;
-  isListingOnly: boolean;
+  detail: ObservationDetail;
 };
+
+/** Existing adapters declare missing documents with the original flag. */
+export const observationDetailOf = (observation: {
+  observationDetail?: ObservationDetail | undefined;
+  isListingOnly?: boolean | undefined;
+}): ObservationDetail =>
+  observation.isListingOnly === true
+    ? OBSERVATION_DETAIL.LISTING_ONLY
+    : (observation.observationDetail ?? OBSERVATION_DETAIL.COMPLETE);
 
 /**
  * The marker's own field names, spelled once. Every reader and the SQL
@@ -26,8 +52,9 @@ export type PartialObservation = {
  */
 export const PARTIAL_OBSERVATION_FIELD = {
   CASE_NUMBER_IS_PLACEHOLDER: "caseNumberIsPlaceholder",
+  DETAIL: "detail",
   IS_LISTING_ONLY: "isListingOnly",
-} as const satisfies Record<string, keyof PartialObservation>;
+} as const satisfies Record<string, keyof PartialObservation | "isListingOnly">;
 
 /**
  * Rows this reader would answer `isListingOnly: false` for, as a predicate
@@ -53,6 +80,14 @@ export const storedObservationHasDetail = (metadata: Column): SQL =>
   sql`jsonb_extract_path_text(${metadata}, ${sql.raw(`'${PARTIAL_OBSERVATION_KEY}'`)}, ${sql.raw(`'${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}'`)}) is distinct from 'true'`;
 
 /**
+ * Retain the existing listing-only JSON path for persisted rows and the search
+ * candidate partial index. New writes derive it from detail; secondary refusals
+ * never set it. Removing it requires migrating those rows and the index together.
+ */
+export const storedObservationIsListingOnly = (metadata: Column): SQL =>
+  sql`jsonb_extract_path_text(${metadata}, ${sql.raw(`'${PARTIAL_OBSERVATION_KEY}'`)}, ${sql.raw(`'${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}'`)}) = 'true'`;
+
+/**
  * The stored metadata with the listing-only marker set, as a SQL value.
  *
  * For a write that decides the marker with the row's own state in its WHERE:
@@ -62,7 +97,7 @@ export const storedObservationHasDetail = (metadata: Column): SQL =>
  * since `||` would otherwise build an array the predicate cannot read.
  */
 export const metadataMarkedListingOnly = (metadata: Column | SQL): SQL =>
-  sql`jsonb_set(coalesce(${metadata}, '{}'::jsonb), ${sql.raw(`'{${PARTIAL_OBSERVATION_KEY}}'`)}, (case when jsonb_typeof(${metadata} -> ${sql.raw(`'${PARTIAL_OBSERVATION_KEY}'`)}) = 'object' then ${metadata} -> ${sql.raw(`'${PARTIAL_OBSERVATION_KEY}'`)} else '{}'::jsonb end) || jsonb_build_object(${sql.raw(`'${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}'`)}, true))`;
+  sql`jsonb_set(coalesce(${metadata}, '{}'::jsonb), ${sql.raw(`'{${PARTIAL_OBSERVATION_KEY}}'`)}, (case when jsonb_typeof(${metadata} -> ${sql.raw(`'${PARTIAL_OBSERVATION_KEY}'`)}) = 'object' then ${metadata} -> ${sql.raw(`'${PARTIAL_OBSERVATION_KEY}'`)} else '{}'::jsonb end) || jsonb_build_object(${sql.raw(`'${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}'`)}, true, ${sql.raw(`'${PARTIAL_OBSERVATION_FIELD.DETAIL}'`)}, ${sql.raw(`'${OBSERVATION_DETAIL.LISTING_ONLY}'`)}))`;
 
 /**
  * The same predicate as raw SQL, for the lateral joins that address the

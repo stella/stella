@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -14,7 +14,12 @@ const config = {
     "Create a category in the organization's template category tree, " +
     "optionally under a parent category.",
   permissions: { template: ["create"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   body: createTemplateCategoryBodySchema,
 } satisfies HandlerConfig;
 

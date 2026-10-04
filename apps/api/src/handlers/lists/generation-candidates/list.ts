@@ -6,7 +6,7 @@ import {
   legalListGenerationCandidates,
   legalListGenerationCandidateSources,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -22,6 +22,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegalListGenerationCandidateId } from "@/api/lib/safe-id-boundaries";
 
 const paramsSchema = workspaceParams({
@@ -44,8 +45,14 @@ const config = {
     "it was accepted as when it has one, and the sources it cites. The run's " +
     "own status is returned alongside the page.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   params: paramsSchema,
   query: querySchema,
 } satisfies WorkspaceHandlerConfig;
@@ -71,7 +78,9 @@ const decodeCursor = (value: string): CandidateCursor | null => {
 const readGenerationCandidates = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, params, query }) {
-    const limit = query.limit ?? LIMITS.legalListGenerationCandidatesMax;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.legalListGenerationCandidatesMax,
+    );
     const conditions = [
       eq(legalListGenerationCandidates.workspaceId, workspaceId),
       eq(legalListGenerationCandidates.listId, params.listId),

@@ -1,3 +1,5 @@
+import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
+
 /**
  * Fold every language version of one decision into a single search unit.
  *
@@ -13,6 +15,8 @@ export type LanguageGroupCollapse<TCandidate extends { id: string }> = {
   representatives: TCandidate[];
   /** Folded candidate id → the id of the representative it folded into. */
   foldedInto: Map<string, string>;
+  /** Stable identity for every representative, including ungrouped documents. */
+  groupTokenById: Map<string, string>;
 };
 
 export const collapseByLanguageGroup = <TCandidate extends { id: string }>(
@@ -22,21 +26,30 @@ export const collapseByLanguageGroup = <TCandidate extends { id: string }>(
   const representativeByGroup = new Map<string, string>();
   const representatives: TCandidate[] = [];
   const foldedInto = new Map<string, string>();
+  const groupTokenById = new Map<string, string>();
 
   for (const candidate of candidates) {
     const groupKey = groupKeyOf(candidate.id);
     if (groupKey === null) {
       representatives.push(candidate);
+      groupTokenById.set(
+        candidate.id,
+        corpusSearchGroupToken(`document:${candidate.id}`),
+      );
       continue;
     }
     const representative = representativeByGroup.get(groupKey);
     if (representative === undefined) {
       representativeByGroup.set(groupKey, candidate.id);
+      groupTokenById.set(
+        candidate.id,
+        corpusSearchGroupToken(`language:${groupKey}`),
+      );
       representatives.push(candidate);
       continue;
     }
     foldedInto.set(candidate.id, representative);
   }
 
-  return { representatives, foldedInto };
+  return { representatives, foldedInto, groupTokenById };
 };

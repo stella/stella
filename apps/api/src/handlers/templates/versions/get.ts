@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -14,12 +14,19 @@ const getTemplateVersionParamsSchema = t.Object({
 });
 
 const config = {
+  contentDelivery: { type: "audited" },
   description:
     "Read one stored template version: its number, field count, creation " +
     "time, and a short-lived presigned URL to download that version's DOCX. " +
     "The download grant is recorded in the audit trail.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   access: "read",
   params: getTemplateVersionParamsSchema,
 } satisfies HandlerConfig;

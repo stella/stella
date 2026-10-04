@@ -9,19 +9,19 @@ import { Temporal } from "@stll/time";
 
 import {
   AGENT_AUTH_ID_JAG_ALLOWED_ALGS,
-  AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS,
   AGENT_AUTH_ID_JAG_JWT_TYP,
   AGENT_AUTH_ID_JAG_MAX_AUTH_AGE_SECONDS,
   AGENT_AUTH_JWKS_CACHE_MAX_MS,
   AGENT_AUTH_JWKS_CACHE_MIN_MS,
   AGENT_AUTH_JWKS_FETCH_TIMEOUT_MS,
 } from "@/api/agent-auth/constants";
+import { AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS } from "@/api/agent-auth/id-jag-policy";
 import {
   agentAssertionReplay,
   agentTrustedIssuer,
 } from "@/api/db/agent-auth-schema";
 import { rootDb } from "@/api/db/root";
-import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 
 /**
  * The error vocabulary the ID-JAG path maps onto HTTP. `issuer_not_enabled`
@@ -368,10 +368,7 @@ class ReplayError extends Error {
 /**
  * Insert the jti one-time, failing closed on a duplicate (the unique PK
  * makes a second insert of the same jti a conflict).
- *
- * TODO: prune rows whose assertion has expired from a periodic background
- * job rather than on this read-heavy validation path; `expires_at` is
- * indexed for exactly that sweep.
+ * Expired records are pruned by the registration retention task.
  */
 const recordJti = async (
   jti: string,

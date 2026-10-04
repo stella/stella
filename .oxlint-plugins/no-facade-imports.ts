@@ -9,6 +9,7 @@ const MANAGED_NAMESPACES = ["@/api/db", "@/api/lib/analytics", "@/lib/errors"];
 const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/agent-auth-schema",
   "@/api/db/auth-schema",
+  "@/api/db/backfill-runtime",
   "@/api/db/billing-validators",
   "@/api/db/columns",
   "@/api/db/corpus-schema-lane",
@@ -18,16 +19,21 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/long-running-connection",
   "@/api/db/rls",
   "@/api/db/root",
+  "@/api/db/registration-budget-schema",
+  "@/api/db/retention",
   "@/api/db/safe-db",
   "@/api/db/schema",
   "@/api/db/schema-validators",
   "@/api/db/scoped",
+  "@/api/db/shared-pool-connection-settings",
   "@/api/db/shared-pool-timeout-policy",
   "@/api/db/shared-pool-timeouts",
   "@/api/lib/analytics/capture",
   "@/api/lib/analytics/client",
   "@/api/lib/analytics/server-analytics",
   "@/api/lib/analytics/tanstack-ai",
+  "@/lib/errors/action-admission",
+  "@/lib/errors/action-admission-response",
   "@/lib/errors/api",
   "@/lib/errors/api-tag",
   "@/lib/errors/auth",
@@ -35,6 +41,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/lib/errors/localization",
   "@/lib/errors/telemetry",
   "@/lib/errors/user-safe",
+  "@/lib/errors/user-toast",
 ]);
 
 const isManagedSpecifier = (specifier: string): boolean =>

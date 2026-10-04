@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
 
 import { workspaceViewTemplates } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
@@ -13,7 +13,13 @@ const config = {
     "layout, layout type, and the columns that layout needs. Personal: " +
     "templates saved by other members are never returned.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies WorkspaceHandlerConfig;
 

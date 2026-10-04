@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
 import { rateEntries } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tPaginationCursor,
@@ -20,6 +20,7 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedRateEntryId } from "@/api/lib/safe-id-boundaries";
 
 const readRateEntriesQuerySchema = t.Object({
@@ -58,16 +59,25 @@ const readRateEntries = createSafeHandler(
     description:
       "List the rate lines of one rate table, earliest effective-from first, " +
       "with cursor pagination. Each line carries the hourly rate in minor " +
-      "currency units, its effective dates, and the user it applies to (null " +
-      "for the table's fallback rate). A rate table that does not exist in " +
+      "currency units, its effective dates, and its person or organization role selector " +
+      "(both null for the table fallback). A rate table that does not exist in " +
       "this matter returns an empty page rather than an error.",
     permissions: { rate: ["read"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    mcp: {
+      type: "capability",
+      readClass: "tenant",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "read",
     params: rateEntryParamsSchema,
     query: readRateEntriesQuerySchema,
   },
   async function* ({ safeDb, workspaceId, session, params, query }) {
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.rateEntriesPageSizeDefault,
+    );
     const table = yield* Result.await(
       safeDb((tx) =>
         tx.query.rateTables.findFirst({
@@ -83,12 +93,11 @@ const readRateEntries = createSafeHandler(
     if (!table) {
       return Result.ok({
         items: [],
-        limit: query.limit ?? LIMITS.rateEntriesPageSizeDefault,
+        limit,
         nextCursor: null,
       });
     }
 
-    const limit = query.limit ?? LIMITS.rateEntriesPageSizeDefault;
     const conditions = [eq(rateEntries.rateTableId, params.rateTableId)];
 
     if (query.cursor) {
@@ -119,6 +128,7 @@ const readRateEntries = createSafeHandler(
           .select({
             id: rateEntries.id,
             userId: rateEntries.userId,
+            role: rateEntries.role,
             hourlyRate: rateEntries.hourlyRate,
             effectiveFrom: rateEntries.effectiveFrom,
             effectiveTo: rateEntries.effectiveTo,
@@ -178,6 +188,7 @@ const readRateEntries = createSafeHandler(
       items: page.items.map((row) => ({
         id: row.id,
         userId: row.userId,
+        role: row.role,
         hourlyRate: row.hourlyRate,
         effectiveFrom: row.effectiveFrom,
         effectiveTo: row.effectiveTo,

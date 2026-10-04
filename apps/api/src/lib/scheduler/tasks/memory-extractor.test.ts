@@ -53,9 +53,25 @@ describe("memory extraction failure recovery", () => {
 });
 
 describe("memory extraction claim", () => {
+  test("reads the thread's send mode after the transcript, before sending it", () => {
+    const transcriptRead = extractorSource.indexOf(
+      "await loadCompactionTranscript(",
+    );
+    const sendModeRead = extractorSource.indexOf(
+      "await readThreadStoredContentSendModeOnTx(",
+    );
+    const modelCall = extractorSource.indexOf(
+      "await generateTanStackObjectForRole(",
+    );
+
+    expect(transcriptRead).toBeGreaterThan(-1);
+    expect(sendModeRead).toBeGreaterThan(transcriptRead);
+    expect(modelCall).toBeGreaterThan(sendModeRead);
+  });
+
   test("requires the compaction to remain active after the provider call", () => {
     expect(extractorSource).toContain(
-      `eq(chatThreadCompactions.status, "active"),\n          isNull(chatThreadCompactions.memoryExtractedAt)`,
+      `eq(chatThreadCompactions.status, "active"),\n        isNull(chatThreadCompactions.memoryExtractedAt)`,
     );
   });
 });

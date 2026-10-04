@@ -16,9 +16,11 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
+import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tCurrencyCode,
@@ -202,6 +204,28 @@ const invoiceHasEntries = async (
   return false;
 };
 
+type SellerProfileAvailabilityOptions = {
+  sellerProfileId: SafeId<"sellerProfile">;
+  organizationId: SafeId<"organization">;
+};
+const sellerProfileIsAvailable = async (
+  tx: Transaction,
+  { sellerProfileId, organizationId }: SellerProfileAvailabilityOptions,
+) => {
+  const [profile] = await tx
+    .select({ id: sellerProfiles.id })
+    .from(sellerProfiles)
+    .where(
+      and(
+        eq(sellerProfiles.id, sellerProfileId),
+        eq(sellerProfiles.organizationId, organizationId),
+        isNull(sellerProfiles.archivedAt),
+      ),
+    )
+    .limit(1);
+  return profile !== undefined;
+};
+
 const updateInvoice = createSafeHandler(
   {
     description:
@@ -214,7 +238,13 @@ const updateInvoice = createSafeHandler(
       "require an eligible original in the same matter. Currency cannot change while " +
       "the invoice has lines or attached entries.",
     permissions: { invoice: ["update"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: invoiceRealtimeUpdates,
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: invoiceParamsSchema,
     body: updateInvoiceBodySchema,
   },
@@ -260,6 +290,12 @@ const updateInvoice = createSafeHandler(
 
           const documentType =
             changedFields.documentType ?? existing.documentType;
+          if (
+            existing.billingMode === "flat_fee" &&
+            documentType !== "invoice"
+          ) {
+            return Result.err(flatFeeInvoiceRefusal());
+          }
           const originalInvoiceId =
             changedFields.originalInvoiceId === undefined
               ? existing.originalInvoiceId
@@ -268,7 +304,8 @@ const updateInvoice = createSafeHandler(
             existing.finalizedAt !== null &&
             (documentType !== existing.documentType ||
               originalInvoiceId !== existing.originalInvoiceId ||
-              changedFields.invoiceNumber === null)
+              (changedFields.invoiceNumber !== undefined &&
+                changedFields.invoiceNumber !== existing.invoiceNumber))
           ) {
             return Result.err(
               new HandlerError({
@@ -308,20 +345,10 @@ const updateInvoice = createSafeHandler(
 
           const { sellerProfileId } = changedFields;
           if (sellerProfileId !== undefined && sellerProfileId !== null) {
-            const [profile] = await tx
-              .select({ id: sellerProfiles.id })
-              .from(sellerProfiles)
-              .where(
-                and(
-                  eq(sellerProfiles.id, sellerProfileId),
-                  eq(
-                    sellerProfiles.organizationId,
-                    session.activeOrganizationId,
-                  ),
-                  isNull(sellerProfiles.archivedAt),
-                ),
-              )
-              .limit(1);
+            const profile = await sellerProfileIsAvailable(tx, {
+              sellerProfileId,
+              organizationId: session.activeOrganizationId,
+            });
             if (!profile) {
               return Result.ok({ status: "seller-profile-not-found" });
             }
@@ -383,19 +410,17 @@ const updateInvoice = createSafeHandler(
             }
           }
           const row = updated.at(0);
-          if (row) {
-            await recordAuditEvent(tx, {
-              action: AUDIT_ACTION.UPDATE,
-              resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
-              resourceId: row.id,
-              changes: buildInvoiceUpdateAuditChanges(existing, changedFields),
-              // Buyer details are personal data: record which changed, not values.
-              metadata: { changedBuyerFields: Object.keys(changedBuyerFields) },
-            });
-          }
           if (!row) {
             return Result.ok({ status: "not-updated" });
           }
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+            resourceId: row.id,
+            changes: buildInvoiceUpdateAuditChanges(existing, changedFields),
+            // Buyer details are personal data: record which changed, not values.
+            metadata: { changedBuyerFields: Object.keys(changedBuyerFields) },
+          });
           return Result.ok({ status: "updated", id: row.id });
         },
       ),

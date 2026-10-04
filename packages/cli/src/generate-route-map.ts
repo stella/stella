@@ -219,6 +219,19 @@ const boundFields = (schema: PropSchema): { min?: number; max?: number } => {
   };
 };
 
+/** Carry the server-owned numeric range policy onto the generated flag. */
+const rangeFields = (schema: PropSchema): { range?: "clamp" } => {
+  const agentInput = schema["x-stella-agent-input"];
+  if (
+    !isRecordSchema(agentInput) ||
+    agentInput["kind"] !== "number" ||
+    agentInput["range"] !== "clamp"
+  ) {
+    return {};
+  }
+  return { range: "clamp" };
+};
+
 /** Result of classifying one prop's schema into a CLI surface (spec S3). */
 /** A dot-path child, with whether its own object lists it as required. */
 type DotPathChild = Omit<FlagSpec, "required"> & {
@@ -341,6 +354,7 @@ const classifyObject = (
       prop: `${prop}.${childName}`,
       kind: scalar,
       ...(scalar === "int" || scalar === "number" ? boundFields(child) : {}),
+      ...(scalar === "int" || scalar === "number" ? rangeFields(child) : {}),
       repeatable: false,
       requiredInObject: requiredChildren.has(childName),
       ...descriptionField(child),
@@ -424,6 +438,7 @@ const classifyPropShape = (
         prop,
         kind: "int",
         ...boundFields(schema),
+        ...rangeFields(schema),
         repeatable: false,
       },
     };
@@ -437,6 +452,7 @@ const classifyPropShape = (
         prop,
         kind: "number",
         ...boundFields(schema),
+        ...rangeFields(schema),
         repeatable: false,
       },
     };
@@ -631,6 +647,7 @@ const leafSpecsForTool = ({
   const windowedText = textPath !== undefined;
   const followable = annotation?.perEntryCursor !== true;
   const confirmPassthrough = annotation?.confirmPassthrough;
+  const composite = annotation?.composite;
   const localFileBase64Prop = resolveLocalFileProp({ annotation, properties });
   const mode = resolvePaginationMode(properties, annotation);
   const paginated = mode !== "none";
@@ -696,6 +713,7 @@ const leafSpecsForTool = ({
         windowedText,
         ...(textPath === undefined ? {} : { textPath }),
         ...(itemsKey === undefined ? {} : { itemsKey }),
+        ...(composite === undefined ? {} : { composite }),
         destructive: sub?.destructive ?? destructiveHint,
         ...(confirmPassthrough === undefined ? {} : { confirmPassthrough }),
         ...(localFileBase64Prop === undefined ? {} : { localFileBase64Prop }),
@@ -727,6 +745,7 @@ const leafSpecsForTool = ({
       windowedText,
       ...(textPath === undefined ? {} : { textPath }),
       ...(itemsKey === undefined ? {} : { itemsKey }),
+      ...(composite === undefined ? {} : { composite }),
       destructive: confirmPassthrough === true ? false : destructiveHint,
       ...(confirmPassthrough === undefined ? {} : { confirmPassthrough }),
       ...(localFileBase64Prop === undefined ? {} : { localFileBase64Prop }),

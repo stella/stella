@@ -7,7 +7,6 @@ import type {
 import { panic, Result, TaggedError } from "better-result";
 import type { Peer } from "crossws";
 import crossws from "crossws/adapters/bun";
-import RedisClient from "ioredis";
 import * as v from "valibot";
 import { applyUpdate, encodeStateAsUpdate } from "yjs";
 
@@ -20,11 +19,13 @@ import {
   parseFolioCollabRoomName,
 } from "@stll/api-contract/folio-collab";
 import { FetchBoundaryError } from "@stll/errors";
+import type { RedisConnectionSettings } from "@stll/redis-config";
+import type { StorePolicyStatus } from "@stll/redis-config/store-policy";
 import { Temporal } from "@stll/time";
 
 import { isSecureCollabRedisUrl, isSecureStellaApiUrl } from "./env-schema";
 import { logCollabEvent } from "./log";
-import { collabRedisConnectionOptions } from "./redis-options";
+import { createCollabRedisClient } from "./redis-client";
 
 type CollabAuthContext = {
   roomId: string;
@@ -76,11 +77,13 @@ type CreateCollabServerOptions = CreateCollabServerBaseOptions &
     | {
         mode: "redis";
         redisTlsRejectUnauthorized?: boolean;
+        redisSettings?: RedisConnectionSettings;
         redisUrl: string;
       }
     | {
         mode?: "single-process";
         redisTlsRejectUnauthorized?: never;
+        redisSettings?: never;
         redisUrl?: never;
       }
   );
@@ -305,21 +308,46 @@ export const createCollabServer = async (
       }
     }
   };
-  const redisExtension =
+  let publishPolicyStatus: StorePolicyStatus | "checking" = "checking";
+  const redisClients =
     options.mode === "redis"
+      ? {
+          publish: createCollabRedisClient({
+            storeClass: "durable-coordination",
+            redisUrl: options.redisUrl,
+            rejectUnauthorized: options.redisTlsRejectUnauthorized ?? true,
+            settings: options.redisSettings ?? {},
+            onPolicyStatus: (status) => {
+              publishPolicyStatus = status;
+              updateRedisReadiness();
+            },
+          }),
+          subscribe: createCollabRedisClient({
+            storeClass: "cache",
+            redisUrl: options.redisUrl,
+            rejectUnauthorized: options.redisTlsRejectUnauthorized ?? true,
+            settings: options.redisSettings ?? {},
+          }),
+        }
+      : null;
+  const extensionClients =
+    redisClients === null ? [] : [redisClients.publish, redisClients.subscribe];
+  const redisExtension =
+    redisClients !== null
       ? new RedisExtension({
           awaitInitialSyncTimeout: REDIS_INITIAL_SYNC_TIMEOUT_MS,
           createClient: () =>
-            new RedisClient(
-              collabRedisConnectionOptions(
-                options.redisUrl,
-                options.redisTlsRejectUnauthorized,
-              ),
+            extensionClients.shift() ??
+            panic(
+              "Collaboration extension requested an undeclared Redis client",
             ),
           lockTimeout: REDIS_LOCK_TIMEOUT_MS,
           prefix: FOLIO_COLLAB_REDIS_SCOPE,
         })
       : null;
+  if (extensionClients.length !== 0) {
+    panic("Collaboration extension did not consume its declared Redis clients");
+  }
 
   const updateRedisReadiness = () => {
     if (redisExtension === null || shuttingDown) {
@@ -327,6 +355,8 @@ export const createCollabServer = async (
     }
 
     const nextReady =
+      publishPolicyStatus !== "checking" &&
+      publishPolicyStatus !== "refused" &&
       redisExtension.pub.status === "ready" &&
       redisExtension.sub.status === "ready";
     if (nextReady === redisReady) {
@@ -349,6 +379,9 @@ export const createCollabServer = async (
   ) => {
     if (shuttingDown) {
       return;
+    }
+    if (transport === "publish" && signal !== "error") {
+      publishPolicyStatus = "checking";
     }
 
     const wasReady = redisReady;
@@ -387,6 +420,17 @@ export const createCollabServer = async (
       markRedisUnavailable("subscribe", "end"),
     );
     updateRedisReadiness();
+    // The subscriber starts through the extension's initial SUBSCRIBE. The
+    // publisher also needs an initial connection before any room is opened.
+    void Result.tryPromise({
+      try: async () => await redisExtension.pub.connect(),
+      catch: (cause: unknown) => cause,
+    }).then((connected) => {
+      if (Result.isError(connected)) {
+        markRedisUnavailable("publish", "error");
+      }
+      return;
+    });
   }
 
   const tokenStates = new Map<string, CollabRoomTokenState>();

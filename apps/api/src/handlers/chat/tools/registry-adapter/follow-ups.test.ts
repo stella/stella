@@ -1,10 +1,13 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { toSafeId } from "@/api/lib/branded-types";
 import { containsRawUuid } from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
@@ -39,7 +42,7 @@ const INV_UUID = "66666666-6666-4666-8666-666666666666";
 const buildContext = (tx: unknown): McpRequestContext => {
   const { safeDb, scopedDb } = createScopedDbMock(tx);
   return buildMcpContextFromChat({
-    memberRole: "owner",
+    memberRole: sessionMemberRole("owner"),
     organizationId: toSafeId<"organization">("org_1"),
     safeDb,
     scopedDb,
@@ -48,6 +51,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
       pinnedIds: [],
     }),
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
   });
 };
 
@@ -136,6 +140,7 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
         chainable([
           {
             id: TE_UUID,
+            activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
             entityId: ENTITY_UUID,
             userId: null,
             dateWorked: "2026-01-01",
@@ -217,6 +222,7 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
                 narrative: "work",
                 narrativeLanguage: null,
                 invoiceNarrative: null,
+                noCharge: false,
                 status: "invoiced",
                 workItem: { id: ENTITY_UUID, name: "Deed" },
               },

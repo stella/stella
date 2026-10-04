@@ -43,7 +43,8 @@ import type {
 } from "@/lib/chat-edit-mode";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { APIError, toAPIError } from "@/lib/errors/api";
+import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+import { APIError, chatRefusal, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
@@ -163,6 +164,24 @@ export const sendThreadChatMessage = async (
 
 const getChatApiPath = () => apiUrl("/chat");
 
+/** Runs `callback` once, later; the returned function cancels it. */
+export type ChatEmitScheduler = (callback: () => void) => () => void;
+
+// Twenty emits a second: the rate the render-storm canary
+// (lib/render-storm-canary.ts) is calibrated against. One emit can commit
+// twice (the page, then a store it syncs, such as a streamed draft in the
+// inspector).
+const STREAM_EMIT_INTERVAL_MS = 50;
+
+// A timer, not an animation frame: a hidden tab pauses frames, and its
+// transcript must still advance.
+const scheduleStreamEmit: ChatEmitScheduler = (callback) => {
+  const timeout = setTimeout(callback, STREAM_EMIT_INTERVAL_MS);
+  return () => {
+    clearTimeout(timeout);
+  };
+};
+
 type CreateChatRuntimeProps = {
   /** The thread's turn not yet settled when the page loaded, which Stop
    *  cancels until a request names a newer one. */
@@ -175,6 +194,9 @@ type CreateChatRuntimeProps = {
   /** Reload the thread from what the server stored: once a stop has settled,
    *  or once the page has left a turn that was still running. */
   reloadThread: () => void;
+  /** When subscribers hear about messages that changed while a response
+   *  streams. Defaults to `STREAM_EMIT_INTERVAL_MS` later. */
+  scheduleEmit?: ChatEmitScheduler | undefined;
 };
 
 type ActiveToolResultOperation = {
@@ -275,6 +297,7 @@ export const createChatRuntime = ({
   onError,
   onFinish,
   reloadThread,
+  scheduleEmit = scheduleStreamEmit,
 }: CreateChatRuntimeProps): ChatRuntime => {
   const listeners = new Set<() => void>();
   let activeToolResultOperation: ActiveToolResultOperation | undefined;
@@ -306,10 +329,32 @@ export const createChatRuntime = ({
     }
   };
 
+  let cancelScheduledEmit: (() => void) | undefined;
+
   const emit = () => {
+    cancelScheduledEmit?.();
+    cancelScheduledEmit = undefined;
     for (const listener of listeners) {
       listener();
     }
+  };
+
+  // A streamed response changes `messages` once per chunk, hundreds of times
+  // a second for a large tool input. `snapshot` always holds the latest, so
+  // imperative readers never lag; subscribers hear about it once per
+  // `scheduleEmit` interval. Every other change emits at once and carries the
+  // latest messages with it, so no subscriber sees a status, error or stop
+  // ahead of the messages it describes, and a run's last messages arrive with
+  // its end.
+  const emitMessagesChange = () => {
+    if (!snapshot.isLoading && !snapshot.sessionGenerating) {
+      emit();
+      return;
+    }
+    cancelScheduledEmit ??= scheduleEmit(() => {
+      cancelScheduledEmit = undefined;
+      emit();
+    });
   };
 
   const setSnapshot = (patch: Partial<ChatRuntimeSnapshot>) => {
@@ -457,13 +502,21 @@ export const createChatRuntime = ({
       setSnapshot({ error });
     },
     onErrorChange: (error) => {
+      // The SDK can replay a transport failure as a generic RUN_ERROR after
+      // reporting its typed cause. A new request clears the error first.
+      if (
+        error !== undefined &&
+        ((actionAdmissionOutcome(snapshot.error) &&
+          !actionAdmissionOutcome(error)) ||
+          (chatRefusal(snapshot.error) !== null && chatRefusal(error) === null))
+      ) {
+        return;
+      }
       if (error === undefined || !isStoppedTurn()) {
         setSnapshot({ error });
       }
     },
-    onFinish: () => {
-      onFinish();
-    },
+    onFinish,
     onInterruptStateChange: observeInterruptSubmission,
     onLoadingChange: (isLoading) => {
       setSnapshot({
@@ -472,13 +525,42 @@ export const createChatRuntime = ({
       });
     },
     onMessagesChange: (messages) => {
-      setSnapshot({ messages: toPersistedChatMessages(messages) });
+      snapshot = { ...snapshot, messages: toPersistedChatMessages(messages) };
+      emitMessagesChange();
     },
     onSessionGeneratingChange: (sessionGenerating) =>
       setSnapshot({ sessionGenerating }),
     onStatusChange: (status) => setSnapshot({ status }),
     tools: [browserTool.tool],
   });
+
+  /**
+   * Wait for the page's request to end before answering a card or an
+   * approval. The server sends a run's RUN_FINISHED, which carries the
+   * interrupt an answer resolves, only once it has stored the turn, so the
+   * card can be answered before the page knows that interrupt. TanStack
+   * applies such an answer to the message, finds nothing to resolve, and then
+   * hydrates the interrupt as pending: the card reads answered and the turn
+   * never continues. Once the request has ended the interrupt is known.
+   * Resolves false when the user stopped the turn meanwhile: its answers
+   * never leave the page. A request closed by `client.stop()` needs no check
+   * here; TanStack drops an answer to the stream it stopped.
+   */
+  const awaitRequestEnd = async (): Promise<boolean> => {
+    if (!snapshot.isLoading) {
+      return true;
+    }
+    await new Promise<void>((resolve) => {
+      const listener = () => {
+        if (!snapshot.isLoading) {
+          listeners.delete(listener);
+          resolve();
+        }
+      };
+      listeners.add(listener);
+    });
+    return !isStoppedTurn();
+  };
 
   const withBody = async (
     options: ChatSendMessageOptions | undefined,
@@ -617,6 +699,9 @@ export const createChatRuntime = ({
     response: { approved: boolean; id: string },
     options: ChatSendMessageOptions | undefined,
   ) => {
+    if (!(await awaitRequestEnd())) {
+      return;
+    }
     await withBody(options, async () => {
       const interrupt = client
         .getInterrupts()
@@ -770,6 +855,9 @@ export const createChatRuntime = ({
         return;
       }
       await enqueueToolResult(async () => {
+        if (!(await awaitRequestEnd())) {
+          return;
+        }
         const messagesBeforeResult = snapshot.messages;
         const errorBeforeResult = snapshot.error;
         const operation: ActiveToolResultOperation = { rejection: undefined };
@@ -886,7 +974,24 @@ export const createChatRuntime = ({
 
 const toPersistedChatMessages = (
   messages: readonly UIMessage<ChatClientTools>[],
-): PersistedChatMessage[] => [...messages];
+): PersistedChatMessage[] =>
+  messages.map((message) => {
+    if (
+      message.role !== "assistant" ||
+      !message.parts.some(
+        (part) => part.type === "text" && part.content.trim().length === 0,
+      )
+    ) {
+      return message;
+    }
+    // RUN_ERROR can leave whitespace parts that server finalization drops.
+    return {
+      ...message,
+      parts: message.parts.filter(
+        (part) => part.type !== "text" || part.content.trim().length > 0,
+      ),
+    };
+  });
 
 const isChatUiMessage = (
   message: ModelMessage | UIMessage,

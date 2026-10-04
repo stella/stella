@@ -17,7 +17,8 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -39,6 +40,8 @@ const config = {
     "matter's last member, when a timer of theirs is still running, or when " +
     "they own more work obligations than one call may unassign at once.",
   permissions: { workspace: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  realtime: workspaceRealtimeUpdates,
   mcp: { type: "covered", by: "manage_organization" },
   params: workspaceParams({ userId: tUserId }),
 } satisfies WorkspaceHandlerConfig;

@@ -3,13 +3,14 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
 import { auditLogs } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
 } from "@/api/lib/audit-log";
+import { auditChangesForResource } from "@/api/lib/audit-log-details";
 import { escapeCSV } from "@/api/lib/csv";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -21,6 +22,8 @@ import {
 } from "./query";
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
+  contentDelivery: { type: "audited" },
   permissions: { auditLog: ["read"] },
   mcp: { type: "internal", reason: "ui_navigation_state" },
   query: readAuditLogsQuerySchema,
@@ -120,6 +123,7 @@ const exportAuditLogs = createSafeRootHandler(
       const u = row.userId ? userMap.get(row.userId) : undefined;
       const userName = u?.name ?? "";
       const userEmail = u?.email ?? "";
+      const changes = auditChangesForResource(row.resourceType, row.changes);
       csvRows.push(
         [
           escapeCSV(new Date(row.createdAt).toISOString()),
@@ -128,7 +132,7 @@ const exportAuditLogs = createSafeRootHandler(
           escapeCSV(row.action),
           escapeCSV(row.resourceType),
           escapeCSV(row.resourceId),
-          escapeCSV(row.changes ? JSON.stringify(row.changes) : ""),
+          escapeCSV(changes ? JSON.stringify(changes) : ""),
         ].join(","),
       );
     }

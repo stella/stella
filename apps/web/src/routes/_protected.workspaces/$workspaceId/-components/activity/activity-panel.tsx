@@ -1,4 +1,11 @@
-import { Suspense, useCallback, useDeferredValue, useState } from "react";
+import {
+  createContext,
+  Suspense,
+  use,
+  useCallback,
+  useDeferredValue,
+  useState,
+} from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import {
@@ -63,11 +70,11 @@ import {
   SheetTitle,
 } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { DocumentIcon } from "@/components/document-icon";
+import { FileThumbnail } from "@/components/file-thumbnail";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterIcon } from "@/components/matter-icon";
 import { PersonMentionLabel } from "@/components/person-mention-label";
@@ -81,6 +88,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   FULL_DATE_LONG_TIME_FORMAT,
   MEDIUM_DATE_SHORT_TIME_FORMAT,
@@ -116,6 +124,10 @@ import {
 } from "./activity-panel.logic";
 
 type ActivityPanelProps = { workspaceId: string };
+
+/** The matter whose activity is shown; file thumbnails are served per matter. */
+const ActivityWorkspaceContext = createContext<string | null>(null);
+
 type ActivityDay = [ActivityGroup, ...ActivityGroup[]];
 type ActivityViewMode = "timeline" | "list";
 
@@ -450,26 +462,26 @@ const ActivityAdvancedFilters = ({
                       .then((result) => {
                         if (result.isError) {
                           getAnalytics().captureError(result.error);
-                          stellaToast.add({
-                            description: userErrorFromThrown(
-                              result.error,
-                              t("common.unexpectedError"),
-                            ),
-                            title: t("errors.actionFailed"),
-                            type: "error",
-                          });
+                          notifyUserError(
+                            result.error,
+                            t("errors.actionFailed"),
+                            {
+                              description: userErrorFromThrown(
+                                result.error,
+                                t("common.unexpectedError"),
+                              ),
+                            },
+                          );
                         }
                         return result;
                       })
                       .catch((error: unknown) => {
                         getAnalytics().captureError(error);
-                        stellaToast.add({
+                        notifyUserError(error, t("errors.actionFailed"), {
                           description: userErrorFromThrown(
                             error,
                             t("common.unexpectedError"),
                           ),
-                          title: t("errors.actionFailed"),
-                          type: "error",
                         });
                       });
                     detached(request, "activity-panel.fetch-actors");
@@ -560,13 +572,12 @@ const ActivityExportMenu = ({
     setExporting(false);
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error);
-      stellaToast.add({
-        title:
-          APIError.is(result.error) && result.error.status === 413
-            ? t("settings.organization.auditLogsExportTooLarge")
-            : t("workspaces.views.exportFailed"),
-        type: "error",
-      });
+      notifyUserError(
+        result.error,
+        APIError.is(result.error) && result.error.status === 413
+          ? t("settings.organization.auditLogsExportTooLarge")
+          : t("workspaces.views.exportFailed"),
+      );
       return;
     }
 
@@ -594,10 +605,7 @@ const ActivityExportMenu = ({
     detached(
       exportActivity(format).catch((error: unknown) => {
         getAnalytics().captureError(error);
-        stellaToast.add({
-          title: t("workspaces.views.exportFailed"),
-          type: "error",
-        });
+        notifyUserError(error, t("workspaces.views.exportFailed"));
       }),
       "activity-panel.export",
     );
@@ -658,23 +666,19 @@ const ActivityTimeline = ({
           // as a rejection, so it is captured here too; the `.catch` below only
           // sees a rejected request.
           getAnalytics().captureError(result.error);
-          stellaToast.add({
+          notifyUserError(result.error, t("errors.actionFailed"), {
             description: userErrorFromThrown(
               result.error,
               t("common.unexpectedError"),
             ),
-            title: t("errors.actionFailed"),
-            type: "error",
           });
         }
         return result;
       })
       .catch((error: unknown) => {
         getAnalytics().captureError(error);
-        stellaToast.add({
+        notifyUserError(error, t("errors.actionFailed"), {
           description: userErrorFromThrown(error, t("common.unexpectedError")),
-          title: t("errors.actionFailed"),
-          type: "error",
         });
       });
     detached(request, "activity-panel.fetch-next-page");
@@ -739,7 +743,7 @@ const ActivityTimeline = ({
   }
 
   return (
-    <>
+    <ActivityWorkspaceContext value={workspaceId}>
       <div className="bg-background ring-foreground/5 overflow-hidden rounded-xl shadow-sm ring-1">
         {activityContent}
       </div>
@@ -752,7 +756,7 @@ const ActivityTimeline = ({
         }}
         workspaceId={workspaceId}
       />
-    </>
+    </ActivityWorkspaceContext>
   );
 };
 
@@ -1335,6 +1339,10 @@ const ActivityList = ({
                       <BidiText as="span">
                         <ActivityGroupTargetName group={group} />
                       </BidiText>
+                      <ActivityTargetThumbnail
+                        className="col-start-2 mt-1.5 size-10"
+                        group={group}
+                      />
                     </span>
                   </button>
                 </td>
@@ -1628,6 +1636,11 @@ type ActivityTripletProps = {
   size: "compact" | "default";
 };
 
+/**
+ * Actor, action and target share one two-column grid: a fixed leading column
+ * holds the avatar and the target icon, so the actor's name, the action and
+ * the target's name all start at the same inline offset.
+ */
 const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
   const item = group.items[0];
   const compact = size === "compact";
@@ -1637,42 +1650,109 @@ const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
   return (
     <span
       className={cn(
-        "min-w-0 wrap-anywhere",
+        "grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-1.5 wrap-anywhere",
         compact ? "text-[13px] leading-5" : "text-sm leading-5",
       )}
     >
-      <span className="block min-h-5 font-medium">
-        <Performer item={item} />
+      <PerformerCells item={item} />
+      <span className="col-start-2 mt-1">
+        <ActivityAction group={group} />
       </span>
-      <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5">
-        <span aria-hidden="true" />
-        <span>
-          <ActivityAction group={group} />
-        </span>
+      <span className="mt-1 flex size-5 items-center justify-center">
+        {activityGroupTargetIcon(group)}
       </span>
-      <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-1.5 font-medium">
-        <span className="flex size-5 items-center justify-center">
-          {activityGroupTargetIcon(group)}
-        </span>
-        <BidiText as="span">
-          <ActivityGroupTargetName group={group} />
-        </BidiText>
-      </span>
+      <BidiText as="span" className="mt-1 font-medium">
+        <ActivityGroupTargetName group={group} />
+      </BidiText>
+      <ActivityTargetThumbnail
+        className="col-start-2 mt-2 size-16"
+        group={group}
+      />
       {showProvenance && (
         <span
           className={cn(
-            compact
-              ? "text-muted-foreground text-2xs mt-0.5 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5 leading-4"
-              : "text-muted-foreground mt-0.5 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5 text-xs leading-4",
+            "text-muted-foreground col-start-2 mt-0.5",
+            compact ? "text-2xs leading-4" : "text-xs leading-4",
           )}
         >
-          <span aria-hidden="true" />
-          <span>
-            <TriggerDetail item={item} />
-          </span>
+          <TriggerDetail item={item} />
         </span>
       )}
     </span>
+  );
+};
+
+/**
+ * The performer as two cells of the triplet grid: the avatar (or automation
+ * glyph) in the leading column and the name in the text column.
+ */
+const PerformerCells = ({ item }: { item: MatterActivityItem }) => {
+  const t = useTranslations();
+  if (item.performer.type === "user") {
+    return (
+      <PersonMentionLabel
+        avatarClassName="size-5 text-2xs"
+        className="contents"
+        mention={{
+          deletedAt: item.performer.deletedAt,
+          image: item.performer.image,
+          name:
+            item.performer.name ??
+            t("workspaces.overview.activity.deletedUser"),
+        }}
+      />
+    );
+  }
+  return (
+    <>
+      <span className="flex size-5 items-center justify-center">
+        {item.performer.type === "agent" ? (
+          <BotIcon className="size-3.5" />
+        ) : (
+          <WorkflowIcon className="size-3.5" />
+        )}
+      </span>
+      <BidiText as="span" className="min-h-5 font-medium">
+        {item.performer.name ??
+          t("workspaces.overview.activity.automatedService")}
+      </BidiText>
+    </>
+  );
+};
+
+/**
+ * A preview of the image a single-file row is about. Rows about several files,
+ * deleted files, or files without a generated thumbnail render nothing.
+ */
+const ActivityTargetThumbnail = ({
+  className,
+  group,
+}: {
+  className: string;
+  group: ActivityGroup;
+}) => {
+  const workspaceId = use(ActivityWorkspaceContext);
+  const item = group.items[0];
+  const { target } = item;
+  if (
+    workspaceId === null ||
+    (group.type === "document_batch" && group.items.length > 1) ||
+    target.deleted ||
+    !target.fieldId ||
+    !target.hasThumbnail
+  ) {
+    return null;
+  }
+  return (
+    <FileThumbnail
+      alt={target.name ?? ""}
+      className={className}
+      fallbackIcon={activityTargetIcon(item)}
+      fieldId={target.fieldId}
+      hasThumbnail={target.hasThumbnail}
+      placeholder={target.placeholder}
+      workspaceId={workspaceId}
+    />
   );
 };
 

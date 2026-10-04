@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -35,7 +35,9 @@ import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
+import { createChatStreamMock } from "@/api/tests/helpers/chat-stream-mock";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -81,12 +83,7 @@ const loadWebSearchProviders = async () =>
     },
   });
 
-const streamChatMock = mock(
-  async () =>
-    new Response("stream started", {
-      headers: { "Content-Type": "text/event-stream" },
-    }),
-);
+const streamChatMock = createChatStreamMock();
 
 const sendMessage = createSendMessage({
   compactMessagesForContext,
@@ -199,7 +196,7 @@ const callerContext = () => ({
   getActiveWorkspaceIds: async () => [ids.wsA1, ids.wsA2],
   getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
     workspaces().find(({ id }) => id === workspaceId) ?? null,
-  memberRole: { role: "owner" as const },
+  memberRole: sessionMemberRole("owner"),
   orgAIConfig,
   safeDb,
   scopedDb,
@@ -322,6 +319,7 @@ const sendAccepts = async (chat: Chat): Promise<ReadonlySet<string>> => {
       },
       createAuditRecorder: () => async () => undefined,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      managedAIResidency: "eu" as const,
       pinServerValidatedWorkspaceId: () => false,
       promptCachingEnabled: false,
       recordAuditEvent: async () => undefined,

@@ -11,7 +11,7 @@
  */
 
 import { panic } from "better-result";
-import JSZip from "jszip";
+import type JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -26,10 +26,13 @@ import {
 } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { loadDocx } from "@/api/lib/docx-archive";
 import { isLookupFormatKey } from "@/api/lib/docx/types";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
+import { collectClauseSlots } from "./discover-clause-slots";
+import type { ClauseSlot } from "./discover-clause-slots";
 import { scanPlaceholders } from "./discover-placeholders";
 import {
   arrayFieldFromFilters,
@@ -57,6 +60,7 @@ import {
   type TemplateWarning,
 } from "./template-warnings";
 import type {
+  ClauseProvenance,
   DiscoveredField,
   DiscoveredPlaceholder,
   DiscoveredTemplate,
@@ -401,6 +405,7 @@ const buildConditionMapFromRanges = (
 type DocumentFieldDeclaration = {
   filters: readonly FilterCall[];
   signature: string;
+  clause?: ClauseProvenance | undefined;
   paragraphIndex: number;
   /** A loop path's filters configure the repeat, not a value, so the two are
    *  read by different halves of the catalogue. */
@@ -447,6 +452,7 @@ type RecordDeclarationOptions = {
   paragraphIndex: number;
   path: string;
   scope?: "value" | "array";
+  clause?: ClauseProvenance | undefined;
 };
 
 const recordFieldDeclaration = ({
@@ -456,6 +462,7 @@ const recordFieldDeclaration = ({
   paragraphIndex,
   path,
   scope = "value",
+  clause,
 }: RecordDeclarationOptions): void => {
   if (filters.length === 0) {
     return;
@@ -463,7 +470,13 @@ const recordFieldDeclaration = ({
   const signature = filterChainSignature(filters);
   const existing = declarations.get(path);
   if (existing === undefined) {
-    declarations.set(path, { filters, signature, paragraphIndex, scope });
+    declarations.set(path, {
+      filters,
+      signature,
+      paragraphIndex,
+      scope,
+      clause,
+    });
     return;
   }
   if (existing.signature === signature) {
@@ -953,6 +966,7 @@ const mergeAnalysis = (
       paragraphIndex: declaration.paragraphIndex,
       path,
       scope: declaration.scope,
+      clause: declaration.clause,
     });
   }
   for (const path of secondary.conditionPaths) {
@@ -986,6 +1000,7 @@ const mergeAnalysis = (
  */
 const analyzeHeadersAndFooters = async (
   zip: JSZip,
+  slots: Map<string, ClauseSlot>,
 ): Promise<AnalysisResult> => {
   const result: AnalysisResult = {
     fields: new Map(),
@@ -1026,6 +1041,7 @@ const analyzeHeadersAndFooters = async (
       continue;
     }
 
+    collectClauseSlots(container, slots);
     const source = hdr ? "header" : "footer";
     const offset = source === "header" ? headerParaCount : footerParaCount;
     // Count before analysis: normalizing a row-form marker adds a paragraph of
@@ -1056,10 +1072,14 @@ const analyzeHeadersAndFooters = async (
 
 export const discoverTemplate = async (
   file: ScannedFile,
+  additionalContent: readonly {
+    container: slimdom.Element;
+    clause: ClauseProvenance;
+  }[] = [],
 ): Promise<DiscoveredTemplate> => {
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(file.bytes);
+  const zip = await loadDocx(file.bytes);
   const emptyResult: DiscoveredTemplate = {
+    clauseSlots: [],
     placeholders: [],
     fields: [],
     structureErrors: [],
@@ -1082,6 +1102,8 @@ export const discoverTemplate = async (
     return emptyResult;
   }
 
+  const slots = new Map<string, ClauseSlot>();
+  collectClauseSlots(body, slots);
   const primary = analyzeContainer(body);
 
   // Tag body errors with their source
@@ -1089,8 +1111,30 @@ export const discoverTemplate = async (
     err.source = "body";
   }
 
+  const clauseFieldPaths = new Set<string>();
+  for (const { container, clause } of additionalContent) {
+    const analysis = analyzeContainer(container);
+    for (const path of analysis.fields.keys()) {
+      clauseFieldPaths.add(path);
+    }
+    for (const declaration of analysis.documentFilters.values()) {
+      declaration.clause = clause;
+    }
+    for (const error of analysis.errors) {
+      error.source = "clause";
+      error.clause = clause;
+    }
+    const previousErrors = primary.errors.length;
+    mergeAnalysis(primary, analysis);
+    // Cross-container declaration conflicts are raised during the merge.
+    for (const error of primary.errors.slice(previousErrors)) {
+      error.source = "clause";
+      error.clause = clause;
+    }
+  }
+
   // Scan headers and footers for additional fields
-  const hfAnalysis = await analyzeHeadersAndFooters(zip);
+  const hfAnalysis = await analyzeHeadersAndFooters(zip, slots);
   mergeAnalysis(primary, hfAnalysis);
 
   const { fields, errors, placeholderCounts, fieldConditions } = primary;
@@ -1150,6 +1194,8 @@ export const discoverTemplate = async (
   discoveredFields.sort((a, b) => compareCodeUnit(a.path, b.path));
 
   return {
+    clauseSlots: [...slots.values()],
+    clauseFieldPaths: [...clauseFieldPaths],
     placeholders,
     fields: discoveredFields,
     structureErrors: errors,
@@ -1224,6 +1270,8 @@ const foldRenderedLookups = (
         `${declaration.signature}. Every marker that renders the field has to ` +
         "carry the same lookup, because they are all printing one hit.",
       paragraphIndex: declaration.paragraphIndex,
+      source: declaration.clause === undefined ? undefined : "clause",
+      clause: declaration.clause,
       directive: `{{ ${path} | lookup(…) }}`,
     });
   }
@@ -1242,10 +1290,10 @@ const documentLayerFields = ({
   errors,
 }: DocumentLayerOptions): FieldMeta[] => {
   const fields: FieldMeta[] = [];
-  for (const [path, { filters, paragraphIndex, scope }] of foldRenderedLookups(
-    declarations,
-    errors,
-  )) {
+  for (const [
+    path,
+    { filters, paragraphIndex, scope, clause },
+  ] of foldRenderedLookups(declarations, errors)) {
     const { field, issues } =
       scope === "array"
         ? arrayFieldFromFilters(path, filters)
@@ -1253,6 +1301,8 @@ const documentLayerFields = ({
     for (const { filter, hint, message } of issues) {
       errors.push({
         message: `${message} ${hint}`,
+        source: clause === undefined ? undefined : "clause",
+        clause,
         paragraphIndex,
         directive: `{{ ${path} | ${filter}(…) }}`,
       });
@@ -1262,4 +1312,29 @@ const documentLayerFields = ({
     }
   }
   return foldItemCountConstraints(fields, arrayPaths).fields;
+};
+
+/** Read clause declarations using the same discovery engine as a full fill. */
+export const discoverContainerFields = (
+  container: slimdom.Element,
+): FieldMeta[] => {
+  const analysis = analyzeContainer(container);
+  const fields = documentLayerFields({
+    arrayPaths: new Set(
+      [...analysis.fields]
+        .filter(([, field]) => field.kind === "array")
+        .map(([path]) => path),
+    ),
+    declarations: analysis.documentFilters,
+    errors: analysis.errors,
+  });
+  for (const field of fields) {
+    if (
+      analysis.fields.get(field.path)?.kind === "boolean" &&
+      field.inputType === undefined
+    ) {
+      field.inputType = "boolean";
+    }
+  }
+  return fields;
 };

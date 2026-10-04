@@ -60,6 +60,8 @@ import {
   type WalkInlinesOptions,
   appendTextInline,
   inlinesToPlainText,
+  ownTableRows,
+  visibleHtmlText,
   walkInlines,
 } from "./shared-inlines";
 
@@ -524,7 +526,7 @@ const trimEdge = (inlines: Inline[], edge: "start" | "end"): void => {
 };
 
 const textOf = (el: cheerio.Cheerio<AnyNode>): string =>
-  el.text().replace(/\s+/gu, " ").trim();
+  visibleHtmlText(el).replace(/\s+/gu, " ").trim();
 
 // ── Keywords ───────────────────────────────────────────────
 
@@ -559,7 +561,7 @@ const LOOSE_KEYWORD_SEPARATOR = /\s[–—]\s/u;
 const extractKeywords = ($document: cheerio.Cheerio<AnyNode>): string[] => {
   // Read the raw text rather than `textOf`: the separator is defined by
   // its exact spacing, which whitespace collapsing would destroy.
-  const raw = $document.find(sel(CLASS.index)).first().text().trim();
+  const raw = visibleHtmlText($document.find(sel(CLASS.index)).first()).trim();
   if (!raw) {
     return [];
   }
@@ -592,7 +594,7 @@ export const ecjStatesKeywordChain = (html: string): boolean =>
 
 export const ecjKeywordSpacingNeedsVerbatim = (html: string): boolean => {
   const $ = cheerio.load(html);
-  const raw = $(sel(CLASS.index)).first().text().trim();
+  const raw = visibleHtmlText($(sel(CLASS.index)).first()).trim();
   return (
     raw.length > 0 &&
     !KEYWORD_SEPARATOR.test(raw) &&
@@ -781,7 +783,7 @@ const visitChild = ({
 
   if (node !== undefined && isText(node)) {
     const inlines: Inline[] = [];
-    appendTextInline(inlines, $el.text());
+    appendTextInline(inlines, node.data);
     const normalizedInlines = collapseWhitespace(inlines);
     const plainText = inlinesToPlainText(normalizedInlines).trim();
     if (!plainText) {
@@ -931,8 +933,8 @@ const sectionHeadingLevel = (
   // separates a heading from body prose, and from a party name, which
   // is emphasized but carries no marker.
   const emphasized = Math.max(
-    dense($body.find(sel(CLASS.bold)).text()),
-    dense($body.find(sel(CLASS.italic)).text()),
+    dense(visibleHtmlText($body.find(sel(CLASS.bold)))),
+    dense(visibleHtmlText($body.find(sel(CLASS.italic)))),
   );
   if (emphasized < titleLength) {
     return undefined;
@@ -989,6 +991,13 @@ const visitTable = (
   builder: BlockBuilder,
   $table: cheerio.Cheerio<AnyNode>,
 ): void => {
+  $table.children("caption").each((_, caption) => {
+    const inlines = walkEcjInlines($, $(caption));
+    const plainText = inlinesToPlainText(inlines).trim();
+    if (plainText) {
+      pushParagraph(builder, { ...roleOf(builder.zone), inlines, plainText });
+    }
+  });
   // A spec-compliant tree builder gives every row an explicit section
   // parent, but that parent is `<tbody>` only for rows the source left
   // unsectioned: rows the source put in `<thead>` or `<tfoot>` stay
@@ -997,51 +1006,48 @@ const visitTable = (
   // labels of a quoted tariff table, or the note under it — which is the
   // one failure rule 10 does not allow, and which the cell selector
   // below cannot catch because the row never reaches it.
-  $table
-    .children("thead, tbody, tfoot")
-    .children("tr")
-    .each((_, tr) => {
-      // `th` counts as a cell. A decision quoting a tariff or rate
-      // table carries that table's column labels in a header row, and
-      // a row selected as `td` alone yields no cells at all — so the
-      // row would be dropped whole rather than shaped wrong.
-      const cells = $(tr).children("td, th").toArray();
-      const [markerCell, contentCell, ...extraCells] = cells;
-      if (!markerCell) {
-        return;
-      }
-      if (!contentCell) {
-        visitCell($, builder, $(markerCell), undefined);
-        return;
-      }
+  ownTableRows($table).each((_, tr) => {
+    // `th` counts as a cell. A decision quoting a tariff or rate
+    // table carries that table's column labels in a header row, and
+    // a row selected as `td` alone yields no cells at all — so the
+    // row would be dropped whole rather than shaped wrong.
+    const cells = $(tr).children("td, th").toArray();
+    const [markerCell, contentCell, ...extraCells] = cells;
+    if (!markerCell) {
+      return;
+    }
+    if (!contentCell) {
+      visitCell($, builder, $(markerCell), undefined);
+      return;
+    }
 
-      const $marker = $(markerCell).find(sel(CLASS.count)).first();
-      const pointNumber = POINT_ID.exec($marker.attr("id") ?? "")?.groups?.[
-        "number"
-      ];
+    const $marker = $(markerCell).find(sel(CLASS.count)).first();
+    const pointNumber = POINT_ID.exec($marker.attr("id") ?? "")?.groups?.[
+      "number"
+    ];
 
-      if (pointNumber === undefined) {
-        // Unanchored markers ("–", "(22)", "1.") belong to the text: they
-        // number a quoted recital or an operative-part item.
-        visitCell($, builder, $(contentCell), {
-          marker: textOf($(markerCell)),
-        });
-      } else {
-        builder.zone = builder.zone === "header" ? "body" : builder.zone;
-        visitCell($, builder, $(contentCell), {
-          number: Number.parseInt(pointNumber, 10),
-        });
-      }
+    if (pointNumber === undefined) {
+      // Unanchored markers ("–", "(22)", "1.") belong to the text: they
+      // number a quoted recital or an operative-part item.
+      visitCell($, builder, $(contentCell), {
+        marker: textOf($(markerCell)),
+      });
+    } else {
+      builder.zone = builder.zone === "header" ? "body" : builder.zone;
+      visitCell($, builder, $(contentCell), {
+        number: Number.parseInt(pointNumber, 10),
+      });
+    }
 
-      // The marker/content pair is the converter's shape for a numbered
-      // paragraph, not a bound on the row: a quoted table has a column
-      // per tariff heading, description and rate, and the pair alone
-      // would silently keep the first two of them. Anything past the
-      // pair still contributes its text, in document order.
-      for (const cell of extraCells) {
-        visitCell($, builder, $(cell), undefined);
-      }
-    });
+    // The marker/content pair is the converter's shape for a numbered
+    // paragraph, not a bound on the row: a quoted table has a column
+    // per tariff heading, description and rate, and the pair alone
+    // would silently keep the first two of them. Anything past the
+    // pair still contributes its text, in document order.
+    for (const cell of extraCells) {
+      visitCell($, builder, $(cell), undefined);
+    }
+  });
 };
 
 type CellContext =
@@ -1135,7 +1141,7 @@ const visitCell = (
 
   $cell.contents().each((_, child) => {
     if (isText(child)) {
-      appendTextInline(run, $(child).text(), anonymized);
+      appendTextInline(run, child.data, anonymized);
       return;
     }
 

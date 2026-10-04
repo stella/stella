@@ -2,9 +2,9 @@ import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Transaction } from "prosemirror-state";
-import { TextSelection } from "prosemirror-state";
-import type { EditorView } from "prosemirror-view";
+import type { Transaction } from "@tiptap/pm/state";
+import { TextSelection } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -31,7 +31,6 @@ import {
   TextQuoteIcon,
 } from "@stll/ui/icons";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
-import { stellaToast } from "@stll/ui/toast";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -39,10 +38,12 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   clausesOptions as clauseLibraryOptions,
-  knowledgeKeys,
+  invalidateTemplateClauseSources,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
@@ -586,9 +587,7 @@ export const useTemplateStudioSlashMenu = ({
       .templates({ templateId: toSafeId<"template">(templateId) })
       .clauses.put({ clauseId: toSafeId<"clause">(clauseId), slotName });
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.linkFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.linkFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -597,12 +596,7 @@ export const useTemplateStudioSlashMenu = ({
       return;
     }
     detached(
-      queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.templates.clauses(
-          activeOrganizationId,
-          templateId,
-        ),
-      }),
+      invalidateTemplateClauseSources(queryClient, activeOrganizationId),
       "template-studio-slash-menu.invalidate",
     );
   };

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import * as p from "drizzle-orm/pg-core";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
 import { INGESTION_ROLE_NAME } from "./role-names";
@@ -983,6 +984,32 @@ export const mcpOAuthStatePolicies = () => [
   }),
 ];
 
+// Organization-scoped like `orgPolicies`, with the update policy also
+// checking the written row so a review cannot move to another organization.
+export const mcpConnectorAuthorizationReviewPolicies = () => [
+  p.pgPolicy("organization_select", {
+    for: "select",
+    to: stella,
+    using: organizationCheck,
+  }),
+  p.pgPolicy("organization_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: organizationCheck,
+  }),
+  p.pgPolicy("organization_update", {
+    for: "update",
+    to: stella,
+    using: organizationCheck,
+    withCheck: organizationCheck,
+  }),
+  p.pgPolicy("organization_delete", {
+    for: "delete",
+    to: stella,
+    using: organizationCheck,
+  }),
+];
+
 // SharePoint (Microsoft Graph) delegated connections are per user+org, so
 // their rows are visible only to the owning user within the active org —
 // the same fail-closed shape as mcp_user_connections.
@@ -1137,6 +1164,51 @@ const organizationManagerCheck = sql`EXISTS (
     ))
     AND m.role IN (${organizationManagementRoleValues})
 )`;
+
+// Internal work is visible to its owner and approvers, never every org member.
+const internalTimeEntryAccessCheck = sql`(
+  activity_group = '${sql.raw(TIME_ENTRY_ACTIVITY_GROUP.INTERNAL)}'
+  AND EXISTS (
+    SELECT 1 FROM member m
+    WHERE m.organization_id = time_entries.organization_id
+      AND m.user_id = (SELECT current_setting('${sql.raw(SETTING_USER_ID)}', true))
+      AND (time_entries.user_id = (SELECT current_setting('${sql.raw(SETTING_USER_ID)}', true))
+        OR approver_user_id = (SELECT current_setting('${sql.raw(SETTING_USER_ID)}', true))
+        OR m.role IN (${organizationManagementRoleValues}))
+  )
+)`;
+
+const timeEntryAccessCheck = sql`(${organizationCheck} AND (
+  (activity_group = '${sql.raw(TIME_ENTRY_ACTIVITY_GROUP.CLIENT)}' AND ${workspaceCheck})
+  OR ${internalTimeEntryAccessCheck}
+))`;
+const timeEntryInsertCheck = sql`(${timeEntryAccessCheck} AND (
+  activity_group = '${sql.raw(TIME_ENTRY_ACTIVITY_GROUP.CLIENT)}' OR ${userCheck}
+))`;
+
+export const timeEntryPolicies = () => [
+  p.pgPolicy("time_entries_workspace_select", {
+    for: "select",
+    to: stella,
+    using: timeEntryAccessCheck,
+  }),
+  p.pgPolicy("time_entries_workspace_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: timeEntryInsertCheck,
+  }),
+  p.pgPolicy("time_entries_workspace_update", {
+    for: "update",
+    to: stella,
+    using: timeEntryAccessCheck,
+    withCheck: timeEntryAccessCheck,
+  }),
+  p.pgPolicy("time_entries_workspace_delete", {
+    for: "delete",
+    to: stella,
+    using: timeEntryAccessCheck,
+  }),
+];
 
 /**
  * Who may write a skill row: owners and admins for team skills, the author for

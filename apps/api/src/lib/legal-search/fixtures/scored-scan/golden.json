@@ -78,8 +78,18 @@
       "roundCapHit": false,
       "highlightRounds": 1
     },
-    "scanRequests": [{ "from": 0, "size": 300 }],
-    "highlightRequests": [{ "maxHits": 40, "clauses": 10 }]
+    "scanRequests": [
+      {
+        "from": 0,
+        "size": 300
+      }
+    ],
+    "highlightRequests": [
+      {
+        "maxHits": 40,
+        "clauses": 10
+      }
+    ]
   },
   "small:2": {
     "pageRanked": [
@@ -115,8 +125,8 @@
       }
     ],
     "nextCursor": null,
-    "passageCountById": "8824130456118165787c44c429a7cca81e8408609e1740fe5c59162df2f643f5",
-    "anchorIdById": "82b57a82e15f267e67af0c1e937ce0deba9ddf158dfd01c206078c3a0795a1a3",
+    "passageCountById": "fcdc4426505a3996698445b50fc81aff8fd329a2dc65ce3958ccd0d49d45a4f1",
+    "anchorIdById": "896083a057d1b6fb3e0978537479b978973ed63c0e0a887be466f27fe7bddc88",
     "snippetById": "006289395fd012641e3023c0f94bb370b7dd764bcbc041386b54c551f1547a43",
     "scan": {
       "rounds": 1,
@@ -125,8 +135,18 @@
       "roundCapHit": false,
       "highlightRounds": 1
     },
-    "scanRequests": [{ "from": 0, "size": 300 }],
-    "highlightRequests": [{ "maxHits": 20, "clauses": 5 }]
+    "scanRequests": [
+      {
+        "from": 0,
+        "size": 300
+      }
+    ],
+    "highlightRequests": [
+      {
+        "maxHits": 20,
+        "clauses": 5
+      }
+    ]
   },
   "wide:1": {
     "pageRanked": [
@@ -207,8 +227,18 @@
       "roundCapHit": false,
       "highlightRounds": 1
     },
-    "scanRequests": [{ "from": 0, "size": 300 }],
-    "highlightRequests": [{ "maxHits": 40, "clauses": 10 }]
+    "scanRequests": [
+      {
+        "from": 0,
+        "size": 300
+      }
+    ],
+    "highlightRequests": [
+      {
+        "maxHits": 40,
+        "clauses": 10
+      }
+    ]
   },
   "wide:2": {
     "pageRanked": [
@@ -279,8 +309,8 @@
       "sort": "relevance",
       "windowStart": 0
     },
-    "passageCountById": "85e086af2bfa3d5d000c70a3fd0b7e824baabb668eafec8635ed3f7d8723cffc",
-    "anchorIdById": "1a3f25fc960443712016625389e966e7ef0e7e71297ae19dccee3a6db72925be",
+    "passageCountById": "615269409b6e48b16d825dc760ae8837397658994c045f6ce2459a47f94920b4",
+    "anchorIdById": "b5c7ad6c74b2701a76f67aa070899ede73551984caf6fe82c587f35bd6f05b5f",
     "snippetById": "1fdcfb8291a872a5e439f95d26e86b0b160c22c476fb29d8746d575bc9ad35bf",
     "scan": {
       "rounds": 1,
@@ -289,8 +319,18 @@
       "roundCapHit": false,
       "highlightRounds": 1
     },
-    "scanRequests": [{ "from": 0, "size": 300 }],
-    "highlightRequests": [{ "maxHits": 40, "clauses": 10 }]
+    "scanRequests": [
+      {
+        "from": 0,
+        "size": 300
+      }
+    ],
+    "highlightRequests": [
+      {
+        "maxHits": 40,
+        "clauses": 10
+      }
+    ]
   },
   "deep-page:1": {
     "pageRanked": [
@@ -911,8 +951,18 @@
       "roundCapHit": false,
       "highlightRounds": 1
     },
-    "scanRequests": [{ "from": 0, "size": 300 }],
-    "highlightRequests": [{ "maxHits": 400, "clauses": 100 }]
+    "scanRequests": [
+      {
+        "from": 0,
+        "size": 300
+      }
+    ],
+    "highlightRequests": [
+      {
+        "maxHits": 400,
+        "clauses": 100
+      }
+    ]
   },
   "deep-page:2": {
     "pageRanked": [
@@ -1523,8 +1573,8 @@
       "sort": "relevance",
       "windowStart": 0
     },
-    "passageCountById": "536d007e2ca06466348e43a79d518adf5ee947add06dc452799c86b7e89e7d42",
-    "anchorIdById": "4c634ccdd2340304e07f70e18ed5066e798e60ebe55409f172925413f4e04f82",
+    "passageCountById": "1e115b561d054c49b4eaab0d221d2366ed1d82fddc43d695942283e68a7b10c9",
+    "anchorIdById": "c868b7c015ae8f7d846bf5d8f80fc0bfa125225532a62cc3120473058c4c9487",
     "snippetById": "2985db1c4c82b2fbea2b6f6ca5ec02bb93a2899b8cea489e41e9b638818de744",
     "scan": {
       "rounds": 3,
@@ -1534,11 +1584,25 @@
       "highlightRounds": 1
     },
     "scanRequests": [
-      { "from": 0, "size": 300 },
-      { "from": 300, "size": 300 },
-      { "from": 600, "size": 300 }
+      {
+        "from": 0,
+        "size": 300
+      },
+      {
+        "from": 300,
+        "size": 300
+      },
+      {
+        "from": 600,
+        "size": 300
+      }
     ],
-    "highlightRequests": [{ "maxHits": 400, "clauses": 100 }]
+    "highlightRequests": [
+      {
+        "maxHits": 400,
+        "clauses": 100
+      }
+    ]
   },
   "flooded:1": {
     "pageRanked": [
@@ -1679,8 +1743,18 @@
       "roundCapHit": false,
       "highlightRounds": 1
     },
-    "scanRequests": [{ "from": 0, "size": 300 }],
-    "highlightRequests": [{ "maxHits": 80, "clauses": 20 }]
+    "scanRequests": [
+      {
+        "from": 0,
+        "size": 300
+      }
+    ],
+    "highlightRequests": [
+      {
+        "maxHits": 80,
+        "clauses": 20
+      }
+    ]
   },
   "flooded:2": {
     "pageRanked": [
@@ -1811,8 +1885,8 @@
       "sort": "relevance",
       "windowStart": 0
     },
-    "passageCountById": "cc9c9376bb5a3e62075f9d0f7a89f2406cd04210a72bbf02a379b9fe704ce182",
-    "anchorIdById": "e1cd0546c9dd2532ee63d83da4fcf36b1b874636824fdaf7bdac3405a5ded97f",
+    "passageCountById": "a0558438e06f7e4c71671ffcb74830185d30b9bce0aa966dcbc20b4370c946cc",
+    "anchorIdById": "3d13734be046323a53daae967bab9b2c884c5b3695947fa19a961f268c3fe686",
     "snippetById": "96813b184a4f94e2d8ad7815fd0b690fbe471dd0cd26b32d62a22f2624e75b82",
     "scan": {
       "rounds": 2,
@@ -1822,10 +1896,21 @@
       "highlightRounds": 1
     },
     "scanRequests": [
-      { "from": 0, "size": 300 },
-      { "from": 300, "size": 300 }
+      {
+        "from": 0,
+        "size": 300
+      },
+      {
+        "from": 300,
+        "size": 300
+      }
     ],
-    "highlightRequests": [{ "maxHits": 80, "clauses": 20 }]
+    "highlightRequests": [
+      {
+        "maxHits": 80,
+        "clauses": 20
+      }
+    ]
   },
   "round-cap:1": {
     "pageRanked": [
@@ -2447,10 +2532,21 @@
       "highlightRounds": 1
     },
     "scanRequests": [
-      { "from": 0, "size": 300 },
-      { "from": 300, "size": 300 }
+      {
+        "from": 0,
+        "size": 300
+      },
+      {
+        "from": 300,
+        "size": 300
+      }
     ],
-    "highlightRequests": [{ "maxHits": 400, "clauses": 100 }]
+    "highlightRequests": [
+      {
+        "maxHits": 400,
+        "clauses": 100
+      }
+    ]
   },
   "round-cap:2": {
     "pageRanked": [
@@ -3061,8 +3157,8 @@
       "sort": "relevance",
       "windowStart": 0
     },
-    "passageCountById": "7e4bd243b6a5cbaf5cafb0b18ff491f02de44fabfd396c651342a48fd6c7818c",
-    "anchorIdById": "a9f4b4274bae42fc1eb6c23554ff90542d1da4cc6a2059fbbedb7b53f7bfd9b0",
+    "passageCountById": "efe107175591bd0006dbfd3bbc910189e55acdb1b6b1c9842444da4b572d2ff9",
+    "anchorIdById": "ffec20cc35760e2645bf5d43f538d238d92d9721fc1678a2d2b04e102d4e2542",
     "snippetById": "5c08bf88db48ac813c60081663ff9f9bbd7fc75823dcf6f1cd8dd64421a7605c",
     "scan": {
       "rounds": 3,
@@ -3072,11 +3168,25 @@
       "highlightRounds": 1
     },
     "scanRequests": [
-      { "from": 0, "size": 300 },
-      { "from": 300, "size": 300 },
-      { "from": 600, "size": 300 }
+      {
+        "from": 0,
+        "size": 300
+      },
+      {
+        "from": 300,
+        "size": 300
+      },
+      {
+        "from": 600,
+        "size": 300
+      }
     ],
-    "highlightRequests": [{ "maxHits": 400, "clauses": 100 }]
+    "highlightRequests": [
+      {
+        "maxHits": 400,
+        "clauses": 100
+      }
+    ]
   },
   "monopolised:1": {
     "pageRanked": [
@@ -3088,10 +3198,11 @@
       }
     ],
     "nextCursor": {
-      "score": 0.549787068367864,
+      "score": 0.5497870683678642,
       "id": "monopolised-flood",
       "sort": "relevance",
-      "windowStart": 900
+      "windowStart": 900,
+      "excludedGroups": ["q8l9Ic"]
     },
     "passageCountById": "aaa8b014cbc1af96b61e5dd85b7aa3e3859b65caa0761b34dcf9e79b9ac8b5aa",
     "anchorIdById": "e7f26cc6745ba1da4214fad7c8e3cda06707720e2825c3899278e0e6e412a663",
@@ -3104,11 +3215,25 @@
       "highlightRounds": 1
     },
     "scanRequests": [
-      { "from": 0, "size": 300 },
-      { "from": 300, "size": 300 },
-      { "from": 600, "size": 300 }
+      {
+        "from": 0,
+        "size": 300
+      },
+      {
+        "from": 300,
+        "size": 300
+      },
+      {
+        "from": 600,
+        "size": 300
+      }
     ],
-    "highlightRequests": [{ "maxHits": 4, "clauses": 1 }]
+    "highlightRequests": [
+      {
+        "maxHits": 4,
+        "clauses": 1
+      }
+    ]
   },
   "monopolised:2": {
     "pageRanked": [
@@ -3177,10 +3302,11 @@
       "score": 0.35499719666908447,
       "id": "monopolised-doc-0000",
       "sort": "relevance",
-      "windowStart": 900
+      "windowStart": 900,
+      "excludedGroups": ["q8l9Ic"]
     },
-    "passageCountById": "a96f3a2424af7d4e128f7231cde63a8dabfb309245b1f5cb4b98c8de9c450bfb",
-    "anchorIdById": "7428a17f75f7f027b5f93bd5f0aa58656a7862e3457d134591feac1f85f42e6f",
+    "passageCountById": "49a13e81801cb4fc39bced4afb8efe71ff95a125e8a8c8c985d31480739cee03",
+    "anchorIdById": "da1471f5282fe5995643c80a67bd06221fd6feaf6a61d9094a82256aa5176ca8",
     "snippetById": "a2d4a5dc278e1b3f153a0debd77f7c3e45d23138898b988fae7a9618d3a8672d",
     "scan": {
       "rounds": 1,
@@ -3189,8 +3315,18 @@
       "roundCapHit": false,
       "highlightRounds": 1
     },
-    "scanRequests": [{ "from": 900, "size": 300 }],
-    "highlightRequests": [{ "maxHits": 40, "clauses": 10 }]
+    "scanRequests": [
+      {
+        "from": 900,
+        "size": 300
+      }
+    ],
+    "highlightRequests": [
+      {
+        "maxHits": 40,
+        "clauses": 10
+      }
+    ]
   },
   "granular:1": {
     "pageRanked": [
@@ -3361,8 +3497,18 @@
       "roundCapHit": false,
       "highlightRounds": 1
     },
-    "scanRequests": [{ "from": 0, "size": 300 }],
-    "highlightRequests": [{ "maxHits": 100, "clauses": 25 }]
+    "scanRequests": [
+      {
+        "from": 0,
+        "size": 300
+      }
+    ],
+    "highlightRequests": [
+      {
+        "maxHits": 100,
+        "clauses": 25
+      }
+    ]
   },
   "granular:2": {
     "pageRanked": [
@@ -3523,7 +3669,7 @@
       "sort": "relevance",
       "windowStart": 0
     },
-    "passageCountById": "7f03f9e6f06f171b04d53b4d6fffa88c1e1986ee913256f05bf19b24d6119fb4",
+    "passageCountById": "27fe2fbe40ca41c1fff72100948055d1e804d80913f0daa1c1c836ffcbea4c46",
     "anchorIdById": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
     "snippetById": "020729e706627144feb716d1b988b9a468bbbf5a1128f0c8dd7f1be10077d356",
     "scan": {
@@ -3533,7 +3679,17 @@
       "roundCapHit": false,
       "highlightRounds": 1
     },
-    "scanRequests": [{ "from": 0, "size": 300 }],
-    "highlightRequests": [{ "maxHits": 100, "clauses": 25 }]
+    "scanRequests": [
+      {
+        "from": 0,
+        "size": 300
+      }
+    ],
+    "highlightRequests": [
+      {
+        "maxHits": 100,
+        "clauses": 25
+      }
+    ]
   }
 }

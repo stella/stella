@@ -18,13 +18,14 @@ import { Result } from "better-result";
 import { access, readFile } from "node:fs/promises";
 import { Temporal } from "temporal-polyfill/full";
 
-import { TOOL_ANNOTATIONS } from "./annotations.js";
+import type { CliActionAdmissionRefusal } from "./action-admission-refusal.js";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
 import { fetchLatestCliVersion } from "./cli-release-channel.js";
 import { buildVersionNudge } from "./cli-version-nudge.js";
 import { buildCliRouteTree } from "./generate-capability-tree.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
 import { generatedRouteMap } from "./generated/route-map.js";
+import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";
 import {
   fetchToolsListRaw,
   type McpClientError,
@@ -199,7 +200,7 @@ export const resolveCommandTree = async ({
   // the cached listings + the baked capability merge), so a diverged registry
   // never drops the generated capability leaves. A missing/corrupt catalog or
   // a tree that fails to build falls back to the baked-in tree (rule 6).
-  const entries = await loadBakedCapabilityCatalog();
+  const entries = loadBakedCapabilityCatalog();
   if (entries === null) {
     return { tree: generatedRouteMap, disabled };
   }
@@ -229,6 +230,7 @@ export const resolveCommandTree = async ({
 export type RefreshOutcome =
   | { status: "skipped"; reason: "no-cache" | "fresh" }
   | { status: "failed"; warning: string }
+  | { status: "admission-refused"; refusal: CliActionAdmissionRefusal }
   | { status: "refreshed"; deltaEmpty: boolean; nudge?: string };
 
 type FetchRaw = () => Promise<Result<RawToolsList, McpClientError>>;
@@ -292,6 +294,9 @@ export const refreshRegistryCache = async ({
     ),
   ]);
   if (Result.isError(raw)) {
+    if (raw.error.admission !== undefined) {
+      return { status: "admission-refused", refusal: raw.error.admission };
+    }
     return {
       status: "failed",
       warning: `registry refresh skipped: ${raw.error.message}`,

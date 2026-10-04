@@ -6,20 +6,16 @@ import {
   type BusinessRegistryLookupDetail,
 } from "@stll/api-contract";
 
-import type { ScopedDb } from "@/api/db/safe-db";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
-import { getOrganizationRegistryHandler } from "@/api/lib/business-registries/credentials";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
   BUSINESS_REGISTRY_SLUGS,
-  executeRegistryLookup,
   LOOKUP_DETAIL_DESCRIPTION,
 } from "@/api/lib/business-registries/dispatch";
-import type {
-  BusinessRegistrySlug,
-  RegistryLookupResponse,
-} from "@/api/lib/business-registries/dispatch";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 
 // A tuple of literals keeps each option in the route types, where a mapped
 // array widens to `never`; `satisfies` fails when the contract list changes.
@@ -46,61 +42,6 @@ const querySchema = t.Object({
   ),
 });
 
-export type LookupBusinessRegistryProps = {
-  scopedDb: ScopedDb;
-  organizationId: SafeId<"organization">;
-  registry: BusinessRegistrySlug;
-  q: string;
-  detail?: BusinessRegistryLookupDetail | undefined;
-  executeLookup?: typeof executeRegistryLookup | undefined;
-};
-
-// Native-tool preferences control discovery, not access to public records.
-export const lookupBusinessRegistryShared = async ({
-  scopedDb,
-  organizationId,
-  registry,
-  q,
-  detail,
-  executeLookup = executeRegistryLookup,
-}: LookupBusinessRegistryProps): Promise<
-  Result<RegistryLookupResponse, HandlerError>
-> => {
-  const configured = await Result.tryPromise({
-    try: async () =>
-      await getOrganizationRegistryHandler({
-        scopedDb,
-        organizationId,
-        registry,
-      }),
-    catch: (cause) =>
-      new HandlerError({
-        status: 500,
-        message: "Could not load registry configuration",
-        cause,
-      }),
-  });
-  if (configured.isErr()) {
-    return Result.err(configured.error);
-  }
-  const handler = configured.value;
-  if (!handler.isDeployAvailable()) {
-    return Result.err(
-      new HandlerError({
-        status: 428,
-        code: "registry_configuration_required",
-        message: `Configure credentials for the '${registry}' registry before searching`,
-      }),
-    );
-  }
-
-  const result = await executeLookup({ handler, query: q, detail });
-  if (result instanceof HandlerError) {
-    return Result.err(result);
-  }
-  return Result.ok(result);
-};
-
 const businessRegistriesLookup = createSafeRootHandler(
   {
     description:
@@ -108,12 +49,18 @@ const businessRegistriesLookup = createSafeRootHandler(
       "identifier (company/registration number, VAT number) for an exact " +
       "match, or a company name to search where the register supports it.",
     permissions: { workspace: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "lookup_business_registry" },
     access: "read",
     query: querySchema,
   },
   async function* ({ query, scopedDb, session }) {
+    const observer = actionRequestObserver(
+      session.activeOrganizationId,
+      ACTION_COST_CALL_KIND.registryRequest,
+    );
     const result = await lookupBusinessRegistryShared({
+      observer,
       scopedDb,
       organizationId: session.activeOrganizationId,
       registry: query.registry,

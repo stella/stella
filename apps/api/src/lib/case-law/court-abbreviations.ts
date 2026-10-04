@@ -1,3 +1,4 @@
+// parser-output-unchanged: The apex abbreviation list feeds search tool text only, not parsed records.
 /**
  * The short form a lawyer writes a court as: ÚS, NS, NSS, KS, SN, NSA, CJEU.
  *
@@ -122,8 +123,8 @@ const APEX_COURT_PATTERNS = {
   ],
   SVK: [
     [/ústavný\s+súd/iu, "ÚS"],
-    [/najvyšší\s+správny\s+súd/iu, "NSS"],
-    [/najvyšší\s+súd/iu, "NS"],
+    [/najvyšš(?:í|ieho)\s+správn(?:y|eho)\s+súd(?:u)?/iu, "NSS"],
+    [/najvyšš(?:í|ieho)\s+súd(?:u)?/iu, "NS"],
   ],
   // Anchored to the court directory's canonical name, the one spelling a
   // decision of that court is stored under.
@@ -188,6 +189,17 @@ const apexCourtPatterns = new Map<
   string,
   readonly (readonly [RegExp, string])[]
 >(Object.entries(APEX_COURT_PATTERNS));
+
+/**
+ * The apex-court abbreviations a stored country's court names carry, in the
+ * registry's order; empty for a country the registry has no patterns for.
+ */
+export const apexCourtAbbreviations = (country: string): readonly string[] => {
+  const patterns = apexCourtPatterns.get(country.toUpperCase());
+  return patterns === undefined
+    ? []
+    : patterns.map(([, abbreviation]) => abbreviation);
+};
 
 /** The abbreviation a jurisdiction's apex-court names carry, or none. */
 const courtAbbreviationFromName = (

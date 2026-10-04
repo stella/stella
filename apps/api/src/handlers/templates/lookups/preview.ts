@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { getOrganizationRegistryHandler } from "@/api/lib/business-registries/credentials";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
@@ -13,6 +13,10 @@ import {
 } from "@/api/lib/docx/lookup-fields";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 
 import { getLookupPreviewOutcome } from "../lookup-preview-cache";
 
@@ -33,7 +37,13 @@ const config = {
     "a 404 when the company is not found. Outcomes are cached per register " +
     "and number, and no model is involved.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "template_authoring_ui",
+    consumesServices: true,
+  },
   access: "read",
   body: lookupPreviewBodySchema,
 } satisfies HandlerConfig;
@@ -48,6 +58,10 @@ const config = {
 const lookupPreview = createSafeRootHandler(
   config,
   async function* ({ body, scopedDb, session }) {
+    const observer = actionRequestObserver(
+      session.activeOrganizationId,
+      ACTION_COST_CALL_KIND.registryRequest,
+    );
     const { registry, format } = body;
     const number = body.number.trim();
     const registryName = lookupRegistryName(registry);
@@ -87,6 +101,7 @@ const lookupPreview = createSafeRootHandler(
       );
     }
     const resolveLookup = createDispatchLookupResolver({
+      observer,
       dispatch: { ...BUSINESS_REGISTRY_DISPATCH, [registry]: handler },
     });
     const cacheKey = `${session.activeOrganizationId}:${registry}:${handler.cacheVersion ?? "deployment"}:${number.replaceAll(/\s/gu, "")}`;

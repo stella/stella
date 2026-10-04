@@ -3,7 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { correspondence } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -14,6 +14,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandValidatedCorrespondenceCursorId } from "@/api/lib/safe-id-boundaries";
 
 type CorrespondenceRow = typeof correspondence.$inferSelect;
@@ -77,7 +78,13 @@ const config = {
   description:
     "List correspondence filed in a matter, newest received first. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "correspondence" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "correspondence",
+    consumesServices: false,
+  },
   access: "read",
   query: t.Object({
     cursor: t.Optional(tPaginationCursor()),
@@ -98,7 +105,7 @@ const listCorrespondence = createSafeHandler(
         }),
       );
     }
-    const limit = query.limit ?? PAGE_SIZE;
+    const limit = normalizeTenantPageLimit(query.limit ?? PAGE_SIZE);
     const rows = yield* Result.await(
       safeDb(
         async (tx) =>

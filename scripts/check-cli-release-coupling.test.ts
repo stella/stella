@@ -1,6 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { propertyConfig } from "@stll/property-testing";
@@ -13,6 +23,8 @@ import {
   compareStableVersions,
   findSurfaceDrift,
   parseGeneratedConstants,
+  readHeadSurface,
+  readPublishedPackageSurface,
   verdictFromClassification,
   type CliContractSurface,
   type PublishedCli,
@@ -356,7 +368,7 @@ describe("release workflows run the gate", () => {
     readFileSync(path.join(REPO_ROOT, file), "utf-8");
 
   test("the tag workflow refuses a stable tag before pushing it", () => {
-    const workflow = read(".github/workflows/tag-on-version-bump.yml");
+    const workflow = read(".github/workflows/release-tag.yml");
     const gate = workflow.indexOf(SCRIPT);
     const push = workflow.indexOf("- name: Push tag");
     expect(gate).toBeGreaterThan(0);
@@ -368,4 +380,206 @@ describe("release workflows run the gate", () => {
       `bun ${SCRIPT} --base "origin/$BASE_REF"`,
     );
   });
+});
+
+describe("catalog storage layout preserves the release contract", () => {
+  const entries = [
+    {
+      id: "matters.get",
+      inputSchema: { properties: { id: { type: "string" } }, type: "object" },
+    },
+    { id: "matters.list", inputSchema: { type: "object", properties: {} } },
+  ];
+
+  const withPackageFixture = (callback: (root: string) => void): void => {
+    const root = mkdtempSync(path.join(tmpdir(), "stella-cli-surface-"));
+    try {
+      for (const [part, metadata] of Object.entries(CLI_CONTRACT_SURFACE)) {
+        if (part === "capability-catalog.json") {
+          continue;
+        }
+        for (const relativePath of [
+          `packages/cli/${part}`,
+          `package/${metadata.published}`,
+        ]) {
+          const file = path.join(root, relativePath);
+          mkdirSync(path.dirname(file), { recursive: true });
+          writeFileSync(
+            file,
+            metadata.kind === "json" ? "{}" : "export const contract = {};",
+          );
+        }
+      }
+      mkdirSync(path.join(root, "packages/cli/capabilities"));
+      // Reverse creation order and object keys: neither is contract drift.
+      for (const entry of entries.toReversed()) {
+        writeFileSync(
+          path.join(root, "packages/cli/capabilities", `${entry.id}.json`),
+          JSON.stringify({ inputSchema: entry.inputSchema, id: entry.id }),
+        );
+      }
+      return callback(root);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+
+  test.each(["legacy", "shards"])(
+    "compares the head shards against %s published data",
+    (layout) => {
+      withPackageFixture((root) => {
+        const publishedRoot = path.join(root, "package");
+        if (layout === "legacy") {
+          writeFileSync(
+            path.join(publishedRoot, "capability-catalog.json"),
+            JSON.stringify(entries),
+          );
+        } else {
+          mkdirSync(path.join(publishedRoot, "capabilities"));
+          for (const entry of entries) {
+            writeFileSync(
+              path.join(publishedRoot, "capabilities", `${entry.id}.json`),
+              JSON.stringify(entry),
+            );
+          }
+        }
+        const publishedSurface = readPublishedPackageSurface(publishedRoot);
+        expect(
+          findSurfaceDrift({
+            head: readHeadSurface(root),
+            published: publishedSurface,
+          }),
+        ).toEqual([]);
+        writeFileSync(
+          path.join(root, "packages/cli/capabilities/matters.list.json"),
+          '{"id":"matters.list","inputSchema":{"changed":true}}',
+        );
+        expect(
+          findSurfaceDrift({
+            head: readHeadSurface(root),
+            published: publishedSurface,
+          }),
+        ).toEqual(["capability-catalog.json"]);
+      });
+    },
+  );
+
+  test("reads the head contract in a checkout without installed dependencies", () => {
+    withPackageFixture((root) => {
+      const directory = path.join(root, "scripts");
+      mkdirSync(directory);
+      for (const file of [
+        "check-cli-release-coupling.ts",
+        "changeset-guard.ts",
+        "changeset-entry.ts",
+      ]) {
+        copyFileSync(
+          path.join(REPO_ROOT, "scripts", file),
+          path.join(directory, file),
+        );
+      }
+      writeFileSync(
+        path.join(root, "read-surface.ts"),
+        'import { readHeadSurface } from "./scripts/check-cli-release-coupling";\n' +
+          'process.stdout.write(readHeadSurface(import.meta.dirname)["capability-catalog.json"]);\n',
+      );
+      const result = Bun.spawnSync([process.execPath, "read-surface.ts"], {
+        cwd: root,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.stderr.toString()).toBe("");
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(result.stdout.toString())).toEqual(entries);
+    });
+  });
+
+  test("fails closed when a shard does not match its filename", () => {
+    withPackageFixture((root) => {
+      writeFileSync(
+        path.join(root, "packages/cli/capabilities/matters.list.json"),
+        JSON.stringify(entries),
+      );
+      expect(() => readHeadSurface(root)).toThrow(
+        "must contain one entry matching its filename",
+      );
+    });
+  });
+});
+
+test("release contract reads committed data without installed dependencies or derived runtime outputs", () => {
+  const root = mkdtempSync(
+    path.join(tmpdir(), "stella-cli-release-no-install-"),
+  );
+  try {
+    const directory = path.join(root, "scripts");
+    mkdirSync(directory);
+    for (const file of [
+      "check-cli-release-coupling.ts",
+      "changeset-guard.ts",
+      "changeset-entry.ts",
+    ]) {
+      copyFileSync(
+        path.join(REPO_ROOT, "scripts", file),
+        path.join(directory, file),
+      );
+    }
+    for (const part of Object.keys(CLI_CONTRACT_SURFACE)) {
+      // The catalog's committed data is the per-capability shard directory.
+      if (part === "capability-catalog.json") {
+        const archive = spawnSync(
+          "git",
+          ["archive", "--format=tar", "HEAD", "packages/cli/capabilities"],
+          { cwd: REPO_ROOT, timeout: 10_000, maxBuffer: 64 * 1024 * 1024 },
+        );
+        expect(archive.error).toBeUndefined();
+        expect(archive.status, archive.stderr.toString()).toBe(0);
+        const extracted = spawnSync("tar", ["-x", "-C", root], {
+          input: archive.stdout,
+          timeout: 10_000,
+        });
+        expect(extracted.error).toBeUndefined();
+        expect(extracted.status, extracted.stderr.toString()).toBe(0);
+        continue;
+      }
+      const relativePath = `packages/cli/${part}`;
+      const committed = spawnSync("git", ["show", `HEAD:${relativePath}`], {
+        cwd: REPO_ROOT,
+        encoding: "utf-8",
+        timeout: 10_000,
+        maxBuffer: 32 * 1024 * 1024,
+      });
+      expect(committed.error).toBeUndefined();
+      expect(committed.status, committed.stderr).toBe(0);
+      const file = path.join(root, relativePath);
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, committed.stdout);
+    }
+    expect(
+      existsSync(path.join(root, "packages/cli/capability-catalog.json")),
+    ).toBe(false);
+    expect(existsSync(path.join(root, "node_modules"))).toBe(false);
+    for (const file of ["route-map.ts", "tool-annotations.ts"]) {
+      expect(
+        existsSync(path.join(root, "packages/cli/src/generated", file)),
+      ).toBe(false);
+    }
+    writeFileSync(
+      path.join(root, "read-surface.ts"),
+      'import { readHeadSurface } from "./scripts/check-cli-release-coupling";\n' +
+        "process.stdout.write(JSON.stringify(readHeadSurface(import.meta.dirname)));\n",
+    );
+    const result = spawnSync(process.execPath, ["read-surface.ts"], {
+      cwd: root,
+      encoding: "utf-8",
+      timeout: 10_000,
+      maxBuffer: 32 * 1024 * 1024,
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.stderr).toBe("");
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual(readHeadSurface(root));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

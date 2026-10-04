@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { SEARCH_PAGINATION_COMPLETE } from "@stll/api-contract/search";
+
 import {
   caseLawPublicReadDb,
   type CaseLawPublicReadTransaction,
@@ -11,6 +13,7 @@ import {
   type CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
+import { decisionTypeFilterSql } from "@/api/lib/case-law/decision-type-filter-sql";
 import {
   loadPublicCourtWeights,
   loadPublicFtsSearchConfigs,
@@ -115,7 +118,7 @@ export const providerSearchPlan = ({
     ? sql`AND d.decision_date <= ${query.dateTo}`
     : sql``;
   const typeFilter = query.documentType
-    ? sql`AND d.decision_type = ${query.documentType}`
+    ? sql`AND ${decisionTypeFilterSql(sql`d.decision_type`, query.documentType)}`
     : sql``;
   const sourceFilter = query.source
     ? sql`AND d.source_id = ${query.source}`
@@ -330,7 +333,13 @@ const searchResult = async (
         language: mapFacet(languageRaw),
       };
 
-  return { hits, facets, nextCursor, limit };
+  return {
+    hits,
+    facets,
+    nextCursor,
+    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+    limit,
+  };
 };
 
 const search = async (query: LegalSearchQuery) => {

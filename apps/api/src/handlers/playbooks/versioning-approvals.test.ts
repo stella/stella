@@ -20,6 +20,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { VERSION_CONFLICT_ERROR_CODE } from "@/api/lib/optimistic-concurrency";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -52,9 +53,10 @@ const createOrgContext = (
 
   return {
     createAuditRecorder: () => noopAuditRecorder,
-    memberRole: { role: "owner" as const },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     request: new Request("https://example.test/playbooks"),

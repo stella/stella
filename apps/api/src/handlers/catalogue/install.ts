@@ -5,8 +5,10 @@ import { findCatalogueEntry, isGithubSkillEntry } from "@stll/catalogue";
 
 import type { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { catalogueRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { installSkill, preflightSkillInstall } from "@/api/lib/skills/install";
 
@@ -31,6 +33,10 @@ const installSkillBody = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Installs a bundled skill without returning stored-file bytes.",
+  },
   description:
     "Install one catalogue skill into the organization by slug, at team " +
     "scope (the default) or private scope. Team scope requires admin or " +
@@ -38,7 +44,13 @@ const config = {
     "afterwards. Refused when that slug is already installed at the same " +
     "scope, or when the scope's skill limit is reached.",
   permissions: { agentSkill: ["create"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: catalogueRealtimeUpdates,
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   body: installSkillBody,
 } satisfies HandlerConfig;
 
@@ -54,7 +66,7 @@ const installBundledSkill = createSafeRootHandler(
   }) {
     const entry = findCatalogueEntry("skill", body.slug);
     if (
-      !env.FEATURE_PUBLIC_TOOLS &&
+      !isDeploymentFeatureEnabled("FEATURE_PUBLIC_TOOLS") &&
       entry !== undefined &&
       isGithubSkillEntry(entry)
     ) {

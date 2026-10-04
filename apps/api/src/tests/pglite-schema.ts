@@ -25,6 +25,11 @@ const CHAT_TURN_RUN_OWNERSHIP_MIGRATION_PATH = nodePath.join(
   "20261003121500_chat_turn_run_ownership",
   "migration.sql",
 );
+const SCHEDULER_OPERATOR_PAUSES_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261003123100_scheduler_operator_pauses",
+  "migration.sql",
+);
 const DOCX_SUGGESTION_SOURCE_MATTERS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260827120000_docx_suggestion_source_matters",
@@ -295,6 +300,24 @@ export const installPgliteAgentSkillRevisionTrigger = async (
   });
 };
 
+/** Install the scheduler pause audit trigger omitted by declarative schema push. */
+export const installPgliteSchedulerJobPauseLog = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    SCHEDULER_OPERATOR_PAUSES_MIGRATION_PATH,
+  ).filter((statement) => {
+    const executable = executableSql(statement);
+    return (
+      executable.startsWith("CREATE FUNCTION public.scheduler_job_pause_log") ||
+      executable.startsWith("CREATE TRIGGER scheduler_job_pause_log")
+    );
+  });
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const PDF_SIGNING_SESSIONS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260928101000_pdf_signing_sessions",
@@ -548,19 +571,42 @@ const ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH = nodePath.join(
   "migration.sql",
 );
 
+/** Install the migration-owned matter-contact capacity guard after schema push. */
+export const installPgliteWorkspaceContactCapacity = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261003125100_workspace_contact_capacity",
+      "migration.sql",
+    ),
+  ).filter((statement) => !executableSql(statement).startsWith("SET "));
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES = [
   "CREATE FUNCTION",
   "REVOKE ALL ON FUNCTION",
   "CREATE TRIGGER",
 ] as const;
 
-/** Install the member capacity function and guard omitted by schema push. */
+/** Install membership capacity and ownership guards omitted by schema push. */
 export const installPgliteOrganizationMemberCapacity = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(
-    ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH,
-  ).filter((statement) =>
+  const statements = [
+    ...readMigrationStatements(ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH),
+    ...readMigrationStatements(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261003123700_membership_role_invariants",
+        "migration.sql",
+      ),
+    ),
+  ].filter((statement) =>
     ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES.some((prefix) =>
       executableSql(statement).startsWith(prefix),
     ),
@@ -594,6 +640,31 @@ export const installPgliteTimeEntryTimerSignals = async (
   }
 };
 
+/** Install the trigger that derives a playbook's document type key from scope. */
+export const installPglitePlaybookDocumentTypeKey = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261003125200_playbook_document_type_reference",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("CREATE TRIGGER")
+    );
+  });
+  if (statements.length !== 2) {
+    panic("Expected the playbook document type key function and trigger");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 export const installPgliteMigration = async ({
   db,
   migrationPath,
@@ -620,6 +691,29 @@ export const installPgliteMigration = async ({
     if (/^SET LOCAL\b/iu.test(executable)) {
       continue;
     }
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Install alias graph invariants which declarative schema push cannot express. */
+export const installPgliteDecisionAliases = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261003123000_case_law_decision_aliases",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("CREATE TRIGGER") ||
+      source.startsWith('ALTER TABLE "case_law_decision_aliases" FORCE')
+    );
+  });
+  for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }
 };

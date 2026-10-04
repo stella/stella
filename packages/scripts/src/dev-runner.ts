@@ -28,6 +28,7 @@ import {
 } from "./dev-runner-config";
 import {
   devStatePath,
+  readOrCreateDevContentEncryptionKey,
   removeDevRuntime,
   SEAL_FILE,
   writeDevRuntime,
@@ -1276,6 +1277,12 @@ export const createWebEnv = ({
   STELLA_WEB_PORT: String(ports.web),
   VITE_API_URL: publicApiUrlForPort(ports.api),
   VITE_DESKTOP_BRIDGE_PORT: String(ports.desktopBridge),
+  // Set these together after inherited/.env values so Vite sees one origin.
+  ...(baseEnv["STELLA_DEV_SAME_ORIGIN_API"] === "1" && {
+    DEV_API_PROXY_TARGET: apiUrlForPort(ports.api),
+    VITE_BROWSER_API_URL: `${webUrlForPort(ports.web)}/api`,
+    VITE_PUBLIC_APP_URL: webUrlForPort(ports.web),
+  }),
 });
 
 export const createDesktopEnv = ({
@@ -1801,7 +1808,7 @@ const buildApiEnv = ({
   rootDir,
 }: BuildApiEnvOptions) => {
   const envFilePath = path.resolve(rootDir, "apps/api/.env");
-  return {
+  const env: NodeJS.ProcessEnv = {
     ...expandEnvMap(loadEnvFile(envFilePath)),
     ...createApiEnv({
       baseEnv: stripAppEnvKeys({ baseEnv: process.env, envFilePath }),
@@ -1809,6 +1816,15 @@ const buildApiEnv = ({
       infraPorts,
       ports,
     }),
+  };
+  return {
+    ...env,
+    CONTENT_ENCRYPTION_KEY:
+      env["CONTENT_ENCRYPTION_KEY"] ||
+      readOrCreateDevContentEncryptionKey(rootDir).match({
+        ok: (key) => key,
+        err: (error) => panic(error.message),
+      }),
   };
 };
 

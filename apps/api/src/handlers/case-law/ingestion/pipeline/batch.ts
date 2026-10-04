@@ -1,4 +1,10 @@
 import { Result, panic } from "better-result";
+import { isNotNull } from "drizzle-orm";
+
+import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+} from "@stll/legal-atlas/ingestion-cycle";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawIngestionFailures } from "@/api/db/schema";
@@ -25,6 +31,8 @@ import {
   wrappedErrorDetail,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { createSourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+import type { SourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import type { DecisionRefresh } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
@@ -32,6 +40,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   ConcurrentModificationError,
+  ingestionStopKindOf,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
@@ -126,13 +135,35 @@ const logIngestionFailures = async (
   if (failures.length === 0) {
     return;
   }
+  const rows = failures.map(storableIngestionFailure);
+  const identified = rows.filter(
+    ({ recordIdentity }) => typeof recordIdentity === "string",
+  );
+  const anonymous = rows.filter(
+    ({ recordIdentity }) => typeof recordIdentity !== "string",
+  );
   // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
-  await scopedDb((tx) => {
+  await scopedDb(async (tx) => {
     // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
-    return tx
-      .insert(caseLawIngestionFailures)
-      .values(failures.map(storableIngestionFailure));
+    if (anonymous.length > 0) {
+      // Rows without an identity insert as they always have.
+      await tx.insert(caseLawIngestionFailures).values(anonymous);
+    }
+    if (identified.length > 0) {
+      // A row that names its record's identity lands once: a replay of the
+      // same record meets the partial unique index and keeps the row already
+      // there. Only that index's conflict is absorbed.
+      await tx
+        .insert(caseLawIngestionFailures)
+        .values(identified)
+        .onConflictDoNothing({
+          target: [
+            caseLawIngestionFailures.sourceId,
+            caseLawIngestionFailures.recordIdentity,
+          ],
+          where: isNotNull(caseLawIngestionFailures.recordIdentity),
+        });
+    }
   });
 };
 
@@ -196,7 +227,12 @@ export type DecisionBatchHalt =
   | { type: "retryable"; reason: ProcessRetryReason }
   | { type: "timeout"; error: TimeoutError }
   | { type: "insert-limit" }
-  | { type: "failure-streak"; tag: string; message: string }
+  | {
+      type: "failure-streak";
+      tag: string;
+      message: string;
+      stopKind: IngestionStopKind;
+    }
   | { type: "aborted" };
 
 /**
@@ -288,6 +324,7 @@ type RejectDecisionOptions = {
   tally: BatchTally;
   error: unknown;
   input: IngestionResult;
+  recordIdentity: string | undefined;
   sourceId: SafeId<"caseLawSource">;
   context: BatchLogContext;
 };
@@ -302,6 +339,7 @@ const rejectDecision = ({
   tally,
   error,
   input,
+  recordIdentity,
   sourceId,
   context: { adapterKey, cursor },
 }: RejectDecisionOptions): DecisionBatchHalt | null => {
@@ -343,6 +381,7 @@ const rejectDecision = ({
     errorType: tag.slice(0, 128),
     errorMessage: message.slice(0, 2048),
     cursor,
+    ...(recordIdentity === undefined ? {} : { recordIdentity }),
   });
   tally.skipped++;
   tally.settlements.push({
@@ -355,7 +394,12 @@ const rejectDecision = ({
   });
 
   return tally.failureStreak >= MAX_CONSECUTIVE_FAILURES
-    ? { type: "failure-streak", tag, message }
+    ? {
+        type: "failure-streak",
+        tag,
+        message,
+        stopKind: ingestionStopKindOf(error),
+      }
     : null;
 };
 
@@ -380,6 +424,9 @@ const rejectSourceRecord = ({
     errorType: record.reason,
     errorMessage: record.message,
     cursor: `${record.recordKey}:${record.recordHash}`,
+    ...(record.recordIdentity === undefined
+      ? {}
+      : { recordIdentity: record.recordIdentity }),
   });
   tally.skipped++;
   tally.settlements.push({
@@ -387,7 +434,12 @@ const rejectSourceRecord = ({
     reason: CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
   });
   return tally.failureStreak >= MAX_CONSECUTIVE_FAILURES
-    ? { type: "failure-streak", tag: record.reason, message: record.message }
+    ? {
+        type: "failure-streak",
+        tag: record.reason,
+        message: record.message,
+        stopKind: INGESTION_STOP_KIND.ADAPTER_ERROR,
+      }
     : null;
 };
 
@@ -489,19 +541,24 @@ type ApplyDecisionBatchOptions = {
  * signal stops the batch; the pack and the ledger are still written for
  * what it reached.
  */
-export const applyDecisionBatch = async ({
-  batch: { batchRecords },
-  sourceId,
-  scopedDb,
-  observation,
-  refresh,
-  corpus,
-  polarityRules,
-  context,
-  failureStreak,
-  insertLimit,
-  signal,
-}: ApplyDecisionBatchOptions): Promise<DecisionBatchApplication> => {
+export const applyDecisionBatch = async (
+  {
+    batch: { batchRecords },
+    sourceId,
+    scopedDb,
+    observation,
+    refresh,
+    corpus,
+    polarityRules,
+    context,
+    failureStreak,
+    insertLimit,
+    signal,
+  }: ApplyDecisionBatchOptions,
+  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver = createSourceMetadataUrlSchemaResolver(
+    scopedDb,
+  ),
+): Promise<DecisionBatchApplication> => {
   const tally: BatchTally = {
     inserted: 0,
     skipped: 0,
@@ -553,21 +610,24 @@ export const applyDecisionBatch = async ({
         }
         continue;
       }
-      const { decision: input } = record;
+      const { decision: input, recordIdentity } = record;
       const processed = await Result.tryPromise({
         try: async () =>
           // db-await-in-loop: per-decision ingest pipeline: identity locks, corpus write, upsert, citations, ordered per observation
-          await processDecision({
-            input,
-            sourceId,
-            scopedDb,
-            observedAt: observation.observedAt,
-            observationOrder: observation.order,
-            refresh,
-            corpus,
-            corpusBatch,
-            polarityRules,
-          }),
+          await processDecision(
+            {
+              input,
+              sourceId,
+              scopedDb,
+              observedAt: observation.observedAt,
+              observationOrder: observation.order,
+              refresh,
+              corpus,
+              corpusBatch,
+              polarityRules,
+            },
+            resolveMetadataUrlSchema,
+          ),
         catch: (cause) => cause,
       });
       halt = Result.isError(processed)
@@ -575,6 +635,7 @@ export const applyDecisionBatch = async ({
             tally,
             error: processed.error,
             input,
+            recordIdentity,
             sourceId,
             context,
           })

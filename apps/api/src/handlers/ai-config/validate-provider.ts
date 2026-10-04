@@ -4,8 +4,12 @@ import { t } from "elysia";
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 
 import { consumeValidateProviderRateLimit } from "@/api/handlers/ai-config/validate-provider-rate-limit";
+import { supportsRegion } from "@/api/lib/ai-config";
 import { probeProvider } from "@/api/lib/ai-provider-probe";
-import { createSafeSessionHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafeSessionHandler,
+} from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { isActiveOrganizationMember } from "@/api/lib/auth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -16,10 +20,13 @@ const MAX_PROBE_ERROR_DETAIL_LEN = 200;
 export const validateProviderBody = t.Object({
   provider: t.UnionEnum(TANSTACK_AI_PROVIDERS),
   apiKey: t.String({ minLength: 1, maxLength: 512 }),
-  region: t.Optional(t.Literal("global")),
+  region: t.Optional(
+    t.Union([t.Literal("global"), t.Literal("eu"), t.Literal("ch")]),
+  ),
 });
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "provider_secret" },
   body: validateProviderBody,
 } satisfies SessionHandlerConfig;
@@ -50,7 +57,21 @@ const truncateProbeError = (message: string): string =>
  */
 const validateProvider = createSafeSessionHandler(
   config,
-  async function* ({ body, request, user }) {
+  async function* ({ body, request, set, user }) {
+    if (
+      body.region &&
+      body.region !== "global" &&
+      !supportsRegion(body.provider)
+    ) {
+      return Result.err(
+        new HandlerError({
+          code: "ai_config_provider_invalid",
+          status: 400,
+          message: `The selected endpoint setting is not supported by ${body.provider}. Use global.`,
+        }),
+      );
+    }
+
     const withinBudget = yield* Result.await(
       Result.tryPromise({
         try: async () =>
@@ -72,6 +93,7 @@ const validateProvider = createSafeSessionHandler(
         try: async () =>
           await isActiveOrganizationMember({
             headers: request.headers,
+            responseHeaders: set.headers,
             userId: user.id,
           }),
         catch: probeUnavailable,

@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { stripMarkdownFences } from "@/api/lib/agent-skills/markdown-fences";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -49,7 +49,12 @@ const config = {
     "pass the result to skills.create and the resource endpoints to keep it. " +
     "Consumes AI usage.",
   permissions: { agentSkill: ["create"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: true,
+  },
   body: generateDraftBodySchema,
   // Queued / "flex" tier — the draft generator is asynchronous from
   // the user's perspective and tolerates higher latency, so we
@@ -96,6 +101,7 @@ const generateSkillDraft = createSafeRootHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
     safeDb,
@@ -103,12 +109,14 @@ const generateSkillDraft = createSafeRootHandler(
     user,
   }) {
     yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
     });
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId: session.activeOrganizationId,
@@ -128,11 +136,13 @@ const generateSkillDraft = createSafeRootHandler(
     const generation = await Result.tryPromise({
       try: async () =>
         await generateTanStackObjectForRole({
+          dataClass: "customer",
           abortSignal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
           maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
           role: "fast",
           serviceTier: "flex",
           orgAIConfig,
+          managedAIResidency,
           organizationId: session.activeOrganizationId,
           // Root-scoped handler: no workspace id is available here.
           tenantWorkspaceIds: [],

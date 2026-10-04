@@ -7,7 +7,7 @@
  */
 
 import { Result } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
   decodeSourceRawEnvelope,
@@ -28,6 +28,7 @@ import {
   readPlKioDetail,
   readPlKioListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
@@ -43,9 +44,16 @@ const gzFixtureText = async (name: string): Promise<string> =>
   );
 
 const originalFetch = globalThis.fetch;
+const originalSleep = Bun.sleep;
+
+beforeEach(() => {
+  // These fixtures prove retry outcomes; backoff timing is covered by retry.test.ts.
+  Bun.sleep = async () => {};
+});
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  Bun.sleep = originalSleep;
 });
 
 const html = (body: string, status = 200): Response =>
@@ -224,9 +232,11 @@ describe("reading a record page", () => {
         documentHtml: undefined,
       }),
     );
-    expect(decision.metadata["unmappedFields"]).toEqual({
-      Publikator: "Biuletyn Zamówień Publicznych",
-    });
+    expect(
+      Bun.deepEquals(decision.metadata["unmappedFields"], {
+        Publikator: "Biuletyn Zamówień Publicznych",
+      }),
+    ).toBe(true);
   });
 });
 
@@ -248,21 +258,26 @@ describe("building a ruling from its three pages", () => {
 
   test("joined appeals: the first is the case number, the rest are identifiers", async () => {
     const decision = await joined();
-    expect(decision.caseNumber).toBe("KIO 2845/25");
-    expect(decision.identifiers).toEqual([
-      { type: "case-number", value: "KIO 2846/25" },
-    ]);
+    expect(decision.caseNumber === "KIO 2845/25").toBe(true);
+    expect(
+      Bun.deepEquals(decision.identifiers, [
+        { type: "case-number", value: "KIO 2846/25" },
+      ]),
+    ).toBe(true);
     expect(decision.sourceDocumentId).toBe("30308");
-    expect(decision.court).toBe("Krajowa Izba Odwoławcza");
+    expect(decision.court === "Krajowa Izba Odwoławcza").toBe(true);
     expect(decision.decisionDate).toBe("2025-09-01");
-    expect(decision.decisionType).toBe("wyrok");
-    expect(decision.judges).toEqual([
-      { role: "presiding", nameAsPrinted: "Ewa Sikorska" },
-    ]);
-    expect(decision.metadata["contractingAuthority"]).toBe(
-      "PKP Polskie Linie Kolejowe Spółkę akcyjną w Warszawie",
-    );
-    expect(decision.metadata["decisionDateSource"]).toBe("publisher");
+    expect(decision.decisionType === "wyrok").toBe(true);
+    expect(
+      Bun.deepEquals(decision.judges, [
+        { role: "presiding", nameAsPrinted: "Ewa Sikorska" },
+      ]),
+    ).toBe(true);
+    expect(
+      decision.metadata["contractingAuthority"] ===
+        "PKP Polskie Linie Kolejowe Spółkę akcyjną w Warszawie",
+    ).toBe(true);
+    expect(decision.metadata["decisionDateSource"] === "publisher").toBe(true);
   });
 
   test("provisions and index terms are split into items, joined or linked singly", async () => {
@@ -292,9 +307,9 @@ describe("building a ruling from its three pages", () => {
         documentHtml: await gzFixtureText("pl-kio-content-8247.html.gz"),
       }),
     );
-    expect(decision.caseNumber).toBe("VIII Ga 248/09");
-    expect(decision.court).toBe("Sąd Okręgowy w Szczecinie");
-    expect(decision.metadata["kind"]).toBe("SO");
+    expect(decision.caseNumber === "VIII Ga 248/09").toBe(true);
+    expect(decision.court === "Sąd Okręgowy w Szczecinie").toBe(true);
+    expect(decision.metadata["kind"] === "SO").toBe(true);
     expect(decision.fulltext).toContain("W IMIENIU RZECZYPOSPOLITEJ POLSKIEJ");
     expect(decision.documentUrl).toBe(
       "https://orzeczenia.uzp.gov.pl/Home/ContentHtml/8247?Kind=SO&flection=0",
@@ -309,10 +324,10 @@ describe("building a ruling from its three pages", () => {
         documentHtml: await gzFixtureText("pl-kio-content-13694.html.gz"),
       }),
     );
-    expect(decision.caseNumber).toBe("KIO 1090/20");
+    expect(decision.caseNumber === "KIO 1090/20").toBe(true);
     expect(decision.identifiers).toBeUndefined();
     expect(decision.decisionDate).toBe("2020-07-28");
-    expect(decision.metadata["decisionDateSource"]).toBe("document");
+    expect(decision.metadata["decisionDateSource"] === "document").toBe(true);
     // The record prints "-" for the type: no type is stated, none invented.
     expect(decision.decisionType).toBeUndefined();
   });
@@ -337,10 +352,11 @@ describe("building a ruling from its three pages", () => {
     const decision = built(outcome);
     expect(decision.fulltext).toBeUndefined();
     expect(decision.isListingOnly).toBeUndefined();
-    expect(decision.caseNumber).toBe("V SA/Wa 3975/15");
-    expect(decision.metadata["challengedAuthority"]).toBe(
-      "Prezes Urzędu Zamówień Publicznych",
-    );
+    expect(decision.caseNumber === "V SA/Wa 3975/15").toBe(true);
+    expect(
+      decision.metadata["challengedAuthority"] ===
+        "Prezes Urzędu Zamówień Publicznych",
+    ).toBe(true);
   });
 
   test("a record the database no longer serves leaves a listing-only row", () => {
@@ -502,6 +518,8 @@ type Seen = { url: string; body: string };
 type StubOverrides = {
   detailStatus?: number;
   contentStatus?: number;
+  /** Serves a document body of this many bytes instead of the fixture. */
+  contentBytes?: number;
   listingStatus?: number;
   /** Replaces the captured month listing, keyed by page number. */
   monthPages?: Readonly<Record<string, string>>;
@@ -541,6 +559,9 @@ const stubPublisher = async (
       return overrides.detailStatus === undefined
         ? html(detail)
         : html("<html>Brak strony</html>", overrides.detailStatus);
+    }
+    if (overrides.contentBytes !== undefined) {
+      return html("x".repeat(overrides.contentBytes));
     }
     return overrides.contentStatus === undefined
       ? html(content)
@@ -613,9 +634,10 @@ describe("walking a month", () => {
   });
 
   test("a refused listing is the page's error and moves no cursor", async () => {
-    await stubPublisher({ listingStatus: 503 });
+    const seen = await stubPublisher({ listingStatus: 503 });
     const page = await plKioAdapter.fetchPage("2025-09:0+0", {});
     expect(Result.isError(page)).toBe(true);
+    expect(listingRequests(seen)).toHaveLength(3);
   });
 
   test("a page yielding fewer rows than its count promises fails rather than advancing", async () => {
@@ -664,7 +686,7 @@ describe("walking a month", () => {
       for (const decision of gone.value.decisions) {
         expect(decision.isListingOnly).toBeUndefined();
         expect(decision.fulltext).toBeUndefined();
-        expect(decision.metadata["presiding"]).toBe("Ewa Sikorska");
+        expect(decision.metadata["presiding"] === "Ewa Sikorska").toBe(true);
       }
     }
 
@@ -672,6 +694,20 @@ describe("walking a month", () => {
     expect(
       Result.isError(await plKioAdapter.fetchPage("2025-09:10+0", {})),
     ).toBe(true);
+  });
+
+  test("a document past the size cap keeps the record with no document", async () => {
+    await stubPublisher({ contentBytes: 16 * 1024 * 1024 + 1 });
+    const page = await plKioAdapter.fetchPage("2025-09:10+0", {});
+    expect(Result.isOk(page)).toBe(true);
+    if (Result.isOk(page)) {
+      expect(page.value.decisions).toHaveLength(10);
+      for (const decision of page.value.decisions) {
+        expect(decision.isListingOnly).toBeUndefined();
+        expect(decision.fulltext).toBeUndefined();
+        expect(decision.metadata["presiding"] === "Ewa Sikorska").toBe(true);
+      }
+    }
   });
 
   test("a counted row without a record link is kept under a quarantine identity", async () => {
@@ -694,8 +730,10 @@ describe("walking a month", () => {
     const [quarantined, keyed] = page.value.decisions;
     expect(quarantined?.sourceDocumentId).toStartWith("uzp-quarantine:");
     expect(quarantined?.isListingOnly).toBe(true);
-    expect(quarantined?.metadata["quarantineReason"]).toBe("no-record-id");
-    expect(quarantined?.caseNumber).toBe("KIO 2681/25");
+    expect(quarantined?.metadata["quarantineReason"] === "no-record-id").toBe(
+      true,
+    );
+    expect(quarantined?.caseNumber === "KIO 2681/25").toBe(true);
     expect(keyed?.sourceDocumentId).toBe("30308");
     // Only the keyed row is asked for.
     expect(
@@ -764,9 +802,11 @@ describe("walking a month", () => {
     expect(held?.sourceDocumentId).toBe("30306");
     expect(held?.isListingOnly).toBe(true);
     expect(held?.court).not.toBe("Krajowa Izba Odwoławcza");
-    expect(held?.metadata["quarantineReason"]).toBe("court-not-stated");
+    expect(held?.metadata["quarantineReason"] === "court-not-stated").toBe(
+      true,
+    );
     expect(later?.sourceDocumentId).toBe("30308");
-    expect(later?.court).toBe("Krajowa Izba Odwoławcza");
+    expect(later?.court === "Krajowa Izba Odwoławcza").toBe(true);
     expect(later?.isListingOnly).toBeUndefined();
     expect(page.value.nextCursor).toBe("2025-10:0+0");
 
@@ -910,3 +950,75 @@ describe("listing one issue date for reconciliation", () => {
     );
   });
 });
+
+test("procurement metadata ignores excluded HTML in every label and value", async () => {
+  const pageHtml = await fixtureText("pl-kio-detail-8247.html");
+  const contaminated = pageHtml.replaceAll(
+    "</label>",
+    "<script>hidden-script</script><style>hidden-style</style></label>",
+  );
+  expect(contaminated).not.toBe(pageHtml);
+  const expected = readPlKioDetail(pageHtml);
+  expect(expected).not.toBeNull();
+  expect(readPlKioDetail(contaminated)).toEqual(expected);
+});
+
+test.each(["script", "style"])(
+  "procurement recovery retains the stored raw-text quarantine fingerprint for %s content",
+  (tag) => {
+    const cleanHtml = listingRow("30306", "KIO 2681/25", "01-09-2025");
+    const contaminated = cleanHtml.replace(
+      "KIO 2681/25",
+      () => `KIO 2681/25<${tag}>hidden-content</${tag}>`,
+    );
+    expect(contaminated).not.toBe(cleanHtml);
+    const item = readPlKioListing(listingPage(1, [contaminated]))?.rows.at(0);
+    const cleanItem = readPlKioListing(listingPage(1, [cleanHtml]))?.rows.at(0);
+    expect(item).toBeDefined();
+    expect(cleanItem).toBeDefined();
+    if (item === undefined || cleanItem === undefined) {
+      return;
+    }
+    const canonical = plKioListingIdentity({ ...item, id: undefined });
+    expect(canonical).toEqual(
+      plKioListingIdentity({ ...cleanItem, id: undefined }),
+    );
+    const storedLegacyId = `uzp-quarantine:${hashContent(
+      JSON.stringify({
+        court: "Krajowa Izba Odwoławcza",
+        documentType: "wyrok",
+        signature: "KIO 2681/25hidden-content",
+        issueDate: "01-09-2025",
+      }),
+    )}`;
+    expect(canonical.type).toBe("document");
+    if (canonical.type !== "document") {
+      return;
+    }
+    expect(canonical).not.toEqual({
+      type: "document",
+      sourceDocumentId: storedLegacyId,
+    });
+    const recovered = built(
+      assemblePlKioDecision({
+        item,
+        detailHtml: undefined,
+        documentHtml: undefined,
+      }),
+    );
+    expect(recovered.sourceDocumentId).toBe("30306");
+    expect(recovered.sourceDocumentIdRepairAliases).toContain(storedLegacyId);
+    expect(recovered.sourceDocumentIdRepairAliases).toContain(
+      canonical.sourceDocumentId,
+    );
+    const held = built(
+      assemblePlKioDecision({
+        item: { ...item, id: undefined },
+        detailHtml: undefined,
+        documentHtml: undefined,
+      }),
+    );
+    expect(held.sourceDocumentId).not.toBe(storedLegacyId);
+    expect(held.sourceDocumentIdRepairAliases).toBeUndefined();
+  },
+);

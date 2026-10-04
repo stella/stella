@@ -17,7 +17,7 @@ import {
   legalListClaims,
   legalListVerificationRuns,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import {
   tPaginationCursor,
@@ -42,6 +42,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
 
 const runCursor = createTimestampIdCursorCodec({
@@ -56,8 +57,14 @@ const config = {
     "against, when it was started and finished, and how many claims landed " +
     "in each verdict state. Read one run in full with lists.verifications.get.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "document_processing",
+    consumesServices: false,
+  },
   params: workspaceParams({}),
   query: t.Object({
     entityId: tSafeId("entity"),
@@ -75,8 +82,9 @@ const config = {
 const readVerifications = createSafeHandler(
   config,
   async function* ({ query, safeDb, workspaceId }) {
-    const limit =
-      query.limit ?? LIMITS.legalListVerificationRunsPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.legalListVerificationRunsPageSizeDefault,
+    );
     const cursor =
       query.cursor === undefined ? null : runCursor.decode(query.cursor);
     if (query.cursor !== undefined && cursor === null) {

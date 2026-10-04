@@ -9,7 +9,7 @@ import {
 import type { SignalSubject } from "@stll/api-contract/signals";
 
 import { createRequestBodySchema } from "@/api/handlers/signals/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
@@ -30,7 +30,12 @@ const config = {
     "Post a manual request into the inbox: a piece of work for the legal " +
     "team, optionally scoped to a matter and assigned to a colleague.",
   permissions: { signal: ["create"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   body: createRequestBodySchema,
 } satisfies HandlerConfig;
 

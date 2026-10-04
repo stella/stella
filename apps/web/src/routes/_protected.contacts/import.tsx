@@ -48,7 +48,6 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
@@ -58,7 +57,7 @@ import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import { IMPORT_EDITABLE_FIELDS } from "@/routes/_protected.contacts/-import-candidate";
 import type { ImportEditableField } from "@/routes/_protected.contacts/-import-candidate";
@@ -205,10 +204,7 @@ function ContactImportStudio() {
 
   const inspectFile = async (file: File) => {
     if (!isSupportedFile(file)) {
-      stellaToast.add({
-        title: t("contacts.importStudio.fileInvalid"),
-        type: "error",
-      });
+      notifyUserError(undefined, t("contacts.importStudio.fileInvalid"));
       return;
     }
 
@@ -220,13 +216,7 @@ function ContactImportStudio() {
     setBusy("idle");
 
     if (Result.isError(result)) {
-      stellaToast.add({
-        title: userErrorFromThrown(
-          result.error,
-          t("contacts.importStudio.inspectFailed"),
-        ),
-        type: "error",
-      });
+      notifyUserError(result.error, t("contacts.importStudio.inspectFailed"));
       return;
     }
 
@@ -266,13 +256,7 @@ function ContactImportStudio() {
     setBusy("idle");
 
     if (Result.isError(result)) {
-      stellaToast.add({
-        title: userErrorFromThrown(
-          result.error,
-          t("contacts.importStudio.previewFailed"),
-        ),
-        type: "error",
-      });
+      notifyUserError(result.error, t("contacts.importStudio.previewFailed"));
       return;
     }
 
@@ -318,7 +302,7 @@ function ContactImportStudio() {
   const step = currentStep(state, review.results !== null);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="border-b px-4 py-4 sm:px-6">
         <div className="mx-auto flex max-w-6xl flex-col gap-4">
           <div>
@@ -446,10 +430,7 @@ const UploadStep = ({
     onDrop: (files) => {
       const file = files.at(0);
       if (files.length !== 1 || !file) {
-        stellaToast.add({
-          title: t("contacts.importStudio.fileInvalid"),
-          type: "error",
-        });
+        notifyUserError(undefined, t("contacts.importStudio.fileInvalid"));
         return;
       }
       onFile(file);

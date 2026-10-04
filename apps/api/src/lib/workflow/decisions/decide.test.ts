@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import type { Fetcher } from "@stll/fetch";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { decide, decideMany } from "@/api/lib/workflow/decisions/decide";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
@@ -104,6 +105,7 @@ describe("decideMany without a decision model", () => {
 
     const { decisions, model } = await decideMany({
       id: "test.no-backend",
+      dataClass: "customer",
       orgAIConfig: null,
       state,
       questions: { kind: kindQuestion, signed: signedQuestion },
@@ -124,9 +126,33 @@ describe("decideMany without a decision model", () => {
     expect(logs.records).toEqual([]);
   });
 
+  test("applies the request policy to an injected instance client", async () => {
+    analytics = installRecordingAnalytics();
+    logs = installRecordingLogger();
+    const wire = respondingWith({ signed: { type: "noul", noul: 0.93 } });
+    const { decisions, model } = await decideMany({
+      id: "test.request-policy",
+      dataClass: "customer",
+      orgAIConfig: null,
+      state,
+      questions: { signed: signedQuestion },
+      client: { ...wire.client, keySource: "instance" },
+    });
+    expect(decisions.signed).toEqual({
+      state: "undecided",
+      reason: "no-backend",
+      confidence: null,
+    });
+    expect(model).toBeNull();
+    expect(wire.calls()).toBe(0);
+    expect(analytics.exceptions()).toEqual([]);
+    expect(logs.records).toEqual([]);
+  });
+
   test("an empty question set asks nothing even with a client", async () => {
     const { decisions, model } = await decideMany({
       id: "test.empty",
+      dataClass: "customer",
       orgAIConfig: null,
       state,
       questions: {},
@@ -143,6 +169,7 @@ describe("the confidence floor, per answer type", () => {
     const above = respondingWith({ kind: choiceAnswer("purchase", 0.82) });
     const decided = await decideMany({
       id: "test.choice",
+      dataClass: "customer",
       orgAIConfig: null,
       state,
       questions: { kind: kindQuestion },
@@ -164,6 +191,7 @@ describe("the confidence floor, per answer type", () => {
     const below = respondingWith({ kind: choiceAnswer("purchase", 0.55) });
     const unsure = await decideMany({
       id: "test.choice",
+      dataClass: "customer",
       orgAIConfig: null,
       state,
       questions: { kind: kindQuestion },
@@ -180,6 +208,7 @@ describe("the confidence floor, per answer type", () => {
     const sure = respondingWith({ signed: { type: "noul", noul: 0.93 } });
     const decided = await decideMany({
       id: "test.noul",
+      dataClass: "customer",
       orgAIConfig: null,
       state,
       questions: { signed: signedQuestion },
@@ -196,6 +225,7 @@ describe("the confidence floor, per answer type", () => {
     const even = respondingWith({ signed: { type: "noul", noul: 0.7 } });
     const unsure = await decideMany({
       id: "test.noul",
+      dataClass: "customer",
       orgAIConfig: null,
       state,
       questions: { signed: signedQuestion },
@@ -213,6 +243,7 @@ describe("the confidence floor, per answer type", () => {
     const wire = respondingWith({ kind: choiceAnswer("lease", 0.82) });
     const { decisions } = await decideMany({
       id: "test.floor",
+      dataClass: "customer",
       orgAIConfig: null,
       state,
       questions: { kind: kindQuestion },
@@ -234,6 +265,7 @@ describe("a failed call", () => {
 
     const { decisions, model } = await decideMany({
       id: "test.failed",
+      dataClass: "customer",
       orgAIConfig: null,
       state,
       questions: { kind: kindQuestion, signed: signedQuestion },
@@ -268,15 +300,18 @@ describe("a failed call", () => {
     };
 
     expect(
-      decideMany({
-        id: "test.aborted",
-        orgAIConfig: null,
-        state,
-        questions: { signed: signedQuestion },
-        abortSignal: controller.signal,
-        client: decisionModel(fetcher),
-      }),
-    ).rejects.toThrow("Request cancelled");
+      await rejectionOf(
+        decideMany({
+          id: "test.aborted",
+          dataClass: "customer",
+          orgAIConfig: null,
+          state,
+          questions: { signed: signedQuestion },
+          abortSignal: controller.signal,
+          client: decisionModel(fetcher),
+        }),
+      ),
+    ).toHaveProperty("message", expect.stringContaining("Request cancelled"));
     expect(analytics.exceptions()).toEqual([]);
   });
 
@@ -303,6 +338,7 @@ describe("a failed call", () => {
 
     const { decisions, model } = await decideMany({
       id: "test.timeout",
+      dataClass: "customer",
       orgAIConfig: null,
       state,
       questions: { signed: signedQuestion },
@@ -330,6 +366,7 @@ describe("the log line", () => {
 
     await decideMany({
       id: "test.log",
+      dataClass: "customer",
       orgAIConfig: null,
       state,
       questions: { kind: kindQuestion, signed: signedQuestion },
@@ -363,6 +400,7 @@ describe("decide", () => {
 
     const decision = await decide({
       id: "test.single",
+      dataClass: "customer",
       orgAIConfig: null,
       state,
       question: kindQuestion,
@@ -385,6 +423,7 @@ describe("decide", () => {
   test("with no decision model it is undecided rather than absent", async () => {
     const decision = await decide({
       id: "test.single",
+      dataClass: "customer",
       orgAIConfig: null,
       state,
       question: kindQuestion,

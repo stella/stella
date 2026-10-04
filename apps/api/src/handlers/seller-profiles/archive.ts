@@ -3,7 +3,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { sellerProfiles } from "@/api/db/schema";
 import { sellerProfileParams } from "@/api/handlers/seller-profiles/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -13,7 +13,8 @@ const config = {
     "Archive an issuer profile so it is unavailable for new invoices. " +
     "The retained record remains available for historical references.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: sellerProfileParams,
 } satisfies HandlerConfig;
 

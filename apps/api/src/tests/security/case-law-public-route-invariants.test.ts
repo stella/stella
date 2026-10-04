@@ -6,6 +6,7 @@ import { RUNTIME_MODE } from "@stll/runtime-mode";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
+import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
 import type {
   CaseLawPublicReadDb,
@@ -221,7 +222,7 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": {
     gate: PUBLIC_DECISION_READ_GATE.SUBJECT,
   },
-  "apps/api/src/handlers/case-law/stored-payload.ts": {
+  "apps/api/src/lib/case-law/stored-payload.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "SQL fragments for 'this row holds a document'; no query.",
   },
@@ -318,18 +319,31 @@ const publicRouteBlock = (source: string): string => {
 };
 
 describe("public case-law route boundary", () => {
-  test("public case-law API is dark-launched outside local development", async () => {
+  test("public law APIs are dark-launched outside local development", async () => {
     const previousFeature = env.FEATURE_PUBLIC_LAW;
     env.FEATURE_PUBLIC_LAW = false;
     const restoreRuntimeMode = setRuntimeModeForTesting({
       mode: RUNTIME_MODE.strict,
     });
     try {
-      const response = await publicCaseLawRoute.handle(
-        new Request("http://localhost/case/coverage"),
-      );
+      // Each route mounts its own response schema; the gate's 404 must be
+      // served for all of them, not rejected by response validation.
+      for (const [route, path] of [
+        [publicCaseLawRoute, "/case/coverage"],
+        [publicCaseLawRoute, "/case/decisions"],
+        [publicCaseLawRoute, "/case/decisions/status"],
+        [publicLegislationRoute, "/law/statutes"],
+        [publicLegislationRoute, "/law/statutes/search?q=zakon"],
+      ] as const) {
+        const response = await route.handle(
+          new Request(`http://localhost${path}`),
+        );
 
-      expect(response.status).toBe(404);
+        expect({ path, status: response.status }).toEqual({
+          path,
+          status: 404,
+        });
+      }
     } finally {
       restoreRuntimeMode();
       env.FEATURE_PUBLIC_LAW = previousFeature;
@@ -883,6 +897,28 @@ describe("public case-law route boundary", () => {
     expect(ownerSource).toContain("storedObservationHasDetailSqlFor(");
     expect(ownerSource).not.toContain("_stellaPartialObservation");
     expect(markerSource).toContain("PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY");
+  });
+
+  test("every related-decision read in the citation graph goes through its one gate", async () => {
+    const source = await readSource(CITATION_GRAPH_FILE);
+    const count = (token: string) => source.split(token).length - 1;
+
+    // Each component of the gate is stated once, inside `visibleFor`, so no
+    // read can hand-roll a subset of it.
+    for (const component of [
+      "redistributableCaseLawSourceFor(",
+      "publishedCaseLawDecisionFor(",
+      "[...PUBLIC_CASE_LAW_COUNTRIES]",
+    ]) {
+      expect({ component, count: count(component) }).toEqual({
+        component,
+        count: 1,
+      });
+    }
+    // Every read that joins the far end's source applies the gate to it.
+    const joins = count("Join(relatedSource,");
+    expect(joins).toBeGreaterThan(0);
+    expect(count("visibleFor({")).toBe(joins);
   });
 
   test("the live citation score and its materialized twin gate the citing side alike", async () => {

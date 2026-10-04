@@ -19,7 +19,7 @@ import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
@@ -32,7 +32,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
-  getTanStackTextModelForRole,
+  getTanStackTextModelInfoForRole,
   requireTanStackAIAvailableForRole,
 } from "@/api/lib/tanstack-ai-models";
 
@@ -79,6 +79,7 @@ const runGeneration = async ({
 }: RunGenerationOptions) => {
   // audit: skip — background AI analysis output
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "public_corpus",
     feature: "case-law.analysis",
     modelRole: "fast",
     organizationId,
@@ -94,10 +95,12 @@ const runGeneration = async ({
   });
 
   try {
-    const { modelId } = getTanStackTextModelForRole("fast", orgAIConfig, {
+    const { modelId } = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
+      dataClass: "public_corpus",
       organizationId,
     });
     const result = await generateTanStackObjectForRole({
+      dataClass: "public_corpus",
       role: "fast",
       serviceTier: "standard",
       orgAIConfig,
@@ -239,6 +242,7 @@ export const generateAnalysis = async (
   // the fast role is unavailable (a pre-existing bug ran this check before
   // them, locking finished analyses behind AI configuration).
   const available = requireTanStackAIAvailableForRole({
+    dataClass: "public_corpus",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
     role: "fast",
@@ -285,7 +289,12 @@ const config = {
     "Generation runs in the background and a call made while one is already " +
     "running does not start a second.",
   permissions: { workspace: ["read"], chat: ["create"] },
-  mcp: { type: "capability", reason: "legal_corpus_admin" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    reason: "legal_corpus_admin",
+    consumesServices: true,
+  },
   // Writes a "generating" sentinel and kicks off background AI generation
   // that updates the decision row.
   access: "write",

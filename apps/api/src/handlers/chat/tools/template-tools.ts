@@ -1,13 +1,22 @@
 import { toolDefinition } from "@tanstack/ai";
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import {
+  holdsUnrestoredPlaceholder,
+  prepareTextForThirdParty,
+  restoreTextFromBoundary,
+} from "@/api/handlers/chat/third-party-boundary";
+import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { templateAiCollaboratorsForBoundary } from "@/api/handlers/chat/tools/template-ai-boundary";
+import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -15,9 +24,17 @@ import {
 } from "@/api/lib/docx/ai-field-generator";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
-import { recordTemplateFill } from "@/api/lib/templates/record-use";
+import { recordTemplateExecution } from "@/api/lib/templates/record-use";
 import { suggestTemplateFields } from "@/api/lib/templates/suggest-template-fields";
+import type { SuggestedTemplateField } from "@/api/lib/templates/suggest-template-fields";
+import {
+  decideTemplateFillCompletion,
+  fillDiagnosticsOf,
+  fillShortfallIssues,
+} from "@/api/lib/templates/template-fill-completion";
 import {
   describeStoredTemplate,
   fillStoredTemplate,
@@ -28,6 +45,11 @@ const DESCRIBE_TEMPLATE_TOOL_NAME = "describe_template" as const;
 const FILL_TEMPLATE_TOOL_NAME = "fill_template" as const;
 export const SUGGEST_TEMPLATE_FIELDS_TOOL_NAME =
   "suggest_template_fields" as const;
+
+const RECORD_FILL_FAILED_SINK = failureSink({
+  event: "templates.fill.record_failed",
+  expected: [],
+});
 
 // Exported so the playbook eval offers the tool as chat does, answered by a
 // stub, instead of a copy that can drift from it.
@@ -65,7 +87,11 @@ export const FILL_TEMPLATE_DESCRIPTION =
   "omitting or emptying it rejects the fill with the exact missing " +
   "fields instead of guessing a value or leaving a placeholder unfilled " +
   "— ask the user for those values and retry. Returns the rendered text " +
-  "plus any placeholders left unfilled.";
+  "plus any placeholders left unfilled, `completionStatus` (`partial` " +
+  "with a `shortfall` list when a placeholder, an AI draft or an " +
+  "AI-decided condition was left open; supply those and retry), and " +
+  "`unrestoredFields` naming any field whose value could not be filled " +
+  "with real values; ask the user to review those.";
 
 type CreateTemplateToolsArgs = {
   scopedDb: ScopedDb;
@@ -80,9 +106,21 @@ type CreateTemplateToolsArgs = {
    * deployments. Callers must pass it (use `null` when there is genuinely none).
    */
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   /** Records the EXECUTE audit event for a fill when present. */
   recordAuditEvent?: AuditRecorder | undefined;
+  /** The chat turn's boundary, which prepares the nested AI-field requests. */
+  thirdPartyBoundary: ChatThirdPartyBoundary;
+  dependencies?: TemplateToolDependencies | undefined;
 };
+
+type TemplateToolDependencies = {
+  fillStoredTemplate: typeof fillStoredTemplate;
+};
+
+const defaultTemplateToolDependencies = {
+  fillStoredTemplate,
+} satisfies TemplateToolDependencies;
 
 type TemplateAiAnalyticsArgs = {
   safeDb: SafeDb;
@@ -103,6 +141,7 @@ const buildTemplateAiAnalytics = ({
   feature,
 }: TemplateAiAnalyticsArgs) =>
   createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -132,7 +171,10 @@ export const createTemplateTools = ({
   organizationId,
   userId,
   orgAIConfig,
+  managedAIResidency,
   recordAuditEvent,
+  thirdPartyBoundary,
+  dependencies = defaultTemplateToolDependencies,
 }: CreateTemplateToolsArgs) => {
   // Model-backed collaborators for the manifest's AI fields, shared with the
   // web fill routes so AI placeholders behave identically: a generator for
@@ -142,9 +184,10 @@ export const createTemplateTools = ({
   // The fill service builds these only when the manifest declares an AI field.
   // tenantWorkspaceIds is empty: a chat-driven template action is org-scoped,
   // not bound to a matter (see buildTemplateAiAnalytics below).
-  const aiCollaborators = () => {
+  const aiCollaborators = (unrestoredFields: Set<string>) => {
     const shared = {
       orgAIConfig: orgAIConfig ?? null,
+      managedAIResidency,
       organizationId,
       aiAnalytics: buildTemplateAiAnalytics({
         safeDb,
@@ -155,11 +198,15 @@ export const createTemplateTools = ({
       }),
       tenantWorkspaceIds: [],
     };
-    return {
-      generateAiValue: buildAiFieldGenerator(shared),
-      decideAiCondition: buildAiConditionDecider(shared),
-      adaptAiValue: buildAiOccurrenceAdapter(shared),
-    };
+    return templateAiCollaboratorsForBoundary({
+      boundary: thirdPartyBoundary,
+      collaborators: {
+        generateAiValue: buildAiFieldGenerator(shared),
+        decideAiCondition: buildAiConditionDecider(shared),
+        adaptAiValue: buildAiOccurrenceAdapter(shared),
+      },
+      unrestoredFields,
+    });
   };
 
   return {
@@ -221,13 +268,24 @@ export const createTemplateTools = ({
       ),
     }).server(async ({ templateId, values }) => {
       const branded = brandPersistedTemplateId(templateId);
-      const result = await fillStoredTemplate({
+      // In anonymized mode the values arrive restored from the model's
+      // placeholders; one it made up stays a placeholder, and so does one in
+      // an AI draft. Both are reported instead of passing as filled.
+      const unrestoredFields = new Set(
+        Object.entries(values)
+          .filter(([, value]) =>
+            holdsUnrestoredPlaceholder(thirdPartyBoundary, value),
+          )
+          .map(([fieldPath]) => fieldPath),
+      );
+      const result = await dependencies.fillStoredTemplate({
         templateId: branded,
         values,
         scopedDb,
         organizationId,
         requiredFields: "enforce",
-        aiCollaborators,
+        useRecording: "caller",
+        aiCollaborators: () => aiCollaborators(unrestoredFields),
       });
       if ("requiredFieldsRejection" in result) {
         // A required, non-AI-fillable field was omitted or empty: reject
@@ -238,27 +296,53 @@ export const createTemplateTools = ({
           missingFields: result.requiredFieldsRejection,
         };
       }
-      if (!("error" in result)) {
-        // Record the execution (fill row + EXECUTE audit) like the REST fill
-        // routes, so agent-driven fills appear in the audit trail.
-        // Best-effort: a successful render is not discarded if the
-        // bookkeeping write fails (it is captured).
-        await scopedDb(
-          async (tx) =>
-            await recordTemplateFill({
-              tx,
-              templateId: branded,
-              organizationId,
-              userId,
-              format: "text",
-              unmatchedCount: result.unmatchedPlaceholders.length,
-              aiFieldErrorCount: result.aiFieldErrors.length,
-              unusedCount: result.unusedValues.length,
-              recordAuditEvent,
-            }),
-        ).catch(captureError);
+      if ("error" in result) {
+        return result;
       }
-      return result;
+      // A value or AI draft that kept a placeholder put the placeholder into
+      // the document: a blocking diagnostic, so the fill is partial.
+      const diagnostics = fillDiagnosticsOf(result, {
+        unrestoredFields: [...unrestoredFields].toSorted(),
+      });
+      const recorded = await recordTemplateExecution({
+        scopedDb,
+        templateId: branded,
+        organizationId,
+        userId,
+        format: "text",
+        diagnostics,
+        recordAuditEvent,
+      });
+      if (Result.isError(recorded)) {
+        observeFailure(recorded.error, { sink: RECORD_FILL_FAILED_SINK });
+        return raiseChatToolError(
+          new ChatToolError({
+            kind: "server-defect",
+            message: "The template fill could not be recorded.",
+            cause: recorded.error,
+          }),
+        );
+      }
+      // The completion decision over the whole diagnostics record: a fill
+      // with an unfilled placeholder, a failed AI draft, an undecided AI
+      // condition or an unrestored placeholder is partial, and each
+      // shortfall names what to supply.
+      const completion = decideTemplateFillCompletion({
+        mode: "allow_partial",
+        diagnostics,
+      });
+      const graded = {
+        ...result,
+        ...(completion.type === "complete"
+          ? { completionStatus: "complete" as const }
+          : {
+              completionStatus: "partial" as const,
+              shortfall: fillShortfallIssues(completion.blocking),
+            }),
+      };
+      return diagnostics.unrestoredFields.length === 0
+        ? graded
+        : { ...graded, unrestoredFields: diagnostics.unrestoredFields };
     }),
   };
 };
@@ -271,6 +355,9 @@ type CreateTemplateAuthoringToolsArgs = {
   userId: SafeId<"user">;
   /** Org AI config from the chat turn; see `createTemplateTools`. */
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
+  /** The chat turn's boundary, which prepares the nested suggestion request. */
+  thirdPartyBoundary: ChatThirdPartyBoundary;
   dependencies?: TemplateAuthoringToolDependencies | undefined;
 };
 
@@ -289,11 +376,41 @@ const defaultTemplateAuthoringToolDependencies = {
  * role into template authoring, so callers gate it behind a `template:
  * ["create"]` grant rather than the broader `["use"]`.
  */
+const restoreSuggestion = (
+  boundary: ChatThirdPartyBoundary,
+  suggestion: SuggestedTemplateField,
+): { complete: boolean; suggestion: SuggestedTemplateField } => {
+  const literal = restoreTextFromBoundary(boundary, suggestion.literalText);
+  const restore = (text: string) =>
+    restoreTextFromBoundary(boundary, text).text;
+  return {
+    complete: literal.complete,
+    suggestion: {
+      ...suggestion,
+      literalText: literal.text,
+      ...(suggestion.label === undefined
+        ? {}
+        : { label: restore(suggestion.label) }),
+      ...(suggestion.exampleValue === undefined
+        ? {}
+        : { exampleValue: restore(suggestion.exampleValue) }),
+      ...(suggestion.aiPrompt === undefined
+        ? {}
+        : { aiPrompt: restore(suggestion.aiPrompt) }),
+      ...(suggestion.hint === undefined
+        ? {}
+        : { hint: restore(suggestion.hint) }),
+    },
+  };
+};
+
 export const createTemplateAuthoringTools = ({
   safeDb,
   organizationId,
   userId,
   orgAIConfig,
+  managedAIResidency,
+  thirdPartyBoundary,
   dependencies = defaultTemplateAuthoringToolDependencies,
 }: CreateTemplateAuthoringToolsArgs) => {
   const aiAnalytics = buildTemplateAiAnalytics({
@@ -337,6 +454,27 @@ export const createTemplateAuthoringTools = ({
         }),
       ),
     }).server(async ({ text, instructions }) => {
+      // The tool receives the turn's real values. Its nested request is
+      // prepared by the turn's boundary like the turn itself, and the
+      // suggestions come back with those values restored, so the boundary
+      // prepares them once more on their way back to the model.
+      const documentText = await prepareTextForThirdParty({
+        boundary: thirdPartyBoundary,
+        text,
+      });
+      const preparedInstructions = await prepareTextForThirdParty({
+        boundary: thirdPartyBoundary,
+        text: instructions ?? "",
+      });
+      // The tool runtime reports a failed call by the error its execute
+      // function throws.
+      if (Result.isError(documentText)) {
+        throw documentText.error;
+      }
+      if (Result.isError(preparedInstructions)) {
+        throw preparedInstructions.error;
+      }
+
       // suggestTemplateFields rejects on a call failure (BYOK
       // misconfiguration, provider outage, timeout); capture the original
       // for telemetry, then throw a sanitized, stable message instead of
@@ -344,13 +482,29 @@ export const createTemplateAuthoringTools = ({
       // names, quota details) that must not reach the model verbatim.
       try {
         const suggestions = await dependencies.suggestTemplateFields({
-          documentText: text,
-          instructions: instructions ?? undefined,
+          documentText: documentText.value,
+          instructions:
+            instructions === null ? undefined : preparedInstructions.value,
           orgAIConfig: orgAIConfig ?? null,
+          managedAIResidency,
           organizationId,
           aiAnalytics,
         });
-        return { suggestions };
+        const restored = suggestions.map((suggestion) =>
+          restoreSuggestion(thirdPartyBoundary, suggestion),
+        );
+        // A suggestion whose literal text keeps a placeholder the boundary
+        // cannot restore matches nothing in the document: it is withheld and
+        // named instead.
+        const unrestoredFields = restored
+          .filter(({ complete }) => !complete)
+          .map(({ suggestion }) => suggestion.fieldPath);
+        return {
+          suggestions: restored
+            .filter(({ complete }) => complete)
+            .map(({ suggestion }) => suggestion),
+          ...(unrestoredFields.length === 0 ? {} : { unrestoredFields }),
+        };
       } catch (error) {
         aiAnalytics.captureError(error);
         throw new ChatToolError({

@@ -31,6 +31,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
 import type {
   ConditionNode,
@@ -41,6 +42,8 @@ import { useUpdateProperty } from "@/lib/workspaces/mutations/properties";
 import { isPlaybookVerdictProperty } from "@/lib/workspaces/playbook-verdicts";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { useGroupScope } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
+
+import { canEditPropertyViaComposer } from "./property-popover.logic";
 
 type PropertyPopoverProps = {
   property: WorkspaceProperty;
@@ -162,22 +165,18 @@ export const PropertyPopover = ({
       });
     },
     onError: (error) => {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
+      notifyUserError(error, t("errors.actionFailed"), {
         description: userErrorFromThrown(error, t("common.unexpectedError")),
-        type: "error",
       });
     },
   });
 
-  // The composer's CreatableContentType union excludes "file" by
-  // design — file columns are created by upload, not by user choice,
-  // and the composer has no UI for them. Hiding the entry here keeps
-  // a save from silently rewriting the file column as text/manual.
-  // Verdict columns are system-computed (read-only), so they are not
-  // editable via the composer either.
-  const canEditViaComposer =
-    property.content.type !== "file" && !isPlaybookVerdictProperty(property);
+  // The composer supports custom content types; file and computed verdict
+  // columns retain their dedicated editing controls.
+  const canEditViaComposer = canEditPropertyViaComposer(
+    property.content,
+    isPlaybookVerdictProperty(property),
+  );
 
   // `useOptimistic` mirrors the server `dependencies` while a save is
   // in flight so rapid successive edits compose against the latest
@@ -231,10 +230,7 @@ export const PropertyPopover = ({
         detached(startWorkflow(), "property-popover.start-workflow");
       } catch (error) {
         getAnalytics().captureError(error);
-        stellaToast.add({
-          title: t("errors.actionFailed"),
-          type: "error",
-        });
+        notifyUserError(error, t("errors.actionFailed"));
       } finally {
         if (dependencyGenerationRef.current === generation) {
           setImmediateDeps(null);
@@ -272,10 +268,7 @@ export const PropertyPopover = ({
       case "ai-unavailable":
         // Re-running a column is an explicit request, so say why nothing
         // happened; the side-effect call sites stay quiet on this one.
-        stellaToast.add({
-          title: t("errors.failedToStartWorkflow"),
-          type: "error",
-        });
+        notifyUserError(undefined, t("errors.failedToStartWorkflow"));
         return;
       case "failed":
         // Already reported by `useStartWorkflow`, error included.

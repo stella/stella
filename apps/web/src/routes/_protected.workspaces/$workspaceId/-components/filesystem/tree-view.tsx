@@ -38,7 +38,6 @@ import {
   FileIcon,
 } from "@stll/ui/icons";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
-import { stellaToast } from "@stll/ui/toast";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -75,6 +74,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { getFileSizeDisplay } from "@/lib/file-size";
 import { UTC_CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -765,11 +765,8 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       moveEntity.mutate(
         { workspaceId, entityId, parentId: null },
         {
-          onError: () => {
-            stellaToast.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
+          onError: (error) => {
+            notifyUserError(error, t("errors.actionFailed"));
           },
         },
       );
@@ -1280,7 +1277,7 @@ type FilesystemRowProps = {
   getAncestorIds: (id: string) => string[];
 };
 
-const FilesystemRow = ({
+export const FilesystemRow = ({
   node,
   depth = 0,
   workspaceId,
@@ -1457,11 +1454,8 @@ const FilesystemRow = ({
           parentId: node.entityId,
         },
         {
-          onError: () => {
-            stellaToast.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
+          onError: (error) => {
+            notifyUserError(error, t("errors.actionFailed"));
           },
         },
       );
@@ -1640,6 +1634,11 @@ const FilesystemRow = ({
               className="size-4 shrink-0"
               fileName={file.fileName}
               mimeType={file.mimeType}
+              thumbnail={{
+                fieldId: file.fieldId,
+                hasThumbnail: file.hasThumbnail,
+                workspaceId,
+              }}
             />
           );
         }

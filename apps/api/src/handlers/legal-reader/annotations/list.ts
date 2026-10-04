@@ -14,7 +14,7 @@ import {
 } from "@/api/handlers/legal-reader/annotations/schema";
 import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
   tPaginationCursor,
   tPaginationLimit,
@@ -28,6 +28,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegalReaderAnnotationId } from "@/api/lib/safe-id-boundaries";
 
 const querySchema = t.Object({
@@ -39,6 +40,7 @@ const querySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   description:
     "List the highlights and comments on one decision or statute version: the caller's own and those colleagues shared.",
   mcp: { type: "tool", name: "list_reader_annotations" },
@@ -120,7 +122,9 @@ export const listReaderAnnotationsHandler = async function* ({
   safeDb,
   userId,
 }: ListReaderAnnotationsProps) {
-  const limit = query.limit ?? LIMITS.readerAnnotationsPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.readerAnnotationsPageSizeDefault,
+  );
   const conditions = [
     eq(legalReaderAnnotations.organizationId, organizationId),
     eq(

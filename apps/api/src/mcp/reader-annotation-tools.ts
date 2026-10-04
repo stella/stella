@@ -646,6 +646,7 @@ const MARK_OWNERSHIP =
 
 const READER_ANNOTATION_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List reader annotations",
       destructiveHint: false,
@@ -659,6 +660,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
       "anchor and quote, oldest first.",
     inputSchema: listArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: deriveTextFieldPaths(readerAnnotationTextFieldSpecs("")),
@@ -667,6 +669,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Create reader annotation",
       destructiveHint: false,
@@ -682,11 +685,17 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
       "Resending the same call returns the mark it already made.",
     inputSchema: createArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "all",
+      permissions: { legalReaderAnnotation: ["create"] },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "create_reader_annotation",
     scope: "stella:knowledge_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Update reader annotation",
       destructiveHint: false,
@@ -697,11 +706,17 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
     description: `Change one of the user's highlights or comments: a comment's words, a highlight's colour or style, or who sees it. ${MARK_OWNERSHIP}`,
     inputSchema: updateArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "all",
+      permissions: { legalReaderAnnotation: ["update"] },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "update_reader_annotation",
     scope: "stella:knowledge_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Delete reader annotation",
       destructiveHint: true,
@@ -712,6 +727,11 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
     description: `Permanently delete one of the user's highlights or comments, every passage of it. ${MARK_OWNERSHIP}`,
     inputSchema: deleteArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "all",
+      permissions: { legalReaderAnnotation: ["delete"] },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_reader_annotation",

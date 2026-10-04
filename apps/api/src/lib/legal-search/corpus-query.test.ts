@@ -1,17 +1,32 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
 import { propertyConfig } from "@stll/property-testing";
 
+import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
   CORPUS_QUERY_LEAF_BUDGET,
   caseLawCorpusQuery,
   type CorpusStemming,
+  type CorpusFreeTextOptions,
   corpusFreeTextClause,
   type CorpusTermExpander,
+  partitionCorpusQueryTokens,
   quoteCorpusValue,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
+import {
+  CORPUS_INDEX_QUERY_VARIANTS,
+  CORPUS_QUERY_VARIANT_POLICY,
+  type CorpusIndexQueryVariant,
+} from "@/api/lib/legal-search/corpus-query-variant-policy";
+import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
+import {
+  LEGACY_STEMMERS,
+  MORPHOLOGY_LANGUAGES,
+} from "@/api/lib/legal-search/morphology/stem";
 
 test("free text cannot escape into the query DSL", () => {
   expect(corpusFreeTextClause('smlouva) OR (court:"X" AND text:*')).toBe(
@@ -207,6 +222,7 @@ test("the clause is exactly the tokenization, quoted and ANDed", () => {
 test("the assembler ANDs filter clauses onto the free-text clause", () => {
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: '"náhrada škody"',
       filters: {
         court: "Nejvyšší soud",
@@ -232,6 +248,7 @@ test("the assembler ANDs filter clauses onto the free-text clause", () => {
 test("a court filter carries its partitions beside the exact court clause, never alone", () => {
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: "habeas",
       filters: {
         court: "Supreme Court of the United States",
@@ -247,6 +264,7 @@ test("a court filter carries its partitions beside the exact court clause, never
   );
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: "habeas",
       filters: { court: "A", courtPartitions: ["p01", "p02"] },
     }),
@@ -256,6 +274,7 @@ test("a court filter carries its partitions beside the exact court clause, never
   // Without a court filter there is nothing for a partition to narrow.
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: "habeas",
       filters: { courtPartitions: ["p08"] },
     }),
@@ -265,12 +284,14 @@ test("a court filter carries its partitions beside the exact court clause, never
 test("an open-ended date range keeps the wildcard bound", () => {
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: "smlouva",
       filters: { dateFrom: "2020-01-01" },
     }),
   ).toBe('("smlouva") AND decision_date:[2020-01-01 TO *]');
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: "smlouva",
       filters: { dateTo: "2020-01-01" },
     }),
@@ -278,19 +299,26 @@ test("an open-ended date range keeps the wildcard bound", () => {
 });
 
 test("no filters leaves the free-text clause alone", () => {
-  expect(caseLawCorpusQuery({ text: "smlouva", filters: {} })).toBe(
-    '("smlouva")',
-  );
+  expect(
+    caseLawCorpusQuery({
+      jurisdiction: undefined,
+      text: "smlouva",
+      filters: {},
+    }),
+  ).toBe('("smlouva")');
 });
 
 test("text without a searchable term yields no query", () => {
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: "?!()",
       filters: { court: "Nejvyšší soud" },
     }),
   ).toBeNull();
-  expect(caseLawCorpusQuery({ text: '""', filters: {} })).toBeNull();
+  expect(
+    caseLawCorpusQuery({ jurisdiction: undefined, text: '""', filters: {} }),
+  ).toBeNull();
 });
 
 // A filter value reaching the engine unescaped would let a caller that does
@@ -299,12 +327,14 @@ test("text without a searchable term yields no query", () => {
 test("filter values cannot close their clause", () => {
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: "smlouva",
       filters: { court: 'X" OR text:*' },
     }),
   ).toBe('("smlouva") AND court:"X\\" OR text:*"');
   expect(
     caseLawCorpusQuery({
+      jurisdiction: undefined,
       text: "smlouva",
       filters: { language: "cs\\" },
     }),
@@ -352,6 +382,7 @@ test("a clause built with no extra fields names no field at all", () => {
 
 test("the decisions query names the summary where its generation maps one", () => {
   const decisions = caseLawCorpusQuery({
+    jurisdiction: undefined,
     text: "nájemního",
     filters: { jurisdiction: "CZE" },
     surfaceFields: ["headnote"],
@@ -362,7 +393,11 @@ test("the decisions query names the summary where its generation maps one", () =
   expect(decisions).toContain('headnote_stem:"nájemn"');
   // The same query for a generation that maps neither is what it is today.
   expect(
-    caseLawCorpusQuery({ text: "nájemního", filters: { jurisdiction: "CZE" } }),
+    caseLawCorpusQuery({
+      jurisdiction: undefined,
+      text: "nájemního",
+      filters: { jurisdiction: "CZE" },
+    }),
   ).toBe('("nájemního") AND jurisdiction:"CZE"');
 });
 
@@ -413,8 +448,15 @@ test("a generation without extra fields gets the query it gets today", () => {
     expect(
       corpusFreeTextClause(text, { stemming: null, surfaceFields: [] }),
     ).toBe(corpusFreeTextClause(text));
-    expect(caseLawCorpusQuery({ text, filters: { jurisdiction: "CZE" } })).toBe(
+    expect(
       caseLawCorpusQuery({
+        jurisdiction: undefined,
+        text,
+        filters: { jurisdiction: "CZE" },
+      }),
+    ).toBe(
+      caseLawCorpusQuery({
+        jurisdiction: undefined,
         text,
         filters: { jurisdiction: "CZE" },
         stemming: null,
@@ -587,4 +629,473 @@ test("every word keeps its stem leaves while the stem pass fits", () => {
     }),
     propertyConfig(),
   );
+});
+
+test("court lists are exact OR terms intersected with a singular court", () => {
+  expect(
+    caseLawCorpusQuery({
+      text: "smlouva",
+      jurisdiction: undefined,
+      filters: {
+        courts: ["Nejvyšší soud", "Nejvyšší správní soud", "Ústavní soud"],
+      },
+    }),
+  ).toBe(
+    '("smlouva") AND (court:"Nejvyšší soud" OR court:"Nejvyšší správní soud" OR court:"Ústavní soud")',
+  );
+  expect(
+    caseLawCorpusQuery({
+      text: "smlouva",
+      jurisdiction: undefined,
+      filters: { court: "Ústavní soud", courts: ['A" OR court:*'] },
+    }),
+  ).toBe('("smlouva") AND court:"Ústavní soud" AND (court:"A\\" OR court:*")');
+});
+
+const SK_STEMMING = {
+  language: "sk",
+  fields: STEM_FIELDS,
+} as const satisfies CorpusStemming;
+
+/** Compare candidate free text with the unchanged baseline allocator. */
+const svkFreeText = (text: string, options: CorpusFreeTextOptions = {}) => {
+  const stemming = options.stemming ?? null;
+  const legacyStemmer =
+    stemming === null ? null : LEGACY_STEMMERS[stemming.language];
+  const query = caseLawCorpusQuery({
+    legacyStemming:
+      stemming !== null && legacyStemmer !== null
+        ? {
+            fields: stemming.fields.filter((field) =>
+              STEM_FIELDS.some((declared) => declared === field),
+            ),
+            stemTerm: legacyStemmer,
+          }
+        : null,
+    jurisdiction: "SVK",
+    text,
+    ...options,
+    filters: { jurisdiction: "SVK" },
+  });
+  return query === null
+    ? null
+    : query.slice(0, -' AND jurisdiction:"SVK"'.length);
+};
+
+test("Slovak terms OR faithful stems beside extended stems in declared fields", () => {
+  expect(svkFreeText("premlčanie", { stemming: SK_STEMMING })).toBe(
+    '(("premlčanie" OR text_stem:"premlčan" OR headnote_stem:"premlčan" OR text_stem:"premlčani" OR headnote_stem:"premlčani"))',
+  );
+  const baseline = corpusFreeTextClause("súd", { stemming: SK_STEMMING });
+  expect(svkFreeText("súd", { stemming: SK_STEMMING })).toBe(baseline);
+  expect(svkFreeText('"premlčanie škodu"', { stemming: SK_STEMMING })).toBe(
+    corpusFreeTextClause('"premlčanie škodu"', { stemming: SK_STEMMING }),
+  );
+});
+
+test("Slovak compatibility preserves NFC normalization and quoted term boundaries", () => {
+  const composed = 'premlčanie "premlčanie škodu" škodu';
+  const decomposed = composed.normalize("NFD");
+  expect(decomposed).not.toBe(composed);
+  const candidate = svkFreeText(composed, { stemming: SK_STEMMING });
+  expect(svkFreeText(decomposed, { stemming: SK_STEMMING })).toBe(candidate);
+  const groups = clauseGroups(candidate ?? "");
+  expect(groups.at(1)).toBe(
+    clauseGroups(
+      corpusFreeTextClause('"premlčanie škodu"', { stemming: SK_STEMMING }) ??
+        "",
+    ).at(0),
+  );
+});
+
+test("only manifest-declared text and headnote stem fields gain faithful alternatives", () => {
+  for (const fields of [
+    [],
+    ["text_stem"],
+    ["headnote_stem"],
+    ["custom_stem"],
+    ["text_stem", "custom_stem"],
+  ]) {
+    const stemming = {
+      language: "sk",
+      fields,
+    } as const satisfies CorpusStemming;
+    const candidate = svkFreeText("premlčanie", { stemming }) ?? "";
+    const baseline = corpusFreeTextClause("premlčanie", { stemming }) ?? "";
+    const extra = fieldLeaves(candidate).filter(
+      (leaf) => !fieldLeaves(baseline).includes(leaf),
+    );
+    expect(extra).toEqual(
+      fields
+        .filter((field) => STEM_FIELDS.some((allowed) => allowed === field))
+        .map((field) => `${field}:"premlčani"`),
+    );
+  }
+});
+
+test("faithful groups spend headroom whole and never displace a baseline grant", () => {
+  for (const count of [7, 8, 9, 24, 25]) {
+    const text = Array.from({ length: count }, () => "premlčanie").join(" ");
+    const baseline =
+      corpusFreeTextClause(text, { stemming: SK_STEMMING }) ?? "";
+    const candidate = svkFreeText(text, { stemming: SK_STEMMING }) ?? "";
+    if (count === 7) {
+      expect(countLeaves(baseline)).toBe(21);
+      expect(countLeaves(candidate)).toBe(23);
+      expect(clauseGroups(candidate).at(1)).toBe(clauseGroups(baseline).at(1));
+    } else {
+      expect(candidate).toBe(baseline);
+    }
+    expect(clauseGroups(candidate)).toHaveLength(count);
+  }
+});
+
+test("non-SVK queries stay byte-identical for every morphology language", () => {
+  fc.assert(
+    fc.property(
+      fc.constantFrom(...MORPHOLOGY_LANGUAGES),
+      fc.array(
+        fc.constantFrom(
+          "premlčanie",
+          "nájemního",
+          "škodu",
+          '"náhrada škody"',
+          "Mietverträge",
+        ),
+        { minLength: 1, maxLength: 10 },
+      ),
+      (language, words) => {
+        const text = words.join(" ");
+        const stemming = { language, fields: STEM_FIELDS };
+        const baseline = corpusFreeTextClause(text, { stemming });
+        if (baseline === null) {
+          panic("Searchable test terms must produce a baseline clause");
+        }
+        for (const jurisdiction of ["CZE", "POL", "DEU", undefined]) {
+          const candidate = caseLawCorpusQuery({
+            jurisdiction,
+            text,
+            stemming,
+            filters: { jurisdiction },
+          });
+          expect(candidate).toBe(
+            jurisdiction === undefined
+              ? baseline
+              : `${baseline} AND jurisdiction:${quoteCorpusValue(jurisdiction)}`,
+          );
+        }
+        if (language !== "sk") {
+          expect(svkFreeText(text, { stemming })).toBe(baseline);
+        }
+      },
+    ),
+    propertyConfig(),
+  );
+});
+
+test("Slovak compatibility preserves all baseline leaves and the actual leaf ceiling", () => {
+  fc.assert(
+    fc.property(
+      fc.array(
+        fc.constantFrom(
+          "premlčanie",
+          "škodu",
+          "súd",
+          '"premlčanie škodu"',
+          "premlčanie) OR (text:*",
+        ),
+        { minLength: 0, maxLength: 12 },
+      ),
+      fc.subarray([...STEM_FIELDS], { minLength: 0 }),
+      fc.integer({ min: 0, max: 5 }),
+      (words, fields, expansionCount) => {
+        const text = words.join(" ");
+        const options = {
+          stemming: {
+            language: "sk",
+            fields,
+          } as const satisfies CorpusStemming,
+          expand: () =>
+            Array.from(
+              { length: expansionCount },
+              (_unused, index) => `forma${index}`,
+            ),
+          surfaceFields: ["headnote"],
+          keywordFields: ["keywords"],
+          legalAlternatives: () => ["súd"],
+        };
+        const baseline = corpusFreeTextClause(text, options);
+        const candidate = svkFreeText(text, options);
+        if (baseline === null) {
+          expect(candidate).toBeNull();
+          return;
+        }
+        const baselineGroups = clauseGroups(baseline);
+        const candidateGroups = clauseGroups(candidate ?? "");
+        expect(candidateGroups).toHaveLength(baselineGroups.length);
+        for (const [index, group] of baselineGroups.entries()) {
+          const candidateGroup = candidateGroups.at(index) ?? "";
+          if (candidateGroup === group) {
+            continue;
+          }
+          expect(candidateGroup).toStartWith(`${group.slice(0, -1)} OR `);
+          const extra = fieldLeaves(candidateGroup).filter(
+            (leaf) => !fieldLeaves(group).includes(leaf),
+          );
+          expect(extra).toHaveLength(fields.length);
+          expect(
+            extra.every((leaf) =>
+              fields.some((field) => leaf.startsWith(`${field}:`)),
+            ),
+          ).toBe(true);
+          expect(candidateGroup).not.toContain("*");
+        }
+        expect(countLeaves(candidate ?? "")).toBeLessThanOrEqual(
+          Math.max(CORPUS_QUERY_LEAF_BUDGET, baselineGroups.length),
+        );
+        if (countLeaves(baseline) >= CORPUS_QUERY_LEAF_BUDGET) {
+          expect(candidate).toBe(baseline);
+        }
+      },
+    ),
+    propertyConfig(),
+  );
+  expect(svkFreeText("premlčanie", { stemming: null })).toBe(
+    corpusFreeTextClause("premlčanie"),
+  );
+});
+
+test("declared Slovak compatibility works even without an index jurisdiction clause", () => {
+  const text = "premlčanie";
+  const sharedIndexQuery = caseLawCorpusQuery({
+    text,
+    jurisdiction: "SVK",
+    filters: { jurisdiction: "SVK" },
+    stemming: SK_STEMMING,
+    legacyStemming: caseLawCorpusQueryFields({
+      generation: "case_law_v7",
+      jurisdiction: "SVK",
+      language: undefined,
+    }).legacyStemming,
+  });
+  const singleJurisdictionQuery = caseLawCorpusQuery({
+    text,
+    jurisdiction: "SVK",
+    filters: {},
+    stemming: SK_STEMMING,
+    legacyStemming: caseLawCorpusQueryFields({
+      generation: "case_law_v7",
+      jurisdiction: "SVK",
+      language: undefined,
+    }).legacyStemming,
+  });
+  if (singleJurisdictionQuery === null) {
+    panic("Searchable Slovak test terms must produce a query");
+  }
+  expect(svkFreeText(text, { stemming: SK_STEMMING })).toBe(
+    singleJurisdictionQuery,
+  );
+  expect(singleJurisdictionQuery).toContain('text_stem:"premlčani"');
+  expect(singleJurisdictionQuery).toContain('headnote_stem:"premlčani"');
+  expect(sharedIndexQuery).toBe(
+    `${singleJurisdictionQuery} AND jurisdiction:"SVK"`,
+  );
+  const baseline = corpusFreeTextClause(text, { stemming: SK_STEMMING });
+  if (baseline === null) {
+    panic("Searchable Slovak test terms must produce a baseline clause");
+  }
+  for (const jurisdiction of ["CZE", undefined]) {
+    expect(
+      caseLawCorpusQuery({
+        text,
+        jurisdiction,
+        filters: { jurisdiction: "SVK" },
+        stemming: SK_STEMMING,
+      }),
+    ).toBe(`${baseline} AND jurisdiction:"SVK"`);
+  }
+});
+
+const PROVISION_VARIANT_OPTIONS = {
+  queryVariant: "provision-refs",
+  stemming: SK_STEMMING,
+  surfaceFields: ["headnote"],
+  functionWords: functionWordsFor("sk"),
+} as const satisfies CorpusFreeTextOptions;
+
+test("a Slovak civil-code provision groups titles, aliases and all profile work identities", () => {
+  expect(
+    svkFreeText(
+      "§ 451 Občianskeho zákonníka bezdôvodné obohatenie",
+      PROVISION_VARIANT_OPTIONS,
+    ),
+  ).toBe(
+    '(("451" OR headnote:"451" OR text_stem:"451" OR headnote_stem:"451") AND ("Občianskeho zákonníka" OR "Občiansky zákonník" OR "Občianskom zákonníku" OR "Stredný občiansky zákonník" OR "Stredného občianskeho zákonníka" OR "Strednom občianskom zákonníku" OR headnote:"Občianskeho zákonníka" OR text_stem:"občianskeh zákonník" OR headnote_stem:"občianskeh zákonník" OR "OZ" OR "obč zák" OR "141 1950" OR "40 1964") AND ("bezdôvodné" OR headnote:"bezdôvodné" OR text_stem:"bezdôvodn" OR headnote_stem:"bezdôvodn") AND ("obohatenie" OR text_stem:"obohaten" OR headnote_stem:"obohaten"))',
+  );
+});
+
+test("a longer provision query trims act alternatives before losing required stem coverage", () => {
+  expect(
+    svkFreeText(
+      "§ 106 Občianskeho zákonníka premlčanie práva na náhradu škody",
+      PROVISION_VARIANT_OPTIONS,
+    ),
+  ).toBe(
+    '(("106" OR text_stem:"106" OR headnote_stem:"106") AND ("Občianskeho zákonníka" OR "Občiansky zákonník" OR "Občianskom zákonníku" OR "Stredný občiansky zákonník" OR "Stredného občianskeho zákonníka" OR "Strednom občianskom zákonníku" OR "OZ" OR "obč zák" OR "40 1964") AND ("premlčanie" OR text_stem:"premlčan" OR headnote_stem:"premlčan") AND ("práva" OR text_stem:"práv" OR headnote_stem:"práv") AND ("náhradu" OR text_stem:"náhrad" OR headnote_stem:"náhrad") AND ("škody" OR text_stem:"škod" OR headnote_stem:"škod"))',
+  );
+});
+
+test("provision reservation that cannot preserve baseline stems falls back byte-identically", () => {
+  const text = `§ 451 Občianskeho zákonníka ${Array.from({ length: 8 }, () => "premlčanie").join(" ")}`;
+  expect(svkFreeText(text, PROVISION_VARIANT_OPTIONS)).toBe(
+    svkFreeText(text, { stemming: SK_STEMMING, surfaceFields: ["headnote"] }),
+  );
+});
+
+test("provision subdivisions and act lead-ins stop being separate requirements", () => {
+  expect(
+    svkFreeText("§ 106 ods. 1 zákona OZ", { queryVariant: "provision-refs" }),
+  ).toBe(
+    '("106" AND ("OZ" OR "Občiansky zákonník" OR "Občianskeho zákonníka" OR "Občianskom zákonníku" OR "obč zák" OR "40 1964"))',
+  );
+});
+
+test.each([
+  { jurisdiction: "SVK", language: "sk", query: "§ 1 zákona o priestupkoch" },
+  { jurisdiction: "CZE", language: "cs", query: "§ 1 zákona o azylu" },
+  { jurisdiction: "SVK", language: "sk", query: "§ 106 ods. 1 písm. a OZ" },
+  { jurisdiction: "CZE", language: "cs", query: "§ 106 odst. 1 písm. a OZ" },
+] as const)(
+  "provision spans retain function words under the production policy (%j)",
+  ({ jurisdiction, language, query }) => {
+    const options = { jurisdiction, queryVariant: "provision-refs" } as const;
+    const clause = corpusFreeTextClause(query, {
+      ...options,
+      functionWords: functionWordsFor(language),
+    });
+    expect(clause).toBe(corpusFreeTextClause(query, options));
+    expect(clause).not.toBe(
+      corpusFreeTextClause(query, {
+        jurisdiction,
+        functionWords: functionWordsFor(language),
+      }),
+    );
+  },
+);
+
+test("profile spellings form act groups with production function-word sets", () => {
+  for (const jurisdiction of ["CZE", "SVK"] as const) {
+    const profile = PROVISION_CITATION_PROFILES[jurisdiction];
+    const functionWords = functionWordsFor(
+      jurisdiction === "CZE" ? "cs" : "sk",
+    );
+    for (const entry of [...profile.titles, ...profile.aliases]) {
+      if ("unit" in entry && entry.unit === "article") {
+        continue;
+      }
+      for (const spelling of entry.spellings) {
+        const clause =
+          corpusFreeTextClause(`na § 451 ${spelling} a škody`, {
+            jurisdiction,
+            queryVariant: "provision-refs",
+            functionWords,
+          }) ?? panic("Profile spellings must produce a clause");
+        const groups = clauseGroups(clause);
+        expect(groups).toHaveLength(3);
+        expect(groups.at(0)).toBe('"451"');
+        expect(groups.at(1)).toContain(
+          quoteCorpusValue(
+            tokenizeCorpusFreeText(spelling)
+              .map(({ value }) => value)
+              .join(" "),
+          ),
+        );
+        expect(groups.at(1)).toContain(" OR ");
+        expect(groups.at(2)).toBe('"škody"');
+      }
+    }
+  }
+});
+
+test("tight act budgets drop predecessor numbers before headnote stems and current act numbers", () => {
+  const query = (
+    count: number,
+    options: CorpusFreeTextOptions = PROVISION_VARIANT_OPTIONS,
+  ) =>
+    svkFreeText(
+      `§ 451 Občianskeho zákonníka ${Array.from({ length: count }, () => "súd").join(" ")}`,
+      options,
+    ) ?? panic("Expected a provision clause");
+  const oneDrop =
+    clauseGroups(query(3)).at(1) ?? panic("Expected an act group");
+  expect(oneDrop).not.toContain('"141 1950"');
+  expect(oneDrop).toContain('headnote_stem:"občianskeh zákonník"');
+  expect(oneDrop).toContain('"40 1964"');
+  const fourDrops =
+    clauseGroups(query(4)).at(1) ?? panic("Expected an act group");
+  expect(fourDrops).not.toContain("_stem:");
+  expect(fourDrops).not.toContain("headnote:");
+  expect(fourDrops).toContain('"Strednom občianskom zákonníku"');
+  const titlesTrimmed =
+    clauseGroups(query(5)).at(1) ?? panic("Expected an act group");
+  expect(titlesTrimmed).not.toContain("Stredn");
+  expect(titlesTrimmed).toContain('"Občianskom zákonníku"');
+  expect(titlesTrimmed).toContain('"40 1964"');
+  expect(clauseGroups(query(6)).at(1)).toBe(
+    '("Občianskeho zákonníka" OR "OZ" OR "obč zák")',
+  );
+  expect(
+    clauseGroups(query(21, { queryVariant: "provision-refs" })).at(1),
+  ).toBe('("Občianskeho zákonníka" OR "OZ")');
+  expect(
+    clauseGroups(query(22, { queryVariant: "provision-refs" })).at(1),
+  ).toBe('"Občianskeho zákonníka"');
+  for (const count of [3, 4, 5, 6]) {
+    expect(countLeaves(query(count))).toBe(CORPUS_QUERY_LEAF_BUDGET);
+  }
+});
+
+test("multiple act groups share the same drop priority before either loses titles", () => {
+  const clause =
+    svkFreeText(
+      "§ 451 Občianskeho zákonníka § 106 Občianskeho zákonníka",
+      PROVISION_VARIANT_OPTIONS,
+    ) ?? panic("Expected two provision groups");
+  const groups = clauseGroups(clause);
+  for (const index of [1, 3]) {
+    const act = groups.at(index) ?? panic("Expected an act group");
+    expect(act).not.toContain('"141 1950"');
+    expect(act).not.toContain("_stem:");
+    expect(act).not.toContain("headnote:");
+    expect(act).toContain('"40 1964"');
+    expect(act).toContain('"Strednom občianskom zákonníku"');
+  }
+  expect(countLeaves(clause)).toBe(CORPUS_QUERY_LEAF_BUDGET);
+});
+
+test("provision spans read the registry's profile for exactly the jurisdictions it holds", () => {
+  const tokens = tokenizeCorpusFreeText("§ 106 OZ");
+  const partitionFor = (
+    queryVariant: CorpusIndexQueryVariant,
+    jurisdiction: string | undefined,
+  ) =>
+    partitionCorpusQueryTokens({
+      tokens,
+      functionWords: null,
+      queryVariant,
+      jurisdiction,
+    }).profile;
+  for (const queryVariant of CORPUS_INDEX_QUERY_VARIANTS) {
+    const { provisions } = CORPUS_QUERY_VARIANT_POLICY[queryVariant];
+    for (const [jurisdiction, profile] of Object.entries(
+      PROVISION_CITATION_PROFILES,
+    )) {
+      expect(partitionFor(queryVariant, jurisdiction)).toBe(
+        provisions ? profile : null,
+      );
+    }
+    for (const jurisdiction of ["POL", "EU", "cze", undefined]) {
+      expect(partitionFor(queryVariant, jurisdiction)).toBeNull();
+    }
+  }
 });

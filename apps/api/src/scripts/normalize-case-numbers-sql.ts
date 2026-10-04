@@ -61,7 +61,8 @@ export const normalizeSheetNumbersStatement = (limit: number): SQL => sql`
     UPDATE case_law_decisions d
     SET case_number = regexp_replace(d.case_number, ${SHEET_PATTERN}, ${String.raw`\1`}),
         sheet_number = regexp_replace(d.case_number, ${SHEET_PATTERN}, ${String.raw`\2`}),
-        citation_key = NULL
+        citation_key = NULL,
+        docket_family_key = NULL
     FROM batch
     WHERE d.id = batch.id
     RETURNING d.id

@@ -1,3 +1,9 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+// parser-output-unchanged: a download the publisher does not serve is reported as an unread item; built decisions are unchanged.
+import { Result, panic } from "better-result";
+
+import type { Document as FolioDocument } from "@stll/docx-core/model";
 /**
  * Hungarian courts (Bírósági Határozatok Gyűjteménye) adapter.
  *
@@ -47,10 +53,6 @@
  * reconciliation ledger's, and its slices are the same year × kollégium windows
  * (rule 16).
  */
-
-import { Result, panic } from "better-result";
-
-import type { Document as FolioDocument } from "@stll/docx-core/model";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import { Temporal } from "@stll/time";
 
@@ -90,9 +92,15 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
   SyncPage,
+  UnreadListedItem,
+  UnreadOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  fetchWithRetry,
+  rethrowCycleStop,
+} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   adapterCatch,
   hashContent,
@@ -109,12 +117,14 @@ import {
   checkedDecisionMetadata,
   presentTextField,
 } from "@/api/lib/case-law/decision-text";
+import { readOutcomeOfStatus } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { parseScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import { publisherDocument } from "@/api/lib/file-scan/publisher-document";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { readRtf, isRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -398,6 +408,7 @@ const search = async ({
       redirect: "error",
     },
     {
+      fetchStage: "listing",
       adapterKey: ADAPTER_KEYS.HU_BHGY,
       signal,
       timeoutMs: ADAPTER_TIMEOUT.LIST,
@@ -479,11 +490,44 @@ export const huBhgyDocumentOf = (
   return undefined;
 };
 
+/**
+ * What one download established. `unread` is a status that neither served
+ * the document nor stated its absence: the crawl reports it to the pipeline,
+ * and the reconciliation fails on `error` as it always has. `halted` is the
+ * publisher's rate-limit refusal, which stops the page (rule 19).
+ */
+type DocumentRead =
+  | { type: "read"; document: DecisionDocument | undefined }
+  | { type: "unread"; outcome: UnreadOutcome; error: AdapterFetchError }
+  | { type: "halted"; error: AdapterFetchError };
+
+/** The publisher's rate-limit refusal of a request. */
+const RATE_LIMITED_STATUS = 429;
+
+/** The unread outcome of a status that is neither served nor absent. */
+const unreadOutcomeOfStatus = (
+  status: number,
+  retryAfter: string | null,
+): UnreadOutcome => {
+  const outcome = readOutcomeOfStatus(status, "document", retryAfter);
+  switch (outcome.type) {
+    case "refused":
+    case "unavailable":
+      return outcome;
+    case "present":
+    case "absent":
+      return panic(`Download status ${status} is not an unread outcome`);
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled read outcome: ${String(outcome)}`);
+  }
+};
+
 const fetchDocument = async (
   row: HuBhgyRow,
   cursor: string,
   signal?: AbortSignal,
-): Promise<Result<DecisionDocument | undefined, AdapterFetchError>> => {
+): Promise<DocumentRead> => {
   const target = restrictOutboundUrl({
     hostPolicy: HU_BHGY_HOST_POLICY,
     rawUrl: documentUrlOf(row),
@@ -491,31 +535,72 @@ const fetchDocument = async (
   if (target === null) {
     return panic("eakta.birosag.hu download escaped the publisher origin");
   }
-  const response = await fetchWithRetry(
-    target.toString(),
-    { redirect: "error" },
-    {
-      adapterKey: ADAPTER_KEYS.HU_BHGY,
-      signal,
-      timeoutMs: ADAPTER_TIMEOUT.PAGE,
-    },
-  );
+  const requested = await Result.tryPromise({
+    try: async () =>
+      await fetchWithRetry(
+        target.toString(),
+        { redirect: "error" },
+        {
+          fetchStage: "document",
+          adapterKey: ADAPTER_KEYS.HU_BHGY,
+          signal,
+          timeoutMs: ADAPTER_TIMEOUT.PAGE,
+        },
+      ),
+    catch: (error: unknown) => error,
+  });
+  if (Result.isError(requested)) {
+    // A timeout, a reset connection or spent retries: unread like a 5xx, so
+    // the cycle bound applies to it. Cancellation and source stops end the
+    // cycle.
+    rethrowCycleStop(requested.error, signal);
+    return {
+      type: "unread",
+      outcome: {
+        type: "unavailable",
+        cause: { kind: "thrown", error: requested.error },
+      },
+      error: searchError(cursor, "download did not answer"),
+    };
+  }
+  const response = requested.value;
   if (response.status === 404 || response.status === 410) {
     // The listing states the decision exists and the download does not serve
     // it: a durable listing-only observation, not a page failure (rule 20).
-    return Result.ok(undefined);
+    return { type: "read", document: undefined };
+  }
+  if (response.status === RATE_LIMITED_STATUS) {
+    // One request, no retry, cursor untouched: the page fails as a halt.
+    const retryAfter = response.headers.get("Retry-After");
+    await response.body?.cancel();
+    return {
+      type: "halted",
+      error: new AdapterFetchError({
+        message: `eakta.birosag.hu: download answered ${response.status}`,
+        adapterKey: ADAPTER_KEYS.HU_BHGY,
+        cursor,
+        httpStatus: response.status,
+        ...(retryAfter === null ? {} : { retryAfter }),
+      }),
+    };
   }
   if (!response.ok) {
-    return Result.err(
-      searchError(
+    await response.body?.cancel();
+    return {
+      type: "unread",
+      outcome: unreadOutcomeOfStatus(
+        response.status,
+        response.headers.get("Retry-After"),
+      ),
+      error: searchError(
         cursor,
         `download answered ${response.status}`,
         response.status,
       ),
-    );
+    };
   }
   const bytes = new Uint8Array(await response.arrayBuffer());
-  return Result.ok(huBhgyDocumentOf(bytes));
+  return { type: "read", document: huBhgyDocumentOf(bytes) };
 };
 
 // ── Normalization ────────────────────────────────────────
@@ -730,6 +815,14 @@ type HuBhgyBuildResult =
   /** The download served nothing this adapter recognises as a document. */
   | { type: "detail-unavailable"; decision: IngestionResult };
 
+/** What fetching and assembling one listed row produced. */
+type HuBhgyFetchedBuild =
+  | HuBhgyBuildResult
+  /** The publisher neither served the document nor stated its absence. */
+  | { type: "unread"; item: UnreadListedItem; error: AdapterFetchError }
+  /** The publisher refused the download for its rate limit. */
+  | { type: "halted"; error: AdapterFetchError };
+
 export type AssembleHuBhgyOptions = {
   row: HuBhgyRow;
   document: DecisionDocument | undefined;
@@ -820,7 +913,7 @@ export const assembleHuBhgyDecision = async ({
   );
 
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
     // The listed docket and the one the document prints are two spellings of
     // one number: `Gfv.30091/2025/4` drops the thousands dot and the panel
@@ -895,7 +988,7 @@ export const assembleHuBhgyDecision = async ({
     documentAst,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 
   return document === undefined
     ? { type: "detail-unavailable", decision }
@@ -933,26 +1026,54 @@ const buildHuBhgyDecision = async ({
   cursor,
   row,
   signal,
-}: BuildOptions): Promise<Result<HuBhgyBuildResult, AdapterFetchError>> => {
+}: BuildOptions): Promise<HuBhgyFetchedBuild> => {
   const normalized = normalizeHuBhgyRow(row);
-  if (
-    normalized.IndexId === undefined ||
-    !isPersistableSourceDocumentId(normalized.IndexId)
-  ) {
-    return Result.ok({ type: "unkeyable" });
+  const { IndexId } = normalized;
+  if (IndexId === undefined || !isPersistableSourceDocumentId(IndexId)) {
+    return { type: "unkeyable" };
   }
   const fetched = await fetchDocument(normalized, cursor, signal);
-  if (Result.isError(fetched)) {
-    return fetched;
+  switch (fetched.type) {
+    case "halted":
+      return fetched;
+    case "read":
+      return await assembleHuBhgyDecision({
+        row: normalized,
+        document: fetched.document,
+        rawParts: huBhgyRawPartsOf(row, fetched.document),
+      });
+    case "unread": {
+      const listed = await assembleHuBhgyDecision({
+        row: normalized,
+        document: undefined,
+        rawParts: huBhgyRawPartsOf(row, undefined),
+      });
+      switch (listed.type) {
+        case "unkeyable":
+          return listed;
+        case "built":
+        case "detail-unavailable":
+          return {
+            type: "unread",
+            item: {
+              listing: {
+                ...listed.decision,
+                sourceDocumentId: IndexId,
+                isListingOnly: true,
+              },
+              outcome: fetched.outcome,
+            },
+            error: fetched.error,
+          };
+        default:
+          listed satisfies never;
+          return panic(`Unhandled hu-bhgy build: ${JSON.stringify(listed)}`);
+      }
+    }
+    default:
+      fetched satisfies never;
+      return panic(`Unhandled hu-bhgy download: ${JSON.stringify(fetched)}`);
   }
-  const document = fetched.value;
-  return Result.ok(
-    await assembleHuBhgyDecision({
-      row: normalized,
-      document,
-      rawParts: huBhgyRawPartsOf(row, document),
-    }),
-  );
 };
 
 /**
@@ -1341,16 +1462,15 @@ const buildHuBhgyFromPayload = async (
   if (!isRecord(payload)) {
     return { type: "unkeyable" };
   }
-  const attempted = await buildHuBhgyDecision({
+  const built = await buildHuBhgyDecision({
     cursor: optionalString(payload["IndexId"]) ?? "",
     row: payload,
     ...(signal === undefined ? {} : { signal }),
   });
-  if (Result.isError(attempted)) {
-    return await Promise.reject(attempted.error);
-  }
-  const built = attempted.value;
   switch (built.type) {
+    case "unread":
+    case "halted":
+      return await Promise.reject(built.error);
     case "built":
       return { type: "built", decision: built.decision };
     case "unkeyable":
@@ -1559,7 +1679,33 @@ type CollectOptions = {
   signal?: AbortSignal | undefined;
 };
 
-type Collected = { decisions: IngestionResult[]; aborted: boolean };
+type Collected = {
+  decisions: IngestionResult[];
+  itemBuildFailures: number;
+  unreadItems: UnreadListedItem[];
+  aborted: boolean;
+};
+
+/** The page fields a collection of listed rows fills. */
+const collectedPage = ({
+  decisions,
+  itemBuildFailures,
+  unreadItems,
+}: Collected): Pick<
+  SyncPage,
+  "decisions" | "itemBuildFailures" | "unreadItems"
+> => ({
+  decisions,
+  ...(itemBuildFailures === 0
+    ? {}
+    : {
+        itemBuildFailures: {
+          type: "item_build_failed" as const,
+          count: itemBuildFailures,
+        },
+      }),
+  ...(unreadItems.length === 0 ? {} : { unreadItems }),
+});
 
 const collectDecisions = async ({
   cursor,
@@ -1567,17 +1713,52 @@ const collectDecisions = async ({
   signal,
 }: CollectOptions): Promise<Result<Collected, AdapterFetchError>> => {
   const decisions: IngestionResult[] = [];
+  const unreadItems: UnreadListedItem[] = [];
+  let itemBuildFailures = 0;
   for (const row of rows) {
     if (signal?.aborted) {
-      return Result.ok({ decisions, aborted: true });
+      return Result.ok({
+        decisions,
+        itemBuildFailures,
+        unreadItems,
+        aborted: true,
+      });
     }
-    const attempted = await buildHuBhgyDecision({ cursor, row, signal });
-    if (Result.isError(attempted)) {
-      return attempted;
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.HU_BHGY,
+
+      rawListing: JSON.stringify(row),
+      decisionOf: (outcome) => {
+        switch (outcome.type) {
+          case "built":
+          case "detail-unavailable":
+            return outcome.decision;
+          case "unread":
+            return outcome.item.listing;
+          case "unkeyable":
+          case "halted":
+            return undefined;
+          default:
+            outcome satisfies never;
+            return panic("Unhandled hu-bhgy decision projection");
+        }
+      },
+      build: async () => await buildHuBhgyDecision({ cursor, row, signal }),
+    });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      continue;
     }
-    const built = attempted.value;
+    const built = captured.value;
     switch (built.type) {
       case "unkeyable":
+        break;
+      case "halted":
+        return Result.err(built.error);
+      // The pipeline decides what an unread document costs the page.
+      case "unread":
+        unreadItems.push(built.item);
         break;
       // The cursor moves past this document either way, so the crawl keeps the
       // listing-only row a download served nothing for; only the
@@ -1592,7 +1773,12 @@ const collectDecisions = async ({
       }
     }
   }
-  return Result.ok({ decisions, aborted: false });
+  return Result.ok({
+    decisions,
+    itemBuildFailures,
+    unreadItems,
+    aborted: false,
+  });
 };
 
 const sweepPage = async (
@@ -1634,17 +1820,21 @@ const sweepPage = async (
       if (Result.isError(collected)) {
         return collected;
       }
-      const { aborted, decisions } = collected.value;
+      const { aborted } = collected.value;
       if (aborted) {
         // The cycle stopped partway through this page, so it says nothing about
         // the rows it never reached: parking at the page's own start replays it
         // rather than checkpointing past them.
-        return Result.ok({ decisions, sourceUrl: url, nextCursor: cursor });
+        return Result.ok({
+          ...collectedPage(collected.value),
+          sourceUrl: url,
+          nextCursor: cursor,
+        });
       }
       const nextOffset = offset + rows.length;
       if (nextOffset < count) {
         return Result.ok({
-          decisions,
+          ...collectedPage(collected.value),
           sourceUrl: url,
           nextCursor: encodeHuBhgyCursor({
             ...start,
@@ -1656,7 +1846,7 @@ const sweepPage = async (
       }
       const after = nextWindow(year, slug);
       return Result.ok({
-        decisions,
+        ...collectedPage(collected.value),
         sourceUrl: url,
         nextCursor:
           after === null
@@ -1757,13 +1947,21 @@ const tipPage = async (
   if (Result.isError(collected)) {
     return collected;
   }
-  const { aborted, decisions } = collected.value;
+  const { aborted } = collected.value;
   if (aborted) {
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: cursor });
+    return Result.ok({
+      ...collectedPage(collected.value),
+      sourceUrl: url,
+      nextCursor: cursor,
+    });
   }
 
   if (reachedFrontier) {
-    return Result.ok({ decisions, sourceUrl: url, nextCursor: caughtUp() });
+    return Result.ok({
+      ...collectedPage(collected.value),
+      sourceUrl: url,
+      nextCursor: caughtUp(),
+    });
   }
 
   const nextOffset = offset + fresh.length;
@@ -1780,7 +1978,7 @@ const tipPage = async (
   // A descending listing only grows at its head, so resuming at this offset
   // can re-read a row but cannot step over one.
   return Result.ok({
-    decisions,
+    ...collectedPage(collected.value),
     sourceUrl: url,
     nextCursor: encodeHuBhgyCursor({
       phase: "tip",
@@ -1879,6 +2077,7 @@ const huBhgyTotalCount = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const huBhgyAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.HU_BHGY,
   language: HU_BHGY_LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,
@@ -1900,6 +2099,26 @@ export const huBhgyAdapter = defineSourceAdapter({
   getTotalCount: huBhgyTotalCount,
 
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            Azonosito: payload["Azonosito"],
+            MeghozoBirosag: payload["MeghozoBirosag"],
+            Kollegium: payload["Kollegium"],
+            JogTerulet: payload["JogTerulet"],
+            KapcsolodoHatarozatok: payload["KapcsolodoHatarozatok"],
+            Jogszabalyhelyek: payload["Jogszabalyhelyek"],
+            HatarozatEve: payload["HatarozatEve"],
+            Szoveg: payload["Szoveg"],
+            Rezume: payload["Rezume"],
+            EgyediAzonosito: payload["EgyediAzonosito"],
+            IndexelesIdeje: payload["IndexelesIdeje"],
+            NemHivatkozhatoSzoveg: payload["NemHivatkozhatoSzoveg"],
+            IndexId: payload["IndexId"],
+            DownloadLink: payload["DownloadLink"],
+          }
+        : null,
     firstSlice: HU_BHGY_FIRST_SLICE,
     sliceOf,
     nextSlice,

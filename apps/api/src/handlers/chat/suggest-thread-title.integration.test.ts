@@ -9,6 +9,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -121,9 +122,10 @@ const createContext = ({
   asTestRaw<SuggestCtx>({
     getWorkspaceAccess: async (id: SafeId<"workspace">) =>
       id === ids.wsA1 ? { id: ids.wsA1, status: "active" } : null,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     params: { threadId },
     promptCachingEnabled: false,
     query: workspaceId ? { workspaceId } : {},
@@ -206,6 +208,35 @@ describe("suggest thread title", () => {
       createContext({ threadId }),
     );
 
+    expect(result).toMatchObject({ code: 403 });
+    expect(generateTextMock).not.toHaveBeenCalled();
+  });
+
+  test("reads the send mode again with the messages it would send", async () => {
+    const threadId = await seedThread({
+      messageTexts: ["First ask", "First answer"],
+    });
+    // The thread switches after the handler's first read: an anonymized turn
+    // is stored before the message window loads.
+    let reads = 0;
+    const switchingSafeDb: SafeDb = async (run, retry) => {
+      reads += 1;
+      if (reads === 2) {
+        await testDb
+          .update(chatThreads)
+          .set({ usedAnonymization: true })
+          .where(eq(chatThreads.id, threadId));
+      }
+      return await safeDb(run, retry);
+    };
+
+    generateTextMock.mockClear();
+    const result = await suggestThreadTitle.handler({
+      ...createContext({ threadId }),
+      safeDb: switchingSafeDb,
+    });
+
+    expect(reads).toBeGreaterThanOrEqual(2);
     expect(result).toMatchObject({ code: 403 });
     expect(generateTextMock).not.toHaveBeenCalled();
   });

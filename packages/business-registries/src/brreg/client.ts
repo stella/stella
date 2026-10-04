@@ -1,5 +1,11 @@
-import { isRecord } from "../shared/guards.js";
-import { registryFetch } from "../shared/http.js";
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
+import {
+  hasOptionalString,
+  hasOptionalNumber,
+  isRecord,
+  isOptionalArrayOf,
+} from "../shared/guards.js";
+import { type RegistryClientOptions, registryFetch } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
   BrregAPIError,
@@ -25,24 +31,53 @@ const DEFAULT_SEARCH_LIMIT = 50;
 const MAX_SEARCH_LIMIT = 100;
 const BRREG_RESULT_CAP = 10_000;
 
-const isOptionalRecord = (value: unknown): boolean =>
-  value === undefined || isRecord(value);
+const isString = (value: unknown): boolean => typeof value === "string";
 
-const isOptionalNumber = (value: unknown): boolean =>
-  value === undefined || typeof value === "number";
+const isBrregAddress = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOptionalString(value, "land") &&
+    hasOptionalString(value, "postnummer") &&
+    hasOptionalString(value, "poststed") &&
+    hasOptionalString(value, "kommune") &&
+    isOptionalArrayOf(value["adresse"], isString));
+
+const isBrregCode = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOptionalString(value, "kode") &&
+    hasOptionalString(value, "beskrivelse"));
 
 const isBrregRawEnhet = (value: unknown): value is BrregRawEnhet =>
   isRecord(value) &&
   typeof value["organisasjonsnummer"] === "string" &&
   typeof value["navn"] === "string" &&
-  isOptionalRecord(value["organisasjonsform"]) &&
-  isOptionalRecord(value["postadresse"]) &&
-  isOptionalRecord(value["forretningsadresse"]) &&
-  isOptionalRecord(value["beliggenhetsadresse"]) &&
-  isOptionalRecord(value["naeringskode1"]) &&
-  isOptionalRecord(value["naeringskode2"]) &&
-  isOptionalRecord(value["naeringskode3"]) &&
-  isOptionalNumber(value["antallAnsatte"]);
+  hasOptionalString(value, "registreringsdatoEnhetsregisteret") &&
+  hasOptionalString(value, "stiftelsesdato") &&
+  hasOptionalString(value, "slettedato") &&
+  hasOptionalString(value, "nedleggelsesdato") &&
+  hasOptionalString(value, "konkursdato") &&
+  hasOptionalString(value, "underAvviklingDato") &&
+  hasOptionalString(value, "tvangsopplostPgaManglendeRegnskapDato") &&
+  hasOptionalString(value, "tvangsopplostPgaManglendeRevisorDato") &&
+  hasOptionalString(value, "tvangsopplostPgaMangelfulltStyreDato") &&
+  hasOptionalString(value, "tvangsopplostPgaManglendeDagligLederDato") &&
+  hasOptionalString(value, "tvangsavvikletPgaManglendeSlettingDato") &&
+  hasOptionalNumber(value, "antallAnsatte") &&
+  (value["konkurs"] === undefined || typeof value["konkurs"] === "boolean") &&
+  (value["underAvvikling"] === undefined ||
+    typeof value["underAvvikling"] === "boolean") &&
+  (value["underTvangsavviklingEllerTvangsopplosning"] === undefined ||
+    typeof value["underTvangsavviklingEllerTvangsopplosning"] === "boolean") &&
+  (value["registrertIMvaregisteret"] === undefined ||
+    typeof value["registrertIMvaregisteret"] === "boolean") &&
+  isBrregCode(value["organisasjonsform"]) &&
+  isBrregAddress(value["forretningsadresse"]) &&
+  isBrregAddress(value["beliggenhetsadresse"]) &&
+  isBrregAddress(value["postadresse"]) &&
+  isBrregCode(value["naeringskode1"]) &&
+  isBrregCode(value["naeringskode2"]) &&
+  isBrregCode(value["naeringskode3"]);
 
 const isBrregSearchResponse = (
   value: unknown,
@@ -92,12 +127,18 @@ const parseErrorBody = (value: unknown): BrregErrorResponse => {
   return result;
 };
 
+type BrregGetOptions<T> = RegistryClientOptions & {
+  isExpectedShape: (value: unknown) => value is T;
+};
+
 const brregGet = async <T>(
   url: string,
-  isExpectedShape: (value: unknown) => value is T,
+  { isExpectedShape, ...options }: BrregGetOptions<T>,
 ): Promise<T | null> =>
   await registryFetch({
     url,
+    observer: options.observer,
+    signal: options.signal,
     init: { headers: { Accept: "application/json" } },
     isExpectedShape,
     wrapRequestError: (cause) =>
@@ -149,7 +190,7 @@ const brregGet = async <T>(
 // Public API
 // ---------------------------------------------------------------------------
 
-export type LookupOptions = {
+export type LookupOptions = RegistryClientOptions & {
   /**
    * Whether to fall back to the sub-entity (underenheter) register when the
    * main `enheter` register returns 404. Useful when the orgnr identifies a
@@ -172,7 +213,7 @@ export type LookupOptions = {
  */
 export const lookupByOrgnr = async (
   orgnr: string,
-  options?: LookupOptions,
+  options: LookupOptions,
 ): Promise<BrregEntity | null> => {
   const normalized = normalizeOrgnr(orgnr);
 
@@ -180,15 +221,18 @@ export const lookupByOrgnr = async (
     throw new BrregValidationError(`Invalid orgnr: ${orgnr}`);
   }
 
-  const enhet = await brregGet(`${ENHETER_URL}/${normalized}`, isBrregRawEnhet);
+  const enhet = await brregGet(
+    `${ENHETER_URL}/${encodeRegistryComponent(normalized)}`,
+    { ...options, isExpectedShape: isBrregRawEnhet },
+  );
   if (enhet) {
     return parseEnhet(enhet, "enhet");
   }
 
-  if (options?.includeSubEntities ?? true) {
+  if (options.includeSubEntities ?? true) {
     const sub = await brregGet(
-      `${UNDERENHETER_URL}/${normalized}`,
-      isBrregRawEnhet,
+      `${UNDERENHETER_URL}/${encodeRegistryComponent(normalized)}`,
+      { ...options, isExpectedShape: isBrregRawEnhet },
     );
     if (sub) {
       return parseEnhet(sub, "underenhet");
@@ -198,7 +242,7 @@ export const lookupByOrgnr = async (
   return null;
 };
 
-export type SearchOptions = {
+export type SearchOptions = RegistryClientOptions & {
   /** Maximum number of results. Brreg caps each page at 100. @default 50 */
   limit?: number;
 };
@@ -213,7 +257,7 @@ export type SearchOptions = {
  */
 export const searchByName = async (
   name: string,
-  options?: SearchOptions,
+  options: SearchOptions,
 ): Promise<BrregSearchResult[]> => {
   const trimmed = name.trim();
   if (trimmed.length === 0) {
@@ -225,7 +269,7 @@ export const searchByName = async (
     );
   }
 
-  const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
+  const requestedLimit = options.limit ?? DEFAULT_SEARCH_LIMIT;
   const size = clampSearchLimit(requestedLimit, MAX_SEARCH_LIMIT);
 
   const params = new URLSearchParams({
@@ -236,7 +280,10 @@ export const searchByName = async (
 
   let data: BrregSearchResponse | null;
   try {
-    data = await brregGet(url, isBrregSearchResponse);
+    data = await brregGet(url, {
+      ...options,
+      isExpectedShape: isBrregSearchResponse,
+    });
   } catch (error) {
     // Brreg short-circuits queries that would exceed its 10k result
     // cap with HTTP 400 — there is no page envelope to inspect — so

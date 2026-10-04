@@ -80,6 +80,10 @@ describe("policy coverage", () => {
     "usage_entitlements",
     "usage_allocations",
     "usage_events",
+    // Operator observations deny the request role entirely; their dedicated
+    // assertion below checks policies and privileges instead of tenant CRUD.
+    "action_cost_records",
+    "action_cost_calls",
     // Root-owned lifecycle history is tenant-readable but app-role immutable;
     // its dedicated assertion below covers the restrictive write policies.
     "extraction_runs",
@@ -108,6 +112,8 @@ describe("policy coverage", () => {
     // The entry timer projection has member reads and truth-bound owner/admin
     // INSERT/UPDATE, with identity immutability enforced by its trigger.
     "time_entry_timer_states",
+    // Owner/admin targets have a dedicated policy assertion and no DELETE grant.
+    "time_daily_targets",
     // AI memory is multi-scope (org OR user OR workspace in one table)
     // and archive-only (no permissive DELETE). The generic workspace /
     // org loops can't express either shape; the dedicated test below
@@ -408,6 +414,22 @@ describe("policy coverage", () => {
     ).toEqual([]);
   });
 
+  test("operator observations deny every request-role operation", async () => {
+    const policies = await fetchStellaPolicies(testDb);
+    const privileges = await fetchStellaTablePrivileges(testDb);
+    for (const table of ["action_cost_records", "action_cost_calls"]) {
+      const tablePolicies = policies.filter(
+        (policy) => policy.table_name === table,
+      );
+      expect(tablePolicies).toHaveLength(1);
+      const policy = tablePolicies.at(0);
+      expect(policy?.command).toBe("*");
+      expect(policy?.using_expr).toBe("false");
+      expect(policy?.check_expr).toBe("false");
+      expect(privilegesForTable(privileges, table)).toEqual([]);
+    }
+  });
+
   test("every table with organization_id (org-only) has org policies", async () => {
     const scoped = await fetchScopedTables(testDb);
     const policies = await fetchStellaPolicies(testDb);
@@ -449,6 +471,21 @@ describe("policy coverage", () => {
         expect(expr).toContain("organization_id");
         expect(expr).toContain(SETTING_ORGANIZATION_ID);
       }
+    }
+  });
+
+  test("daily targets require the active organization and owner or organization management", async () => {
+    const policies = (await fetchStellaPolicies(testDb)).filter(
+      (policy) => policy.table_name === "time_daily_targets",
+    );
+    expect(policies).toHaveLength(1);
+    const policy = policies.at(0);
+    expect(policy?.command).toBe("*");
+    for (const expression of [policy?.using_expr, policy?.check_expr]) {
+      expect(expression).toContain(SETTING_ORGANIZATION_ID);
+      expect(expression).toContain(SETTING_USER_ID);
+      expect(expression).toContain("owner");
+      expect(expression).toContain("admin");
     }
   });
 

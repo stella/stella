@@ -1,4 +1,14 @@
 {
+  "case-law.outstanding-document-candidates": {
+    "scans": [
+      {
+        "position": "root/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Scan",
+        "index": "case_law_decisions_document_outstanding_date_idx"
+      }
+    ]
+  },
   "case-law.ecli-identity": {
     "scans": [
       {
@@ -18,6 +28,66 @@
         "relation": "case_law_decision_identifiers",
         "nodeType": "Index Only Scan",
         "index": "case_law_decision_identifiers_lookup_idx"
+      }
+    ]
+  },
+  "case-law.docket-family-identity": {
+    "scans": [
+      {
+        "position": "root/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_country_date_idx"
+      },
+      {
+        "position": "root/0/1/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_citation_candidate_idx"
+      },
+      {
+        "position": "root/0/1/0/1",
+        "relation": "case_law_decision_identifiers",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_decision_identifiers_lookup_idx"
+      }
+    ]
+  },
+  "case-law.outstanding-document-probe": {
+    "scans": [
+      {
+        "position": "root/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_document_outstanding_idx"
+      }
+    ]
+  },
+  "case-law.docket-family-key-identity": {
+    "scans": [
+      {
+        "position": "root/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_country_date_idx"
+      },
+      {
+        "position": "root/0/1/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_citation_candidate_idx"
+      },
+      {
+        "position": "root/0/1/0/1",
+        "relation": "case_law_decision_identifiers",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_decision_identifiers_lookup_idx"
+      },
+      {
+        "position": "root/0/1/0/2",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Scan",
+        "index": "case_law_decisions_docket_family_key_idx"
       }
     ]
   },
@@ -119,6 +189,24 @@
         "relation": "corpus_index_projection_states",
         "nodeType": "Index Scan",
         "index": "corpus_index_projection_states_pkey"
+      },
+      {
+        "position": "root/2",
+        "relation": "corpus_index_projection_intents",
+        "nodeType": "Index Scan",
+        "index": "corpus_index_projection_intents_identity_uidx"
+      },
+      {
+        "position": "root/2/0",
+        "relation": "corpus_index_projection_states",
+        "nodeType": "Index Scan",
+        "index": "corpus_index_projection_states_pkey"
+      },
+      {
+        "position": "root/3",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Scan",
+        "index": "case_law_decisions_lang_group_idx"
       }
     ]
   },
@@ -141,6 +229,18 @@
         "relation": "case_law_decision_identifiers",
         "nodeType": "Index Scan",
         "index": "case_law_decision_identifiers_pk"
+      },
+      {
+        "position": "root/3",
+        "relation": "corpus_index_projection_intents",
+        "nodeType": "Index Scan",
+        "index": "corpus_index_projection_intents_identity_uidx"
+      },
+      {
+        "position": "root/3/0",
+        "relation": "corpus_index_projection_states",
+        "nodeType": "Index Scan",
+        "index": "corpus_index_projection_states_pkey"
       }
     ]
   },
@@ -290,6 +390,16 @@
         "relation": "corpus_index_projection_states",
         "nodeType": "Index Scan",
         "index": "corpus_index_projection_states_erase_pending_idx"
+      }
+    ]
+  },
+  "system-audit.purge-candidates": {
+    "scans": [
+      {
+        "position": "root/0",
+        "relation": "system_audit_runs",
+        "nodeType": "Index Scan",
+        "index": "system_audit_runs_created_at_idx"
       }
     ]
   }

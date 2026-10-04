@@ -9,11 +9,12 @@
  */
 
 import { panic } from "better-result";
-import JSZip from "jszip";
+import type JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import type { NamedCondition } from "@stll/template-conditions";
 
+import { loadDocx } from "@/api/lib/docx-archive";
 import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
@@ -63,8 +64,7 @@ const fillTemplateWithValues = async (
   data: Buffer,
   values: PatchValues,
 ): Promise<Buffer> => {
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(data);
+  const zip = await loadDocx(data);
   const partNames = templateContentPartPaths(Object.keys(zip.files));
 
   // Each part is read, patched, and written back independently — `values` is
@@ -211,25 +211,29 @@ const preProcessTemplateDirectives = async (
   };
 };
 
+type FillTemplateOptions = {
+  namedConditions: NamedCondition[];
+};
+
 /** Fills a scanned template; the filled document comes back as a derived
  *  `ScannedFile`, so it can be read again without a second scan. */
 export const fillTemplate = async (
   template: ScannedFile,
   values: PatchValues | TemplateData,
+  options?: FillTemplateOptions,
 ): Promise<FillTemplateResult> => {
   let data: Buffer = Buffer.from(template.bytes);
 
   // Open ZIP once for manifest + block-directive checks
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(data);
+  const zip = await loadDocx(data);
 
   // A boolean condition-field IS a named condition (addressed by its path), so
   // synthesize both shapes into one list the evaluator resolves bare names
   // against; `{% if field_path %}` then resolves the field's rule. The
   // conditions come from the markers, like every other field configuration.
-  const synthesized = manifestNamedConditions(
-    deriveManifest(await discoverTemplate(template)),
-  );
+  const synthesized =
+    options?.namedConditions ??
+    manifestNamedConditions(deriveManifest(await discoverTemplate(template)));
   const namedConditions = synthesized.length > 0 ? synthesized : undefined;
 
   let effectiveValues: PatchValues;
@@ -284,8 +288,7 @@ export const fillTemplate = async (
   // (paragraph span text) rather than the raw string lets a `num()`/`ref()`
   // that Word split across runs be seen and rewritten, the same way the
   // placeholder pipeline handles split markers.
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const numberingZip = await JSZip.loadAsync(data);
+  const numberingZip = await loadDocx(data);
   const numberingParts = templateContentPartPaths(
     Object.keys(numberingZip.files),
   );
@@ -323,12 +326,6 @@ export const fillTemplate = async (
   // Discover what the template actually contains
   const discovered = await discoverPlaceholders(data);
   const templateNames = new Set(discovered.map((p) => p.name));
-  const providedNames = new Set(Object.keys(effectiveValues));
-
-  const unmatchedPlaceholders = [...templateNames].filter(
-    (name) => !providedNames.has(name),
-  );
-
   // For unused-value detection, compare against the original
   // user-supplied keys (not the expanded __each_ keys)
   const originalKeys = new Set(Object.keys(values));
@@ -346,6 +343,12 @@ export const fillTemplate = async (
   const filled = await stripManifest(
     await fillTemplateWithValues(data, effectiveValues),
   );
+
+  // Inspect the delivered content, including rich clause patches inserted
+  // after the original template discovery and surviving conditional removal.
+  const unmatchedPlaceholders = [
+    ...new Set((await discoverPlaceholders(filled)).map(({ name }) => name)),
+  ];
 
   return {
     file: derivedScannedFile(template, filled),

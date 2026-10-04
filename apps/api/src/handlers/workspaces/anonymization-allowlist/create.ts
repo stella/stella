@@ -3,8 +3,9 @@ import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { anonymizationAllowlistEntries, entities } from "@/api/db/schema";
+import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { countWorkspaceAnonymizationAllowlistForWrite } from "@/api/lib/anonymization-write-cap";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -31,7 +32,13 @@ const config = {
     "the duplicate is detected, so replaying an existing entry is refused " +
     "there rather than reported as a no-op.",
   permissions: { workspace: ["update"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: workspaceRealtimeUpdates,
+  mcp: {
+    type: "capability",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
   body: t.Object({
     canonical: t.String({ minLength: 1, maxLength: 512 }),
     label: t.String({ minLength: 1, maxLength: 64 }),

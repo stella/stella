@@ -25,6 +25,8 @@ import { PublicLawConnectionItem } from "@/components/dev/public-law-connection-
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { useDevStore } from "@/lib/dev-store";
+import { toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 const SEED_STATUS_POLL_INTERVAL_MS = 1000;
 const SEED_STATUS_MAX_POLLS = 180;
@@ -100,8 +102,6 @@ export const DevSidebarGroup = () => {
       setTanstackDevtools: s.setTanstackDevtools,
       sourceInspector: s.sourceInspector,
       setSourceInspector: s.setSourceInspector,
-      reactGrab: s.reactGrab,
-      setReactGrab: s.setReactGrab,
       publicLawPreview: s.publicLawPreview,
       setPublicLawPreview: s.setPublicLawPreview,
       simulateSlowLoad: s.simulateSlowLoad,
@@ -114,7 +114,7 @@ export const DevSidebarGroup = () => {
     const start = await api.dev.seed.post();
     if (start.error) {
       setSeeding(false);
-      stellaToast.add({ title: "Seed failed", type: "error" });
+      notifyUserError(toAPIError(start.error), "Seed failed");
       return;
     }
 
@@ -128,10 +128,8 @@ export const DevSidebarGroup = () => {
       },
       onFailed: (message) => {
         setSeeding(false);
-        stellaToast.add({
-          title: "Seed failed",
+        notifyUserError(undefined, "Seed failed", {
           ...(message === undefined ? {} : { description: message }),
-          type: "error",
         });
       },
       onSucceeded: () => {
@@ -156,13 +154,13 @@ export const DevSidebarGroup = () => {
     const start = await api.dev["seed-firm-knowledge"].post();
     if (start.error) {
       setSeedingFirmKnowledge(false);
-      stellaToast.add({ title: "Firm-knowledge seed failed", type: "error" });
+      notifyUserError(toAPIError(start.error), "Firm-knowledge seed failed");
       return;
     }
 
     if (start.data instanceof Response) {
       setSeedingFirmKnowledge(false);
-      stellaToast.add({ title: "Firm-knowledge seed failed", type: "error" });
+      notifyUserError(undefined, "Firm-knowledge seed failed");
       return;
     }
     const jobId = start.data.jobId;
@@ -180,10 +178,8 @@ export const DevSidebarGroup = () => {
       },
       onFailed: (message) => {
         setSeedingFirmKnowledge(false);
-        stellaToast.add({
-          title: "Firm-knowledge seed failed",
+        notifyUserError(undefined, "Firm-knowledge seed failed", {
           ...(message === undefined ? {} : { description: message }),
-          type: "error",
         });
       },
       onSucceeded: () => {
@@ -210,10 +206,7 @@ export const DevSidebarGroup = () => {
     const { error } = await api.dev["clear-cache"].post();
     setClearingCache(false);
     if (error) {
-      stellaToast.add({
-        title: "Clear cache failed",
-        type: "error",
-      });
+      notifyUserError(toAPIError(error), "Clear cache failed");
       return;
     }
     queryClient.clear();
@@ -229,10 +222,7 @@ export const DevSidebarGroup = () => {
     const { error } = await api.dev.clean.post();
     setCleaning(false);
     if (error) {
-      stellaToast.add({
-        title: "Clean failed",
-        type: "error",
-      });
+      notifyUserError(toAPIError(error), "Clean failed");
       return;
     }
     await queryClient.invalidateQueries();
@@ -262,17 +252,6 @@ export const DevSidebarGroup = () => {
           variant="switch"
         >
           Source Inspector
-        </MenuCheckboxItem>
-        <MenuCheckboxItem
-          checked={dev.reactGrab}
-          onClick={() => {
-            const next = !dev.reactGrab;
-            dev.setReactGrab(next);
-            window.location.reload();
-          }}
-          variant="switch"
-        >
-          React Grab
         </MenuCheckboxItem>
         <MenuCheckboxItem
           checked={dev.publicLawPreview}

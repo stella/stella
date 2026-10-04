@@ -2,15 +2,11 @@ import { panic, Result } from "better-result";
 import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { renderMatterReference } from "@stll/api-contract";
-
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
-import { transactionAbortError } from "@/api/db/safe-db";
+import { resultTx } from "@/api/db/safe-db";
 import {
-  type entities,
   type fields,
-  matterCounters,
   properties,
   propertyDependencies,
   workspaceContacts,
@@ -19,9 +15,9 @@ import {
   workspaceViews,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { env } from "@/api/env";
+import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -30,9 +26,14 @@ import {
   remapDependencyRefs,
   remapNodePropertyIds,
 } from "@/api/lib/conditions/ast-utils";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
+import {
+  createSiblingNamePlan,
+  type NamedEntityInsert,
+} from "@/api/lib/entities/sibling-name-insert";
 import {
   type CurrentVersionAssignment,
   insertEntityBatch,
@@ -46,9 +47,9 @@ import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
+  allocateMatterReference,
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
-  toScopeKey,
 } from "@/api/lib/matter-reference";
 import {
   assertPropertyDependencyReadWithinLimit,
@@ -72,12 +73,20 @@ import {
   enqueueEntitySearchRepairs,
   enqueueWorkspaceSearchRepairs,
 } from "@/api/lib/search/projection-repair-queue";
+import { findExtractionFileFieldRow } from "@/api/lib/search/types";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { portableLayout } from "@/api/lib/views/utils";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
+  realtime: organizationWorkspaceRealtimeUpdates,
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Copies stored content and returns operation metadata rather than file bytes.",
+  },
   description:
     "Copy a matter into a new one: its columns with their dependencies, " +
     "views, members, party contacts, client, billing reference, colour, and " +
@@ -87,7 +96,11 @@ const config = {
     "name gains a numeric suffix when earlier copies exist. Refused once the " +
     "organization is at its matter limit.",
   permissions: { workspace: ["create"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: true,
+  },
   body: t.Object({
     includeContent: t.Boolean(),
   }),
@@ -357,7 +370,7 @@ const copyWorkspaceFiles = async ({
       mimeType: copy.mimeType,
     });
     copiedS3Keys.push(targetKey);
-    const source = env.FEATURE_FILE_USAGE_LIMITS
+    const source = isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
       ? await headObject(sourceKey)
       : Result.ok({ contentLength: 0 });
     if (Result.isError(source)) {
@@ -587,7 +600,7 @@ export const createDuplicateWorkspace = (
       // transaction callback commits whatever it has already written, so a
       // rejection raised part-way through would persist half a matter and then
       // have the caller delete the objects those committed rows point at.
-      const txResult = await safeDb(async (tx) => {
+      const txResult = await resultTx(safeDb, async (tx) => {
         const [countResult, duplicatedNames, settings, orgMembers] =
           await Promise.all([
             tx
@@ -653,35 +666,18 @@ export const createDuplicateWorkspace = (
         const padding =
           settings?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING;
         const now = new Date();
-        const scopeKey = toScopeKey(pattern, now);
-        const counter = await tx
-          .insert(matterCounters)
-          .values({
-            id: createSafeId<"matterCounter">(),
-            organizationId,
-            scopeKey,
-            lastValue: 1,
-          })
-          .onConflictDoUpdate({
-            target: [matterCounters.organizationId, matterCounters.scopeKey],
-            set: { lastValue: sql`${matterCounters.lastValue} + 1` },
-          })
-          .returning({ lastValue: matterCounters.lastValue })
-          .then((rows) => rows.at(0));
-
-        if (!counter) {
-          throw new HandlerError({
-            status: 500,
-            message: "Failed to create matter counter",
-          });
-        }
-
-        const reference = renderMatterReference({
+        const referenceResult = await allocateMatterReference({
+          tx,
+          organizationId,
           pattern,
           now,
-          seq: counter.lastValue,
           padding,
         });
+
+        if (Result.isError(referenceResult)) {
+          return Result.err(referenceResult.error);
+        }
+        const reference = referenceResult.value;
 
         await tx.insert(workspaces).values({
           id: targetWorkspaceId,
@@ -822,7 +818,11 @@ export const createDuplicateWorkspace = (
           // Ids are minted here and parents resolve from `entityIdMap`, so the
           // loop only builds rows and `insertEntityBatch` writes them after it;
           // `orderEntitiesForDuplicate` puts parents first.
-          const entityRows: (typeof entities.$inferInsert)[] = [];
+          const entityRows: NamedEntityInsert[] = [];
+          const resolvePlannedName = await createSiblingNamePlan({
+            tx,
+            workspaceId: targetWorkspaceId,
+          });
           const versionRows: EntityVersionValues[] = [];
           const currentVersions: CurrentVersionAssignment[] = [];
           const fieldRows: (typeof fields.$inferInsert)[] = [];
@@ -848,12 +848,20 @@ export const createDuplicateWorkspace = (
               ? (entityIdMap.get(source.parentId) ?? null)
               : null;
 
+            const resolvedName = resolvePlannedName({
+              parentId: newParentId,
+              name: source.name,
+              kind: source.kind,
+            });
+            const primaryFile = findExtractionFileFieldRow(
+              source.currentVersion.fields,
+            );
             entityRows.push({
               id: newEntityId,
               workspaceId: targetWorkspaceId,
               kind: source.kind,
               parentId: newParentId,
-              name: source.name,
+              name: resolvedName.name,
               createdBy: user.id,
               lastEditedBy: user.id,
               docSequence: entityStamp?.docSequence ?? null,
@@ -909,7 +917,15 @@ export const createDuplicateWorkspace = (
                   workspaceId: targetWorkspaceId,
                   propertyId,
                   entityVersionId: newVersionId,
-                  content: remapFieldContent(field.content, fileIdMap),
+                  content: remapFieldContent(
+                    primaryFile !== null && field === primaryFile
+                      ? {
+                          ...primaryFile.content,
+                          fileName: resolvedName.fileName,
+                        }
+                      : field.content,
+                    fileIdMap,
+                  ),
                 },
               ];
             });
@@ -973,11 +989,11 @@ export const createDuplicateWorkspace = (
           targetWorkspaceId,
         ]);
 
-        return {
+        return Result.ok({
           workspaceId: targetWorkspaceId,
           entityIds: duplicatedEntityIds,
           nativeExtractionRunIds,
-        };
+        });
       });
 
       // An aborted duplicate leaves no target matter, so every object copied
@@ -987,7 +1003,7 @@ export const createDuplicateWorkspace = (
           copiedS3Keys,
           targetWorkspaceId,
         });
-        return Result.err(transactionAbortError(txResult.error));
+        return Result.err(txResult.error);
       }
 
       // These post-commit calls only accelerate work the transaction already

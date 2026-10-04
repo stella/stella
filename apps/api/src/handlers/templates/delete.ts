@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { templateDeletionCleanupRequests, templates } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -110,7 +110,12 @@ const config = {
     "template survive as history, but the template and its files cannot be " +
     "recovered.",
   permissions: { template: ["delete"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: deleteTemplateParamsSchema,
 } satisfies HandlerConfig;
 

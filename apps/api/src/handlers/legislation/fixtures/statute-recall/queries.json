@@ -1,0 +1,82 @@
+[
+  {
+    "id": "labour-trial-period",
+    "query": "zákon č. 262/2006 Sb. zákoník práce § 35 zkušební doba",
+    "expectedActs": ["262/2006"]
+  },
+  {
+    "id": "labour-fixed-term",
+    "query": "262/2006 Sb. zákoník práce § 39 doba určitá",
+    "expectedActs": ["262/2006"]
+  },
+  {
+    "id": "civil-appeal-citation",
+    "query": "99/1963 Sb. občanský soudní řád § 204",
+    "expectedActs": ["99/1963"]
+  },
+  {
+    "id": "labour-amendment",
+    "query": "zákon č. 120/2025 Sb. flexinovela zákoníku práce",
+    "expectedActs": ["120/2025"]
+  },
+  {
+    "id": "contractual-penalty",
+    "query": "Může soud snížit smluvní pokutu bez návrhu dlužníka podle § 2051 OZ?",
+    "expectedActs": ["89/2012"]
+  },
+  {
+    "id": "civil-appeal-deadline",
+    "query": "Kdy odvolání podle § 204 OSŘ není opožděné, přestože bylo podáno až po patnácti dnech?",
+    "expectedActs": ["99/1963"]
+  },
+  {
+    "id": "director-remuneration",
+    "query": "Je výkon funkce jednatele podle ZOK vždy bezplatný, když smlouva o výkonu funkce nebyla schválena?",
+    "expectedActs": ["90/2012"]
+  },
+  {
+    "id": "damage-threshold-date",
+    "query": "TrZ: škoda 9 999 Kč oproti 10 000 Kč podle hranic účinných od 1. října 2020?",
+    "expectedActs": ["40/2009"]
+  },
+  {
+    "id": "land-register-good-faith",
+    "query": "Chrání materiální publicita katastru i každého bezúplatného nabyvatele v dobré víře?",
+    "expectedActs": ["89/2012"]
+  },
+  {
+    "id": "parental-return",
+    "query": "Dítěti jsou v den návratu z rodičovské přesně dva roky: platí garance stejné židle?",
+    "expectedActs": ["262/2006"]
+  },
+  {
+    "id": "civil-limitation-unaccented",
+    "query": "obcansky zakonik promlcenim pohledavky subjektivni objektivni lhuty 629",
+    "expectedActs": ["89/2012"]
+  },
+  {
+    "id": "labour-dismissal-unaccented",
+    "query": "vypoved nesplnovani predpokladu pracovni kazen mesic flexinovela §52",
+    "expectedActs": ["262/2006"]
+  },
+  {
+    "id": "damage-threshold-unaccented",
+    "query": "TrZ skoda nikoliv nepatrna vetsi znacna velkeho rozsahu deset tisic",
+    "expectedActs": ["40/2009"]
+  },
+  {
+    "id": "labour-notice-transition",
+    "query": "Výpověď doručená 31. května 2025: začne výpovědní doba už ten den, nebo 1. června?",
+    "expectedActs": ["262/2006"]
+  },
+  {
+    "id": "historical-civil-limitation",
+    "query": "Které znění promlčení podle § 101 starého OZ platilo v ČR 31. prosince 2013?",
+    "expectedActs": ["40/1964"]
+  },
+  {
+    "id": "labour-amendment-english",
+    "query": "Czech 2025 labour flexibility amendment transitional provisions for notice given before 1 June 2025",
+    "expectedActs": ["120/2025"]
+  }
+]

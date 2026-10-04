@@ -1,0 +1,1 @@
+REINDEX INDEX documents_reindex_fixture_idx;

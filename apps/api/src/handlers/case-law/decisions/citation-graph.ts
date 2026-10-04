@@ -39,6 +39,7 @@ import {
   isUuidPaginationCursorPart,
   type Page,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 import { includes } from "@/api/lib/type-guards";
 
@@ -55,7 +56,7 @@ export const treatmentOf = (polarity: string | null): CitationTreatment => {
 };
 
 export const listDecisionCitationsQuerySchema = t.Object({
-  direction: t.Union(CITATION_DIRECTIONS.map((value) => t.Literal(value))),
+  direction: t.UnionEnum(CITATION_DIRECTIONS),
   cursor: t.Optional(tPaginationCursor()),
 });
 
@@ -229,8 +230,14 @@ const DIRECTION_SPECS = {
 } as const satisfies Record<CitationDirection, DirectionSpec>;
 
 /**
- * A row the reader may see: its far end is a decision from a source that
- * allows redistribution, or (outgoing only) there is no far end to protect.
+ * A row the reader may see: its far end is a held decision from a source that
+ * allows redistribution, published rather than listing-only, in a public
+ * country; or (outgoing only) there is no far end to protect.
+ *
+ * The one gate for every related-decision read in this module: the list, the
+ * summary and the leading rows all filter through it, so a new disposition
+ * reaches them together. `case-law-public-route-invariants.test.ts` holds the
+ * module to it.
  */
 const visibleFor = ({
   keepsUnresolved,
@@ -281,7 +288,9 @@ export const listDecisionCitationsHandler = async ({
   if (cursorId === null) {
     return status(400, { message: "Invalid cursor" });
   }
-  const pageSize = Math.min(limit, LIMITS.caseLawDecisionCitationPageSize);
+  const pageSize = normalizeTenantPageLimit(
+    Math.min(limit, LIMITS.caseLawDecisionCitationPageSize),
+  );
   const rows = await decisionCitationPageQuery({
     cursorId,
     decisionId,
@@ -591,7 +600,7 @@ export const decisionCitationSummaryQuery = ({
 export const LEADING_CITATIONS_PER_TREATMENT = 3;
 
 export const listLeadingCitationsQuerySchema = t.Object({
-  direction: t.Union(CITATION_DIRECTIONS.map((value) => t.Literal(value))),
+  direction: t.UnionEnum(CITATION_DIRECTIONS),
 });
 
 type ListLeadingCitationsQuery = Static<typeof listLeadingCitationsQuerySchema>;
@@ -658,8 +667,9 @@ export const listLeadingCitationsHandler = async ({
       and(
         eq(spec.anchor, decisionId),
         precedentOnly,
-        inArray(relatedDecision.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
-        redistributableCaseLawSourceFor(relatedSource.descriptor),
+        // Before ranking, so a hidden decision cannot take a leader's place.
+        // Only a held decision can lead, whatever the direction keeps.
+        visibleFor({ keepsUnresolved: false, related: spec.related }),
       ),
     )
     .as("leading_mentions");

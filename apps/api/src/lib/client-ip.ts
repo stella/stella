@@ -1,5 +1,4 @@
 import { panic } from "better-result";
-import { Address4, Address6 } from "ip-address";
 /**
  * Resolves the client IP for a request, refusing to trust
  * `x-forwarded-for` unless the request actually arrived through a trusted
@@ -22,10 +21,13 @@ import { Address4, Address6 } from "ip-address";
  * `STELLA_CLIENT_ADDRESS_HEADER`. That header is read only from a trusted
  * peer and takes precedence over the `x-forwarded-for` chain.
  */
-import { BlockList, isIP, isIPv6 } from "node:net";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { BlockList, isIP, isIPv4, isIPv6 } from "node:net";
 
 import { env } from "@/api/env";
 import {
+  AUTH_CLIENT_ADDRESS_HEADER,
+  ORIGIN_VERIFY_HEADER,
   SIGNUP_RATE_LIMIT_IP_SOURCE,
   type SignupRateLimitIpSource,
 } from "@/api/lib/client-ip-config";
@@ -36,7 +38,22 @@ import { logger } from "@/api/lib/observability/logger";
  * replacing any incoming value, so Better Auth and other readers of request
  * headers see the same address as stella.
  */
-export const AUTH_CLIENT_ADDRESS_HEADER = "x-stella-client-address";
+export { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip-config";
+
+/**
+ * The header the edge adds to prove a request came through it. When
+ * `STELLA_ORIGIN_VERIFY_SECRET` is set, the edge address header is read only
+ * from requests that carry one of its values here.
+ */
+export { ORIGIN_VERIFY_HEADER } from "@/api/lib/client-ip-config";
+
+export const EDGE_ADDRESS_FORMAT = {
+  withPort: "with-port",
+  bare: "bare",
+} as const;
+
+export type EdgeAddressFormat =
+  (typeof EDGE_ADDRESS_FORMAT)[keyof typeof EDGE_ADDRESS_FORMAT];
 
 export const CLIENT_ADDRESS_SOURCE = {
   edgeHeader: "edge_header",
@@ -159,15 +176,23 @@ const clientIpFromForwardedFor = (
 };
 
 /**
- * Parses an edge viewer-address header. The value always carries a port
- * (`203.0.113.7:443`, `2001:db8::1:443`, or the bracketed `[2001:db8::1]:443`),
- * so the last colon-separated segment is dropped before validation.
+ * Parses an edge viewer-address header. In the `with-port` format the value
+ * carries a port (`203.0.113.7:443`, `2001:db8::1:443`, or the bracketed
+ * `[2001:db8::1]:443`), whose last colon-separated segment is dropped; an
+ * unbracketed IPv6 value is ambiguous otherwise, so the format is configured,
+ * never guessed. The `bare` format carries the address alone.
  */
-export const parseEdgeClientAddress = (value: string | null): string | null => {
+export const parseEdgeClientAddress = (
+  value: string | null,
+  format: EdgeAddressFormat = EDGE_ADDRESS_FORMAT.withPort,
+): string | null => {
   if (!value) {
     return null;
   }
   const trimmed = value.trim();
+  if (format === EDGE_ADDRESS_FORMAT.bare) {
+    return isIP(trimmed) === 0 ? null : trimmed;
+  }
   const bracketed = /^\[([^\]]+)\]:\d{1,5}$/u.exec(trimmed)?.at(1);
   if (bracketed !== undefined) {
     return isIPv6(bracketed) ? bracketed : null;
@@ -188,16 +213,67 @@ type ClientAddressOptions = {
   trusted?: TrustedProxies;
   /** Header name carrying the edge's viewer address; null disables it. */
   edgeHeader?: string | null;
+  /**
+   * Accepted {@link ORIGIN_VERIFY_HEADER} values; when non-empty, the edge
+   * header is read only from requests carrying one of them.
+   */
+  originSecrets?: readonly string[];
+  /** How the edge header spells the address; defaults to the configured one. */
+  edgeAddressFormat?: EdgeAddressFormat;
 };
 
-const addressFromTrustedPeer = (
+const digest = (value: string) => createHash("sha256").update(value).digest();
+
+const carriesOriginSecret = (
   request: Request,
-  peer: string,
-  trusted: TrustedProxies,
-  edgeHeader: string | null,
-): ClientAddress | null => {
-  if (edgeHeader !== null) {
-    const address = parseEdgeClientAddress(request.headers.get(edgeHeader));
+  secrets: readonly string[],
+): boolean => {
+  if (secrets.length === 0) {
+    return true;
+  }
+  const presented = request.headers.get(ORIGIN_VERIFY_HEADER);
+  if (presented === null) {
+    return false;
+  }
+  const presentedDigest = digest(presented);
+  // Every value is compared so the time taken does not reveal which matched.
+  return secrets
+    .map((secret) => timingSafeEqual(presentedDigest, digest(secret)))
+    .includes(true);
+};
+
+let cachedOriginSecrets: readonly string[] | null = null;
+
+const getOriginSecrets = (): readonly string[] => {
+  cachedOriginSecrets ??= (env.STELLA_ORIGIN_VERIFY_SECRET ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+  return cachedOriginSecrets;
+};
+
+type TrustedPeerInput = {
+  request: Request;
+  peer: string;
+  trusted: TrustedProxies;
+  edgeHeader: string | null;
+  originSecrets: readonly string[];
+  edgeAddressFormat: EdgeAddressFormat;
+};
+
+const addressFromTrustedPeer = ({
+  request,
+  peer,
+  trusted,
+  edgeHeader,
+  originSecrets,
+  edgeAddressFormat,
+}: TrustedPeerInput): ClientAddress | null => {
+  if (edgeHeader !== null && carriesOriginSecret(request, originSecrets)) {
+    const address = parseEdgeClientAddress(
+      request.headers.get(edgeHeader),
+      edgeAddressFormat,
+    );
     if (address !== null) {
       return { address, source: CLIENT_ADDRESS_SOURCE.edgeHeader };
     }
@@ -222,6 +298,9 @@ export const resolveClientAddress = (
   server: ServerLike | null,
   options?: ClientAddressOptions,
 ): ClientAddress | null => {
+  if (options === undefined && resolvedAddresses.has(request)) {
+    return resolvedAddresses.get(request) ?? null;
+  }
   const peer = server?.requestIP(request)?.address ?? null;
   if (!peer) {
     return null;
@@ -235,11 +314,40 @@ export const resolveClientAddress = (
       ? (env.STELLA_CLIENT_ADDRESS_HEADER ?? null)
       : options.edgeHeader;
   return (
-    addressFromTrustedPeer(request, peer, trusted, edgeHeader) ?? {
+    addressFromTrustedPeer({
+      request,
+      peer,
+      trusted,
+      edgeHeader,
+      originSecrets: options?.originSecrets ?? getOriginSecrets(),
+      edgeAddressFormat:
+        options?.edgeAddressFormat ?? env.STELLA_CLIENT_ADDRESS_FORMAT,
+    }) ?? {
       address: peer,
       source: CLIENT_ADDRESS_SOURCE.peer,
     }
   );
+};
+
+// The address each request resolved to when it arrived, before
+// {@link sealEdgeHeaders} removed the headers it was read from.
+const resolvedAddresses = new WeakMap<Request, ClientAddress | null>();
+
+/**
+ * Records the request's resolved address for later readers and removes the
+ * edge headers, so handlers and logs never see the origin secret and later
+ * lookups cannot re-read a header.
+ */
+export const sealEdgeHeaders = (
+  request: Request,
+  clientAddress: ClientAddress | null,
+): void => {
+  resolvedAddresses.set(request, clientAddress);
+  request.headers.delete(ORIGIN_VERIFY_HEADER);
+  const edgeHeader = env.STELLA_CLIENT_ADDRESS_HEADER;
+  if (edgeHeader !== undefined) {
+    request.headers.delete(edgeHeader);
+  }
 };
 
 /**
@@ -282,6 +390,8 @@ export const resolveSignupRateLimitClientIp = (
     source?: SignupRateLimitIpSource;
     trusted?: TrustedProxies;
     edgeHeader?: string | null;
+    originSecrets?: readonly string[];
+    edgeAddressFormat?: EdgeAddressFormat;
   },
 ): string | null => {
   const peer = server?.requestIP(request)?.address ?? null;
@@ -310,30 +420,71 @@ export const resolveSignupRateLimitClientIp = (
       ? (env.STELLA_CLIENT_ADDRESS_HEADER ?? null)
       : options.edgeHeader;
   return (
-    addressFromTrustedPeer(request, peer, trusted, edgeHeader)?.address ?? null
+    addressFromTrustedPeer({
+      request,
+      peer,
+      trusted,
+      edgeHeader,
+      originSecrets: options?.originSecrets ?? getOriginSecrets(),
+      edgeAddressFormat:
+        options?.edgeAddressFormat ?? env.STELLA_CLIENT_ADDRESS_FORMAT,
+    })?.address ?? null
   );
 };
 
 const IPV6_RATE_LIMIT_PREFIX_LENGTH = 64;
 
-export const normalizeRateLimitClientAddress = (identity: string): string => {
-  const ipVersion = isIP(identity);
-  if (ipVersion === 4) {
-    return new Address4(identity).correctForm();
+// A valid IPv6 spelling may end in a dotted IPv4 address; rewrite it as the
+// two hex groups it stands for.
+const expandEmbeddedIPv4 = (address: string): string => {
+  const lastGroupStart = address.lastIndexOf(":") + 1;
+  const lastGroup = address.slice(lastGroupStart);
+  if (!lastGroup.includes(".")) {
+    return address;
   }
-  if (ipVersion !== 6) {
+  const value = lastGroup
+    .split(".")
+    .reduce((n, octet) => n * 256 + Number(octet), 0);
+  return `${address.slice(0, lastGroupStart)}${Math.floor(value / 65_536).toString(16)}:${(value % 65_536).toString(16)}`;
+};
+
+export const normalizeRateLimitClientAddress = (identity: string): string => {
+  if (isIPv4(identity) || !isIPv6(identity)) {
     return identity;
   }
-
-  const address = new Address6(identity);
-  if (address.isMapped4()) {
-    return address.to4().correctForm();
+  const zoneStart = identity.indexOf("%");
+  const address = expandEmbeddedIPv4(
+    zoneStart === -1 ? identity : identity.slice(0, zoneStart),
+  );
+  const [left = "", right = ""] = address.split("::");
+  const head = left === "" ? [] : left.split(":");
+  const tail = right === "" ? [] : right.split(":");
+  const groups = address.includes("::")
+    ? [
+        ...head,
+        ...Array.from({ length: 8 - head.length - tail.length }, () => "0"),
+        ...tail,
+      ]
+    : head;
+  const values = groups.map((group) => Number.parseInt(group, 16));
+  if (
+    values.slice(0, 5).every((group) => group === 0) &&
+    values.at(5) === 0xff_ff
+  ) {
+    const ipv4 = values
+      .slice(6)
+      .reduce((value, group) => value * 65_536 + group, 0);
+    return [24, 16, 8, 0]
+      .map((shift) => Math.floor(ipv4 / 2 ** shift) % 256)
+      .join(".");
   }
-  return new Address6(
-    `${address.correctForm()}/${IPV6_RATE_LIMIT_PREFIX_LENGTH}`,
-  )
-    .startAddress()
-    .correctForm();
+  const network = values.slice(0, IPV6_RATE_LIMIT_PREFIX_LENGTH / 16);
+  // The /64 mask supplies four trailing zero groups, so its trailing run is
+  // always the longest; no earlier run can contain more than three zeros.
+  while (network.at(-1) === 0) {
+    network.pop();
+  }
+  return `${network.map((group) => group.toString(16)).join(":")}::`;
 };
 
 export type RateLimitClientAddressOptions = {

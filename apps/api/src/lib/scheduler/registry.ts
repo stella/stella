@@ -1,5 +1,17 @@
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
 import {
+  SWEEP_ACTION_COSTS_TASK,
+  sweepActionCostRecords,
+} from "@/api/lib/scheduler/tasks/action-cost-retention";
+import {
+  BACKFILL_AGENT_CLIENT_STORAGE_TASK,
+  backfillAgentClientStorage,
+} from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
+import {
+  BACKFILL_HEARTBEAT_TASK,
+  emitBackfillHeartbeats,
+} from "@/api/lib/scheduler/tasks/backfill-heartbeat";
+import {
   RECONCILE_BILINGUAL_RUNS_TASK,
   reconcileBilingualRuns,
 } from "@/api/lib/scheduler/tasks/bilingual-run-reconcile";
@@ -81,6 +93,10 @@ import {
   reconcileFlowRunOrphans,
 } from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
 import {
+  REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK,
+  redactHostedUsageWebhookEvents,
+} from "@/api/lib/scheduler/tasks/hosted-usage-webhook-retention";
+import {
   INFO_SOUD_SYNC_TRACKED_CASES_TASK,
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
@@ -108,6 +124,10 @@ import {
   RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK,
   reconcileOrganizationFileReservations,
 } from "@/api/lib/scheduler/tasks/organization-file-reservation-reconcile";
+import {
+  SWEEP_REGISTRATIONS_TASK,
+  sweepRegistrationRecords,
+} from "@/api/lib/scheduler/tasks/registration-retention";
 import {
   RECONCILE_REPORT_EXPORTS_TASK,
   reconcileReportExports,
@@ -137,6 +157,10 @@ import {
   reconcileStyleSetPackageCleanups,
 } from "@/api/lib/scheduler/tasks/style-set-package-cleanup-reconcile";
 import {
+  PURGE_SYSTEM_AUDIT_RUNS_TASK,
+  purgeSystemAuditRunsTask,
+} from "@/api/lib/scheduler/tasks/system-audit-retention";
+import {
   CLEAN_TEMPLATE_DELETION_OBJECTS_TASK,
   cleanTemplateDeletionObjects,
 } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
@@ -158,6 +182,9 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
+  [BACKFILL_AGENT_CLIENT_STORAGE_TASK]: backfillAgentClientStorage,
+  [BACKFILL_HEARTBEAT_TASK]: emitBackfillHeartbeats,
   "scheduler.noop": noopTask,
   "scheduler.dispatchBullMq": createBullMqDispatchTask(),
   [INFO_SOUD_SYNC_TRACKED_CASES_TASK]: syncInfoSoudTrackedCases,
@@ -183,6 +210,9 @@ const SCHEDULER_TASKS = {
   [REPAIR_SEARCH_PROJECTIONS_TASK]: repairSearchProjections,
   [CHAT_THREAD_COMPACTOR_TASK]: compactChatThreads,
   [SWEEP_CHAT_RUN_LOGS_TASK]: sweepChatRunLogs,
+  [SWEEP_ACTION_COSTS_TASK]: sweepActionCostRecords,
+  [SWEEP_REGISTRATIONS_TASK]: sweepRegistrationRecords,
+  [PURGE_SYSTEM_AUDIT_RUNS_TASK]: purgeSystemAuditRunsTask,
   [BACKFILL_WORK_OBLIGATIONS_TASK]: backfillWorkObligations,
   [BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK]: backfillLegislationExpressionIds,
   [WORK_ATTENTION_SCOUT_TASK]: runWorkAttentionScoutTask,

@@ -5,7 +5,6 @@ import {
   AGENT_AUTH_CLAIM_GRANT_TYPE,
   AGENT_AUTH_JWT_BEARER_GRANT_TYPE,
 } from "@/api/agent-auth/constants";
-import { env } from "@/api/env";
 import {
   exchangeAuthorizationCode,
   pollClaimGrant,
@@ -19,8 +18,13 @@ import {
   verifyServiceAssertion,
 } from "@/api/lib/agent-auth-idjag";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { PRAGMA_NO_CACHE } from "@/api/lib/security-headers";
 
 /**
  * Profile-specific token exchange hosting two grants better-auth's closed
@@ -39,7 +43,9 @@ const config = {
       assertion: t.String({ minLength: 1, maxLength: 8192 }),
     }),
   ]),
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
+  cache: { kind: "none" },
 } satisfies PublicHandlerConfig;
 
 const ERROR_STATUS_BY_CODE: Record<AgentTokenErrorCode, 400 | 403> = {
@@ -80,7 +86,7 @@ const toTokenResult = (
 const exchangeJwtBearer = async (
   assertion: string,
 ): Promise<Result<TokenResponseShape, HandlerError>> => {
-  if (!env.FEATURE_AGENT_ID_JAG) {
+  if (!isDeploymentFeatureEnabled("FEATURE_AGENT_ID_JAG")) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -112,10 +118,7 @@ const exchangeJwtBearer = async (
 const agentTokenHandler = createSafePublicHandler(
   config,
   async function* ({ body, set }) {
-    // OAuth 2.0 §5.1: token responses carry bearer credentials and must not be
-    // cached by browsers or intermediaries.
-    set.headers["cache-control"] = "no-store";
-    set.headers.pragma = "no-cache";
+    set.headers.pragma = PRAGMA_NO_CACHE;
 
     const result =
       body.grant_type === AGENT_AUTH_JWT_BEARER_GRANT_TYPE

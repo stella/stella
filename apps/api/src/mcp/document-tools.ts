@@ -18,13 +18,11 @@ import { createEntitiesHandler } from "@/api/handlers/entities/create";
 import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import { moveEntityHandler } from "@/api/handlers/entities/move";
-import { renameEntityHandler } from "@/api/handlers/entities/rename";
+import { renameEntityHandler } from "@/api/handlers/entities/rename-operation";
 import { loadEntityVersionDocxText } from "@/api/handlers/entities/version-diff-sources";
 import { deleteEntityVersionHandler } from "@/api/handlers/entities/versions/delete";
 import { updateVersionDescriptionHandler } from "@/api/handlers/entities/versions/description/update";
 import { updateVersionLabelHandler } from "@/api/handlers/entities/versions/label/update";
-import type { UpsertFieldContent } from "@/api/handlers/fields/upsert";
-import { upsertFieldHandler } from "@/api/handlers/fields/upsert";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -51,6 +49,12 @@ import {
   entityListCursorCondition,
   entityListTimestampCursorExpr,
 } from "@/api/lib/entities/list-cursor";
+import {
+  FIELD_VALUE_WRITE_PERMISSIONS,
+  writeFieldValue,
+} from "@/api/lib/fields/write-field";
+import type { FieldWriteContent } from "@/api/lib/fields/write-field";
+import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -58,6 +62,7 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedEntityId,
   brandPersistedEntityVersionId,
@@ -86,7 +91,10 @@ import {
   UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA,
   uploadRemoteDocumentVersion,
 } from "@/api/mcp/document-file-upload";
-import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  hasEffectiveAuthority,
+  mcpMemberAuthority,
+} from "@/api/mcp/effective-authority";
 import {
   handlePrepareFileComparisonFromLinksTool,
   PREPARE_FILE_COMPARISON_FROM_LINKS_OUTPUT_CONTRACT,
@@ -138,6 +146,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { selectOperationByPresence } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 type DocumentToolName =
@@ -509,6 +518,7 @@ const READ_DOCUMENT_TEXT_FIELD_PATHS = [
 ];
 
 const UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: true,
   _meta: {
     "openai/fileParams": ["file"],
   },
@@ -526,12 +536,15 @@ const UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION = defineValibotMcpTool({
     "presigned, checksum-verified, scanned, and audited file-version pipeline.",
   inputSchema: UPLOAD_DOCUMENT_VERSION_INPUT_SCHEMA,
   access: "write",
+  accountAccess: "sandbox",
+  permissions: { type: "all", permissions: { entity: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: DOCUMENT_VERSION_UPLOAD_TRANSPORT.toolName,
   scope: "stella:documents_write",
 });
 
 const OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   _meta: {
     ui: {
       resourceUri: DOCUMENT_UPLOAD_APP_RESOURCE_URI,
@@ -551,6 +564,8 @@ const OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION = defineValibotMcpTool({
     "reference; do not use when the host already supplied an attached file.",
   inputSchema: OPEN_DOCUMENT_VERSION_UPLOAD_INPUT_SCHEMA,
   access: "write",
+  accountAccess: "sandbox",
+  permissions: { type: "all", permissions: { entity: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: DOCUMENT_VERSION_UPLOAD_TRANSPORT.pickerToolName,
   scope: "stella:documents_write",
@@ -689,7 +704,9 @@ const handleListDocumentsTool: TypedMcpToolHandler<
     }
   }
 
-  const limit = parsed.output.limit ?? DEFAULT_LIST_LIMIT;
+  const limit = normalizeTenantPageLimit(
+    parsed.output.limit ?? DEFAULT_LIST_LIMIT,
+  );
 
   const parentCondition = documentsParentCondition({ mode, parentId });
 
@@ -834,7 +851,7 @@ const loadVersionHistory = async ({
     }
   }
 
-  const limit = LIMITS.versionsPageSizeDefault;
+  const limit = normalizeTenantPageLimit(LIMITS.versionsPageSizeDefault);
   const keyset = boundary
     ? or(
         lt(entityVersions.versionNumber, boundary.versionNumber),
@@ -1286,7 +1303,7 @@ const loadDocumentProcessingStates = async ({
       return {
         status: "unsupported",
         sourceVersionId: current.currentVersionId,
-        reason: "Encrypted document content cannot be extracted.",
+        reason: ENCRYPTED_CONTENT_MESSAGE,
       };
     }
     if (!extractionCanBecomeAvailable) {
@@ -2169,7 +2186,9 @@ const handleListPropertiesTool: TypedMcpToolHandler<
       return invalidCursorResult({ cursor: parsed.output.cursor });
     }
   }
-  const limit = parsed.output.limit ?? DEFAULT_LIST_LIMIT;
+  const limit = normalizeTenantPageLimit(
+    parsed.output.limit ?? DEFAULT_LIST_LIMIT,
+  );
 
   const boundaryCondition = boundary
     ? propertyPageCursorCodec.keysetAfter({
@@ -2300,7 +2319,7 @@ const setFieldValueArgsSchema = nullAsAbsent(
 
 type SetFieldValueContent = v.InferOutput<typeof setFieldValueContentSchema>;
 
-const toFieldContent = (content: SetFieldValueContent): UpsertFieldContent => {
+const toFieldContent = (content: SetFieldValueContent): FieldWriteContent => {
   if (content.type === "int") {
     return {
       version: 1,
@@ -2324,9 +2343,10 @@ const toFieldContent = (content: SetFieldValueContent): UpsertFieldContent => {
 const handleSetFieldValueTool: TypedMcpToolHandler<
   v.InferInput<typeof SET_FIELD_VALUE_PROJECTION>
 > = async ({ args, context }) => {
-  const hasPermission = hasEffectiveAuthority(context, {
-    entity: ["create", "update"],
-  });
+  const hasPermission = hasEffectiveAuthority(
+    context,
+    FIELD_VALUE_WRITE_PERMISSIONS,
+  );
   if (!hasPermission) {
     return errorResult("Forbidden");
   }
@@ -2370,16 +2390,15 @@ const handleSetFieldValueTool: TypedMcpToolHandler<
   }
 
   const result = await Result.gen(() =>
-    upsertFieldHandler({
+    writeFieldValue({
       safeDb: context.safeDb,
+      authority: mcpMemberAuthority(context),
       workspaceId,
       userId: context.userId,
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
-      body: {
-        entityId,
-        propertyId: brandPersistedPropertyId(parsed.output.property_id),
-        content: toFieldContent(parsed.output.content),
-      },
+      entityId,
+      propertyId: brandPersistedPropertyId(parsed.output.property_id),
+      content: toFieldContent(parsed.output.content),
     }),
   );
   if (Result.isError(result)) {
@@ -2393,6 +2412,7 @@ const handleSetFieldValueTool: TypedMcpToolHandler<
 
 export const DOCUMENT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List documents",
       destructiveHint: false,
@@ -2414,6 +2434,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         "The mode/parent_id dependency remains authoritative in the runtime schema.",
     },
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: [DOCUMENT_LIST_TEXT_FIELD_PATH],
@@ -2422,6 +2443,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Read document",
       destructiveHint: false,
@@ -2445,6 +2467,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         "The compare_with_version_id/version_id dependency remains authoritative in the runtime schema.",
     },
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: READ_DOCUMENT_TEXT_FIELD_PATHS,
@@ -2453,6 +2476,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "Create a document or folder, or update an existing one. Omit entity_id " +
       "to create: pass matter_id and name, optionally a parent_id folder " +
@@ -2476,6 +2500,13 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "any",
+      alternatives: [{ entity: ["create"] }, { entity: ["update"] }],
+      reason:
+        "entity_id selects rename, move or version metadata; without it the call creates.",
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_document",
     scope: "stella:documents_write",
@@ -2487,6 +2518,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
   PREPARE_FILE_COMPARISON_FROM_LINKS_TOOL_DEFINITION,
   OPEN_FILE_COMPARISON_TOOL_DEFINITION,
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Delete document",
       destructiveHint: true,
@@ -2501,12 +2533,21 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       "irreversible.",
     inputSchema: deleteDocumentArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: selectOperationByPresence("version_id", {
+      present: {
+        operation: "delete_version",
+        permissions: { entity: ["update"] },
+      },
+      absent: { operation: "delete", permissions: { entity: ["delete"] } },
+    }),
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_document",
     scope: "stella:documents_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List properties",
       destructiveHint: false,
@@ -2521,6 +2562,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       "upload/version tools replace only a document's primary file.",
     inputSchema: listPropertiesArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: [PROPERTY_LIST_TEXT_FIELD_PATH],
@@ -2529,6 +2571,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "Set a document's value for a property (a cell in the matter's table). " +
       "Pass the document entity_id, the property_id (from list_properties), and " +
@@ -2538,7 +2581,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       "(value: integer, optional currency: 3-letter ISO code). An empty value " +
       "clears the cell.",
     inputSchema: setFieldValueArgsSchema,
-    // Not idempotent: upsertFieldHandler unconditionally deletes/reinserts and
+    // Not idempotent: writeFieldValue unconditionally deletes/reinserts and
     // reindexes the cell and records a fresh audit event + updatedAt bump on
     // every call, so a repeat with identical args has an observable additional
     // effect (a duplicate audit entry) in this compliance context.
@@ -2550,6 +2593,8 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: FIELD_VALUE_WRITE_PERMISSIONS },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "set_field_value",
     scope: "stella:documents_write",

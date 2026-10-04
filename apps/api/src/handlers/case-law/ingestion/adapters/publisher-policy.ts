@@ -1,11 +1,12 @@
+// parser-output-unchanged: gate definitions share their owner and immediate request-boundary checks share publisher pacing; response parsing and stored output are unchanged.
 /**
  * What each publisher costs, declared once, and the only fetch that spends it.
  *
  * A budget an adapter keeps for itself is a budget the next adapter does not
  * know about, and a loop that reaches the publisher through a plain `fetch`
  * spends requests nothing counts. So the pacing is not a habit of any loop:
- * every adapter names its publisher here, every publisher names its interval
- * here, and `retry.ts` reserves a slot before the request leaves.
+ * every adapter names its publisher here, the shared publisher-gates map names
+ * its interval, and `retry.ts` reserves a slot before the request leaves.
  * `publisher-gate-coverage.test.ts` fails the build on an adapter module that
  * reaches the network any other way.
  *
@@ -15,10 +16,14 @@
  * requests rather than a total.
  */
 
+import { panic, Result } from "better-result";
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import { DAY_IN_MS } from "@stll/time";
 
 import {
   createPublisherRequestSlot,
+  PublisherPacingStopped,
   publisherGateReserves,
   type PublisherRequestGateDependencies,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
@@ -26,198 +31,19 @@ import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  PUBLISHER_GATES,
+  type PublisherGateId,
+} from "@/api/lib/legal-search/publisher-gates";
 
-type PublisherGate = {
-  /** Named in gate errors and logs; the publisher, not the adapter. */
-  readonly publisher: string;
-  /** Minimum gap between two requests to this publisher, in milliseconds. */
-  readonly intervalMs: number;
-  /**
-   * The hosts this publisher serves from, as a request names them. A URL the
-   * publisher hands back is only followed onto one of these; see
-   * `publisher-target.ts`.
-   */
-  readonly hosts: readonly string[];
-};
+export {
+  NALUS_DAILY_REQUEST_LIMIT,
+  PUBLISHER_GATES,
+} from "@/api/lib/legal-search/publisher-gates";
+export type { PublisherGateId } from "@/api/lib/legal-search/publisher-gates";
 
-/**
- * A politeness floor, not a publisher statement.
- *
- * Two requests a second sustained is well under what any of these endpoints
- * has refused, and it is small enough that a loop which starts spinning costs
- * a number an operator can reason about instead of whatever the network
- * allows. A publisher that states a limit gets its own entry; a publisher
- * that agrees to an interval gets that interval verbatim.
- */
-const POLITE_INTERVAL_MS = 500;
-
-/**
- * The ceiling nalus.usoud.cz states to an over-quota client: "The maximum
- * allowed limit for automated scrapers is 5,000 requests per day."
- */
-export const NALUS_DAILY_REQUEST_LIMIT = 5000;
-
-/** The share of the stated NALUS limit this worker spends; the rest is margin. */
-const NALUS_REQUEST_BUDGET_SHARE = 0.96;
-
-/**
- * Every publisher this slice talks to, with what one request to it costs in
- * waiting. Several adapters may name the same gate: one publisher serving ten
- * Austrian tribunals is one budget, not ten.
- */
-export const PUBLISHER_GATES = {
-  /**
-   * nalus.usoud.cz. 4,800 requests a day against the 5,000 the court allows,
-   * and it redirects a client past the ceiling to a limit page rather than
-   * refusing the request outright — see `cz-us-throttle.ts`.
-   */
-  "nalus-usoud": {
-    publisher: "NALUS",
-    intervalMs: Math.ceil(
-      DAY_IN_MS / (NALUS_DAILY_REQUEST_LIMIT * NALUS_REQUEST_BUDGET_SHARE),
-    ),
-    hosts: ["nalus.usoud.cz"],
-  },
-  /** ris.bka.gv.at and data.bka.gv.at. */
-  "ris-bka": {
-    publisher: "RIS",
-    intervalMs: 5000,
-    hosts: ["data.bka.gv.at", "ogd.ris.bka.gv.at", "www.ris.bka.gv.at"],
-  },
-  /** findok.bmf.gv.at. */
-  "findok-bmf": {
-    publisher: "Findok",
-    intervalMs: 1500,
-    hosts: ["findok.bmf.gv.at"],
-  },
-  /**
-   * sn.pl. A dozen requests in quick succession earned the upstream's 429
-   * dressed as `{"error":"Brak tokenu"}`; the same pacing then answered
-   * normally. A sustained request a second was still refused every few
-   * minutes, each refusal clearing within one.
-   */
-  "sn-pl": {
-    publisher: "Sąd Najwyższy",
-    intervalMs: 1500,
-    hosts: ["sn.pl"],
-  },
-  /** orzeczenia.uzp.gov.pl. */
-  "uzp-pl": {
-    publisher: "Urząd Zamówień Publicznych",
-    intervalMs: 1000,
-    hosts: ["orzeczenia.uzp.gov.pl"],
-  },
-  /** ipo.trybunal.gov.pl. */
-  "trybunal-pl": {
-    publisher: "Trybunał Konstytucyjny",
-    intervalMs: 1500,
-    hosts: ["ipo.trybunal.gov.pl"],
-  },
-  /** apiorzeczenia.wroclaw.sa.gov.pl, the common courts' judgments API. */
-  "ms-gov-pl": {
-    publisher: "Ministerstwo Sprawiedliwości",
-    intervalMs: 1000,
-    hosts: ["apiorzeczenia.wroclaw.sa.gov.pl"],
-  },
-  /** rozhodnuti.nsoud.cz. */
-  "nsoud-cz": {
-    publisher: "Nejvyšší soud",
-    intervalMs: POLITE_INTERVAL_MS,
-    hosts: ["rozhodnuti.nsoud.cz"],
-  },
-  /** vyhledavac.nssoud.cz. */
-  "nssoud-cz": {
-    publisher: "Nejvyšší správní soud",
-    intervalMs: POLITE_INTERVAL_MS,
-    hosts: ["vyhledavac.nssoud.cz"],
-  },
-  /** rozhodnuti.justice.cz. */
-  "justice-cz": {
-    publisher: "Justice.cz",
-    intervalMs: POLITE_INTERVAL_MS,
-    hosts: ["rozhodnuti.justice.cz"],
-  },
-  /** obcan.justice.sk. */
-  "justice-sk": {
-    publisher: "Justice.sk",
-    intervalMs: POLITE_INTERVAL_MS,
-    hosts: ["obcan.justice.sk"],
-  },
-  /**
-   * www.usoud.cz, the court's own site rather than its decision database:
-   * the judge roster and the pages it links. A budget of its own because it
-   * is a different host with a different limit, and one the roster import
-   * would otherwise spend uncounted.
-   */
-  "usoud-cz": {
-    publisher: "Ústavní soud",
-    intervalMs: POLITE_INTERVAL_MS,
-    hosts: ["www.usoud.cz"],
-  },
-  /** www.ustavnysud.sk. */
-  "ustavnysud-sk": {
-    publisher: "Ústavný súd SR",
-    intervalMs: POLITE_INTERVAL_MS,
-    hosts: ["www.ustavnysud.sk"],
-  },
-  /** www.saos.org.pl. */
-  "saos-pl": {
-    publisher: "SAOS",
-    intervalMs: POLITE_INTERVAL_MS,
-    hosts: ["www.saos.org.pl"],
-  },
-  /**
-   * huggingface.co and the CDN it redirects file reads to. Few requests: a
-   * shard is a dozen ranged reads of a pinned file.
-   */
-  "huggingface-datasets": {
-    publisher: "Hugging Face",
-    intervalMs: POLITE_INTERVAL_MS,
-    hosts: ["huggingface.co"],
-  },
-  /**
-   * orzeczenia.uodo.gov.pl. Politeness, not a publisher statement: the portal
-   * states no limit, and this keeps it under one request a second.
-   */
-  "uodo-gov-pl": {
-    publisher: "Prezes UODO",
-    intervalMs: 1000,
-    hosts: ["orzeczenia.uodo.gov.pl"],
-  },
-  /**
-   * decyzje.uokik.gov.pl. Politeness, not a publisher statement: the register
-   * states no limit, and two seconds between requests keeps a crawl
-   * sequential and slow.
-   */
-  "uokik-gov-pl": {
-    publisher: "Prezes UOKiK",
-    intervalMs: 2000,
-    hosts: ["decyzje.uokik.gov.pl"],
-  },
-  /** eakta.birosag.hu. */
-  "birosag-hu": {
-    publisher: "Országos Bírósági Hivatal",
-    intervalMs: POLITE_INTERVAL_MS,
-    hosts: ["eakta.birosag.hu"],
-  },
-  /**
-   * eureka.mf.gov.pl. The service states no limit; one request a second is
-   * politeness, and its search stalls rather than refuses under load.
-   */
-  "eureka-mf": {
-    publisher: "EUREKA",
-    intervalMs: 1000,
-    hosts: ["eureka.mf.gov.pl"],
-  },
-  /** publications.europa.eu, both the SPARQL endpoint and Cellar. */
-  "cellar-eu": {
-    publisher: "EU Publications Office",
-    intervalMs: POLITE_INTERVAL_MS,
-    hosts: ["publications.europa.eu"],
-  },
-} as const satisfies Record<string, PublisherGate>;
-
-export type PublisherGateId = keyof typeof PUBLISHER_GATES;
+const MILLISECONDS_PER_SECOND = 1000;
+const MAX_PUBLISHER_REQUESTS_PER_SECOND = 2;
 
 /**
  * Which publisher each adapter spends against.
@@ -279,8 +105,7 @@ export const publisherRequestsPerDay = (gateId: PublisherGateId): number =>
 export const createPublisherSlot = (
   adapterKey: AdapterKey,
   dependencies?: PublisherRequestGateDependencies,
-): ((signal?: AbortSignal) => Promise<void>) =>
-  createPublisherGateSlot(ADAPTER_PUBLISHER_GATES[adapterKey], dependencies);
+) => createPublisherGateSlot(ADAPTER_PUBLISHER_GATES[adapterKey], dependencies);
 
 /**
  * The gate for a publisher this slice reaches outside a crawl — a roster
@@ -290,10 +115,32 @@ export const createPublisherSlot = (
 export const createPublisherGateSlot = (
   gateId: PublisherGateId,
   dependencies?: PublisherRequestGateDependencies,
-): ((signal?: AbortSignal) => Promise<void>) => {
-  const { publisher, intervalMs } = PUBLISHER_GATES[gateId];
+) =>
+  createPublisherGateSlotAtInterval({
+    gateId,
+    intervalMs: PUBLISHER_GATES[gateId].intervalMs,
+    ...(dependencies === undefined ? {} : { dependencies }),
+  });
+
+type CreatePublisherGateSlotWithIntervalOptions = {
+  gateId: PublisherGateId;
+  intervalMs: number;
+  dependencies?: PublisherRequestGateDependencies;
+};
+
+const createPublisherGateSlotAtInterval = ({
+  gateId,
+  intervalMs,
+  dependencies,
+}: CreatePublisherGateSlotWithIntervalOptions) => {
+  const { publisher } = PUBLISHER_GATES[gateId];
   return createPublisherRequestSlot(
-    { intervalMs, key: `case-law:publisher-gate:${gateId}`, publisher },
+    {
+      intervalMs: Math.max(PUBLISHER_GATES[gateId].intervalMs, intervalMs),
+      key: gateId,
+      publisher,
+      ...(gateId === "cellar-eu" ? { cooldown: "shared" as const } : {}),
+    },
     dependencies,
   );
 };
@@ -307,18 +154,162 @@ export const createPublisherGateSlot = (
  */
 const slotsByGate = new Map<
   PublisherGateId,
-  (signal?: AbortSignal) => Promise<void>
+  ReturnType<typeof createPublisherGateSlot>
 >();
+
+type RunPublisherLimit = {
+  gateId: "cellar-eu";
+  gateSlot: ReturnType<typeof createPublisherGateSlot>;
+};
+
+const runPublisherLimit = new AsyncLocalStorage<RunPublisherLimit>();
+
+// Immediate mode checks the shared gate at every outbound request boundary.
+const immediateRequestGate = new AsyncLocalStorage<{
+  gateId: PublisherGateId;
+  slot: ReturnType<typeof createPublisherGateSlot>;
+}>();
+
+type WithImmediatePublisherSlotOptions<T> = {
+  adapterKey: AdapterKey;
+  operation: () => Promise<T>;
+  dependencies?: PublisherRequestGateDependencies;
+};
+
+export type PublisherPacingOutcome = PublisherPacingStopped["status"];
+
+export type ImmediatePublisherSlotResult<T> =
+  | { status: "completed"; value: T }
+  | { status: PublisherPacingOutcome }
+  | { status: "failed"; error: unknown };
+
+export const withImmediatePublisherSlot = async <T>({
+  adapterKey,
+  operation,
+  dependencies,
+}: WithImmediatePublisherSlotOptions<T>): Promise<
+  ImmediatePublisherSlotResult<T>
+> => {
+  const gateId = ADAPTER_PUBLISHER_GATES[adapterKey];
+  const slot =
+    dependencies === undefined
+      ? getPublisherGateSlot(gateId)
+      : createPublisherGateSlot(gateId, dependencies);
+  const result = await Result.tryPromise({
+    try: async () =>
+      await immediateRequestGate.run({ gateId, slot }, operation),
+    catch: (error) => error,
+  });
+  if (Result.isOk(result)) {
+    return { status: "completed", value: result.value };
+  }
+  if (PublisherPacingStopped.is(result.error)) {
+    return { status: result.error.status };
+  }
+  return { status: "failed", error: result.error };
+};
+
+const getPublisherGateSlot = (gateId: PublisherGateId) => {
+  const slot = slotsByGate.get(gateId) ?? createPublisherGateSlot(gateId);
+  slotsByGate.set(gateId, slot);
+  return slot;
+};
+
+type WithPublisherRequestRateLimitOptions<T> = {
+  gateId: "cellar-eu";
+  requestsPerSecond: number;
+  operation: () => Promise<T>;
+  dependencies?: PublisherRequestGateDependencies;
+};
+
+/**
+ * Apply a run-specific interval through the shared EU publisher gate, so
+ * retries, cooldowns, and coordination use the same reservation.
+ */
+export const withPublisherRequestRateLimit = async <T>({
+  gateId,
+  requestsPerSecond,
+  operation,
+  dependencies,
+}: WithPublisherRequestRateLimitOptions<T>): Promise<T> => {
+  if (
+    !Number.isFinite(requestsPerSecond) ||
+    requestsPerSecond <= 0 ||
+    requestsPerSecond > MAX_PUBLISHER_REQUESTS_PER_SECOND
+  ) {
+    return panic(
+      `requestsPerSecond must be greater than 0 and at most ${MAX_PUBLISHER_REQUESTS_PER_SECOND}`,
+    );
+  }
+
+  const requestedIntervalMs = Math.ceil(
+    MILLISECONDS_PER_SECOND / requestsPerSecond,
+  );
+  return await runPublisherLimit.run(
+    {
+      gateId,
+      gateSlot: createPublisherGateSlotAtInterval({
+        gateId,
+        intervalMs: requestedIntervalMs,
+        ...(dependencies === undefined ? {} : { dependencies }),
+      }),
+    },
+    operation,
+  );
+};
 
 export const reservePublisherSlot = async (
   adapterKey: AdapterKey,
   signal?: AbortSignal,
+): Promise<void> =>
+  await reservePublisherGateSlot(ADAPTER_PUBLISHER_GATES[adapterKey], signal);
+
+export const reservePublisherGateSlot = async (
+  gateId: PublisherGateId,
+  signal?: AbortSignal,
 ): Promise<void> => {
+  const immediate = immediateRequestGate.getStore();
+  if (immediate?.gateId === gateId) {
+    await immediate.slot.reserveImmediately(signal);
+    return;
+  }
+  const runLimit = runPublisherLimit.getStore();
+  if (runLimit?.gateId === gateId) {
+    await runLimit.gateSlot(signal);
+    return;
+  }
   if (!publisherGateReserves()) {
     return;
   }
-  const gateId = ADAPTER_PUBLISHER_GATES[adapterKey];
-  const reserve = slotsByGate.get(gateId) ?? createPublisherSlot(adapterKey);
-  slotsByGate.set(gateId, reserve);
-  await reserve(signal);
+  await getPublisherGateSlot(gateId)(signal);
+};
+
+export const deferPublisherGate = async (
+  gateId: PublisherGateId,
+  durationMs: number,
+  signal?: AbortSignal,
+): Promise<number> => {
+  const runLimit = runPublisherLimit.getStore();
+  const reserve =
+    (runLimit?.gateId === gateId ? runLimit.gateSlot : undefined) ??
+    getPublisherGateSlot(gateId);
+  return await reserve.defer(durationMs, signal);
+};
+
+/** Shared deadline in epoch milliseconds, based on Redis TIME, not the caller clock. */
+export const readPublisherCooldown = async (
+  publisherKey: PublisherGateId,
+  dependencies?: PublisherRequestGateDependencies,
+): Promise<number | null> => {
+  if (dependencies !== undefined) {
+    return await createPublisherGateSlot(
+      publisherKey,
+      dependencies,
+    ).readCooldown();
+  }
+  const runLimit = runPublisherLimit.getStore();
+  const reserve =
+    (runLimit?.gateId === publisherKey ? runLimit.gateSlot : undefined) ??
+    getPublisherGateSlot(publisherKey);
+  return await reserve.readCooldown();
 };

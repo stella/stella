@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import type { numberSeries } from "@/api/db/schema";
 import { numberSeriesParams } from "@/api/handlers/number-series/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
@@ -47,7 +47,13 @@ true satisfies UnexpectedNumberSeriesGetColumn extends never ? true : never;
 const config = {
   description: "Read one active document number series.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   params: numberSeriesParams,
 } satisfies HandlerConfig;

@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 
 import { vatRates } from "@/api/db/schema";
 import { createVatRateBody } from "@/api/handlers/vat-rates/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
@@ -14,7 +14,8 @@ const config = {
   description:
     "Create a VAT rate validity period in the active organization. validFrom is inclusive; validTo is exclusive.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createVatRateBody,
 } satisfies HandlerConfig;
 export default createSafeRootHandler(

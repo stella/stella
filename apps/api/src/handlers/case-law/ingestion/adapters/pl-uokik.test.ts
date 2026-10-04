@@ -11,7 +11,8 @@
 
 import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import * as cheerio from "cheerio";
 
 import {
   decodeSourceRawEnvelope,
@@ -21,7 +22,7 @@ import type {
   IngestionResult,
   StoredRawReparseInput,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
+import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import {
   assemblePlUokikDecision,
@@ -34,6 +35,7 @@ import {
   PL_UOKIK_DETAIL_STATUS,
   PL_UOKIK_DOCUMENT_ABSENCE,
   PL_UOKIK_FILE_STATUS,
+  PL_UOKIK_LABEL,
   PL_UOKIK_UNDATED_SLICE,
   plUokikAdapter,
   plUokikDayOfDetailDate,
@@ -107,9 +109,16 @@ const entryOf = (entries: readonly Entry[], unid: string): Entry =>
   panic(`the view fixtures lost ${unid}`);
 
 const originalFetch = globalThis.fetch;
+const originalSleep = Bun.sleep;
+
+beforeEach(() => {
+  // These fixtures prove retry outcomes; backoff timing is covered by retry.test.ts.
+  Bun.sleep = async () => {};
+});
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  Bun.sleep = originalSleep;
 });
 
 /** The first decision file a captured page links, by name. */
@@ -350,17 +359,19 @@ describe("a decision", () => {
       ]),
     );
     expect(decision.sourceDocumentId).toBe(WITH_RULINGS);
-    expect(decision.caseNumber).toBe("DOK-9/2011");
-    expect(decision.court).toBe(PRESIDENT);
+    expect(decision.caseNumber === "DOK-9/2011").toBe(true);
+    expect(decision.court === PRESIDENT).toBe(true);
     expect(decision.decisionDate).toBe("2011-11-28");
-    expect(decision.decisionType).toBe("decyzja");
+    expect(decision.decisionType === "decyzja").toBe(true);
     expect(decision.isListingOnly).toBeUndefined();
     expect(decision.fulltext).toContain("Inco-Veritas");
     expect(decision.documentUrl).toBe(
       plUokikFileUrl(WITH_RULINGS, name) ?? undefined,
     );
-    expect(decision.metadata["fileReference"]).toBe("DOK1-430/2/11/AZ");
-    expect(decision.metadata["appealed"]).toBe("Tak");
+    expect(decision.metadata["fileReference"] === "DOK1-430/2/11/AZ").toBe(
+      true,
+    );
+    expect(decision.metadata["appealed"] === "Tak").toBe(true);
     expect(decision.sourceRawObjects?.["decision-file"]?.contentType).toBe(
       "application/pdf",
     );
@@ -385,12 +396,13 @@ describe("a decision", () => {
   test("a page filed with no attachment is the decision without a document, its unlabelled rows kept", async () => {
     const entry = entryOf(await capturedEntries(), FILELESS);
     const decision = decisionOf(await buildFrom(entry, await pageOf(FILELESS)));
-    expect(decision.caseNumber).toBe("DIH-4/2009");
+    expect(decision.caseNumber === "DIH-4/2009").toBe(true);
     expect(decision.isListingOnly).toBeUndefined();
     expect(decision.fulltext).toBeUndefined();
-    expect(decision.metadata["documentAbsence"]).toBe(
-      PL_UOKIK_DOCUMENT_ABSENCE.NO_ATTACHMENT,
-    );
+    expect(
+      decision.metadata["documentAbsence"] ===
+        PL_UOKIK_DOCUMENT_ABSENCE.NO_ATTACHMENT,
+    ).toBe(true);
     expect(decision.metadata["unlabelledFields"]).toBeDefined();
   });
 
@@ -399,7 +411,7 @@ describe("a decision", () => {
     const decision = decisionOf(
       await buildFrom(entry, await pageOf(NUMBERLESS)),
     );
-    expect(decision.caseNumber).toBe(NUMBERLESS);
+    expect(decision.caseNumber === NUMBERLESS).toBe(true);
     expect(decision.caseNumberIsPlaceholder).toBe(true);
     expect(decision.decisionDate).toBeUndefined();
   });
@@ -409,10 +421,12 @@ describe("a decision", () => {
     const decision = decisionOf(
       await buildFrom(entry, await pageOf(WITH_RULINGS)),
     );
-    expect(decision.identifiers).toEqual([
-      { type: "case-number", value: "DOK-9/2011" },
-      { type: "case-number", value: "DOK 9/2011" },
-    ]);
+    expect(
+      Bun.deepEquals(decision.identifiers, [
+        { type: "case-number", value: "DOK-9/2011" },
+        { type: "case-number", value: "DOK 9/2011" },
+      ]),
+    ).toBe(true);
     const numberless = decisionOf(
       await buildFrom(
         entryOf(await capturedEntries(), NUMBERLESS),
@@ -440,9 +454,11 @@ describe("a decision", () => {
     const built = await buildFrom(entry, page);
     expect(built.type).toBe("detail-unavailable");
     const decision = decisionOf(built);
-    expect(decision.court).toBe("");
+    expect(decision.court === "").toBe(true);
     expect(decision.isListingOnly).toBe(true);
-    expect(decision.metadata["quarantineReason"]).toBe("court-not-stated");
+    expect(decision.metadata["quarantineReason"] === "court-not-stated").toBe(
+      true,
+    );
     expect(decision.metadata["detailStatus"]).toBeUndefined();
   });
 
@@ -452,11 +468,11 @@ describe("a decision", () => {
     expect(built.type).toBe("detail-unavailable");
     const decision = decisionOf(built);
     expect(decision.isListingOnly).toBe(true);
-    expect(decision.metadata["detailStatus"]).toBe(
-      PL_UOKIK_DETAIL_STATUS.UNRECOGNISED,
-    );
+    expect(
+      decision.metadata["detailStatus"] === PL_UOKIK_DETAIL_STATUS.UNRECOGNISED,
+    ).toBe(true);
     // What the row states is still the row's.
-    expect(decision.caseNumber).toBe("DIH-4/2009");
+    expect(decision.caseNumber === "DIH-4/2009").toBe(true);
     expect(decision.decisionDate).toBe("2009-07-06");
   });
 
@@ -509,18 +525,20 @@ describe("a decision with no text to read", () => {
     ]);
     expect(decision.fulltext).toBeUndefined();
     expect(decision.isListingOnly).toBeUndefined();
-    expect(decision.metadata["documentAbsence"]).toBe(
-      PL_UOKIK_DOCUMENT_ABSENCE.SCANNED,
-    );
+    expect(
+      decision.metadata["documentAbsence"] ===
+        PL_UOKIK_DOCUMENT_ABSENCE.SCANNED,
+    ).toBe(true);
   });
 
   test("a decision filed as an image is a scan too", async () => {
     const decision = await withFile([
       { name: await fileName(), status: PL_UOKIK_FILE_STATUS.IMAGE },
     ]);
-    expect(decision.metadata["documentAbsence"]).toBe(
-      PL_UOKIK_DOCUMENT_ABSENCE.SCANNED,
-    );
+    expect(
+      decision.metadata["documentAbsence"] ===
+        PL_UOKIK_DOCUMENT_ABSENCE.SCANNED,
+    ).toBe(true);
   });
 
   test("a file served as a TIFF is recognised as an image, not an unknown format", async () => {
@@ -533,9 +551,10 @@ describe("a decision with no text to read", () => {
     serveRegister(model);
     const walk = await walkCrawl(null);
     const [decision] = walk.decisions;
-    expect(decision?.metadata["documentAbsence"]).toBe(
-      PL_UOKIK_DOCUMENT_ABSENCE.SCANNED,
-    );
+    expect(
+      decision?.metadata["documentAbsence"] ===
+        PL_UOKIK_DOCUMENT_ABSENCE.SCANNED,
+    ).toBe(true);
     expect(JSON.stringify(decision?.metadata["decisionFiles"])).toContain(
       PL_UOKIK_FILE_STATUS.IMAGE,
     );
@@ -554,7 +573,9 @@ describe("a decision with no text to read", () => {
     ]) {
       const decision = await withFile([{ name: await fileName(), status }]);
       expect(decision.metadata["documentAbsence"], status).toBeUndefined();
-      expect(decision.metadata["documentStatus"], status).toBe("unreadable");
+      expect(decision.metadata["documentStatus"] === "unreadable", status).toBe(
+        true,
+      );
     }
   });
 
@@ -598,17 +619,23 @@ describe("what the register does not serve", () => {
     const walk = await walkCrawl(null);
     expect(idsOf(walk.decisions)).toEqual([FILELESS]);
     expect(walk.decisions[0]?.isListingOnly).toBe(true);
-    expect(walk.decisions[0]?.metadata["detailStatus"]).toBe(
-      PL_UOKIK_DETAIL_STATUS.NOT_FOUND,
-    );
+    expect(
+      walk.decisions[0]?.metadata["detailStatus"] ===
+        PL_UOKIK_DETAIL_STATUS.NOT_FOUND,
+    ).toBe(true);
   });
 
   test.each([500, 503, 429, 403])(
     "a decision page answering %p fails the page and holds the cursor",
     async (status) => {
-      await onePage(FILELESS, () => new Response("", { status }));
+      let attempts = 0;
+      await onePage(FILELESS, () => {
+        attempts += 1;
+        return new Response("", { status });
+      });
       const result = await plUokikAdapter.fetchPage(null, {});
       expect(Result.isError(result)).toBe(true);
+      expect(attempts).toBe(status >= 500 ? 3 : 1);
     },
   );
 
@@ -878,25 +905,58 @@ const rulingNamed = (
   ) ?? panic(`no ruling row for ${name}`);
 
 describe("the court rulings a decision page attaches", () => {
+  test("a rejected parent keeps its independently built court rulings", async () => {
+    const model = await registerWithRulings();
+    model.entries = model.entries.map((entry) => ({
+      ...entry,
+      "@noteid": String.raw`{\rtf1 poisoned}`,
+    }));
+    serveRegister(model);
+    const page = (await plUokikAdapter.fetchPage(null, {})).unwrap();
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
+    expect(page.decisions).toHaveLength(4);
+    const parent = page.decisions.find(
+      ({ sourceDocumentId }) => sourceDocumentId === APPEALED_TO_SUPREME,
+    );
+    expect(parent?.plainTextOutcome.type).toBe("item_build_failed");
+    expect(parent?.isListingOnly).toBe(true);
+    expect(
+      page.decisions
+        .filter(
+          ({ sourceDocumentId }) => sourceDocumentId !== APPEALED_TO_SUPREME,
+        )
+        .map(({ plainTextOutcome }) => plainTextOutcome.type),
+    ).toEqual(["accepted", "accepted", "accepted"]);
+    expect(
+      rulingNamed(page.decisions, "Wyrok VI ACa 527_08.pdf").fulltext,
+    ).toContain("oddala apelację");
+    expect(page.nextCursor).not.toBeNull();
+  });
+
   test("become rows of their own, filed under the court their header names", async () => {
     serveRegister(await registerWithRulings());
     const { decisions } = await walkCrawl(null);
     expect(decisions).toHaveLength(4);
     const appeal = rulingNamed(decisions, "Wyrok VI ACa 527_08.pdf");
-    expect(appeal.court).toBe("Sąd Apelacyjny w Warszawie");
-    expect(appeal.caseNumber).toBe("VI ACa 527/08");
+    expect(appeal.court === "Sąd Apelacyjny w Warszawie").toBe(true);
+    expect(appeal.caseNumber === "VI ACa 527/08").toBe(true);
     expect(appeal.decisionDate).toBe("2008-09-29");
-    expect(appeal.decisionType).toBe("wyrok");
+    expect(appeal.decisionType === "wyrok").toBe(true);
     expect(appeal.isListingOnly).toBeUndefined();
     expect(appeal.fulltext).toContain("oddala apelację");
-    expect(appeal.metadata["divisionAsPrinted"]).toBe("VI Wydział Cywilny");
+    expect(appeal.metadata["divisionAsPrinted"] === "VI Wydział Cywilny").toBe(
+      true,
+    );
     expect(appeal.sourceRawObjects?.["ruling-file"]?.contentType).toBe(
       "application/pdf",
     );
     const supreme = rulingNamed(decisions, "Postanowienie III SK 17_09.pdf");
-    expect(supreme.court).toBe("Sąd Najwyższy");
-    expect(supreme.caseNumber).toBe("III SK 17/09");
-    expect(supreme.decisionType).toBe("postanowienie");
+    expect(supreme.court === "Sąd Najwyższy").toBe(true);
+    expect(supreme.caseNumber === "III SK 17/09").toBe(true);
+    expect(supreme.decisionType === "postanowienie").toBe(true);
   });
 
   test("each links the decision it reviewed, and the decision links each back", async () => {
@@ -918,11 +978,13 @@ describe("the court rulings a decision page attaches", () => {
       ),
     );
     for (const name of Object.keys(RULING_FILES)) {
-      expect(rulingNamed(decisions, name).metadata["uokikDecision"]).toEqual({
-        sourceDocumentId: APPEALED_TO_SUPREME,
-        caseNumber: decision.caseNumber,
-        decisionDate: decision.decisionDate,
-      });
+      expect(
+        Bun.deepEquals(rulingNamed(decisions, name).metadata["uokikDecision"], {
+          sourceDocumentId: APPEALED_TO_SUPREME,
+          caseNumber: decision.caseNumber,
+          decisionDate: decision.decisionDate,
+        }),
+      ).toBe(true);
     }
   });
 
@@ -932,27 +994,31 @@ describe("the court rulings a decision page attaches", () => {
     const appeal = rulingNamed(decisions, "Wyrok VI ACa 527_08.pdf");
     // The common courts' judgments API and SAOS key a judgment by court,
     // signature, date and kind.
-    expect(appeal.metadata["rulingKeys"]).toEqual(
-      plCommonCourtRulingKeys({
-        caseNumber: "VI ACa 527/08",
-        court: "Sąd Apelacyjny w Warszawie",
-        decisionDate: "2008-09-29",
-        decisionType: "wyrok",
-      }),
-    );
+    expect(
+      Bun.deepEquals(
+        appeal.metadata["rulingKeys"],
+        plCommonCourtRulingKeys({
+          caseNumber: "VI ACa 527/08",
+          court: "Sąd Apelacyjny w Warszawie",
+          decisionDate: "2008-09-29",
+          decisionType: "wyrok",
+        }),
+      ),
+    ).toBe(true);
     // The Supreme Court's own adapter keys it by docket, date and kind.
     expect(
-      rulingNamed(decisions, "Postanowienie III SK 17_09.pdf").metadata[
-        "rulingKeys"
-      ],
-    ).toEqual(
-      plSupremeCourtRulingKeys({
-        caseNumber: "III SK 17/09",
-        court: "Sąd Najwyższy",
-        decisionDate: "2009-07-02",
-        decisionType: "postanowienie",
-      }),
-    );
+      Bun.deepEquals(
+        rulingNamed(decisions, "Postanowienie III SK 17_09.pdf").metadata[
+          "rulingKeys"
+        ],
+        plSupremeCourtRulingKeys({
+          caseNumber: "III SK 17/09",
+          court: "Sąd Najwyższy",
+          decisionDate: "2009-07-02",
+          decisionType: "postanowienie",
+        }),
+      ),
+    ).toBe(true);
   });
 
   test("a scan is kept on what the register states and not published, never keyed by a guess", async () => {
@@ -961,8 +1027,10 @@ describe("the court rulings a decision page attaches", () => {
     const scan = rulingNamed(decisions, "Wyrok XVII AmA 73_07.pdf");
     expect(scan.isListingOnly).toBe(true);
     expect(scan.caseNumberIsPlaceholder).toBe(true);
-    expect(scan.court).toBe("");
-    expect(scan.metadata["rulingStatus"]).toBe(PL_UOKIK_RULING_UNREAD.NO_TEXT);
+    expect(scan.court === "").toBe(true);
+    expect(
+      scan.metadata["rulingStatus"] === PL_UOKIK_RULING_UNREAD.NO_TEXT,
+    ).toBe(true);
     expect(scan.metadata["rulingKeys"]).toBeUndefined();
   });
 
@@ -974,8 +1042,8 @@ describe("the court rulings a decision page attaches", () => {
     expect(
       rulingNamed(decisions, "Wyrok VI ACa 527_08.pdf").metadata[
         "rulingStatus"
-      ],
-    ).toBe(PL_UOKIK_FILE_STATUS.NOT_FOUND);
+      ] === PL_UOKIK_FILE_STATUS.NOT_FOUND,
+    ).toBe(true);
 
     const failing = await registerWithRulings();
     const answer = answerRegister;
@@ -1026,9 +1094,9 @@ describe("the court rulings a decision page attaches", () => {
       await buildFrom(entryOf(entries, WITH_RULINGS), await pageOf(APPEALED)),
     );
     // The page says the case is pending before the court.
-    expect(pending.metadata["appealWatch"]).toBe(
-      PL_UOKIK_APPEAL_WATCH.AWAITING_RULING,
-    );
+    expect(
+      pending.metadata["appealWatch"] === PL_UOKIK_APPEAL_WATCH.AWAITING_RULING,
+    ).toBe(true);
     // Appealed, with its rulings attached and no status printed.
     const ruled = decisionOf(
       await buildFrom(
@@ -1049,8 +1117,8 @@ describe("the court rulings a decision page attaches", () => {
     );
     expect(
       decisionOf(await buildFrom(entryOf(entries, WITH_RULINGS), awaiting))
-        .metadata["appealWatch"],
-    ).toBe(PL_UOKIK_APPEAL_WATCH.AWAITING_RULING);
+        .metadata["appealWatch"] === PL_UOKIK_APPEAL_WATCH.AWAITING_RULING,
+    ).toBe(true);
     expect(plUokikAdapter.reconciliation.recheckHeld).toEqual({
       metadataKey: "appealWatch",
       values: [PL_UOKIK_APPEAL_WATCH.AWAITING_RULING],
@@ -1130,9 +1198,10 @@ describe("a listed row is never dropped silently", () => {
       true,
     );
     expect(decision.isListingOnly).toBe(true);
-    expect(decision.metadata["detailStatus"]).toBe(
-      PL_UOKIK_DETAIL_STATUS.IDENTITY_UNAVAILABLE,
-    );
+    expect(
+      decision.metadata["detailStatus"] ===
+        PL_UOKIK_DETAIL_STATUS.IDENTITY_UNAVAILABLE,
+    ).toBe(true);
   });
 
   test("the same row, once its UNID is back, can adopt the quarantined one", async () => {
@@ -1212,10 +1281,10 @@ describe("replaying a stored envelope", () => {
       storedOf(decision),
     );
     expect(
-      replayed?.type === "parsed"
-        ? replayed.result.metadata["detailStatus"]
-        : undefined,
-    ).toBe(PL_UOKIK_DETAIL_STATUS.GONE);
+      replayed?.type === "parsed" &&
+        replayed.result.metadata["detailStatus"] ===
+          PL_UOKIK_DETAIL_STATUS.GONE,
+    ).toBe(true);
   });
 });
 
@@ -1243,4 +1312,147 @@ describe("the field inventory", () => {
       listPlUokikSourceFields(plUokikRawPartsOf(entry, undefined)),
     ).toContain("listing.@newkey");
   });
+});
+
+test("constructed decision and appeal addresses survive metadata projection as scalar URLs", async () => {
+  const entry = entryOf(await capturedEntries(), WITH_RULINGS);
+  const page = await pageOf(WITH_RULINGS);
+  const detail = parsePlUokikDetail(page) ?? panic("fixture has no detail");
+  const attachmentFiles = detail.fields.flatMap(({ files }) => files);
+  let statedPage = page;
+  for (const file of attachmentFiles) {
+    statedPage = statedPage.replaceAll(
+      file.name,
+      () => `${file.name}&amp;amp;copy`,
+    );
+  }
+  const statedDetail =
+    parsePlUokikDetail(statedPage) ?? panic("fixture has no detail");
+  const decision = decisionOf(await buildFrom(entry, statedPage));
+  for (const [label, key] of [
+    [PL_UOKIK_LABEL.DECISION_FILES, "decisionFiles"],
+    [PL_UOKIK_LABEL.RULINGS, "appealRulings"],
+  ] as const) {
+    const declared = decision.metadata[key];
+    const expected =
+      statedDetail.fields.find((field) => field.label === label)?.files ?? [];
+    expect(Array.isArray(declared)).toBe(true);
+    expect(expected.length).toBeGreaterThan(0);
+    expect(Array.isArray(declared) ? declared.length : 0).toBe(expected.length);
+    for (const [index, file] of expected.entries()) {
+      const attachment = Array.isArray(declared)
+        ? declared.at(index)
+        : undefined;
+      expect(isRecord(attachment) ? attachment["documentUrl"] : undefined).toBe(
+        plUokikFileUrl(WITH_RULINGS, file.name) ?? undefined,
+      );
+    }
+  }
+  expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+});
+
+for (const name of [
+  "decision&amp;copy.pdf",
+  "decision%26amp%3B.pdf",
+  "decision with spaces.pdf",
+  "nested/decision.pdf",
+  "../decision.pdf",
+  "decision?query.pdf",
+  "decision#fragment.pdf",
+  "decision\\path.pdf",
+]) {
+  test(`constructed attachment metadata URL filename boundary: ${name}`, async () => {
+    const entry = entryOf(await capturedEntries(), WITH_RULINGS);
+    const $ = cheerio.load(await pageOf(WITH_RULINGS));
+    const labels = [PL_UOKIK_LABEL.DECISION_FILES, PL_UOKIK_LABEL.RULINGS];
+    $("div.ck-content table tr").each((_, element) => {
+      const cells = $(element).children("td");
+      const label = cells.first().text().trim().replace(/:$/u, "");
+      if (labels.some((expected) => expected === label)) {
+        cells
+          .last()
+          .find("a[href]")
+          .attr("href", `/$FILE/${encodeURIComponent(name)}`);
+      }
+    });
+    const page = $.html();
+    const detail = parsePlUokikDetail(page) ?? panic("fixture has no detail");
+    const decision = decisionOf(await buildFrom(entry, page));
+    if (name.includes("\\")) {
+      for (const label of labels) {
+        const files =
+          detail.fields.find((field) => field.label === label)?.files ?? [];
+        expect(files.length).toBeGreaterThan(0);
+        for (const file of files) {
+          expect(file.name).toBe(name);
+        }
+      }
+      expect(decision.plainTextOutcome.type).toBe("item_build_failed");
+      if (decision.plainTextOutcome.type === "item_build_failed") {
+        expect(decision.plainTextOutcome.error.reason).toBe("rtf-syntax");
+      }
+      expect(decision.metadata).toHaveProperty(
+        "plainTextFailureReason",
+        "rtf-syntax",
+      );
+      expect(decision.metadata["decisionFiles"]).toBeUndefined();
+      expect(decision.metadata["appealRulings"]).toBeUndefined();
+      expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+      expect(decision.documentUrl).toBeUndefined();
+      return;
+    }
+    const expectedUrl = plUokikFileUrl(WITH_RULINGS, name);
+    const diagnostics: { address: string; reason: string }[] = [];
+    for (const [label, key] of [
+      [PL_UOKIK_LABEL.DECISION_FILES, "decisionFiles"],
+      [PL_UOKIK_LABEL.RULINGS, "appealRulings"],
+    ] as const) {
+      const files =
+        detail.fields.find((field) => field.label === label)?.files ?? [];
+      expect(files.length).toBeGreaterThan(0);
+      const stored = decision.metadata[key];
+      expect(Array.isArray(stored) ? stored.length : 0).toBe(files.length);
+      for (const index of files.keys()) {
+        const attachment = Array.isArray(stored) ? stored.at(index) : undefined;
+        if (expectedUrl === null) {
+          expect(
+            isRecord(attachment) && Object.hasOwn(attachment, "documentUrl"),
+          ).toBe(false);
+          diagnostics.push({
+            address: `${key}[${index}].documentUrl`,
+            reason: "invalid-url",
+          });
+        } else {
+          expect(
+            isRecord(attachment) ? attachment["documentUrl"] : undefined,
+          ).toBe(expectedUrl);
+        }
+      }
+    }
+    if (expectedUrl === null) {
+      expect(decision.documentUrl).toBeUndefined();
+      if (diagnostics.length === 0) {
+        expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+      } else {
+        expect(decision.metadata).toHaveProperty("metadataUrlDiagnostics", {
+          entries: diagnostics,
+          overflowCount: 0,
+        });
+      }
+    } else {
+      expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+    }
+  });
+}
+
+test("competition metadata ignores excluded HTML in every label and value", async () => {
+  const html = await pageOf(APPEALED);
+  const contaminated = html.replaceAll(
+    "</td>",
+    "<script>hidden-script</script><style>hidden-style</style></td>",
+  );
+  expect(contaminated).not.toBe(html);
+  const expected = parsePlUokikDetail(html);
+  expect(expected).not.toBeNull();
+  expect(parsePlUokikDetail(contaminated)).toEqual(expected);
 });

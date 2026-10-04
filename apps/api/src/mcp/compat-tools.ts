@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -7,6 +7,7 @@ import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
@@ -30,8 +31,10 @@ import {
   decodeCompatId,
 } from "@/api/mcp/compat-ids";
 import {
+  COMPAT_SEARCH_CURSOR_MAX_LENGTH,
   compatCorpusFetchResponse,
   compatSearchCursorError,
+  compatSearchPageLimitResult,
   decodeCompatSearchCursor,
   encodeCompatSearchCursor,
   invalidCompatIdResult,
@@ -276,6 +279,7 @@ const compatSearchArgsSchema = nullAsAbsent(
       v.description("Search query"),
     ),
     cursor: cursorInput({
+      maxLength: COMPAT_SEARCH_CURSOR_MAX_LENGTH,
       description:
         "Opaque cursor from a previous search call to fetch the next page",
     }),
@@ -292,8 +296,34 @@ const compatFetchArgsSchema = nullAsAbsent(
   }),
 );
 
+export const resolveCompatFetchReadClass = (args: unknown) => {
+  if (
+    typeof args !== "object" ||
+    args === null ||
+    !("id" in args) ||
+    typeof args.id !== "string"
+  ) {
+    return undefined;
+  }
+  const target = decodeCompatId(args.id);
+  if (target === null) {
+    return undefined;
+  }
+  switch (target.kind) {
+    case "document":
+      return "tenant";
+    case "decision":
+    case "statute":
+      return "public";
+    default:
+      target satisfies never;
+      return panic("Unhandled compat read target");
+  }
+};
+
 export const COMPAT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Search",
       destructiveHint: false,
@@ -301,6 +331,7 @@ export const COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    readClass: "both",
     anonymized: {
       exposure: "anonymize",
       textFields: ["title"],
@@ -320,6 +351,7 @@ export const COMPAT_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Fetch",
       destructiveHint: false,
@@ -327,6 +359,7 @@ export const COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    readClass: resolveCompatFetchReadClass,
     anonymized: {
       exposure: "anonymize",
       textFields: ["title", "text"],
@@ -402,7 +435,7 @@ const searchMatterKnowledge = async ({
     query,
     organizationId: context.organizationId,
     workspaceIds: context.accessibleWorkspaceIds,
-    limit: DEFAULT_COMPAT_SEARCH_LIMIT,
+    limit: normalizeTenantPageLimit(DEFAULT_COMPAT_SEARCH_LIMIT),
     ...(cursor === undefined ? {} : { cursor }),
   });
 
@@ -439,6 +472,13 @@ const handleCompatSearchTool: McpToolHandler<
     : matterOnlyPosition(cursor);
   if (position === null) {
     return compatSearchCursorError(cursor ?? "");
+  }
+
+  const pageLimitResult = corpusEnabled
+    ? compatSearchPageLimitResult("tenant")
+    : null;
+  if (pageLimitResult !== null) {
+    return pageLimitResult;
   }
 
   const matter =
@@ -482,6 +522,7 @@ const handleCompatSearchTool: McpToolHandler<
   // anonymized mode. The handler never branches on mode.
   return {
     egress: "compatSearch",
+    paginationOutcome: corpus.paginationOutcome,
     nextCursor: exhausted
       ? null
       : encodeCompatSearchCursor({
@@ -490,6 +531,29 @@ const handleCompatSearchTool: McpToolHandler<
         }),
     results: [...matter.results, ...corpus.results],
   };
+};
+
+/** Resolves the fetch target with the same schema and id reader as dispatch. */
+export const compatFetchConsumesServices = (args: unknown): boolean => {
+  const parsed = v.safeParse(compatFetchArgsSchema, args);
+  if (!parsed.success) {
+    return true;
+  }
+  const id = decodeCompatId(parsed.output.id);
+  if (id === null) {
+    return true;
+  }
+  switch (id.kind) {
+    case "document":
+      return false;
+    case "decision":
+    case "statute":
+      return true;
+    default: {
+      id satisfies never;
+      return panic("Unclassified compat fetch target");
+    }
+  }
 };
 
 const handleCompatFetchTool: McpToolHandler<

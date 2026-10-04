@@ -98,6 +98,8 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // The same tiered retry around adding the primary reference type column
   // and its NOT VALID check.
   "20261003121000_case_law_decision_case_number_type/migration.sql:83fc403c99c6f705c47e3b4d029ad695bae40385a43a0ae817425992b0547627",
+  // The same tiered retry around adding the nullable case-file key column.
+  "20261003123300_case_law_decision_docket_family_key/migration.sql:7b46b61397d41a9d56b74a1076485cc682123ff373c8d9893b2b87918c4c8b48",
   // Acquires the two hot corpus tables in writer order before installing the
   // citation-count triggers. The static body retries only lock_not_available
   // under a bounded statement budget and changes no rows.
@@ -1857,6 +1859,7 @@ const isReplaySafeBeforeSplit = (
  * timestamp, which makes the boundary a plain string comparison.
  */
 const REPLAY_SAFE_SPLIT_FROM = "20260919";
+const ROW_SCAN_SPLIT_FROM = "20261003123100";
 
 const collectUnreplayableSplitPrefixes = async (): Promise<string[]> => {
   const violations: string[] = [];
@@ -1888,6 +1891,37 @@ const collectUnreplayableSplitPrefixes = async (): Promise<string[]> => {
 };
 
 describe("split-transaction migrations", () => {
+  test("releases schema locks before scanning rows in new split migrations", async () => {
+    const violations: string[] = [];
+    for await (const relativePath of new Bun.Glob("20*/migration.sql").scan({
+      cwd: MIGRATIONS_DIR,
+    })) {
+      if (relativePath < ROW_SCAN_SPLIT_FROM) {
+        continue;
+      }
+      const statements = splitSqlStatements(
+        await Bun.file(nodePath.join(MIGRATIONS_DIR, relativePath)).text(),
+      );
+      const split = statements.findIndex((statement) =>
+        /^COMMIT$/iu.test(statement),
+      );
+      if (split === -1) {
+        continue;
+      }
+      for (const statement of statements.slice(0, split)) {
+        if (
+          /^UPDATE\b/iu.test(statement) ||
+          /\bVALIDATE\s+CONSTRAINT\b/iu.test(statement) ||
+          (/\bCHECK\s*\(/iu.test(statement) &&
+            !/\bNOT\s+VALID\b/iu.test(statement))
+        ) {
+          violations.push(`${relativePath}: row scan before transaction split`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
   test("every statement before the split survives a replay", async () => {
     expect(await collectUnreplayableSplitPrefixes()).toEqual([]);
   });

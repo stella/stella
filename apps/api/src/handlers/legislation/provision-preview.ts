@@ -3,8 +3,16 @@ import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import {
+  projectProvisionPreview,
+  provisionPreviewSuccessResponseSchema,
+} from "@/api/handlers/legislation/reader-response";
+import {
+  ACCOUNT_ACCESS,
+  createSafeBoundedPublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
+} from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
@@ -21,22 +29,16 @@ import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 
 const PREVIEW_READ_STEP = "provisionPreview.corpusAst";
 
-/**
- * How long a provision preview may be reused. A consolidation's wording is
- * fixed once published: an amendment is a new consolidation with its own id,
- * so an answer addressed by document id and anchor changes only when the
- * corpus is reparsed. The freshness trade is against a reparse, never against
- * a change in the law, and an unauthenticated read carries no session, so the
- * answer is shareable.
- */
-const PROVISION_PREVIEW_CACHE_CONTROL =
-  "public, max-age=3600, stale-while-revalidate=86400";
-
 const config = {
-  // Not a capability: a browser citation-preview read that sets its own
-  // cache-control header and is gated by the public-law route hook, neither of
+  response: safePublicHandlerResponseSchemasWithStatusText(
+    provisionPreviewSuccessResponseSchema,
+  ),
+  cache: { kind: "public", maxAge: 3600, swr: 86_400 },
+  // Not a capability: a cacheable browser citation-preview read gated
+  // by the public-law route hook, neither of
   // which the generic invoke path can honor. Agents read provision text
   // through `read_statute_provisions`, which is where the MCP contract lives.
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "public_indexing" },
   params: t.Object({
     documentId: tSafeId("legislationDocument"),
@@ -111,12 +113,12 @@ export const readProvisionPreviewHandler = async ({
     return status(404, { message: "Provision not found" });
   }
 
-  return preview;
+  return projectProvisionPreview(preview);
 };
 
-const readProvisionPreview = createSafePublicHandler(
+const readProvisionPreview = createSafeBoundedPublicHandler(
   config,
-  async function* ({ params: { documentId, anchor }, query, set }) {
+  async function* ({ params: { documentId, anchor }, query }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -128,8 +130,6 @@ const readProvisionPreview = createSafePublicHandler(
           }),
       ),
     );
-
-    set.headers["cache-control"] = PROVISION_PREVIEW_CACHE_CONTROL;
 
     return Result.ok(response);
   },

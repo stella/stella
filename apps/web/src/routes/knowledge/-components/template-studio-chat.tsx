@@ -1,3 +1,4 @@
+import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
 /**
  * Template Studio chat — the general document chat engine (same
  * backend, composer, tool surface, and persistence as the DOCX file
@@ -11,13 +12,11 @@
  *     inspector review panel. Accepting a `{{field}}` replacement also
  *     registers the field in the Studio session.
  */
-
-import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import type { EditorView } from "@tiptap/pm/view";
 import { Result } from "better-result";
-import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 
@@ -58,7 +57,6 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { COMPOSER_TEXT_CLASS } from "@stll/ui/composer";
 import { LoaderCircleIcon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -111,6 +109,7 @@ import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind } from "@/lib/value-types";
 import { useTemplateStudioStore } from "@/routes/knowledge/-components/template-studio-store";
@@ -216,7 +215,7 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
     });
     if (Result.isError(rotated)) {
       getAnalytics().captureError(rotated.error);
-      stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
+      notifyUserError(rotated.error, t("common.somethingWentWrong"));
       return false;
     }
     queryClient.setQueryData(
@@ -1411,6 +1410,7 @@ const TemplateStudioChatInner = ({
           anonymized={anonymized}
           attachmentsEnabled
           canSubmitNow={canSubmitWithCurrentSnapshot}
+          context={{ activeOrganizationId, threadRef }}
           editorController={editorController}
           emptyPlaceholder={
             <span

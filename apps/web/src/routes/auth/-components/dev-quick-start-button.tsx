@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 import { useNavigate } from "@tanstack/react-router";
 import { Result, TaggedError } from "better-result";
@@ -15,19 +15,23 @@ import { detached } from "@/lib/detached";
 import { fetchDevOtp } from "@/lib/dev-otp";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
+import { devQuickStartRuntime } from "./dev-quick-start-runtime";
 import {
-  clearDevQuickStartAttempt,
   readDevQuickStartAttempt,
   writeDevQuickStartAttempt,
 } from "./dev-quick-start-storage";
 import {
   DEV_QUICK_START_PHASE,
+  DEV_QUICK_START_STAGE,
   createDevQuickStartIdentity,
   type DevQuickStartAttempt,
   type DevQuickStartIdentity,
   type DevQuickStartPhase,
+  resolveDevQuickStartOrganization,
   runDevQuickStart,
+  startDevQuickStartAttempt,
 } from "./dev-quick-start.logic";
 
 const QUICK_START_MATTER_COUNT = 3;
@@ -50,6 +54,7 @@ const DEV_QUICK_START_COPY = {
 
 const DEV_QUICK_START_ERROR = {
   matterImport: "matterImport",
+  matterImportRunning: "matterImportRunning",
   otpUnavailable: "otpUnavailable",
 } as const;
 
@@ -59,6 +64,8 @@ type DevQuickStartErrorCode =
 const ERROR_MESSAGES = {
   [DEV_QUICK_START_ERROR.matterImport]:
     "The Harvey LAB import could not start.",
+  [DEV_QUICK_START_ERROR.matterImportRunning]:
+    "An import is already running. Wait for it to finish and try again.",
   [DEV_QUICK_START_ERROR.otpUnavailable]:
     "The development OTP was not available.",
 } as const satisfies Record<DevQuickStartErrorCode, string>;
@@ -101,31 +108,31 @@ const authenticate = async ({ email }: DevQuickStartIdentity) => {
   return AUTHENTICATION_OUTCOME.authenticated;
 };
 
-const createOrganization = async ({
-  organizationName,
-  organizationSlug,
-}: DevQuickStartIdentity) => {
-  const listed = await authClient.organization.list();
-  if (listed.error) {
-    throw toAuthClientError(listed.error);
+const createOrganization = async (identity: DevQuickStartIdentity) => {
+  const resolved = await resolveDevQuickStartOrganization({
+    identity,
+    listOrganizations: async () => {
+      const listed = await authClient.organization.list();
+      if (listed.error) {
+        throw toAuthClientError(listed.error);
+      }
+      return listed.data;
+    },
+    createOrganization: async ({ organizationName, organizationSlug }) => {
+      const created = await authClient.organization.create({
+        name: organizationName,
+        slug: organizationSlug,
+      });
+      if (created.error) {
+        throw toAuthClientError(created.error);
+      }
+      return created.data.id;
+    },
+  });
+  if (Result.isError(resolved)) {
+    throw resolved.error;
   }
-
-  const existing = listed.data.find(({ slug }) => slug === organizationSlug);
-  const organizationId = await (async () => {
-    if (existing) {
-      return existing.id;
-    }
-
-    const created = await authClient.organization.create({
-      name: organizationName,
-      slug: organizationSlug,
-    });
-    if (created.error) {
-      throw toAuthClientError(created.error);
-    }
-
-    return created.data.id;
-  })();
+  const organizationId = resolved.value;
 
   const active = await authClient.organization.setActive({
     organizationId,
@@ -148,9 +155,13 @@ const startMatterImport = async (
     selectionSeed,
   });
   if (response.error) {
+    const code =
+      response.error.status === 409
+        ? DEV_QUICK_START_ERROR.matterImportRunning
+        : DEV_QUICK_START_ERROR.matterImport;
     throw new DevQuickStartError({
-      code: DEV_QUICK_START_ERROR.matterImport,
-      message: "The Harvey LAB import could not start.",
+      code,
+      message: ERROR_MESSAGES[code],
     });
   }
 
@@ -166,23 +177,29 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
   const analytics = useAnalytics();
   const navigate = useNavigate();
   const invalidateSession = useInvalidateSession();
-  const attemptRef = useRef<DevQuickStartAttempt | null>(null);
-  const runningRef = useRef(false);
-  const [phase, setPhase] = useState<DevQuickStartPhase | null>(null);
+  const phase = useSyncExternalStore(
+    devQuickStartRuntime.subscribe,
+    devQuickStartRuntime.getPhase,
+    () => null,
+  );
   const currentPhaseLabel = phase === null ? null : PHASE_LABELS[phase];
 
   const runQuickStart = async () => {
-    const attempt =
-      attemptRef.current ??
-      readDevQuickStartAttempt() ??
-      ({
-        completedPhase: null,
-        identity: createDevQuickStartIdentity(crypto.randomUUID()),
-        organizationId: null,
-      } satisfies DevQuickStartAttempt);
-    attemptRef.current = attempt;
+    const createIdentity = () =>
+      createDevQuickStartIdentity(crypto.randomUUID());
+    const retainedAttempt = devQuickStartRuntime.getAttempt(
+      () =>
+        readDevQuickStartAttempt() ??
+        ({
+          completedPhase: null,
+          identity: createIdentity(),
+          organizationId: null,
+        } satisfies DevQuickStartAttempt),
+    );
+    const attempt = startDevQuickStartAttempt(retainedAttempt, createIdentity);
+    devQuickStartRuntime.setAttempt(attempt);
     writeDevQuickStartAttempt(attempt);
-    setPhase(DEV_QUICK_START_PHASE.authenticate);
+    devQuickStartRuntime.setPhase(DEV_QUICK_START_PHASE.authenticate);
 
     const result = await Result.tryPromise({
       try: async () => await authenticate(attempt.identity),
@@ -190,17 +207,14 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
     });
 
     if (Result.isError(result)) {
-      setPhase(null);
       analytics.captureError(result.error);
-      stellaToast.add({
-        title: DEV_QUICK_START_COPY.errorTitle,
+      notifyUserError(result.error, DEV_QUICK_START_COPY.errorTitle, {
         description: DevQuickStartError.is(result.error)
           ? ERROR_MESSAGES[result.error.code]
           : userErrorFromThrown(
               result.error,
               DEV_QUICK_START_COPY.errorFallback,
             ),
-        type: "error",
       });
       return;
     }
@@ -213,7 +227,7 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
             organizationId: attempt.organizationId,
           }
         : attempt;
-    attemptRef.current = authenticatedAttempt;
+    devQuickStartRuntime.setAttempt(authenticatedAttempt);
     writeDevQuickStartAttempt(authenticatedAttempt);
 
     if (result.value === AUTHENTICATION_OUTCOME.twoFactorRequired) {
@@ -232,13 +246,9 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
   };
 
   const handleQuickStart = async () => {
-    if (runningRef.current) {
-      return;
-    }
-    runningRef.current = true;
-
-    await runQuickStart().finally(() => {
-      runningRef.current = false;
+    await devQuickStartRuntime.runSingleFlight({
+      stage: DEV_QUICK_START_STAGE.authenticate,
+      run: runQuickStart,
     });
   };
 
@@ -266,27 +276,25 @@ export const DevQuickStartContinuation = ({
 }) => {
   const analytics = useAnalytics();
   const invalidateSession = useInvalidateSession();
-  const attemptRef = useRef<DevQuickStartAttempt | null>(null);
-  const runningRef = useRef(false);
-  const [phase, setPhase] = useState<DevQuickStartPhase | null>(null);
+  const phase = useSyncExternalStore(
+    devQuickStartRuntime.subscribe,
+    devQuickStartRuntime.getPhase,
+    () => null,
+  );
   const currentPhaseLabel = phase === null ? null : PHASE_LABELS[phase];
 
   const runContinuation = async () => {
-    if (runningRef.current) {
-      return;
-    }
-    runningRef.current = true;
-
-    const attempt =
-      attemptRef.current ??
-      readDevQuickStartAttempt() ??
-      ({
-        completedPhase: DEV_QUICK_START_PHASE.authenticate,
-        identity: createDevQuickStartIdentity(crypto.randomUUID()),
-        organizationId: null,
-      } satisfies DevQuickStartAttempt);
-    attemptRef.current = attempt;
+    const attempt = devQuickStartRuntime.getAttempt(
+      () =>
+        readDevQuickStartAttempt() ??
+        ({
+          completedPhase: DEV_QUICK_START_PHASE.authenticate,
+          identity: createDevQuickStartIdentity(crypto.randomUUID()),
+          organizationId: null,
+        } satisfies DevQuickStartAttempt),
+    );
     writeDevQuickStartAttempt(attempt);
+    devQuickStartRuntime.setPhase(DEV_QUICK_START_PHASE.organization);
 
     const result = await Result.tryPromise({
       try: async () => {
@@ -304,31 +312,26 @@ export const DevQuickStartContinuation = ({
           },
           createOrganization,
           onAttemptUpdated: (nextAttempt) => {
-            attemptRef.current = nextAttempt;
+            devQuickStartRuntime.setAttempt(nextAttempt);
             writeDevQuickStartAttempt(nextAttempt);
           },
-          onPhase: setPhase,
+          onPhase: devQuickStartRuntime.setPhase,
           startMatterImport,
         });
         await invalidateSession.mutateAsync();
-        clearDevQuickStartAttempt();
       },
       catch: (cause) => cause,
     });
 
-    runningRef.current = false;
     if (Result.isError(result)) {
-      setPhase(null);
       analytics.captureError(result.error);
-      stellaToast.add({
-        title: DEV_QUICK_START_COPY.errorTitle,
+      notifyUserError(result.error, DEV_QUICK_START_COPY.errorTitle, {
         description: DevQuickStartError.is(result.error)
           ? ERROR_MESSAGES[result.error.code]
           : userErrorFromThrown(
               result.error,
               DEV_QUICK_START_COPY.errorFallback,
             ),
-        type: "error",
       });
       return;
     }
@@ -341,8 +344,14 @@ export const DevQuickStartContinuation = ({
     window.location.assign(redirectTo);
   };
 
+  const handleContinuation = async () =>
+    devQuickStartRuntime.runSingleFlight({
+      stage: DEV_QUICK_START_STAGE.continue,
+      run: runContinuation,
+    });
+
   useMountEffect(() => {
-    detached(runContinuation(), "dev-quick-start.continue");
+    detached(handleContinuation(), "dev-quick-start.continue");
   });
 
   return (
@@ -351,7 +360,7 @@ export const DevQuickStartContinuation = ({
       disabled={phase !== null}
       loading={phase !== null}
       onClick={() => {
-        detached(runContinuation(), "dev-quick-start.retry");
+        detached(handleContinuation(), "dev-quick-start.retry");
       }}
       size="lg"
       type="button"

@@ -3,12 +3,13 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { rateEntries, rateTables } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedRateTableId } from "@/api/lib/safe-id-boundaries";
 
 const readRateTablesQuerySchema = t.Object({
@@ -32,12 +33,20 @@ const readRateTables = createSafeHandler(
       "and rates.resolve for the rate that actually applies to a user on a " +
       "date.",
     permissions: { rate: ["read"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    mcp: {
+      type: "capability",
+      readClass: "tenant",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "read",
     query: readRateTablesQuerySchema,
   },
   async function* ({ safeDb, workspaceId, query }) {
-    const limit = query.limit ?? LIMITS.rateTablesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.rateTablesPageSizeDefault,
+    );
     const conditions = [eq(rateTables.workspaceId, workspaceId)];
 
     if (query.cursor) {

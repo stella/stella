@@ -1,3 +1,7 @@
+import { PROVIDER_EVENT_REPLAY_AUDIT_TEXT_PATH } from "@/api/lib/hosted-usage-provider/replay-audit";
+import type { ProviderEventReplayAudit } from "@/api/lib/hosted-usage-provider/replay-audit";
+import { CONFIGURED_ACCESS_STATUSES } from "@/api/lib/usage/configured-access";
+
 import {
   destructiveEffectChunkColumns,
   destructiveEffectChunkConstraints,
@@ -7,6 +11,7 @@ import {
   member,
   organization,
   organizationCheck,
+  orgReadOnlyPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -29,9 +34,17 @@ import {
   USAGE_ALLOCATION_SOURCES,
   USAGE_ENTITLEMENT_SOURCES,
   USAGE_ENTITLEMENT_STATUSES,
+  type UsageEntitlementStatus,
   USAGE_PROVIDER_WEBHOOK_RESULTS,
   USAGE_SERVICE_TIERS,
 } from "./skills";
+
+export const CLOSED_USAGE_ENTITLEMENT_STATUSES = [
+  "paused",
+  "cancelled",
+] as const satisfies readonly UsageEntitlementStatus[];
+const CLOSED_USAGE_ENTITLEMENT_STATUS_SQL_VALUES =
+  CLOSED_USAGE_ENTITLEMENT_STATUSES.map((status) => sql.raw(`'${status}'`));
 
 export const USAGE_POLICY_KINDS = ["subscription", "addon"] as const;
 export type UsagePolicyKind = (typeof USAGE_POLICY_KINDS)[number];
@@ -130,6 +143,7 @@ export const usagePolicies = p.pgTable(
     // `organization_member_capacity` database function together with the
     // seat count of a per-seat policy. Null = the policy sets no bound.
     maxMembers: p.integer("max_members"),
+    serviceActionsPerPeriod: p.integer("service_actions_per_period"),
     // Hidden by default: a seeded policy only appears in the catalog
     // endpoint once the operator explicitly marks it public.
     visibility: p
@@ -194,6 +208,10 @@ export const usagePolicies = p.pgTable(
       .on(table.hostedPolicyRef)
       .where(sql`hosted_policy_ref IS NOT NULL`),
     p.check(
+      "usage_policies_service_actions_positive",
+      sql`service_actions_per_period IS NULL OR service_actions_per_period > 0`,
+    ),
+    p.check(
       "usage_policies_policy_key_format",
       sql`policy_key ~ '^[a-z0-9][a-z0-9_-]{0,63}$'`,
     ),
@@ -240,13 +258,14 @@ export const usageEntitlements = p.pgTable(
     /**
      * Provider-reported occurrence time of the last applied lifecycle
      * event. Webhook deliveries can arrive out of order (independent
-     * retry backoff per event); dispatch skips events strictly older
-     * than this so a stale `active` retry cannot resurrect an
-     * entitlement that a newer `revoked` already terminated. Null when
+     * retry backoff per event); dispatch rejects older events and resolves
+     * equal versions by external generation and terminal state. Null when
      * the provider payload carries no timestamp (ordering then remains
      * delivery-order, as before).
      */
     hostedLastEventAt: timestamptz("hosted_last_event_at"),
+    /** Provider creation time identifies the current external generation. */
+    hostedEntitlementCreatedAt: timestamptz("hosted_entitlement_created_at"),
     /**
      * True when hosted access is scheduled to end but remains
      * usable until `current_period_end`. UI surfaces it as
@@ -288,7 +307,7 @@ export const usageEntitlements = p.pgTable(
     ),
     p.check(
       "usage_entitlements_period_order",
-      sql`current_period_end > current_period_start`,
+      sql`current_period_end > current_period_start OR (current_period_end = current_period_start AND status IN (${sql.join(CLOSED_USAGE_ENTITLEMENT_STATUS_SQL_VALUES, sql`, `)}))`,
     ),
     // Entitlements are owned by system paths (hosted webhook adapter
     // via rootDb, or future admin tools also via rootDb), not by org
@@ -409,6 +428,69 @@ export const organizationAccessStates = p.pgTable(
       to: stella,
       using: sql`false`,
     }),
+  ],
+);
+
+const configuredAccessOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_configured_access'::regclass)`;
+
+// Separate from the original standing: feature disablement and older builds
+// read organization_access_states without observing or rewriting this overlay.
+export const organizationConfiguredAccess = p.pgTable(
+  "organization_configured_access",
+  {
+    organizationId: safeOrganizationId("organization_id").primaryKey(),
+    sourceSignature: p.text("source_signature").notNull(),
+    sourceEventAt: timestamptz("source_event_at"),
+    sourceEntitlementExternalId: p
+      .text("source_entitlement_external_id")
+      .notNull(),
+    sourceEntitlementCreatedAt: timestamptz("source_entitlement_created_at"),
+    sourceEntitlementStatus: p
+      .text("source_entitlement_status", { enum: USAGE_ENTITLEMENT_STATUSES })
+      .notNull(),
+    sourceCancelAtPeriodEnd: p.boolean("source_cancel_at_period_end").notNull(),
+    configuredAccessStatus: p
+      .text("configured_access_status", { enum: CONFIGURED_ACCESS_STATUSES })
+      .notNull(),
+    configuredPeriodEndsAt: timestamptz("configured_period_ends_at"),
+    paymentRetryEndsAt: timestamptz("payment_retry_ends_at"),
+    serviceActionsPerPeriod: p.integer("service_actions_per_period"),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p
+      .foreignKey({
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+        name: "configured_access_org_fk",
+      })
+      .onDelete("cascade"),
+    p.check(
+      "organization_configured_access_source_status",
+      sql`source_entitlement_status IN (${sql.join(
+        USAGE_ENTITLEMENT_STATUSES.map((status) => sql.raw(`'${status}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "organization_configured_access_shape",
+      sql`((configured_access_status IN (${sql.join(
+        CONFIGURED_ACCESS_STATUSES.filter(
+          (status) => status === "active" || status === "ending",
+        ).map((status) => sql.raw(`'${status}'`)),
+        sql`, `,
+      )}) AND configured_period_ends_at IS NOT NULL AND payment_retry_ends_at IS NULL AND service_actions_per_period > 0) OR (configured_access_status = 'payment_retry' AND configured_period_ends_at IS NOT NULL AND payment_retry_ends_at IS NOT NULL AND service_actions_per_period > 0) OR (configured_access_status = 'disabled' AND configured_period_ends_at IS NULL AND payment_retry_ends_at IS NULL AND service_actions_per_period IS NULL)) IS TRUE`,
+    ),
+    p.pgPolicy("organization_configured_access_owner", {
+      for: "all",
+      to: "public",
+      using: configuredAccessOwner,
+      withCheck: configuredAccessOwner,
+    }),
+    ...orgReadOnlyPolicies("organization_configured_access"),
   ],
 );
 
@@ -580,6 +662,8 @@ export const usageEvents = p.pgTable(
      * by the per-user lane counters instead.
      */
     lane: p.text({ enum: USAGE_EVENT_LANES }).notNull().default("pool"),
+    actionKind: p.text("action_kind"),
+    logicalPhaseId: p.text("logical_phase_id"),
     traceId: p.text("trace_id"),
     idempotencyKey: p.text("idempotency_key"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
@@ -598,6 +682,18 @@ export const usageEvents = p.pgTable(
     // BYOK rows land with units_consumed = 0: the work is attributed
     // to the org's configured provider account. Platform-backed rows
     // are floored at 1 in app code.
+    p
+      .index("usage_events_org_cost_period_idx")
+      .on(
+        table.organizationId,
+        table.createdAt,
+        table.actionKind,
+        table.logicalPhaseId,
+      ),
+    p.check(
+      "usage_events_action_identity_pair",
+      sql`(action_kind IS NULL) = (logical_phase_id IS NULL)`,
+    ),
     p.check("usage_events_units_nonneg", sql`units_consumed >= 0`),
     p.check("usage_events_period_order", sql`period_end > period_start`),
     p.check(
@@ -905,11 +1001,27 @@ export const hostedUsageWebhookEvents = p.pgTable(
     processedAt: timestamptz("processed_at").notNull().defaultNow(),
     result: p.text({ enum: USAGE_PROVIDER_WEBHOOK_RESULTS }).notNull(),
     errorMessage: p.text("error_message"),
+    // Ordered replay attempts survive redaction; ignored attempts remain eligible.
+    replayAudit: jsonb("replay_audit").$type<ProviderEventReplayAudit>(),
   },
   (table) => [
     p
       .index("usage_provider_webhook_events_processed_at_idx")
       .on(table.processedAt),
+    p
+      .index("usage_provider_webhook_events_retention_idx")
+      .on(table.processedAt)
+      .where(
+        sql`result IN ('ok', 'ignored') AND (payload <> '{}'::jsonb OR error_message IS NOT NULL OR replay_audit @? ${PROVIDER_EVENT_REPLAY_AUDIT_TEXT_PATH})`,
+      ),
+    p
+      .index("usage_provider_webhook_events_ignored_entity_idx")
+      .on(sql`(${table.payload}->'data'->>'id')`)
+      .where(sql`result = 'ignored'`),
+    p
+      .index("usage_provider_webhook_events_ignored_account_idx")
+      .on(sql`(${table.payload}->'data'->>'account_ref')`)
+      .where(sql`result = 'ignored'`),
     // System table: written and read only by the webhook handler via
     // the root connection. Stella sessions have no business touching it.
     p.pgPolicy("usage_provider_webhook_events_no_stella_access", {

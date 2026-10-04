@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, asc, eq, isNull } from "drizzle-orm";
 
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 import { LIMITS } from "@/api/lib/limits";
@@ -14,8 +14,14 @@ const config = {
     "live in the same table but are never returned here; read those with " +
     "matters.anonymization-terms.list.",
   permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
   access: "read",
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
 } satisfies HandlerConfig;
 
 // Restrict to org-wide rows (workspace_id IS NULL). Workspace-scoped

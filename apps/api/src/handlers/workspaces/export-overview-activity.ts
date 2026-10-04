@@ -4,7 +4,7 @@ import { t } from "elysia";
 import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
 import { Temporal } from "@stll/time";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { escapeCSV } from "@/api/lib/csv";
@@ -25,6 +25,8 @@ type MatterActivityExportFormat =
   (typeof MATTER_ACTIVITY_EXPORT_FORMATS)[number];
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
+  contentDelivery: { type: "audited" },
   permissions: { workspace: ["read"] },
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",

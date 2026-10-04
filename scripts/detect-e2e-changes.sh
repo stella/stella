@@ -4,9 +4,15 @@ set -euo pipefail
 scope=${1:-}
 shift || true
 
-if [[ "$scope" != "core" && "$scope" != "landing" && "$scope" != "marketing" ]]; then
-  echo "usage: $0 <core|landing|marketing> [changed-file ...]" >&2
+if [[ "$scope" != "core" && "$scope" != "landing" && "$scope" != "marketing" && "$scope" != "pr-core" ]]; then
+  echo "usage: $0 <core|landing|marketing|pr-core> [changed-file ...]" >&2
   exit 2
+fi
+
+# The production config owns its spec tree and imported fixtures/helpers.
+# Other E2E configs belong to their existing full-depth jobs.
+if [[ "$scope" == "pr-core" ]]; then
+  exec node "$(dirname "$0")/production-e2e-inputs.mjs" "$@"
 fi
 
 for file in "$@"; do
@@ -20,7 +26,7 @@ for file in "$@"; do
   case "$scope:$file" in
     core:apps/web/e2e/marketing/*|core:apps/web/e2e/playwright.marketing.config.ts)
       ;;
-    core:apps/api/*|core:apps/web/*|core:packages/*|core:docker-compose.yml)
+    core:.github/actions/prepare-network-baseline/*|core:scripts/network-baseline-*|core:apps/api/*|core:apps/web/*|core:packages/*|core:docker-compose.yml)
       echo true
       exit 0
       ;;

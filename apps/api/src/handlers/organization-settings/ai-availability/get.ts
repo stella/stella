@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   hasTanStackInstanceProvider,
@@ -20,7 +20,13 @@ const config = {
   // Any org member needs to know whether AI is usable; the answer
   // is just two booleans, so it does not require admin scope.
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies HandlerConfig;
 

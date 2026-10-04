@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and } from "drizzle-orm";
 
-import { prorateHourlyCents } from "@stll/money";
+import { timeEntryAmount } from "@stll/money";
 
 import { timeEntries } from "@/api/db/schema";
 import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
@@ -11,7 +11,7 @@ import {
   timeEntryExportQuerySchema,
 } from "@/api/handlers/time-entries/export-query";
 import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/export-query";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { escapeCSV } from "@/api/lib/csv";
 import { LIMITS } from "@/api/lib/limits";
@@ -28,12 +28,14 @@ export const exportCsvHandler = async ({
     tx
       .select({
         id: timeEntries.id,
+        activityGroup: timeEntries.activityGroup,
         userId: timeEntries.userId,
         workItemId: timeEntries.workItemId,
         dateWorked: timeEntries.dateWorked,
         durationMinutes: timeEntries.durationMinutes,
         billedMinutes: timeEntries.billedMinutes,
         rateAtEntry: timeEntries.rateAtEntry,
+        noCharge: timeEntries.noCharge,
         currency: timeEntries.currency,
         narrative: timeEntries.narrative,
         invoiceNarrative: timeEntries.invoiceNarrative,
@@ -58,6 +60,7 @@ export const exportCsvHandler = async ({
     "Date",
     "User",
     "Matter ID",
+    "Activity Group",
     "Work Item ID",
     "Duration (min)",
     "Billed (min)",
@@ -75,15 +78,13 @@ export const exportCsvHandler = async ({
   const csvRows = [headers.join(",")];
 
   for (const row of rows) {
-    const amount = prorateHourlyCents({
-      billedMinutes: row.billedMinutes,
-      hourlyRateCents: row.rateAtEntry,
-    });
+    const amount = timeEntryAmount(row);
     csvRows.push(
       [
         escapeCSV(row.dateWorked),
         escapeCSV(row.userId ? (userMap.get(row.userId) ?? "") : ""),
         escapeCSV(workspaceId),
+        escapeCSV(row.activityGroup),
         escapeCSV(row.workItemId ?? ""),
         String(row.durationMinutes),
         String(row.billedMinutes),
@@ -104,14 +105,20 @@ export const exportCsvHandler = async ({
 };
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
-    "Export a matter's time entries as CSV text, one row per entry with " +
-    "date, timekeeper name, work item, minutes, rate, amount, billable flag, " +
+    "Export a matter's client time entries as CSV text, one row per entry with " +
+    "date, timekeeper name, activity group, work item, minutes, rate, amount, billable flag, " +
     "status, task and activity codes, and narratives. Filter by date-worked " +
     "range, status, and work item. Unlike the LEDES export this includes " +
     "non-billable and written-off entries; the row count is capped.",
   permissions: { timeEntry: ["approve"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: timeEntryExportQuerySchema,
 } satisfies WorkspaceHandlerConfig;

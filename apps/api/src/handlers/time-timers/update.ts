@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { timeTimers } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
   lockTimerOwner,
@@ -21,7 +21,12 @@ const updateTimer = createSafeRootHandler(
     description:
       "Set your timer's description or matter. Pass null to clear either field. Confirm requires a matter and any narrative required by the organization.",
     permissions: { timeEntry: ["update"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: timerParams,
     body: timerDetails,
   },

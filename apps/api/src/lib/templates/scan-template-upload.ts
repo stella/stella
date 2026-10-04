@@ -1,7 +1,8 @@
-import type { Result } from "better-result";
+import { Result } from "better-result";
 
+import { validateDocxArchive } from "@/api/lib/docx-archive";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -14,12 +15,18 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
  */
 export const scanTemplateUpload = async (
   file: File,
-): Promise<Result<ScannedFile, HandlerError<422 | 503>>> =>
-  await scanUploadForHandler({
-    bytes: await file.arrayBuffer(),
+): Promise<Result<ScannedFile, HandlerError<422 | 503>>> => {
+  const bytes = await file.arrayBuffer();
+  const validated = await validateDocxArchive(bytes);
+  if (Result.isError(validated)) {
+    return validated;
+  }
+  return await scanUploadForHandler({
+    bytes,
     declaredMimeType: DOCX_MIME_TYPE,
     fileName: sanitizeFilename(file.name),
   });
+};
 
 /**
  * The same error as a JSON response, for the template routes that answer

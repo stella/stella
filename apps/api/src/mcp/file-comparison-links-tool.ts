@@ -10,6 +10,8 @@ import * as v from "valibot";
 
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 
+import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
+import { probeEncryptedOoxml } from "@/api/lib/files/encrypted-ooxml";
 import { presignUploadUrl, putPresignedUpload } from "@/api/lib/s3-presign";
 import {
   parseSafeOutboundUrl,
@@ -106,6 +108,7 @@ export type PrepareFileComparisonFromLinksOutput = v.InferInput<
 
 export const PREPARE_FILE_COMPARISON_FROM_LINKS_TOOL_DEFINITION =
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Prepare file comparison from links",
       destructiveHint: false,
@@ -127,6 +130,8 @@ export const PREPARE_FILE_COMPARISON_FROM_LINKS_TOOL_DEFINITION =
         "Whitespace is normalised by the runtime schema; what the server may fetch is decided by the outbound-fetch reader, which names the side it refuses, not by a spelling rule on the field.",
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: { entity: ["update"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     name: FILE_COMPARISON_TRANSPORT.linksToolName,
     scope: "stella:documents_write",
@@ -272,6 +277,16 @@ const resolveLinkedFile = async ({
         hint: DOWNLOAD_HINT,
         message: `The ${side} file is empty`,
         reason: "The link served no bytes",
+        side,
+      }),
+    );
+  }
+  if (probeEncryptedOoxml(bytes).status === "encrypted") {
+    return Result.err(
+      linkIssue({
+        hint: "Remove the password from the document, then link it again.",
+        message: ENCRYPTED_CONTENT_MESSAGE,
+        reason: "The downloaded document is password-protected",
         side,
       }),
     );

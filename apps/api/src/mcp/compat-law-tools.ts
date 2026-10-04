@@ -17,8 +17,10 @@ import {
   decodeCompatCorpusId,
 } from "@/api/mcp/compat-ids";
 import {
+  LAW_COMPAT_SEARCH_CURSOR_MAX_LENGTH,
   compatCorpusFetchResponse,
   compatSearchCursorError,
+  compatSearchPageLimitResult,
   decodeCompatSearchCursor,
   encodeCompatSearchCursor,
   invalidCompatIdResult,
@@ -59,6 +61,7 @@ const lawCompatSearchArgsSchema = nullAsAbsent(
       v.description("Search query"),
     ),
     cursor: cursorInput({
+      maxLength: LAW_COMPAT_SEARCH_CURSOR_MAX_LENGTH,
       description:
         "Opaque cursor from a previous search call to fetch the next page",
     }),
@@ -79,6 +82,7 @@ const lawCompatFetchArgsSchema = nullAsAbsent(
 
 const LAW_COMPAT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Search",
       destructiveHint: false,
@@ -86,6 +90,7 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     description:
       "Search the public legal corpus (case-law decisions and statutes) using " +
@@ -98,6 +103,7 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Fetch",
       destructiveHint: false,
@@ -105,6 +111,7 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     description:
       "Fetch one public-corpus document by id using the OpenAI-compatible fetch " +
@@ -132,6 +139,11 @@ const handleLawCompatSearchTool: McpToolHandler<
     return compatSearchCursorError(cursor ?? "");
   }
 
+  const pageLimitResult = compatSearchPageLimitResult("law");
+  if (pageLimitResult !== null) {
+    return pageLimitResult;
+  }
+
   const corpus = await searchCompatCorpus({
     context,
     countries: await resolveCompatCorpusCountries(context),
@@ -147,6 +159,7 @@ const handleLawCompatSearchTool: McpToolHandler<
   // serialize the same way.
   return {
     egress: "compatSearch",
+    paginationOutcome: corpus.paginationOutcome,
     nextCursor: hasMoreCorpusPages(corpus.cursors)
       ? encodeCompatSearchCursor({ matter: null, corpus: corpus.cursors })
       : null,

@@ -22,6 +22,7 @@ import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-s
 import { documentReviewTargetSchema } from "@/api/handlers/document-reviews/schemas";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import {
+  ACCOUNT_ACCESS,
   assertUsageAvailableForHandler,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
@@ -45,6 +46,7 @@ const config = {
   description:
     "Detect a target document's parties ahead of any position proposal, so the review launcher can show which side the reviewer acts for before choosing references.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
   body: documentReviewPartiesBodySchema,
@@ -67,6 +69,7 @@ export const createReviewParties = ({
       body,
       session,
       orgAIConfig,
+      managedAIResidency,
       orgAIConfigStatus,
       promptCachingEnabled,
       user,
@@ -125,6 +128,7 @@ export const createReviewParties = ({
       }
 
       yield* requireTanStackAIAvailableForRole({
+        dataClass: "customer",
         configStatus: orgAIConfigStatus,
         orgConfig: orgAIConfig,
         role: "pdf",
@@ -166,6 +170,7 @@ export const createReviewParties = ({
         organizationId,
         workspaceId,
         orgAIConfig,
+        managedAIResidency,
         promptCachingEnabled,
         serviceTier,
         usageMetering: {

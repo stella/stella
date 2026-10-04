@@ -3,14 +3,20 @@ import {
   flowRunsWorkspaceParamsSchema,
   listFlowRunsQuerySchema,
 } from "@/api/handlers/flows/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
   description:
     "List flow runs in a matter, including lifecycle state and pagination metadata.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   access: "read",
   params: flowRunsWorkspaceParamsSchema,
   query: listFlowRunsQuerySchema,

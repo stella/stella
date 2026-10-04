@@ -150,16 +150,17 @@ runs:
         path: apps/web/dist
 
     - name: Validate production web build
-      # An artifact is only handed over by PR CI, which captures the triggering
-      # commit, so the build must be for exactly that commit.
+      # The artifact must match the checked-out commit, including a historical
+      # main commit selected by a reusable caller.
       if: inputs.web-build-artifact != ''
       shell: bash
       run: |
+        expected_sha=$(git rev-parse HEAD)
         for side in client server; do
           manifest="apps/web/dist/$side/version.json"
           commit=$(jq -r '.commit' "$manifest")
-          if [[ "$commit" != "$GITHUB_SHA" ]]; then
-            echo "::error::$side build is for $commit, expected $GITHUB_SHA"
+          if [[ "$commit" != "$expected_sha" ]]; then
+            echo "::error::$side build is for $commit, expected $expected_sha"
             exit 1
           fi
         done
@@ -188,7 +189,7 @@ runs:
     - name: Install Playwright browsers
       uses: ./.github/actions/setup-playwright
       with:
-        dependency-mode: full
+        dependency-mode: container
 
     - name: Seed deterministic marketing content
       shell: bash
@@ -205,9 +206,9 @@ runs:
         # The `--update-snapshots` flag lives in the package script alone, so
         # there is one place that knows how a baseline is rewritten.
         if [[ "$MODE" == "update" ]]; then
-          bun --filter @stll/web test:e2e:marketing:update
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:marketing:update
         else
-          bun --filter @stll/web test:e2e:marketing
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:marketing
         fi
 
     - name: Stop production web server

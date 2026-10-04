@@ -3,13 +3,14 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { styleSets } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedStyleSetId } from "@/api/lib/safe-id-boundaries";
 import { styleSetColumns } from "@/api/lib/style-sets";
 
@@ -27,8 +28,14 @@ const config = {
     "name, file name, size in bytes, and timestamps, and the response also " +
     "reports the maximum number of style sets the organization may hold.",
   permissions: { styleSet: ["use"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   query: querySchema,
 } satisfies HandlerConfig;
 
@@ -40,7 +47,9 @@ const styleSetCursor = createTimestampIdCursorCodec({
 export default createSafeRootHandler(
   config,
   async function* ({ safeDb, session, query }) {
-    const limit = query.limit ?? LIMITS.styleSetsPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.styleSetsPageSizeDefault,
+    );
     const conditions = [
       eq(styleSets.organizationId, session.activeOrganizationId),
       isNull(styleSets.deletedAt),

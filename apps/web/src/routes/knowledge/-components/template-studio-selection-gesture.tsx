@@ -1,8 +1,8 @@
 import type { ReactNode, RefObject } from "react";
 import { useCallback, useRef, useState } from "react";
 
-import type { EditorState } from "prosemirror-state";
-import type { EditorView } from "prosemirror-view";
+import type { EditorState } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -25,7 +25,6 @@ import {
 } from "@stll/ui/icons";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { Separator } from "@stll/ui/separator";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import type { BlockGestureKind } from "@/features/knowledge/views/templates/directive-kinds";
@@ -34,6 +33,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { BoundedMap } from "@/lib/bounded-set";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import { reusableConditions } from "@/routes/knowledge/-components/template-studio-condition-source";
 import { isInputType } from "@/routes/knowledge/-components/template-studio-model";
@@ -440,7 +440,7 @@ export const useTemplateStudioSelectionGesture = ({
       }
       getAnalytics().captureError(error);
       setEnrichment({ status: "idle" });
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(error, t("errors.actionFailed"));
     });
   }, GESTURE_ENRICH_DELAY_MS);
 

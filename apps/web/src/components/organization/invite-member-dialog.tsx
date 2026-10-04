@@ -1,13 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ComponentProps } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
-import { useSelector } from "@tanstack/react-store";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
-import * as v from "valibot";
 
+import { assignableRoles } from "@stll/permissions";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -33,16 +32,17 @@ import {
 } from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
 
+import type { Role } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import {
-  managementRoles,
-  rolePriority,
-  roleTranslationKeys,
-} from "@/lib/organization/consts";
+import { roleTranslationKeys } from "@/lib/organization/consts";
 import { useInviteMember } from "@/lib/organization/mutations";
-import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
+import {
+  inviteMemberSchema,
+  roleAssignmentOptions,
+} from "@/lib/organization/role-assignment.logic";
+import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 type InviteMemberDialogProps = {
   buttonLabel?: string;
@@ -53,51 +53,72 @@ type InviteMemberDialogProps = {
   showIcon?: boolean;
 };
 
-const inviteSchema = v.strictObject({
-  email: emailSchema(),
-  role: v.picklist(["owner", "admin", "member"]),
-});
-
-const defaultValues: v.InferInput<typeof inviteSchema> = {
-  email: "",
-  role: "member",
-};
-
 export const useCanInviteMembers = () => {
   const { data: currentUserRole } = useQuery({
     ...roleOptions,
     staleTime: Number.POSITIVE_INFINITY,
   });
 
-  return currentUserRole ? managementRoles.includes(currentUserRole) : false;
+  return currentUserRole ? assignableRoles(currentUserRole).length > 0 : false;
 };
 
-export const InviteMemberDialog = ({
-  buttonLabel,
-  buttonSize = "sm",
-  buttonVariant = "outline",
-  description,
-  onInvited,
-  showIcon = true,
-}: InviteMemberDialogProps) => {
-  const t = useTranslations();
-  const [isOpen, setIsOpen] = useState(false);
-  const inviteMember = useInviteMember();
+export const InviteMemberDialog = (props: InviteMemberDialogProps) => {
   const { data: currentUserRole } = useQuery({
     ...roleOptions,
     staleTime: Number.POSITIVE_INFINITY,
   });
-  const roles = roleTranslationKeys.map(
-    ({ descriptionKey, labelKey, value }) => ({
-      description: t(descriptionKey),
-      label: t(labelKey),
-      value,
-    }),
+  const defaultRole =
+    currentUserRole === undefined
+      ? undefined
+      : assignableRoles(currentUserRole).at(-1);
+  if (currentUserRole === undefined || defaultRole === undefined) {
+    return null;
+  }
+  return (
+    <InviteMemberForm
+      {...props}
+      currentUserRole={currentUserRole}
+      defaultRole={defaultRole}
+      key={currentUserRole}
+    />
   );
+};
+
+type InviteMemberFormProps = InviteMemberDialogProps & {
+  currentUserRole: Role;
+  defaultRole: Role;
+};
+
+const InviteMemberForm = ({
+  buttonLabel,
+  buttonSize = "sm",
+  buttonVariant = "outline",
+  description,
+  currentUserRole,
+  defaultRole,
+  onInvited,
+  showIcon = true,
+}: InviteMemberFormProps) => {
+  const t = useTranslations();
+  const [isOpen, setIsOpen] = useState(false);
+  const inviteMember = useInviteMember();
+  const schema = useMemo(
+    () => inviteMemberSchema(currentUserRole),
+    [currentUserRole],
+  );
+  const defaultValues = useMemo(
+    () => ({ email: "", role: defaultRole }),
+    [defaultRole],
+  );
+  const roles = roleAssignmentOptions(currentUserRole).map(({ value }) => ({
+    description: t(roleTranslationKeys[value].descriptionKey),
+    label: t(roleTranslationKeys[value].labelKey),
+    value,
+  }));
 
   const form = useForm(
     schemaFormOptions({
-      schema: inviteSchema,
+      schema,
       defaultValues,
       submitValues: "schema-output",
       onSubmit: async ({ value, formApi }) => {
@@ -131,13 +152,6 @@ export const InviteMemberDialog = ({
   );
 
   const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
-
-  if (
-    currentUserRole === undefined ||
-    !managementRoles.includes(currentUserRole)
-  ) {
-    return null;
-  }
 
   return (
     <Dialog
@@ -214,14 +228,7 @@ export const InviteMemberDialog = ({
                     </SelectTrigger>
                     <SelectPopup alignItemWithTrigger={false}>
                       {roles.map((item) => (
-                        <SelectItem
-                          disabled={
-                            rolePriority[item.value] <
-                            rolePriority[currentUserRole]
-                          }
-                          key={item.value}
-                          value={item.value}
-                        >
+                        <SelectItem key={item.value} value={item.value}>
                           {item.label}
                         </SelectItem>
                       ))}

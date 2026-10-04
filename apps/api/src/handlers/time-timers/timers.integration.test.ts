@@ -13,6 +13,8 @@ import {
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
@@ -28,6 +30,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -37,6 +40,7 @@ import {
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+import stopMemberTimer from "./admin/stop";
 import confirmTimer from "./confirm";
 import discardTimer from "./discard";
 import listTimers from "./list";
@@ -88,7 +92,7 @@ const context = (workspaceIds = [ids.wsA1]) => ({
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
   workspaceId: ids.wsA1,
-  memberRole: { role: "member" as const },
+  memberRole: sessionMemberRole("member"),
   getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" as const }),
   pinServerValidatedWorkspaceId: () => true,
   recordAuditEvent: async (_tx: unknown, event: unknown) => {
@@ -275,73 +279,88 @@ describe("global timer lifecycle", () => {
     expect(await readTimer(timer.id)).toBeUndefined();
   });
 
-  test("migrated timers retain their original date, timezone and billing snapshot after the default rate table is deleted", async () => {
-    const deletedTableId = createSafeId<"rateTable">();
-    await db.insert(rateTables).values({
-      id: deletedTableId,
-      organizationId: ids.orgA,
-      workspaceId: ids.wsA1,
-      name: "Temporary rate",
-      currency: "CHF",
-      isDefault: true,
-    });
-    const legacyId = createSafeId<"timeEntry">();
-    await db.insert(timeEntries).values({
-      id: legacyId,
-      organizationId: ids.orgA,
-      workspaceId: ids.wsA1,
-      userId: ids.userA1,
-      dateWorked: "2026-08-20",
-      timezoneId: "Asia/Tokyo",
-      durationMinutes: 0,
-      timerStartedAt: new Date(START),
-      billedMinutes: 0,
-      rateAtEntry: cents(12_345),
-      currency: "CHF",
-      narrative: "Legacy research",
-      billable: true,
-      source: TIME_ENTRY_SOURCE.TIMER,
-      status: BILLING_STATUS.DRAFT,
-    });
-    const timerId = createSafeId<"timeTimer">();
-    await db.insert(timeTimers).values({
-      id: timerId,
-      organizationId: ids.orgA,
-      workspaceId: ids.wsA1,
-      userId: ids.userA1,
-      legacyTimeEntryId: legacyId,
-      description: "Legacy research",
-      state: "paused",
-      startedAt: new Date(START),
-      accumulatedSeconds: 120,
-      lastResumedAt: null,
-    });
-    await db.delete(rateTables).where(eq(rateTables.id, deletedTableId));
-    expect(
-      await db.query.rateTables.findFirst({
-        where: { workspaceId: { eq: ids.wsA1 }, isDefault: true },
-      }),
-    ).toBeUndefined();
-    await db
-      .update(organizationSettings)
-      .set({ timeLockedThroughMonth: "2026-08-31" })
-      .where(eq(organizationSettings.organizationId, ids.orgA));
-    const beforeRefusal = await db
-      .select()
-      .from(timeEntries)
-      .where(
-        and(
-          eq(timeEntries.organizationId, ids.orgA),
-          eq(timeEntries.userId, ids.userA1),
-        ),
-      );
-    expect(await confirm(timerId, "UTC")).toMatchObject({ code: 400 });
-    expect(await readTimer(timerId)).toBeDefined();
-    expect(
-      await db.query.timeEntries.findFirst({ where: { id: { eq: legacyId } } }),
-    ).toBeDefined();
-    expect(
+  test.each([
+    ["owner", true, "Client-facing research"],
+    ["admin", true, "Client-facing research"],
+    ["owner", false, null],
+    ["admin", false, null],
+    ["owner", true, ""],
+    ["admin", true, ""],
+  ] as const)(
+    "%s migrated completion preserves billing fields (noCharge=%p, invoiceNarrative=%p)",
+    async (completion, noCharge, invoiceNarrative) => {
+      const complete = async (timerId: typeof timeTimers.$inferSelect.id) => {
+        if (completion === "owner") {
+          return await confirm(timerId, "UTC");
+        }
+        return await stopMemberTimer.handler(
+          createTestHandlerContext<
+            Parameters<typeof stopMemberTimer.handler>[0]
+          >({
+            ...context(),
+            safeDb: asTestRaw<SafeDb>(
+              createSafeDb(db, [ids.wsA1], ids.orgA, ids.userAdmin),
+            ),
+            memberRole: sessionMemberRole("admin"),
+            user: { id: ids.userAdmin },
+            params: { id: timerId },
+            body: checkedBody(stopMemberTimer.config.body, {}),
+          }),
+        );
+      };
+      const deletedTableId = createSafeId<"rateTable">();
+      await db.insert(rateTables).values({
+        id: deletedTableId,
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        name: "Temporary rate",
+        currency: "CHF",
+        isDefault: true,
+      });
+      const legacyId = createSafeId<"timeEntry">();
+      await db.insert(timeEntries).values({
+        id: legacyId,
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+        dateWorked: "2026-08-20",
+        timezoneId: "Asia/Tokyo",
+        durationMinutes: 0,
+        timerStartedAt: new Date(START),
+        billedMinutes: 0,
+        rateAtEntry: cents(12_345),
+        currency: "CHF",
+        narrative: "Legacy research",
+        billable: true,
+        noCharge,
+        invoiceNarrative,
+        source: TIME_ENTRY_SOURCE.TIMER,
+        status: BILLING_STATUS.DRAFT,
+      });
+      const timerId = createSafeId<"timeTimer">();
+      await db.insert(timeTimers).values({
+        id: timerId,
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+        legacyTimeEntryId: legacyId,
+        description: "Legacy research",
+        state: completion === "admin" ? "running" : "paused",
+        startedAt: new Date(START),
+        accumulatedSeconds: 120,
+        lastResumedAt: completion === "admin" ? new Date(START) : null,
+      });
+      await db.delete(rateTables).where(eq(rateTables.id, deletedTableId));
+      expect(
+        await db.query.rateTables.findFirst({
+          where: { workspaceId: { eq: ids.wsA1 }, isDefault: true },
+        }),
+      ).toBeUndefined();
       await db
+        .update(organizationSettings)
+        .set({ timeLockedThroughMonth: "2026-08-31" })
+        .where(eq(organizationSettings.organizationId, ids.orgA));
+      const beforeRefusal = await db
         .select()
         .from(timeEntries)
         .where(
@@ -349,38 +368,66 @@ describe("global timer lifecycle", () => {
             eq(timeEntries.organizationId, ids.orgA),
             eq(timeEntries.userId, ids.userA1),
           ),
-        ),
-    ).toEqual(beforeRefusal);
-    await db
-      .update(organizationSettings)
-      .set({ timeLockedThroughMonth: null })
-      .where(eq(organizationSettings.organizationId, ids.orgA));
-    const completed = await confirm(timerId, "UTC");
-    if ("code" in completed) {
-      throw new Error(`Timer confirm failed: ${JSON.stringify(completed)}`);
-    }
-    expect(completed.id).not.toBe(legacyId);
-    expect(
-      await db.query.timeEntries.findFirst({ where: { id: { eq: legacyId } } }),
-    ).toBeUndefined();
-    expect(await readTimer(timerId)).toBeUndefined();
-    expect(
-      await db.query.timeEntries.findFirst({
-        where: { id: { eq: completed.id } },
-      }),
-    ).toMatchObject({
-      dateWorked: "2026-08-20",
-      timezoneId: "Asia/Tokyo",
-      rateAtEntry: 12_345,
-      currency: "CHF",
-      billable: true,
-      status: BILLING_STATUS.DRAFT,
-      narrative: "Legacy research",
-      durationMinutes: 2,
-      billedMinutes: 15,
-    });
-    expect(await confirm(timerId, "Europe/Madrid")).toEqual(completed);
-  });
+        );
+      expect(await complete(timerId)).toMatchObject({ code: 400 });
+      expect(await readTimer(timerId)).toBeDefined();
+      expect(
+        await db.query.timeEntries.findFirst({
+          where: { id: { eq: legacyId } },
+        }),
+      ).toBeDefined();
+      expect(
+        await db
+          .select()
+          .from(timeEntries)
+          .where(
+            and(
+              eq(timeEntries.organizationId, ids.orgA),
+              eq(timeEntries.userId, ids.userA1),
+            ),
+          ),
+      ).toEqual(beforeRefusal);
+      await db
+        .update(organizationSettings)
+        .set({ timeLockedThroughMonth: null })
+        .where(eq(organizationSettings.organizationId, ids.orgA));
+      const completed = await complete(timerId);
+      if ("code" in completed) {
+        throw new Error(`Timer confirm failed: ${JSON.stringify(completed)}`);
+      }
+      expect(completed.id).not.toBe(legacyId);
+      expect(
+        await db.query.timeEntries.findFirst({
+          where: { id: { eq: legacyId } },
+        }),
+      ).toBeUndefined();
+      expect(await readTimer(timerId)).toBeUndefined();
+      expect(
+        await db.query.timeEntries.findFirst({
+          where: { id: { eq: completed.id } },
+        }),
+      ).toMatchObject({
+        dateWorked: "2026-08-20",
+        timezoneId: "Asia/Tokyo",
+        rateAtEntry: 12_345,
+        currency: "CHF",
+        billable: true,
+        noCharge,
+        invoiceNarrative,
+        status: BILLING_STATUS.DRAFT,
+        narrative: "Legacy research",
+        durationMinutes: 2,
+        billedMinutes: 15,
+      });
+      expect(await complete(timerId)).toEqual(completed);
+      expect(await confirm(timerId, "Europe/Madrid")).toEqual(completed);
+      expect(
+        await db.query.timeEntries.findFirst({
+          where: { id: { eq: completed.id } },
+        }),
+      ).toMatchObject({ noCharge, invoiceNarrative });
+    },
+  );
 
   test("completion snapshots the effective billing rate when one exists", async () => {
     await db
@@ -402,6 +449,132 @@ describe("global timer lifecycle", () => {
       currency: "USD",
       billedMinutes: 15,
     });
+  });
+
+  test("explicit internal confirmation preserves actual time, zero billing, and replay identity", async () => {
+    const started = await startTimer.handler(
+      createTestHandlerContext<Parameters<typeof startTimer.handler>[0]>({
+        ...context(),
+        body: checkedBody(startTimer.config.body, {
+          description: "Internal training",
+        }),
+      }),
+    );
+    if ("code" in started) {
+      throw new Error(`Timer start failed: ${JSON.stringify(started)}`);
+    }
+    setSystemTime(new Date("2026-09-02T00:06:00.000Z"));
+    const request = createTestHandlerContext<
+      Parameters<typeof confirmTimer.handler>[0]
+    >({
+      ...context([]),
+      params: { id: started.id },
+      body: checkedBody(confirmTimer.config.body, {
+        timezoneId: "UTC",
+        activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+      }),
+    });
+    const completed = await confirmTimer.handler(request);
+    if ("code" in completed) {
+      throw new Error(`Internal confirm failed: ${JSON.stringify(completed)}`);
+    }
+    expect(completed).toMatchObject({
+      activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+      durationMinutes: 7,
+      billedMinutes: 0,
+    });
+    expect(
+      await db.query.timeEntries.findFirst({
+        where: { id: { eq: completed.id } },
+      }),
+    ).toMatchObject({
+      activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+      workspaceId: null,
+      workItemId: null,
+      billable: false,
+      noCharge: false,
+      durationMinutes: 7,
+      billedMinutes: 0,
+      rateAtEntry: 0,
+      currency: "XXX",
+      invoiceId: null,
+      invoiceNarrative: null,
+      taskCode: null,
+      activityCode: null,
+      status: BILLING_STATUS.DRAFT,
+      source: TIME_ENTRY_SOURCE.TIMER,
+    });
+    expect(await readTimer(started.id)).toBeUndefined();
+    expect(await confirmTimer.handler(request)).toEqual(completed);
+  });
+
+  test("internal confirmation refuses an assigned matter or billable request without consuming the timer", async () => {
+    const assigned = await start();
+    expect(
+      await confirmTimer.handler(
+        createTestHandlerContext<Parameters<typeof confirmTimer.handler>[0]>({
+          ...context(),
+          params: { id: assigned.id },
+          body: checkedBody(confirmTimer.config.body, {
+            timezoneId: "UTC",
+            activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+          }),
+        }),
+      ),
+    ).toMatchObject({ code: 400 });
+    expect(await readTimer(assigned.id)).toBeDefined();
+    await updateTimer.handler(
+      createTestHandlerContext<Parameters<typeof updateTimer.handler>[0]>({
+        ...context(),
+        params: { id: assigned.id },
+        body: checkedBody(updateTimer.config.body, { matterId: null }),
+      }),
+    );
+    expect(
+      await confirmTimer.handler(
+        createTestHandlerContext<Parameters<typeof confirmTimer.handler>[0]>({
+          ...context([]),
+          params: { id: assigned.id },
+          body: checkedBody(confirmTimer.config.body, {
+            timezoneId: "UTC",
+            activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+            billable: true,
+          }),
+        }),
+      ),
+    ).toMatchObject({ code: 400 });
+    expect(await readTimer(assigned.id)).toBeDefined();
+  });
+
+  test("a locked month refuses internal timer confirmation and retains its timer", async () => {
+    const started = await startTimer.handler(
+      createTestHandlerContext<Parameters<typeof startTimer.handler>[0]>({
+        ...context(),
+        body: checkedBody(startTimer.config.body, {
+          description: "Internal work",
+        }),
+      }),
+    );
+    if ("code" in started) {
+      throw new Error(`Timer start failed: ${JSON.stringify(started)}`);
+    }
+    await db
+      .update(organizationSettings)
+      .set({ timeLockedThroughMonth: "2026-09-30" })
+      .where(eq(organizationSettings.organizationId, ids.orgA));
+    expect(
+      await confirmTimer.handler(
+        createTestHandlerContext<Parameters<typeof confirmTimer.handler>[0]>({
+          ...context([]),
+          params: { id: started.id },
+          body: checkedBody(confirmTimer.config.body, {
+            timezoneId: "UTC",
+            activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+          }),
+        }),
+      ),
+    ).toMatchObject({ code: 400 });
+    expect(await readTimer(started.id)).toBeDefined();
   });
 
   test("confirm requires a matter and retains the timer on refusal", async () => {
@@ -438,6 +611,94 @@ describe("global timer lifecycle", () => {
     const completed = await confirm(started.id);
     expect(completed).toHaveProperty("id");
     expect(await readTimer(started.id)).toBeUndefined();
+  });
+
+  test("a migrated draft completed in another matter starts its billing fields over", async () => {
+    const originalMatterId = createSafeId<"workspace">();
+    await db.insert(workspaces).values({
+      id: originalMatterId,
+      organizationId: ids.orgA,
+      name: "Original timer matter",
+      reference: originalMatterId,
+      status: "active",
+    });
+    await db.insert(workspaceMembers).values({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId: originalMatterId,
+      userId: ids.userA1,
+    });
+    const legacyId = createSafeId<"timeEntry">();
+    await db.insert(timeEntries).values({
+      id: legacyId,
+      organizationId: ids.orgA,
+      workspaceId: originalMatterId,
+      userId: ids.userA1,
+      dateWorked: "2026-09-01",
+      timezoneId: "UTC",
+      durationMinutes: 0,
+      timerStartedAt: new Date(START),
+      billedMinutes: 0,
+      rateAtEntry: cents(12_345),
+      currency: "CHF",
+      narrative: "Legacy research",
+      // Not billable, so completion in a matter without a rate table succeeds.
+      billable: false,
+      noCharge: true,
+      invoiceNarrative: "Wording for the original client",
+      source: TIME_ENTRY_SOURCE.TIMER,
+      status: BILLING_STATUS.DRAFT,
+    });
+    const timerId = createSafeId<"timeTimer">();
+    await db.insert(timeTimers).values({
+      id: timerId,
+      organizationId: ids.orgA,
+      workspaceId: originalMatterId,
+      userId: ids.userA1,
+      legacyTimeEntryId: legacyId,
+      description: "Legacy research",
+      state: "paused",
+      startedAt: new Date(START),
+      accumulatedSeconds: 120,
+      lastResumedAt: null,
+    });
+    const completeInOtherMatter = async () => {
+      const bothMatters = context([originalMatterId, ids.wsA1]);
+      const reassigned = await updateTimer.handler(
+        createTestHandlerContext<Parameters<typeof updateTimer.handler>[0]>({
+          ...bothMatters,
+          params: { id: timerId },
+          body: checkedBody(updateTimer.config.body, { matterId: ids.wsA1 }),
+        }),
+      );
+      expect(reassigned).toMatchObject({ id: timerId, matterId: ids.wsA1 });
+      const completed = await confirmTimer.handler(
+        createTestHandlerContext<Parameters<typeof confirmTimer.handler>[0]>({
+          ...bothMatters,
+          params: { id: timerId },
+          body: checkedBody(confirmTimer.config.body, { timezoneId: "UTC" }),
+        }),
+      );
+      if ("code" in completed) {
+        throw new Error(`Timer confirm failed: ${JSON.stringify(completed)}`);
+      }
+      expect(
+        await db.query.timeEntries.findFirst({
+          where: { id: { eq: completed.id } },
+        }),
+      ).toMatchObject({
+        workspaceId: ids.wsA1,
+        noCharge: false,
+        invoiceNarrative: null,
+      });
+      await db.delete(timeEntries).where(eq(timeEntries.id, completed.id));
+    };
+    try {
+      await completeInOtherMatter();
+    } finally {
+      await db.delete(timeTimers).where(eq(timeTimers.id, timerId));
+      await db.delete(timeEntries).where(eq(timeEntries.id, legacyId));
+      await db.delete(workspaces).where(eq(workspaces.id, originalMatterId));
+    }
   });
 
   test("a timer survives matter membership removal and confirms after reassignment", async () => {

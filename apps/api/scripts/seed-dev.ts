@@ -40,6 +40,7 @@ import {
   chatMessages,
   chatThreads,
   contacts,
+  documentReferenceCounters,
   documentTypes,
   entities,
   entityVersions,
@@ -5497,6 +5498,9 @@ export async function seed(organizationId?: string, userId?: string) {
         seedId(`extra-ws-${workspace.reference}`),
       ),
     ];
+    const seedReferences = [...seedWorkspaces, ...MORE_WORKSPACES].map(
+      (workspace) => workspace.reference,
+    );
     if (allSeedWorkspaceIds.length > 0) {
       await db.transaction(
         async (tx) =>
@@ -5520,12 +5524,19 @@ export async function seed(organizationId?: string, userId?: string) {
               sql`${propertyDependencies.workspaceId} IN ${allSeedWorkspaceIds}`,
             ),
       );
-      await db.transaction(
-        async (tx) =>
-          await tx
-            .delete(workspaces)
-            .where(sql`${workspaces.id} IN ${allSeedWorkspaceIds}`),
-      );
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(workspaces)
+          .where(sql`${workspaces.id} IN ${allSeedWorkspaceIds}`);
+        await tx
+          .delete(documentReferenceCounters)
+          .where(
+            and(
+              eq(documentReferenceCounters.organizationId, ORG_ID),
+              inArray(documentReferenceCounters.reference, seedReferences),
+            ),
+          );
+      });
     }
     if (allSeedContactIds.length === 0) {
       return;
@@ -6155,12 +6166,17 @@ export async function seed(organizationId?: string, userId?: string) {
         }
       };
       const content = await buildContent();
-      const docText =
-        format.type === "email"
-          ? parsedEmailToText(
-              await parseEmail(Uint8Array.from(content).buffer, EML_MIME_TYPE),
-            )
-          : configuredDocText;
+      let docText = configuredDocText;
+      if (format.type === "email") {
+        const parsedResult = await parseEmail(
+          Uint8Array.from(content).buffer,
+          EML_MIME_TYPE,
+        );
+        if (parsedResult.isErr()) {
+          panic(`Could not parse seed email ${fileName}`, parsedResult.error);
+        }
+        docText = parsedEmailToText(parsedResult.value);
+      }
 
       const sha256Hex = new Bun.CryptoHasher("sha256")
         .update(content)
@@ -6168,10 +6184,13 @@ export async function seed(organizationId?: string, userId?: string) {
 
       const fileId = seedId(`${wsLabel}-file-${j}`);
       const s3Key = `${ORG_ID}/${wsId}/${fileId}.${format.extension}`;
-      await writeS3ObjectWithRetry({
-        data: new Uint8Array(content),
-        key: s3Key,
-      });
+      await writeS3ObjectWithRetry(
+        {
+          data: new Uint8Array(content),
+          key: s3Key,
+        },
+        { type: "fixture" },
+      );
 
       // DOCX files are rendered natively via Folio — no PDF twin needed.
       // Non-DOCX convertible types still get a PDF twin from Gotenberg.
@@ -6213,10 +6232,13 @@ export async function seed(organizationId?: string, userId?: string) {
           `${wsLabel}-supplier-agreement-base-file`,
         );
         const baseContent = await createSupplierAgreementDocx("reject");
-        await writeS3ObjectWithRetry({
-          data: new Uint8Array(baseContent),
-          key: `${ORG_ID}/${wsId}/${baseFileId}.docx`,
-        });
+        await writeS3ObjectWithRetry(
+          {
+            data: new Uint8Array(baseContent),
+            key: `${ORG_ID}/${wsId}/${baseFileId}.docx`,
+          },
+          { type: "fixture" },
+        );
         const baseFileContent = {
           version: 1,
           type: "file",

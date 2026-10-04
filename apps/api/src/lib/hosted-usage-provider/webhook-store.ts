@@ -15,23 +15,38 @@
 
 import { eq } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { hostedUsageWebhookEvents } from "@/api/db/schema";
 import type { UsageProviderWebhookResult } from "@/api/db/schema";
 import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
   type AuditAction,
   type AuditEvent,
-  type AuditResourceType,
+  type NonChatAuditResourceType,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { DispatchOutcome } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
+import type { HostedUsageWebhookEvent } from "@/api/lib/hosted-usage-provider/event-schemas";
+import type {
+  ProviderEventReplayAudit,
+  ProviderEventReplayAttempt,
+  ProviderEventReplayPerformer,
+} from "@/api/lib/hosted-usage-provider/replay-audit";
+import { minimalWebhookRecord } from "@/api/lib/hosted-usage-provider/webhook-record";
+import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 import { isRecord } from "@/api/lib/type-guards";
 
 type InsertWebhookEventInput = {
   eventId: string;
   eventType: string;
   payload: Record<string, unknown>;
+  rawBody: string;
+  event: HostedUsageWebhookEvent | null;
   /**
    * Initial `result` to write on insert. Most callers want
    * "ok" — the receive pipeline overwrites it inside the same
@@ -63,43 +78,17 @@ const NUL_SYMBOL = "\u2400";
 const markNul = (value: string): string =>
   value.replaceAll(NUL, () => NUL_SYMBOL);
 
-/**
- * Keys without a NUL keep their names. A key with one takes its marked name,
- * and when an original key already holds that name, the first free
- * `<marked>~<n>` from 2 upward, in payload order. Every value is kept.
- */
 const storableRecord = (
   record: Record<string, unknown>,
-): Record<string, unknown> => {
-  const entries = Object.entries(record);
-  const taken = new Set(
-    entries.map(([key]) => key).filter((key) => !key.includes(NUL)),
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(record).map(([key, value]) => [key, storableJson(value)]),
   );
-  const storedKey = (key: string): string => {
-    if (!key.includes(NUL)) {
-      return key;
-    }
-    const marked = markNul(key);
-    let candidate = marked;
-    for (let suffix = 2; taken.has(candidate); suffix++) {
-      candidate = `${marked}~${suffix}`;
-    }
-    taken.add(candidate);
-    return candidate;
-  };
-  return Object.fromEntries(
-    entries.map(([key, entry]): [string, unknown] => [
-      storedKey(key),
-      storableJson(entry),
-    ]),
-  );
-};
 
 /**
  * The payload as a jsonb column stores it. Postgres text and jsonb values
- * carry no NUL character, so each one in a key or string is stored as the
- * NUL symbol (U+2400), and distinct keys stay distinct (see
- * `storableRecord`).
+ * carry no NUL character. Minimal records have schema-owned keys; strings
+ * replace NUL with the NUL symbol (U+2400).
  */
 const storableJson = (value: unknown): unknown => {
   if (typeof value === "string") {
@@ -116,6 +105,8 @@ export const insertWebhookEventInTx = async ({
   eventId,
   eventType,
   payload,
+  rawBody,
+  event,
   initialResult,
 }: InsertWebhookEventInput & {
   tx: Transaction;
@@ -125,7 +116,9 @@ export const insertWebhookEventInTx = async ({
     .values({
       eventId,
       eventType: markNul(eventType),
-      payload: storableRecord(payload),
+      payload: storableRecord(
+        minimalWebhookRecord({ rawBody, payload, event }),
+      ),
       result: initialResult,
     })
     .onConflictDoNothing({ target: hostedUsageWebhookEvents.eventId })
@@ -178,17 +171,17 @@ export type WebhookTransactionRunner = typeof runWebhookTransaction;
  * marker. `audit_logs.user_id` is plain text (no FK) so this is
  * accepted by the schema.
  */
-export const WEBHOOK_AUDIT_ACTOR = "system:usage-provider" as const;
+export const WEBHOOK_AUDIT_ACTOR = TENANT_SYSTEM_ACTOR.usageProvider;
 
 type WebhookAuditEventInput = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
   action: AuditAction;
-  resourceType: AuditResourceType;
+  resourceType: NonChatAuditResourceType;
   resourceId: string;
   /**
    * Provider event id. Lets a reviewer cross-reference the audit row
-   * with `usage_provider_webhook_events.event_id` and the raw payload.
+   * with `usage_provider_webhook_events.event_id` and its minimal record.
    */
   eventId: string;
   /**
@@ -240,4 +233,65 @@ export const recordWebhookAuditEvent = async ({
     changes: changes ?? null,
     metadata: { source: "usage_provider.webhook", eventId },
   });
+};
+
+type RecordProviderEventReplayAuditOptions = {
+  tx: Transaction;
+  eventId: string;
+  performer: ProviderEventReplayPerformer;
+  requestedBy: string | null;
+  previousReason: string | null;
+  reason: string;
+  newResult: "ok" | "ignored";
+  previousAttempts: ProviderEventReplayAudit | null;
+  outcome: DispatchOutcome["kind"];
+  dispatchReason: string | null;
+};
+
+/** System receipts can precede organization resolution, so their audit lives
+ * on the deny-by-default receipt rather than inventing a tenant audit owner.
+ * Dispatch's organization audit records remain in the same transaction. */
+export const recordProviderEventReplayAuditInTx = async ({
+  tx,
+  eventId,
+  performer,
+  requestedBy,
+  previousReason,
+  reason,
+  newResult,
+  previousAttempts,
+  outcome,
+  dispatchReason,
+}: RecordProviderEventReplayAuditOptions) => {
+  const attempt = {
+    requestedBy,
+    at: Temporal.Now.instant().toString(),
+    previousResult: "ignored",
+    previousReason,
+    newResult,
+    outcome,
+    reason,
+    dispatchReason,
+    execution: {
+      performer,
+      trigger: {
+        type: "system",
+        source: "usage_provider.replay",
+        sourceId: eventId,
+      },
+    },
+    event: {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.USAGE_PROVIDER_EVENT,
+      resourceId: eventId,
+      changes: { result: { old: "ignored", new: newResult } },
+      metadata: { requestedBy, reason, outcome, dispatchReason },
+    },
+  } as const satisfies ProviderEventReplayAttempt;
+  const replayAudit =
+    previousAttempts === null ? [attempt] : [...previousAttempts, attempt];
+  await tx
+    .update(hostedUsageWebhookEvents)
+    .set({ result: newResult, errorMessage: dispatchReason, replayAudit })
+    .where(eq(hostedUsageWebhookEvents.eventId, eventId));
 };

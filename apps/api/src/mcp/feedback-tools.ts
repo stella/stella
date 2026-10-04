@@ -315,6 +315,7 @@ const DRAFTING_RULES =
 
 export const FEEDBACK_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "Draft a bug, idea, missing-capability or docs report for the stella " +
       "maintainers and get it back sanitized. Sends nothing: " +
@@ -336,11 +337,13 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
       readOnlyHint: true,
     },
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     name: "prepare_feedback",
     scope: "stella:feedback",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "File the report prepared by prepare_feedback with the stella " +
       "maintainers. This sends the content out of the workspace: it is " +
@@ -364,6 +367,8 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "standard",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: {
       type: "outbound",

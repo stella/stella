@@ -2,12 +2,13 @@ import { Result } from "better-result";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type { TimeEntrySummary } from "@stll/api-contract/time-entry-types";
 import { addDays, parseIsoDateLocal } from "@stll/time";
 
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntries, workspaceMembers } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -31,9 +32,15 @@ const timeEntrySummaryQuerySchema = t.Object({
 const readTimeEntrySummary = createSafeHandler(
   {
     description:
-      "Summarize time in the current matter for a bounded date range; team scope requires time-entry approval access.",
+      "Summarize client time in the current matter for a bounded date range; team scope requires time-entry approval access.",
     permissions: { timeEntry: ["read"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    mcp: {
+      type: "capability",
+      readClass: "tenant",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "read",
     query: timeEntrySummaryQuerySchema,
   },
@@ -78,6 +85,7 @@ const readTimeEntrySummary = createSafeHandler(
             .where(
               and(
                 eq(timeEntries.workspaceId, workspaceId),
+                eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
                 gte(timeEntries.dateWorked, query.dateFrom),
                 lte(timeEntries.dateWorked, query.dateTo),
               ),
@@ -109,6 +117,7 @@ const readTimeEntrySummary = createSafeHandler(
               timeEntries,
               and(
                 eq(timeEntries.workspaceId, workspaceId),
+                eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
                 eq(timeEntries.userId, workspaceMembers.userId),
                 gte(timeEntries.dateWorked, query.dateFrom),
                 lte(timeEntries.dateWorked, query.dateTo),
@@ -174,6 +183,7 @@ const readTimeEntrySummary = createSafeHandler(
           .where(
             and(
               eq(timeEntries.workspaceId, workspaceId),
+              eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
               eq(timeEntries.userId, currentUser.id),
               gte(timeEntries.dateWorked, query.dateFrom),
               lte(timeEntries.dateWorked, query.dateTo),

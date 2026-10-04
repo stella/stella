@@ -1,4 +1,9 @@
+// parser-output-unchanged: Crawl listing availability controls checkpoints; stored decision parsing is unchanged.
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
+import * as v from "valibot";
+
 /**
  * Slovak Constitutional Court (Ústavný súd SR) adapter.
  *
@@ -32,8 +37,8 @@ import { Result, panic } from "better-result";
  * the crawl cursor ever reaching it. See `reconciliation`
  * at the bottom of this file.
  */
-
 import { classifyFailure } from "@stll/errors";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
 import { Temporal } from "@stll/time";
 
@@ -75,8 +80,12 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  backoffMs,
+  fetchPublisher,
+} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -90,6 +99,7 @@ import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
 } from "@/api/lib/case-law/decision-text";
+import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import {
   AdapterFetchError,
   FetchBoundaryError,
@@ -98,6 +108,8 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -117,6 +129,7 @@ const DOC_DOWNLOAD_URL = `${BASE_URL}/docDownload`;
 
 /** The corpus this adapter reads; the service echoes it back as `docType`. */
 const DECISION_DOC_TYPE = "USSR_DECISION_MK";
+const COLLECTION_DOC_TYPE = "USSR_ZNAU";
 
 /**
  * The index fields the service states only as facet counts.
@@ -176,20 +189,26 @@ const FIELDS_TO_RETURN: string[] = [];
 
 // ── Cursor helpers ──────────────────────────────────────────
 
-type YearCursor = { year: number; offset: number };
+type YearCursor = { year: number; offset: number } & (
+  | { status: "walking" }
+  | { status: "refused-frontier" }
+);
 
 const parseCursor = (cursor: string | null): YearCursor => {
   if (!cursor) {
-    return { year: FIRST_YEAR, offset: 0 };
+    return { year: FIRST_YEAR, offset: 0, status: "walking" };
   }
 
   // New format: "YYYY:offset"
-  const match = /^(?<year>\d{4}):(?<offset>\d+)$/u.exec(cursor);
-  const { year, offset } = match?.groups ?? {};
+  const match = /^(?<year>\d{4}):(?<offset>\d+)(?<refused>:refused)?$/u.exec(
+    cursor,
+  );
+  const { year, offset, refused } = match?.groups ?? {};
   if (year && offset) {
     return {
       year: Number.parseInt(year, 10),
       offset: Number.parseInt(offset, 10),
+      status: refused ? "refused-frontier" : "walking",
     };
   }
 
@@ -199,13 +218,14 @@ const parseCursor = (cursor: string | null): YearCursor => {
   // archive (~52k decisions, takes a few hours to crawl through).
   const legacyOffset = Number.parseInt(cursor, 10);
   if (!Number.isNaN(legacyOffset)) {
-    return { year: FIRST_YEAR, offset: 0 };
+    return { year: FIRST_YEAR, offset: 0, status: "walking" };
   }
 
-  return { year: FIRST_YEAR, offset: 0 };
+  return { year: FIRST_YEAR, offset: 0, status: "walking" };
 };
 
-const encodeCursor = (c: YearCursor): string => `${c.year}:${c.offset}`;
+const encodeCursor = (c: { year: number; offset: number }): string =>
+  `${c.year}:${c.offset}`;
 
 // ── Search API types ─────────────────────────────────────
 
@@ -353,7 +373,9 @@ const fetchPdfBytes = async (
 ): Promise<Uint8Array | undefined> => {
   try {
     const response = await fetchPublisher(`${DOC_DOWNLOAD_URL}/${documentId}`, {
+      fetchStage: "document",
       adapterKey: ADAPTER_KEYS.SK_US,
+      expectedContentType: "pdf",
       headers: { "User-Agent": INGESTION_USER_AGENT },
       signal,
       timeoutMs: 30_000,
@@ -400,12 +422,17 @@ const fetchPdfBytes = async (
  */
 const fetchJson = async (
   path: string,
-  init: { body?: string; signal?: AbortSignal },
+  init: {
+    body?: string;
+    signal?: AbortSignal;
+    fetchStage: DocumentFetchStage;
+  },
 ): Promise<string | undefined> =>
   (
     await Result.tryPromise({
       try: async (): Promise<string | undefined> => {
         const response = await fetchPublisher(`${SERVICE_URL}/${path}`, {
+          fetchStage: init.fetchStage,
           adapterKey: ADAPTER_KEYS.SK_US,
           ...(init.body === undefined
             ? {}
@@ -446,6 +473,7 @@ const fetchDocumentXhtml = async (
       documentId,
       docType: DECISION_DOC_TYPE,
     }),
+    fetchStage: "document",
     ...(signal === undefined ? {} : { signal }),
   });
   if (body === undefined) {
@@ -481,6 +509,7 @@ const fetchFacets = async (
   signal?: AbortSignal,
 ): Promise<string | undefined> =>
   await fetchJson(SEARCH_PATH, {
+    fetchStage: "listing",
     body: JSON.stringify({
       docType: DECISION_DOC_TYPE,
       start: 0,
@@ -507,6 +536,39 @@ const fetchFacets = async (
     ...(signal === undefined ? {} : { signal }),
   });
 
+/** Collection entries have their own document ids; a docket query does not re-key them. */
+const fetchCollectionListing = async (
+  { caseNumber, decisionDate }: { caseNumber: string; decisionDate: string },
+  signal?: AbortSignal,
+): Promise<string | undefined> =>
+  await fetchJson(SEARCH_PATH, {
+    fetchStage: "listing",
+    body: JSON.stringify({
+      docType: COLLECTION_DOC_TYPE,
+      start: 0,
+      pageSize: LISTING_PAGE_SIZE,
+      searchFilter: {
+        filterNameValue: [
+          {
+            type: "DATE_RANGE",
+            fieldName: "mkDateOfDecision",
+            fieldValue: { FROM: decisionDate, TO: decisionDate },
+          },
+          {
+            type: "STRING",
+            fieldName: "mkRSAPNumberOfFileNorm",
+            fieldValue: caseNumber,
+          },
+        ],
+      },
+      facetFilter: { facetFilterNameValue: [] },
+      facets: [],
+      fieldsToReturn: FIELDS_TO_RETURN,
+      clustering: false,
+    }),
+    ...(signal === undefined ? {} : { signal }),
+  });
+
 /**
  * The docket file a decision was filed under, with the documents in it.
  *
@@ -519,6 +581,7 @@ const fetchCourtFile = async (
   signal?: AbortSignal,
 ): Promise<string | undefined> =>
   await fetchJson(`${COURT_FILE_PATH}/${rvpNumber.replace("/", ":")}`, {
+    fetchStage: "document",
     ...(signal === undefined ? {} : { signal }),
   });
 
@@ -590,6 +653,10 @@ const codelistPart = (
  * court has since added a judge to.
  */
 export type SkUsPageContext = {
+  collectionListing: (
+    key: { caseNumber: string; decisionDate: string },
+    signal?: AbortSignal,
+  ) => Promise<string | undefined>;
   codelist: (signal?: AbortSignal) => Promise<SkUsCodelist | undefined>;
   facets: (
     key: { caseNumber: string; decisionDate: string },
@@ -623,6 +690,7 @@ const perKey = <T>(
 export const createSkUsPageContext = (): SkUsPageContext => {
   const codelist = perKey(async (_key, signal) => {
     const body = await fetchJson(CODELIST_PATH, {
+      fetchStage: "listing",
       ...(signal === undefined ? {} : { signal }),
     });
     return body === undefined ? undefined : parseCodelist(body);
@@ -631,11 +699,20 @@ export const createSkUsPageContext = (): SkUsPageContext => {
     const [caseNumber = "", decisionDate = ""] = key.split(FACET_KEY_SEPARATOR);
     return await fetchFacets({ caseNumber, decisionDate }, signal);
   });
+  const collectionListing = perKey(async (key, signal) => {
+    const [caseNumber = "", decisionDate = ""] = key.split(FACET_KEY_SEPARATOR);
+    return await fetchCollectionListing({ caseNumber, decisionDate }, signal);
+  });
   const courtFile = perKey(
     async (key, signal) => await fetchCourtFile(key, signal),
   );
 
   return {
+    collectionListing: async ({ caseNumber, decisionDate }, signal) =>
+      await collectionListing(
+        `${caseNumber}${FACET_KEY_SEPARATOR}${decisionDate}`,
+        signal,
+      ),
     codelist: async (signal) => await codelist("decision", signal),
     facets: async ({ caseNumber, decisionDate }, signal) =>
       await facets(
@@ -766,6 +843,118 @@ export const skUsListingIdentity = (doc: SearchDocument): ListingIdentity => {
     : { type: "document", sourceDocumentId: fields.documentId };
 };
 
+export type SkUsListingFetchOutcome =
+  | { type: "listing"; listing: string }
+  | { type: "listing_unavailable" }
+  | { type: "listing_identity_mismatch" }
+  | { type: "publisher_rate_limited"; error: AdapterFetchError }
+  | { type: "retry_later"; error: AdapterFetchError };
+
+type FetchSkUsListingOptions = {
+  documentId: string;
+  caseNumber: string;
+  signal?: AbortSignal;
+  request?: typeof fetchPublisher;
+  pause?: (milliseconds: number) => Promise<void>;
+};
+
+/** Refetch only the publisher row, using the crawl's gated HTTP boundary. */
+// parser-output-unchanged: listing fetch only; stored replay and parser inputs are unchanged.
+export const fetchSkUsListing = async ({
+  documentId,
+  caseNumber,
+  signal,
+  request = fetchPublisher,
+  pause = async (milliseconds) => {
+    await Bun.sleep(milliseconds);
+  },
+}: FetchSkUsListingOptions): Promise<SkUsListingFetchOutcome> => {
+  for (let attempt = 0; ; attempt += 1) {
+    const fetched = await Result.tryPromise({
+      try: async (): Promise<SkUsListingFetchOutcome> => {
+        const response = await request(SEARCH_URL, {
+          adapterKey: ADAPTER_KEYS.SK_US,
+          fetchStage: "listing",
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "User-Agent": INGESTION_USER_AGENT,
+          },
+          body: JSON.stringify({
+            docType: DECISION_DOC_TYPE,
+            start: 0,
+            pageSize: 2,
+            searchFilter: {
+              filterNameValue: [
+                {
+                  type: "STRING",
+                  fieldName: "documentId",
+                  fieldValue: documentId,
+                },
+              ],
+            },
+            facetFilter: { facetFilterNameValue: [] },
+            facets: [],
+            fieldsToReturn: FIELDS_TO_RETURN,
+            clustering: false,
+          }),
+          signal,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        });
+        if (response.status === 204) {
+          return { type: "listing_unavailable" };
+        }
+        if (!response.ok) {
+          throw new FetchBoundaryError({
+            url: SEARCH_URL,
+            status: response.status,
+            statusText: response.statusText,
+            message: `SK ÚS listing fetch failed: ${response.status}`,
+          });
+        }
+        const body = await response.text();
+        const data: unknown = JSON.parse(body);
+        if (!isSearchResponse(data)) {
+          throw new FetchBoundaryError({
+            url: SEARCH_URL,
+            message: "SK ÚS listing response has an invalid shape",
+          });
+        }
+        if (data.numFound === 0 && data.documents.length === 0) {
+          return { type: "listing_unavailable" };
+        }
+        const doc = data.documents.at(0);
+        const identity = doc === undefined ? null : skUsIdentityFields(doc);
+        if (
+          data.numFound !== 1 ||
+          data.documents.length !== 1 ||
+          identity?.documentId !== documentId ||
+          identity.caseNumber !== caseNumber
+        ) {
+          return { type: "listing_identity_mismatch" };
+        }
+        return { type: "listing", listing: JSON.stringify(doc) };
+      },
+      catch: adapterCatch(ADAPTER_KEYS.SK_US, null),
+    });
+    if (Result.isOk(fetched)) {
+      return fetched.value;
+    }
+    const cause = fetched.error.cause;
+    if (cause instanceof FetchBoundaryError && cause.status === 429) {
+      return { type: "publisher_rate_limited", error: fetched.error };
+    }
+    const retryable =
+      cause instanceof FetchBoundaryError &&
+      cause.status !== undefined &&
+      cause.status >= 500;
+    if (attempt >= 2 || signal?.aborted || !retryable) {
+      return { type: "retry_later", error: fetched.error };
+    }
+    await pause(backoffMs(attempt));
+  }
+};
+
 /**
  * What building one listed item produced.
  *
@@ -834,21 +1023,240 @@ const skUsRapporteurs = (doc: SearchDocument): string[] =>
  */
 const NO_LEGAL_SENTENCE = "- bez právnej vety -";
 
-const skUsTextFields = (doc: SearchDocument): IngestionResult["textFields"] => {
+const skUsTextFields = (
+  doc: SearchDocument,
+): RawIngestionResult["textFields"] => {
   const absent = absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED);
   const headnote = doc.mkClauseTitle?.trim();
   const legalSentence = doc.mkClauseText?.trim();
-  return {
+  const fields = {
     ...absent,
     ...(headnote === undefined || headnote.length === 0
       ? {}
       : { headnote: { type: "present" as const, text: headnote } }),
-    ...(legalSentence === undefined ||
-    legalSentence.length === 0 ||
-    legalSentence === NO_LEGAL_SENTENCE
-      ? {}
-      : { legalSentence: { type: "present" as const, text: legalSentence } }),
   };
+  if (legalSentence === NO_LEGAL_SENTENCE) {
+    return {
+      ...fields,
+      legalSentence: {
+        type: "absent",
+        reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+      },
+    };
+  }
+  if (legalSentence === undefined || legalSentence.length === 0) {
+    return fields;
+  }
+  return {
+    ...fields,
+    legalSentence: { type: "present", text: legalSentence },
+  };
+};
+
+type SkUsCollectionMatch =
+  | { status: "matched"; entry: SearchDocument }
+  | {
+      status: "unresolved";
+      reason:
+        | "unavailable"
+        | "invalid_listing"
+        | "incomplete_listing"
+        | "no_matching_entry"
+        | "ambiguous_identity";
+    };
+
+const storedSearchResponse = (
+  raw: string | undefined,
+): SearchResponse | null => {
+  if (raw === undefined) {
+    return null;
+  }
+  const value: unknown = Result.try({
+    try: (): unknown => JSON.parse(raw),
+    catch: () => null,
+  }).unwrapOr(null);
+  return isSearchResponse(value) ? value : null;
+};
+
+// Preserve unknown publisher fields while validating everything the join reads.
+const COLLECTION_ENTRY_SCHEMA = v.looseObject({
+  docType: v.literal(COLLECTION_DOC_TYPE),
+  documentId: v.pipe(v.string(), v.minLength(1)),
+  mkRSAPNumberOfFile: v.string(),
+  mkDateOfDecision: v.exactOptional(v.nullable(v.string())),
+  mkFormOfDecision: v.exactOptional(v.nullable(v.string())),
+  mkTypeOfDecision: v.exactOptional(v.nullable(v.array(v.string()))),
+  mkClauseTitle: v.exactOptional(v.nullable(v.string())),
+  mkClauseText: v.exactOptional(v.nullable(v.string())),
+  mkLawReportsNumber: v.exactOptional(
+    v.nullable(v.union([v.string(), v.number()])),
+  ),
+  mkVolumeOfLawReports: v.exactOptional(
+    v.nullable(v.union([v.string(), v.number()])),
+  ),
+  mkYearOfLawReports: v.exactOptional(
+    v.nullable(v.pipe(v.number(), v.integer())),
+  ),
+  mkTimePeriodZNaU: v.exactOptional(v.nullable(v.string())),
+});
+
+type SkUsCollectionMatchOptions = {
+  doc: SearchDocument;
+  collectionJson: string | undefined;
+  facetsJson: string | undefined;
+};
+
+/** A docket can contain several judgments and opinions, so both sides must be unique. */
+const skUsCollectionMatch = ({
+  doc,
+  collectionJson,
+  facetsJson,
+}: SkUsCollectionMatchOptions): SkUsCollectionMatch => {
+  const collection = storedSearchResponse(collectionJson);
+  if (collection === null) {
+    return { status: "unresolved", reason: "unavailable" };
+  }
+  const validated = v.safeParse(
+    v.array(COLLECTION_ENTRY_SCHEMA),
+    collection.documents,
+  );
+  if (
+    !validated.success ||
+    !Number.isSafeInteger(collection.numFound) ||
+    collection.numFound < 0
+  ) {
+    return { status: "unresolved", reason: "invalid_listing" };
+  }
+  if (collection.numFound !== collection.documents.length) {
+    return { status: "unresolved", reason: "incomplete_listing" };
+  }
+  const date = parseApiDate(doc.mkDateOfDecision);
+  const kind = doc.mkFormOfDecision?.toLocaleLowerCase("sk");
+  const sameDecision = (entry: SearchDocument): boolean => {
+    if (
+      date === undefined ||
+      kind === undefined ||
+      entry.mkRSAPNumberOfFile !== doc.mkRSAPNumberOfFile ||
+      parseApiDate(entry.mkDateOfDecision) !== date
+    ) {
+      return false;
+    }
+    if (typeof entry.mkFormOfDecision === "string") {
+      return entry.mkFormOfDecision.toLocaleLowerCase("sk") === kind;
+    }
+    return (
+      Array.isArray(entry.mkTypeOfDecision) &&
+      entry.mkTypeOfDecision.some(
+        (value) =>
+          typeof value === "string" && value.toLocaleLowerCase("sk") === kind,
+      )
+    );
+  };
+  const entries = validated.output.filter(sameDecision);
+  const entry = entries.at(0);
+  if (entry === undefined) {
+    return { status: "unresolved", reason: "no_matching_entry" };
+  }
+  if (entries.length !== 1) {
+    return { status: "unresolved", reason: "ambiguous_identity" };
+  }
+  const siblings = storedSearchResponse(facetsJson);
+  if (siblings === null || siblings.numFound !== siblings.documents.length) {
+    return { status: "unresolved", reason: "incomplete_listing" };
+  }
+  const decisions = siblings.documents.filter(sameDecision);
+  if (
+    decisions.length !== 1 ||
+    decisions.at(0)?.documentId !== doc.documentId
+  ) {
+    return { status: "unresolved", reason: "ambiguous_identity" };
+  }
+  return { status: "matched", entry };
+};
+
+type SkUsCollectionPublication =
+  | {
+      status: "published";
+      documentId: string | null;
+      number: string | number | null;
+      volume: string | number | null;
+      year: number | null;
+      period: string | null;
+    }
+  | {
+      status: "selected" | "not_included" | "not_stated";
+      reason: Extract<SkUsCollectionMatch, { status: "unresolved" }>["reason"];
+    };
+
+const skUsCollectionPublication = (
+  doc: SearchDocument,
+  collection: SkUsCollectionMatch,
+): SkUsCollectionPublication => {
+  switch (collection.status) {
+    case "matched": {
+      const { entry } = collection;
+      return {
+        status: "published",
+        documentId: entry.documentId ?? null,
+        number: entry.mkLawReportsNumber ?? null,
+        volume: entry.mkVolumeOfLawReports ?? null,
+        year: entry.mkYearOfLawReports ?? null,
+        period: entry.mkTimePeriodZNaU ?? null,
+      };
+    }
+    case "unresolved":
+      if (doc.mkIncludeToZnaU === true) {
+        return { status: "selected", reason: collection.reason };
+      }
+      if (doc.mkIncludeToZnaU === false) {
+        return { status: "not_included", reason: collection.reason };
+      }
+      return { status: "not_stated", reason: collection.reason };
+    default:
+      collection satisfies never;
+      return panic("Unhandled ÚS collection identity state");
+  }
+};
+
+const skUsCollectionTextFields = (
+  doc: SearchDocument,
+  collection: SkUsCollectionMatch,
+): RawIngestionResult["textFields"] => {
+  const stated = skUsTextFields(doc);
+  switch (collection.status) {
+    case "unresolved":
+      return stated;
+    case "matched": {
+      const published = skUsTextFields(collection.entry);
+      return {
+        ...stated,
+        headnote:
+          stated.headnote.type !== "present" &&
+          published.headnote.type === "present"
+            ? published.headnote
+            : stated.headnote,
+        legalSentence:
+          stated.legalSentence.type !== "present" &&
+          published.legalSentence.type === "present"
+            ? published.legalSentence
+            : stated.legalSentence,
+      };
+    }
+    default:
+      collection satisfies never;
+      return panic("Unhandled ÚS collection identity state");
+  }
+};
+
+type SkUsEcliAvailability = {
+  status: "published" | "not_published" | "not_stated";
+};
+
+const skUsEcliAvailability = (doc: SearchDocument): SkUsEcliAvailability => {
+  if (!Object.hasOwn(doc, "mkECLI")) {
+    return { status: "not_stated" };
+  }
+  return doc.mkECLI ? { status: "published" } : { status: "not_published" };
 };
 
 type SkUsMetadataOptions = {
@@ -856,6 +1264,7 @@ type SkUsMetadataOptions = {
   facetsJson: string | undefined;
   /** The docket file's own header row, where the service served one. */
   header: SearchDocument | undefined;
+  collection: SkUsCollectionMatch;
 };
 
 /**
@@ -871,6 +1280,7 @@ const skUsMetadata = ({
   doc,
   facetsJson,
   header,
+  collection,
 }: SkUsMetadataOptions): Record<string, unknown> => {
   const multiValueMetadata = {
     typeOfDecision: doc.mkTypeOfDecision,
@@ -907,6 +1317,8 @@ const skUsMetadata = ({
     normalizedValues,
     caseNumber: doc.mkRSAPNumberOfFile,
     ecli: doc.mkECLI,
+    decisionType: doc.mkFormOfDecision,
+    decisionTypeKey: decisionTypeKey(doc.mkFormOfDecision),
     documentId: doc.documentId,
     docType: doc.docType,
     title: doc.title,
@@ -921,6 +1333,11 @@ const skUsMetadata = ({
     affectedLegalRegulation: doc.mkAffectedLegalRegulation,
     underage: doc.mkUnderage,
     includeToZnaU: doc.mkIncludeToZnaU,
+    publishedInCollection: skUsCollectionPublication(doc, collection),
+    ...(collection.status === "matched"
+      ? { collectionEntry: collection.entry }
+      : {}),
+    ecliAvailability: skUsEcliAvailability(doc),
     formOfEntry: doc.mkFormOfEntry,
     typeOfEntry: doc.mkTypeOfEntry,
     parentDecisionKind: doc.mkParentIdDecision,
@@ -960,7 +1377,7 @@ export const buildSkUsDecision = async (
   const page = context ?? createSkUsPageContext();
 
   const decisionDate = parseApiDate(doc.mkDateOfDecision);
-  const decisionType = doc.mkFormOfDecision?.toLowerCase();
+  const decisionType = doc.mkFormOfDecision ?? undefined;
   const ecli = doc.mkECLI ?? undefined;
   const court = "Ústavný súd SR";
   const documentUrl = `${DOC_DOWNLOAD_URL}/${documentId}`;
@@ -970,6 +1387,24 @@ export const buildSkUsDecision = async (
     decisionDate === undefined
       ? undefined
       : await page.facets({ caseNumber, decisionDate }, signal);
+  const collectionJson =
+    decisionDate === undefined
+      ? undefined
+      : await page.collectionListing({ caseNumber, decisionDate }, signal);
+  signal?.throwIfAborted();
+  const collection = skUsCollectionMatch({ doc, collectionJson, facetsJson });
+  if (
+    decisionDate !== undefined &&
+    collection.status === "unresolved" &&
+    collection.reason === "unavailable"
+  ) {
+    logger.warn("case_law.ingestion.collection_fetch_failed", {
+      adapterKey: ADAPTER_KEYS.SK_US,
+      caseNumber,
+      decisionDate,
+      reason: collection.reason,
+    });
+  }
   const rvpNumber = doc.mkRVPNumberOfFile ?? undefined;
   const courtFileJson =
     rvpNumber === undefined
@@ -1015,6 +1450,9 @@ export const buildSkUsDecision = async (
 
   const parts: Record<string, string> = {
     listing: JSON.stringify(doc),
+    ...(collectionJson === undefined
+      ? {}
+      : { "collection-listing": collectionJson }),
     ...(documentXhtml === undefined ? {} : { document: documentXhtml }),
     ...(facetsJson === undefined ? {} : { facets: facetsJson }),
     ...(courtFileJson === undefined ? {} : { file: courtFileJson }),
@@ -1031,7 +1469,7 @@ export const buildSkUsDecision = async (
   };
   const sourceRaw = encodeSourceRawEnvelope(parts);
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     caseNumber,
     sourceDocumentId: documentId,
     // What every row this adapter wrote before it stated an id was stored
@@ -1055,11 +1493,11 @@ export const buildSkUsDecision = async (
     ...(pdfBytes === undefined ? { isListingOnly: true } : {}),
     sourceUrl: documentUrl,
     documentUrl,
-    textFields: skUsTextFields(doc),
+    textFields: skUsCollectionTextFields(doc, collection),
     metadata: checkedDecisionMetadata(
-      skUsMetadata({ doc, facetsJson, header }),
+      skUsMetadata({ doc, facetsJson, header, collection }),
     ),
-    // Over the envelope, not over the listing row: the row is one of six
+    // Over the envelope, not over the listing row: the row is one of seven
     // responses stored, and a hash of it alone would call a decision
     // unchanged after the court rewrote the document behind it.
     rawHash: hashContent(sourceRaw),
@@ -1079,7 +1517,7 @@ export const buildSkUsDecision = async (
           },
         }),
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 
   return pdfBytes === undefined
     ? { type: "detail-unavailable", decision }
@@ -1110,13 +1548,19 @@ type ExecuteSearchOptions = {
   signal?: AbortSignal | undefined;
 };
 
+type SearchRead =
+  | { type: "present"; data: SearchResponse }
+  | { type: "absent"; data: SearchResponse }
+  | { type: "unavailable" };
+
 const executeSearch = async ({
   offset,
   pageSize,
   range,
   signal,
-}: ExecuteSearchOptions): Promise<SearchResponse | null> => {
+}: ExecuteSearchOptions): Promise<SearchRead> => {
   const response = await fetchPublisher(SEARCH_URL, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.SK_US,
     method: "POST",
     headers: {
@@ -1161,7 +1605,7 @@ const executeSearch = async ({
   }
 
   if (response.status === 204) {
-    return null;
+    return { type: "unavailable" };
   }
 
   const data: unknown = await response.json();
@@ -1170,7 +1614,9 @@ const executeSearch = async ({
     panic(`SK ÚS search returned an invalid payload: ${preview}`);
   }
 
-  return data;
+  return data.documents.length === 0
+    ? { type: "absent", data }
+    : { type: "present", data };
 };
 
 type ExecuteSearchWithRetryOptions = ExecuteSearchOptions & {
@@ -1296,18 +1742,6 @@ const sliceDateRange = (slice: string): SearchDateRange => {
 };
 
 /**
- * One page of the publisher's own listing for a month, with no PDF downloads.
- *
- * A failed request is thrown, never flattened into an empty page. The crawl
- * can afford to read a 204 or a dead window as "nothing here" because a cursor
- * that moves on can be walked again; a ledger row cannot, since an outage
- * recorded as an empty month makes that month settled and it is never revisited.
- * So only a body that states a count answers what a month holds: `numFound: 0`
- * is an empty slice, and everything else — a 5xx (this endpoint has been
- * observed answering 500 and 524 under load), a 204, a body the validator
- * rejects — is an error the engine retries on a later pass.
- */
-/**
  * One listed item for a result the DMS will not serve.
  *
  * With no body there is no document id and no docket, so there is nothing to
@@ -1323,10 +1757,13 @@ const unservedListingItem = (offset: number): ReconciliationListingItem => ({
   payload: { unservedResultIndex: offset },
 });
 
-/** What one window of a month's results answered. */
+/** What one window of a date range's results answered. */
 type ListedWindow = {
-  items: ReconciliationListingItem[];
-  /** The month's size, from whichever sub-window stated it; null if none did. */
+  items: (
+    | { type: "served"; document: SearchDocument }
+    | { type: "unserved"; offset: number }
+  )[];
+  /** The range's size, from whichever sub-window stated it; null if none did. */
   numFound: number | null;
 };
 
@@ -1353,9 +1790,10 @@ type SplitBudget = { remaining: number };
 
 type ListSkUsWindowOptions = {
   budget: SplitBudget;
-  /** 0-indexed result offset within the month. */
+  /** 0-indexed result offset within the date range. */
   offset: number;
   pageSize: number;
+  range: SearchDateRange;
   slice: string;
   signal?: AbortSignal | undefined;
 };
@@ -1372,18 +1810,19 @@ const unservedWindowError = (
 
 type SearchWindowOptions = Omit<ListSkUsWindowOptions, "budget">;
 
-/** One search request for a window: its body, or null where it answered 204. */
+/** One typed reading of a publisher search window. */
 const searchWindow = async ({
   offset,
   pageSize,
+  range,
   signal,
   slice,
-}: SearchWindowOptions): Promise<SearchResponse | null> => {
+}: SearchWindowOptions): Promise<SearchRead> => {
   const searchResult = await executeSearchWithRetry({
     cursor: slice,
     offset,
     pageSize,
-    range: sliceDateRange(slice),
+    range,
     signal,
   });
   if (Result.isError(searchResult)) {
@@ -1393,15 +1832,12 @@ const searchWindow = async ({
 };
 
 const listedWindow = (data: SearchResponse): ListedWindow => ({
-  items: data.documents.map((doc) => ({
-    identity: skUsListingIdentity(doc),
-    payload: doc,
-  })),
+  items: data.documents.map((document) => ({ type: "served", document })),
   numFound: data.numFound,
 });
 
 /**
- * List one window of a month, splitting it around whatever the DMS refuses.
+ * List one crawl-year or reconciliation-month window, isolating DMS refusals.
  *
  * The endpoint answers 204 with an empty body for any window containing a
  * record it cannot serialise, and it does so deterministically: for 2025-04,
@@ -1413,17 +1849,17 @@ const listedWindow = (data: SearchResponse): ListedWindow => ({
  * So a refused window is halved until the refusal is one record wide. What
  * surrounds it lists normally, the record itself is reported with nothing to
  * key on, and the month settles honestly: 277 reported, 277 collected, one
- * unidentifiable. The halving terminates at a window of one record, costs
+ * unidentifiable. The halving terminates at a window of one record, costs up to
  * {@link SPLIT_REQUESTS_PER_UNSERVED_RECORD} plus the one confirming request
  * below per such record, and each of those requests waits the same pause as
  * every other request here.
  *
- * A refusal that survives the halving with nothing served on either side is
- * the endpoint being down for that window rather than a record it cannot
- * serialise, and is thrown: reporting the window as that many unidentifiable
- * items would settle the month over an outage. Two unservable records lying
- * side by side read the same way and are refused with it, which is the safe
- * direction to be wrong in.
+ * A refused subtree may have no count, including adjacent poison records;
+ * a sibling can still supply the count for the enclosing page. If the whole
+ * page serves nothing, it cannot distinguish poison records from an empty
+ * range. Reconciliation rejects it; the crawl records the refusal and parks
+ * its current frontier with bounded polling. The shared split budget bounds
+ * that work.
  *
  * A one-record refusal is confirmed by a second request before it is reported
  * unserved. An unidentifiable item is excluded from the slice rather than
@@ -1436,24 +1872,26 @@ const listSkUsWindow = async ({
   budget,
   offset,
   pageSize,
+  range,
   signal,
   slice,
 }: ListSkUsWindowOptions): Promise<ListedWindow> => {
-  const data = await searchWindow({ offset, pageSize, signal, slice });
-  if (data !== null) {
-    return listedWindow(data);
+  const data = await searchWindow({ offset, pageSize, range, signal, slice });
+  if (data.type !== "unavailable") {
+    return listedWindow(data.data);
   }
 
   if (pageSize <= 1) {
     const confirmation = await searchWindow({
       offset,
       pageSize,
+      range,
       signal,
       slice,
     });
-    return confirmation === null
-      ? { items: [unservedListingItem(offset)], numFound: null }
-      : listedWindow(confirmation);
+    return confirmation.type === "unavailable"
+      ? { items: [{ type: "unserved", offset }], numFound: null }
+      : listedWindow(confirmation.data);
   }
 
   if (budget.remaining < 2) {
@@ -1469,6 +1907,7 @@ const listSkUsWindow = async ({
     budget,
     offset,
     pageSize: half,
+    range,
     signal,
     slice,
   });
@@ -1476,12 +1915,13 @@ const listSkUsWindow = async ({
     budget,
     offset: offset + half,
     pageSize: pageSize - half,
+    range,
     signal,
     slice,
   });
 
-  // Both halves state the size of the same month, so two different counts mean
-  // the month changed under the walk or the endpoint answered about something
+  // Both halves state the size of the same range, so two different counts mean
+  // the range changed under the walk or the endpoint answered about something
   // else. Either way the page cannot be sized, and banking it would write a
   // `reported` the slice can never reach.
   if (
@@ -1497,12 +1937,6 @@ const listSkUsWindow = async ({
   }
 
   const numFound = lower.numFound ?? upper.numFound;
-  if (numFound === null) {
-    throw unservedWindowError(
-      slice,
-      `${pageSize} records from offset ${offset} served nothing`,
-    );
-  }
 
   return { items: [...lower.items, ...upper.items], numFound };
 };
@@ -1516,17 +1950,33 @@ const listSkUsSlicePage = async ({
     budget: { remaining: SPLIT_REQUEST_BUDGET },
     offset: page * LISTING_PAGE_SIZE,
     pageSize: LISTING_PAGE_SIZE,
+    range: sliceDateRange(slice),
     signal,
     slice,
   });
 
   if (numFound === null) {
-    // Only reachable where a page is one record wide: the split refuses a
-    // wider window that served nothing before it can answer with one.
+    // A window with no served records cannot establish the publisher count.
     throw unservedWindowError(slice, `offset ${page * LISTING_PAGE_SIZE}`);
   }
 
-  return { items, totalPages: Math.ceil(numFound / LISTING_PAGE_SIZE) };
+  return {
+    items: items.map((item) => {
+      switch (item.type) {
+        case "served":
+          return {
+            identity: skUsListingIdentity(item.document),
+            payload: item.document,
+          };
+        case "unserved":
+          return unservedListingItem(item.offset);
+        default:
+          item satisfies never;
+          return panic("Unhandled SK ÚS listing result");
+      }
+    }),
+    totalPages: Math.ceil(numFound / LISTING_PAGE_SIZE),
+  };
 };
 
 /**
@@ -1859,6 +2309,15 @@ const listSkUsSourceFields = (parts: SourceRawParts): readonly string[] => {
     }
   }
 
+  const collection = storedSearchResponse(parts["collection-listing"]);
+  if (collection !== null) {
+    for (const entry of collection.documents) {
+      for (const name of Object.keys(entry)) {
+        names.add(name);
+      }
+    }
+  }
+
   const facets: unknown = Result.try({
     try: (): unknown => JSON.parse(parts["facets"] ?? "null"),
     catch: () => null,
@@ -1989,11 +2448,16 @@ const reparseStoredRaw = (
   }
 
   const decisionDate = parseApiDate(listing.mkDateOfDecision);
-  const decisionType = listing.mkFormOfDecision?.toLowerCase();
+  const decisionType = listing.mkFormOfDecision ?? undefined;
   const court = stored.court;
   const documentUrl = `${DOC_DOWNLOAD_URL}/${fields.documentId}`;
   const documentXhtml = parts?.["document"];
   const facetsJson = parts?.["facets"];
+  const collection = skUsCollectionMatch({
+    doc: listing,
+    collectionJson: parts?.["collection-listing"],
+    facetsJson,
+  });
 
   const parsed =
     documentXhtml === undefined
@@ -2010,7 +2474,7 @@ const reparseStoredRaw = (
 
   return {
     type: "parsed",
-    result: {
+    result: plainTextIngestionResult({
       caseNumber: fields.caseNumber,
       sourceDocumentId: fields.documentId,
       ecli: listing.mkECLI ?? undefined,
@@ -2026,12 +2490,13 @@ const reparseStoredRaw = (
       }),
       sourceUrl: documentUrl,
       documentUrl,
-      textFields: skUsTextFields(listing),
+      textFields: skUsCollectionTextFields(listing, collection),
       metadata: checkedDecisionMetadata(
         skUsMetadata({
           doc: listing,
           facetsJson,
           header: courtFileHeader(parts?.["file"]),
+          collection,
         }),
       ),
       rawHash: hashContent(raw),
@@ -2039,7 +2504,7 @@ const reparseStoredRaw = (
       documentAst: parsed === null ? EMPTY_AST : parsed.documentAst,
       sourceRaw: raw,
       sourceRawContentType: stored.contentType ?? "application/json",
-    },
+    }),
   };
 };
 
@@ -2049,11 +2514,12 @@ const reparseStoredRaw = (
  * Every payload this court's service serves for one decision, and whether the
  * row keeps it.
  *
- * Six are kept: the search row that names the decision, the text rendering
+ * Seven are kept: the search row that names the decision, the collection
+ * listing joined only when both identities are unambiguous, the text rendering
  * and the file the court serves of the same document, the facet counts that
  * are the only statement of several index fields, the docket file the
  * document was filed under, and the vocabularies the coded fields resolve
- * against. Two corpora under the same endpoint are not walked; the rest of
+ * against. The archive corpus is not walked; the rest of
  * the list is this service's export machinery and the portal around it.
  */
 const SOURCE_SURFACES = [
@@ -2085,10 +2551,7 @@ const SK_US_SOURCE_SURFACES = {
     file: storedSourceSurface("file"),
     facets: storedSourceSurface("facets"),
     codelists: storedSourceSurface("codelists"),
-    "collection-listing": backlogSurface(
-      ADAPTER_KEYS.SK_US,
-      "separate corpus; identity reconciliation rule needed",
-    ),
+    "collection-listing": storedSourceSurface("collection-listing"),
     "archive-listing": backlogSurface(
       ADAPTER_KEYS.SK_US,
       "separate corpus; identity reconciliation rule needed",
@@ -2118,6 +2581,7 @@ const SK_US_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const skUsAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.SK_US,
   sourceSurfaces: SK_US_SOURCE_SURFACES,
   sourceFields: {
@@ -2152,9 +2616,9 @@ export const skUsAdapter = defineSourceAdapter({
       return { type: "probe-failed", errorTag: errorTag(searched.error) };
     }
     // A 204 carries no count; it is the endpoint declining, not an empty court.
-    return searched.value === null
+    return searched.value.type === "unavailable"
       ? sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD)
-      : sourceTotalRead(searched.value.numFound);
+      : sourceTotalRead(searched.value.data.numFound);
   },
 
   /**
@@ -2163,6 +2627,57 @@ export const skUsAdapter = defineSourceAdapter({
    * each item the way the ingest would, and compare against what is held.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            documentId: payload["documentId"],
+            docType: payload["docType"],
+            title: payload["title"],
+            content: payload["content"],
+            extension: payload["extension"],
+            size: payload["size"],
+            contentType: payload["contentType"],
+            mkDocumentType: payload["mkDocumentType"],
+            mkRSAPNumberOfFile: payload["mkRSAPNumberOfFile"],
+            mkRVPNumberOfFile: payload["mkRVPNumberOfFile"],
+            mkECLI: payload["mkECLI"],
+            mkDateOfDecision: payload["mkDateOfDecision"],
+            mkDateOfLegalForce: payload["mkDateOfLegalForce"],
+            mkPublicationDate: payload["mkPublicationDate"],
+            mkFormOfDecision: payload["mkFormOfDecision"],
+            mkTypeOfDecision: payload["mkTypeOfDecision"],
+            mkTypeOfProceeding: payload["mkTypeOfProceeding"],
+            mkTypeOfNegotiation: payload["mkTypeOfNegotiation"],
+            mkDecisionInTermsOf: payload["mkDecisionInTermsOf"],
+            mkResultOfNegotiation: payload["mkResultOfNegotiation"],
+            mkCause: payload["mkCause"],
+            mkJudgeReporter: payload["mkJudgeReporter"],
+            mkDifferentView: payload["mkDifferentView"],
+            mkWordRegister: payload["mkWordRegister"],
+            mkMaterialRegister: payload["mkMaterialRegister"],
+            mkComplainedLegalRegulation: payload["mkComplainedLegalRegulation"],
+            mkClarificationOfLegalRegulation:
+              payload["mkClarificationOfLegalRegulation"],
+            mkFileReference: payload["mkFileReference"],
+            mkReferences: payload["mkReferences"],
+            mkTypeOfProposer: payload["mkTypeOfProposer"],
+            mkAffectedLegalRegulation: payload["mkAffectedLegalRegulation"],
+            mkUnderage: payload["mkUnderage"],
+            mkIncludeToZnaU: payload["mkIncludeToZnaU"],
+            mkEntryDate: payload["mkEntryDate"],
+            mkFormOfEntry: payload["mkFormOfEntry"],
+            mkTypeOfEntry: payload["mkTypeOfEntry"],
+            mkParentIdDecision: payload["mkParentIdDecision"],
+            mkLawReportsNumber: payload["mkLawReportsNumber"],
+            mkVolumeOfLawReports: payload["mkVolumeOfLawReports"],
+            mkYearOfLawReports: payload["mkYearOfLawReports"],
+            mkTimePeriodZNaU: payload["mkTimePeriodZNaU"],
+            mkClauseTitle: payload["mkClauseTitle"],
+            mkClauseText: payload["mkClauseText"],
+            mkWebTitle: payload["mkWebTitle"],
+          }
+        : null,
     firstSlice: SK_US_FIRST_SLICE,
     sliceOf: skUsSliceOf,
     nextSlice: skUsNextSlice,
@@ -2184,27 +2699,56 @@ export const skUsAdapter = defineSourceAdapter({
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
       try: async () => {
-        const { year, offset } = parseCursor(cursor);
+        const { year, offset, status } = parseCursor(cursor);
         const currentYear = Temporal.Now.plainDateISO().year;
 
-        const searchResult = await executeSearchWithRetry({
-          cursor,
-          offset,
-          pageSize: PAGE_SIZE,
-          range: { from: `${year}-01-01`, to: `${year}-12-31` },
-          signal,
-        });
-        if (Result.isError(searchResult)) {
-          if (signal?.aborted) {
-            throw new DOMException("Cycle aborted", "AbortError");
-          }
-          throw searchResult.error;
+        const range = { from: `${year}-01-01`, to: `${year}-12-31` };
+        const slice = encodeCursor({ year, offset });
+        let window: ListedWindow;
+        if (status === "refused-frontier") {
+          const read = await searchWindow({
+            offset,
+            pageSize: PAGE_SIZE,
+            range,
+            signal,
+            slice,
+          });
+          window =
+            read.type === "unavailable"
+              ? { items: [], numFound: null }
+              : listedWindow(read.data);
+        } else {
+          window = await listSkUsWindow({
+            budget: { remaining: SPLIT_REQUEST_BUDGET },
+            offset,
+            pageSize: PAGE_SIZE,
+            range,
+            signal,
+            slice,
+          });
         }
-        const data = searchResult.value;
+        const { items, numFound } = window;
+        if (numFound === null) {
+          // No sub-window states a count: empty and wholly refused years are
+          // indistinguishable. Reconciliation audits historical months; the
+          // current frontier rechecks one window until it can be read again.
+          logger.warn("case_law.ingestion.unserved_crawl_window", {
+            adapterKey: ADAPTER_KEYS.SK_US,
+            year,
+            offset,
+            reconciliation: "monthly_listing_reports_unserved_records",
+          });
+          return {
+            decisions: [],
+            itemBuildFailures: { type: "item_build_failed", count: PAGE_SIZE },
+            nextCursor:
+              year < currentYear
+                ? encodeCursor({ year: year + 1, offset: 0 })
+                : `${slice}:refused`,
+          };
+        }
 
-        // 204 / empty search for this year window.
-        // Advance to next year if available.
-        if (!data || data.documents.length === 0) {
+        if (items.length === 0) {
           if (year < currentYear) {
             // Move to next year
             return {
@@ -2220,17 +2764,60 @@ export const skUsAdapter = defineSourceAdapter({
         }
 
         const decisions: IngestionResult[] = [];
+        let failed = 0;
         // One context for the page: the vocabularies are fetched once for
         // it, and a docket listed twice on it costs one facet query and one
         // docket-file read.
         const context = createSkUsPageContext();
 
-        for (const doc of data.documents) {
+        for (const item of items) {
+          switch (item.type) {
+            case "unserved":
+              failed++;
+              logger.warn("case_law.ingestion.unserved_listing_record", {
+                adapterKey: ADAPTER_KEYS.SK_US,
+                cursor: encodeCursor({ year, offset }),
+                resultIndex: item.offset,
+                outcome: "deterministic_refusal",
+                reconciliation: "reports_unserved",
+              });
+              continue;
+            case "served":
+              break;
+            default:
+              item satisfies never;
+              panic("Unhandled SK ÚS listing result");
+          }
+          const doc = item.document;
           try {
-            const built = await buildSkUsDecision(doc, {
-              context,
-              ...(signal === undefined ? {} : { signal }),
+            const attempted = await buildPlainTextItem({
+              decisionOf: (value) => {
+                switch (value.type) {
+                  case "built":
+                  case "detail-unavailable":
+                    return value.decision;
+                  case "unkeyable":
+                    return undefined;
+                  default:
+                    value satisfies never;
+                    return panic("Unhandled source build outcome");
+                }
+              },
+              adapterKey: ADAPTER_KEYS.SK_US,
+
+              rawListing: JSON.stringify(doc),
+              build: async () =>
+                await buildSkUsDecision(doc, {
+                  context,
+                  ...(signal === undefined ? {} : { signal }),
+                }),
             });
+            if (attempted.type === "item_build_failed") {
+              failed++;
+              decisions.push(attempted.decision);
+              continue;
+            }
+            const built = attempted.value;
             switch (built.type) {
               case "unkeyable":
                 break;
@@ -2247,12 +2834,17 @@ export const skUsAdapter = defineSourceAdapter({
               }
             }
           } catch (error) {
-            if (error instanceof DOMException) {
+            if (
+              error instanceof DOMException ||
+              error instanceof AdapterFetchError ||
+              error instanceof FetchBoundaryError
+            ) {
               throw error;
             }
             // The cursor moves past this document and the reconciliation walk
             // is what recovers it; reported so a build failing on every row
             // is not read as a page with nothing on it.
+            failed++;
             logger.warn("case_law.ingestion.item_build_failed", {
               adapterKey: ADAPTER_KEYS.SK_US,
               ...(typeof doc.documentId === "string"
@@ -2265,12 +2857,12 @@ export const skUsAdapter = defineSourceAdapter({
         }
 
         const nextOffset = offset + PAGE_SIZE;
-        const hasMore =
-          data.documents.length >= PAGE_SIZE && nextOffset < data.numFound;
+        const hasMore = items.length >= PAGE_SIZE && nextOffset < numFound;
 
         if (hasMore) {
           return {
             decisions,
+            itemBuildFailures: { type: "item_build_failed", count: failed },
             nextCursor: encodeCursor({ year, offset: nextOffset }),
           };
         }
@@ -2279,6 +2871,7 @@ export const skUsAdapter = defineSourceAdapter({
         if (year < currentYear) {
           return {
             decisions,
+            itemBuildFailures: { type: "item_build_failed", count: failed },
             nextCursor: encodeCursor({ year: year + 1, offset: 0 }),
           };
         }
@@ -2294,9 +2887,10 @@ export const skUsAdapter = defineSourceAdapter({
         // to find, not this cursor's.
         return {
           decisions,
+          itemBuildFailures: { type: "item_build_failed", count: failed },
           nextCursor: encodeCursor({
             year,
-            offset: offset + data.documents.length,
+            offset: offset + items.length,
           }),
         };
       },

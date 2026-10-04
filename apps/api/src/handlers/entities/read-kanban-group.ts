@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import { ENTITY_KINDS } from "@stll/api-contract";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/entities/window-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { tViewSortSchema } from "@/api/lib/views-schema";
 
 const readKanbanGroupBodySchema = t.Object({
@@ -63,6 +64,7 @@ const readKanbanGroupBodySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
   access: "read",
   body: readKanbanGroupBodySchema,
@@ -85,7 +87,9 @@ const readKanbanGroup = createSafeHandler(
       return Result.err(conditionResult.error);
     }
 
-    const limit = body.limit ?? LIMITS.entitiesWindowSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      body.limit ?? LIMITS.entitiesWindowSizeDefault,
+    );
     const result = yield* Result.await(
       queryEntities({
         safeDb,

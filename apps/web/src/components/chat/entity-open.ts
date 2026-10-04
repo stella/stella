@@ -1,5 +1,3 @@
-import { stellaToast } from "@stll/ui/toast";
-
 import {
   isEntityActiveInMainRoute,
   isFileActiveInMainRoute,
@@ -14,7 +12,7 @@ import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { EmailCitationSource } from "@/lib/files/email-citations";
 import type { OfficeCitationSource } from "@/lib/files/office-citations";
 import { toSafeId } from "@/lib/safe-id";
@@ -183,18 +181,12 @@ export const openEntityInInspector = async (
     }
 
     const t = getTranslator();
-    stellaToast.add({
-      title: t("errors.actionFailed"),
-      type: "error",
-    });
+    notifyUserError(undefined, t("errors.actionFailed"));
     return { type: "unsupported" };
   } catch (error) {
     getAnalytics().captureError(error);
     const t = getTranslator();
-    stellaToast.add({
-      title: userErrorFromThrown(error, t("errors.actionFailed")),
-      type: "error",
-    });
+    notifyUserError(error, t("errors.actionFailed"));
     return { type: "unsupported" };
   }
 };
@@ -247,18 +239,12 @@ export const openSourceBoundEntityFile = async ({
     }
 
     const t = getTranslator();
-    stellaToast.add({
-      title: t("errors.actionFailed"),
-      type: "error",
-    });
+    notifyUserError(undefined, t("errors.actionFailed"));
     return false;
   } catch (error) {
     getAnalytics().captureError(error);
     const t = getTranslator();
-    stellaToast.add({
-      title: userErrorFromThrown(error, t("errors.actionFailed")),
-      type: "error",
-    });
+    notifyUserError(error, t("errors.actionFailed"));
     return false;
   }
 };

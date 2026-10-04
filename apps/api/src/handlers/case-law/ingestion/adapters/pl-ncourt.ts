@@ -1,3 +1,6 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+import { Result, panic } from "better-result";
 /**
  * Polish common courts from the Ministry of Justice's judgments API.
  *
@@ -45,11 +48,14 @@
  * their own rows; {@link plCommonCourtRulingKeys} is the relationship between
  * them, and nothing here merges or deletes either side.
  */
-
-import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
+import {
+  DECISION_DOCUMENT_ROLE,
+  type DecisionDocumentRole,
+} from "@stll/api-contract/decision-document-role";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
@@ -94,6 +100,9 @@ import type {
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
+import type { CommonCourtRulingKeyInput } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import {
   PL_COURTS_RULING_DECISION_TYPES,
   PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
@@ -123,6 +132,8 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -674,15 +685,49 @@ const REASONS_DECISION_TYPE = "uzasadnienie";
 /** Components that name no ruling: the hearing record and anything else. */
 const OTHER_COMPONENTS = ["RECORD", "OTHER"] as const;
 
-const isRulingComponent = (
-  value: string,
-): value is keyof typeof RULING_COMPONENTS =>
-  Object.hasOwn(RULING_COMPONENTS, value);
+export type PlNcourtComponent =
+  | keyof typeof RULING_COMPONENTS
+  | typeof REASONS_COMPONENT
+  | (typeof OTHER_COMPONENTS)[number];
 
-const isKnownComponent = (value: string): boolean =>
-  isRulingComponent(value) ||
-  value === REASONS_COMPONENT ||
-  OTHER_COMPONENTS.some((component) => component === value);
+const COMPONENT_DOCUMENT_ROLES = {
+  SENTENCE: DECISION_DOCUMENT_ROLE.RULING,
+  DECISION: DECISION_DOCUMENT_ROLE.RULING,
+  RESOLUTION: DECISION_DOCUMENT_ROLE.RULING,
+  REGULATION: DECISION_DOCUMENT_ROLE.RULING,
+  REASON: DECISION_DOCUMENT_ROLE.REASONS,
+  RECORD: undefined,
+  OTHER: undefined,
+} as const satisfies Record<
+  PlNcourtComponent,
+  DecisionDocumentRole | undefined
+>;
+
+const isKnownComponent = (value: string): value is PlNcourtComponent =>
+  Object.hasOwn(COMPONENT_DOCUMENT_ROLES, value);
+
+/** A known ruling component wins in a mixed document; unknown enums stay unknown. */
+const documentRoleOf = (
+  components: readonly string[],
+): DecisionDocumentRole | undefined => {
+  const roles: (DecisionDocumentRole | undefined)[] = [];
+  for (const component of components) {
+    if (!isKnownComponent(component)) {
+      logger.warn(DOCUMENT_ROLE_UNMAPPED, {
+        adapterKey: ADAPTER_KEYS.PL_NCOURT,
+        publisherValue: component,
+      });
+      return undefined;
+    }
+    roles.push(COMPONENT_DOCUMENT_ROLES[component]);
+  }
+  if (roles.includes(DECISION_DOCUMENT_ROLE.RULING)) {
+    return DECISION_DOCUMENT_ROLE.RULING;
+  }
+  return roles.includes(DECISION_DOCUMENT_ROLE.REASONS)
+    ? DECISION_DOCUMENT_ROLE.REASONS
+    : undefined;
+};
 
 /** The rulings, in the order one names a document holding several. */
 const RULING_PRECEDENCE = [
@@ -722,43 +767,6 @@ export const plNcourtDecisionType = (
     ? REASONS_DECISION_TYPE
     : undefined;
 };
-
-/** Where a signature's parts differ only in spacing, one spelling. */
-const normalizeSignature = (signature: string): string =>
-  collapse(signature).toLocaleUpperCase("pl-PL");
-
-/** What a ruling key is read from: stored columns only. */
-type CommonCourtRulingKeyInput = Pick<
-  IngestionResult,
-  "caseNumber" | "court" | "decisionDate" | "decisionType"
->;
-
-/**
- * The key under which a stored common-court judgment meets its copy in the
- * other source: court, signature, judgment date and decision type.
- *
- * Both this adapter and `pl-courts` store the same judgment under their own
- * ids; the one here is also the `source.judgmentId` SAOS keeps. Two rows
- * sharing a key are one judgment, and this API is the one SAOS imports from.
- * Empty for a row missing the date or the type: a signature alone does not
- * name a judgment, since a ruling and a later order share it.
- */
-export const plCommonCourtRulingKeys = ({
-  caseNumber,
-  court,
-  decisionDate,
-  decisionType,
-}: CommonCourtRulingKeyInput): string[] =>
-  decisionDate === undefined || decisionType === undefined
-    ? []
-    : [
-        [
-          collapse(court).toLocaleLowerCase("pl-PL"),
-          normalizeSignature(caseNumber),
-          decisionDate,
-          decisionType.toLocaleLowerCase("pl-PL"),
-        ].join("|"),
-      ];
 
 const COURT_ID = /^15\d{6}$/u;
 
@@ -869,7 +877,11 @@ const orUndefined = <T>(items: readonly T[]): readonly T[] | undefined =>
 /** The components a type lists and the decision type they name, reported when unknown. */
 const typeOf = (
   rawType: string | undefined,
-): { components: string[]; decisionType: string | undefined } => {
+): {
+  components: string[];
+  decisionType: string | undefined;
+  documentRole: DecisionDocumentRole | undefined;
+} => {
   const components = plNcourtComponents(rawType);
   const decisionType = plNcourtDecisionType(components);
   if (
@@ -881,7 +893,7 @@ const typeOf = (
       decisionForm: rawType ?? "",
     });
   }
-  return { components, decisionType };
+  return { components, decisionType, documentRole: documentRoleOf(components) };
 };
 
 /**
@@ -1054,7 +1066,7 @@ export const assemblePlNcourtDecision = ({
     return unkeyed();
   }
 
-  const { components, decisionType } = typeOf(
+  const { components, decisionType, documentRole } = typeOf(
     fieldOf(detail, "type") ?? presentText(row.type),
   );
   // Written reasons listed on their own are the reasons of a ruling, joined
@@ -1113,8 +1125,9 @@ export const assemblePlNcourtDecision = ({
     (alias) => alias !== undefined,
   );
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     ...keyed,
+    ...(documentRole === undefined ? {} : { documentRole }),
     sourceDocumentId: id,
     ...(repairAliases.length === 0
       ? {}
@@ -1165,7 +1178,10 @@ export const assemblePlNcourtDecision = ({
     documentAst,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
+  if (decision.plainTextOutcome.type === "item_build_failed") {
+    return { type: "built", decision };
+  }
   return standaloneReasons
     ? {
         type: "supplement",
@@ -1314,7 +1330,7 @@ export const buildPlNcourtQuarantine = (
     [RAW_PART.QUARANTINE]: JSON.stringify(quarantine),
   });
   const court = UNSERVED_ROW_LABEL;
-  return {
+  return plainTextIngestionResult({
     sourceDocumentId: id,
     caseNumber: id,
     caseNumberIsPlaceholder: true,
@@ -1343,7 +1359,7 @@ export const buildPlNcourtQuarantine = (
     documentAst: EMPTY_AST,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 /**
@@ -1370,12 +1386,17 @@ const buildUnkeyedRow = ({
   const signature = presentText(row.signature);
   const court = courtNameOf(presentText(row.courtId))?.name;
   const label = UNSERVED_ROW_LABEL;
+  const detail = detailXml === undefined ? null : readPlNcourtDetail(detailXml);
+  const { components, documentRole } = typeOf(
+    fieldOf(detail, "type") ?? presentText(row.type),
+  );
   const sourceRaw = encodeSourceRawEnvelope({
     [RAW_PART.LISTING]: listingXml,
     ...(detailXml === undefined ? {} : { [RAW_PART.DETAIL]: detailXml }),
   });
-  return {
+  return plainTextIngestionResult({
     sourceDocumentId,
+    ...(documentRole === undefined ? {} : { documentRole }),
     caseNumber: signature ?? sourceDocumentId,
     ...(signature === undefined ? { caseNumberIsPlaceholder: true } : {}),
     isListingOnly: true,
@@ -1392,13 +1413,14 @@ const buildUnkeyedRow = ({
         ? DETAIL_STATUS.LISTING_INCOMPLETE
         : DETAIL_STATUS.ID_UNAVAILABLE,
       listed: row,
+      documentTypes: orUndefined(components),
     }),
     rawHash: hashContent(sourceRaw),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_NCOURT],
     documentAst: EMPTY_AST,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 };
 
 const isGapped = (value: unknown): boolean =>
@@ -1450,12 +1472,14 @@ const mediaTypeOf = (contentType: string | null): string =>
  */
 const request = async ({
   cursor,
+  fetchStage,
   params,
   path,
   signal,
   timeoutMs,
 }: {
   cursor: string;
+  fetchStage: DocumentFetchStage;
   params: Record<string, string>;
   path: string;
   signal?: AbortSignal | undefined;
@@ -1471,7 +1495,12 @@ const request = async ({
   const response = await fetchWithRetry(
     target.toString(),
     { headers: { Accept: "text/xml" }, redirect: "error" },
-    { adapterKey: ADAPTER_KEYS.PL_NCOURT, signal, timeoutMs },
+    {
+      fetchStage,
+      adapterKey: ADAPTER_KEYS.PL_NCOURT,
+      signal,
+      timeoutMs,
+    },
   );
   const bytes =
     response.body === null
@@ -1530,6 +1559,7 @@ const listWindow = async ({
 }): Promise<Result<Listed, AdapterFetchError>> => {
   const requested = await request({
     cursor,
+    fetchStage: "listing",
     params,
     path: "/judgements",
     signal,
@@ -1598,6 +1628,7 @@ const fetchPlNcourtDecision = async ({
   }
   const detail = await request({
     cursor,
+    fetchStage: "document",
     params: { id },
     path: "/judgement/details",
     signal,
@@ -1634,6 +1665,7 @@ const fetchPlNcourtDecision = async ({
   }
   const content = await request({
     cursor,
+    fetchStage: "document",
     params: { id },
     path: "/judgement/content",
     signal,
@@ -1956,6 +1988,7 @@ const positionAliasOf = (
 
 type Built = {
   decisions: IngestionResult[];
+  itemBuildFailures: number;
   supplements: DecisionSupplement[];
   read: number;
   aborted: boolean;
@@ -1969,17 +2002,53 @@ const buildRows = async (
   signal?: AbortSignal,
 ): Promise<Result<Built, AdapterFetchError>> => {
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   const supplements: DecisionSupplement[] = [];
   for (const [index, row] of rows.entries()) {
     if (signal?.aborted) {
-      return Result.ok({ decisions, supplements, read: index, aborted: true });
+      return Result.ok({
+        decisions,
+        itemBuildFailures,
+        supplements,
+        read: index,
+        aborted: true,
+      });
     }
-    const attempted = await fetchPlNcourtDecision({
-      cursor,
-      listingXml: row.fragment,
-      positionAlias: row.positionAlias,
-      signal,
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_NCOURT,
+
+      rawListing: row.fragment,
+      decisionOf: (result) => {
+        if (result.isErr()) {
+          return undefined;
+        }
+        const outcome = result.value;
+        switch (outcome.type) {
+          case "built":
+            return outcome.decision;
+          case "supplement":
+            return outcome.supplement.document;
+          case "unkeyable":
+            return undefined;
+          default:
+            outcome satisfies never;
+            return panic("Unhandled pl-ncourt decision projection");
+        }
+      },
+      build: async () =>
+        await fetchPlNcourtDecision({
+          cursor,
+          listingXml: row.fragment,
+          positionAlias: row.positionAlias,
+          signal,
+        }),
     });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      continue;
+    }
+    const attempted = captured.value;
     if (Result.isError(attempted)) {
       return attempted;
     }
@@ -2005,6 +2074,7 @@ const buildRows = async (
   }
   return Result.ok({
     decisions,
+    itemBuildFailures,
     supplements,
     read: rows.length,
     aborted: false,
@@ -2239,9 +2309,17 @@ const plNcourtFetchPage = async (
   if (Result.isError(built)) {
     return built;
   }
-  const { decisions, supplements, read } = built.value;
+  const { decisions, itemBuildFailures, supplements, read } = built.value;
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     ...(supplements.length === 0 ? {} : { supplements }),
     sourceUrl: url,
     nextCursor: encodePlNcourtCursor(afterWindow({ cursor, listing, read })),
@@ -2585,6 +2663,7 @@ export const plNcourtCensus = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const plNcourtAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_NCOURT,
   language: PL_NCOURT_LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,
@@ -2606,6 +2685,15 @@ export const plNcourtAdapter = defineSourceAdapter({
   getTotalCount: plNcourtTotalCount,
 
   reconciliation: {
+    // Row XML is the content signal; aliases and quarantine neighbours only locate a result.
+    revisionOf: (payload) => {
+      if (!isSlicePayload(payload)) {
+        return null;
+      }
+      return "listingXml" in payload
+        ? { listingXml: payload.listingXml }
+        : { status: payload.quarantine.status };
+    },
     firstSlice: PL_NCOURT_FIRST_SLICE,
     ...plNcourtDaySlices.walk,
     tipWindowDays: PL_NCOURT_TIP_WINDOW_DAYS,

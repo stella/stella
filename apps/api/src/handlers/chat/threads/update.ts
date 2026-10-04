@@ -7,7 +7,7 @@ import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@stll/api-contract";
 import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -20,7 +20,12 @@ const config = {
     "id it is created as an empty placeholder carrying the flag, so a draft " +
     "can record the setting before its first message is sent.",
   permissions: { chat: ["update"] },
-  mcp: { type: "capability", reason: "assistant_chat" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    reason: "assistant_chat",
+    consumesServices: false,
+  },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({
     workspaceId: t.Optional(tSafeId("workspace")),
@@ -121,7 +126,6 @@ const updateThread = createSafeRootHandler(
               created: {
                 old: null,
                 new: {
-                  title: CHAT_THREAD_PLACEHOLDER_TITLE,
                   webSearchEnabled: body.webSearchEnabled,
                 },
               },

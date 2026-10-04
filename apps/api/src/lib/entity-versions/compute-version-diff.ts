@@ -95,7 +95,11 @@ export const computeVersionDiffStats = async ({
     fieldList: { content: FieldContent }[],
   ): Extract<FieldContent, { type: "file" }> | null => {
     for (const f of fieldList) {
-      if (f.content.type === "file" && f.content.mimeType === DOCX_MIME_TYPE) {
+      if (
+        f.content.type === "file" &&
+        f.content.mimeType === DOCX_MIME_TYPE &&
+        !f.content.encrypted
+      ) {
         return f.content;
       }
     }

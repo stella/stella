@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { workspaceViews } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest, type SupportedLang } from "@/api/lib/locale";
@@ -21,7 +21,13 @@ const config = {
     "layouts. A pure read: default views are seeded when the matter is " +
     "created, so listing never mints one.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies WorkspaceHandlerConfig;
 

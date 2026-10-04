@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useRef } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 import {
   type QueryClient,
   useMutation,
@@ -14,7 +14,6 @@ import {
   redirect,
   useNavigate,
 } from "@tanstack/react-router";
-import { useSelector } from "@tanstack/react-store";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -33,7 +32,6 @@ import {
 import { getInitials } from "@stll/ui/initials";
 import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -43,7 +41,10 @@ import { authClient } from "@/lib/auth-client";
 import { refreshAuthQueries } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import {
+  notifyAuthClientError,
+  notifyUserError,
+} from "@/lib/errors/user-toast";
 import {
   getOauthHashFragment,
   getOauthRedirectUrl,
@@ -251,13 +252,7 @@ const OrganizationList = ({
       });
 
       if (error) {
-        stellaToast.add({
-          title: userErrorFromThrown(
-            toAuthClientError(error),
-            t("errors.actionFailed"),
-          ),
-          type: "error",
-        });
+        notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
         throw toAuthClientError(error);
       }
 
@@ -353,10 +348,7 @@ const CreateOrganizationForm = ({
 
         if (slugCheckError) {
           analytics.captureError(toAuthClientError(slugCheckError));
-          stellaToast.add({
-            title: slugCheckError.message ?? t("errors.actionFailed"),
-            type: "error",
-          });
+          notifyAuthClientError(slugCheckError, t("errors.actionFailed"));
           return;
         }
 
@@ -375,10 +367,7 @@ const CreateOrganizationForm = ({
 
         if (createError) {
           analytics.captureError(toAuthClientError(createError));
-          stellaToast.add({
-            title: createError.message ?? t("errors.actionFailed"),
-            type: "error",
-          });
+          notifyAuthClientError(createError, t("errors.actionFailed"));
           return;
         }
 
@@ -389,10 +378,7 @@ const CreateOrganizationForm = ({
 
         if (setActiveError) {
           analytics.captureError(toAuthClientError(setActiveError));
-          stellaToast.add({
-            title: setActiveError.message ?? t("errors.actionFailed"),
-            type: "error",
-          });
+          notifyAuthClientError(setActiveError, t("errors.actionFailed"));
           return;
         }
 
@@ -406,10 +392,7 @@ const CreateOrganizationForm = ({
           });
         } catch (error) {
           analytics.captureError(error);
-          stellaToast.add({
-            title: userErrorFromThrown(error, t("errors.actionFailed")),
-            type: "error",
-          });
+          notifyUserError(error, t("errors.actionFailed"));
         }
       },
     }),

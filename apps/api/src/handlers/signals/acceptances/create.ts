@@ -21,7 +21,7 @@ import {
   transitionSignal,
 } from "@/api/handlers/signals/transition";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import { AGENDA_ITEM_KIND } from "@/api/lib/entity-constants";
@@ -45,8 +45,13 @@ const config = {
     "deadline suggestions are created here; for the others the client " +
     "performs the action and reports what it produced.",
   permissions: { signal: ["resolve"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   params: signalParamsSchema,
   body: acceptBodySchema,
 } satisfies HandlerConfig;

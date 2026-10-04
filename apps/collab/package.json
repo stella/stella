@@ -19,6 +19,7 @@
     "@hocuspocus/server": "^4.6.0",
     "@stll/api-contract": "workspace:*",
     "@stll/errors": "workspace:*",
+    "@stll/redis-config": "workspace:*",
     "@stll/runtime-mode": "workspace:*",
     "@stll/time": "workspace:*",
     "@t3-oss/env-core": "catalog:",
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@hocuspocus/provider": "^4.7.0",
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:"
   },

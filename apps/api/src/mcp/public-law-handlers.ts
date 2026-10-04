@@ -24,10 +24,10 @@ import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/vers
  * is a second seam tests would have to know about.
  */
 export const defaultSearchDecisionsHandler: typeof searchDecisionsHandler =
-  async (input, database) =>
+  async (args) =>
     await (
       await import("@/api/handlers/case-law/decisions/search")
-    ).searchDecisionsHandler(input, database);
+    ).searchDecisionsHandler(args);
 
 export const defaultReadGatedDecisionWithDocument: typeof readGatedDecisionWithDocument =
   async (input) =>
@@ -48,10 +48,10 @@ export const defaultLookupDecisionsByIdentity: typeof lookupDecisionsByIdentity 
     ).lookupDecisionsByIdentity(input);
 
 export const defaultSearchLegislationHandler: typeof searchLegislationHandler =
-  async (body, legislationDb) =>
+  async (body, legislationDb, observer) =>
     await (
       await import("@/api/handlers/legislation/search")
-    ).searchLegislationHandler(body, legislationDb);
+    ).searchLegislationHandler(body, legislationDb, observer);
 
 export const defaultResolveStatuteExpression: typeof resolveStatuteExpression =
   async (query, legislationDb) =>

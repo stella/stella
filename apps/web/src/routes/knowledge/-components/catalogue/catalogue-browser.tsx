@@ -35,8 +35,12 @@ import {
 import { useMountEffect } from "@/hooks/use-effect";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
+import {
+  isEffectivelyInstalled,
+  type CatalogueDisplayEntry,
+} from "@/lib/knowledge/catalogue-types";
 import { useChatUnavailableSkills } from "@/lib/prompts/use-chat-unavailable-skills";
 import {
   BlueprintGallerySheet,
@@ -46,7 +50,6 @@ import { ImportSkillDialog } from "@/routes/knowledge/-components/import-skill-d
 
 import { addCustomActions } from "./add-custom-actions.logic";
 import { AddMcpServerSheet } from "./add-mcp-server-sheet";
-import { isEffectivelyInstalled, type CatalogueEntry } from "./catalogue-types";
 import { InstallPackButton } from "./install-pack-button";
 import { getToolDetailPayload, toolDetailTabId } from "./tool-detail";
 import { useCatalogueRemoval } from "./use-catalogue-removal";
@@ -83,7 +86,7 @@ type CatalogueBrowserProps = {
   practiceJurisdictions?: readonly PracticeJurisdiction[];
 };
 
-const toRowDisplay = (entry: CatalogueEntry): CatalogueRowDisplay => ({
+const toRowDisplay = (entry: CatalogueDisplayEntry): CatalogueRowDisplay => ({
   slug: entry.slug,
   kind: entry.kind,
   displayName: entry.displayName,
@@ -131,7 +134,7 @@ export const CatalogueBrowser = ({
 
   const entries = data.entries;
 
-  const onRowFocus = (entry: CatalogueEntry) => {
+  const onRowFocus = (entry: CatalogueDisplayEntry) => {
     const tabId = toolDetailTabId(entry.kind, entry.slug);
     if (focusedTabId === tabId) {
       inspector.close(tabId);
@@ -174,7 +177,7 @@ export const CatalogueBrowser = ({
     );
   };
 
-  const openEditInstalledSkill = (entry: CatalogueEntry) => {
+  const openEditInstalledSkill = (entry: CatalogueDisplayEntry) => {
     if (entry.kind !== "skill" || entry.installedSkillId === null) {
       return;
     }
@@ -337,7 +340,7 @@ export const CatalogueBrowserWithRouteData = ({
 );
 
 type CatalogueEntryRowProps = {
-  entry: CatalogueEntry;
+  entry: CatalogueDisplayEntry;
   focused: boolean;
   onEditSkill: () => void;
   onFocus: () => void;
@@ -381,10 +384,7 @@ const CatalogueEntryRow = ({
         });
       },
       onError: (error) => {
-        stellaToast.add({
-          title: userErrorFromThrown(error, t("catalogue.installFailed")),
-          type: "error",
-        });
+        notifyUserError(error, t("catalogue.installFailed"));
       },
     });
   };

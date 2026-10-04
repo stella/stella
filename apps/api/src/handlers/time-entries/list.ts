@@ -12,7 +12,7 @@ import {
   selectTimekeeperNames,
   timekeeperIdsOf,
 } from "@/api/handlers/time-entries/timekeeper-names";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -34,6 +34,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedTimeEntryId,
   brandPersistedUserId,
@@ -51,6 +52,7 @@ const UNPROJECTED_TIME_ENTRY_LIST_COLUMNS = [
   // Invoicing and split bookkeeping; the list reports billing through
   // `status`, and a split entry reads as an ordinary entry.
   "invoiceId",
+  "invoiceAttachment",
   "splitGroupId",
 ] as const satisfies readonly (keyof TimeEntryRow)[];
 
@@ -154,6 +156,7 @@ const readTimeEntries = createSafeHandler(
       "entry's id, entity, user, date, minutes, rate (minor currency " +
       "units), currency, narrative, and status.",
     permissions: { timeEntry: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "list_time_entries" },
     access: "read",
     query: readTimeEntriesQuerySchema,
@@ -166,7 +169,9 @@ const readTimeEntries = createSafeHandler(
     workspaceId,
     query,
   }) {
-    const limit = query.limit ?? LIMITS.timeEntriesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.timeEntriesPageSizeDefault,
+    );
     const canReviewMatterEntries = canApproveTimeEntries(memberRole);
 
     const conditions = [eq(timeEntries.workspaceId, workspaceId)];
@@ -300,6 +305,12 @@ const readTimeEntries = createSafeHandler(
         billedMinutes: row.billedMinutes,
         rateAtEntry: row.rateAtEntry,
         currency: row.currency,
+        approverUserId: row.approverUserId,
+        approvedByUserId: row.approvedByUserId,
+        approvedAt: row.approvedAt?.toISOString() ?? null,
+        returnedByUserId: row.returnedByUserId,
+        returnedAt: row.returnedAt?.toISOString() ?? null,
+        returnComment: row.returnComment,
         narrative: row.narrative,
         narrativeLanguage: row.narrativeLanguage,
         invoiceNarrative: row.invoiceNarrative,

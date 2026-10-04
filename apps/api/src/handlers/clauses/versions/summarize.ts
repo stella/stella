@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { summarizeVersionChange } from "@/api/lib/entity-versions/version-change-summary";
@@ -21,7 +21,12 @@ const config = {
     "returns. Returns summary null when the two are identical, skipping the " +
     "model call. Consumes AI usage.",
   permissions: { workspace: ["read"], chat: ["create"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: true,
+  },
   access: "write",
   params: clauseVersionSummarizeParamsSchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
@@ -35,7 +40,15 @@ const config = {
  */
 const clauseVersionSummarize = createSafeRootHandler(
   config,
-  async function* ({ scopedDb, session, params, safeDb, user, orgAIConfig }) {
+  async function* ({
+    scopedDb,
+    session,
+    params,
+    safeDb,
+    user,
+    orgAIConfig,
+    managedAIResidency,
+  }) {
     const organizationId = session.activeOrganizationId;
 
     const sources = yield* Result.await(
@@ -68,6 +81,7 @@ const clauseVersionSummarize = createSafeRootHandler(
         currentText: sources.currentText,
         feature: "clauses.version_summary",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         safeDb,
         userId: user.id,

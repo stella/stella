@@ -8,6 +8,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
+import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
 
 /**
@@ -106,10 +107,17 @@ export type GoldenQueryRequest = {
  * holds several jurisdictions is compared on the query's jurisdiction alone.
  * Null when the query text carries no searchable term.
  */
-export const goldenQueryRequest = (
-  generation: string,
-  query: GoldenQuery,
-): GoldenQueryRequest | null => {
+type GoldenQueryRequestOptions = {
+  generation: string;
+  query: GoldenQuery;
+  queryVariant?: CorpusIndexQueryVariant;
+};
+
+export const goldenQueryRequest = ({
+  generation,
+  query,
+  queryVariant = "off",
+}: GoldenQueryRequestOptions): GoldenQueryRequest | null => {
   const { indexId, jurisdictionClause } = corpusIndexRoute(
     requireCorpusIndexManifest("case_law", generation),
     query.jurisdiction,
@@ -117,15 +125,19 @@ export const goldenQueryRequest = (
   // The diff compares generations, so the query each one gets is the query
   // that generation's schema supports: a clause over a field an index never
   // mapped would compare an invalid query with a valid one.
-  const { surfaceFields, keywordFields, stemming } = caseLawCorpusQueryFields({
-    generation,
-    jurisdiction: query.jurisdiction,
-    language: query.filters?.language,
-  });
+  const { surfaceFields, keywordFields, stemming, legacyStemming } =
+    caseLawCorpusQueryFields({
+      generation,
+      jurisdiction: query.jurisdiction,
+      language: query.filters?.language,
+    });
   const engineQuery = caseLawCorpusQuery({
+    jurisdiction: query.jurisdiction,
     text: query.text,
+    queryVariant,
     filters: { ...query.filters, jurisdiction: jurisdictionClause },
     stemming,
+    legacyStemming,
     surfaceFields,
     keywordFields,
   });

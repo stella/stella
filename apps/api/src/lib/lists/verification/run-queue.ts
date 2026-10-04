@@ -251,7 +251,7 @@ type ClaimedRun = {
 /** Conditional `queued -> running`: the loser of a double delivery updates
  *  nothing and stops. */
 const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
-  const rows = await actor.scopedDb(
+  const rows = await actor.writeDb(
     async (tx) =>
       // audit: skip — lifecycle bookkeeping on a run audited at creation.
       await tx
@@ -278,7 +278,7 @@ const setRunFailed = async (
   actor: RunActor,
   errorCode: VerificationRunErrorCode,
 ): Promise<void> => {
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     // audit: skip — failure bookkeeping on a run audited at creation.
     await tx
       .update(legalListVerificationRuns)
@@ -301,13 +301,15 @@ type ResolvedFile = {
   pdfFileId: string | null;
 };
 
-/** The pinned file, or why it can no longer be read as pinned. */
+/** The pinned file, or why it can no longer be read as pinned. Read under
+ *  the requester's current membership: a requester who lost the matter
+ *  resolves nothing, so the run stops before the document is read. */
 const resolvePinnedFile = async (
   actor: RunActor,
   run: ClaimedRun,
 ): Promise<Result<ResolvedFile, VerificationRunErrorCode>> => {
   const row = (
-    await actor.scopedDb(
+    await actor.inputDb(
       async (tx) =>
         await tx
           .select({ content: fields.content })
@@ -403,19 +405,21 @@ const executeRun = async (
 
   const configResult = await Result.tryPromise({
     try: async () => {
-      const settings = await actor.scopedDb(
+      const settings = await actor.writeDb(
         async (tx) => await loadOrgAISettings(tx, actor),
       );
       if (Result.isError(settings)) {
         return Result.err(settings.error);
       }
-      const { orgAIConfig, promptCachingEnabled } = settings.value;
+      const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
+        settings.value;
       return Result.ok({
         orgAIConfig,
+        managedAIResidency,
         model: getTanStackTextModelInfoForRole(
           VERIFICATION_MODEL_ROLE,
           orgAIConfig,
-          { organizationId: actor.organizationId },
+          { dataClass: "customer", organizationId: actor.organizationId },
         ),
         promptCachingEnabled,
       });
@@ -430,7 +434,7 @@ const executeRun = async (
     });
     return "ai_unavailable";
   }
-  await actor.scopedDb(
+  await actor.writeDb(
     async (tx) =>
       // audit: skip — records the model the run used, on a run audited at creation.
       await tx
@@ -449,12 +453,13 @@ const executeRun = async (
     workspaceId: actor.workspaceId,
     entityVersionId: run.entityVersionId,
     orgAIConfig: config.value.orgAIConfig,
+    managedAIResidency: config.value.managedAIResidency,
     promptCachingEnabled: config.value.promptCachingEnabled,
     serviceTier: SERVICE_TIER,
     usageMetering: {
       actionType: "doc_review",
       organizationId: actor.organizationId,
-      safeDb: actor.safeDb,
+      safeDb: actor.writeSafeDb,
       serviceTier: SERVICE_TIER,
       userId: actor.userId,
       workspaceId: actor.workspaceId,
@@ -474,9 +479,14 @@ const executeRun = async (
             {
               key: String(position),
               text: claim.text,
-              context:
-                document.blocks.at(claim.blockIndex)?.text ??
-                panic("An extracted claim names a block outside the document"),
+              context: {
+                text:
+                  document.blocks.at(claim.blockIndex)?.text ??
+                  panic(
+                    "An extracted claim names a block outside the document",
+                  ),
+                anchor: claim.anchor,
+              },
             },
           ]
         : [],
@@ -489,7 +499,7 @@ const executeRun = async (
   }
 
   const rows = claimRows(actor, claims, graded.value.grades);
-  await actor.scopedDb(async (tx) => {
+  await actor.writeDb(async (tx) => {
     await completeVerificationRun({
       tx,
       runId: actor.runId,
@@ -501,8 +511,9 @@ const executeRun = async (
   return null;
 };
 
-const processJob = async (data: ListVerificationJobData): Promise<void> => {
-  const actor = brandActor(data);
+export const processListVerificationRun = async (
+  actor: RunActor,
+): Promise<void> => {
   const claimed = await claimRun(actor);
   if (claimed === null) {
     return;
@@ -524,13 +535,22 @@ const processJob = async (data: ListVerificationJobData): Promise<void> => {
   }
 };
 
+const processJob = async (data: ListVerificationJobData): Promise<void> => {
+  await processListVerificationRun(brandActor(data));
+};
+
 export const initListVerificationRunWorker = () => {
   const worker = new Worker<ListVerificationJobData>(
     QUEUE_NAME,
     async (job) => {
       await processJob(job.data);
     },
-    { connection: createBullMqConnection(), concurrency: WORKER_CONCURRENCY },
+    {
+      connection: createBullMqConnection({
+        storeClass: "durable-coordination",
+      }),
+      concurrency: WORKER_CONCURRENCY,
+    },
   );
 
   worker.on("failed", (job, error) => {

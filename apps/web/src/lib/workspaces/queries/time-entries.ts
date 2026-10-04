@@ -81,7 +81,8 @@ const timeEntriesListKey = (key: TimeEntriesListKey) => ({
 });
 
 export const timeEntriesKeys = {
-  all: (workspaceId: string) => ["timeEntries", workspaceId],
+  root: () => ["timeEntries"],
+  all: (workspaceId: string) => [...timeEntriesKeys.root(), workspaceId],
   // What the list shows depends on who asks (their own entries, or everyone's
   // for a reviewer), so it is keyed by the signed-in user too.
   list: (workspaceId: string, userId: string, key: TimeEntriesListKey) => [
@@ -92,11 +93,6 @@ export const timeEntriesKeys = {
   byId: (workspaceId: string, id: string) => [
     ...timeEntriesKeys.all(workspaceId),
     id,
-  ],
-  activeTimer: (workspaceId: string, userId: string) => [
-    ...timeEntriesKeys.all(workspaceId),
-    userId,
-    "timer",
   ],
   summary: (
     workspaceId: string,
@@ -317,25 +313,4 @@ export const timeEntrySuggestionsOptions = (
         query: { date, timezoneId },
         signal,
       }),
-  });
-
-export const activeTimerOptions = (workspaceId: string, userId: string) =>
-  queryOptions({
-    staleTime: 0,
-    queryKey: timeEntriesKeys.activeTimer(workspaceId, userId),
-    queryFn: async ({ signal }) => {
-      const page = await fetchTimeEntries({
-        workspaceId,
-        query: {
-          scope: "me",
-          source: "timer",
-          status: "draft",
-          hasActiveTimer: true,
-        },
-        signal,
-      });
-
-      return page.items.at(0) ?? null;
-    },
-    refetchInterval: 60_000,
   });

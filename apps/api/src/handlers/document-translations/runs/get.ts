@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { documentTranslationRuns } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -10,8 +10,14 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const config = {
   description: "Read a document translation run and its progress.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "document_processing",
+    consumesServices: false,
+  },
   params: workspaceParams({ runId: tSafeId("documentTranslationRun") }),
 } satisfies WorkspaceHandlerConfig;
 

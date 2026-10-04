@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import type * as v from "valibot";
 
 import {
@@ -5,6 +6,8 @@ import {
   envBaseServerSchema,
 } from "../apps/api/src/env-base-schema";
 import { envDocumentProcessingWorkerServerSchema } from "../apps/api/src/env-document-processing-worker-schema";
+import { envOnlineIndexServerSchema } from "../apps/api/src/env-online-index";
+import { replayTickServerSchema } from "../apps/api/src/env-replay";
 import { envApiServerSchema } from "../apps/api/src/env-schema";
 import { envCollabServerSchema } from "../apps/collab/src/env-schema";
 import { envWebClientSchema } from "../apps/web/src/env-schema";
@@ -40,6 +43,7 @@ export const ENV_OWNER = {
 export type EnvOwner = (typeof ENV_OWNER)[keyof typeof ENV_OWNER];
 
 export type EnvCatalogEntry = {
+  credentialKind: (typeof ENV_CREDENTIAL_KIND)[keyof typeof ENV_CREDENTIAL_KIND];
   description: string;
   documented: boolean;
   example: string | undefined;
@@ -55,9 +59,25 @@ export type EnvCatalogEntry = {
 type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
+  "UNUSED_CLIENT_RETENTION_DAYS",
+  "AGENT_REGISTRATION_DAILY_LIMIT",
+  "OPEN_CLIENT_REGISTRATION_DAILY_LIMIT",
+  "ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY",
+  "ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY",
   "ACTION_ADMISSION_LEASE_MS",
   "ACTION_ADMISSION_ORG_CONCURRENCY",
   "ACTION_ADMISSION_USER_CONCURRENCY",
+  "ACTION_REQUEST_MAX_BYTES",
+  "ACTION_RESPONSE_MAX_BYTES",
+  "ACTION_PAGE_SIZE_MAX",
+  "MCP_READ_WINDOW_MS",
+  "MCP_READ_WINDOW_MAX_ENTRIES",
+  "MCP_READ_TENANT_ORG_BYTES",
+  "MCP_READ_TENANT_USER_BYTES",
+  "MCP_READ_PUBLIC_ORG_BYTES",
+  "MCP_READ_PUBLIC_USER_BYTES",
+  "MCP_CASE_LAW_SEARCH_GUIDANCE",
+  "AGENT_CLIENT_STORAGE_V1_ENABLED",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
   "AGENT_SANDBOX_HARNESS_BASE_URL",
@@ -71,31 +91,46 @@ const INTERNAL_SERVER_KEYS = new Set([
   "AI_MODEL_PDF",
   "AI_MODEL_REASONING",
   "TYPESAFE_MODEL",
-  "AI_PROVIDER",
   "AI_PROVIDER_BASE_URL",
+  "OPENROUTER_WIF_POLICY_ID",
+  "OPENROUTER_WIF_AUDIENCE",
+  "OPENROUTER_WIF_STS_REGION",
   "AZURE_API_VERSION",
   "AZURE_BASE_URL",
   "AZURE_RESOURCE_NAME",
   "BETTER_AUTH_COOKIE_PREFIX",
   "BETTER_AUTH_URL",
   "CASE_LAW_DATABASE_POOL_MAX",
+  "CASE_LAW_REPLAY_ENABLED",
+  "CASE_LAW_REPLAY_KILL_SWITCH",
+  "CASE_LAW_REPLAY_DISABLED_SOURCES",
   "PUBLIC_LAW_DATABASE_POOL_MAX",
-  "CORPUS_PROJECTION_OWNER",
+  "PUBLIC_CORPUS_RESERVED_CONNECTIONS",
+  "PUBLIC_CORPUS_ASSUMED_REPLICAS",
+  "PUBLIC_CORPUS_SEARCH_P95_SECONDS",
+  "PUBLIC_CORPUS_AGGREGATE_P95_SECONDS",
+  "PUBLIC_CORPUS_SITEMAP_P95_SECONDS",
+  "PUBLIC_CORPUS_SEARCH_ADDRESS_MAX",
+  "PUBLIC_CORPUS_SEARCH_GLOBAL_MAX",
+  "PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX",
+  "PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX",
   "CORPUS_INDEX_Q09_ENDPOINT",
   "CORPUS_INDEX_Q09_SEARCH_ENDPOINT",
   "CORPUS_INDEX_S3_BUCKET",
-  "CORPUS_MEMBER_LAYOUT",
   "CORPUS_STORAGE_ENABLED",
-  "CORPUS_STORAGE_MODE",
+  "MANAGED_PROVIDER_CHECK_INTERVAL_MS",
+  "MANAGED_PROVIDER_CHECK_TIMEOUT_MS",
   "DATABASE_POOL_IDLE_TIMEOUT_S",
   "DATABASE_POOL_MAX_LIFETIME_S",
   "DATABASE_STATEMENT_TIMEOUT_MS",
   "DATABASE_RLS_POOL_MAX",
   "DATABASE_ROOT_POOL_MAX",
+  "DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER",
+  "DB_LOAD_GATE_EBS_SIGNAL",
+  ...Object.keys(envOnlineIndexServerSchema),
   "DB_HOST",
   "DB_NAME",
   "DB_PORT",
-  "DB_SSLMODE",
   "DB_USER",
   "DEBUG_UNREDACTED_ERRORS",
   "DEV_PUBLIC_LAW_CONNECT_COMMAND",
@@ -103,41 +138,33 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DOCUMENT_OCR_MODEL_DIR",
   "DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES",
   "E2E_DISABLE_AUTH_RATE_LIMIT",
-  "EMAIL_PROVIDER",
   "EXTENSION_ORIGIN",
   "FEATURE_ACTION_ADMISSION",
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
-  "FEATURE_CALENDAR",
-  "FEATURE_CASE_LAW",
-  "FEATURE_CHAT",
-  "FEATURE_CONTACTS",
-  "FEATURE_DESKTOP_EDITING",
   "FEATURE_FILE_USAGE_LIMITS",
   "FEATURE_GOVERNED_WORKFLOW",
   "FEATURE_INBOX_DOCUMENT_SCOUTS",
-  "FEATURE_KNOWLEDGE_TEMPLATES",
   "FEATURE_LEGAL_LISTS",
-  "FEATURE_MCP",
+  "FEATURE_MANAGED_PROVIDER_CHECKS",
+  "FEATURE_MCP_READ_FENCE",
   "FEATURE_ORG_ACCESS_STATE",
+  "FEATURE_ORG_SERVICE_BUDGETS",
   "FEATURE_PUBLIC_LAW",
   "FEATURE_PUBLIC_KNOWLEDGE",
   "FEATURE_PUBLIC_TOOLS",
   "FEATURE_SHAREPOINT",
   "FEATURE_TEMPLATE_PACKS",
   "FEATURE_TIME_BILLING",
-  "FEATURE_TODOS",
   "FEATURE_USAGE",
   "FEATURE_WEB_SEARCH",
   "FRONTEND_URL",
   "GOOGLE_AUTH_CLIENT_ID",
   "GOTENBERG_URL",
-  "HOSTED_USAGE_PROVIDER",
   "HOSTED_USAGE_PROVIDER_BASE_URL",
   "HUGGINGFACE_BASE_URL",
   "INBOUND_MAIL_DOMAIN",
   "LEGAL_CORPUS_S3_BUCKET",
-  "LEGAL_SEARCH_PROVIDER",
   "MICROSOFT_AUTH_CLIENT_ID",
   "MICROSOFT_AUTH_TENANT_ID",
   "ORG_EVALUATION_PERIOD_DAYS",
@@ -149,17 +176,17 @@ const INTERNAL_SERVER_KEYS = new Set([
   "PDF_SIGNING_TSA_TRUST_PEM",
   "POSTHOG_LOCAL_DEBUG",
   "PUBLIC_URL",
-  "QUERY_EXPANSION_MODE",
   "REPORT_SPECS_DIR",
   "REPORT_SPECS_S3_PREFIX",
   "REDIS_TLS_REJECT_UNAUTHORIZED",
   "REQUIRE_PERSONAL_AI_KEY",
   "S3_BUCKET",
-  "S3_CREDENTIALS_PROVIDER",
   "S3_ENDPOINT",
   "S3_REGION",
   "S3_SCOPED_SIGNING_ROLE_ARN",
   "SELFHOST_LOCAL_PASSWORD_AUTH",
+  "SESSION_TOKEN_ROTATION_ENABLED",
+  "SESSION_LIFETIME_CAP_ENABLED",
   "SES_CONFIGURATION_SET",
   "SES_REGION",
   "SKIP_MIGRATION_CHECK",
@@ -169,11 +196,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "STELLA_API_PORT",
   "STELLA_API_URL",
   "STELLA_CLIENT_ADDRESS_HEADER",
-  "STELLA_COLLAB_MODE",
   "STELLA_COLLAB_PORT",
   "STELLA_COMMIT_SHA",
   "STELLA_OCR_PDF_FONT_PATH",
-  "STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE",
   "STELLA_TRUSTED_PROXY_CIDRS",
   "STELLA_USAGE_POLICY_SEEDS",
   "STELLA_VERSION",
@@ -182,8 +207,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "TEMPLATE_PACKS_CONTENT_DIR",
   "USAGE_ENFORCEMENT_ENABLED",
   "USE_MOCK_AI",
-  "WEB_FETCH_PROVIDER",
-  "WEB_SEARCH_PROVIDER",
 ]);
 
 const EXAMPLE_VALUES: Record<string, string> = {
@@ -202,6 +225,9 @@ const EXAMPLE_VALUES: Record<string, string> = {
   INGESTION_USER_AGENT: "acme-ingestion/1.0 (+https://example.com/contact)",
   FEEDBACK_EMAIL_TO: "maintainer@example.com",
   FEEDBACK_GITHUB_REPO: "owner/repo",
+  DB_LOAD_GATE_EBS_SIGNAL: "disabled",
+  // Local and CI databases build indexes without wall-clock busy windows.
+  DB_LOAD_GATE_BUSY_WINDOWS: "[]",
   FRONTEND_URL: "http://localhost:3000",
   GOOGLE_GENERATIVE_AI_API_KEY: "key-test",
   GOTENBERG_PASSWORD: "gotenberg",
@@ -242,6 +268,24 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  CASE_LAW_REPLAY_ENABLED:
+    "Enable bounded background case-law replay. Defaults to false.",
+  CASE_LAW_REPLAY_KILL_SWITCH:
+    "Stop background case-law replay at the next batch boundary. Defaults to false.",
+  CASE_LAW_REPLAY_DISABLED_SOURCES:
+    "Comma-separated adapter keys excluded from background case-law replay.",
+  UNUSED_CLIENT_RETENTION_DAYS:
+    "Age in days before unused client registrations expire (1–365; default 30).",
+  AGENT_REGISTRATION_DAILY_LIMIT:
+    "Maximum agent registrations per UTC day (1–1000000; default 10000).",
+  OPEN_CLIENT_REGISTRATION_DAILY_LIMIT:
+    "Maximum open client registrations per UTC day (1–1000000; default 10000).",
+  HOSTED_USAGE_WEBHOOK_RETENTION_DAYS:
+    "Retention in days for completed provider event details; unset disables redaction.",
+  AGENT_CLIENT_STORAGE_V1_ENABLED:
+    "Enable the shared agent client storage format.",
+  ACTION_LIMIT_CONTACT_URL:
+    "Public http(s) contact link shown when an action is paused or not enabled.",
   AGENT_SANDBOX_DOCKER_NETWORK:
     "Locked-down Docker network used by agent sandboxes. It must deny arbitrary egress.",
   AGENT_SANDBOX_DOCKER_SOCKET:
@@ -277,6 +321,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Maximum RLS pool size. Keep its sum with DATABASE_ROOT_POOL_MAX, plus one connection for the periodic login check outside local development, within the process connection budget.",
   DATABASE_ROOT_POOL_MAX:
     "Maximum root pool size. Keep its sum with DATABASE_RLS_POOL_MAX, plus one connection for the periodic login check outside local development, within the process connection budget.",
+  PUBLIC_CORPUS_RESERVED_CONNECTIONS:
+    "Public corpus concurrent-work reservation when using the root pool. Unset reserves max(1, floor(DATABASE_ROOT_POOL_MAX / 4)); values are capped at the root pool size. A dedicated PUBLIC_LAW_DATABASE_URL uses its own pool limits.",
+  PUBLIC_CORPUS_SEARCH_ADDRESS_MAX:
+    "Statute and case-law full-text search requests per minute shared by one client address, capped at half the search global budget.",
   PUBLIC_LAW_DATABASE_POOL_MAX:
     "Maximum connections in the optional local read-only public-law pool.",
   PUBLIC_LAW_DATABASE_URL:
@@ -286,6 +334,36 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Corpus index read endpoint, accepted on a private corpus-index-v09 service host and otherwise only in local development. Unset uses CORPUS_INDEX_Q09_ENDPOINT; never used for mutations.",
   DATABASE_URL:
     "Postgres owner URL used by Drizzle. Requests downgrade to the stella role so row-level security applies.",
+  DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER:
+    "RDS instance whose EBS balances gate heavy maintenance and online index builds. Region and credentials use the AWS SDK provider chain. A set identifier enables EBS reads and takes precedence over DB_LOAD_GATE_EBS_SIGNAL. Missing or failed metrics defer maintenance.",
+  DB_LOAD_GATE_EBS_SIGNAL:
+    "Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, migrate fails before connecting, and background maintenance holds with an error event naming the missing configuration.",
+  DB_LOAD_GATE_START_FLOOR:
+    "EBS balance percentage required to start an online index build.",
+  DB_LOAD_GATE_HARD_FLOOR:
+    "EBS balance percentage below which a running online index build is cancelled and retried later.",
+  DB_LOAD_GATE_MAX_STALENESS_MS:
+    "Maximum age of a health reading before it counts as unknown and holds the build.",
+  DB_LOAD_GATE_READ_TIMEOUT_MS:
+    "Timeout for each health probe, including the online index observer's connection and statements.",
+  DB_LOAD_GATE_MAX_HELD_MS:
+    "How long an online index build may stay held before a held-too-long event is logged.",
+  DB_LOAD_GATE_LONG_TX_MAX_AGE_MS:
+    "Oldest open transaction age that still allows an online index build to start.",
+  DB_LOAD_GATE_BUSY_WINDOWS:
+    'JSON array of local busy windows, such as `[{"start":"06:30","end":"08:00","timeZone":"Europe/Prague"}]`, during which online index builds wait. `[]` disables them.',
+  ONLINE_INDEX_POLL_MS:
+    "Interval between health checks while an online index build runs.",
+  ONLINE_INDEX_CLIENT_CHECK_MS:
+    "client_connection_check_interval for the index build session, so a lost migrator stops its build.",
+  ONLINE_INDEX_RETRY_MS:
+    "Delay before the migrator retries a deferred online index build.",
+  ONLINE_INDEX_MAX_SNAPSHOT_WAIT_MS:
+    "Maximum time an online index build may stay in one waiting phase, such as waiting for older transactions, before it is cancelled and retried.",
+  ONLINE_INDEX_PARALLEL_WORKERS:
+    "max_parallel_maintenance_workers for online index builds (0 or 1).",
+  ONLINE_INDEX_MAINTENANCE_WORK_MEM_MB:
+    "maintenance_work_mem, in megabytes, for online index builds.",
   DB_HOST:
     "Postgres hostname used with the component settings when DATABASE_URL is unset.",
   DB_NAME:
@@ -324,6 +402,18 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Enforce the per-organization access state before a model call falls back to the instance provider.",
   FEATURE_FILE_USAGE_LIMITS:
     "Enforce organization file byte reservations at storage writes.",
+  OPENROUTER_WIF_POLICY_ID:
+    "Workload-identity federation policy. Configure with audience and regional STS endpoint; a static key takes precedence.",
+  OPENROUTER_WIF_AUDIENCE:
+    "Audience for the workload-identity token. Required with the federation policy and STS region.",
+  OPENROUTER_WIF_STS_REGION:
+    "AWS region for workload-identity token minting. Required with the federation policy and audience.",
+  FEATURE_MANAGED_PROVIDER_CHECKS:
+    "Check regional model availability before managed requests. Requires AI_PROVIDER=openrouter, a static key or complete workload-identity configuration, and explicit check interval/timeout settings.",
+  MANAGED_PROVIDER_CHECK_INTERVAL_MS:
+    "Regional catalog refresh interval in milliseconds. Required when FEATURE_MANAGED_PROVIDER_CHECKS is enabled; must exceed the check timeout.",
+  MANAGED_PROVIDER_CHECK_TIMEOUT_MS:
+    "Regional catalog check deadline in milliseconds, at most 30000. Required when FEATURE_MANAGED_PROVIDER_CHECKS is enabled.",
   ORG_EVALUATION_PERIOD_DAYS:
     "Length in days of the evaluation period a new organization starts.",
   FEATURE_PUBLIC_TOOLS:
@@ -356,14 +446,14 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "identifier with the build version and a contact URL; set it so a fork " +
     "does not identify as the upstream project. Browser-like values are " +
     "refused by publishers that gate bots.",
+  MCP_CASE_LAW_SEARCH_GUIDANCE:
+    'Query guidance in the search_case_law tool: "off" keeps today\'s description, "v1" explains how phrasings are matched and how the limit is shared, names apex courts per admitted country, and warns when a long phrasing fills fewer slots than it was given.',
   MICROSOFT_AUTH_CLIENT_ID:
     "Microsoft OAuth client ID; required when the matching web login flag is enabled.",
   MICROSOFT_AUTH_CLIENT_SECRET:
     "Microsoft OAuth client secret; required when the matching web login flag is enabled.",
   MICROSOFT_AUTH_TENANT_ID:
     "Microsoft OAuth tenant selector accepted by the configured application registration.",
-  OPERATOR_METRICS_TOKEN:
-    "Bearer token for registration metrics. Unset disables the endpoint; use a long random value.",
   POSTHOG_KEY:
     'PostHog project key. The placeholder "phc_" disables capture for local development.',
   POSTHOG_LOCAL_DEBUG:
@@ -383,7 +473,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Leave on unless the endpoint presents a certificate no trust anchor can " +
     "validate and the private network is the boundary instead.",
   REDIS_URL:
-    "Valkey or Redis URL used for cross-instance broadcasts and rate limits. Treated as secret because it may contain credentials.",
+    "Valkey or Redis URL used for cross-instance broadcasts and rate limits. Set maxmemory-policy noeviction on the server for durable coordination, including queues, locks, reservations, and fences. Treated as secret because it may contain credentials.",
   S3_ACCESS_KEY_ID:
     'S3 access-key ID. Required with S3_CREDENTIALS_PROVIDER="env"; otherwise omit it with the secret to use the selected provider.',
   S3_BUCKET: "S3 bucket for uploaded files.",
@@ -397,6 +487,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'S3 secret access key. Required with S3_CREDENTIALS_PROVIDER="env"; otherwise omit it with the access-key ID.',
   SECURITY_CANARY_API_KEY_SHA256:
     "SHA-256 digest of a decoy machine API key. Keep its plaintext outside this environment.",
+  SESSION_TOKEN_ROTATION_ENABLED:
+    "Rotate browser session credentials on refresh. Defaults off; enable after every API instance supports prior credentials.",
+  SESSION_LIFETIME_CAP_ENABLED:
+    "Apply the ninety-day session cap at startup after one idle hour. Defaults off; enable after activity tracking is established.",
   SES_REGION: "AWS region used for SES transactional email delivery.",
   SMTP_HOST: "SMTP relay hostname.",
   SMTP_PORT: "SMTP relay port.",
@@ -420,7 +514,11 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
   STELLA_CLIENT_ADDRESS_HEADER:
-    "Header the edge sets to the viewer address with its port (e.g. cloudfront-viewer-address). Read only from STELLA_TRUSTED_PROXY_CIDRS peers; set only when every route to the API adds it.",
+    "Header the edge sets to the viewer address (e.g. cloudfront-viewer-address; see STELLA_CLIENT_ADDRESS_FORMAT). Read only from STELLA_TRUSTED_PROXY_CIDRS peers; set only when every route to the API adds it.",
+  STELLA_CLIENT_ADDRESS_FORMAT:
+    "How STELLA_CLIENT_ADDRESS_HEADER spells the address: with-port (default, e.g. cloudfront-viewer-address) or bare.",
+  STELLA_ORIGIN_VERIFY_SECRET:
+    "Comma-separated values the edge sends in x-stella-origin-verify (current, then next during a rotation). When set, the client address header is read only from requests carrying one of them.",
   STELLA_TRUSTED_PROXY_CIDRS:
     "Comma-separated CIDRs for proxies directly in front of the API. Never trust public client ranges.",
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS:
@@ -475,6 +573,9 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   AGENT_SANDBOX_IMAGE: "AGENT_SANDBOX_RUNS_ENABLED is true",
   AGENT_SANDBOX_MCP_URL: "AGENT_SANDBOX_RUNS_ENABLED is true",
   CONTENT_ENCRYPTION_KEY: "the process runs without local development access",
+  DB_LOAD_GATE_EBS_SIGNAL: "DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER is unset",
+  DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER:
+    "the database is RDS and DB_LOAD_GATE_EBS_SIGNAL is unset",
   CORPUS_INDEX_Q09_ENDPOINT:
     "LEGAL_SEARCH_PROVIDER is corpus-index and CORPUS_INDEX_Q09_SEARCH_ENDPOINT is unset",
   CORPUS_PROJECTION_OWNER: "CORPUS_STORAGE_MODE is canonical",
@@ -490,12 +591,323 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   TRANSACTIONAL_EMAIL_FROM: "EMAIL_PROVIDER is ses or smtp",
 };
 
+export const ENV_CREDENTIAL_KIND = {
+  credential: "credential",
+  notCredential: "not-credential",
+} as const;
+
+type EnvCatalogName =
+  | keyof typeof envBaseServerSchema
+  | keyof typeof databaseComponentEnvSchema
+  | keyof typeof envOnlineIndexServerSchema
+  | keyof typeof envDocumentProcessingWorkerServerSchema
+  | keyof typeof envApiServerSchema
+  | keyof typeof envCollabServerSchema
+  | keyof typeof replayTickServerSchema
+  | keyof typeof envWebClientSchema;
+
+export const ENV_CREDENTIAL_CLASSIFICATION = {
+  ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY:
+    ENV_CREDENTIAL_KIND.notCredential,
+  ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY:
+    ENV_CREDENTIAL_KIND.notCredential,
+  ACTION_ADMISSION_LEASE_MS: ENV_CREDENTIAL_KIND.notCredential,
+  ACTION_ADMISSION_ORG_CONCURRENCY: ENV_CREDENTIAL_KIND.notCredential,
+  ACTION_ADMISSION_PERIOD_ACTIONS: ENV_CREDENTIAL_KIND.notCredential,
+  ACTION_ADMISSION_PERIOD_MS: ENV_CREDENTIAL_KIND.notCredential,
+  ACTION_ADMISSION_USER_CONCURRENCY: ENV_CREDENTIAL_KIND.notCredential,
+  ACTION_COST_CALL_RATES: ENV_CREDENTIAL_KIND.notCredential,
+  ACTION_COST_ESTIMATES: ENV_CREDENTIAL_KIND.notCredential,
+  ACTION_COST_RETENTION_DAYS: ENV_CREDENTIAL_KIND.notCredential,
+  ACTION_LIMIT_CONTACT_URL: ENV_CREDENTIAL_KIND.notCredential,
+  ACTION_PAGE_SIZE_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  ACTION_REQUEST_MAX_BYTES: ENV_CREDENTIAL_KIND.notCredential,
+  ACTION_RESPONSE_MAX_BYTES: ENV_CREDENTIAL_KIND.notCredential,
+  AGENT_CLIENT_STORAGE_V1_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  AGENT_REGISTRATION_DAILY_LIMIT: ENV_CREDENTIAL_KIND.notCredential,
+  AGENT_SANDBOX_DOCKER_NETWORK: ENV_CREDENTIAL_KIND.notCredential,
+  AGENT_SANDBOX_DOCKER_SOCKET: ENV_CREDENTIAL_KIND.notCredential,
+  AGENT_SANDBOX_HARNESS_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  AGENT_SANDBOX_HARNESS_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  AGENT_SANDBOX_HARNESS_MODEL: ENV_CREDENTIAL_KIND.notCredential,
+  AGENT_SANDBOX_IMAGE: ENV_CREDENTIAL_KIND.notCredential,
+  AGENT_SANDBOX_MCP_URL: ENV_CREDENTIAL_KIND.notCredential,
+  AGENT_SANDBOX_RUNS_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  AI_MODEL_CHAT: ENV_CREDENTIAL_KIND.notCredential,
+  AI_MODEL_FAST: ENV_CREDENTIAL_KIND.notCredential,
+  AI_MODEL_PDF: ENV_CREDENTIAL_KIND.notCredential,
+  AI_MODEL_REASONING: ENV_CREDENTIAL_KIND.notCredential,
+  AI_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
+  AI_PROVIDER_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  ANTHROPIC_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  AZURE_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  AZURE_API_VERSION: ENV_CREDENTIAL_KIND.notCredential,
+  AZURE_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  AZURE_RESOURCE_NAME: ENV_CREDENTIAL_KIND.notCredential,
+  BEDROCK_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  BETTER_AUTH_COOKIE_PREFIX: ENV_CREDENTIAL_KIND.notCredential,
+  BETTER_AUTH_SECRET: ENV_CREDENTIAL_KIND.credential,
+  BETTER_AUTH_URL: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_DATABASE_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_REPLAY_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_REPLAY_KILL_SWITCH: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_REPLAY_DISABLED_SOURCES: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_DATABASE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  CHAT_RUN_LOG_SHADOW: ENV_CREDENTIAL_KIND.notCredential,
+  COMPANIES_HOUSE_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  CONTENT_ENCRYPTION_KEY: ENV_CREDENTIAL_KIND.credential,
+  CORPUS_INDEX_Q09_ENDPOINT: ENV_CREDENTIAL_KIND.notCredential,
+  CORPUS_INDEX_Q09_SEARCH_ENDPOINT: ENV_CREDENTIAL_KIND.notCredential,
+  CORPUS_INDEX_QUERY_VARIANT: ENV_CREDENTIAL_KIND.notCredential,
+  CORPUS_INDEX_RANKING_MODE: ENV_CREDENTIAL_KIND.notCredential,
+  CORPUS_INDEX_S3_BUCKET: ENV_CREDENTIAL_KIND.notCredential,
+  CORPUS_MEMBER_LAYOUT: ENV_CREDENTIAL_KIND.notCredential,
+  CORPUS_PROJECTION_OWNER: ENV_CREDENTIAL_KIND.notCredential,
+  CORPUS_STORAGE_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  CORPUS_STORAGE_MODE: ENV_CREDENTIAL_KIND.notCredential,
+  DATABASE_POOL_IDLE_TIMEOUT_S: ENV_CREDENTIAL_KIND.notCredential,
+  DATABASE_POOL_MAX_LIFETIME_S: ENV_CREDENTIAL_KIND.notCredential,
+  DATABASE_RLS_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  DATABASE_ROOT_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  DATABASE_STATEMENT_TIMEOUT_MS: ENV_CREDENTIAL_KIND.notCredential,
+  DATABASE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  DB_HOST: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_BUSY_WINDOWS: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_EBS_SIGNAL: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_HARD_FLOOR: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_LONG_TX_MAX_AGE_MS: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_MAX_HELD_MS: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_MAX_STALENESS_MS: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_READ_TIMEOUT_MS: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_START_FLOOR: ENV_CREDENTIAL_KIND.notCredential,
+  DB_NAME: ENV_CREDENTIAL_KIND.notCredential,
+  DB_PASSWORD: ENV_CREDENTIAL_KIND.credential,
+  DB_PORT: ENV_CREDENTIAL_KIND.notCredential,
+  DB_SSLMODE: ENV_CREDENTIAL_KIND.notCredential,
+  DB_USER: ENV_CREDENTIAL_KIND.notCredential,
+  DEBUG_UNREDACTED_ERRORS: ENV_CREDENTIAL_KIND.notCredential,
+  DEMO_ACCOUNT_EMAIL: ENV_CREDENTIAL_KIND.notCredential,
+  DEMO_ACCOUNT_ORGANIZATION_ID: ENV_CREDENTIAL_KIND.notCredential,
+  DEMO_ACCOUNT_OTP: ENV_CREDENTIAL_KIND.credential,
+  DEV_PUBLIC_LAW_CONNECT_COMMAND: ENV_CREDENTIAL_KIND.notCredential,
+  DOCUMENT_OCR_BATCH_INTERVAL_MINUTES: ENV_CREDENTIAL_KIND.notCredential,
+  DOCUMENT_OCR_MODEL_DIR: ENV_CREDENTIAL_KIND.notCredential,
+  DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES: ENV_CREDENTIAL_KIND.notCredential,
+  E2E_DISABLE_AUTH_RATE_LIMIT: ENV_CREDENTIAL_KIND.notCredential,
+  EDGAR_USER_AGENT: ENV_CREDENTIAL_KIND.notCredential,
+  EMAIL_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
+  EXTENSION_ORIGIN: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_ACTION_ADMISSION: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_ACTION_COST_RECORDS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_AGENT_ID_JAG: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_CONFIGURED_ACCESS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_FILE_USAGE_LIMITS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_INBOX_DOCUMENT_SCOUTS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_LEGAL_LISTS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_MANAGED_PROVIDER_CHECKS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_MCP_READ_FENCE: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_ORG_ACCESS_STATE: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_ORG_SERVICE_BUDGETS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_PUBLIC_KNOWLEDGE: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_PUBLIC_LAW: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_PUBLIC_TOOLS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_SHAREPOINT: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_TEMPLATE_PACKS: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_TIME_BILLING: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_USAGE: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_WEB_SEARCH: ENV_CREDENTIAL_KIND.notCredential,
+  FEEDBACK_EMAIL_TO: ENV_CREDENTIAL_KIND.notCredential,
+  FEEDBACK_GITHUB_REPO: ENV_CREDENTIAL_KIND.notCredential,
+  FEEDBACK_GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  FRONTEND_URL: ENV_CREDENTIAL_KIND.notCredential,
+  GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  GOOGLE_AI_API_KEY_CH: ENV_CREDENTIAL_KIND.credential,
+  GOOGLE_AI_API_KEY_EU: ENV_CREDENTIAL_KIND.credential,
+  GOOGLE_AUTH_CLIENT_ID: ENV_CREDENTIAL_KIND.notCredential,
+  GOOGLE_AUTH_CLIENT_SECRET: ENV_CREDENTIAL_KIND.credential,
+  GOOGLE_GENERATIVE_AI_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  GOTENBERG_PASSWORD: ENV_CREDENTIAL_KIND.credential,
+  GOTENBERG_URL: ENV_CREDENTIAL_KIND.notCredential,
+  GOTENBERG_USERNAME: ENV_CREDENTIAL_KIND.notCredential,
+  HOSTED_USAGE_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
+  HOSTED_USAGE_PROVIDER_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  HOSTED_USAGE_PROVIDER_API_VERSION: ENV_CREDENTIAL_KIND.notCredential,
+  HOSTED_USAGE_PROVIDER_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  HOSTED_USAGE_WEBHOOK_RETENTION_DAYS: ENV_CREDENTIAL_KIND.notCredential,
+  HOSTED_USAGE_WEBHOOK_SECRET: ENV_CREDENTIAL_KIND.credential,
+  HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS: ENV_CREDENTIAL_KIND.credential,
+  HUGGINGFACE_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  HUGGINGFACE_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  INBOUND_MAIL_DOMAIN: ENV_CREDENTIAL_KIND.notCredential,
+  INEGI_DENUE_API_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  INGESTION_USER_AGENT: ENV_CREDENTIAL_KIND.notCredential,
+  JINA_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  LEGAL_CORPUS_S3_BUCKET: ENV_CREDENTIAL_KIND.notCredential,
+  LEGAL_SEARCH_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
+  LOGS_OTLP_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  LOGS_OTLP_URL: ENV_CREDENTIAL_KIND.notCredential,
+  MANAGED_PROVIDER_CHECK_INTERVAL_MS: ENV_CREDENTIAL_KIND.notCredential,
+  MANAGED_PROVIDER_CHECK_TIMEOUT_MS: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_CASE_LAW_SEARCH_GUIDANCE: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_READ_PUBLIC_ORG_BYTES: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_READ_PUBLIC_USER_BYTES: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_READ_TENANT_ORG_BYTES: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_READ_TENANT_USER_BYTES: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_READ_WINDOW_MAX_ENTRIES: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_READ_WINDOW_MS: ENV_CREDENTIAL_KIND.notCredential,
+  MICROSOFT_AUTH_CLIENT_ID: ENV_CREDENTIAL_KIND.notCredential,
+  MICROSOFT_AUTH_CLIENT_SECRET: ENV_CREDENTIAL_KIND.credential,
+  MICROSOFT_AUTH_TENANT_ID: ENV_CREDENTIAL_KIND.notCredential,
+  MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: ENV_CREDENTIAL_KIND.notCredential,
+  MISTRAL_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  ONLINE_INDEX_CLIENT_CHECK_MS: ENV_CREDENTIAL_KIND.notCredential,
+  ONLINE_INDEX_MAINTENANCE_WORK_MEM_MB: ENV_CREDENTIAL_KIND.notCredential,
+  ONLINE_INDEX_MAX_SNAPSHOT_WAIT_MS: ENV_CREDENTIAL_KIND.notCredential,
+  ONLINE_INDEX_PARALLEL_WORKERS: ENV_CREDENTIAL_KIND.notCredential,
+  ONLINE_INDEX_POLL_MS: ENV_CREDENTIAL_KIND.notCredential,
+  ONLINE_INDEX_RETRY_MS: ENV_CREDENTIAL_KIND.notCredential,
+  OPENAI_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  OPENAI_APPS_CHALLENGE_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  OPENROUTER_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  OPENROUTER_WIF_AUDIENCE: ENV_CREDENTIAL_KIND.notCredential,
+  OPENROUTER_WIF_POLICY_ID: ENV_CREDENTIAL_KIND.notCredential,
+  OPENROUTER_WIF_STS_REGION: ENV_CREDENTIAL_KIND.notCredential,
+  OPEN_CLIENT_REGISTRATION_DAILY_LIMIT: ENV_CREDENTIAL_KIND.notCredential,
+  ORG_EVALUATION_PERIOD_DAYS: ENV_CREDENTIAL_KIND.notCredential,
+  PAYMENT_RETRY_WINDOW_MS: ENV_CREDENTIAL_KIND.notCredential,
+  PDF_SIGNING_TSA_TRUST_PEM: ENV_CREDENTIAL_KIND.notCredential,
+  PDF_SIGNING_TSA_URL: ENV_CREDENTIAL_KIND.notCredential,
+  PDF_SIGNING_TSA_URLS: ENV_CREDENTIAL_KIND.notCredential,
+  PORT: ENV_CREDENTIAL_KIND.notCredential,
+  POSTHOG_HOST: ENV_CREDENTIAL_KIND.notCredential,
+  POSTHOG_KEY: ENV_CREDENTIAL_KIND.notCredential,
+  POSTHOG_LOCAL_DEBUG: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_AGGREGATE_P95_SECONDS: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_ASSUMED_REPLICAS: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_RESERVED_CONNECTIONS: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_SEARCH_ADDRESS_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_SEARCH_GLOBAL_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_SEARCH_P95_SECONDS: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_CORPUS_SITEMAP_P95_SECONDS: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_LAW_DATABASE_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_LAW_DATABASE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  PUBLIC_URL: ENV_CREDENTIAL_KIND.notCredential,
+  QUERY_EXPANSION_MODE: ENV_CREDENTIAL_KIND.notCredential,
+  REDIS_CONNECTION_ENFORCED: ENV_CREDENTIAL_KIND.notCredential,
+  REDIS_PASSWORD: ENV_CREDENTIAL_KIND.credential,
+  REDIS_TLS_CA_PEM: ENV_CREDENTIAL_KIND.notCredential,
+  REDIS_TLS_REJECT_UNAUTHORIZED: ENV_CREDENTIAL_KIND.notCredential,
+  REDIS_TLS_SERVER_NAME: ENV_CREDENTIAL_KIND.notCredential,
+  REDIS_URL: ENV_CREDENTIAL_KIND.notCredential,
+  REDIS_USERNAME: ENV_CREDENTIAL_KIND.notCredential,
+  REPORT_SPECS_DIR: ENV_CREDENTIAL_KIND.notCredential,
+  REPORT_SPECS_S3_PREFIX: ENV_CREDENTIAL_KIND.notCredential,
+  REQUIRE_PERSONAL_AI_KEY: ENV_CREDENTIAL_KIND.notCredential,
+  S3_ACCESS_KEY_ID: ENV_CREDENTIAL_KIND.notCredential,
+  S3_BUCKET: ENV_CREDENTIAL_KIND.notCredential,
+  S3_CREDENTIALS_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
+  S3_ENDPOINT: ENV_CREDENTIAL_KIND.notCredential,
+  S3_REGION: ENV_CREDENTIAL_KIND.notCredential,
+  S3_SCOPED_SIGNING_ROLE_ARN: ENV_CREDENTIAL_KIND.notCredential,
+  S3_SECRET_ACCESS_KEY: ENV_CREDENTIAL_KIND.credential,
+  SANCTIONS_EU_XML_URL: ENV_CREDENTIAL_KIND.notCredential,
+  SECURITY_CANARY_API_KEY_SHA256: ENV_CREDENTIAL_KIND.notCredential,
+  SELFHOST_BOOTSTRAP_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  SELFHOST_LOCAL_PASSWORD_AUTH: ENV_CREDENTIAL_KIND.notCredential,
+  SERVICE_ACTIONS_EVALUATION_PERIOD_ACTIONS: ENV_CREDENTIAL_KIND.notCredential,
+  SERVICE_ACTIONS_SELF_MANAGED_ACTIONS: ENV_CREDENTIAL_KIND.notCredential,
+  SESSION_LIFETIME_CAP_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  SESSION_TOKEN_ROTATION_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  SES_ACCESS_KEY_ID: ENV_CREDENTIAL_KIND.notCredential,
+  SES_CONFIGURATION_SET: ENV_CREDENTIAL_KIND.notCredential,
+  SES_REGION: ENV_CREDENTIAL_KIND.notCredential,
+  SES_SECRET_ACCESS_KEY: ENV_CREDENTIAL_KIND.credential,
+  SKIP_MIGRATION_CHECK: ENV_CREDENTIAL_KIND.notCredential,
+  SMOKE_SESSION_SECRET: ENV_CREDENTIAL_KIND.credential,
+  SMTP_HOST: ENV_CREDENTIAL_KIND.notCredential,
+  SMTP_PASSWORD: ENV_CREDENTIAL_KIND.credential,
+  SMTP_PORT: ENV_CREDENTIAL_KIND.notCredential,
+  SMTP_USERNAME: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_API_PORT: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_API_URL: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_CLIENT_ADDRESS_FORMAT: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_CLIENT_ADDRESS_HEADER: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_COLLAB_MODE: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_COLLAB_PORT: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_COLLAB_REDIS_URL: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_COLLAB_SERVICE_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  STELLA_COMMIT_SHA: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_OCR_PDF_FONT_PATH: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_ORIGIN_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
+  STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_TRUSTED_PROXY_CIDRS: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_USAGE_POLICY_SEEDS: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_VERSION: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_WORKER_DIR: ENV_CREDENTIAL_KIND.notCredential,
+  STELLA_YARA_RULES_DIR: ENV_CREDENTIAL_KIND.notCredential,
+  TAVILY_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  TEMPLATE_PACKS_CONTENT_DIR: ENV_CREDENTIAL_KIND.notCredential,
+  TRANSACTIONAL_EMAIL_FROM: ENV_CREDENTIAL_KIND.notCredential,
+  TYPESAFE_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  TYPESAFE_MODEL: ENV_CREDENTIAL_KIND.notCredential,
+  UNUSED_CLIENT_RETENTION_DAYS: ENV_CREDENTIAL_KIND.notCredential,
+  USAGE_ENFORCEMENT_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  USE_MOCK_AI: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_API_URL: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_AUTH_GOOGLE: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_AUTH_MICROSOFT: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_BETA_FEATURES_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_BROWSER_API_URL: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_COLLAB_URL: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_DESKTOP_BRIDGE_PORT: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_DESKTOP_RELEASES_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_FEATURE_INBOX: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_FEATURE_LEGAL_LISTS: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_FEATURE_TIME_BILLING: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_FEATURE_USAGE: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_POSTHOG_HOST: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_POSTHOG_KEY: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_POSTHOG_LOCAL_DEBUG: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_POSTHOG_UI_HOST: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_PUBLIC_APP_URL: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_PUBLIC_KNOWLEDGE_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_PUBLIC_KNOWLEDGE_INDEXING_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_PUBLIC_LAW_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_PUBLIC_LAW_INDEXING_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_PUBLIC_TOOLS_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_PUBLIC_TOOLS_INDEXING_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_SELFHOST: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_SEO_INDEXABLE: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_TERMS_URL: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_WORKFLOWS_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
+  WEB_FETCH_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
+  WEB_SEARCH_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
+} as const satisfies Record<
+  EnvCatalogName,
+  (typeof ENV_CREDENTIAL_KIND)[keyof typeof ENV_CREDENTIAL_KIND]
+>;
+
+const credentialClassifications = new Map(
+  Object.entries(ENV_CREDENTIAL_CLASSIFICATION),
+);
+
 const ACTIVE_EXAMPLE_KEYS = new Set([
   "BETTER_AUTH_SECRET",
   "BETTER_AUTH_URL",
   "DATABASE_ROOT_POOL_MAX",
   "DATABASE_RLS_POOL_MAX",
   "DATABASE_URL",
+  "DB_LOAD_GATE_BUSY_WINDOWS",
+  "DB_LOAD_GATE_EBS_SIGNAL",
   "DOCUMENT_OCR_BATCH_INTERVAL_MINUTES",
   "EMAIL_PROVIDER",
   "FRONTEND_URL",
@@ -540,7 +952,9 @@ const humanizeEnvName = (name: string) => {
 };
 
 const sectionFor = (name: string) => {
-  if (/^(DATABASE|DB_|STELLA_WORKER|SKIP_MIGRATION)/u.test(name)) {
+  if (
+    /^(DATABASE|DB_|ONLINE_INDEX_|STELLA_WORKER|SKIP_MIGRATION)/u.test(name)
+  ) {
     return "Database";
   }
   if (/^(S3|CORPUS|LEGAL_)/u.test(name)) {
@@ -557,7 +971,7 @@ const sectionFor = (name: string) => {
     return "AI providers";
   }
   if (
-    /^(BETTER_AUTH|GOOGLE_AUTH|MICROSOFT_AUTH|SELFHOST|SECURITY_CANARY)/u.test(
+    /^(BETTER_AUTH|GOOGLE_AUTH|MICROSOFT_AUTH|SELFHOST|SECURITY_CANARY|SESSION_)/u.test(
       name,
     )
   ) {
@@ -608,11 +1022,34 @@ export const requirementFor = (schema: v.GenericSchema): EnvRequirement => {
   return ENV_REQUIREMENT.optional;
 };
 
-const exposureFor = (name: string, owner: EnvOwner): EnvExposure => {
-  if (owner === ENV_OWNER.web) {
+// Every value a picklist accepts is spelled out in source, so it can never
+// hold a secret.
+const isPicklistSchema = (schema: v.GenericSchema): boolean => {
+  const inner =
+    schema.type === "optional" && "wrapped" in schema ? schema.wrapped : schema;
+  return (
+    typeof inner === "object" &&
+    inner !== null &&
+    "type" in inner &&
+    inner.type === "picklist"
+  );
+};
+
+type ExposureForOptions = {
+  name: string;
+  owner: EnvOwner;
+  schema: v.GenericSchema;
+};
+
+const exposureFor = ({
+  name,
+  owner,
+  schema,
+}: ExposureForOptions): EnvExposure => {
+  if (owner === ENV_OWNER.web || name === "ACTION_LIMIT_CONTACT_URL") {
     return ENV_EXPOSURE.public;
   }
-  if (INTERNAL_SERVER_KEYS.has(name)) {
+  if (isPicklistSchema(schema) || INTERNAL_SERVER_KEYS.has(name)) {
     return ENV_EXPOSURE.internal;
   }
   return ENV_EXPOSURE.secret;
@@ -625,12 +1062,19 @@ type CreateCatalogEntriesOptions = {
 
 const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
   Object.entries(schema).map(([name, entrySchema]): EnvCatalogEntry => {
+    const credentialKind = credentialClassifications.get(name);
+    if (credentialKind === undefined) {
+      panic(
+        `Environment variable ${name} must declare a credential classification.`,
+      );
+    }
     const requirementNote = CONDITIONAL_REQUIREMENT_NOTES[name];
     return {
+      credentialKind,
       description: DESCRIPTION_OVERRIDES[name] ?? humanizeEnvName(name),
       documented: !HIDDEN_SCHEMA_KEYS.has(name),
       example: EXAMPLE_VALUES[name],
-      exposure: exposureFor(name, owner),
+      exposure: exposureFor({ name, owner, schema: entrySchema }),
       name,
       owner,
       requirement: requirementNote
@@ -645,11 +1089,19 @@ const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
 export const ENV_CATALOG = [
   ...createCatalogEntries({
     owner: ENV_OWNER.apiBase,
+    schema: replayTickServerSchema,
+  }),
+  ...createCatalogEntries({
+    owner: ENV_OWNER.apiBase,
     schema: envBaseServerSchema,
   }),
   ...createCatalogEntries({
     owner: ENV_OWNER.apiBase,
     schema: databaseComponentEnvSchema,
+  }),
+  ...createCatalogEntries({
+    owner: ENV_OWNER.apiBase,
+    schema: envOnlineIndexServerSchema,
   }),
   ...createCatalogEntries({
     owner: ENV_OWNER.documentWorker,
@@ -667,7 +1119,9 @@ export const ENV_CATALOG = [
 ];
 
 export const API_ENV_SCHEMA = {
+  ...replayTickServerSchema,
   ...envBaseServerSchema,
+  ...envOnlineIndexServerSchema,
   ...envDocumentProcessingWorkerServerSchema,
   ...envApiServerSchema,
 };
@@ -778,6 +1232,13 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // ci-result evaluates each independently scoped suite in folded jobs.
+  "FOLDED_SUITES",
+  // Preserve Bun global-store links inside browser containers.
+  "BUN_INSTALL_CACHE_DIR",
+  // Browser commands use only executables baked into the pinned image.
+  "PLAYWRIGHT_BROWSERS_PATH",
+  "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
   "AGENT_ENGINE_DOCKER_CANARY_URL",
   "AGENT_ENGINE_DOCKER_IMAGE",
   "AGENT_ENGINE_DOCKER_NETWORK",
@@ -813,6 +1274,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODEX_API_KEY",
   "DEV_API_PROXY_TARGET",
   "DEV_LINKED_PACKAGE_ROOTS",
+  // Nightly issue reporter: suppress writes while exercising failure reporting.
+  "DRY_RUN",
   "E2E_API_URL",
   "E2E_EDGE_HEADER_NAME",
   "E2E_EDGE_HEADER_VALUE",
@@ -828,6 +1291,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "EVENT_NAME",
   "EXPECTED_COMMIT",
   "GH_READ_TOKEN",
+  "HEAD_SHA",
   "LANDING_SITE",
   "MARKETING_CAPTURE",
   "MARKETING_COMMIT",
@@ -839,13 +1303,29 @@ export const TOOLING_ENV_KEYS = new Set([
   "MCP_CANARY_TOKEN",
   "MERGE_GROUP_HEAD_REF",
   "MODE",
+  "NETWORK_BASELINE_PURPOSE",
   "NETWORK_CANARY_URL",
+  // The online index gate's child-process fixture receives its target here.
+  "ONLINE_INDEX_TEST_NAME",
+  "ONLINE_INDEX_TEST_NOW",
+  "ONLINE_INDEX_TEST_TABLE",
+  "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY",
+  "OSV_SCANNER_MIRROR_RELEASE_URL",
+  "OSV_SCANNER_PRIMARY_RELEASE_URL",
+  "OSV_SCANNER_RELEASE_VERSION",
+  "OSV_SCANNER_SHA256",
   "PGLITE_TEST_SNAPSHOT",
+  "PR_HEAD_SHA",
   "PRODUCT_MEDIA_S3_BUCKET",
   "PROPERTY_ROLE_BACKFILL_BATCH_SIZE",
   "PROPERTY_TEST_NUM_RUNS_FACTOR",
+  "PROPERTY_TEST_PATH",
+  "PROPERTY_TEST_REDACT",
   "PROPERTY_TEST_SEED",
+  "PROPERTY_TEST_TIME_LIMIT_MS",
   "PROPERTY_TEST_TIMEOUT_BASE_MS",
+  "PROVIDER_REQUEST_COMBINATIONS",
+  "PROVIDER_REQUEST_SHARD",
   "RAILWAY_API_TOKEN",
   "RAILWAY_PROJECT_TOKEN",
   "RAILWAY_SMOKE_API_URL",
@@ -853,6 +1333,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "RAILWAY_SMOKE_WEB_URL",
   "RAILWAY_TEMPLATE_ENVIRONMENT",
   "RAILWAY_TEMPLATE_PROJECT_ID",
+  // CI names the revision the convention ratchet measures as its base.
+  "RATCHET_BASE_REF",
+  "READ_FAULT_BASELINE",
   "RECORD_ANTHROPIC_API_KEY",
   "RECORD_BEDROCK_API_KEY",
   "RECORD_GOOGLE_API_KEY",
@@ -865,19 +1348,22 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_DECISIONS",
   "REHEARSAL_MIGRATE_BUDGET_SECONDS",
   "REHEARSAL_PRODUCTION_READY_URL",
-  "RELAY_EVENT",
-  "RELAY_HEAD_SHA",
-  "RELAY_PULL_REQUESTS",
   "RELEASE_REF",
   "REPO",
   "REPOSITORY",
   "RETRY_ATTEMPTS",
-  "REVIEW_GATE_BASE",
   "RETRY_DELAYS_SECONDS",
+  // Nightly issue reporter: workflow run linked from the failure issue.
+  "RUN_URL",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",
   "SMOKE_API_URL",
   "SMOKE_TEST",
+  // The source-fingerprint baseline generator reads the guard test's census.
+  "SOURCE_FINGERPRINT_CENSUS_OUT",
+  "STAGING_STATE",
+  // CI names the target-branch revision the statute recall floor compares to.
+  "STATUTE_RECALL_BASE_REF",
   "STELLA_AGENT_CAPTURE_LOG",
   "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
   "STELLA_COLLAB_TEST_REDIS_URL",
@@ -900,25 +1386,37 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_TEST_OMIT_ASSET",
   "STELLA_TEST_RELEASE_NUMBERS",
   "STELLA_UPDATE_PLAN_CONTRACTS",
+  "STORED_AGENT_TEST_CREDENTIAL",
+  "STORED_AGENT_TEST_VALUE",
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
+  "TEST_API_ERROR",
+  "TURBO_HASH",
   "TURBO_SCM_BASE",
+  "TURN_OUTCOME_COMBINATIONS",
+  "TURN_OUTCOME_SHARD",
+  "UPDATE_CHAT_PROMPT_BASELINE",
+  "UPDATE_PROVIDER_REQUEST_PATHS",
   "WXT_STELLA_ORIGINS",
 ]);
 
 export const AMBIENT_ENV_KEYS = new Set([
   "AWS_ACCESS_KEY_ID",
   "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+  "AWS_EXECUTION_ENV",
   "AWS_REGION",
   "AWS_SECRET_ACCESS_KEY",
   "AWS_SESSION_TOKEN",
   "CARGO_MANIFEST_DIR",
   "CARGO_PKG_VERSION",
   "CI",
+  "ECS_CONTAINER_METADATA_URI_V4",
   "GITHUB_TOKEN",
   "GH_REPO",
   "GH_TOKEN",
   "HOSTNAME",
   "NODE_ENV",
+  // Read by the provider SDK; managed request tests verify it cannot enable logging.
+  "OPENROUTER_DEBUG",
   "PATH",
   "RAILWAY_GIT_COMMIT_SHA",
   "STELLA_LOCAL_DEV",

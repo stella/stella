@@ -1,7 +1,6 @@
-import { useForm } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "@tanstack/react-router";
-import { useSelector } from "@tanstack/react-store";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -63,6 +62,7 @@ import { api, publicFeedbackApi } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
@@ -193,12 +193,12 @@ const FeedbackReport = ({
       analytics.captureError(error);
       const rateLimited =
         APIError.is(error) && error.status === RATE_LIMITED_STATUS;
-      stellaToast.add({
-        title: rateLimited
+      notifyUserError(
+        error,
+        rateLimited
           ? t("feedback.rateLimited")
           : userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
-      });
+      );
     },
   });
 
@@ -396,7 +396,7 @@ const FeedbackReceipt = ({ onClose, response }: FeedbackReceiptProps) => {
     const copied = await copyToClipboard(response.receipt);
     if (Result.isError(copied)) {
       analytics.captureError(copied.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(copied.error, t("errors.actionFailed"));
       return;
     }
     stellaToast.add({ title: t("common.copied"), type: "success" });

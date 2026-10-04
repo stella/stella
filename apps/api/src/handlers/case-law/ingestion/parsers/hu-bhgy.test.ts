@@ -17,7 +17,7 @@ import type {
   Paragraph,
   ParagraphAlignment,
 } from "@stll/docx-core/model";
-import { parseDocx } from "@stll/folio-core/server";
+import { parseDocx, table } from "@stll/folio-core/server";
 import {
   DECISION_IDENTIFIER_MAX_LENGTH,
   DECISION_IDENTIFIER_TYPES,
@@ -121,6 +121,64 @@ const shapeOfBlock = (block: Block): string => {
 
 const shapeOf = (blocks: readonly Block[]): string[] =>
   blocks.map(shapeOfBlock);
+
+test("custom XML wrappers retain every body and table-cell paragraph", () => {
+  const document = documentOf([
+    { text: "Indokolás" },
+    { text: "[1] A bíróság minden szót megőriz." },
+    { text: "[2] A következő bekezdés is megmarad." },
+  ]);
+  document.package.document.content.push(
+    table({
+      rows: [
+        [
+          {
+            content: [paragraphOf({ text: "A cella teljes szövege." })],
+          },
+        ],
+      ],
+    }),
+  );
+  const expected = parseDocument(document).documentAst;
+  const wrap = (content: BlockContent[]) =>
+    ({
+      type: "blockCustomXml",
+      openingXml: '<w:customXml w:element="decision">',
+      closingXml: "</w:customXml>",
+      content,
+    }) satisfies BlockContent;
+  for (const depth of [1, 2, 4]) {
+    let content = document.package.document.content.map(
+      (block): BlockContent =>
+        block.type === "table"
+          ? {
+              ...block,
+              rows: block.rows.map((row) => ({
+                ...row,
+                cells: row.cells.map((cell) => ({
+                  ...cell,
+                  content: [wrap(cell.content)],
+                })),
+              })),
+            }
+          : block,
+    );
+    for (let level = 0; level < depth; level += 1) {
+      content = [wrap(content)];
+    }
+    const wrapped = {
+      ...document,
+      package: {
+        ...document.package,
+        document: {
+          ...document.package.document,
+          content,
+        },
+      },
+    };
+    expect(parseDocument(wrapped).documentAst).toEqual(expected);
+  }
+});
 
 // ── Dates, kinds and dockets ─────────────────────────────
 

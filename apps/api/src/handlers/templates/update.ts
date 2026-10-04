@@ -5,7 +5,7 @@ import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { templates } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -183,7 +183,12 @@ const config = {
     "storing a new body with templates.document.update or by calling " +
     "configure_template_fields.",
   permissions: { template: ["update"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: updateTemplateParamsSchema,
   body: updateTemplateBodySchema,
 } satisfies HandlerConfig;

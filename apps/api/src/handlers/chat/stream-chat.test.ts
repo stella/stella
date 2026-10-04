@@ -3,6 +3,7 @@ import {
   EventType,
   maxIterations,
   normalizeStreamChunk,
+  RUN_CANCEL_REASON,
   StreamProcessor,
   toolDefinition,
 } from "@tanstack/ai";
@@ -16,7 +17,7 @@ import type {
   UIMessage,
 } from "@tanstack/ai";
 import { createOpenaiChat } from "@tanstack/ai-openai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
@@ -26,16 +27,27 @@ import {
   CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
 
 import {
   createChatAttachmentPart,
+  chatMessageContentFromMessage,
+  chatMessageFromPersisted,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   CHAT_RUN_MODE,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
+import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run";
 import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
+import {
+  COMPACTION_SUMMARY_MESSAGE_ID,
+  createCompactionSummaryMessage,
+} from "@/api/handlers/chat/compaction";
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
@@ -61,6 +73,7 @@ import {
   guardModelToolSchemas,
 } from "@/api/lib/chat/model-ingress-guard";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   ChatEmptyCompletionError,
@@ -69,13 +82,20 @@ import {
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
+import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
-import { buildEngineSnapshot } from "@/api/tests/helpers/chat-fixtures";
+import {
+  buildEngineSnapshot,
+  buildWireSnapshot,
+  unsafeFixture,
+} from "@/api/tests/helpers/chat-fixtures";
+import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
+import { buildGlobalPromptParts } from "./chat-prompt";
 import type { GuardedChatSurfaces } from "./stream-chat";
 import {
   chatMessageUsageFromTokenUsage,
@@ -405,6 +425,11 @@ type ProcessedStreamFinishEvent = Parameters<
 type TurnSignals = {
   abortSignal: AbortSignal;
   deadlineSignal: AbortSignal;
+  runSignal?: AbortSignal;
+  teardownAfterSourceChunks?: number;
+  getRestorableCheckpoint?: () =>
+    | ReturnType<typeof toPersistableChatMessage>
+    | undefined;
 };
 
 const uncutTurnSignals = (): TurnSignals => {
@@ -420,6 +445,7 @@ const persistNativeInterruptTurn = async (
   chunks: AsyncIterable<StreamChunk>,
   signals: TurnSignals = uncutTurnSignals(),
 ) => {
+  const { teardownAfterSourceChunks, ...streamSignals } = signals;
   const messageId = toSafeId<"chatMessage">(
     "11111111-1111-4111-8111-111111111111",
   );
@@ -442,20 +468,62 @@ const persistNativeInterruptTurn = async (
       yield chunk;
     }
   };
-  const emitted = await collectChunks(
-    processServerChatStream({
-      ...signals,
-      getResponseMessage: () => responseMessage,
-      mapMessageId,
-      onFinish: (event) => {
-        terminal.finish = event;
-      },
-      processor,
-      source: observed(),
-    }),
-  );
+  const output = processServerChatStream({
+    ...streamSignals,
+    getResponseMessage: () => responseMessage,
+    initialMessages: [],
+    mapMessageId,
+    onFinish: (event) => {
+      terminal.finish = event;
+    },
+    processor,
+    source: observed(),
+  });
+  const emitted: StreamChunk[] = [];
+  for await (const chunk of output) {
+    emitted.push(chunk);
+    if (
+      teardownAfterSourceChunks !== undefined &&
+      source.length >= teardownAfterSourceChunks
+    ) {
+      break;
+    }
+  }
   return { emitted, finish: terminal.finish, source };
 };
+
+test("whitespace rejected as an empty completion remains in the raw live processor", async () => {
+  const whitespace = " \n\t\u00a0";
+  const { emitted, finish, source } = await persistNativeInterruptTurn(
+    chat({
+      adapter: createTextReplyAdapter(whitespace),
+      messages: [{ role: "user", content: "Summarize the NDA" }],
+      threadId: "thread-whitespace",
+    }),
+  );
+  expect(
+    source.some(
+      (chunk) =>
+        chunk.type === EventType.TEXT_MESSAGE_CONTENT &&
+        chunk.delta === whitespace,
+    ),
+  ).toBe(true);
+  expect(finish?.outcome).toEqual({
+    type: "failed",
+    error: "empty_completion",
+  });
+  expect(finish?.responseMessage.parts).toEqual([]);
+  expect(emitted.at(-1)?.type).toBe(EventType.RUN_ERROR);
+
+  // RUN_ERROR does not finalize the browser processor as RUN_FINISHED would.
+  const live = new StreamProcessor();
+  for (const chunk of emitted) {
+    live.processChunk(chunk);
+  }
+  expect(
+    live.getMessages().findLast(({ role }) => role === "assistant")?.parts,
+  ).toContainEqual({ type: "text", content: whitespace });
+});
 
 /**
  * A turn that is cut while the model thinks about a tool result: the run is
@@ -674,6 +742,409 @@ describe("a turn cut while the model was thinking", () => {
   });
 });
 
+type AdmissionExit = "drain" | "throw" | "teardown" | "adapter-error";
+type AdmissionCheckpoint =
+  | "approval"
+  | "client-tool"
+  | "ask-user"
+  | "incomplete";
+
+const persistAdmissionLoss = async ({
+  exit,
+  checkpoint,
+  controlReason,
+}: {
+  exit: AdmissionExit;
+  checkpoint: AdmissionCheckpoint;
+  controlReason?: string;
+}) => {
+  const toolNames = {
+    approval: "mcp__external__delete",
+    "ask-user": "ask-user",
+    "client-tool": "create-document",
+    incomplete: "create-document",
+  } as const satisfies Record<AdmissionCheckpoint, string>;
+  const toolName = toolNames[checkpoint];
+  const tool =
+    checkpoint === "approval"
+      ? toolDefinition({
+          name: "mcp__external__delete",
+          description: "Fixture interaction",
+          inputSchema: draftToolInputSchema,
+          needsApproval: true,
+        }).server(async () => "deleted")
+      : toolDefinition({
+          name: toolName,
+          description: "Fixture interaction",
+          inputSchema: draftToolInputSchema,
+        });
+  const native = await collectChunks(
+    chat({
+      adapter: createSingleToolCallAdapter({
+        arguments: '{"name":"NDA","source":"@title NDA"}',
+        toolName,
+      }),
+      agentLoopStrategy: maxIterations(3),
+      messages: [{ role: "user", content: "Draft a document" }],
+      threadId: "thread-1",
+      tools: [tool],
+    }),
+  );
+  expect(native.some((chunk) => chunk.type === EventType.TOOL_CALL_END)).toBe(
+    true,
+  );
+  expect(native.some((chunk) => chunk.type === EventType.RUN_FINISHED)).toBe(
+    true,
+  );
+  const fixture =
+    checkpoint === "incomplete"
+      ? native.filter((chunk) => chunk.type !== EventType.TOOL_CALL_END)
+      : native;
+  const admission = new AbortController();
+  const control = new AbortController();
+  const deadline = new AbortController();
+  const source = async function* (): AsyncIterable<StreamChunk> {
+    yield* fixture;
+    admission.abort(
+      new ActionAdmissionError({
+        message: "Admission lease lost",
+        reason: "unavailable",
+      }),
+    );
+    if (controlReason !== undefined) {
+      control.abort(controlReason);
+    }
+    if (exit === "throw") {
+      throw new HandlerError({ status: 503, message: "Provider aborted" });
+    }
+    if (exit === "adapter-error") {
+      yield {
+        type: EventType.RUN_ERROR,
+        code: "provider_unavailable",
+        message: "Provider aborted",
+      };
+    }
+    if (exit === "teardown") {
+      // A forwarded snapshot lets the consumer close while a terminal finish is still buffered.
+      yield buildEngineSnapshot([]);
+      throw new HandlerError({
+        status: 500,
+        message: "Consumer failed to tear down",
+      });
+    }
+  };
+  return await persistNativeInterruptTurn(source(), {
+    abortSignal: AbortSignal.any([control.signal, admission.signal]),
+    deadlineSignal: deadline.signal,
+    runSignal: control.signal,
+    ...(exit === "teardown"
+      ? { teardownAfterSourceChunks: fixture.length + 1 }
+      : {}),
+  });
+};
+
+describe("admission loss before message production identifies the persisted assistant", () => {
+  for (const exit of ["drain", "throw", "adapter-error"] as const) {
+    test(`${exit} announces one mapped assistant before its refusal`, async () => {
+      const admission = new AbortController();
+      const source = async function* (): AsyncIterable<StreamChunk> {
+        admission.abort(
+          new ActionAdmissionError({
+            reason: "unavailable",
+            message: "Admission lost",
+          }),
+        );
+        if (exit === "throw") {
+          throw new HandlerError({ status: 503, message: "Provider aborted" });
+        }
+        if (exit === "adapter-error") {
+          yield {
+            type: EventType.RUN_ERROR,
+            code: "provider_unavailable",
+            message: "Provider aborted",
+          };
+        }
+      };
+      const { emitted, finish } = await persistNativeInterruptTurn(source(), {
+        abortSignal: admission.signal,
+        deadlineSignal: new AbortController().signal,
+      });
+      expect(
+        emitted.filter((chunk) => chunk.type === EventType.TEXT_MESSAGE_START),
+      ).toEqual([
+        expect.objectContaining({
+          messageId: finish?.responseMessage.id,
+          role: "assistant",
+        }),
+      ]);
+      const client = new StreamProcessor();
+      for (const chunk of emitted) {
+        client.processChunk(chunk);
+      }
+      if (finish === null) {
+        panic("Admission loss did not settle");
+      }
+      const reloaded = chatMessageFromPersisted({
+        id: finish.responseMessage.id,
+        role: finish.responseMessage.role,
+        content: structuredClone(
+          chatMessageContentFromMessage(finish.responseMessage),
+        ),
+      });
+      expect(reloaded.metadata?.turnOutcome).toEqual(finish.outcome);
+      expect(
+        new Set([...client.getMessages(), reloaded].map(({ id }) => id)).size,
+      ).toBe(1);
+      expect(client.getMessages()).toHaveLength(1);
+      expect(client.getMessages().at(0)?.id).toBe(finish.responseMessage.id);
+      expect(emitted.at(0)?.type).toBe(EventType.TEXT_MESSAGE_START);
+      expect(emitted.at(1)).toEqual(
+        expect.objectContaining({
+          type: EventType.RUN_ERROR,
+          code: ACTION_ADMISSION_CODES.admissionUnavailable,
+        }),
+      );
+      expect(finish.responseMessage.metadata.turnOutcome).toEqual(
+        finish.outcome,
+      );
+    });
+  }
+});
+
+describe("admission loss preserves complete interaction checkpoints", () => {
+  for (const exit of ["drain", "throw", "teardown", "adapter-error"] as const) {
+    for (const checkpoint of [
+      "approval",
+      "client-tool",
+      "ask-user",
+      "incomplete",
+    ] as const) {
+      test(`${exit} keeps ${checkpoint} infrastructure loss distinct from a user stop`, async () => {
+        const { finish, emitted } = await persistAdmissionLoss({
+          exit,
+          checkpoint,
+        });
+        expect(finish?.outcome).toEqual(
+          checkpoint === "incomplete"
+            ? {
+                type: "failed",
+                error: "provider_unavailable",
+                refusal: {
+                  code: ACTION_ADMISSION_CODES.admissionUnavailable,
+                  ...ACTION_ADMISSION_REFUSALS[
+                    ACTION_ADMISSION_CODES.admissionUnavailable
+                  ],
+                },
+              }
+            : {
+                type: "awaiting-user",
+                interaction: { type: checkpoint, toolCallId: "call-1" },
+              },
+        );
+        expect(
+          emitted.some((chunk) => chunk.type === EventType.RUN_ERROR),
+        ).toBe(checkpoint === "incomplete" && exit !== "teardown");
+        expect(
+          finish?.responseMessage.parts.some(
+            (part) => part.type === "tool-call",
+          ),
+        ).toBe(true);
+      });
+    }
+    for (const controlReason of [
+      RUN_CANCEL_REASON,
+      CHAT_TURN_OWNER_LOST_REASON,
+    ]) {
+      test(`${exit} preserves ${controlReason} precedence after admission loss`, async () => {
+        const { finish } = await persistAdmissionLoss({
+          exit,
+          checkpoint: "approval",
+          controlReason,
+        });
+        expect(finish?.outcome).toEqual(
+          controlReason === RUN_CANCEL_REASON
+            ? { type: "cancelled", reason: "user-stop" }
+            : { type: "interrupted", reason: "owner-lost" },
+        );
+      });
+    }
+  }
+});
+
+describe("late admission loss retains a completed and charged response", () => {
+  test("an empty successful finish retains its empty-provider outcome after one charge", async () => {
+    const admission = new AbortController();
+    let charges = 0;
+    const source = async function* (): AsyncIterable<StreamChunk> {
+      yield {
+        type: EventType.RUN_STARTED,
+        runId: "empty_run",
+        threadId: "thread-1",
+      };
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: "empty_run",
+        threadId: "thread-1",
+        finishReason: "stop",
+        outcome: { type: "success" },
+      };
+      charges += 1;
+      admission.abort(
+        new ActionAdmissionError({
+          reason: "unavailable",
+          message: "Lease lost after empty completion",
+        }),
+      );
+    };
+    const { finish, emitted } = await persistNativeInterruptTurn(source(), {
+      abortSignal: admission.signal,
+      deadlineSignal: new AbortController().signal,
+    });
+    expect(finish?.outcome).toEqual({
+      type: "failed",
+      error: "empty_completion",
+    });
+    expect(charges).toBe(1);
+    expect(
+      emitted.filter((chunk) => chunk.type === EventType.RUN_FINISHED),
+    ).toHaveLength(1);
+  });
+  for (const exit of ["drain", "throw", "teardown", "adapter-error"] as const) {
+    for (const completed of [true, false]) {
+      test(`${exit} distinguishes ${completed ? "completed" : "interrupted"} text after upstream settlement`, async () => {
+        const native = await collectChunks(
+          chat({
+            adapter: createTextReplyAdapter("Completed answer"),
+            messages: [{ role: "user", content: "Reply" }],
+            threadId: "thread-1",
+          }),
+        );
+        expect(
+          native.some((chunk) => chunk.type === EventType.RUN_FINISHED),
+        ).toBe(true);
+        const fixture = completed
+          ? native
+          : native.filter((chunk) => chunk.type !== EventType.RUN_FINISHED);
+        const admission = new AbortController();
+        let charges = 0;
+        const source = async function* (): AsyncIterable<StreamChunk> {
+          yield* fixture;
+          if (completed) {
+            charges += 1;
+          }
+          admission.abort(
+            new ActionAdmissionError({
+              reason: "unavailable",
+              message: "Lease lost during upstream cleanup",
+            }),
+          );
+          if (exit === "throw") {
+            throw new HandlerError({
+              status: 503,
+              message: "Upstream cleanup aborted",
+            });
+          }
+          if (exit === "adapter-error") {
+            yield {
+              type: EventType.RUN_ERROR,
+              code: "provider_unavailable",
+              message: "Cleanup aborted",
+            };
+          }
+          if (exit === "teardown") {
+            yield buildEngineSnapshot([]);
+          }
+        };
+        const { emitted, finish } = await persistNativeInterruptTurn(source(), {
+          abortSignal: admission.signal,
+          deadlineSignal: new AbortController().signal,
+          ...(exit === "teardown"
+            ? { teardownAfterSourceChunks: fixture.length + 1 }
+            : {}),
+        });
+        expect(finish?.outcome).toEqual(
+          completed
+            ? { type: "completed" }
+            : {
+                type: "failed",
+                error: "provider_unavailable",
+                refusal: {
+                  code: ACTION_ADMISSION_CODES.admissionUnavailable,
+                  ...ACTION_ADMISSION_REFUSALS[
+                    ACTION_ADMISSION_CODES.admissionUnavailable
+                  ],
+                },
+              },
+        );
+        expect(finish?.responseMessage.parts).toContainEqual({
+          type: "text",
+          content: "Completed answer",
+        });
+        expect(charges).toBe(completed ? 1 : 0);
+        expect(
+          emitted.some((chunk) => chunk.type === EventType.RUN_ERROR),
+        ).toBe(!completed && exit !== "teardown");
+        if (completed && exit !== "teardown") {
+          expect(
+            emitted.filter((chunk) => chunk.type === EventType.RUN_FINISHED),
+          ).toHaveLength(1);
+        }
+      });
+    }
+  }
+});
+
+describe("admission lost before continuation production retains the original checkpoint", () => {
+  for (const exit of ["drain", "throw", "teardown"] as const) {
+    test(`${exit} preserves the original pending snapshot and message identity`, async () => {
+      const checkpoint = toPersistableChatMessage({
+        id: toSafeId<"chatMessage">("original_pending_message"),
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "original_call",
+            name: "web_search",
+            arguments: "{}",
+            state: "approval-requested",
+            approval: { id: "original_approval", needsApproval: true },
+          },
+        ],
+      });
+      const admission = new AbortController();
+      admission.abort(
+        new ActionAdmissionError({
+          reason: "unavailable",
+          message: "Lease lost before dispatch",
+        }),
+      );
+      const source = async function* (): AsyncIterable<StreamChunk> {
+        if (exit === "throw") {
+          throw new HandlerError({
+            status: 503,
+            message: "Already aborted provider",
+          });
+        }
+        if (exit === "teardown") {
+          yield buildEngineSnapshot([]);
+        }
+      };
+      const { finish } = await persistNativeInterruptTurn(source(), {
+        abortSignal: admission.signal,
+        deadlineSignal: new AbortController().signal,
+        getRestorableCheckpoint: () => checkpoint,
+        ...(exit === "teardown" ? { teardownAfterSourceChunks: 1 } : {}),
+      });
+      expect(finish?.outcome).toEqual({
+        type: "awaiting-user",
+        interaction: { type: "approval", toolCallId: "original_call" },
+      });
+      expect(finish?.responseMessage.id).toBe(checkpoint.id);
+      expect(finish?.responseMessage.parts).toEqual(checkpoint.parts);
+    });
+  }
+});
+
 describe("native interrupt boundary persistence", () => {
   test("persists a client-tool turn the loop pauses for, and awaits the client", async () => {
     const draftTool = toolDefinition({
@@ -761,6 +1232,89 @@ describe("native interrupt boundary persistence", () => {
     ]);
   });
 
+  for (const compacted of [false, true]) {
+    test(`keeps model summaries off the live approval page (compacted: ${String(compacted)})`, async () => {
+      const summary = createCompactionSummaryMessage({
+        summarizedMessageCount: 4,
+        summary: "Earlier conversation context",
+      });
+      // Identical text in a real user message must remain visible.
+      const user = {
+        id: "user-1",
+        role: "user",
+        parts: summary.parts,
+      } satisfies ChatMessage;
+      const initialMessages = compacted ? [summary, user] : [user];
+      const approvalTool = toolDefinition({
+        name: "mcp__external__delete",
+        description: "Server tool behind an approval",
+        inputSchema: draftToolInputSchema,
+        needsApproval: true,
+      }).server(async () => "deleted");
+      const { emitted, finish, source } = await persistNativeInterruptTurn(
+        chat({
+          adapter: createSingleToolCallAdapter({
+            arguments: '{"name":"NDA","source":"@title NDA"}',
+            toolName: "mcp__external__delete",
+          }),
+          agentLoopStrategy: maxIterations(3),
+          messages: initialMessages,
+          threadId: "thread-1",
+          tools: [approvalTool],
+        }),
+      );
+      const engineSnapshot = source.find(
+        (chunk) => chunk.type === EventType.MESSAGES_SNAPSHOT,
+      );
+      if (engineSnapshot?.type !== EventType.MESSAGES_SNAPSHOT) {
+        throw new Error("Expected the real engine's approval snapshot");
+      }
+      expect(
+        engineSnapshot.messages.some(
+          ({ id }) => id === COMPACTION_SUMMARY_MESSAGE_ID,
+        ),
+      ).toBe(compacted);
+      expect(finish?.outcome).toMatchObject({
+        type: "awaiting-user",
+        interaction: { type: "approval", toolCallId: "call-1" },
+      });
+      const visible = await collectChunks(
+        transformClientVisibleStream({
+          source: streamChunks(emitted),
+          storedHistory: NOTHING_REWRITTEN,
+        }),
+      );
+      const { processor } = createStreamMessageCapture({
+        initialMessages: [user],
+        capture: (message) => message,
+      });
+      for (const chunk of visible) {
+        processor.processChunk(chunk);
+      }
+      if (finish === null) {
+        throw new Error("Expected the real engine to finish the turn");
+      }
+      expect(
+        processor
+          .getMessages()
+          .map(({ id, role, parts }) => ({ id, role, parts })),
+      ).toEqual([
+        user,
+        {
+          id: finish.responseMessage.id,
+          role: "assistant",
+          parts: finish.responseMessage.parts,
+        },
+      ]);
+      // Presentation must not mutate the history the model and persistence read.
+      expect(
+        engineSnapshot.messages.some(
+          ({ id }) => id === COMPACTION_SUMMARY_MESSAGE_ID,
+        ),
+      ).toBe(compacted);
+    });
+  }
+
   // The same pause, driven by the real `suggest_changes` apply tool rather
   // than a fixture: it carries folio's raw JSON Schema wrapped as a Standard
   // Schema, so its `inputSchema` has to survive `normalizeApprovalSchema`
@@ -777,10 +1331,13 @@ describe("native interrupt boundary persistence", () => {
         "22222222-2222-4222-8222-222222222222",
       ),
       userId: toSafeId<"user">("33333333-3333-4333-8333-333333333333"),
-      workspaceId: toSafeId<"workspace">(
-        "44444444-4444-4444-8444-444444444444",
-      ),
-      entityId: toSafeId<"entity">("55555555-5555-4555-8555-555555555555"),
+      access: memberDocumentWriteAccess({
+        type: "new_version",
+        workspaceId: toSafeId<"workspace">(
+          "44444444-4444-4444-8444-444444444444",
+        ),
+        entityId: toSafeId<"entity">("55555555-5555-4555-8555-555555555555"),
+      }),
       fileFieldId: toSafeId<"field">("77777777-7777-4777-8777-777777777777"),
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
@@ -848,6 +1405,7 @@ describe("native interrupt boundary persistence", () => {
         "22222222-2222-4222-8222-222222222222",
       ),
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       safeDb,
       userId: toSafeId<"user">("33333333-3333-4333-8333-333333333333"),
       workspaceId: null,
@@ -1047,8 +1605,8 @@ describe("native continuation persistence", () => {
     const emitted = await collectChunks(
       processServerChatStream({
         ...uncutTurnSignals(),
-        existingMessageIds: new Set(messages.map(({ id }) => id)),
         getResponseMessage: () => responseMessage,
+        initialMessages: messages,
         mapMessageId: createTurnMessageIdMapper(
           toSafeId<"chatMessage">(owningAssistantMessageId),
         ),
@@ -1328,6 +1886,7 @@ describe("outgoing chat stream message ids", () => {
           abortSignal: new AbortController().signal,
           deadlineSignal: new AbortController().signal,
           getResponseMessage: () => responseMessage,
+          initialMessages: [],
           mapMessageId: createChatMessageIdMapper(() => messageId),
           onFinish: ({ outcome }) => {
             resolveTerminalOutcome(outcome.type);
@@ -1470,54 +2029,51 @@ describe("outgoing chat stream message ids", () => {
         existingMessageIds,
         mapMessageId: createChatMessageIdMapper(() => messageId),
         source: streamChunks([
-          {
-            type: EventType.MESSAGES_SNAPSHOT,
-            messages: [
-              {
-                id: "user-1",
-                role: "user",
-                content: "Please continue",
-              },
-              {
-                id: "assistant-previous",
-                role: "assistant",
-                content: "Earlier answer",
-              },
-              {
-                id: "provider-message-1",
-                role: "assistant",
-                content: "Checking the request",
-                toolCalls: [
-                  {
-                    id: "tool-lookup",
-                    type: "function",
-                    function: { name: "list_templates", arguments: "{}" },
+          buildWireSnapshot([
+            {
+              id: "user-1",
+              role: "user",
+              content: "Please continue",
+            },
+            {
+              id: "assistant-previous",
+              role: "assistant",
+              content: "Earlier answer",
+            },
+            {
+              id: "provider-message-1",
+              role: "assistant",
+              content: "Checking the request",
+              toolCalls: [
+                {
+                  id: "tool-lookup",
+                  type: "function",
+                  function: { name: "list_templates", arguments: "{}" },
+                },
+              ],
+            },
+            {
+              id: "tool-lookup-result",
+              role: "tool",
+              toolCallId: "tool-lookup",
+              content: '{"templates":[]}',
+            },
+            {
+              id: "provider-message-2",
+              role: "assistant",
+              content: "Waiting for approval",
+              toolCalls: [
+                {
+                  id: "tool-draft",
+                  type: "function",
+                  function: {
+                    name: "create-document",
+                    arguments: '{"name":"NDA","source":"@title NDA"}',
                   },
-                ],
-              },
-              {
-                id: "tool-lookup-result",
-                role: "tool",
-                toolCallId: "tool-lookup",
-                content: '{"templates":[]}',
-              },
-              {
-                id: "provider-message-2",
-                role: "assistant",
-                content: "Waiting for approval",
-                toolCalls: [
-                  {
-                    id: "tool-draft",
-                    type: "function",
-                    function: {
-                      name: "create-document",
-                      arguments: '{"name":"NDA","source":"@title NDA"}',
-                    },
-                  },
-                ],
-              },
-            ],
-          },
+                },
+              ],
+            },
+          ]),
           {
             type: EventType.TOOL_CALL_RESULT,
             content: '{"approved":true}',
@@ -1539,50 +2095,47 @@ describe("outgoing chat stream message ids", () => {
       }),
     );
     expect(chunks).toEqual([
-      {
-        type: EventType.MESSAGES_SNAPSHOT,
-        messages: [
-          {
-            id: "user-1",
-            role: "user",
-            content: "Please continue",
-          },
-          {
-            id: "assistant-previous",
-            role: "assistant",
-            content: "Earlier answer",
-          },
-          // One assistant message per persisted turn: both iterations' text and
-          // tool calls, under the turn's stable id, tool messages anchoring by
-          // toolCallId behind it.
-          {
-            id: messageId,
-            role: "assistant",
-            content: "Checking the request\n\nWaiting for approval",
-            toolCalls: [
-              {
-                id: "tool-lookup",
-                type: "function",
-                function: { name: "list_templates", arguments: "{}" },
+      buildWireSnapshot([
+        {
+          id: "user-1",
+          role: "user",
+          content: "Please continue",
+        },
+        {
+          id: "assistant-previous",
+          role: "assistant",
+          content: "Earlier answer",
+        },
+        // One assistant message per persisted turn: both iterations' text and
+        // tool calls, under the turn's stable id, tool messages anchoring by
+        // toolCallId behind it.
+        {
+          id: messageId,
+          role: "assistant",
+          content: "Checking the request\n\nWaiting for approval",
+          toolCalls: [
+            {
+              id: "tool-lookup",
+              type: "function",
+              function: { name: "list_templates", arguments: "{}" },
+            },
+            {
+              id: "tool-draft",
+              type: "function",
+              function: {
+                name: "create-document",
+                arguments: '{"name":"NDA","source":"@title NDA"}',
               },
-              {
-                id: "tool-draft",
-                type: "function",
-                function: {
-                  name: "create-document",
-                  arguments: '{"name":"NDA","source":"@title NDA"}',
-                },
-              },
-            ],
-          },
-          {
-            id: "tool-lookup-result",
-            role: "tool",
-            toolCallId: "tool-lookup",
-            content: '{"templates":[]}',
-          },
-        ],
-      },
+            },
+          ],
+        },
+        {
+          id: "tool-lookup-result",
+          role: "tool",
+          toolCallId: "tool-lookup",
+          content: '{"templates":[]}',
+        },
+      ]),
       {
         type: EventType.TOOL_CALL_RESULT,
         content: '{"approved":true}',
@@ -1629,30 +2182,27 @@ describe("outgoing chat stream message ids", () => {
         existingMessageIds: new Set(["user-1", owningMessageId]),
         mapMessageId: createTurnMessageIdMapper(owningMessageId),
         source: streamChunks([
-          {
-            type: EventType.MESSAGES_SNAPSHOT,
-            messages: [
-              { id: "user-1", role: "user", content: "Save the draft" },
-              {
-                id: owningMessageId,
-                role: "assistant",
-                content: "Saving the draft",
-                toolCalls: [savedCall],
-              },
-              {
-                id: "call-1-result",
-                role: "tool",
-                toolCallId: "call-1",
-                content: '{"playbookId":"playbook-1"}',
-              },
-              {
-                id: "provider-message-2",
-                role: "assistant",
-                content: "Saving another",
-                toolCalls: [nextCall],
-              },
-            ],
-          },
+          buildWireSnapshot([
+            { id: "user-1", role: "user", content: "Save the draft" },
+            {
+              id: owningMessageId,
+              role: "assistant",
+              content: "Saving the draft",
+              toolCalls: [savedCall],
+            },
+            {
+              id: "call-1-result",
+              role: "tool",
+              toolCallId: "call-1",
+              content: '{"playbookId":"playbook-1"}',
+            },
+            {
+              id: "provider-message-2",
+              role: "assistant",
+              content: "Saving another",
+              toolCalls: [nextCall],
+            },
+          ]),
           {
             type: EventType.TOOL_CALL_START,
             parentMessageId: "provider-message-2",
@@ -1663,26 +2213,23 @@ describe("outgoing chat stream message ids", () => {
       }),
     );
     expect(chunks).toEqual([
-      {
-        type: EventType.MESSAGES_SNAPSHOT,
-        messages: [
-          { id: "user-1", role: "user", content: "Save the draft" },
-          // The resumed run's iteration folds into the message it continues,
-          // which the snapshot already carries from history.
-          {
-            id: owningMessageId,
-            role: "assistant",
-            content: "Saving the draft\n\nSaving another",
-            toolCalls: [savedCall, nextCall],
-          },
-          {
-            id: "call-1-result",
-            role: "tool",
-            toolCallId: "call-1",
-            content: '{"playbookId":"playbook-1"}',
-          },
-        ],
-      },
+      buildWireSnapshot([
+        { id: "user-1", role: "user", content: "Save the draft" },
+        // The resumed run's iteration folds into the message it continues,
+        // which the snapshot already carries from history.
+        {
+          id: owningMessageId,
+          role: "assistant",
+          content: "Saving the draft\n\nSaving another",
+          toolCalls: [savedCall, nextCall],
+        },
+        {
+          id: "call-1-result",
+          role: "tool",
+          toolCallId: "call-1",
+          content: '{"playbookId":"playbook-1"}',
+        },
+      ]),
       {
         type: EventType.TOOL_CALL_START,
         parentMessageId: owningMessageId,
@@ -1766,7 +2313,7 @@ describe("outgoing chat stream message ids", () => {
     const stream = processServerChatStream({
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
-      existingMessageIds: new Set([owningMessageId]),
+      initialMessages: [{ id: owningMessageId, parts: [], role: "assistant" }],
       getResponseMessage: () => ({
         id: owningMessageId,
         role: "assistant",
@@ -1886,6 +2433,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: () => {
         events.push("server:onFinish");
@@ -1965,6 +2513,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ responseMessage: finishedMessage }) => {
         persistedTexts.push(
@@ -2047,6 +2596,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ responseMessage: finishedMessage }) => {
         persistedToolCalls = finishedMessage.parts.flatMap((part) =>
@@ -2205,6 +2755,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ responseMessage: finishedMessage }) => {
         const part = finishedMessage.parts.at(0);
@@ -2311,6 +2862,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: abortController.signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome, responseMessage: finishedMessage }) => {
         finishEvents.push({
@@ -2375,6 +2927,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
         outcomes.push(outcome.type);
@@ -2402,7 +2955,6 @@ describe("outgoing chat stream message ids", () => {
         type: EventType.RUN_ERROR,
         message: "quota_exhausted",
         code: "quota_exhausted",
-        rawEvent: { statusCode: 429 },
       },
     ]);
     expect(outcomes).toEqual(["failed"]);
@@ -2435,6 +2987,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
         outcomes.push(outcome.type);
@@ -2452,12 +3005,6 @@ describe("outgoing chat stream message ids", () => {
     ).toMatchObject({
       code: "provider_credentials_rejected",
       message: "provider_credentials_rejected",
-      rawEvent: {
-        code: "invalid_api_key",
-        message: "Incorrect API key",
-        param: null,
-        type: "invalid_request_error",
-      },
       type: EventType.RUN_ERROR,
     });
     expect(outcomes).toEqual(["failed"]);
@@ -2473,6 +3020,7 @@ describe("outgoing chat stream message ids", () => {
         abortSignal: new AbortController().signal,
         deadlineSignal: new AbortController().signal,
         getResponseMessage: () => null,
+        initialMessages: [],
         mapMessageId: createChatMessageIdMapper(() => messageId),
         onFinish: () => undefined,
         processor: new StreamProcessor(),
@@ -2510,6 +3058,7 @@ describe("outgoing chat stream message ids", () => {
         abortSignal: new AbortController().signal,
         deadlineSignal: new AbortController().signal,
         getResponseMessage: () => null,
+        initialMessages: [],
         mapMessageId: createChatMessageIdMapper(() => messageId),
         onFinish: () => undefined,
         processor: new StreamProcessor(),
@@ -2530,7 +3079,6 @@ describe("outgoing chat stream message ids", () => {
         type: EventType.RUN_ERROR,
         message: "unknown",
         code: "unknown",
-        rawEvent: expect.any(HandlerError),
       });
       expect(errorSpy).not.toHaveBeenCalledWith(
         "chat.stream_failed",
@@ -2550,6 +3098,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
         outcomes.push(outcome.type);
@@ -2596,6 +3145,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
         outcomes.push(outcome.type);
@@ -2627,6 +3177,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
         outcomes.push(outcome.type);
@@ -2664,6 +3215,7 @@ describe("outgoing chat stream message ids", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => null,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
         outcomes.push(outcome.type);
@@ -2699,7 +3251,6 @@ describe("outgoing chat stream message ids", () => {
       type: EventType.RUN_ERROR,
       message: "provider_billing",
       code: "provider_billing",
-      rawEvent: { statusCode: 402 },
     });
     expect(outcomes).toEqual(["failed"]);
   });
@@ -3081,6 +3632,7 @@ describe("chat stream client-disconnect persistence", () => {
       abortSignal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome, responseMessage }) => {
         finishEvents.push({
@@ -3158,6 +3710,7 @@ describe("chat stream client-disconnect persistence", () => {
       deadlineSignal: new AbortController().signal,
       flushPendingSource: persistenceVisible.flushPending,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ responseMessage: finishedMessage }) => {
         persistedParts = finishedMessage.parts;
@@ -3191,6 +3744,7 @@ describe("chat stream client-disconnect persistence", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: () => {
         finishCount += 1;
@@ -3233,6 +3787,7 @@ describe("chat stream client-disconnect persistence", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
         outcomes.push(outcome.type);
@@ -3316,6 +3871,7 @@ describe("streamed chat message conversion", () => {
         abortSignal: new AbortController().signal,
         deadlineSignal: new AbortController().signal,
         getResponseMessage: () => responseMessage,
+        initialMessages: [],
         mapMessageId: createChatMessageIdMapper(() => messageId),
         onFinish: ({ outcome }) => {
           outcomes.push(outcome.type);
@@ -3354,6 +3910,7 @@ describe("streamed chat message conversion", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ outcome }) => {
         outcomes.push(outcome.type);
@@ -3410,6 +3967,7 @@ describe("guarded model-ingress seam", () => {
     const surfaces: GuardedChatSurfaces = {
       messages: guardProviderHistory({ messages, workspaceIds }),
       system: guardModelSystemPrompt({ system, workspaceIds }),
+      systemLayers: buildGlobalPromptParts({ userContext: null }).safeLayers,
       tenantWorkspaceIds: workspaceIds,
       tools: guardModelToolSchemas({ tools, workspaceIds }),
     };
@@ -3485,7 +4043,7 @@ describe("chat attempt terminal classification", () => {
     ).toBe(false);
   });
 
-  test("captures empty stop completions", () => {
+  test("captures a stop that streamed no answer", () => {
     const state = createChatAttemptState();
     const capturedErrors: unknown[] = [];
 
@@ -3498,11 +4056,6 @@ describe("chat attempt terminal classification", () => {
       modelInfo: { modelId: "gpt-test", provider: "openai" },
       state,
       threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111111"),
-      usage: {
-        completionTokens: 0,
-        promptTokens: 12,
-        totalTokens: 12,
-      },
     });
 
     expect(state.emptyCompletion).toBeInstanceOf(ChatEmptyCompletionError);
@@ -3510,8 +4063,23 @@ describe("chat attempt terminal classification", () => {
     expect(capturedErrors).toEqual([state.emptyCompletion]);
   });
 
+  test("keeps a stop that streamed an answer", () => {
+    const state = { ...createChatAttemptState(), producedAnswer: true };
+
+    recordChatAttemptFinish({
+      captureError: () => {},
+      finishReason: "stop",
+      messages: [],
+      modelInfo: { modelId: "gpt-test", provider: "openai" },
+      state,
+      threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111111"),
+    });
+
+    expect(state.emptyCompletion).toBeNull();
+  });
+
   test("surfaces final content loops", () => {
-    const state = createChatAttemptState();
+    const state = { ...createChatAttemptState(), producedAnswer: true };
     const loopChunk = "abcdefghij".repeat(5);
     const messages: ModelMessage[] = [
       { content: "Please answer.", role: "user" },
@@ -3525,11 +4093,6 @@ describe("chat attempt terminal classification", () => {
       modelInfo: { modelId: "gpt-test", provider: "openai" },
       state,
       threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111111"),
-      usage: {
-        completionTokens: 50,
-        promptTokens: 12,
-        totalTokens: 62,
-      },
     });
 
     expect(state.finalLoopDetection).toBeInstanceOf(ChatLoopDetectedError);
@@ -3582,14 +4145,15 @@ describe("native continuation third-party boundary", () => {
   test("anonymizes resolved payload text while preserving protocol fields", async () => {
     const boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }> = {
       ...createBoundary([]),
-      anonymizeFields: async ({ fields }) => ({
-        entityCount: fields.filter((field) => field.includes("Jan Novak"))
-          .length,
-        fields: fields.map((field) =>
-          field.replaceAll("Jan Novak", "[PERSON_1]"),
-        ),
-        redactionMap: new Map([["[PERSON_1]", "Jan Novak"]]),
-      }),
+      anonymizeFields: async ({ fields }) =>
+        Result.ok({
+          entityCount: fields.filter((field) => field.includes("Jan Novak"))
+            .length,
+          fields: fields.map((field) =>
+            field.replaceAll("Jan Novak", "[PERSON_1]"),
+          ),
+          redactionMap: new Map([["[PERSON_1]", "Jan Novak"]]),
+        }),
     };
 
     const prepared = await prepareResumeForThirdParty({
@@ -3689,6 +4253,7 @@ describe("chat stream refs", () => {
       abortSignal: new AbortController().signal,
       deadlineSignal: new AbortController().signal,
       getResponseMessage: () => responseMessage,
+      initialMessages: [],
       mapMessageId: createChatMessageIdMapper(() => messageId),
       onFinish: ({ responseMessage: terminalMessage }) => {
         const toolCall = terminalMessage.parts.find(
@@ -4075,40 +4640,43 @@ describe("chat stream refs", () => {
         initialRestorationPlaceholders: new Set(),
         restorationPairs: [],
         source: streamChunks([
-          {
-            type: EventType.MESSAGES_SNAPSHOT,
-            messages: [
-              {
-                id: "assistant-1",
-                role: "assistant",
-                toolCalls: [
-                  {
-                    id: "tool-1",
-                    type: "function",
-                    function: {
-                      arguments: JSON.stringify({ matter_id: matterRef }),
-                      name: "list_matters",
+          unsafeFixture(
+            "Unsupported activity role intentionally exercises non-engine snapshot extension preservation",
+            {
+              type: EventType.MESSAGES_SNAPSHOT,
+              messages: [
+                {
+                  id: "assistant-1",
+                  role: "assistant",
+                  toolCalls: [
+                    {
+                      id: "tool-1",
+                      type: "function",
+                      function: {
+                        arguments: JSON.stringify({ matter_id: matterRef }),
+                        name: "list_matters",
+                      },
                     },
-                  },
-                ],
-              },
-              {
-                id: "tool-result-1",
-                role: "tool",
-                toolCallId: "tool-1",
-                content: JSON.stringify({
-                  decisionId: matterRef,
-                  matters: [{ decisionId: matterRef, id: matterRef }],
-                }),
-              },
-              {
-                id: "activity-1",
-                role: "activity",
-                activityType: "review",
-                content: { matterRef },
-              },
-            ],
-          },
+                  ],
+                },
+                {
+                  id: "tool-result-1",
+                  role: "tool",
+                  toolCallId: "tool-1",
+                  content: JSON.stringify({
+                    decisionId: matterRef,
+                    matters: [{ decisionId: matterRef, id: matterRef }],
+                  }),
+                },
+                {
+                  id: "activity-1",
+                  role: "activity",
+                  activityType: "review",
+                  content: { matterRef },
+                },
+              ],
+            },
+          ),
         ]),
         resolveAssistantToolInputRefs: ({ input, toolName }) =>
           resolveRegistryToolInputRefs({
@@ -4126,40 +4694,45 @@ describe("chat stream refs", () => {
       }),
     );
 
-    expect(snapshot).toEqual({
-      type: EventType.MESSAGES_SNAPSHOT,
-      messages: [
+    expect(snapshot).toEqual(
+      unsafeFixture(
+        "Unsupported activity role intentionally exercises non-engine snapshot extension preservation",
         {
-          id: "assistant-1",
-          role: "assistant",
-          toolCalls: [
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: [
             {
-              id: "tool-1",
-              type: "function",
-              function: {
-                arguments: JSON.stringify({ matter_id: workspaceId }),
-                name: "list_matters",
-              },
+              id: "assistant-1",
+              role: "assistant",
+              toolCalls: [
+                {
+                  id: "tool-1",
+                  type: "function",
+                  function: {
+                    arguments: JSON.stringify({ matter_id: workspaceId }),
+                    name: "list_matters",
+                  },
+                },
+              ],
+            },
+            {
+              id: "tool-result-1",
+              role: "tool",
+              toolCallId: "tool-1",
+              content: JSON.stringify({
+                decisionId: matterRef,
+                matters: [{ decisionId: matterRef, id: workspaceId }],
+              }),
+            },
+            {
+              id: "activity-1",
+              role: "activity",
+              activityType: "review",
+              content: { matterRef },
             },
           ],
         },
-        {
-          id: "tool-result-1",
-          role: "tool",
-          toolCallId: "tool-1",
-          content: JSON.stringify({
-            decisionId: matterRef,
-            matters: [{ decisionId: matterRef, id: workspaceId }],
-          }),
-        },
-        {
-          id: "activity-1",
-          role: "activity",
-          activityType: "review",
-          content: { matterRef },
-        },
-      ],
-    });
+      ),
+    );
   });
 });
 
@@ -4286,29 +4859,32 @@ describe("anonymized outgoing chat stream", () => {
     ]);
   });
 
-  test("restores native AG-UI snapshots and interrupt bindings", async () => {
+  test("restores non-engine activity snapshot extensions and interrupt bindings", async () => {
     const boundary = createBoundary([["[PERSON_1]", "Jan Novak"]]);
     const stream = transformOutgoingStream({
       boundary,
       initialRestorationPlaceholders: new Set(),
       restorationPairs: [],
       source: streamChunks([
-        {
-          type: EventType.MESSAGES_SNAPSHOT,
-          messages: [
-            {
-              id: "message-1",
-              role: "assistant",
-              content: "Review [PERSON_1]",
-            },
-            {
-              id: "activity-1",
-              role: "activity",
-              activityType: "review",
-              content: { id: "[PERSON_1]", status: "[PERSON_1]" },
-            },
-          ],
-        },
+        unsafeFixture(
+          "Unsupported activity role intentionally exercises non-engine snapshot extension preservation",
+          {
+            type: EventType.MESSAGES_SNAPSHOT,
+            messages: [
+              {
+                id: "message-1",
+                role: "assistant",
+                content: "Review [PERSON_1]",
+              },
+              {
+                id: "activity-1",
+                role: "activity",
+                activityType: "review",
+                content: { id: "[PERSON_1]", status: "[PERSON_1]" },
+              },
+            ],
+          },
+        ),
         {
           type: EventType.RUN_FINISHED,
           threadId: "thread-1",
@@ -4346,22 +4922,25 @@ describe("anonymized outgoing chat stream", () => {
           pairs: [{ placeholder: "[PERSON_1]", original: "Jan Novak" }],
         },
       },
-      {
-        type: EventType.MESSAGES_SNAPSHOT,
-        messages: [
-          {
-            id: "message-1",
-            role: "assistant",
-            content: "Review Jan Novak",
-          },
-          {
-            id: "activity-1",
-            role: "activity",
-            activityType: "review",
-            content: { id: "Jan Novak", status: "Jan Novak" },
-          },
-        ],
-      },
+      unsafeFixture(
+        "Unsupported activity role intentionally exercises non-engine snapshot extension preservation",
+        {
+          type: EventType.MESSAGES_SNAPSHOT,
+          messages: [
+            {
+              id: "message-1",
+              role: "assistant",
+              content: "Review Jan Novak",
+            },
+            {
+              id: "activity-1",
+              role: "activity",
+              activityType: "review",
+              content: { id: "Jan Novak", status: "Jan Novak" },
+            },
+          ],
+        },
+      ),
       {
         type: EventType.RUN_FINISHED,
         threadId: "thread-1",

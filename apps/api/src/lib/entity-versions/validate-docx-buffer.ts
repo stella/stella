@@ -23,6 +23,7 @@ export type DocxValidationFailure =
  */
 const FAILURE_BY_ARCHIVE_REASON = {
   "load-failed": "unreadable-archive",
+  "invalid-entry-name": "archive-limit-exceeded",
   "too-many-entries": "archive-limit-exceeded",
   "entry-too-large": "archive-limit-exceeded",
   "total-too-large": "archive-limit-exceeded",
@@ -48,7 +49,7 @@ export type ValidateDocxBufferResult =
  * it in its own sentence.
  */
 export const validateDocxBuffer = async (
-  buffer: ArrayBuffer,
+  buffer: ArrayBuffer | Uint8Array,
 ): Promise<ValidateDocxBufferResult> => {
   try {
     const archive = await loadDocxArchive(buffer);

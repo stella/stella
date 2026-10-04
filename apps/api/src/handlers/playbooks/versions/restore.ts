@@ -3,7 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { playbookDefinitions } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { mapPlaybookDocumentTypeError } from "@/api/handlers/playbooks/assert-document-type";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -22,7 +23,12 @@ const config = {
     "so it must be approved again before runs pick it up, and the stored " +
     "version itself is left untouched.",
   permissions: { playbook: ["update"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   params: restorePlaybookVersionParamsSchema,
 } satisfies HandlerConfig;
 
@@ -113,7 +119,7 @@ const restorePlaybookVersion = createSafeRootHandler(
             restoredFromVersion: { old: null, new: params.version },
           },
         });
-      }),
+      }).then((result) => result.mapError(mapPlaybookDocumentTypeError)),
     );
 
     return Result.ok({ status: "draft" as const });

@@ -14,7 +14,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { reportExports } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -38,10 +38,20 @@ const downloadFileName = (resultS3Key: string): string =>
 // at export-view.ts, so a caller with nothing to poll could never have
 // reached one.
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Returns the export result covered by the report export operation audit.",
+  },
   description:
     "Read a report export's status. Completed downloads include a short-lived URL; workspace exports include the created document ID.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "reporting_export" },
+  mcp: {
+    type: "capability",
+    reason: "reporting_export",
+    consumesServices: false,
+  },
   access: "write",
   params: workspaceParams({ exportId: tSafeId("reportExport") }),
 } satisfies WorkspaceHandlerConfig;

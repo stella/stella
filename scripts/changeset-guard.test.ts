@@ -16,6 +16,7 @@ import { propertyConfig } from "@stll/property-testing";
 import {
   checkChangesetPackages,
   decideChangesetGate,
+  findCatalogInputs,
   isChangesetEntry,
   loadChangesetPolicy,
   parseChangesetPolicy,
@@ -148,10 +149,10 @@ const CHANGESET_GATE_FIRST_STEP = "Load release policy";
 const CHANGESET_GATE_LAST_STEP =
   "Changeset present for published package changes";
 
-/** The changeset gate's steps in the ci-checks job, first through last. */
+/** The changeset gate's steps in the ci-checks-rest job, first through last. */
 const changesetJob = (): string => {
   const lines = readFile(WORKFLOW_FILE).split("\n");
-  const job = lines.indexOf("  ci-checks:");
+  const job = lines.indexOf("  ci-checks-rest:");
   expect(job).toBeGreaterThanOrEqual(0);
   const jobLines = lines.slice(job + 1);
   const jobEnd = jobLines.findIndex((line) => /^ {2}\S/u.test(line));
@@ -173,6 +174,7 @@ describe("changeset gate decision", () => {
     expect(decide(["packages/ui/src/button.tsx"])).toEqual({
       status: "missing",
       releaseFiles: ["packages/ui/src/button.tsx"],
+      catalogInputs: [],
     });
   });
 
@@ -235,6 +237,7 @@ describe("changeset gate decision", () => {
     ).toEqual({
       status: "missing",
       releaseFiles: ["packages/cli/README.md", "packages/cli/src/gone.ts"],
+      catalogInputs: [],
     });
   });
 
@@ -402,6 +405,10 @@ describe("changeset package relevance", () => {
       expect(edited.stderr.toString()).toContain(
         ".changeset/change.md: @stll/ui",
       );
+      // No version tag or version commit: the diff alone decides, visibly.
+      expect(edited.stderr.toString()).toContain(
+        "@stll/ui: no published version reference resolved",
+      );
       rmSync(entryPath);
       writeFileSync(
         path.join(root, "packages/cli/package.json"),
@@ -422,6 +429,244 @@ describe("changeset package relevance", () => {
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
+  });
+});
+
+describe("catalog versions a published package ships", () => {
+  const DOCX_UTILS = "@stll/docx-utils";
+  const DOCX_MANIFEST = "packages/docx-utils/package.json";
+  const REFERENCE = "@stll/docx-utils@0.1.2";
+  const ENTRY_FILE = ".changeset/change.md";
+  const entry = (names: readonly string[]) => ({
+    file: ENTRY_FILE,
+    contents: `---\n${names.map((name) => `"${name}": patch`).join("\n")}\n---\n\nShip the catalog version.\n`,
+  });
+  const rootManifest = (jszip: string, react = "^19.2.8"): string =>
+    JSON.stringify({
+      name: "stella",
+      private: true,
+      workspaces: ["packages/*"],
+      catalog: { jszip, tsdown: "0.1.0" },
+      catalogs: { react19: { react } },
+    });
+  const manifests = new Map([
+    [
+      DOCX_MANIFEST,
+      JSON.stringify({
+        name: DOCX_UTILS,
+        version: "0.1.2",
+        dependencies: { jszip: "catalog:" },
+        devDependencies: { tsdown: "catalog:" },
+      }),
+    ],
+    [
+      "packages/ui/package.json",
+      JSON.stringify({
+        name: "@stll/ui",
+        version: "1.0.0",
+        peerDependencies: { react: "catalog:react19" },
+      }),
+    ],
+  ]);
+  const jszipBump = findCatalogInputs({
+    policy,
+    manifests,
+    before: rootManifest("3.10.1"),
+    after: rootManifest("3.10.2"),
+  });
+
+  test("reads default and named catalog entries from the shipped sections", () => {
+    expect(jszipBump).toEqual([
+      {
+        packageName: DOCX_UTILS,
+        field: "dependencies",
+        dependency: "jszip",
+        entry: "jszip@catalog:",
+      },
+    ]);
+    expect(
+      findCatalogInputs({
+        policy,
+        manifests,
+        before: rootManifest("3.10.1", "^19.2.7"),
+        after: rootManifest("3.10.1"),
+      }),
+    ).toEqual([
+      {
+        packageName: "@stll/ui",
+        field: "peerDependencies",
+        dependency: "react",
+        entry: "react@catalog:react19",
+      },
+    ]);
+  });
+
+  test("rejects a shipped catalog bump that no changeset names, naming the package and entry", () => {
+    const changedFiles = ["package.json", "bun.lock"];
+    for (const entries of [
+      [],
+      [{ file: ".changeset/empty.md", contents: EMPTY_CHANGESET }],
+    ]) {
+      expect(() =>
+        checkChangesetPackages({
+          changedFiles,
+          entries,
+          policy,
+          catalogInputs: jszipBump,
+        }),
+      ).toThrow(`${DOCX_UTILS}: jszip@catalog:`);
+    }
+    expect(
+      decideChangesetGate({
+        changedFiles,
+        addedFiles: [],
+        releasePaths: policy.releasePaths,
+        catalogInputs: jszipBump,
+      }),
+    ).toEqual({
+      status: "missing",
+      releaseFiles: [],
+      catalogInputs: jszipBump,
+    });
+  });
+
+  test("accepts the same bump with a changeset for that package", () => {
+    const changedFiles = ["package.json", "bun.lock", ENTRY_FILE];
+    expect(
+      checkChangesetPackages({
+        changedFiles,
+        entries: [entry([DOCX_UTILS])],
+        policy,
+        catalogInputs: jszipBump,
+      }),
+    ).toEqual([]);
+    expect(
+      decideChangesetGate({
+        changedFiles,
+        addedFiles: [ENTRY_FILE],
+        releasePaths: policy.releasePaths,
+        catalogInputs: jszipBump,
+      }).status,
+    ).toBe("satisfied");
+  });
+
+  test("requires nothing for a devDependency or a package that is private or outside the release policy", () => {
+    const inputs = findCatalogInputs({
+      policy,
+      manifests: new Map([
+        [
+          DOCX_MANIFEST,
+          JSON.stringify({
+            name: DOCX_UTILS,
+            devDependencies: { jszip: "catalog:" },
+          }),
+        ],
+        [
+          "packages/ui/package.json",
+          JSON.stringify({
+            name: "@stll/ui",
+            private: true,
+            dependencies: { jszip: "catalog:" },
+          }),
+        ],
+        [
+          "apps/web/package.json",
+          JSON.stringify({
+            name: "@stll/web",
+            dependencies: { jszip: "catalog:" },
+          }),
+        ],
+      ]),
+      before: rootManifest("3.10.1"),
+      after: rootManifest("3.10.2"),
+    });
+    expect(inputs).toEqual([]);
+    expect(
+      checkChangesetPackages({
+        changedFiles: ["package.json"],
+        entries: [],
+        policy,
+        catalogInputs: inputs,
+      }),
+    ).toEqual([]);
+    expect(
+      decideChangesetGate({
+        changedFiles: ["package.json"],
+        addedFiles: [],
+        releasePaths: policy.releasePaths,
+        catalogInputs: inputs,
+      }),
+    ).toEqual({ status: "not-required" });
+  });
+
+  test("accepts a changeset-only diff for a package whose shipped catalog version changed since its last publish", () => {
+    expect(
+      checkChangesetPackages({
+        changedFiles: [ENTRY_FILE],
+        entries: [entry([DOCX_UTILS])],
+        policy,
+        published: new Map([
+          [
+            DOCX_UTILS,
+            {
+              reference: REFERENCE,
+              changedFiles: ["packages/docx-utils/CHANGELOG.md"],
+              catalogInputs: jszipBump,
+            },
+          ],
+        ]),
+      }),
+    ).toEqual([`${DOCX_UTILS}: changed since ${REFERENCE}: jszip@catalog:.`]);
+  });
+
+  test("rejects a package with no release input changed since its last publish", () => {
+    expect(() =>
+      checkChangesetPackages({
+        changedFiles: [ENTRY_FILE],
+        entries: [entry([DOCX_UTILS])],
+        policy,
+        published: new Map([
+          [
+            DOCX_UTILS,
+            {
+              reference: REFERENCE,
+              // Ungated files of the package, and a catalog left as it was.
+              changedFiles: [
+                "packages/docx-utils/CHANGELOG.md",
+                "packages/docx-utils/vitest.config.ts",
+              ],
+              catalogInputs: findCatalogInputs({
+                policy,
+                manifests,
+                before: rootManifest("3.10.2"),
+                after: rootManifest("3.10.2"),
+              }),
+            },
+          ],
+        ]),
+      }),
+    ).toThrow(`${ENTRY_FILE}: ${DOCX_UTILS}`);
+  });
+
+  test("falls back to the diff, with a note, when no published reference resolves", () => {
+    const note = `${DOCX_UTILS}: no published version reference resolved; checked this diff only.`;
+    const published = new Map([[DOCX_UTILS, null]]);
+    expect(() =>
+      checkChangesetPackages({
+        changedFiles: [ENTRY_FILE],
+        entries: [entry([DOCX_UTILS])],
+        policy,
+        published,
+      }),
+    ).toThrow(note);
+    expect(
+      checkChangesetPackages({
+        changedFiles: ["packages/docx-utils/src/index.ts", ENTRY_FILE],
+        entries: [entry([DOCX_UTILS])],
+        policy,
+        published,
+      }),
+    ).toEqual([note]);
   });
 });
 
@@ -561,9 +806,7 @@ describe("changeset policy file", () => {
   });
 
   test("gates the CLI capability catalog", () => {
-    expect(policy.releasePaths).toContain(
-      "packages/cli/capability-catalog.json",
-    );
+    expect(policy.releasePaths).toContain("packages/cli/capabilities/**");
   });
 
   test("declares the same packages to the changesets entry validator", () => {
@@ -633,7 +876,7 @@ describe("workflow and pre-push read the same policy", () => {
       gate.match(/^ {8}if: github\.event_name == 'pull_request'$/gmu),
     ).toHaveLength(stepCount);
     const workflow = readFile(WORKFLOW_FILE);
-    const job = workflow.indexOf("\n  ci-checks:\n");
+    const job = workflow.indexOf("\n  ci-checks-rest:\n");
     const gateStart = workflow.indexOf(gate, job);
     expect(gateStart).toBeGreaterThan(job);
     expect(gateStart).toBeLessThan(

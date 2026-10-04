@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -45,6 +51,10 @@ import {
   MAX_PORT_OFFSET,
   parseDevRunnerConfig,
 } from "./dev-runner-config";
+import {
+  devStatePath,
+  readOrCreateDevContentEncryptionKey,
+} from "./dev-runtime";
 
 const tempDirs: string[] = [];
 
@@ -1177,6 +1187,87 @@ describe("legacy shared Docker service detection", () => {
 });
 
 describe("dev env factories", () => {
+  test("uses the configured content encryption key without creating local state", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+    const configuredKey = "a".repeat(64);
+    writeFileSync(
+      path.resolve(rootDir, "apps/api/.env"),
+      `CONTENT_ENCRYPTION_KEY=${configuredKey}\n`,
+    );
+    const steps = buildPersistentSteps({
+      infraOffset: 0,
+      infraPorts: infraPortsForOffset(0),
+      mode: "dev:api",
+      ports: portsForOffset(0),
+      rootDir,
+    });
+    for (const step of steps.primary) {
+      expect(step.env?.["CONTENT_ENCRYPTION_KEY"] === configuredKey).toBe(true);
+    }
+    expect(() =>
+      statSync(devStatePath(rootDir, "content-encryption-key")),
+    ).toThrow("ENOENT");
+  });
+
+  test("keeps a private persistent content encryption key per checkout", () => {
+    const rootDir = createTempDir();
+    const otherRootDir = createTempDir();
+    const key = readOrCreateDevContentEncryptionKey(rootDir).unwrap();
+    expect(key).toMatch(/^[a-f0-9]{64}$/u);
+    expect(readOrCreateDevContentEncryptionKey(rootDir).unwrap() === key).toBe(
+      true,
+    );
+    expect(
+      readOrCreateDevContentEncryptionKey(otherRootDir).unwrap() === key,
+    ).toBe(false);
+    const steps = buildPersistentSteps({
+      infraOffset: 0,
+      infraPorts: infraPortsForOffset(0),
+      mode: "dev:api",
+      ports: portsForOffset(0),
+      rootDir,
+    });
+    for (const step of steps.primary) {
+      expect(step.env?.["CONTENT_ENCRYPTION_KEY"] === key).toBe(true);
+    }
+  });
+
+  // Windows reports synthetic permission bits; file ACLs are not modes.
+  test.skipIf(process.platform === "win32")(
+    "creates the content encryption key readable by its owner only",
+    () => {
+      const rootDir = createTempDir();
+      readOrCreateDevContentEncryptionKey(rootDir).unwrap();
+      expect(
+        statSync(devStatePath(rootDir, "content-encryption-key")).mode %
+          0o1_0000,
+      ).toBe(0o600);
+    },
+  );
+
+  test("returns a typed error when local state cannot be created", () => {
+    const rootDir = createTempDir();
+    writeFileSync(path.join(rootDir, ".stella-dev"), "occupied");
+    const result = readOrCreateDevContentEncryptionKey(rootDir);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toContain(
+        "Could not initialize local content encryption key",
+      );
+      expect(result.error.cause).toBeInstanceOf(Error);
+    }
+  });
+
+  test("requires a valid persisted content encryption key", () => {
+    const rootDir = createTempDir();
+    readOrCreateDevContentEncryptionKey(rootDir);
+    writeFileSync(devStatePath(rootDir, "content-encryption-key"), "invalid");
+    expect(() => readOrCreateDevContentEncryptionKey(rootDir).unwrap()).toThrow(
+      "must contain a 32-byte hexadecimal key",
+    );
+  });
+
   test("keeps scheduled jobs inside the API process", () => {
     const rootDir = createTempDir();
     mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
@@ -1331,6 +1422,40 @@ describe("dev env factories", () => {
       VITE_API_URL: "http://localhost:3101",
       VITE_DESKTOP_BRIDGE_PORT: "45999",
     });
+  });
+
+  test("same-origin API opt-in overrides stale URLs together for every allocated port", () => {
+    for (const offset of [0, 10, 80]) {
+      const ports = portsForOffset(offset);
+      const webEnv = createWebEnv({
+        baseEnv: {
+          DEV_API_PROXY_TARGET: "http://localhost:1",
+          STELLA_DEV_SAME_ORIGIN_API: "1",
+          VITE_BROWSER_API_URL: "http://localhost:2/api",
+          VITE_PUBLIC_APP_URL: "http://localhost:3",
+        },
+        ports,
+      });
+      const browserApi = new URL(webEnv.VITE_BROWSER_API_URL ?? "");
+      const app = new URL(webEnv.VITE_PUBLIC_APP_URL ?? "");
+      expect(app.origin).toBe(`http://localhost:${String(ports.web)}`);
+      expect(browserApi.origin).toBe(app.origin);
+      expect(browserApi.pathname).toBe("/api");
+      expect(webEnv.DEV_API_PROXY_TARGET).toBe(
+        `http://127.0.0.1:${String(ports.api)}`,
+      );
+      expect(webEnv.VITE_API_URL).toBe(`http://localhost:${String(ports.api)}`);
+    }
+  });
+
+  test("same-origin API routing requires an explicit opt-in", () => {
+    for (const optIn of [undefined, "", "0"]) {
+      const baseEnv = { STELLA_DEV_SAME_ORIGIN_API: optIn };
+      const webEnv = createWebEnv({ baseEnv, ports: portsForOffset(10) });
+      expect(webEnv).not.toHaveProperty("DEV_API_PROXY_TARGET");
+      expect(webEnv).not.toHaveProperty("VITE_BROWSER_API_URL");
+      expect(webEnv).not.toHaveProperty("VITE_PUBLIC_APP_URL");
+    }
   });
 
   test("threads computed ports into the desktop env", () => {

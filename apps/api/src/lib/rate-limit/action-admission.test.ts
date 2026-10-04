@@ -2,10 +2,32 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   ActionAdmissionError,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
+
+test("period exhaustion has its own non-transient code before execution", async () => {
+  let calls = 0;
+  const refusal = await failureOf(
+    withActionAdmission({
+      enabled: true,
+      organizationId,
+      userId: firstUser,
+      policy,
+      redis: { send: async () => -1 },
+      run: async () => {
+        calls += 1;
+      },
+    }),
+  );
+  expect(refusal).toMatchObject({
+    reason: "period_exhausted",
+    code: "action_period_exhausted",
+  });
+  expect(calls).toBe(0);
+});
 
 const policy = {
   organizationConcurrency: 2,
@@ -262,11 +284,12 @@ describe("shared action admission", () => {
     );
   });
 
-  test("lease loss aborts the inherited nested signal and rejects its completed result", async () => {
+  test("lease loss aborts the inherited signal without replacing a settled and charged result", async () => {
     const redis = sharedRedis({ onRenew: async () => 0 });
     const timing = manualTiming(redis);
     const started = deferred();
     const pending = deferred();
+    let charges = 0;
     const admitted = withActionAdmission({
       enabled: true,
       organizationId,
@@ -282,10 +305,11 @@ describe("shared action admission", () => {
             userId: firstUser,
             run: async (signal) => {
               expect(signal).toBe(outerSignal);
+              charges += 1;
               started.finish();
               await pending.promise;
               expect(signal.aborted).toBe(true);
-              return "unexpected";
+              return "completed";
             },
           }),
         ),
@@ -293,7 +317,8 @@ describe("shared action admission", () => {
     await started.promise;
     await timing.fireNext();
     pending.finish();
-    expect(await failureOf(admitted)).toMatchObject({ reason: "unavailable" });
+    expect(await valueOf(admitted)).toBe("completed");
+    expect(charges).toBe(1);
   });
 
   test("work continuing after its enclosing call finishes cannot reuse a released lease", async () => {
@@ -578,7 +603,7 @@ describe("shared action admission", () => {
             "abort",
             () => {
               observedAbort = true;
-              reject(new Error("Action aborted", { cause: signal.reason }));
+              reject(new DOMException("Action aborted", "AbortError"));
             },
             { once: true },
           );
@@ -591,4 +616,53 @@ describe("shared action admission", () => {
     expect(await failure).toMatchObject({ reason: "unavailable" });
     expect(observedAbort).toBe(true);
   });
+  for (const failureKind of [
+    "signal-reason",
+    "abort-error",
+    "handler-error",
+  ] as const) {
+    test(`lease loss preserves error identity for ${failureKind}`, async () => {
+      const redis = sharedRedis({ onRenew: async () => 0 });
+      const timing = manualTiming(redis);
+      const started = deferred();
+      const pending = deferred();
+      const conflict = new HandlerError({
+        status: 409,
+        message: "The resource changed",
+      });
+      const admitted = withActionAdmission({
+        enabled: true,
+        organizationId,
+        userId: firstUser,
+        policy: { ...policy, leaseMs: 100 },
+        redis,
+        timing,
+        run: async (signal) => {
+          started.finish();
+          await pending.promise;
+          expect(signal.aborted).toBe(true);
+          switch (failureKind) {
+            case "signal-reason":
+              throw signal.reason;
+            case "abort-error":
+              throw new DOMException("Action aborted", "AbortError");
+            case "handler-error":
+              throw conflict;
+          }
+        },
+      });
+      const failure = failureOf(admitted);
+      await started.promise;
+      await timing.fireNext();
+      pending.finish();
+      const error = await failure;
+      if (failureKind === "handler-error") {
+        expect(error).toBe(conflict);
+        expect(error).toMatchObject({ status: 409 });
+      } else {
+        expect(ActionAdmissionError.is(error)).toBe(true);
+        expect(error).toMatchObject({ reason: "unavailable" });
+      }
+    });
+  }
 });

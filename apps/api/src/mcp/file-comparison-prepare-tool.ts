@@ -135,6 +135,7 @@ export type PrepareFileComparisonOutput = v.InferInput<
 >;
 
 export const PREPARE_FILE_COMPARISON_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   annotations: {
     title: "Prepare file comparison",
     destructiveHint: false,
@@ -162,6 +163,8 @@ export const PREPARE_FILE_COMPARISON_TOOL_DEFINITION = defineValibotMcpTool({
       "Whitespace and digest case are normalised by the runtime schema and the digest predicate stays enforced there; neither is a spelling constraint the projection should advertise.",
   },
   access: "write",
+  accountAccess: "sandbox",
+  permissions: { type: "all", permissions: { entity: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: FILE_COMPARISON_TRANSPORT.prepareToolName,
   scope: "stella:documents_write",

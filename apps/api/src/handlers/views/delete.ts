@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { workspaceViews } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -20,7 +20,12 @@ const config = {
     "of a layout the matter must keep (overview, table, filesystem, kanban); " +
     "past report exports keep their own layout snapshot.",
   permissions: { view: ["delete"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   params: workspaceParams({ viewId: tSafeId("workspaceView") }),
 } satisfies WorkspaceHandlerConfig;
 

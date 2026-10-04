@@ -3,17 +3,22 @@ import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { timeEntryRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
 import type { TimePolicy } from "@/api/lib/billing-time";
+import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import {
   rateLookupKey,
   resolveRatesInTransaction,
 } from "@/api/lib/billing/rates";
-import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
+import {
+  guardRunningTimeEntries,
+  timeEntryIsRunning,
+} from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -151,7 +156,13 @@ const batchUpdate = createSafeHandler(
       "no rate; mark_billable re-resolves each entry's rate and is refused " +
       "when one of them has no effective rate.",
     permissions: { timeEntry: ["approve"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    realtime: timeEntryRealtimeUpdates,
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "write",
     body: batchUpdateBodySchema,
   },
@@ -197,7 +208,7 @@ const batchUpdate = createSafeHandler(
                 dateWorked: timeEntries.dateWorked,
                 narrative: timeEntries.narrative,
                 timezoneId: timeEntries.timezoneId,
-                timerStartedAt: timeEntries.timerStartedAt,
+                running: timeEntryIsRunning(),
               })
               .from(timeEntries)
               .where(
@@ -214,9 +225,7 @@ const batchUpdate = createSafeHandler(
             if (violation) {
               return { type: "policy" as const, error: violation, rows: [] };
             }
-            const hasRunningTimer = blockers.some(
-              (entry) => entry.timerStartedAt !== null,
-            );
+            const hasRunningTimer = blockers.some((entry) => entry.running);
             if (hasRunningTimer) {
               return { type: "running_timer" as const, rows: [] };
             }
@@ -230,12 +239,24 @@ const batchUpdate = createSafeHandler(
             }
             const updated = await tx
               .update(timeEntries)
-              .set({ status: BILLING_STATUS.APPROVED, updatedAt: new Date() })
+              .set({
+                status: BILLING_STATUS.APPROVED,
+                approvedByUserId: user.id,
+                approvedAt: now,
+                returnedAt: null,
+                returnedByUserId: null,
+                returnComment: null,
+                updatedAt: now,
+              })
               .where(
                 and(condition, eq(timeEntries.status, BILLING_STATUS.DRAFT)),
               )
               .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));
+            await recordBillingCapCrossings(tx, {
+              workspaceId,
+              recordAuditEvent,
+            });
             return { type: "updated" as const, rows: updated };
           }),
         );
@@ -296,12 +317,21 @@ const batchUpdate = createSafeHandler(
             }
             const updated = await tx
               .update(timeEntries)
-              .set({ status: BILLING_STATUS.DRAFT, updatedAt: new Date() })
+              .set({
+                status: BILLING_STATUS.DRAFT,
+                approvedByUserId: null,
+                approvedAt: null,
+                updatedAt: now,
+              })
               .where(
                 and(condition, eq(timeEntries.status, BILLING_STATUS.APPROVED)),
               )
               .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));
+            await recordBillingCapCrossings(tx, {
+              workspaceId,
+              recordAuditEvent,
+            });
             return { type: "updated" as const, rows: updated };
           }),
         );
@@ -463,6 +493,10 @@ const batchUpdate = createSafeHandler(
               tx,
               buildBatchEvents(updated, action, rateChanges),
             );
+            await recordBillingCapCrossings(tx, {
+              workspaceId,
+              recordAuditEvent,
+            });
             return { type: "updated" as const, rows: updated };
           }),
         );
@@ -531,6 +565,10 @@ const batchUpdate = createSafeHandler(
               )
               .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));
+            await recordBillingCapCrossings(tx, {
+              workspaceId,
+              recordAuditEvent,
+            });
             return { type: "updated" as const, rows: updated };
           }),
         );

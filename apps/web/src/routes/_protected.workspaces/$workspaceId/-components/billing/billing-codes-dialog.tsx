@@ -1,8 +1,7 @@
 import { useState } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
-import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -14,12 +13,12 @@ import { Form } from "@stll/ui/form";
 import { PlusIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
-import { stellaToast } from "@stll/ui/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -124,11 +123,8 @@ export const BillingCodesDialog = ({
     deleteCode.mutate(
       { workspaceId, id },
       {
-        onError: () => {
-          stellaToast.add({
-            title: t("common.somethingWentWrong"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("common.somethingWentWrong"));
         },
       },
     );
@@ -138,11 +134,8 @@ export const BillingCodesDialog = ({
     updateCode.mutate(
       { workspaceId, id, active: !active },
       {
-        onError: () => {
-          stellaToast.add({
-            title: t("common.somethingWentWrong"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("common.somethingWentWrong"));
         },
       },
     );
@@ -193,11 +186,8 @@ export const BillingCodesDialog = ({
                   },
                   {
                     onSuccess: () => setShowForm(false),
-                    onError: () => {
-                      stellaToast.add({
-                        title: t("common.somethingWentWrong"),
-                        type: "error",
-                      });
+                    onError: (error) => {
+                      notifyUserError(error, t("common.somethingWentWrong"));
                     },
                   },
                 );

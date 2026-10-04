@@ -42,6 +42,9 @@ import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
   inlinesToPlainText,
+  isExcludedHtmlTag,
+  ownTableRows,
+  visibleHtmlText,
   stripFurniturePrefix,
   stripInlinePrefix,
   walkInlines as walkInlinesShared,
@@ -376,7 +379,9 @@ const styledBlockChunk = (
     return null;
   }
 
-  const boldText = $el.find("span[style*='font-weight:bold']").text().trim();
+  const boldText = visibleHtmlText(
+    $el.find("span[style*='font-weight:bold']"),
+  ).trim();
   return {
     inlines,
     plainText,
@@ -437,7 +442,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
     }
     const $el = $(el);
     const tag = "tagName" in el ? el.tagName.toLowerCase() : "";
-    if (tag === "script" || tag === "style") {
+    if (isExcludedHtmlTag(tag)) {
       return;
     }
     if (
@@ -469,17 +474,23 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
     }
 
     if (tag === "table") {
+      $el.children("caption").each((_caption, caption) => {
+        const chunk = styledBlockChunk($, $(caption));
+        if (chunk !== null) {
+          chunks.push(chunk);
+        }
+      });
       // Extract each row as a paragraph. Cell values are
       // joined with " | " to preserve tabular structure
       // in plain text (e.g., cost breakdowns, fee summaries).
-      $el.find("tr").each((_tr, trEl) => {
+      ownTableRows($el).each((_tr, trEl) => {
         const cells: string[] = [];
         const cellInlines: Inline[] = [];
 
         $(trEl)
-          .find("td, th")
+          .children("td, th")
           .each((_td, tdEl) => {
-            const cellText = $(tdEl).text().trim();
+            const cellText = visibleHtmlText($(tdEl)).trim();
             if (cellText) {
               cells.push(cellText);
               if (cellInlines.length > 0) {

@@ -1,4 +1,7 @@
-import { getTranslator } from "@/i18n/i18n-store";
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import type { ActionAdmissionCode } from "@stll/api-contract/action-admission";
+
+import { getTranslator } from "@/i18n/translator";
 import type { TranslationKey } from "@/i18n/types";
 
 export const STATUS_ERROR_KEYS = {
@@ -33,3 +36,13 @@ export const STATUS_TO_KEY: Readonly<
 
 export const translateError = (key: TranslationKey): string =>
   getTranslator()(key);
+
+export const ACTION_ADMISSION_ERROR_KEYS = {
+  [ACTION_ADMISSION_CODES.periodExhausted]:
+    "errors.actionAdmission.periodExhausted",
+  [ACTION_ADMISSION_CODES.concurrencyBusy]:
+    "errors.actionAdmission.concurrencyBusy",
+  [ACTION_ADMISSION_CODES.notEnabled]: "errors.actionAdmission.notEnabled",
+  [ACTION_ADMISSION_CODES.admissionUnavailable]:
+    "errors.actionAdmission.admissionUnavailable",
+} as const satisfies Record<ActionAdmissionCode, TranslationKey>;

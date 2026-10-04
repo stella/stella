@@ -3,26 +3,20 @@ import type * as React from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { MCP_HTTP_PATH } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { ExternalLinkIcon, MonitorIcon, TerminalIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { AIProviderIcon } from "@/components/ai-provider-icons";
-import { CopyField } from "@/components/copy-field";
+import { AssistantSetup } from "@/components/assistant-setup";
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
-import { env } from "@/env";
 import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-status";
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
 import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
-import { externalApiOrigin } from "@/lib/api-origins";
+import { CLI_DOCS_URL } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { ClipboardWorkflowPreview } from "@/routes/onboarding/-components/clipboard-workflow-preview";
-
-const ASSISTANT_DOCS_URL =
-  "https://stll.app/docs/get-started/connect-ai-assistant/";
-const CLI_DOCS_URL = "https://stll.app/docs/get-started/cli/";
 
 /**
  * Single source of truth for the card order: drives the rendered card
@@ -190,22 +184,6 @@ const SetupPanel = ({
   </div>
 );
 
-/** Brand tile that opens the setup guide for that assistant. */
-const AssistantTile = ({
-  name,
-  children,
-}: React.PropsWithChildren<{ name: string }>) => (
-  <a
-    className="bg-muted/60 text-foreground hover:bg-muted flex flex-1 items-center justify-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium"
-    href={sanitizeHref(ASSISTANT_DOCS_URL)}
-    rel="noreferrer"
-    target="_blank"
-  >
-    {children}
-    {name}
-  </a>
-);
-
 type DocsLinkProps = React.PropsWithChildren<{
   href: string;
   className?: string;
@@ -237,29 +215,10 @@ const AssistantPanel = () => {
 
   return (
     <SetupPanel title={t("onboarding.mcpCardTitle")}>
-      <div className="flex gap-3">
-        <AssistantTile name="Claude">
-          <AIProviderIcon className="size-6" provider="anthropic" />
-        </AssistantTile>
-        <AssistantTile name="ChatGPT">
-          <AIProviderIcon className="size-6" provider="openai" />
-        </AssistantTile>
-      </div>
-      <p className="text-muted-foreground text-sm leading-relaxed text-pretty">
-        {t("onboarding.mcpCardDescription")}
-      </p>
-      {/* The guide names the hosted server; a self-hosted deployment has to
-          hand its own address over here or the reader connects to the wrong
-          stella. */}
-      {env.VITE_SELFHOST && (
-        <CopyField
-          label={t("settings.connections.mcpUrlLabel")}
-          value={`${externalApiOrigin().replace(/\/$/u, "")}${MCP_HTTP_PATH}`}
-        />
-      )}
-      <DocsLink href={ASSISTANT_DOCS_URL}>
-        {t("onboarding.assistantDocsLink")}
-      </DocsLink>
+      {/* The same block as Settings → Connections, so both paths stay one. It
+          carries this deployment's own address, so self-hosted readers
+          connect to the right stella. */}
+      <AssistantSetup variant="inline" />
       <DocsLink
         className="text-muted-foreground text-xs"
         href={CLI_DOCS_URL}
@@ -274,9 +233,7 @@ const AssistantPanel = () => {
 const DesktopSetupPanel = () => {
   const t = useTranslations();
   const platform = useHydrationSafeDesktopPlatform();
-  // Downloading here starts the watch, so launching the app is the whole
-  // setup: no trip back to settings to connect.
-  const { connect, startWatch, state } = useDesktopAccountConnection();
+  const { connect, state } = useDesktopAccountConnection();
   const shortcut = platform === "mac" ? "⌘ ⇧ V" : "Ctrl + Shift + V";
   const copyShortcut = platform === "mac" ? "⌘ C" : "Ctrl + C";
 
@@ -296,7 +253,17 @@ const DesktopSetupPanel = () => {
           {shortcut}
         </kbd>
       </p>
-      <DesktopDownloadButtons onDownload={startWatch} platform={platform} />
+      <DesktopDownloadButtons platform={platform} />
+      <Button
+        loading={state.status === "connecting"}
+        onClick={() => {
+          detached(connect(), "onboarding-download-step.connect-desktop");
+        }}
+        type="button"
+        variant="outline"
+      >
+        {t("common.connect")}
+      </Button>
       <DesktopConnectionStatus
         onRetry={() => {
           detached(connect(), "onboarding-download-step.connect-desktop");

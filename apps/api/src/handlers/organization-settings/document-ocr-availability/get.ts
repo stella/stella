@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { isDocumentOcrWorkerAvailable } from "@/api/lib/document-processing-readiness";
 
@@ -11,7 +11,13 @@ const config = {
   // The response is only an ephemeral availability bit; it exposes no worker
   // topology or provider configuration.
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies HandlerConfig;
 

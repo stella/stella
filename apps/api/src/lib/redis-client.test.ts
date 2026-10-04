@@ -1,4 +1,5 @@
-import { describe, expect, mock, test } from "bun:test";
+import { Result } from "better-result";
+import { describe, expect, mock, spyOn, test } from "bun:test";
 
 const createBunRedisClientCalls: unknown[] = [];
 
@@ -13,6 +14,7 @@ void mock.module("bullmq", () => ({
   },
 }));
 
+const redisClientModule = await import("@/api/lib/redis-client");
 const {
   connectWithColdStartRetries,
   createBullMqConnection,
@@ -21,7 +23,8 @@ const {
   isRecoverableRedisPollError,
   isTransientRedisConnectionError,
   redisClientOptions,
-} = await import("@/api/lib/redis-client");
+} = redisClientModule;
+const { createLazyBullMqQueue } = await import("@/api/lib/bullmq-queue");
 
 const REDIS_URL = "redis://127.0.0.1:6379";
 // Bun reads `maxRetries` as a u32, so the ceiling is the value rather than an
@@ -29,10 +32,45 @@ const REDIS_URL = "redis://127.0.0.1:6379";
 const U32_CEILING = 4_294_967_295;
 
 describe("BullMQ Redis connection", () => {
+  test("lazy queues pass custom options to their classified connection factory", () => {
+    const unavailable = new Error("Connection construction is unavailable");
+    const construction = spyOn(
+      redisClientModule,
+      "createBullMqConnection",
+    ).mockImplementation(() => {
+      throw unavailable;
+    });
+    try {
+      const getQueue = createLazyBullMqQueue({
+        name: "document-processing",
+        connectionOptions: {
+          connectionTimeout: 137,
+          enableOfflineQueue: false,
+        },
+      });
+      expect(construction).not.toHaveBeenCalled();
+      const result = Result.try({
+        try: getQueue,
+        catch: (error: unknown) => error,
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBe(unavailable);
+      }
+      expect(construction).toHaveBeenCalledTimes(1);
+      expect(construction).toHaveBeenCalledWith({
+        storeClass: "durable-coordination",
+        overrides: { connectionTimeout: 137, enableOfflineQueue: false },
+      });
+    } finally {
+      construction.mockRestore();
+    }
+  });
+
   test("lets BullMQ own connection startup", () => {
     createBunRedisClientCalls.length = 0;
 
-    createBullMqConnection();
+    createBullMqConnection({ storeClass: "durable-coordination" });
 
     expect(createBunRedisClientCalls).toHaveLength(1);
     expect(createBunRedisClientCalls[0]).toMatchObject([
@@ -50,6 +88,15 @@ describe("BullMQ Redis connection", () => {
  * actually reach Bun's setter.
  */
 describe("the reconnect policy", () => {
+  test("native connection options preserve caller timeout and offline queue settings", () => {
+    expect(
+      redisClientOptions(REDIS_URL, {
+        connectionTimeout: 137,
+        enableOfflineQueue: false,
+      }),
+    ).toMatchObject({ connectionTimeout: 137, enableOfflineQueue: false });
+  });
+
   test("the reconnect ladder is unbounded", () => {
     expect(redisClientOptions(REDIS_URL).maxRetries).toBe(U32_CEILING);
   });
@@ -88,7 +135,7 @@ describe("the reconnect policy", () => {
   });
 
   test("assigning onclose reaches Bun's setter", () => {
-    const client = createRedisClient();
+    const client = createRedisClient({ storeClass: "cache" });
 
     // Through `[[Set]]`, the way BullMQ's adapter registers its own callback.
     Reflect.set(client, "onclose", () => undefined);
@@ -114,8 +161,14 @@ describe("connectWithColdStartRetries", () => {
     };
 
     // Resolving without throwing is the assertion; a rejection fails the test.
-    await connectWithColdStartRetries(connectOnce);
+    const delays: number[] = [];
+    await connectWithColdStartRetries(connectOnce, {
+      sleep: async (delayMs) => {
+        delays.push(delayMs);
+      },
+    });
     expect(calls).toBe(3);
+    expect(delays).toEqual([200, 500]);
   });
 
   test("rethrows the original error once retries are exhausted", async () => {
@@ -126,15 +179,21 @@ describe("connectWithColdStartRetries", () => {
       throw originalError;
     };
 
+    const delays: number[] = [];
     let caught: unknown;
     try {
-      await connectWithColdStartRetries(connectOnce);
+      await connectWithColdStartRetries(connectOnce, {
+        sleep: async (delayMs) => {
+          delays.push(delayMs);
+        },
+      });
     } catch (error) {
       caught = error;
     }
     // Identity check: the retries-exhausted rethrow must preserve the
     // original error object, not wrap it.
     expect(caught).toBe(originalError);
+    expect(delays).toEqual([200, 500, 1000, 2000]);
   });
 });
 
@@ -262,7 +321,12 @@ describe("createLazyRedisClient", () => {
       }
       await Promise.resolve();
     };
-    const lazy = createLazyRedisClient(() => client);
+    const delays: number[] = [];
+    const lazy = createLazyRedisClient(() => client, {
+      sleep: async (delayMs) => {
+        delays.push(delayMs);
+      },
+    });
 
     const rejection: unknown = await lazy.ready().then(
       () => null,
@@ -274,6 +338,7 @@ describe("createLazyRedisClient", () => {
 
     expect(rejection).toBeInstanceOf(Error);
     expect(client.connects).toBe(failingAttempts + 1);
+    expect(delays).toEqual([200, 500, 1000, 2000]);
   });
 
   test("closing drops the connection with the client", async () => {

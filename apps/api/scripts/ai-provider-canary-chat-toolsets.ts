@@ -27,6 +27,7 @@ import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 
 import type { CanaryProvider } from "./ai-provider-canary-config";
@@ -166,10 +167,11 @@ const buildChatToolsForScenario = ({
     editApplyMode,
     hasActiveDocxEditClient: true,
     hasActiveDocxFileClient,
-    memberRole: "owner",
+    memberRole: sessionMemberRole("owner"),
     memoryEnabled: true,
     organizationId,
     orgAIConfig,
+    managedAIResidency: "eu",
     // A matters scope registers both past-chat tools, so the approval-gated
     // wider search also runs through the provider matrix.
     pastChatScope: {
@@ -198,6 +200,7 @@ const buildChatToolsForScenario = ({
       accessibleWorkspaceIds: [workspaceId],
       pinnedIds: [],
     }),
+    userEmail: "provider-schema-canary@example.test",
     userId,
     webSearchEnabled: true,
     webSearchProviders: {

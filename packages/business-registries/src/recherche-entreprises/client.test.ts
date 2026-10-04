@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { lookupBySiren, lookupBySiret, searchByName } from "./client.js";
 import { RechercheEntreprisesValidationError } from "./errors.js";
 import type { RechercheEntreprisesSearchResponse } from "./types.js";
@@ -61,6 +63,7 @@ describe("lookupBySiren (fixture)", () => {
 
     const controller = new AbortController();
     const lookup = lookupBySiren("780129987", {
+      observer: "unobserved",
       signal: controller.signal,
     });
     expect(signal?.aborted).toBe(false);
@@ -91,7 +94,9 @@ describe("lookupBySiren (fixture)", () => {
           headers: { "Content-Type": "application/json" },
         }),
     );
-    expect(await lookupBySiren("837295260")).toBeNull();
+    expect(
+      await lookupBySiren("837295260", { observer: "unobserved" }),
+    ).toBeNull();
   });
 
   test("returns null when the first result's siren does not match", async () => {
@@ -108,7 +113,9 @@ describe("lookupBySiren (fixture)", () => {
           headers: { "Content-Type": "application/json" },
         }),
     );
-    expect(await lookupBySiren("552032534")).toBeNull();
+    expect(
+      await lookupBySiren("552032534", { observer: "unobserved" }),
+    ).toBeNull();
   });
 
   test("surfaces 5xx errors as RechercheEntreprisesAPIError", async () => {
@@ -121,7 +128,9 @@ describe("lookupBySiren (fixture)", () => {
           { status: 503, headers: { "Content-Type": "application/json" } },
         ),
     );
-    expect(lookupBySiren("780129987")).rejects.toMatchObject({
+    expect(
+      await rejectionOf(lookupBySiren("780129987", { observer: "unobserved" })),
+    ).toMatchObject({
       name: "RechercheEntreprisesAPIError",
       httpStatus: 503,
       upstreamMessage: "Service temporarily unavailable",
@@ -139,7 +148,9 @@ describe("lookupBySiren (fixture)", () => {
           headers: { "Content-Type": "application/json" },
         }),
     );
-    expect(lookupBySiren("780129987")).rejects.toMatchObject({
+    expect(
+      await rejectionOf(lookupBySiren("780129987", { observer: "unobserved" })),
+    ).toMatchObject({
       name: "RechercheEntreprisesAPIError",
       httpStatus: 200,
     });
@@ -167,7 +178,9 @@ describe("lookupBySiret (fixture)", () => {
         }),
     );
 
-    const company = await lookupBySiret("78012998704037");
+    const company = await lookupBySiret("78012998704037", {
+      observer: "unobserved",
+    });
     expect(company).not.toBeNull();
     expect(company?.siren).toBe("780129987");
     expect(company?.matchedEstablishment?.siret).toBe("78012998704037");
@@ -192,7 +205,9 @@ describe("lookupBySiret (fixture)", () => {
     // SIREN 780129987 (Renault) + NIC 99999 + Luhn check digit 5 =
     // 78012998799995, a Luhn-valid SIRET that does not appear in the
     // Renault fixture's matching_etablissements list.
-    const company = await lookupBySiret("78012998799995");
+    const company = await lookupBySiret("78012998799995", {
+      observer: "unobserved",
+    });
     expect(company).toBeNull();
   });
 });
@@ -217,7 +232,7 @@ describe("searchByName (fixture)", () => {
           headers: { "Content-Type": "application/json" },
         }),
     );
-    const results = await searchByName("Renault");
+    const results = await searchByName("Renault", { observer: "unobserved" });
     expect(results.length).toBeGreaterThan(0);
     expect(results.every((entry) => /^\d{9}$/u.test(entry.siren))).toBe(true);
   });
@@ -231,7 +246,10 @@ describe("searchByName (fixture)", () => {
           headers: { "Content-Type": "application/json" },
         }),
     );
-    const results = await searchByName("Renault", { limit: 1 });
+    const results = await searchByName("Renault", {
+      observer: "unobserved",
+      limit: 1,
+    });
     expect(results).toHaveLength(1);
   });
 });
@@ -240,47 +258,49 @@ describe("searchByName (fixture)", () => {
 // Validation
 // ---------------------------------------------------------------------------
 describe("lookupBySiren validation", () => {
-  test("rejects format violations", () => {
-    expect(lookupBySiren("12345")).rejects.toBeInstanceOf(
-      RechercheEntreprisesValidationError,
-    );
-    expect(lookupBySiren("abcdefghi")).rejects.toBeInstanceOf(
-      RechercheEntreprisesValidationError,
-    );
+  test("rejects format violations", async () => {
+    expect(
+      await rejectionOf(lookupBySiren("12345", { observer: "unobserved" })),
+    ).toBeInstanceOf(RechercheEntreprisesValidationError);
+    expect(
+      await rejectionOf(lookupBySiren("abcdefghi", { observer: "unobserved" })),
+    ).toBeInstanceOf(RechercheEntreprisesValidationError);
   });
 
-  test("rejects bad checksum", () => {
+  test("rejects bad checksum", async () => {
     // 780129987 is the genuine SIREN; bumping the last digit must fail.
-    expect(lookupBySiren("780129988")).rejects.toBeInstanceOf(
-      RechercheEntreprisesValidationError,
-    );
+    expect(
+      await rejectionOf(lookupBySiren("780129988", { observer: "unobserved" })),
+    ).toBeInstanceOf(RechercheEntreprisesValidationError);
   });
 });
 
 describe("lookupBySiret validation", () => {
-  test("rejects format violations", () => {
-    expect(lookupBySiret("12345")).rejects.toBeInstanceOf(
-      RechercheEntreprisesValidationError,
-    );
-    expect(lookupBySiret("780129987")).rejects.toBeInstanceOf(
-      RechercheEntreprisesValidationError,
-    );
+  test("rejects format violations", async () => {
+    expect(
+      await rejectionOf(lookupBySiret("12345", { observer: "unobserved" })),
+    ).toBeInstanceOf(RechercheEntreprisesValidationError);
+    expect(
+      await rejectionOf(lookupBySiret("780129987", { observer: "unobserved" })),
+    ).toBeInstanceOf(RechercheEntreprisesValidationError);
   });
 
-  test("rejects bad checksum", () => {
-    expect(lookupBySiret("78012998704038")).rejects.toBeInstanceOf(
-      RechercheEntreprisesValidationError,
-    );
+  test("rejects bad checksum", async () => {
+    expect(
+      await rejectionOf(
+        lookupBySiret("78012998704038", { observer: "unobserved" }),
+      ),
+    ).toBeInstanceOf(RechercheEntreprisesValidationError);
   });
 });
 
 describe("searchByName validation", () => {
-  test("rejects empty input", () => {
-    expect(searchByName("")).rejects.toBeInstanceOf(
-      RechercheEntreprisesValidationError,
-    );
-    expect(searchByName("  ")).rejects.toBeInstanceOf(
-      RechercheEntreprisesValidationError,
-    );
+  test("rejects empty input", async () => {
+    expect(
+      await rejectionOf(searchByName("", { observer: "unobserved" })),
+    ).toBeInstanceOf(RechercheEntreprisesValidationError);
+    expect(
+      await rejectionOf(searchByName("  ", { observer: "unobserved" })),
+    ).toBeInstanceOf(RechercheEntreprisesValidationError);
   });
 });

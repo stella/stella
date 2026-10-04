@@ -1,11 +1,14 @@
 import { useState } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import {
+  CURRENCY_CODE_LENGTH,
+  currencyCodeSchema,
+} from "@stll/api-contract/currency-code";
 import { tryToMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -23,7 +26,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
-import { stellaToast } from "@stll/ui/toast";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -33,6 +35,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { localISODate } from "@/lib/local-iso-date";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { organizationOptions } from "@/lib/organization/queries";
@@ -176,11 +179,8 @@ const RateTablesView = ({
     updateTable.mutate(
       { workspaceId, id, isDefault: true },
       {
-        onError: () => {
-          stellaToast.add({
-            title: t("common.somethingWentWrong"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("common.somethingWentWrong"));
         },
       },
     );
@@ -190,11 +190,8 @@ const RateTablesView = ({
     deleteTable.mutate(
       { workspaceId, id },
       {
-        onError: () => {
-          stellaToast.add({
-            title: t("common.somethingWentWrong"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("common.somethingWentWrong"));
         },
       },
     );
@@ -222,11 +219,8 @@ const RateTablesView = ({
               { workspaceId, ...values },
               {
                 onSuccess: () => setShowForm(false),
-                onError: () => {
-                  stellaToast.add({
-                    title: t("common.somethingWentWrong"),
-                    type: "error",
-                  });
+                onError: (error) => {
+                  notifyUserError(error, t("common.somethingWentWrong"));
                 },
               },
             );
@@ -316,7 +310,14 @@ const CreateRateTableForm = ({
   const t = useTranslations();
   const schema = v.strictObject({
     name: requiredTrimmedStringSchema(t("common.required")),
-    currency: v.string(),
+    // One message per field: stop at the first failing currency check.
+    currency: v.config(
+      v.message(
+        currencyCodeSchema,
+        t("billing.sellerProfiles.invalidCurrency"),
+      ),
+      { abortPipeEarly: true },
+    ),
     isDefault: v.boolean(),
   });
 
@@ -366,21 +367,22 @@ const CreateRateTableForm = ({
             )}
           </form.Field>
         </div>
-        <div className="flex w-24 flex-col gap-1.5">
-          <Label>{t("common.currency")}</Label>
-          <form.Field name="currency">
-            {(field) => (
+        <form.Field name="currency">
+          {(field) => (
+            <Field className="w-24 gap-1.5" name={field.name}>
+              <FieldLabel>{t("common.currency")}</FieldLabel>
               <Input
                 dir="ltr"
-                maxLength={3}
+                maxLength={CURRENCY_CODE_LENGTH}
                 onChange={(e) =>
                   field.handleChange(e.currentTarget.value.toUpperCase())
                 }
                 value={field.state.value}
               />
-            )}
-          </form.Field>
-        </div>
+              <FieldError />
+            </Field>
+          )}
+        </form.Field>
       </div>
 
       <form.Field name="isDefault">
@@ -495,11 +497,8 @@ const RateEntriesView = ({
     deleteEntry.mutate(
       { workspaceId, rateTableId, id },
       {
-        onError: () => {
-          stellaToast.add({
-            title: t("common.somethingWentWrong"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("common.somethingWentWrong"));
         },
       },
     );
@@ -549,11 +548,8 @@ const RateEntriesView = ({
               { workspaceId, rateTableId, ...values },
               {
                 onSuccess: () => setShowForm(false),
-                onError: () => {
-                  stellaToast.add({
-                    title: t("common.somethingWentWrong"),
-                    type: "error",
-                  });
+                onError: (error) => {
+                  notifyUserError(error, t("common.somethingWentWrong"));
                 },
               },
             );

@@ -5,7 +5,6 @@ import { t } from "elysia";
 import type { Transaction } from "@/api/db/root";
 import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, userFiles } from "@/api/db/schema";
-import { env } from "@/api/env";
 import {
   attachTerminalTurnOutcome,
   cancelPendingChatToolCalls,
@@ -29,12 +28,13 @@ import type {
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { consumeInBatches } from "@/api/lib/destructive-effect-chunks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FileKey } from "@/api/lib/file-key";
@@ -50,6 +50,11 @@ import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { parseUserFileId, toUserFileUrl } from "@/api/lib/user-files/types";
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Copies thread attachments and returns thread metadata rather than stored-file bytes.",
+  },
   description:
     "Fork one of your own chat threads into a new thread that keeps the " +
     "history up to a chosen answer, so another direction or model can be " +
@@ -61,8 +66,13 @@ const config = {
     "either thread leaves the other's files intact. The fork records where " +
     "it came from and starts with no compaction state of its own.",
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
-  mcp: { type: "capability", reason: "assistant_chat" },
+  mcp: {
+    type: "capability",
+    reason: "assistant_chat",
+    consumesServices: false,
+  },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({
     workspaceId: t.Optional(tSafeId("workspace")),
@@ -267,7 +277,7 @@ const stageUserFileCopies = (
 const prepareUserFileCopy = async (
   copy: ReturnType<typeof stageUserFileCopies>[number],
 ) => {
-  const mainHead = env.FEATURE_FILE_USAGE_LIMITS
+  const mainHead = isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
     ? await headObject(copy.source.s3Key)
     : undefined;
   if (mainHead !== undefined && Result.isError(mainHead)) {
@@ -301,7 +311,8 @@ const prepareUserFileThumbnail = async (
           userId,
         });
   const thumbnailHead =
-    thumbnailSource !== null && env.FEATURE_FILE_USAGE_LIMITS
+    thumbnailSource !== null &&
+    isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
       ? await headObject(thumbnailSource)
       : undefined;
   return { ...copy, thumbnailSource, thumbnailHead };

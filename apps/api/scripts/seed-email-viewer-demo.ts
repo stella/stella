@@ -282,11 +282,14 @@ const seedEmailViewerDemo = async () => {
     );
 
     const s3Key = `${target.organizationId}/${target.workspaceId}/${fileId}.eml`;
-    await writeS3ObjectWithRetry({
-      contentType: EML_MIME_TYPE,
-      data: new Uint8Array(content),
-      key: s3Key,
-    });
+    await writeS3ObjectWithRetry(
+      {
+        contentType: EML_MIME_TYPE,
+        data: new Uint8Array(content),
+        key: s3Key,
+      },
+      { type: "fixture" },
+    );
 
     const fileContent = {
       version: 1,
@@ -320,9 +323,14 @@ const seedEmailViewerDemo = async () => {
           }),
     );
 
-    const extractedText = parsedEmailToText(
-      await parseEmail(Uint8Array.from(content).buffer, EML_MIME_TYPE),
+    const parsedResult = await parseEmail(
+      Uint8Array.from(content).buffer,
+      EML_MIME_TYPE,
     );
+    if (parsedResult.isErr()) {
+      panic(`Could not parse seed email ${fileName}`, parsedResult.error);
+    }
+    const extractedText = parsedEmailToText(parsedResult.value);
     const extractionEnvelope = {
       ciphertext: Buffer.from(extractedText, "utf-8"),
       iv: Buffer.alloc(IV_BYTES),

@@ -1,6 +1,9 @@
 import type { Static } from "elysia";
 
-import type { DecisionQueryIntent } from "@stll/api-contract/decision-query-intent";
+import {
+  type DecisionQueryIntent,
+  isWholeEntryIdentifier,
+} from "@stll/api-contract/decision-query-intent";
 import type { CaseLawSearchWarning } from "@stll/api-contract/search";
 
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
@@ -8,9 +11,13 @@ import { caseLawSearchWarnings } from "@/api/lib/case-law/search-warnings";
 import { caseLawQueryLanguage } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
   formatCorpusQueryTokens,
-  partitionCorpusFunctionWords,
+  partitionCorpusQueryTokens,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
+import {
+  type CorpusIndexQueryVariant,
+  corpusQueryVariant,
+} from "@/api/lib/legal-search/corpus-query-variant-policy";
 import {
   type LegalAlternatives,
   normalizeLegalAlternatives,
@@ -49,6 +56,9 @@ const SEARCH_OPTION_EFFECT = {
   // Alternatives only widen: an empty page is never theirs to blame.
   alternatives: "shapes",
   court: "narrows",
+  courts: "narrows",
+  category: "narrows",
+  hasLegalSentence: "narrows",
   cursor: "shapes",
   dateFrom: "narrows",
   dateTo: "narrows",
@@ -76,6 +86,9 @@ type NarrowingOption = {
  */
 const NARROWING_FILTERS = {
   court: ({ court }) => court !== undefined,
+  courts: ({ courts }) => courts !== undefined,
+  category: ({ category }) => category !== undefined,
+  hasLegalSentence: ({ hasLegalSentence }) => hasLegalSentence !== undefined,
   dateFrom: ({ dateFrom }) => dateFrom !== undefined,
   dateTo: ({ dateTo }) => dateTo !== undefined,
   decisionType: ({ decisionType }) => decisionType !== undefined,
@@ -98,6 +111,7 @@ export const narrowingFilters = (body: SearchDecisionsBody): string[] =>
     .toSorted();
 
 export type DecisionQueryInterpretation = {
+  queryVariant: CorpusIndexQueryVariant;
   /** The query as executed, itself re-readable as a query. */
   queryUsed: string;
   /** Function words left out, as the reader wrote them. */
@@ -120,11 +134,20 @@ export type DecisionQueryInterpretation = {
  * parts are not words at all and whose fall-through to the text index exists
  * precisely to find the decision it names.
  */
-export const interpretDecisionQuery = (
-  body: SearchDecisionsBody,
-  intent: DecisionQueryIntent,
-): DecisionQueryInterpretation => {
-  const verbatim = body.strict === true || intent.type === "identifier";
+type InterpretDecisionQueryOptions = {
+  body: SearchDecisionsBody;
+  intent: DecisionQueryIntent;
+  configuredVariant: CorpusIndexQueryVariant;
+};
+
+export const interpretDecisionQuery = ({
+  body,
+  intent,
+  configuredVariant,
+}: InterpretDecisionQueryOptions): DecisionQueryInterpretation => {
+  // An identifier found among other words leaves them a text search, read
+  // like any other should the reference name nothing.
+  const verbatim = body.strict === true || isWholeEntryIdentifier(intent);
   const functionWords = verbatim
     ? null
     : functionWordsFor(
@@ -133,11 +156,17 @@ export const interpretDecisionQuery = (
           language: body.language,
         }),
       );
-  const { dropped, required } = partitionCorpusFunctionWords(
-    tokenizeCorpusFreeText(body.query),
+  const queryVariant = corpusQueryVariant({ configuredVariant, verbatim });
+  const {
+    partition: { dropped, required },
+  } = partitionCorpusQueryTokens({
+    tokens: tokenizeCorpusFreeText(body.query),
     functionWords,
-  );
+    queryVariant,
+    jurisdiction: body.country,
+  });
   return {
+    queryVariant,
     // The reader's own string wherever nothing was dropped, so a search that
     // changed nothing reports itself back byte for byte rather than a
     // re-tokenised spelling of itself.

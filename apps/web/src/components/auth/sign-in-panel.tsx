@@ -1,10 +1,9 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -14,7 +13,6 @@ import { Field, FieldError } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 import { TextSeparator } from "@stll/ui/separator";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { SecretInput } from "@/components/secret-input";
@@ -30,7 +28,7 @@ import {
 } from "@/lib/auth-client";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
@@ -151,13 +149,7 @@ export const SignInPanel = ({
 
     analytics.captureError(toAuthClientError(error));
     if (error.status !== HTTP_TOO_MANY_REQUESTS) {
-      stellaToast.add({
-        title: userErrorFromThrown(
-          toAuthClientError(error),
-          t("errors.actionFailed"),
-        ),
-        type: "error",
-      });
+      notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
     }
     setSocialLoading(null);
   };
@@ -176,13 +168,7 @@ export const SignInPanel = ({
         if (error) {
           analytics.captureError(toAuthClientError(error));
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
-            stellaToast.add({
-              title: userErrorFromThrown(
-                toAuthClientError(error),
-                t("errors.actionFailed"),
-              ),
-              type: "error",
-            });
+            notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
           }
           return;
         }
@@ -402,13 +388,7 @@ const PasswordSignInForm = ({
         if (error) {
           analytics.captureError(toAuthClientError(error));
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
-            stellaToast.add({
-              title: userErrorFromThrown(
-                toAuthClientError(error),
-                t("errors.actionFailed"),
-              ),
-              type: "error",
-            });
+            notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
           }
           return;
         }
@@ -512,13 +492,7 @@ const BootstrapSignUpForm = ({
         if (error) {
           analytics.captureError(toAuthClientError(error));
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
-            stellaToast.add({
-              title: userErrorFromThrown(
-                toAuthClientError(error),
-                t("errors.actionFailed"),
-              ),
-              type: "error",
-            });
+            notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
           }
           return;
         }

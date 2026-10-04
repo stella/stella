@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { trimToNull } from "../shared/strings.js";
 import type {
   GcisCompany,
@@ -76,14 +77,18 @@ const parseStatus = (
   }
   const statusCode = raw.Company_Status?.trim();
   if (statusCode) {
-    const mapped = STATUS_CODE_MAP[statusCode];
+    const mapped = Object.hasOwn(STATUS_CODE_MAP, statusCode)
+      ? STATUS_CODE_MAP[statusCode]
+      : undefined;
     if (mapped) {
       return mapped;
     }
   }
   const desc = raw.Company_Status_Desc?.trim();
   if (desc) {
-    const mapped = STATUS_TEXT_MAP[desc];
+    const mapped = Object.hasOwn(STATUS_TEXT_MAP, desc)
+      ? STATUS_TEXT_MAP[desc]
+      : undefined;
     if (mapped) {
       return mapped;
     }
@@ -145,7 +150,9 @@ const numberOrNull = (input: number | undefined): number | null =>
   typeof input === "number" && Number.isFinite(input) ? input : null;
 
 const buildRegistryUrl = (taxId: string): string => {
-  const filter = encodeURIComponent(`Business_Accounting_NO eq '${taxId}'`);
+  const filter = encodeRegistryComponent(
+    `Business_Accounting_NO eq '${taxId}'`,
+  );
   return `${GCIS_API_BASE}/${GCIS_LOOKUP_DATASET}?$format=json&$filter=${filter}`;
 };
 

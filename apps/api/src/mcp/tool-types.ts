@@ -4,7 +4,10 @@ import type {
 } from "@modelcontextprotocol/server";
 import type * as v from "valibot";
 
-import type { env } from "@/api/env";
+import type { SearchPaginationOutcome } from "@stll/api-contract/search";
+
+import type { AccountAccess } from "@/api/lib/api-handlers";
+import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -12,6 +15,7 @@ import type {
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import type { TextWindowResult } from "@/api/mcp/tool-utils";
+import type { McpWriteToolPermissions } from "@/api/mcp/write-tool-authority";
 
 /**
  * v2 types `Tool["inputSchema"]` as an arbitrary JSON value, which loses the
@@ -60,16 +64,6 @@ export type RuntimeMcpToolOutputContract = Omit<
 >;
 
 export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
-
-/**
- * Deployment feature flag that gates a tool's backing surface. Derived
- * structurally from the `FEATURE_*` keys of the API env schema, so a tool can
- * only name a flag that actually exists: a typo or a removed flag fails
- * typecheck. A tool tagged with a flag is advertised and dispatchable only when
- * that flag is on (or the deployment is running in dev); see
- * `isMcpToolFeatureEnabled` in `gateway/list-tools.ts`.
- */
-export type McpToolFeatureFlag = Extract<keyof typeof env, `FEATURE_${string}`>;
 
 /**
  * Closed set of reasons a tool is kept off the anonymized surface. No
@@ -152,6 +146,21 @@ export type McpToolAnnotations = NonNullable<McpTool["annotations"]> & {
   title: string;
 };
 
+export type McpReadClass = "tenant" | "public" | "both";
+
+export type McpReadClassResolver = (
+  args: unknown,
+) => McpReadClass | undefined | Promise<McpReadClass | undefined>;
+
+/** Reads declare their source; the generic gateway resolves its target instead. */
+export const resolveMcpReadClass = async (
+  definition: McpToolDefinition,
+  args: unknown,
+) =>
+  typeof definition.readClass === "function"
+    ? definition.readClass(args)
+    : definition.readClass;
+
 /**
  * `access` and `readOnlyHint` are one fact stated twice (the registry's
  * structural signal and the MCP client hint), so the type binds them: a
@@ -163,11 +172,25 @@ export type McpToolAnnotations = NonNullable<McpTool["annotations"]> & {
 export type McpToolAccessBranch =
   | {
       access: "read";
+      readClass: McpReadClass | McpReadClassResolver;
       annotations: McpToolAnnotations & { readOnlyHint: true };
     }
   | {
       access: "write";
+      /** Generic dispatch may invoke a read target despite its own write access. */
+      readClass?: McpReadClassResolver;
       annotations: McpToolAnnotations & { readOnlyHint: false };
+      /**
+       * The member authority every call needs; discovery and dispatch enforce
+       * it centrally through `write-tool-authority.ts`.
+       */
+      permissions: McpWriteToolPermissions;
+      /**
+       * Whether the configured demo account may use the tool, declared as its
+       * REST counterpart declares it (`standard` refuses it, `sandbox`
+       * admits it); discovery and dispatch read it through the same owner.
+       */
+      accountAccess: AccountAccess;
     };
 
 export type McpToolDestructiveBehavior =
@@ -228,13 +251,15 @@ export type McpToolDefinition = McpToolAccessBranch &
      */
     additionalScopes?: readonly ToolScope[];
     anonymized: McpAnonymizedPolicy;
+    consumesServices: boolean;
     description: string;
     /**
      * Deployment feature flag gating this tool. When set, the tool is dropped
-     * from the advertised list and its dispatch is rejected unless the flag is on
-     * (or the deployment runs in dev). Omitted for always-available tools.
+     * from the advertised list and its dispatch is rejected unless
+     * `isDeploymentFeatureEnabled` holds for it. Omitted for always-available
+     * tools.
      */
-    feature?: McpToolFeatureFlag;
+    feature?: DeploymentFeatureFlag;
     inputSchema: McpToolInputSchema;
     /**
      * Optional session-member visibility predicate, enforced centrally for both
@@ -339,6 +364,38 @@ export type McpCliToolAnnotation = {
    * envelope at a TTY, prompts and retries once with `confirm: true`.
    */
   confirmPassthrough?: true;
+  /**
+   * The result is one record that holds tables (a check answering per list),
+   * so neither a single row list nor a key/value dump shows all of it. Table
+   * output prints `summary` as key/value lines, then each section as a table;
+   * JSON and JSONL output print the payload as is. A payload with no array at
+   * the first section's rows (another outcome of the same tool) renders as a
+   * single record.
+   */
+  composite?: McpCliCompositeView;
+};
+
+/** One table of a composite result. */
+type McpCliCompositeSection = {
+  /** The heading printed above the table. */
+  title: string;
+  /**
+   * Dot path to an array of records. A segment ending in `[]` spreads an
+   * array, so `lists[].possibleMatches` gathers every list's matches into one
+   * table.
+   */
+  rows: string;
+  /**
+   * Dot paths read from each row. A path starting with `^.` reads the record
+   * the row was gathered from, so a gathered match can name its list.
+   */
+  columns: readonly string[];
+};
+
+type McpCliCompositeView = {
+  /** Dot paths printed as key/value lines above the tables; absent and null values are skipped. */
+  summary: readonly string[];
+  sections: readonly [McpCliCompositeSection, ...McpCliCompositeSection[]];
 };
 
 export type McpCliToolAnnotationMap<
@@ -432,6 +489,7 @@ export type InternalToolStructuredError = {
   hint?: string;
   issues?: readonly McpValidationIssue[];
   retryable?: boolean;
+  contactUrl?: string;
   requestId?: string;
 };
 
@@ -476,6 +534,7 @@ export type InternalToolResult<TData = unknown> =
 export type McpEgressPlan<TPayload = unknown> =
   | {
       egress: "compatSearch";
+      paginationOutcome?: SearchPaginationOutcome;
       nextCursor: string | null | undefined;
       results: readonly McpCompatSearchResult[];
     }

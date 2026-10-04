@@ -3,7 +3,7 @@ import type { Static } from "elysia";
 
 import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { suggestColumnPrompt } from "@/api/lib/properties/column-prompt-suggestion";
@@ -48,7 +48,12 @@ const config = {
     "optionally the prompt as it stands. Returns one single-line prompt of " +
     "at most 280 characters and stores nothing. Consumes AI usage.",
   permissions: { property: ["create"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: true,
+  },
   body: suggestPromptBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies WorkspaceHandlerConfig;
@@ -59,6 +64,7 @@ const suggestPrompt = createSafeHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     promptCachingEnabled,
     request,
     safeDb,
@@ -78,6 +84,7 @@ const suggestPrompt = createSafeHandler(
       organizationId: session.activeOrganizationId,
       userId: user.id,
       orgAIConfig,
+      managedAIResidency,
       promptCachingEnabled,
       safeDb,
       abortSignal: request.signal,

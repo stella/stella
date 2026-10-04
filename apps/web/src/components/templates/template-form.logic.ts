@@ -1,6 +1,13 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import {
+  CLAUSE_WARNINGS_HEADER,
+  clauseWarningCountHeaderSchema,
+  UNDECIDED_CONDITIONS_HEADER,
+  undecidedConditionsHeaderSchema,
+} from "@stll/api-contract/template-fill-headers";
+
 import type { ResolvedField } from "@/components/templates/template-discover-types";
 
 const aiFieldErrorPathsSchema = v.array(
@@ -19,6 +26,100 @@ export const readAiFieldErrorPaths = (headers: Headers) =>
       .parse(aiFieldErrorPathsSchema, decoded)
       .map(({ fieldPath }) => fieldPath);
   });
+
+/** How a warning names an undecided condition: its label, or its path when
+ *  the template authored an empty label. */
+export const undecidedConditionName = ({
+  label,
+  path,
+}: {
+  label: string;
+  path: string;
+}): string => (label === "" ? path : label);
+
+/** The labels of the AI-decided conditions a download left undecided. */
+export const readUndecidedConditionLabels = (headers: Headers) =>
+  Result.try(() => {
+    const encoded = headers.get(UNDECIDED_CONDITIONS_HEADER);
+    if (encoded === null) {
+      return [];
+    }
+    const decoded: unknown = JSON.parse(decodeURIComponent(encoded));
+    return v
+      .parse(undecidedConditionsHeaderSchema, decoded)
+      .map(undecidedConditionName);
+  });
+
+/** What a fill saved into a matter reports back, as far as the notices read
+ *  it. */
+type SavedFill = {
+  completionStatus: "complete" | "partial";
+  unmatchedPlaceholders: readonly string[];
+  aiFieldErrors: readonly { fieldPath: string }[];
+  undecidedConditions: readonly { label: string; path: string }[];
+  structureErrors: readonly unknown[];
+};
+
+/** One notice the save-to-matter flow shows, in display order. */
+export type SavedFillNotice =
+  | { kind: "created" }
+  | { kind: "createdIncomplete" }
+  | { kind: "unmatchedPlaceholders"; list: string }
+  | { kind: "aiFieldsNotDrafted"; list: string }
+  | { kind: "aiConditionsUndecided"; list: string }
+  | { kind: "structureErrors"; count: number };
+
+/**
+ * The notices for a fill saved into a matter. The document is reported as
+ * created only when the server graded the fill complete; a partial fill is
+ * reported as incomplete, followed by every reason it fell short.
+ */
+export const savedFillNotices = (created: SavedFill): SavedFillNotice[] => [
+  created.completionStatus === "complete"
+    ? { kind: "created" }
+    : { kind: "createdIncomplete" },
+  ...(created.unmatchedPlaceholders.length === 0
+    ? []
+    : [
+        {
+          kind: "unmatchedPlaceholders" as const,
+          list: created.unmatchedPlaceholders.join(", "),
+        },
+      ]),
+  // A field whose draft failed is unfilled, so it is already listed above
+  // as an unmatched placeholder; this names the ones the model could not
+  // write, which the person filling the template has to write instead.
+  ...(created.aiFieldErrors.length === 0
+    ? []
+    : [
+        {
+          kind: "aiFieldsNotDrafted" as const,
+          list: created.aiFieldErrors
+            .map((fieldError) => fieldError.fieldPath)
+            .join(", "),
+        },
+      ]),
+  // A condition nothing decided rendered its sections as if it did not
+  // apply; the person filling the template has to decide it instead.
+  ...(created.undecidedConditions.length === 0
+    ? []
+    : [
+        {
+          kind: "aiConditionsUndecided" as const,
+          list: created.undecidedConditions
+            .map(undecidedConditionName)
+            .join(", "),
+        },
+      ]),
+  ...(created.structureErrors.length === 0
+    ? []
+    : [
+        {
+          kind: "structureErrors" as const,
+          count: created.structureErrors.length,
+        },
+      ]),
+];
 
 type SingleFlightState = {
   current: Promise<void> | null;
@@ -118,3 +219,11 @@ export const groupFieldsByPrefix = (
         },
   );
 };
+
+export const readClauseWarnings = (headers: Headers) =>
+  Result.try(() =>
+    v.parse(
+      clauseWarningCountHeaderSchema,
+      headers.get(CLAUSE_WARNINGS_HEADER) ?? "0",
+    ),
+  );

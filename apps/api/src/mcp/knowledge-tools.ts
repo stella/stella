@@ -44,9 +44,11 @@ import {
   type ClauseParagraph,
   type ClauseRun,
   isClauseBody,
+  normalizeClauseBody,
 } from "@/api/lib/clauses/types";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
+import { playbookRunFailureDetails } from "@/api/lib/document-review/playbook-run-refusal";
 import {
   PLAYBOOK_RUN_START_OUTCOME,
   playbookRunStartOutcome,
@@ -71,6 +73,7 @@ import type {
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { plainRecord } from "@/api/mcp/input-schemas";
 import {
   mergePlaybookPositions,
   playbookPositionInputSchema,
@@ -933,7 +936,12 @@ const clauseRunArgSchema = v.strictObject({
 });
 
 const clauseParagraphArgSchema = v.strictObject({
-  text: v.pipe(v.string(), v.description("Paragraph plain text")),
+  text: v.pipe(
+    v.string(),
+    v.description(
+      "Paragraph text; directive paragraphs use balanced literal tags, e.g. {% if enabled %} ... {% endif %}.",
+    ),
+  ),
   style: v.optional(
     v.pipe(v.string(), v.description("Optional paragraph style name")),
   ),
@@ -1048,6 +1056,27 @@ const saveClauseArgsSchema = nullAsAbsent(
         ),
       ),
       body: v.optional(clauseBodyArgSchema),
+      expected_body: v.optional(
+        v.pipe(
+          v.pipe(
+            v.array(
+              v.objectWithRest(
+                {
+                  text: v.pipe(
+                    v.string(),
+                    v.description("Paragraph text from the read body"),
+                  ),
+                },
+                v.unknown(),
+              ),
+            ),
+            v.minLength(1),
+          ),
+          v.description(
+            "Body from your last read; update only if the current body still matches. On conflict, read the clause again before saving.",
+          ),
+        ),
+      ),
       category_id: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.uuid())),
@@ -1080,7 +1109,7 @@ const saveClauseArgsSchema = nullAsAbsent(
       ),
       metadata: v.optional(
         v.pipe(
-          v.nullable(v.record(v.string(), v.unknown())),
+          v.nullable(plainRecord(v.unknown())),
           v.description("Free-form metadata object; pass null to clear"),
         ),
       ),
@@ -1123,6 +1152,15 @@ const saveClauseArgsSchema = nullAsAbsent(
       ["snapshot_version"],
     ),
     // An update must request at least one change.
+    v.forward(
+      v.partialCheck(
+        [["clause_id"], ["expected_body"]],
+        ({ clause_id, expected_body }) =>
+          clause_id !== undefined || expected_body === undefined,
+        "expected_body only applies when updating a clause",
+      ),
+      ["expected_body"],
+    ),
     v.partialCheck(
       [
         ["clause_id"],
@@ -1238,6 +1276,9 @@ const handleSaveClauseTool: TypedMcpToolHandler<
       body: {
         ...(input.title === undefined ? {} : { title: input.title }),
         ...(clauseBody === undefined ? {} : { body: clauseBody }),
+        ...(input.expected_body === undefined
+          ? {}
+          : { expectedBody: normalizeClauseBody(input.expected_body) }),
         ...(input.category_id === undefined
           ? {}
           : {
@@ -1723,8 +1764,12 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     if (merged.issues.length > 0 && merged.written.length === 0) {
       return savePlaybookRefusedResult(merged.issues);
     }
-    const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
-      await loadOrgSettings();
+    const {
+      orgAIConfig,
+      orgAIConfigStatus,
+      promptCachingEnabled,
+      managedAIResidency,
+    } = await loadOrgSettings();
     const scope = toPlaybookScope({ stored: null, input: input.scope });
     const created = await Result.gen(() =>
       createPlaybookDefinitionHandler({
@@ -1733,6 +1778,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
         orgAIConfig,
         orgAIConfigStatus,
         promptCachingEnabled,
+        managedAIResidency,
         recordAuditEvent: context.recordAuditEvent,
         body: {
           name,
@@ -1828,8 +1874,12 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     } satisfies v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>);
   }
 
-  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
-    await loadOrgSettings();
+  const {
+    orgAIConfig,
+    orgAIConfigStatus,
+    promptCachingEnabled,
+    managedAIResidency,
+  } = await loadOrgSettings();
   const updated = await Result.gen(() =>
     updatePlaybookDefinitionHandler({
       safeDb: context.safeDb,
@@ -1838,6 +1888,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
       orgAIConfig,
       orgAIConfigStatus,
       promptCachingEnabled,
+      managedAIResidency,
       recordAuditEvent: context.recordAuditEvent,
       body: {
         name,
@@ -1957,7 +2008,9 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
   }
   const outcome = txResult.value;
   if (!outcome.ok) {
-    return errorResult(outcome.message);
+    return internalFailureResult(
+      new HandlerError(playbookRunFailureDetails(outcome)),
+    );
   }
 
   if (outcome.materializedPropertyIds.length === 0) {
@@ -1999,6 +2052,7 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
 
 export const KNOWLEDGE_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List clauses",
       destructiveHint: false,
@@ -2022,6 +2076,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
         "in the runtime schema.",
     },
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: LIST_CLAUSES_TEXT_FIELD_PATHS,
@@ -2030,12 +2085,14 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "Create or update a clause in the organization's clause library. Omit " +
       "clause_id to create (title and body required); pass clause_id to update. " +
       "body is an ordered array of paragraphs, each with text and optional " +
       "style, level, runs, list_kind, list_level, is_directive, directive_kind, " +
-      "and directive_expression. " +
+      "and directive_expression. Use balanced {% ... %} tags. " +
+      "Keep num(), ref(), clause() and ai(adapt=true) in the template body. " +
       "category_id, language, description, usage_notes, and metadata " +
       "accept null to clear them on update. Set snapshot_version true on an " +
       "update to also append a version snapshot of the body. Returns the clause id.",
@@ -2054,11 +2111,22 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "input",
+      select: {
+        by: "presence",
+        property: "clause_id",
+        present: { operation: "update", permissions: { clause: ["update"] } },
+        absent: { operation: "create", permissions: { clause: ["create"] } },
+      },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_clause",
     scope: "stella:knowledge_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Delete clause",
       destructiveHint: true,
@@ -2071,12 +2139,15 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       "organization's clause library. This is irreversible.",
     inputSchema: deleteClauseArgsSchema,
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: { clause: ["delete"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "always" },
     name: "delete_clause",
     scope: "stella:knowledge_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List playbooks",
       destructiveHint: false,
@@ -2098,6 +2169,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
         "pagination dependency; it remains authoritative in the runtime schema.",
     },
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: [
@@ -2109,6 +2181,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "Create a review playbook, or add, change, and remove positions in one. " +
       "Omit playbook_id to create (name required); pass playbook_id and " +
@@ -2142,11 +2215,22 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: {
+      type: "input",
+      select: {
+        by: "presence",
+        property: "playbook_id",
+        present: { operation: "update", permissions: { playbook: ["update"] } },
+        absent: { operation: "create", permissions: { playbook: ["create"] } },
+      },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_playbook",
     scope: "stella:knowledge_write",
   }),
   defineValibotMcpTool({
+    consumesServices: true,
     description:
       "Run a review playbook over a matter's documents. Materializes the " +
       "playbook's extraction and verdict columns onto the matter's table " +
@@ -2161,6 +2245,8 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: { playbook: ["apply"] } },
     anonymized: { exposure: "excluded", reason: "write" },
     name: "run_playbook",
     scope: "stella:knowledge_write",

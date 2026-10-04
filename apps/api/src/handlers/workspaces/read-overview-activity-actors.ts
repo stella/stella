@@ -1,12 +1,13 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 import {
   decodeActorCursor,
@@ -16,6 +17,7 @@ import { readOverviewActivityActorRows } from "./read-overview-activity-actors.q
 
 const config = {
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",
   query: t.Object({
@@ -43,7 +45,9 @@ const readOverviewActivityActors = createSafeHandler(
       );
     }
 
-    const limit = query.limit ?? LIMITS.matterActivityActorPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.matterActivityActorPageSizeDefault,
+    );
     const actorRows = yield* Result.await(
       readOverviewActivityActorRows({
         afterActorId,

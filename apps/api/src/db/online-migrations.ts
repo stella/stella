@@ -1,22 +1,31 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
+
+import {
+  DOCUMENT_OUTSTANDING_DATE_INDEX,
+  DOCUMENT_OUTSTANDING_INDEX,
+} from "@/api/lib/legal-search/sk-document-outstanding-index";
 
 import {
   REWRITTEN_MIGRATION_INDEXES,
   type RequiredMigrationIndex,
 } from "../lib/db/migration-history";
+import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
+import { CORPUS_PROJECTION_CLEANUP_STALL_REPAIR } from "./corpus-projection-cleanup-stall-repair";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import { DECISION_DATE_CEILING_REPAIR } from "./decision-date-ceiling-repair";
+import { createOnlineIndexGate } from "./online-index-gate";
+import type { OnlineIndexGateOptions } from "./online-index-gate";
 import type {
   OnlineMigrationConnection,
   OnlineMigrationPool,
   OnlineRepair,
   OnlineRepairCompletion,
 } from "./online-migration-connection";
+import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 
-// Sized for index builds: a DDL lock that queues behind live traffic fails
-// fast instead of holding the queue. A repair may set its own for its own
-// statements; the phase restores this one after it.
+// Fast DDL retains a short lock budget; guarded concurrent index work lifts it
+// and uses the observer watchdog for virtual transaction waits.
 const ONLINE_MIGRATION_LOCK_TIMEOUT_SQL = "SET lock_timeout = '1s'";
 const ONLINE_MIGRATIONS_LOCK_SQL =
   "SELECT pg_advisory_lock(hashtext('stella-online-migrations'))";
@@ -69,6 +78,49 @@ type OnlineIndex = RequiredMigrationIndex & {
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "contacts_org_id_unique" ON public."contacts" USING btree ("organization_id", "id")',
+    definitionBody: "ON public.contacts USING btree (organization_id, id)",
+    isUnique: true,
+    name: "contacts_org_id_unique",
+    tableName: "contacts",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "rate_entries_table_role_from_idx" ON public."rate_entries" USING btree ("rate_table_id", "role", "effective_from")',
+    definitionBody:
+      "ON public.rate_entries USING btree (rate_table_id, role, effective_from)",
+    isUnique: false,
+    name: "rate_entries_table_role_from_idx",
+    tableName: "rate_entries",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "session_priorTokenHash_idx" ON public."session" USING btree ("prior_token_hash")',
+    definitionBody: "ON public.session USING btree (prior_token_hash)",
+    isUnique: true,
+    name: "session_priorTokenHash_idx",
+    tableName: "session",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "time_entries_org_status_date_id_idx" ON public."time_entries" USING btree ("organization_id", "status", "date_worked", "id")',
+    definitionBody:
+      "ON public.time_entries USING btree (organization_id, status, date_worked, id)",
+    isUnique: false,
+    name: "time_entries_org_status_date_id_idx",
+    tableName: "time_entries",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "time_entries_approval_queue_idx" ON public."time_entries" USING btree ("organization_id", "approver_user_id", "status", "date_worked", "id") WHERE "status" = \'draft\'',
+    definitionBody:
+      "ON public.time_entries USING btree (organization_id, approver_user_id, status, date_worked, id) WHERE (status = 'draft'::text)",
+    isUnique: false,
+    name: "time_entries_approval_queue_idx",
+    tableName: "time_entries",
+  },
+  {
+    createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "invoices_id_workspace_unique" ON public."invoices" USING btree ("id", "workspace_id")',
     definitionBody: "ON public.invoices USING btree (id, workspace_id)",
     isUnique: true,
@@ -91,6 +143,17 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
       "ON public.case_law_decisions USING btree (country, language, id)",
     isUnique: false,
     name: "case_law_decisions_provision_scope_cursor_idx",
+    tableName: "case_law_decisions",
+  },
+  DOCUMENT_OUTSTANDING_INDEX,
+  DOCUMENT_OUTSTANDING_DATE_INDEX,
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_decisions_docket_family_key_idx" ON public."case_law_decisions" USING btree ("docket_family_key") WHERE "docket_family_key" IS NOT NULL',
+    definitionBody:
+      "ON public.case_law_decisions USING btree (docket_family_key) WHERE (docket_family_key IS NOT NULL)",
+    isUnique: false,
+    name: "case_law_decisions_docket_family_key_idx",
     tableName: "case_law_decisions",
   },
   {
@@ -200,6 +263,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "workspace_views_correspondence_uidx" ON public."workspace_views" USING btree ("workspace_id") WHERE ("layout" ->> \'type\') = \'correspondence\'',
+    definitionBody:
+      "ON public.workspace_views USING btree (workspace_id) WHERE ((layout ->> 'type'::text) = 'correspondence'::text)",
+    isUnique: true,
+    name: "workspace_views_correspondence_uidx",
+    tableName: "workspace_views",
+  },
+  {
+    createSql:
       'CREATE INDEX CONCURRENTLY "report_exports_workspace_requester_created_idx" ON public."report_exports" USING btree ("workspace_id", "requested_by", "created_at", "id")',
     definitionBody:
       "ON public.report_exports USING btree (workspace_id, requested_by, created_at, id)",
@@ -233,6 +305,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     isUnique: true,
     name: "chat_turns_org_run_id_uidx",
     tableName: "chat_turns",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "case_law_ingestion_failures_source_record_uidx" ON public."case_law_ingestion_failures" USING btree ("source_id", "record_identity") WHERE "record_identity" IS NOT NULL',
+    definitionBody:
+      "ON public.case_law_ingestion_failures USING btree (source_id, record_identity) WHERE (record_identity IS NOT NULL)",
+    isUnique: true,
+    name: "case_law_ingestion_failures_source_record_uidx",
+    tableName: "case_law_ingestion_failures",
   },
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
@@ -269,6 +350,10 @@ type OnlineIndexReplacement = {
 };
 
 const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
+  {
+    legacyName: "case_law_decisions_document_pending_date_idx",
+    replacementNames: [DOCUMENT_OUTSTANDING_DATE_INDEX.name],
+  },
   {
     legacyName: "case_law_decisions_source_case_lang_idx",
     replacementNames: [
@@ -314,6 +399,8 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
+  ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
+  CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
   // Not behind one migration: the OAuth resource set is derived from the MCP
   // audiences in application code, so it is the code that moves and the rows
   // that follow. Its completion is the startup census, so the deploy that
@@ -333,115 +420,274 @@ type PresentIndexState = {
 
 type OnlineIndexState = { type: "missing" } | PresentIndexState;
 
-type OnlineMigrationOperation = "repair" | "validate";
+/** Only repair builds indexes, so only repair carries the index gate. */
+type OnlineMigrationMode =
+  | {
+      operation: "repair";
+      indexGate: OnlineIndexGateOptions;
+      reserveObserver: () => Promise<OnlineMigrationConnection>;
+    }
+  | { operation: "validate" };
+
+type OnlineMigrationOperation = OnlineMigrationMode["operation"];
+
+type OnlineMigrationOptions = {
+  repairs?: readonly OnlineRepair[];
+  log?: (record: {
+    event: "online_repair_pending";
+    repair: string;
+    completion: Extract<OnlineRepairCompletion, { type: "pending" }>;
+  }) => void;
+};
+
+/**
+ * Where the online phase stopped. An index build the database is not healthy
+ * enough to start, or that was cancelled for health, defers the phase at that
+ * index: every later step may depend on it, so none of them runs, and the
+ * caller runs the phase again after `retryAfterMs`.
+ */
+export type OnlineMigrationOutcome =
+  | { type: "complete" }
+  | { type: "deferred"; index: string; retryAfterMs: number };
+
+const COMPLETE = { type: "complete" } as const satisfies OnlineMigrationOutcome;
+
+export type OnlineRepairOptions = OnlineMigrationOptions & {
+  indexGate: OnlineIndexGateOptions;
+  /** Opens a separate session in the database `pool` reserves from. */
+  reserveObserver: () => Promise<OnlineMigrationConnection>;
+};
 
 export const runOnlineMigrations = async (
   pool: OnlineMigrationPool,
-): Promise<void> => await processOnlineMigrations(pool, "repair");
+  { indexGate, reserveObserver, ...options }: OnlineRepairOptions,
+): Promise<OnlineMigrationOutcome> =>
+  await processOnlineMigrations(
+    pool,
+    { operation: "repair", indexGate, reserveObserver },
+    options,
+  );
 
 export const assertOnlineMigrationsApplied = async (
   pool: OnlineMigrationPool,
-): Promise<void> => await processOnlineMigrations(pool, "validate");
+  options: OnlineMigrationOptions = {},
+): Promise<void> => {
+  const outcome = await processOnlineMigrations(
+    pool,
+    { operation: "validate" },
+    options,
+  );
+  if (outcome.type !== "complete") {
+    panic("Online migration validation cannot defer");
+  }
+};
 
 const processOnlineMigrations = async (
   pool: OnlineMigrationPool,
-  operation: OnlineMigrationOperation,
-): Promise<void> => {
+  mode: OnlineMigrationMode,
+  options: OnlineMigrationOptions,
+): Promise<OnlineMigrationOutcome> => {
   const connection = await pool.reserve();
+  let sessionStatus: "active" | "terminated" = "active";
+  const sessionIsActive = () => sessionStatus === "active";
+  const terminate = connection.terminate;
+  if (terminate) {
+    connection.terminate = async () => {
+      sessionStatus = "terminated";
+      await terminate();
+    };
+  }
   let lockAcquired = false;
 
   try {
     await connection.execute(ONLINE_MIGRATIONS_LOCK_SQL);
     lockAcquired = true;
 
-    if (operation === "repair") {
+    if (mode.operation === "repair") {
       await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
       await connection.execute("SET statement_timeout = '0'");
     }
 
-    await processOnlineIndexAt(connection, operation);
-    await processOnlineIndexCutoverAt(connection, operation);
-    if (operation === "repair") {
+    const indexes = await processOnlineIndexAt({
+      connection,
+      mode,
+    });
+    if (indexes.type === "deferred") {
+      return indexes;
+    }
+    const cutovers = await processOnlineIndexCutoverAt({
+      connection,
+      mode,
+    });
+    if (cutovers.type === "deferred") {
+      return cutovers;
+    }
+    if (mode.operation === "repair") {
       await retireReplacedIndexAt(connection);
     }
-    await processOnlineRepairAt(connection, operation);
+    await processOnlineRepairAt({
+      connection,
+      operation: mode.operation,
+      repairs: options.repairs ?? ONLINE_MIGRATION_REPAIRS,
+      log:
+        options.log ??
+        ((record) => process.stderr.write(`${JSON.stringify(record)}\n`)),
+    });
+    return COMPLETE;
   } finally {
     try {
-      if (lockAcquired) {
+      if (lockAcquired && sessionIsActive()) {
         await connection.execute(ONLINE_MIGRATIONS_UNLOCK_SQL);
       }
     } finally {
-      connection.release();
+      await connection.release();
     }
   }
 };
 
-const processOnlineIndexAt = async (
-  connection: OnlineMigrationConnection,
-  operation: OnlineMigrationOperation,
+type OnlineIndexWalkOptions = {
+  connection: OnlineMigrationConnection;
+  mode: OnlineMigrationMode;
+  offset?: number;
+};
+
+const processOnlineIndexAt = async ({
+  connection,
+  mode,
   offset = 0,
-): Promise<void> => {
+}: OnlineIndexWalkOptions): Promise<OnlineMigrationOutcome> => {
   const index = ONLINE_MIGRATION_INDEXES.at(offset);
   if (!index) {
-    return;
+    return COMPLETE;
   }
 
-  if (operation === "repair") {
-    await ensureIndexValid(connection, index);
+  if (mode.operation === "repair") {
+    const outcome = await ensureOnlineIndexValid({
+      connection,
+      index,
+      gate: mode.indexGate,
+      reserveObserver: mode.reserveObserver,
+    });
+    if (outcome.type === "deferred") {
+      return outcome;
+    }
   } else {
     await assertIndexReady(connection, index);
   }
-  await processOnlineIndexAt(connection, operation, offset + 1);
+  return await processOnlineIndexAt({
+    connection,
+    mode,
+    offset: offset + 1,
+  });
 };
 
-const processOnlineIndexCutoverAt = async (
-  connection: OnlineMigrationConnection,
-  operation: OnlineMigrationOperation,
+const processOnlineIndexCutoverAt = async ({
+  connection,
+  mode,
   offset = 0,
-): Promise<void> => {
+}: OnlineIndexWalkOptions): Promise<OnlineMigrationOutcome> => {
   const cutover = ONLINE_MIGRATION_INDEX_CUTOVERS.at(offset);
   if (!cutover) {
-    return;
+    return COMPLETE;
   }
 
-  if (operation === "repair") {
-    await completeIndexCutover(connection, cutover);
+  if (mode.operation === "repair") {
+    const outcome = await completeIndexCutover({
+      connection,
+      cutover,
+      repair: mode,
+    });
+    if (outcome.type === "deferred") {
+      return outcome;
+    }
   } else {
     await assertIndexReady(connection, cutover.final);
   }
-  await processOnlineIndexCutoverAt(connection, operation, offset + 1);
+  return await processOnlineIndexCutoverAt({
+    connection,
+    mode,
+    offset: offset + 1,
+  });
 };
 
-const processOnlineRepairAt = async (
-  connection: OnlineMigrationConnection,
-  operation: OnlineMigrationOperation,
+type OnlineRepairWalkOptions = {
+  connection: OnlineMigrationConnection;
+  operation: OnlineMigrationOperation;
+  repairs: readonly OnlineRepair[];
+  log: NonNullable<OnlineMigrationOptions["log"]>;
+  offset?: number;
+};
+
+const processOnlineRepairAt = async ({
+  connection,
+  operation,
+  repairs,
+  log,
   offset = 0,
-): Promise<void> => {
-  const repair = ONLINE_MIGRATION_REPAIRS.at(offset);
+}: OnlineRepairWalkOptions): Promise<void> => {
+  const repair = repairs.at(offset);
   if (!repair) {
     return;
   }
 
   const completion = await repair.readCompletion(connection);
-  if (operation === "repair" && completion.type === "incomplete") {
-    await repair.repair(connection);
+  if (operation === "repair" && completion.type !== "complete") {
+    const outcome = await Result.tryPromise({
+      try: async () => await repair.repair(connection),
+      catch: (cause: unknown) => cause,
+    });
     await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
-    assertRepairComplete(repair, await repair.readCompletion(connection));
+    if (
+      Result.isError(outcome) &&
+      !(outcome.error instanceof BackfillHeldError)
+    ) {
+      throw outcome.error;
+    }
+    const settled = await repair.readCompletion(connection);
+    if (Result.isError(outcome) && settled.type !== "pending") {
+      return panic(
+        `Online repair ${repair.name}: hold has no durable pending checkpoint`,
+      );
+    }
+    assertRepairDeployable(repair, settled);
+    if (settled.type === "pending") {
+      log({
+        event: "online_repair_pending",
+        repair: repair.name,
+        completion: settled,
+      });
+    }
   } else {
-    assertRepairComplete(repair, completion);
+    assertRepairDeployable(repair, completion);
+    if (completion.type === "pending") {
+      log({ event: "online_repair_pending", repair: repair.name, completion });
+    }
   }
-  await processOnlineRepairAt(connection, operation, offset + 1);
+  await processOnlineRepairAt({
+    connection,
+    operation,
+    repairs,
+    log,
+    offset: offset + 1,
+  });
 };
 
-const assertRepairComplete = (
+const assertRepairDeployable = (
   { name }: OnlineRepair,
   completion: OnlineRepairCompletion,
 ): void => {
-  if (completion.type === "incomplete") {
-    panic(
-      `Online repair ${name} is not complete: ${completion.reason}`,
-      completion.cause,
-    );
+  switch (completion.type) {
+    case "complete":
+    case "pending":
+      return;
+    case "incomplete":
+      return panic(
+        `Online repair ${name} is not complete: ${completion.reason}`,
+        completion.cause,
+      );
+    default:
+      completion satisfies never;
+      return panic(`Online repair ${name}: unexpected completion state`);
   }
 };
 
@@ -621,34 +867,103 @@ const assertIndexReady = async (
   await assertNoReindexArtifacts(connection, index);
 };
 
-const ensureIndexValid = async (
-  connection: OnlineMigrationConnection,
-  index: OnlineIndex,
-): Promise<void> => {
-  await cleanupFailedReindexArtifacts(connection, index);
+type EnsureOnlineIndexOptions = {
+  connection: OnlineMigrationConnection;
+  index: OnlineIndex;
+  gate: OnlineIndexGateOptions;
+  reserveObserver: () => Promise<OnlineMigrationConnection>;
+};
+
+export const ensureOnlineIndexValid = async ({
+  connection,
+  index,
+  gate,
+  reserveObserver,
+}: EnsureOnlineIndexOptions): Promise<OnlineMigrationOutcome> => {
   const initialState = await readIndexState(connection, index);
   if (initialState.type === "present") {
     assertIndexDefinition(index, initialState);
-    if (initialState.isValid && initialState.isReady) {
-      return;
+    if (
+      initialState.isValid &&
+      initialState.isReady &&
+      (await readReindexArtifacts(connection, index)).length === 0
+    ) {
+      return COMPLETE;
     }
-
-    await connection.execute(
-      `REINDEX INDEX CONCURRENTLY public.${quoteIdentifier(index.name)}`,
-    );
-  } else if (index.createSql) {
-    await connection.execute(index.createSql);
-  } else {
+  } else if (!index.createSql) {
     panic(`Required migration index ${index.name} is missing`);
   }
-
-  await assertIndexReady(connection, index);
+  const observer = await reserveObserver();
+  try {
+    const runtime = createOnlineIndexGate({
+      ...gate,
+      connection,
+      observer,
+      tableName: index.tableName,
+      name: index.name,
+      kind: initialState.type === "present" ? "index_repair" : "index_build",
+    });
+    try {
+      const outcome = await runtime.attempt(async (guardedConnection) => {
+        await cleanupFailedReindexArtifacts(guardedConnection, index);
+        const state = await readIndexState(guardedConnection, index);
+        if (state.type === "present") {
+          assertIndexDefinition(index, state);
+          if (state.isValid && state.isReady) {
+            return;
+          }
+          // An interrupted concurrent build can leave the index ready but
+          // invalid: PostgreSQL still maintains it, and a unique one still
+          // rejects duplicates. REINDEX builds the copy beside it and swaps
+          // only once the copy is valid, so enforcement never lapses; a
+          // DROP before CREATE would let a duplicate commit in between.
+          await guardedConnection.execute(
+            `REINDEX INDEX CONCURRENTLY public.${quoteIdentifier(index.name)}`,
+          );
+          return;
+        }
+        await guardedConnection.execute(
+          index.createSql ??
+            `CREATE ${index.isUnique ? "UNIQUE " : ""}INDEX CONCURRENTLY ${quoteIdentifier(index.name)} ${index.definitionBody}`,
+        );
+      });
+      switch (outcome) {
+        case "done":
+          await assertIndexReady(connection, index);
+          return COMPLETE;
+        // Waiting here would hold the caller's corpus schema lane for as long
+        // as the database stays unhealthy. A build cancelled into INVALID is
+        // repaired, with repair priority, by the next run.
+        case "retry":
+        case "wait":
+          return {
+            type: "deferred",
+            index: index.name,
+            retryAfterMs: runtime.retryAfterMs,
+          };
+        default:
+          outcome satisfies never;
+          return panic(`Online index ${index.name}: unexpected gate outcome`);
+      }
+    } finally {
+      await runtime.close();
+    }
+  } finally {
+    await observer.release();
+  }
 };
 
-const completeIndexCutover = async (
-  connection: OnlineMigrationConnection,
-  { final, staged }: OnlineIndexCutover,
-): Promise<void> => {
+type CompleteIndexCutoverOptions = {
+  connection: OnlineMigrationConnection;
+  cutover: OnlineIndexCutover;
+  repair: Extract<OnlineMigrationMode, { operation: "repair" }>;
+};
+
+const completeIndexCutover = async ({
+  connection,
+  cutover: { final, staged },
+  repair: { indexGate, reserveObserver },
+}: CompleteIndexCutoverOptions): Promise<OnlineMigrationOutcome> => {
   const finalState = await readIndexState(connection, final);
 
   if (finalState.type === "present") {
@@ -667,11 +982,19 @@ const completeIndexCutover = async (
           `DROP INDEX CONCURRENTLY public.${quoteIdentifier(staged.name)}`,
         );
       }
-      return;
+      return COMPLETE;
     }
   }
 
-  await ensureIndexValid(connection, staged);
+  const stagedOutcome = await ensureOnlineIndexValid({
+    connection,
+    index: staged,
+    gate: indexGate,
+    reserveObserver,
+  });
+  if (stagedOutcome.type === "deferred") {
+    return stagedOutcome;
+  }
 
   if (finalState.type === "present") {
     await connection.execute(
@@ -682,6 +1005,7 @@ const completeIndexCutover = async (
     `ALTER INDEX public.${quoteIdentifier(staged.name)} RENAME TO ${quoteIdentifier(final.name)}`,
   );
   await assertIndexReady(connection, final);
+  return COMPLETE;
 };
 
 const POSTGRES_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/u;

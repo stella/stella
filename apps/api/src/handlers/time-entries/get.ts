@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntries } from "@/api/db/schema";
 import { timeEntryReadColumns } from "@/api/handlers/time-entries/time-entry-columns";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { canManageTimeEntry } from "@/api/lib/billing/time-entry-authorization";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -22,6 +22,7 @@ const readTimeEntryById = createSafeHandler(
       "time-entry approval access can only read their own entries; another " +
       "user's entry is reported as not found.",
     permissions: { timeEntry: ["read"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_time_entries" },
     access: "read",
     params: readTimeEntryByIdParamsSchema,
@@ -90,6 +91,8 @@ const readTimeEntryById = createSafeHandler(
     return Result.ok({
       ...row,
       userName,
+      approvedAt: row.approvedAt?.toISOString() ?? null,
+      returnedAt: row.returnedAt?.toISOString() ?? null,
       timerStartedAt: row.timerStartedAt?.toISOString() ?? null,
       timerStoppedAt: row.timerStoppedAt?.toISOString() ?? null,
       createdAt: row.createdAt.toISOString(),

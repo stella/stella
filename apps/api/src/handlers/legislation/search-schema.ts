@@ -2,15 +2,23 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { LEGISLATION_SEARCH_MATCH_TYPES } from "@stll/api-contract/search";
 
-import { safeHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
+import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
 import {
   tPaginationCursor,
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
-import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
+import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
+import { tPublicCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
+import { searchPaginationOutcomeSchema } from "@/api/lib/search/pagination-outcome-schema";
+import { safePublicHandlerErrorOrStatusTextResponseSchema } from "@/api/lib/search/public-error-response";
+import {
+  boundedString,
+  nullableBoundedString,
+} from "@/api/lib/search/response-text-bounds";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
 export const PUBLIC_JURISDICTIONS_DESCRIPTION =
@@ -25,7 +33,7 @@ export const searchLegislationBodySchema = t.Object({
   // showed, so the cursor may be longer than a bare keyset.
   cursor: t.Optional(
     tPaginationCursor({
-      maxChars: CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+      maxChars: CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
     }),
   ),
   jurisdiction: t.Optional(
@@ -41,36 +49,50 @@ export const searchLegislationBodySchema = t.Object({
 
 export type SearchLegislationBody = Static<typeof searchLegislationBodySchema>;
 
-const nullableStringSchema = t.Union([t.String(), t.Null()]);
+const textBytes = LIMITS.legislationSearchTextBytes;
 
 export const searchLegislationSuccessResponseSchema = t.Object(
   {
     items: t.Array(
       t.Object(
         {
-          documentId: t.String(),
-          eli: t.String(),
-          slug: nullableStringSchema,
-          title: t.String(),
-          country: t.String(),
-          language: t.String(),
-          documentType: nullableStringSchema,
-          status: t.String(),
-          effectiveDate: nullableStringSchema,
-          sourceUrl: nullableStringSchema,
-          headline: nullableStringSchema,
+          match: t.Object(
+            {
+              type: t.UnionEnum(LEGISLATION_SEARCH_MATCH_TYPES),
+            },
+            { additionalProperties: false },
+          ),
+          documentId: boundedString(textBytes.documentId),
+          eli: boundedString(textBytes.eli),
+          slug: nullableBoundedString(textBytes.slug),
+          title: boundedString(textBytes.title),
+          country: boundedString(textBytes.country),
+          language: boundedString(textBytes.language),
+          documentType: nullableBoundedString(textBytes.documentType),
+          status: boundedString(textBytes.status),
+          effectiveDate: nullableBoundedString(textBytes.effectiveDate),
+          sourceUrl: nullableBoundedString(textBytes.sourceUrl),
+          headline: nullableBoundedString(textBytes.headline),
           score: t.Number(),
         },
         { additionalProperties: false },
       ),
     ),
-    nextCursor: nullableStringSchema,
+    nextCursor: nullableBoundedString(
+      CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
+    ),
+    paginationOutcome: searchPaginationOutcomeSchema,
     total: searchTotalSchema,
   },
   { additionalProperties: false },
 );
 
-export const searchLegislationResponseSchema =
-  safeHandlerResponseSchemasWithStatusText(
+export const searchLegislationResponseSchema = {
+  ...safePublicHandlerResponseSchemasWithStatusText(
     searchLegislationSuccessResponseSchema,
-  );
+  ),
+  503: t.Union([
+    safePublicHandlerErrorOrStatusTextResponseSchema,
+    tPublicCountryUnavailable,
+  ]),
+};

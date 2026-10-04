@@ -3,25 +3,24 @@ import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { renderMatterReference } from "@stll/api-contract";
-
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import type { SafeDb } from "@/api/db/safe-db";
+import { resultTx } from "@/api/db/safe-db";
 import {
   contacts,
-  matterCounters,
   properties,
   workspaceMembers,
   workspaces,
   workspaceViews,
 } from "@/api/db/schema";
+import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
+import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tDefaultVarchar,
@@ -32,9 +31,9 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import {
+  allocateMatterReference,
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
-  toScopeKey,
 } from "@/api/lib/matter-reference";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -66,11 +65,14 @@ const config = {
     "Create a new matter (name required; pass clientId to attach a client " +
     "contact). Returns the matter ID.",
   permissions: { workspace: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: organizationWorkspaceRealtimeUpdates,
   mcp: { type: "tool", name: "save_matter" },
   body: createWorkspaceBodySchema,
 } satisfies HandlerConfig;
 
 export type CreateWorkspaceHandlerProps = {
+  userEmail: string;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -82,14 +84,18 @@ export type CreateWorkspaceHandlerProps = {
 // `save_matter` MCP tool, so both emit identical audit events and
 // search-index writes.
 export const createWorkspaceHandler = async function* ({
+  userEmail,
   safeDb,
   organizationId,
   userId,
   recordAuditEvent,
   body,
 }: CreateWorkspaceHandlerProps) {
+  if (body.clientId !== undefined && (body.memberUserIds?.length ?? 0) > 0) {
+    yield* checkDemoAccountOperation(userEmail);
+  }
   const txResult = yield* Result.await(
-    safeDb(async (tx) => {
+    resultTx(safeDb, async (tx) => {
       // New personal matters (no clientId) start with exactly one
       // member: the creator. Additional members can be attached
       // through the workspace members endpoint after creation.
@@ -150,19 +156,21 @@ export const createWorkspaceHandler = async function* ({
       const activeCount = countResult.at(0)?.total ?? 0;
 
       if (body.clientId !== undefined && !client) {
-        return {
-          ok: false as const,
-          status: 404 as const,
-          message: "Client not found",
-        };
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            message: "Client not found",
+          }),
+        );
       }
 
       if (orgMembers.length !== requestedMemberUserIds.length) {
-        return {
-          ok: false as const,
-          status: 400 as const,
-          message: "Some users are not members of this organization",
-        };
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Some users are not members of this organization",
+          }),
+        );
       }
 
       // Membership verified above — brand each requested user ID.
@@ -177,11 +185,12 @@ export const createWorkspaceHandler = async function* ({
       );
 
       if (activeCount >= LIMITS.workspacesCount) {
-        return {
-          ok: false as const,
-          status: 400 as const,
-          message: "Workspaces limit reached",
-        };
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Workspaces limit reached",
+          }),
+        );
       }
 
       const newName =
@@ -194,36 +203,18 @@ export const createWorkspaceHandler = async function* ({
       const padding =
         settings?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING;
       const now = new Date();
-      const scopeKey = toScopeKey(pattern, now);
-
-      // Atomic counter increment (upsert)
-      const counter = await tx
-        .insert(matterCounters)
-        .values({
-          id: createSafeId<"matterCounter">(),
-          organizationId,
-          scopeKey,
-          lastValue: 1,
-        })
-        .onConflictDoUpdate({
-          target: [matterCounters.organizationId, matterCounters.scopeKey],
-          set: {
-            lastValue: sql`${matterCounters.lastValue} + 1`,
-          },
-        })
-        .returning({ lastValue: matterCounters.lastValue })
-        .then((r) => r.at(0));
-
-      if (!counter) {
-        panic("Failed to create matter counter");
-      }
-
-      const reference = renderMatterReference({
+      const referenceResult = await allocateMatterReference({
+        tx,
+        organizationId,
         pattern,
         now,
-        seq: counter.lastValue,
         padding,
       });
+
+      if (Result.isError(referenceResult)) {
+        return Result.err(referenceResult.error);
+      }
+      const reference = referenceResult.value;
 
       await tx.insert(workspaces).values({
         id: body.id,
@@ -333,21 +324,9 @@ export const createWorkspaceHandler = async function* ({
 
       await enqueueWorkspaceSearchRepairs(tx, [workspaceId]);
 
-      return {
-        ok: true as const,
-        id: body.id,
-      };
+      return Result.ok({ id: body.id });
     }),
   );
-
-  if (!txResult.ok) {
-    return Result.err(
-      new HandlerError({
-        status: txResult.status,
-        message: txResult.message,
-      }),
-    );
-  }
 
   flushWorkspaceSearchRepairs([txResult.id]).catch(captureError);
 
@@ -358,6 +337,7 @@ const createWorkspaces = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, body, recordAuditEvent }) {
     return yield* createWorkspaceHandler({
+      userEmail: user.email,
       safeDb,
       organizationId: session.activeOrganizationId,
       userId: user.id,

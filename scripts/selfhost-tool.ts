@@ -51,6 +51,7 @@ const SELFHOST_ACTIVE_API_ENV_NAMES = [
   "BETTER_AUTH_URL",
   "CONTENT_ENCRYPTION_KEY",
   "DATABASE_URL",
+  "DB_LOAD_GATE_EBS_SIGNAL",
   "FRONTEND_URL",
   "GOTENBERG_PASSWORD",
   "GOTENBERG_URL",
@@ -79,6 +80,7 @@ const SELFHOST_API_EXAMPLES = {
   CONTENT_ENCRYPTION_KEY: "",
   DATABASE_URL:
     "postgres://stella_owner:password@postgres.example.internal:5432/stella?sslmode=require",
+  DB_LOAD_GATE_EBS_SIGNAL: "disabled",
   FRONTEND_URL: "https://stella.example.com",
   GOTENBERG_PASSWORD: "",
   GOTENBERG_URL: "http://gotenberg:3000",
@@ -189,7 +191,10 @@ const renderSelfhostDoc = () => {
   const documentWithContract = replaceGeneratedBlock(
     readFileSync(path.join(REPO_ROOT, SELFHOST_DOC_PATH), "utf-8"),
     SELFHOST_DOC_MARKERS,
-    renderSelfhostDocsContract(),
+    renderSelfhostDocsContract(
+      ENV_CATALOG.find(({ name }) => name === "DB_LOAD_GATE_EBS_SIGNAL")
+        ?.description ?? panic("Missing EBS load-gate environment description"),
+    ),
   );
   return replaceGeneratedBlock(
     documentWithContract,

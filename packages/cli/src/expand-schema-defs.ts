@@ -164,7 +164,7 @@ export const expandSchemaDefs = (
     defs: rawDefs ?? {},
     resolving: new Set<string>(),
   };
-  const expanded: Record<string, unknown> = {};
+  const expanded: [string, unknown][] = [];
   for (const [key, value] of Object.entries(document)) {
     if (key === DEFS_KEY) {
       continue;
@@ -173,7 +173,7 @@ export const expandSchemaDefs = (
     if (expandedValue === EXPANSION_FAILED) {
       return null;
     }
-    expanded[key] = expandedValue;
+    expanded.push([key, expandedValue]);
   }
-  return expanded;
+  return Object.fromEntries(expanded);
 };

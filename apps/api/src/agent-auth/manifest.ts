@@ -6,8 +6,8 @@ import {
   AUTH_MD_SPEC_VERSION,
   getAgentAuthUrl,
 } from "@/api/agent-auth/constants";
-import { env } from "@/api/env";
-import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   getMcpProtectedResourceMetadataUrl,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
@@ -25,7 +25,9 @@ export const getAgentAuthManifest = (): string => {
   // ID-JAG is dark-launched: when the flag is off the AS metadata hides
   // `identity_assertion` and the identity route 403s it, so the manifest
   // must not advertise it either or agents discover an unsupported flow.
-  const identityAssertionListItem = env.FEATURE_AGENT_ID_JAG
+  const identityAssertionListItem = isDeploymentFeatureEnabled(
+    "FEATURE_AGENT_ID_JAG",
+  )
     ? `
 - \`identity_assertion\` — present an audience-bound ID-JAG
   (\`urn:ietf:params:oauth:token-type:id-jag\`) signed by a trusted provider; exchange it
@@ -65,3 +67,9 @@ receives a scoped, revocable OAuth access token.
 - events: \`${getAgentAuthUrl(AGENT_AUTH_EVENTS_PATH)}\`
 `;
 };
+
+export const AGENT_AUTH_MANIFEST_HEADERS = {
+  "Content-Type": "text/markdown; charset=utf-8",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+} as const;

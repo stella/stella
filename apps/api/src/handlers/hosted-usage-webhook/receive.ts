@@ -26,20 +26,17 @@
  * narrow helpers.
  */
 
-import { panic } from "better-result";
+import { TaggedError } from "better-result";
 import * as v from "valibot";
 
-import {
-  handleHostedAllocation,
-  handleUsageEntitlementStatusChange,
-  handleHostedEntitlementUpsert,
-} from "@/api/handlers/hosted-usage-webhook/dispatch";
-import type { DispatchOutcome } from "@/api/handlers/hosted-usage-webhook/dispatch";
+import { dispatchEvent } from "@/api/handlers/hosted-usage-webhook/dispatch";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   getHostedUsageProviderKind,
+  getHostedUsageProviderApiVersion,
   getWebhookSecret,
 } from "@/api/lib/hosted-usage-provider/config";
+import type { DispatchOutcome } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import {
   hostedUsageUnknownEventEnvelopeSchema,
   hostedUsageWebhookEventSchema,
@@ -61,6 +58,7 @@ export const HOSTED_USAGE_WEBHOOK_HEADERS = {
   id: "webhook-id",
   timestamp: "webhook-timestamp",
   signature: "webhook-signature",
+  apiVersion: "webhook-api-version",
 } as const;
 
 type ReceiveCtx = {
@@ -75,6 +73,14 @@ const respond = (statusCode: number, message: string): Response =>
     status: statusCode,
     headers: { "content-type": "application/json" },
   });
+
+class HostedProviderContractMismatch extends TaggedError(
+  "HostedProviderContractMismatch",
+)<{ message: string }> {}
+const providerContractMismatch = failureSink({
+  event: "usage_provider.webhook.contract_mismatch",
+  expected: [],
+});
 
 export const receiveHostedUsageWebhook = async (
   ctx: ReceiveCtx,
@@ -135,12 +141,45 @@ export const receiveHostedUsageWebhook = async (
   }
   const payload = parsedJson;
 
+  if (getHostedUsageProviderKind() === "polar") {
+    const reportedVersion =
+      ctx.request.headers.get(HOSTED_USAGE_WEBHOOK_HEADERS.apiVersion) ??
+      payload["api_version"];
+    // Keep delivery metadata with the signed envelope for later reconciliation.
+    payload["delivery_api_version"] = reportedVersion ?? null;
+    if (
+      reportedVersion !== getHostedUsageProviderApiVersion() ||
+      (payload["api_version"] !== undefined &&
+        payload["api_version"] !== getHostedUsageProviderApiVersion()) ||
+      envelope.type === "subscription.migrated"
+    ) {
+      observeFailure(
+        new HostedProviderContractMismatch({
+          message: "Provider event requires reconciliation",
+        }),
+        {
+          sink: providerContractMismatch,
+          ctx: {
+            source: "usage_provider.webhook",
+            requestId: eventId,
+            versionId:
+              typeof reportedVersion === "string" ? reportedVersion : "missing",
+            step:
+              envelope.type === "subscription.migrated"
+                ? "migration"
+                : "apiVersion",
+          },
+        },
+      );
+    }
+  }
+
   // Translate the (already authenticated) body into the neutral event
   // contract before validating it. For the neutral provider this is a
   // pass-through; the Polar adapter renames `subscription.*` / `order.*`
   // events into `entitlement.*` / `allocation.*`. We record the native
-  // event type and original payload for audit, and dispatch on the
-  // normalised event.
+  // event type for audit, and dispatch on the normalised event. Storage
+  // retains only the dispatch projection and digest.
   //
   // Validation happens BEFORE opening a transaction. Unknown event types
   // are recorded in their own tiny transaction (insert with
@@ -165,6 +204,7 @@ export const receiveHostedUsageWebhook = async (
       eventId,
       eventType: envelope.type,
       payload,
+      rawBody,
     });
     if (recorded === UNKNOWN_EVENT_RECORD.retry) {
       // Nothing committed: the record's insert and result update share one
@@ -189,13 +229,20 @@ export const receiveHostedUsageWebhook = async (
         eventId,
         eventType: envelope.type,
         payload,
+        rawBody,
+        event,
         initialResult: "ok",
       });
       if (inserted.kind === "duplicate") {
         return { kind: "duplicate" } as const;
       }
 
-      const dispatched = await dispatchEvent(tx, event, eventId);
+      const dispatched = await dispatchEvent({
+        tx,
+        event,
+        eventId,
+        mode: "live",
+      });
 
       if (dispatched.kind === "ignored") {
         await updateWebhookEventResultInTx({
@@ -258,11 +305,13 @@ const persistUnknownEventType = async ({
   eventId,
   eventType,
   payload,
+  rawBody,
 }: {
   runTransaction: WebhookTransactionRunner;
   eventId: string;
   eventType: string;
   payload: Record<string, unknown>;
+  rawBody: string;
 }): Promise<UnknownEventRecord> => {
   try {
     await runTransaction(async (tx) => {
@@ -271,6 +320,8 @@ const persistUnknownEventType = async ({
         eventId,
         eventType,
         payload,
+        rawBody,
+        event: null,
         initialResult: "ignored",
       });
       if (inserted.kind === "fresh") {
@@ -309,40 +360,3 @@ const persistUnknownEventType = async ({
 /** SQLSTATE class 22: Postgres rejected a value, not the connection or the transaction. */
 const isPgDataException = (error: unknown): boolean =>
   getPgErrorCode(error)?.startsWith("22") === true;
-
-const dispatchEvent = async (
-  tx: Parameters<typeof handleHostedEntitlementUpsert>[0]["tx"],
-  event: v.InferOutput<typeof hostedUsageWebhookEventSchema>,
-  eventId: string,
-): Promise<DispatchOutcome> => {
-  switch (event.type) {
-    case "entitlement.created":
-    case "entitlement.updated":
-    case "entitlement.active":
-      return await handleHostedEntitlementUpsert({
-        tx,
-        payload: event.data,
-        eventId,
-      });
-    case "entitlement.canceled":
-      return await handleUsageEntitlementStatusChange({
-        tx,
-        payload: event.data,
-        eventId,
-        eventKind: "canceled",
-      });
-    case "entitlement.revoked":
-      return await handleUsageEntitlementStatusChange({
-        tx,
-        payload: event.data,
-        eventId,
-        eventKind: "revoked",
-      });
-    case "allocation.created":
-      return await handleHostedAllocation({ tx, payload: event.data, eventId });
-    default: {
-      event satisfies never;
-      return panic(`Unhandled event: ${String(event)}`);
-    }
-  }
-};

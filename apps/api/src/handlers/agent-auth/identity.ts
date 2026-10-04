@@ -17,7 +17,11 @@ import {
 import { resolveIdJagIdentity } from "@/api/lib/agent-auth-idjag";
 import type { IdJagIdentityOutcome } from "@/api/lib/agent-auth-idjag";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 
@@ -45,7 +49,9 @@ const config = {
       assertion: t.String({ minLength: 1, maxLength: 8192 }),
     }),
   ]),
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
+  cache: { kind: "none" },
 } satisfies PublicHandlerConfig;
 
 type AgentIdentityResponse =
@@ -156,6 +162,10 @@ const mapIdJagOutcome = (
     );
   }
 
+  if (HandlerError.is(outcome.error)) {
+    return Result.err(outcome.error);
+  }
+
   return Result.err(
     new HandlerError({
       status: ID_JAG_REJECTION_STATUS[outcome.error.code],
@@ -172,7 +182,7 @@ const agentIdentityHandler = createSafePublicHandler(
       // Dark-launch gate: even when on, the trusted-issuer allow-list
       // ships empty, so this still rejects every assertion until an
       // operator explicitly trusts an issuer.
-      if (!env.FEATURE_AGENT_ID_JAG) {
+      if (!isDeploymentFeatureEnabled("FEATURE_AGENT_ID_JAG")) {
         return Result.err(
           new HandlerError({
             status: 403,
@@ -188,6 +198,9 @@ const agentIdentityHandler = createSafePublicHandler(
     if (body.type === "anonymous") {
       const result = await startAnonymousRegistration();
       if (Result.isError(result)) {
+        if (HandlerError.is(result.error)) {
+          return Result.err(result.error);
+        }
         return Result.err(
           new HandlerError({
             status: 502,
@@ -212,7 +225,9 @@ const agentIdentityHandler = createSafePublicHandler(
       });
     }
 
-    const ceremony = await startServiceAuthRegistration(body.login_hint.trim());
+    const ceremony = yield* await startServiceAuthRegistration(
+      body.login_hint.trim(),
+    );
 
     const verificationUri = getClaimVerificationUri();
     const verificationUriComplete = `${verificationUri}?user_code=${encodeURIComponent(ceremony.userCode)}`;

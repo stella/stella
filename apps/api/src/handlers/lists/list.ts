@@ -3,13 +3,14 @@ import { and, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { LEGAL_LIST_STATUSES, legalLists } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegalListId } from "@/api/lib/safe-id-boundaries";
 import { includes } from "@/api/lib/type-guards";
 
@@ -27,8 +28,14 @@ const config = {
     "by status (active by default, archived on request). Each entry carries " +
     "the name, description, status, and timestamps.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   query: querySchema,
 } satisfies WorkspaceHandlerConfig;
 
@@ -40,7 +47,9 @@ const listCursorCodec = createTimestampIdCursorCodec({
 const readLists = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, query }) {
-    const limit = query.limit ?? LIMITS.legalListsPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.legalListsPageSizeDefault,
+    );
     const status = query.status ?? "active";
     if (!includes(LEGAL_LIST_STATUSES, status)) {
       return Result.err(

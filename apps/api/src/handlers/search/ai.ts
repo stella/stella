@@ -19,7 +19,6 @@ import {
   searchDocuments,
   workspaceSearchDocuments,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
@@ -34,9 +33,12 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedContactId,
@@ -200,6 +202,7 @@ type SearchSummaryChatBody = Static<typeof searchSummaryChatBodySchema>;
 type SearchAIContext = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   safeDb: SafeDb;
@@ -299,6 +302,7 @@ type GenerateRefinedSearchQueryOptions = {
   lastValidationError: string | null;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
 };
 
 const validateSearchQueryWithPostgres = async ({
@@ -325,13 +329,16 @@ const generateRefinedSearchQuery = async ({
   lastValidationError,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
 }: GenerateRefinedSearchQueryOptions) =>
   await Result.tryPromise({
     try: async () =>
       await generateTanStackObjectForRole({
+        dataClass: "customer",
         role: "fast",
         serviceTier: "standard",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         // No workspace id is threaded through SearchAIContext at this call site.
         tenantWorkspaceIds: [],
@@ -355,6 +362,7 @@ export const refineSearchQuery = async ({
   body,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   orgAIConfigStatus,
   promptCachingEnabled,
   safeDb,
@@ -364,6 +372,7 @@ export const refineSearchQuery = async ({
   body: RefineSearchBody;
 }) => {
   const gate = requireTanStackAIAvailableForRole({
+    dataClass: "customer",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
     role: "fast",
@@ -373,6 +382,7 @@ export const refineSearchQuery = async ({
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -397,6 +407,7 @@ export const refineSearchQuery = async ({
       lastValidationError,
       organizationId,
       orgAIConfig,
+      managedAIResidency,
       analytics: aiAnalytics,
       caching: resolveCaching({
         promptCachingEnabled,
@@ -448,6 +459,7 @@ export const summarizeSearchResults = async ({
   userId,
   accessibleWorkspaceIds,
   orgAIConfig,
+  managedAIResidency,
   orgAIConfigStatus,
   promptCachingEnabled,
   safeDb,
@@ -456,6 +468,7 @@ export const summarizeSearchResults = async ({
   body: SummarizeSearchBody;
 }) => {
   const gate = requireTanStackAIAvailableForRole({
+    dataClass: "customer",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
     role: "fast",
@@ -492,6 +505,7 @@ export const summarizeSearchResults = async ({
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -513,9 +527,11 @@ export const summarizeSearchResults = async ({
   const result = await Result.tryPromise({
     try: async () =>
       await generateTanStackObjectForRole({
+        dataClass: "customer",
         role: "fast",
         serviceTier: "standard",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         tenantWorkspaceIds: resolved.ids,
         analytics: aiAnalytics,
@@ -717,7 +733,8 @@ export const createSearchSummaryChatThread = async ({
           version: 1,
           data: [{ type: "text", text: userText }],
         },
-        memoryExtractionEligible: env.FEATURE_AI_MEMORY,
+        memoryExtractionEligible:
+          isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
         createdAt: now,
       },
       {
@@ -734,7 +751,8 @@ export const createSearchSummaryChatThread = async ({
             sourceDocuments: citedContexts.flatMap(toChatSourceDocuments),
           },
         }),
-        memoryExtractionEligible: env.FEATURE_AI_MEMORY,
+        memoryExtractionEligible:
+          isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
         createdAt: new Date(now.getTime() + 1),
       },
     ]);
@@ -825,7 +843,9 @@ const loadSummaryContexts = async ({
       mimeTypes: filters.mimeTypes,
       updatedFrom: filters.updatedFrom,
       updatedTo: filters.updatedTo,
-      limit: filters.limit ?? SEARCH_SUMMARY_RESULT_LIMIT,
+      limit: normalizeTenantPageLimit(
+        filters.limit ?? SEARCH_SUMMARY_RESULT_LIMIT,
+      ),
     },
     { scopedDb },
   );

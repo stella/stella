@@ -19,7 +19,9 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { appToday } from "@/lib/local-iso-date";
 import { toSafeId } from "@/lib/safe-id";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
@@ -72,9 +74,6 @@ type HandleDropParams = {
   kind: string;
 };
 
-const getTodayUTCDate = (): Temporal.PlainDate =>
-  Temporal.Now.instant().toZonedDateTimeISO("UTC").toPlainDate();
-
 export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   const t = useTranslations();
   const locale = useLocale();
@@ -118,10 +117,10 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
 
     const entityId = taskData?.entityId;
     if (taskError || !entityId) {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(
+        taskError ? toAPIError(taskError) : undefined,
+        t("errors.actionFailed"),
+      );
       return;
     }
 
@@ -157,9 +156,9 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   };
 
   // Current viewport date (month/week navigation state)
-  const [viewDate, setViewDate] = useState(getTodayUTCDate);
+  const [viewDate, setViewDate] = useState(appToday);
   const [monthWindowStart, setMonthWindowStart] = useState(() =>
-    getCenteredMonthWindowStart(getTodayUTCDate()),
+    getCenteredMonthWindowStart(appToday()),
   );
   const monthScrollRef = useRef<HTMLDivElement>(null);
   const monthAnchorRefs = useRef<Map<string, HTMLElement> | null>(null);
@@ -174,7 +173,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
 
   const year = viewDate.year;
   const month = viewDate.month - 1;
-  const monthWeeks = getMonthWeekRows(locale, monthWindowStart);
+  const monthWeeks = getMonthWeekRows(locale, monthWindowStart, appToday());
   const monthAnchors = getMonthAnchors(locale, monthWindowStart);
 
   const days = (() => {
@@ -182,7 +181,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       return monthWeeks.flatMap((week) => week.days);
     }
     if (mode === "week") {
-      return getWeekDays(viewDate, firstWeekday, weekend);
+      return getWeekDays(viewDate, firstWeekday, weekend, appToday());
     }
     return [];
   })();
@@ -283,7 +282,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   };
 
   const navigateToday = () => {
-    const today = getTodayUTCDate();
+    const today = appToday();
     if (mode === "month") {
       scrollToMonth(today);
       return;
@@ -450,10 +449,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
           );
           if (Result.isError(requested)) {
             getAnalytics().captureError(requested.error);
-            stellaToast.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
+            notifyUserError(requested.error, t("errors.actionFailed"));
           }
           detached(
             invalidateCalendarTasks(),
@@ -478,10 +474,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
           );
           if (Result.isError(requested)) {
             getAnalytics().captureError(requested.error);
-            stellaToast.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
+            notifyUserError(requested.error, t("errors.actionFailed"));
           }
           detached(
             invalidateCalendarTasks(),

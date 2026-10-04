@@ -1,51 +1,128 @@
+import { Schema } from "@tiptap/pm/model";
 import { describe, expect, test } from "bun:test";
 
+import { typedCharacter } from "@stll/ui/typed-character";
+
 import {
+  charBeforeCaret,
+  chooseShortcutPopupSide,
   COMPOSER_MENU_SHORTCUT,
+  contextMentionSearchKey,
   resolveComposerMenuShortcut,
+  SHORTCUT_POPUP_COMFORT_HEIGHT,
+  SHORTCUT_POPUP_SIDE,
   shouldDrainSkillPages,
 } from "@/components/chat/composer-plus-menu.logic";
 
 const baseOptions = {
-  altKey: false,
-  ctrlKey: false,
+  charBeforeCaret: null,
   hasContext: true,
   hasSkills: true,
-  isAltGraph: false,
-  isComposing: false,
-  isEditorEmpty: true,
-  metaKey: false,
 };
+
+const schema = new Schema({
+  nodes: {
+    doc: { content: "paragraph+" },
+    paragraph: { content: "inline*" },
+    text: { group: "inline", inline: true },
+    hardBreak: { group: "inline", inline: true },
+    mention: { atom: true, group: "inline", inline: true },
+  },
+});
+
+// Resolves the caret at the end of a single paragraph holding `children`.
+const caretAfter = (children: Parameters<typeof schema.node>[2]) => {
+  const doc = schema.node("doc", null, [
+    schema.node("paragraph", null, children),
+  ]);
+  const paragraph = doc.firstChild;
+  if (!paragraph) {
+    throw new Error("Expected a paragraph");
+  }
+  return doc.resolve(1 + paragraph.content.size);
+};
+
+const resolveAfterText = (text: string, character: string) =>
+  resolveComposerMenuShortcut({
+    ...baseOptions,
+    charBeforeCaret: charBeforeCaret(
+      caretAfter(text ? [schema.text(text)] : []),
+    ),
+    character,
+  });
 
 describe("resolveComposerMenuShortcut", () => {
   test("opens Skills for slash in a blank skills-enabled composer", () => {
-    expect(resolveComposerMenuShortcut({ ...baseOptions, key: "/" })).toBe(
-      COMPOSER_MENU_SHORTCUT.skills,
-    );
+    expect(resolveAfterText("", "/")).toBe(COMPOSER_MENU_SHORTCUT.skills);
   });
 
   test("opens Context for at-sign in a blank context-enabled composer", () => {
-    expect(resolveComposerMenuShortcut({ ...baseOptions, key: "@" })).toBe(
-      COMPOSER_MENU_SHORTCUT.context,
+    expect(resolveAfterText("", "@")).toBe(COMPOSER_MENU_SHORTCUT.context);
+  });
+
+  test("opens after every JavaScript whitespace character", () => {
+    const whitespaceCharacters = [
+      "\u0009",
+      "\u000b",
+      "\u000c",
+      " ",
+      "\u00a0",
+      "\u1680",
+      "\u2000",
+      "\u2001",
+      "\u2002",
+      "\u2003",
+      "\u2004",
+      "\u2005",
+      "\u2006",
+      "\u2007",
+      "\u2008",
+      "\u2009",
+      "\u200a",
+      "\u2028",
+      "\u2029",
+      "\u202f",
+      "\u205f",
+      "\u3000",
+      "\ufeff",
+    ];
+
+    for (const whitespace of whitespaceCharacters) {
+      expect(resolveAfterText(`review${whitespace}`, "@")).toBe(
+        COMPOSER_MENU_SHORTCUT.context,
+      );
+      expect(resolveAfterText(`review${whitespace}`, "/")).toBe(
+        COMPOSER_MENU_SHORTCUT.skills,
+      );
+    }
+  });
+
+  test("keeps the character literal inside words, addresses and URLs", () => {
+    for (const prefix of ["and", "jan", "person.example", "clause-", "a_"]) {
+      expect(resolveAfterText(prefix, "@")).toBeNull();
+      expect(resolveAfterText(prefix, "/")).toBeNull();
+    }
+    expect(resolveAfterText("https:", "/")).toBeNull();
+  });
+
+  test("opens after a hard break but not flush against a chip", () => {
+    const afterBreak = charBeforeCaret(
+      caretAfter([schema.text("first line"), schema.node("hardBreak")]),
     );
-  });
-
-  test("keeps slash literal after the composer has content", () => {
     expect(
       resolveComposerMenuShortcut({
         ...baseOptions,
-        isEditorEmpty: false,
-        key: "/",
+        charBeforeCaret: afterBreak,
+        character: "/",
       }),
-    ).toBeNull();
-  });
+    ).toBe(COMPOSER_MENU_SHORTCUT.skills);
 
-  test("keeps at-sign literal after the composer has content", () => {
+    const afterChip = charBeforeCaret(caretAfter([schema.node("mention")]));
     expect(
       resolveComposerMenuShortcut({
         ...baseOptions,
-        isEditorEmpty: false,
-        key: "@",
+        charBeforeCaret: afterChip,
+        character: "@",
       }),
     ).toBeNull();
   });
@@ -55,38 +132,50 @@ describe("resolveComposerMenuShortcut", () => {
       resolveComposerMenuShortcut({
         ...baseOptions,
         hasSkills: false,
-        key: "/",
+        character: "/",
+      }),
+    ).toBeNull();
+    expect(
+      resolveComposerMenuShortcut({
+        ...baseOptions,
+        hasContext: false,
+        character: "@",
       }),
     ).toBeNull();
   });
 
-  test("preserves command shortcuts and IME composition", () => {
-    expect(
-      resolveComposerMenuShortcut({
-        ...baseOptions,
-        ctrlKey: true,
-        key: "/",
-      }),
-    ).toBeNull();
-    expect(
-      resolveComposerMenuShortcut({
-        ...baseOptions,
-        isComposing: true,
-        key: "/",
-      }),
-    ).toBeNull();
+  test("ignores absent and unrelated typed characters", () => {
+    for (const character of [null, "a", "😀", " "]) {
+      expect(
+        resolveComposerMenuShortcut({ ...baseOptions, character }),
+      ).toBeNull();
+    }
   });
 
-  test("allows AltGraph printable characters", () => {
-    expect(
-      resolveComposerMenuShortcut({
-        ...baseOptions,
-        altKey: true,
-        ctrlKey: true,
-        isAltGraph: true,
+  // Which keystrokes type a character is typedCharacter's contract, pinned
+  // per layout next to it; this checks the composer consumes it.
+  test("opens for an Option-typed trigger and keeps Cmd shortcuts", () => {
+    const keystroke = (modifiers: { altKey: boolean; metaKey: boolean }) =>
+      typedCharacter({
+        ...modifiers,
+        ctrlKey: false,
+        getModifierState: () => false,
+        isComposing: false,
         key: "@",
+      });
+
+    expect(
+      resolveComposerMenuShortcut({
+        ...baseOptions,
+        character: keystroke({ altKey: true, metaKey: false }),
       }),
     ).toBe(COMPOSER_MENU_SHORTCUT.context);
+    expect(
+      resolveComposerMenuShortcut({
+        ...baseOptions,
+        character: keystroke({ altKey: false, metaKey: true }),
+      }),
+    ).toBeNull();
   });
 });
 
@@ -118,5 +207,78 @@ describe("shouldDrainSkillPages", () => {
         query: "  ",
       }),
     ).toBe(false);
+  });
+});
+
+describe("contextMentionSearchKey", () => {
+  const scope = {
+    organizationId: "org-a",
+    query: "lease",
+    registrationVersion: 3,
+    threadKey: "workspace:matter-a:thread-a",
+    userId: "user-a",
+  };
+
+  test("the same query in another scope never shares a cache entry", () => {
+    const key = JSON.stringify(contextMentionSearchKey(scope));
+    for (const other of [
+      { organizationId: "org-b" },
+      { userId: "user-b" },
+      { threadKey: "workspace:matter-b:thread-a" },
+      { threadKey: "global:thread-a" },
+      { registrationVersion: 4 },
+    ]) {
+      expect(
+        JSON.stringify(contextMentionSearchKey({ ...scope, ...other })),
+      ).not.toBe(key);
+    }
+  });
+
+  test("a repeated search in the same scope reuses its entry", () => {
+    expect(contextMentionSearchKey({ ...scope })).toEqual(
+      contextMentionSearchKey(scope),
+    );
+  });
+});
+
+describe("chooseShortcutPopupSide", () => {
+  test("opens above a caret low in the viewport, below one near the top", () => {
+    // A thread's composer docked at the bottom.
+    expect(
+      chooseShortcutPopupSide({
+        caretBottom: 850,
+        caretTop: 830,
+        viewportHeight: 900,
+      }),
+    ).toBe(SHORTCUT_POPUP_SIDE.above);
+    // The new-chat composer high on the page: the list has room only below.
+    expect(
+      chooseShortcutPopupSide({
+        caretBottom: 247,
+        caretTop: 227,
+        viewportHeight: 900,
+      }),
+    ).toBe(SHORTCUT_POPUP_SIDE.below);
+  });
+
+  test("never trades a comfortable side for a cramped one", () => {
+    for (const viewportHeight of [400, 600, 900, 1400]) {
+      for (let caretTop = 0; caretTop < viewportHeight; caretTop += 10) {
+        const caretBottom = caretTop + 20;
+        const side = chooseShortcutPopupSide({
+          caretBottom,
+          caretTop,
+          viewportHeight,
+        });
+        const roomAbove = caretTop;
+        const roomBelow = viewportHeight - caretBottom;
+        if (roomAbove >= SHORTCUT_POPUP_COMFORT_HEIGHT) {
+          expect(side).toBe(SHORTCUT_POPUP_SIDE.above);
+        }
+        if (side === SHORTCUT_POPUP_SIDE.below) {
+          expect(roomBelow).toBeGreaterThan(roomAbove);
+        }
+      }
+    }
   });
 });

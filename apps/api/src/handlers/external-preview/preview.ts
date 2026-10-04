@@ -3,7 +3,7 @@ import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
@@ -16,6 +16,8 @@ import type {
   SafeOutboundAddress,
   SafeOutboundFetchResponse,
 } from "@/api/lib/safe-outbound-fetch";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 
 const PREVIEW_TIMEOUT_MS = 8000;
 const MAX_URL_LENGTH = 2048;
@@ -42,7 +44,12 @@ type ExternalPreviewResponse = {
 };
 
 const config = {
+  contentDelivery: {
+    type: "public",
+    reason: "Returns previews of public external sources.",
+  },
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "url_preview" },
   access: "read",
   query: t.Object({
@@ -163,16 +170,11 @@ export const previewExternalFile = createSafeRootHandler(
     }
 
     return Result.ok(
-      new Response(body, {
-        headers: {
-          "Cache-Control": "private, max-age=600",
-          "Content-Disposition": "inline",
-          "Content-Security-Policy":
-            "default-src 'none'; object-src 'none'; base-uri 'none'",
-          "Content-Type": "application/pdf",
-          "Referrer-Policy": "no-referrer",
-          "X-Content-Type-Options": "nosniff",
-        },
+      secureDocumentResponse({
+        body,
+        contentType: "application/pdf",
+        disposition: "inline",
+        fileName: sanitizeFilename("preview.pdf"),
       }),
     );
   },

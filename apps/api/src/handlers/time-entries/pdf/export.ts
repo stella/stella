@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and } from "drizzle-orm";
 
-import { MoneyTotals, prorateHourlyCents } from "@stll/money";
+import { timeEntryAmount, MoneyTotals } from "@stll/money";
 import { Temporal } from "@stll/time";
 
 import { timeEntries } from "@/api/db/schema";
@@ -12,7 +12,7 @@ import {
   timeEntryExportQuerySchema,
 } from "@/api/handlers/time-entries/export-query";
 import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/export-query";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -33,11 +33,13 @@ export const exportPdfHandler = async ({
     tx
       .select({
         id: timeEntries.id,
+        activityGroup: timeEntries.activityGroup,
         userId: timeEntries.userId,
         dateWorked: timeEntries.dateWorked,
         durationMinutes: timeEntries.durationMinutes,
         billedMinutes: timeEntries.billedMinutes,
         rateAtEntry: timeEntries.rateAtEntry,
+        noCharge: timeEntries.noCharge,
         currency: timeEntries.currency,
         narrative: timeEntries.narrative,
         billable: timeEntries.billable,
@@ -81,10 +83,7 @@ export const exportPdfHandler = async ({
       : "Unknown";
     const hours = (row.billedMinutes / 60).toFixed(2);
     const rate = exportAmountText(row.rateAtEntry, row.currency);
-    const amount = prorateHourlyCents({
-      billedMinutes: row.billedMinutes,
-      hourlyRateCents: row.rateAtEntry,
-    });
+    const amount = timeEntryAmount(row);
 
     // Total Hours must reconcile with the per-row billed hours and the
     // amount, which are both derived from billedMinutes; summing raw
@@ -97,7 +96,7 @@ export const exportPdfHandler = async ({
       `Duration: ${hours}h  Rate: ${row.currency} ${rate}/hr  Amount: ${row.currency} ${exportAmountText(amount, row.currency)}`,
     );
     textLines.push(
-      `Status: ${row.status}  Billable: ${row.billable ? "Yes" : "No"}`,
+      `Activity group: ${row.activityGroup}  Status: ${row.status}  Billable: ${row.billable ? "Yes" : "No"}`,
     );
 
     // Truncate narrative for PDF
@@ -231,13 +230,19 @@ const buildMinimalPdf = (lines: readonly string[]): Uint8Array => {
 };
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
   description:
-    "Render a matter's time entries as a PDF timesheet report: one block per " +
+    "Render a matter's client time entries as a PDF timesheet report: one block per " +
     "entry plus total hours and totals per currency. Filter by date-worked " +
     "range, status, and work item. Returns PDF bytes; use " +
     "time-entries.csv.export to get the same entries as text.",
   permissions: { timeEntry: ["approve"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   transport: {
     type: "file-response",

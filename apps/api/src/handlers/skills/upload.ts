@@ -2,16 +2,22 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
+import { validateDocxArchive } from "@/api/lib/docx-archive";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import {
   authorizeSkillInstallScope,
   installSkill,
 } from "@/api/lib/skills/install";
-import { parseUploadedSkillPackage } from "@/api/lib/skills/skill-package";
+import {
+  isZipSkillSource,
+  parseUploadedSkillPackage,
+  SKILL_ARCHIVE_OPTIONS,
+} from "@/api/lib/skills/skill-package";
 
 const uploadSkillBodySchema = t.Object({
   scope: t.UnionEnum(AGENT_SKILL_SCOPES),
@@ -19,13 +25,23 @@ const uploadSkillBodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason: "Stores a skill upload without delivering stored-file bytes.",
+  },
   description:
     "Install an agent skill by uploading a skill pack or a bare SKILL.md " +
     "file; the parser reads the bytes rather than trusting the declared " +
     "media type. It is stored with an upload origin and stays editable. Team " +
     "scope requires admin or owner.",
   permissions: { agentSkill: ["create"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: skillRealtimeUpdates,
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   transport: {
     type: "file-input",
     // Any declared type: the package parser sniffs the bytes (zip pack or a
@@ -58,9 +74,20 @@ const uploadSkill = createSafeRootHandler(
       return Result.err(authorization.error);
     }
 
+    const bytes = await body.file.arrayBuffer();
+    if (
+      isZipSkillSource({
+        buffer: bytes,
+        contentType: body.file.type,
+        path: body.file.name,
+      })
+    ) {
+      yield* Result.await(validateDocxArchive(bytes, SKILL_ARCHIVE_OPTIONS));
+    }
+
     const scanned = yield* Result.await(
       scanUploadForHandler({
-        bytes: await body.file.arrayBuffer(),
+        bytes,
         declaredMimeType: body.file.type,
         fileName: sanitizeFilenamePreservingExtension(body.file.name),
       }),

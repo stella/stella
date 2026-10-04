@@ -5,6 +5,7 @@ import { panic, Result } from "better-result";
 import type { ModelRole } from "@stll/ai-catalog";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { chatRequestOptions } from "@/api/handlers/chat/chat-request";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   deanonymizeFromBoundary,
@@ -18,6 +19,7 @@ import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   chatToolMapToArray,
   type ChatToolMap,
@@ -27,7 +29,6 @@ import {
   guardModelToolSchemas,
   redactModelSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
-import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import {
   finishReasonOf,
@@ -36,9 +37,7 @@ import {
 import type { TanStackTextFinishReason } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   abortControllerFromSignal,
-  mergeGenerationOptions,
   resolveTanStackTextModel,
-  systemPromptsPatch,
 } from "@/api/lib/tanstack-ai-generate";
 import {
   addTokenUsage,
@@ -58,6 +57,7 @@ type RunSubagentMetering = {
 export type RunSubagentOptions = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   role: ModelRole;
   modelId?: string | undefined;
   /**
@@ -197,7 +197,9 @@ export const runSubagent = async (
   options: RunSubagentOptions,
   dependencies: RunSubagentDependencies = defaultRunSubagentDependencies,
 ): Promise<RunSubagentResult> => {
-  const model = dependencies.resolveModel({
+  const model = await dependencies.resolveModel({
+    dataClass: "customer",
+    managedAIResidency: options.managedAIResidency,
     modelId: options.modelId,
     organizationId: options.organizationId,
     orgAIConfig: options.orgAIConfig,
@@ -207,6 +209,7 @@ export const runSubagent = async (
   const abortController = abortControllerFromSignal(options.abortSignal);
 
   const analytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "subagent",
       organizationId: options.organizationId,
@@ -232,12 +235,9 @@ export const runSubagent = async (
     boundary: options.thirdPartyBoundary,
     tools: options.tools,
   });
-  const projectedTools = projectChatToolSchemasForProvider({
-    modelTools: guardModelToolSchemas({
-      tools: chatToolMapToArray(boundaryTools),
-      workspaceIds: options.tenantWorkspaceIds,
-    }),
-    provider: model.provider,
+  const modelTools = guardModelToolSchemas({
+    tools: chatToolMapToArray(boundaryTools),
+    workspaceIds: options.tenantWorkspaceIds,
   });
 
   // Subagent calls have no caller-supplied cache scope key, so prompt caching
@@ -297,19 +297,15 @@ export const runSubagent = async (
   const stream = streamChatChunks({
     adapter: model.adapter,
     messages: guardedMessages,
-    tools: projectedTools,
     agentLoopStrategy: maxIterations(options.maxSteps),
     abortController,
-    ...systemPromptsPatch({
+    ...chatRequestOptions({
       caching,
-      model,
-      system: guardedSystem,
-    }),
-    modelOptions: mergeGenerationOptions({
-      caching,
-      model,
       maxOutputTokens: undefined,
+      model,
+      modelTools,
       serviceTier: options.metering.serviceTier,
+      system: guardedSystem,
       temperature: getTemperatureForRole(options.role),
     }),
     middleware: [analytics.middleware],

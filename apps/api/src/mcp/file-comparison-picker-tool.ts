@@ -40,6 +40,7 @@ export type OpenFileComparisonOutput = v.InferInput<
 >;
 
 export const OPEN_FILE_COMPARISON_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   _meta: {
     ui: {
       resourceUri: FILE_COMPARISON_APP_RESOURCE_URI,
@@ -61,6 +62,8 @@ export const OPEN_FILE_COMPARISON_TOOL_DEFINITION = defineValibotMcpTool({
     "you cannot upload attached files yourself. Takes no input.",
   inputSchema: OPEN_FILE_COMPARISON_INPUT_SCHEMA,
   access: "write",
+  accountAccess: "sandbox",
+  permissions: { type: "all", permissions: { entity: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: FILE_COMPARISON_TRANSPORT.pickerToolName,
   scope: "stella:documents_write",

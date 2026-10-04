@@ -1,3 +1,5 @@
+import { chat, EventType, StreamProcessor } from "@tanstack/ai";
+import type { StreamChunk } from "@tanstack/ai";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
@@ -6,24 +8,26 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
-import type { ChatPart } from "@/api/handlers/chat/types";
+import {
+  processServerChatStream,
+  toChatMessage,
+} from "@/api/handlers/chat/stream-chat";
+import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
+import { createChatMessageIdMapper } from "@/api/handlers/chat/stream-message-identity";
+import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isRecord } from "@/api/lib/type-guards";
 import {
   APPROVAL_TOOL_NAME,
   createApprovalHarness,
   pendingApprovalCallOf,
 } from "@/api/tests/helpers/chat-approval-harness";
-import type { HarnessModel } from "@/api/tests/helpers/chat-approval-harness";
+import { createPromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
 import {
-  createPromptPrefixLedger,
-  wirePromptBlocksOf,
-} from "@/api/tests/helpers/chat-prompt-prefix";
-import type {
-  PromptPrefixLedger,
-  WirePromptSections,
-} from "@/api/tests/helpers/chat-prompt-prefix";
+  instanceWireErrorModel,
+  providerCallErrorCassettes,
+  providerCallErrorSentinel,
+} from "@/api/tests/helpers/provider-call-error-wire";
 import {
   cassetteFor,
   loadProviderWireCassettes,
@@ -40,6 +44,11 @@ import {
 } from "@/api/tests/helpers/provider-wire-contract";
 import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import { replayedHarnessModel } from "@/api/tests/helpers/replayed-harness-model";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -81,7 +90,7 @@ beforeAll(async () => {
   previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
   process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
     "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-  replay = installProviderWireReplay();
+  replay = installProviderWireReplay({ retryAfterMs: 1 });
 });
 
 afterAll(async () => {
@@ -100,124 +109,13 @@ afterAll(async () => {
   await releaseRlsFixture();
 });
 
-const entriesOf = (value: unknown): readonly unknown[] => {
-  if (value === undefined || value === null) {
-    return [];
-  }
-  return Array.isArray(value) ? value : [value];
-};
-
-/** Where each provider's request body holds its tools, system prompt and
- *  messages. */
-const WIRE_PROMPT_SECTIONS = {
-  anthropic: (body) => ({
-    messages: entriesOf(body["messages"]),
-    system: entriesOf(body["system"]),
-    tools: entriesOf(body["tools"]),
-  }),
-  bedrock: (body) => ({
-    messages: entriesOf(body["messages"]),
-    system: entriesOf(body["system"]),
-    tools: entriesOf(
-      isRecord(body["toolConfig"]) ? body["toolConfig"]["tools"] : undefined,
-    ),
-  }),
-  google: (body) => ({
-    messages: entriesOf(body["contents"]),
-    system: entriesOf(body["systemInstruction"]),
-    tools: entriesOf(body["tools"]),
-  }),
-  // The system prompt is the first message.
-  mistral: (body) => ({
-    messages: entriesOf(body["messages"]),
-    system: [],
-    tools: entriesOf(body["tools"]),
-  }),
-  openai: (body) => ({
-    messages: entriesOf(body["input"]),
-    system: entriesOf(body["instructions"]),
-    tools: entriesOf(body["tools"]),
-  }),
-  openrouter: (body) => ({
-    messages: entriesOf(body["messages"]),
-    system: [],
-    tools: entriesOf(body["tools"]),
-  }),
-} as const satisfies Record<
-  ProviderWireProvider,
-  (body: Record<string, unknown>) => WirePromptSections
->;
-
-/** The harness's model seam, answered by the replay: its queue is the
- *  conversation's script. Every request the chat model answered is held to
- *  `chat.provider.prefix-stable` as its SDK wrote it. */
-const replayedModel = ({
-  prompts,
-  provider,
-}: {
-  prompts: PromptPrefixLedger;
-  provider: ProviderWireProvider;
-}): HarnessModel => {
-  /** How many of the replay's requests `prompts` holds. */
-  let recorded = 0;
-  const recordNewRequests = () => {
-    const requests = replay.requests();
-    for (const { body, exchange } of requests.slice(recorded)) {
-      // Side calls go to another model; a refused request reached no one.
-      if (typeof exchange !== "number") {
-        continue;
-      }
-      const parsed: unknown = JSON.parse(body);
-      if (!isRecord(parsed)) {
-        panic("A chat request body is a JSON object");
-      }
-      prompts.record(
-        wirePromptBlocksOf(WIRE_PROMPT_SECTIONS[provider](parsed)),
-      );
-    }
-    recorded = requests.length;
-  };
-  return {
-    modelOptionsOf: () => [],
-    promptLedgerOf: () => {
-      recordNewRequests();
-      return prompts;
-    },
-    promptsOf: () => [],
-    restore: () => undefined,
-    script: (_threadId, ...runs) => {
-      expect(runs).toEqual([]);
-    },
-    stalled: async () => {
-      await Promise.reject(
-        new TypeError("A replayed provider does not stall on cue"),
-      );
-    },
-    takeFindings: () => {
-      recordNewRequests();
-      // Taking the replay's findings clears its requests.
-      const { unconsumed, unexpected } = replay.takeFindings();
-      recorded = 0;
-      // What the model is handed goes over the wire to a recorded answer, so
-      // the scripted provider's record of it has no counterpart here.
-      return {
-        changedToolResults: [],
-        unconsumedScripts: unconsumed,
-        unscriptedCalls: unexpected,
-      };
-    },
-    // The bodies the adapter sent, in its provider's wire format.
-    takeRequests: () => replay.takeRequests(),
-  };
-};
-
 /** A thread whose chat model is the one `cassette` was recorded with. */
 const openThread = async (cassette: ProviderWireCassette) => {
   const { model, provider } = cassette;
   const prompts = createPromptPrefixLedger();
   const harness = createApprovalHarness({
     ids,
-    model: replayedModel({ prompts, provider }),
+    model: replayedHarnessModel({ prompts, provider, replay }),
     organizationAIConfig: wireOrgAIConfig({
       apiKey: "cassette-replay-no-credentials",
       chatModel: model,
@@ -320,6 +218,151 @@ describe("a replayed provider through the chat pipeline", () => {
   test("offers the wire tool under the harness's approval tool name", () => {
     expect(WIRE_TOOL_NAME).toBe(APPROVAL_TOOL_NAME);
   });
+
+  test.each(providerCallErrorCassettes())(
+    "provider failure persists and streams its kind with $scenario/$variant",
+    async (cassette) => {
+      const { client, harness, threadId } = await openThread(cassette);
+      const analytics = installRecordingAnalytics();
+      const logs = installRecordingLogger();
+      try {
+        const recording = harness.recordThread(threadId);
+        replay.serve(cassette);
+        await client.sendUserMessage(Bun.randomUUIDv7(), "Draft a memo");
+        const violations = await harness.checkWebClient({
+          client,
+          expected: { runFailure: true },
+          threadId,
+        });
+        expect(violations).toEqual([]);
+        const stored = await harness.readThreadMessages(threadId);
+        const assistant = await harness.lastAssistant(threadId);
+        if (cassette.expect.outcome !== "error") {
+          throw new TypeError("The fixture has an error outcome");
+        }
+        expect(JSON.stringify(assistant)).toContain(cassette.expect.errorKind);
+        expect(recording).toHaveLength(1);
+        expect(recording.at(0)?.response.body).toContain(
+          cassette.expect.errorKind,
+        );
+        expect(logs.records.length).toBeGreaterThan(0);
+        expect(analytics.exceptions()).toEqual([]);
+        expect(
+          JSON.stringify({
+            stored,
+            recording,
+            logs: logs.records,
+            analytics: analytics.events,
+          }),
+        ).not.toContain(providerCallErrorSentinel(cassette));
+      } finally {
+        logs.restore();
+        analytics.restore();
+        client.dispose();
+        await harness.close();
+      }
+    },
+    RETRY_TIMEOUT_MS,
+  );
+
+  test.each(["rich", "spec"] as const)(
+    "preserves %s usage attached to a replayed provider run error without provider text",
+    async (shape) => {
+      const cassette = providerCallErrorCassettes().at(0);
+      if (cassette === undefined) {
+        panic("The provider error corpus is non-empty");
+      }
+      const sentinel = providerCallErrorSentinel(cassette);
+      const counts = { promptTokens: 24, completionTokens: 2, totalTokens: 26 };
+      const details = {
+        completionTokensDetails: { reasoningTokens: 1 },
+        providerUsageDetails: { message: sentinel },
+      };
+      const events: StreamChatFinishEvent[] = [];
+      const output: StreamChunk[] = [];
+      let responseMessage: ChatMessage | null = null;
+      const processor = new StreamProcessor({
+        events: {
+          onStreamEnd: (message) => {
+            responseMessage = toChatMessage(message);
+          },
+        },
+      });
+      const logs = installRecordingLogger();
+      const analytics = installRecordingAnalytics();
+      try {
+        replay.serve(cassette);
+        // This adapter omits usage on errors. Attach the two documented SDK
+        // shapes to its real wire error to exercise the persistence boundary.
+        const source = async function* (): AsyncIterable<StreamChunk> {
+          for await (const chunk of chat({
+            adapter: instanceWireErrorModel(cassette.model).adapter,
+            messages: [{ role: "user", content: "Draft a memo" }],
+          })) {
+            if (chunk.type !== EventType.RUN_ERROR) {
+              yield chunk;
+              continue;
+            }
+            expect(JSON.stringify(chunk)).toContain(sentinel);
+            yield shape === "rich"
+              ? { ...chunk, usage: { ...counts, ...details } }
+              : {
+                  ...chunk,
+                  usage: [
+                    {
+                      inputTokens: 24,
+                      outputTokens: 2,
+                      totalTokens: 26,
+                      provider: sentinel,
+                    },
+                  ],
+                  metadata: { tanstack: { usage: details }, message: sentinel },
+                };
+          }
+        };
+        for await (const chunk of processServerChatStream({
+          abortSignal: new AbortController().signal,
+          deadlineSignal: new AbortController().signal,
+          getResponseMessage: () => responseMessage,
+          initialMessages: [],
+          mapMessageId: createChatMessageIdMapper(() =>
+            toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+          ),
+          onFinish: (event) => {
+            events.push(event);
+          },
+          processor,
+          source: source(),
+        })) {
+          output.push(chunk);
+        }
+        expect(events).toHaveLength(1);
+        expect(events.at(0)?.responseMessage.metadata).toMatchObject({
+          usage: { ...counts, completionTokensDetails: { reasoningTokens: 1 } },
+        });
+        expect(events.at(0)?.outcome).toMatchObject({ type: "failed" });
+        expect(
+          output.find((chunk) => chunk.type === EventType.RUN_ERROR)?.usage,
+        ).toMatchObject(counts);
+        expect(
+          JSON.stringify({
+            events,
+            output,
+            logs: logs.records,
+            analytics: analytics.events,
+          }),
+        ).not.toContain(sentinel);
+        expect(replay.takeFindings()).toMatchObject({
+          unconsumed: [],
+          unexpected: [],
+        });
+      } finally {
+        logs.restore();
+        analytics.restore();
+      }
+    },
+    RETRY_TIMEOUT_MS,
+  );
 
   for (const provider of PROVIDER_WIRE_PROVIDERS) {
     test(

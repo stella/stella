@@ -17,6 +17,7 @@ import {
 } from "@/api/lib/public-law-relations";
 import {
   createSchemaPglite,
+  installPgliteDecisionAliases,
   installPgliteChatRunLogRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
@@ -25,13 +26,21 @@ import {
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
+  installPgliteSchedulerJobPauseLog,
   installPgliteOrganizationMemberCapacity,
+  installPgliteWorkspaceContactCapacity,
   installPglitePdfSigningTokenScopes,
+  installPglitePlaybookDocumentTypeKey,
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
   installPgliteTimeEntryTimerSignals,
   installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
+import {
+  deriveStellaTablePrivileges,
+  readCommittedMigrations,
+  stellaTablePrivilegeStatements,
+} from "@/api/tests/stella-table-privileges";
 
 // Test processes boot from a prebuilt data-dir snapshot when the batching
 // runner provides one (scripts/run-tests.ts). Building the schema in-process
@@ -206,6 +215,10 @@ export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
   "reported_total_origin",
   "stored_total",
   "stored_total_as_of",
+  "stored_total_attempted_at",
+  "stored_total_next_refresh_at",
+  "stored_total_held_since",
+  "stored_total_warned_slot",
 ] as const;
 
 /**
@@ -233,16 +246,6 @@ export const withPublicLawReaderRole = async <
     return await fn(tx);
   });
 
-const AUTH_TABLES_SQL = [
-  ...Object.values(authSchema.authSchema).map((table) => getTableName(table)),
-  "agent_registration",
-  "agent_trusted_issuer",
-  "agent_delegation",
-  "agent_assertion_replay",
-]
-  .map(quoteSqlIdentifier)
-  .join(", ");
-
 const AUTH_USER_STELLA_SELECT_COLUMNS_SQL =
   authSchema.AUTH_USER_STELLA_SELECT_COLUMN_NAMES.map(quoteSqlIdentifier).join(
     ", ",
@@ -263,54 +266,46 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
 // The snapshot bakes in the superset every suite needs: RLS roles, schema,
 // workspace-access objects, and the role grants. Suites that never SET ROLE
 // simply ignore the grants.
+/**
+ * Reader columns this release declares `permitted` but no migration grants
+ * yet: the grant lands in a later release, so running readers accept it. The
+ * harness mirrors the migrations, so it leaves them ungranted too.
+ */
+const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
+  new Set(["case_law_decisions.docket_family_key"]);
+
+/**
+ * Role grants the harness runs after `stella`'s table privileges are set from
+ * the migrations (`applyStellaTablePrivileges`). Table-level privileges of
+ * `stella` are not spelled here: the migrations own them, and a second copy
+ * is how a REVOKE goes missing from the harness.
+ */
 export const ROLE_GRANT_STATEMENTS = [
-  `
-    GRANT SELECT, INSERT, UPDATE, DELETE
-      ON ALL TABLES IN SCHEMA public TO stella
-  `,
-  `
-    REVOKE ALL PRIVILEGES ON TABLE "case_law_search_backfill_failures"
-      FROM stella
-  `,
-  `
-    REVOKE ALL PRIVILEGES ON TABLE ${AUTH_TABLES_SQL} FROM stella
-  `,
+  `GRANT SELECT ON TABLE "soft_law_sources", "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
+  `GRANT INSERT, UPDATE ON TABLE "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
+  `GRANT UPDATE (listing_baseline, listing_seen, listing_expected_total, sync_cursor, last_sync_at, run_state, run_id, run_started_at, lease_token, lease_expires_at, failure_tag) ON TABLE "soft_law_sources" TO stella_ingestion`,
+  `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
   `
     GRANT SELECT (${AUTH_USER_STELLA_SELECT_COLUMNS_SQL})
       ON TABLE "user" TO stella
   `,
   `
-    GRANT SELECT ON TABLE "organization" TO stella
-  `,
-  `
-    GRANT SELECT ON TABLE "member" TO stella
-  `,
-  `
     GRANT UPDATE (last_active_workspace_id) ON TABLE "member" TO stella
   `,
+  // Exact-key cleanup intents: the request role reaches only the id, the
+  // state and the retry schedule.
   `
-    REVOKE INSERT, UPDATE, DELETE ON TABLE
-      "case_law_sources",
-      "case_law_decisions",
-      "case_law_decision_identifiers",
-      "case_law_decision_identifier_backfills",
-      "case_law_judges",
-      "case_law_decision_judges",
-      "case_law_citations",
-      "case_law_provision_citations",
-      "case_law_statute_citation_memberships",
-      "case_law_statute_citation_counts",
-      "case_law_statute_citation_count_state",
-      "case_law_polarity_rules",
-      "case_law_court_weights",
-      "case_law_court_directory_ranks",
-      "case_law_fts_configs",
-      "case_law_search_documents",
-      "case_law_ingestion_events",
-      "case_law_ingestion_failures",
-      "case_law_index_jobs",
-      "case_law_corpus_tombstones"
-    FROM stella
+    GRANT SELECT ("id", "status") ON TABLE "buffer_object_cleanup_intents"
+      TO stella
+  `,
+  `
+    GRANT UPDATE ("status", "attempt_count", "next_attempt_at")
+      ON TABLE "buffer_object_cleanup_intents" TO stella
+  `,
+  // List item provenance is frozen apart from its verification fields.
+  `
+    GRANT UPDATE ("verification_status", "verified_by", "verified_at", "updated_at")
+      ON TABLE "legal_list_item_sources" TO stella
   `,
   `
     GRANT SELECT ON TABLE
@@ -372,14 +367,6 @@ export const ROLE_GRANT_STATEMENTS = [
   // were added. `pglite-role-grants.test.ts` holds this list and the
   // migrations to agreement, so the next such table cannot be forgotten here.
   `
-    GRANT SELECT ON TABLE
-      "case_law_reconciliation_items",
-      "case_law_coverage_slices",
-      "case_law_corpus_tombstones",
-      "case_law_search_document_preview_passages"
-    TO stella
-  `,
-  `
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
       "case_law_reconciliation_items",
       "case_law_search_backfill_failures",
@@ -404,18 +391,6 @@ export const ROLE_GRANT_STATEMENTS = [
   // Provision extraction state: request code reads it and ingestion updates
   // it; only owner-run database functions insert state or read scopes.
   `
-    REVOKE ALL PRIVILEGES ON TABLE "case_law_provision_extraction_scopes"
-    FROM stella
-  `,
-  `
-    REVOKE INSERT, UPDATE, DELETE ON TABLE
-      "case_law_provision_scope_transitions",
-      "case_law_provision_extraction_revisions_registry",
-      "case_law_provision_extraction_revisions",
-      "case_law_provision_extractions"
-    FROM stella
-  `,
-  `
     GRANT SELECT, UPDATE ON TABLE "case_law_provision_extractions"
     TO stella_ingestion
   `,
@@ -431,24 +406,7 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT INSERT ON TABLE "case_law_index_jobs" TO stella_ingestion
   `,
-  // Ingestion bookkeeping the migrations keep from the request role outright.
-  `
-    REVOKE ALL PRIVILEGES ON TABLE
-      "case_law_corpus_upload_intents",
-      "case_law_corpus_pack_refs",
-      "case_law_decision_source_identities",
-      "case_law_raw_sweeps",
-      "case_law_decision_supplements",
-      "case_law_citation_reviews"
-    FROM stella
-  `,
   // Global sanctions lists are readable by requests and writable by ingestion.
-  `
-    REVOKE INSERT, UPDATE, DELETE ON TABLE
-      "sanctions_sources", "sanctions_editions",
-      "sanctions_entry_payloads", "sanctions_edition_entries"
-    FROM stella
-  `,
   `
     GRANT SELECT, INSERT, UPDATE ON TABLE
       "sanctions_sources", "sanctions_editions"
@@ -460,14 +418,6 @@ export const ROLE_GRANT_STATEMENTS = [
     TO stella_ingestion
   `,
   // Legislation corpus — same global model as case law.
-  `
-    REVOKE INSERT, UPDATE, DELETE ON TABLE
-      "legislation_sources",
-      "legislation_documents",
-      "legislation_search_documents",
-      "legislation_index_jobs"
-    FROM stella
-  `,
   `
     GRANT SELECT ON TABLE
       "legislation_sources",
@@ -495,40 +445,16 @@ export const ROLE_GRANT_STATEMENTS = [
   `,
   // Written only by the legislation triggers, as the legislation writer.
   `
-    REVOKE ALL PRIVILEGES ON TABLE "legislation_work_changes" FROM stella
-  `,
-  `
     GRANT INSERT ON TABLE "legislation_work_changes" TO stella_ingestion
   `,
   // Written by legislation ingestion beside each version, read by the
   // public-law reader through the column map below.
   `
-    REVOKE ALL PRIVILEGES ON TABLE "legislation_work_names" FROM stella
-  `,
-  `
     GRANT SELECT, INSERT, DELETE ON TABLE "legislation_work_names"
     TO stella_ingestion
   `,
-  // Written only by the owner-run sitemap refresh; the public-law reader's
-  // column grants come from the public-law map below.
-  `
-    REVOKE ALL PRIVILEGES ON TABLE "case_law_sitemap_shards" FROM stella
-  `,
-  `
-    REVOKE ALL PRIVILEGES ON TABLE "case_law_browse_facet_counts" FROM stella
-  `,
-  `
-    REVOKE ALL PRIVILEGES ON TABLE "statute_sitemap_shards" FROM stella
-  `,
   // Final-generation state is observable by request code but mutated only by
   // ingestion. A narrowly scoped database function owns retirement deletes.
-  `
-    REVOKE INSERT, UPDATE, DELETE ON TABLE
-      "corpus_index_generations",
-      ${CORPUS_PROJECTION_HISTORY_TABLES_SQL},
-      ${CORPUS_PROJECTION_REVISION_TABLE_SQL}
-    FROM stella
-  `,
   `
     GRANT SELECT ON TABLE
       "corpus_index_generations",
@@ -547,16 +473,17 @@ export const ROLE_GRANT_STATEMENTS = [
   // A group's contract binding is written once; ingestion may insert it and
   // move only its readiness.
   `
-    REVOKE INSERT, UPDATE, DELETE ON TABLE "corpus_index_group_enrollments"
-    FROM stella
-  `,
-  `
     GRANT SELECT, INSERT ON TABLE "corpus_index_group_enrollments"
     TO stella_ingestion
   `,
   `
     GRANT UPDATE (provisioning_status, attested_at, updated_at)
       ON TABLE "corpus_index_group_enrollments" TO stella_ingestion
+  `,
+  // The withdrawal trail is append-only: ingestion records, the app reads.
+  `
+    GRANT SELECT, INSERT ON TABLE "corpus_index_group_withdrawals"
+    TO stella_ingestion
   `,
   `
     GRANT INSERT, UPDATE ON TABLE
@@ -590,13 +517,26 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT USAGE ON SCHEMA public TO stella_public_law_reader
   `,
-  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).map(
-    ([relation, columns]) => `
-      GRANT SELECT (${Object.keys(columns).map(quoteSqlIdentifier).join(", ")})
+  // Alias reader grants land only after the release declaring them optional.
+  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)
+    .filter(
+      ([relation]) => relation !== getTableName(schema.caseLawDecisionAliases),
+    )
+    .map(
+      ([relation, columns]) => `
+      GRANT SELECT (${Object.keys(columns)
+        .filter(
+          (column) =>
+            !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
+              `${relation}.${column}`,
+            ),
+        )
+        .map(quoteSqlIdentifier)
+        .join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
         TO stella_public_law_reader
     `,
-  ),
+    ),
   // Operator role for pre-computed decision analyses: a narrow read plus the
   // single writable column.
   `
@@ -639,6 +579,38 @@ export const ROLE_GRANT_STATEMENTS = [
 ] as const;
 
 /**
+ * The relations a harness role privilege can reach: tables, partitioned
+ * tables, views, materialized views and foreign tables in `public`.
+ */
+export const HARNESS_RELATIONS_SQL = `
+  SELECT c.relname AS relation
+  FROM pg_catalog.pg_class c
+  JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public'
+    AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+`;
+
+/**
+ * Give `stella` exactly the table privileges the committed migrations leave it
+ * with, relation by relation. The column grants in `ROLE_GRANT_STATEMENTS`
+ * run afterwards, because revoking a table privilege drops the column grants
+ * of the same kind.
+ */
+const applyStellaTablePrivileges = async (client: PGlite): Promise<void> => {
+  const { privileges } = deriveStellaTablePrivileges(readCommittedMigrations());
+  const { rows } = await client.query<{ relation: string }>(
+    HARNESS_RELATIONS_SQL,
+  );
+  const statements = rows.flatMap(({ relation }) =>
+    stellaTablePrivilegeStatements(
+      relation,
+      privileges.get(relation) ?? new Set(),
+    ),
+  );
+  await client.exec(statements.join(";\n"));
+};
+
+/**
  * Build a fully provisioned test PGlite from scratch: RLS roles, schema
  * prerequisites, the drizzle schema push, workspace-access objects, and
  * role grants. This is the expensive path (drizzle-kit peaks ~2.2 GB);
@@ -672,6 +644,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteAgentSkillRevisionTrigger(db);
+  await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteStatuteCitationCounts(db);
   await installPgliteLegislationPayloadRevision(db);
@@ -681,12 +654,16 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPglitePdfSigningTokenScopes(db);
   await installPgliteChatTurnRunIdLookup(db);
   await installPgliteOrganizationMemberCapacity(db);
+  await installPgliteWorkspaceContactCapacity(db);
   await installPgliteChatRunLogRls(db);
+  await installPgliteSchedulerJobPauseLog(db);
 
+  await applyStellaTablePrivileges(client);
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));
   }
   await installPgliteTimeEntryTimerSignals(db);
+  await installPglitePlaybookDocumentTypeKey(db);
 
   return client;
 };
@@ -694,9 +671,16 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
 /**
  * Create a test PGlite: from the batching runner's snapshot when
  * PGLITE_TEST_SNAPSHOT is set, otherwise via the full in-process build so
- * solo `bun test <file>` runs keep working without the runner.
+ * solo `bun test <file>` runs keep working without the runner. A suite may
+ * supply its own snapshot with additional DDL and seed data baked in.
  */
-export const createTestPglite = async (): Promise<PGlite> => {
+export const createTestPglite = async (snapshot?: Blob): Promise<PGlite> => {
+  if (snapshot !== undefined) {
+    return await PGlite.create({
+      extensions: { pg_trgm },
+      loadDataDir: snapshot,
+    });
+  }
   const snapshotPath = process.env[PGLITE_TEST_SNAPSHOT_ENV];
   if (snapshotPath === undefined || snapshotPath.length === 0) {
     return await buildFullTestPglite();

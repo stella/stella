@@ -3,6 +3,42 @@ import { describe, expect, test } from "bun:test";
 import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 import { advanceDeploymentStability } from "./check-api-deployment";
 
+// CI runs this file in "Test release policy scripts" without the dependency
+// install (workflow-only pull requests skip it), so it reads workflow shapes
+// by hand instead of through a schema library.
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+type WorkflowStep = { run: string; env: Record<string, unknown> };
+
+const workflowSteps = (workflow: unknown, file: string): WorkflowStep[] => {
+  const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+  expect(isRecord(jobs), `${file}: jobs`).toBe(true);
+  if (!isRecord(jobs)) {
+    return [];
+  }
+  return Object.entries(jobs).flatMap(([id, job]) => {
+    expect(isRecord(job), `${file}: ${id}`).toBe(true);
+    const steps = isRecord(job) ? job["steps"] : undefined;
+    if (steps === undefined) {
+      return [];
+    }
+    expect(Array.isArray(steps), `${file}: ${id} steps`).toBe(true);
+    return (Array.isArray(steps) ? steps : []).map((step: unknown) => {
+      const run = isRecord(step) ? step["run"] : undefined;
+      const env = isRecord(step) ? step["env"] : undefined;
+      expect(run === undefined || typeof run === "string", `${file}: run`).toBe(
+        true,
+      );
+      expect(env === undefined || isRecord(env), `${file}: env`).toBe(true);
+      return {
+        run: typeof run === "string" ? run : "",
+        env: isRecord(env) ? env : {},
+      };
+    });
+  });
+};
+
 describe("API deployment health receipt", () => {
   test("supports either scheduled-alert authentication mechanism", async () => {
     const workflow = await Bun.file(
@@ -42,17 +78,63 @@ describe("API deployment health receipt", () => {
       new URL("../.github/workflows/publish-npm.yml", import.meta.url),
     ).text();
 
-    const setupPin =
-      /stella\/\.github\/actions\/setup-bun-cached@(?<sha>[0-9a-f]{40})/u.exec(
-        workflow,
-      )?.groups?.["sha"];
     const releasePin =
       /stella\/\.github\/\.github\/workflows\/npm-independent-release\.yml@(?<sha>[0-9a-f]{40}) # release job environment input/u.exec(
         workflow,
       )?.groups?.["sha"];
 
-    expect(setupPin).toBeDefined();
-    expect(releasePin).toBe(setupPin);
+    expect(releasePin).toBeDefined();
+    // What the pack job builds is published, so it restores no shared cache.
+    expect(workflow).not.toContain("setup-bun-cached");
+    expect(workflow).not.toMatch(/actions\/cache(\/save)?@|rust-cache@/u);
+    const setups =
+      workflow.match(/oven-sh\/setup-bun@[^\n]*\n(?: {8,}.*\n)*/gu) ?? [];
+    expect(setups.length).toBeGreaterThan(0);
+    for (const setup of setups) {
+      expect(setup).toContain("no-cache: true");
+    }
+  });
+
+  test("staging checks share their access configuration", async () => {
+    // Steps that reach staging through the viewer lock, found by what they
+    // run, so a step that drops its access entries is still checked.
+    const stagingTargets = [
+      "$STAGING_HEALTH_URL",
+      "test:e2e:staging",
+      "apps/api/src/scripts/post-deploy-smoke.ts",
+      "apps/api/src/scripts/post-deploy-response-policy.ts",
+    ];
+    const workflowsDir = new URL("../.github/workflows/", import.meta.url);
+    const consumers: { run: string; env: Record<string, unknown> }[] = [];
+    for await (const file of new Bun.Glob("*.yml").scan(
+      workflowsDir.pathname,
+    )) {
+      const steps = workflowSteps(
+        Bun.YAML.parse(await Bun.file(new URL(file, workflowsDir)).text()),
+        file,
+      );
+      for (const { run, env } of steps) {
+        if (
+          stagingTargets.some((target) => run.includes(target)) ||
+          Object.keys(env).some((key) => key.endsWith("EDGE_HEADER_VALUE"))
+        ) {
+          consumers.push({ run, env });
+        }
+      }
+    }
+
+    // Every target is still found, so a renamed script cannot drop out.
+    for (const target of stagingTargets) {
+      expect(consumers.some(({ run }) => run.includes(target))).toBe(true);
+    }
+    // One source for the staging access value, so rotating it is one change.
+    for (const { run, env } of consumers) {
+      const prefix = run.includes("$STAGING_HEALTH_URL") ? "" : "E2E_";
+      expect(env[`${prefix}EDGE_HEADER_NAME`]).toBe("x-stella-edge-token");
+      expect(env[`${prefix}EDGE_HEADER_VALUE`]).toBe(
+        `\${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}`,
+      );
+    }
   });
 
   test("ties staging promotion to the current health gate", async () => {
@@ -72,11 +154,26 @@ describe("API deployment health receipt", () => {
     expect(apiBuildStart).toBeGreaterThan(healthJobStart);
     expect(webBuildStart).toBeGreaterThan(apiBuildStart);
     expect(promoteStart).toBeGreaterThan(webBuildStart);
-    expect(promoteJob).toContain("/etc/apt/sources.list.d/google-chrome.list");
-    expect(promoteJob).toContain("Disable runner Chrome apt source");
-    expect(promoteJob.indexOf("Disable runner Chrome apt source")).toBeLessThan(
-      promoteJob.indexOf("Install Playwright browser"),
+    const imageSetupStart = promoteJob.indexOf(
+      "      - name: Verify image-provided Chromium",
     );
+    const browserSmokeStart = promoteJob.indexOf(
+      "      - name: Run staging web smoke",
+    );
+    expect(imageSetupStart).toBeGreaterThanOrEqual(0);
+    expect(browserSmokeStart).toBeGreaterThan(imageSetupStart);
+    const imageSetup = promoteJob.slice(imageSetupStart, browserSmokeStart);
+    expect(imageSetup).toContain(
+      "if: steps.current.outputs.promoted == 'true'",
+    );
+    expect(imageSetup).toContain("uses: ./.github/actions/setup-playwright");
+    expect(promoteJob).toContain(
+      'run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:staging',
+    );
+    expect(promoteJob).not.toContain(
+      "/etc/apt/sources.list.d/google-chrome.list",
+    );
+    expect(promoteJob).not.toContain("playwright install");
     // The gate only reads: it decides whether to promote, never promotes.
     // Both delimiters are asserted so a missing block cannot slice to "" and
     // satisfy the write check by being empty.

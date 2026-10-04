@@ -1,5 +1,61 @@
 # @stll/ui
 
+## 0.42.0
+
+### Minor Changes
+
+- [#4763](https://github.com/stella/stella/pull/4763) [`019d735`](https://github.com/stella/stella/commit/019d735308d3baec6d4143c61b3b5a5e38fe8ce9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DatePickerPopover` gains localizable accessible labels (`dialogLabel`, `previousMonthLabel`, `nextMonthLabel`, `previousYearLabel`, `nextYearLabel`, `previousDecadeLabel`, `nextDecadeLabel`, `timeLabel`), `disabled`, `className`, `hideClear`, a bordered `variant="field"` trigger, `size="touch"` for 44px cells under a coarse pointer, and `mode="date-time"`, which reads and writes a zone-less `YYYY-MM-DDTHH:mm` value. Defaults keep the existing behaviour.
+
+## 0.41.1
+
+### Patch Changes
+
+- [#4528](https://github.com/stella/stella/pull/4528) [`8e5a77d`](https://github.com/stella/stella/commit/8e5a77d0c78131dd1551b8be3480901e14488aa1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Landing column headings use sentence case, and row text lines up with the heading label.
+
+## 0.41.0
+
+### Minor Changes
+
+- [#4504](https://github.com/stella/stella/pull/4504) [`9669e8a`](https://github.com/stella/stella/commit/9669e8acbb6460e3fbf32478eb0dd2c0a0c1c185) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DatePickerPopover` gains localizable accessible labels (`dialogLabel`, `previousMonthLabel`, `nextMonthLabel`, `previousYearLabel`, `nextYearLabel`, `previousDecadeLabel`, `nextDecadeLabel`, `timeLabel`), `disabled`, `className`, `hideClear`, a bordered `variant="field"` trigger, `size="touch"` for 44px cells under a coarse pointer, and `mode="date-time"`, which reads and writes a zone-less `YYYY-MM-DDTHH:mm` value. Defaults keep the existing behaviour.
+
+## 0.40.2
+
+### Patch Changes
+
+- [#4527](https://github.com/stella/stella/pull/4527) [`7511562`](https://github.com/stella/stella/commit/75115627f781b29b63f3dc7cd92ae82506a89367) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `MenuPopup` accepts a `collisionAvoidance` prop for its positioner.
+
+- [#4505](https://github.com/stella/stella/pull/4505) [`20902c2`](https://github.com/stella/stella/commit/20902c2f6c7adc4899504538e2ce701b51eb08e5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Declare React type packages as optional peers so isolated and global-store installs resolve React types.
+
+## 0.40.1
+
+### Patch Changes
+
+- [#4500](https://github.com/stella/stella/pull/4500) [`986bac7`](https://github.com/stella/stella/commit/986bac7ed65df97e8ecb980733a36763807e8bbb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `typedCharacter` (`@stll/ui/typed-character`), which returns the character a keystroke typed across keyboard layouts.
+
+## 0.40.0
+
+### Minor Changes
+
+- [#4359](https://github.com/stella/stella/pull/4359) [`96a31ab`](https://github.com/stella/stella/commit/96a31abbb7f6ddae0aa4c1ea857559b714190ff1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `CopyButton`, which confirms a copy in place; semantic `NewChatIcon` and `AddCommentIcon`; and a centered slot in `ComposerStatusRow`.
+
+## 0.39.0
+
+### Minor Changes
+
+- [#4339](https://github.com/stella/stella/pull/4339) [`8c81796`](https://github.com/stella/stella/commit/8c81796e512762094793acc16eb13f3e49c7cc61) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove the unused sortable Kanban layer: `KanbanSortableBoard`, `useKanbanSortable`, `KanbanDragHandle` and the `sortable` prop of `KanbanVirtualCell` are no longer exported.
+
+- [#4358](https://github.com/stella/stella/pull/4358) [`deb3ce4`](https://github.com/stella/stella/commit/deb3ce49c36f89c6371731d6706e777ad8fbed3b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `CopyButton`, which confirms a copy in place; semantic `NewChatIcon` and `AddCommentIcon`; and a centered slot in `ComposerStatusRow`.
+
+## 0.38.0
+
+### Minor Changes
+
+- [#4262](https://github.com/stella/stella/pull/4262) [`3f1bdaf`](https://github.com/stella/stella/commit/3f1bdafb817d599f49d21c5d853ea76720278236) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add grouped list and search field components.
+
+### Patch Changes
+
+- [#4283](https://github.com/stella/stella/pull/4283) [`f215762`](https://github.com/stella/stella/commit/f2157623605b1a08efbed05866773da8b8618d93) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `WorkspaceShell` keeps a single divider under its top bar: the content slot drops the top border of its first child.
+
 ## 0.37.1
 
 ### Patch Changes

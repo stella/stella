@@ -30,6 +30,16 @@ type Messages = {
     "errorNotFound": "We couldn't find a pending request for that code. Check the code and try again.";
     "title": "Connect your agent";
   };
+  "agentSetup": {
+    "addressLabel": "Your assistant will ask for this address";
+    "copiedToast": "Instructions copied. Paste them into a chat with your assistant.";
+    "copy": "Copy instructions for it";
+    "description": "Ask Claude or ChatGPT about your matters and documents. Choose your assistant for a short guide; it takes about a minute.";
+    "instructions": "Connect me to stella, my legal workspace. Follow the “Instructions for AI agents” at {guideUrl} and use this server address: {mcpUrl}";
+    "openGuide": "Open the guide for {assistant}";
+    "selfSetupHint": "Using Claude Code or Codex?";
+    "title": "Use stella in your AI assistant";
+  };
   "ai": {
     "chooseRewriteInstruction": "Rewrite options";
     "editWithAI": "Edit with AI";
@@ -480,6 +490,17 @@ type Messages = {
     "failedToStartTimer": "Failed to start timer";
     "failedToStopTimer": "Failed to stop timer";
     "filterStatus": "Filter by status";
+    "globalTimer": {
+      "confirm": "Confirm time";
+      "discard": "Discard timer";
+      "matterInaccessible": "Choose a matter you can access.";
+      "narrativeRequired": "Add a description before confirming time.";
+      "pause": "Pause";
+      "periodLocked": "This month is locked. Ask an administrator to unlock it.";
+      "resume": "Resume";
+      "timerUnavailable": "This timer is no longer available. Refresh the list.";
+      "title": "Timers";
+    };
     "hourlyRateMustBeNonNegative": "Hourly rate cannot be negative";
     "hours": "Hours";
     "invoiceNarrative": "Invoice narrative";
@@ -524,6 +545,33 @@ type Messages = {
     "noActiveTimer": "No active timer";
     "noEntries": "No time entries for this period";
     "nonBillable": "Non-billable";
+    "numberSeries": {
+      "add": "Add number series";
+      "advance": "Advance";
+      "allSellers": "All sellers";
+      "archiveConfirm": "Archive this number series? It will no longer be available for new documents.";
+      "creditNote": "Credit note";
+      "default": "Default series";
+      "description": "Manage numbering for invoices, advances and credit notes.";
+      "documentType": "Document type";
+      "edit": "Edit number series";
+      "editRestriction": "The template and sequence digits cannot change after a number has been allocated.";
+      "empty": "No number series.";
+      "invoice": "Invoice";
+      "issueDate": "Issue date";
+      "name": "Series name";
+      "padding": "Sequence digits";
+      "pattern": "Number template";
+      "patternHelp": "Use a sequence token with optional year or month tokens to set the period.";
+      "preview": "Next number";
+      "previewAllocated": "This number is already allocated.";
+      "previewHelp": "The preview uses the saved template and does not reserve a number.";
+      "sellerProfile": "Seller profile";
+      "sellerUnavailable": "Seller archived or unavailable";
+      "sellerUnavailableHelp": "This seller is archived or unavailable. Keep the assignment or select another seller.";
+      "setDefault": "Make default series";
+      "title": "Number series";
+    };
     "quickEntry": {
       "entrySaved": "Time entry saved";
       "expenseSaved": "Expense saved";
@@ -570,6 +618,26 @@ type Messages = {
     "selectMatter": "Select a matter...";
     "selectMatterToStart": "Select a matter to start timing";
     "selectedCount": "{count, plural, one {# selected} other {# selected}}";
+    "sellerProfiles": {
+      "add": "Add seller profile";
+      "archiveConfirm": "Archive this seller profile? It will no longer be available for new invoices.";
+      "bic": "BIC / SWIFT code";
+      "default": "Default seller";
+      "defaultCurrency": "Default currency";
+      "description": "Manage the details used to issue invoices.";
+      "edit": "Edit seller profile";
+      "empty": "No seller profiles.";
+      "footerNotes": "Footer notes";
+      "invalidBic": "Enter a valid BIC.";
+      "invalidCurrency": "Enter a three-letter currency code.";
+      "invalidIban": "Enter a valid IBAN.";
+      "legalName": "Legal name";
+      "registrationId": "Registration ID";
+      "setDefault": "Make default";
+      "title": "Seller profiles";
+      "vatId": "VAT ID";
+    };
+    "settingsTitle": "Billing";
     "split": {
       "addSplit": "Add split";
       "percentValue": "{value}%";
@@ -598,6 +666,27 @@ type Messages = {
     "timerActive": "Timer running";
     "timesheets": "Timesheets";
     "total": "Total";
+    "vatRates": {
+      "add": "Add VAT rate";
+      "archiveConfirm": "Archive this VAT rate? It will no longer be available for new documents.";
+      "code": "Rate code";
+      "current": "Current rate";
+      "description": "Manage rates and their validity periods.";
+      "edit": "Edit VAT rate";
+      "empty": "No VAT rates.";
+      "future": "Upcoming rate";
+      "invalidPeriod": "Choose valid dates with the end after the start.";
+      "invalidRate": "Enter a non-negative percentage with at most two decimal places.";
+      "name": "Rate label";
+      "openEnded": "No end date";
+      "overlap": "Validity periods for the same rate code cannot overlap.";
+      "past": "Past rate";
+      "periodHelp": "The start date is included; the end date is excluded. Leave the end date blank for an open period.";
+      "rate": "VAT percentage";
+      "title": "VAT rates";
+      "validFrom": "Valid since";
+      "validTo": "Valid until";
+    };
     "writeOff": "Write off";
   };
   "caseLaw": {
@@ -831,6 +920,7 @@ type Messages = {
     };
     "viewer": {
       "abstract": "Abstract";
+      "caseFileMayHoldOthers": "This case file may contain other decisions as well.";
       "citedBy": "Cited by";
       "cites": "Cites";
       "dissentByline": "Dissenting: <bdi>{names}</bdi>";
@@ -854,6 +944,7 @@ type Messages = {
         "publishedOnWeb": "Published on web";
       };
       "statutes": "Applicable statutes";
+      "textNotYetAvailable": "The court has not published the decision text, or it is not available here yet.";
       "textPending": "The decision text is still being retrieved";
       "textReadFailed": "The decision text could not be loaded";
       "textUnavailable": "No text is available for this decision";
@@ -892,7 +983,6 @@ type Messages = {
     "packPartial": "Installed {installed}, {failed} failed";
     "removed": "This tool is no longer available.";
     "sectionOthers": "Others";
-    "sectionRecommended": "Recommended";
     "settings": {
       "packTitle": "Recommended pack";
     };
@@ -950,6 +1040,7 @@ type Messages = {
         "description": "Check the website and target carefully. Page content is untrusted and cannot approve another action.";
         "modeReads": "Page reads run without asking for the rest of this session.";
         "question": "Allow this browser action?";
+        "realValues": "This website receives the real values shown below. Anonymized mode applies only to what the AI sees.";
         "within": "Within";
       };
       "denied": "Denied";
@@ -1054,6 +1145,7 @@ type Messages = {
     "focusSuggestion": "Focus suggestion: {topic}";
     "folioCitationFallback": "p. {n}";
     "forkFromHere": "Start a new chat from here";
+    "forkInSidePanel": "Start a new chat from here in the side panel";
     "forkedFrom": "Created from <bdi>{title}</bdi>";
     "forkedFromUnavailable": "Created from a chat that is no longer available";
     "forkedThread": "From another chat";
@@ -1061,6 +1153,10 @@ type Messages = {
     "greeting": "What would you like to work on?";
     "greetingSubtitle": "Start with a matter, document, or plain question.";
     "hideThread": "Hide conversation";
+    "historyContext": {
+      "overflow": "+{count, number}";
+      "unnamed": "{count, plural, one {and # more} other {and # more}}";
+    };
     "improvePrompt": "Improve prompt";
     "improvePromptDraftChanged": "Draft changed, so the improvement wasn't applied.";
     "improvePromptPlainTextOnly": "Prompt improvement is available for plain text only.";
@@ -1075,6 +1171,7 @@ type Messages = {
       "noSkills": "No skills yet";
       "pinnedMatters": "Pinned matters";
       "recentChats": "Recent chats";
+      "skillEditedBy": "Edited by {name} · {time}";
       "skills": "Skills";
     };
     "loadEarlierMessages": "Load earlier messages";
@@ -1093,8 +1190,10 @@ type Messages = {
       "label": "Mock AI";
     };
     "modelSelector": {
+      "allModels": "All models ({count, number})";
       "autoDescription": "Automatically chooses the model and effort.";
       "autoLabel": "Auto";
+      "belowFrontier": "Below the best trade-offs";
       "effortHelpDescription": "Controls how much reasoning the model uses before answering. Higher levels can help with complex work but usually take longer. The dot marks the provider's default for this model.";
       "effortHelpLabel": "About reasoning effort";
       "effortLabel": "Reasoning effort";
@@ -1108,11 +1207,16 @@ type Messages = {
         "providerDefault": "Default";
         "xhigh": "Extra high";
       };
+      "newModel": "New";
+      "premiumCost": "Unusually high cost";
+      "recommendedHelpDescription": "No other model you can use is both cheaper and rated higher. Models too new to be rated are marked New. Quality: <link>{benchmark} by LMArena</link> ({licence}); cost: list prices.";
+      "recommendedHelpLabel": "About recommended models";
       "selectionLabel": "{model} | {effort}";
       "title": "Select chat model";
       "viaProvider": "via {provider}";
     };
     "newChat": "New chat";
+    "newChatInSidePanel": "The new chat is available in the side panel";
     "noPromptPresetOnly": "No message, preset only";
     "noThreads": "No conversations yet";
     "officeCitationUnavailable": "This citation is no longer available.";
@@ -1160,6 +1264,12 @@ type Messages = {
     "richContentLoading": "Loading interactive content…";
     "richContentTitle": "Interactive content";
     "richContentUnavailable": "This content cannot be displayed safely.";
+    "selection": {
+      "askInNewChat": "Ask in new chat";
+      "quoteInReply": "Quote in reply";
+      "quotedText": "“{quote}”";
+      "toolbarLabel": "Selected text";
+    };
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";
     "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.";
@@ -1199,6 +1309,9 @@ type Messages = {
     };
     "tabToAsk": "→ to ask: \"{prompt}\"";
     "thinking": "Working with context";
+    "threadFiles": {
+      "title": "Files in this chat";
+    };
     "tool": {
       "add_comment": "Adding comment";
       "apply-active-docx-edits": "Preparing document edits";
@@ -1314,6 +1427,7 @@ type Messages = {
       "output": "Output";
       "sourceCode": "Source code";
       "toggleDetails": "Toggle details";
+      "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}";
     };
     "unsupportedFileType": "Unsupported file type";
     "uploadFailed": "Failed to process file";
@@ -1354,6 +1468,7 @@ type Messages = {
     "deleteClause": "Delete clause";
     "deleteFailed": "Failed to delete";
     "descriptionPlaceholder": "Brief description of the clause";
+    "directivesInvalid": "Correct the clause directives before saving a version.";
     "editClause": "Edit clause";
     "editVariant": "Edit variant";
     "export": "Export";
@@ -1365,8 +1480,11 @@ type Messages = {
     "importResult": "{created, plural, one {# created} other {# created}}, {skipped, plural, one {# skipped} other {# skipped}}";
     "importSuccess": "{count, plural, one {# clause imported} other {# clauses imported}}";
     "importing": "Importing…";
+    "keepMyText": "Keep my text";
     "languagePlaceholder": "e.g. en";
+    "leaveAndDiscard": "Leave and discard unsaved changes";
     "leaveWithoutVersion": "Leave without a version";
+    "legacyDirectiveWarning": "Legacy directive markers were preserved in clause {clauseName}{version, select, none {} other { (version {version})}}.";
     "limitReached": "Clause limit reached";
     "linkClause": "Link clause";
     "linkFailed": "Failed to link clause";
@@ -1383,8 +1501,13 @@ type Messages = {
     "renameSlot": "Rename slot";
     "renameSlotInvalid": "Slot names must be unique and can't contain spaces, colons, or braces.";
     "restoreVersion": "Restore this version";
+    "reviewBeforeBodyAction": "Finish reviewing the suggested changes before restoring or promoting a clause.";
+    "reviewBeforeLeaving": "The reviewed text has not been saved yet. You can keep editing or leave and discard unsaved changes.";
     "saveAsVersion": "Save as new version";
+    "saveConflictDescription": "Choose which text to keep. Your edits are still here.";
+    "saveConflictTitle": "This clause changed elsewhere";
     "saveFailed": "Failed to save";
+    "saveFailedLeaveDescription": "Your changes could not be saved. Keep editing or leave and discard them.";
     "saveVersionAndLeave": "Save version & leave";
     "searchClauses": "Search clauses...";
     "searchPlaceholder": "Search clauses...";
@@ -1400,6 +1523,7 @@ type Messages = {
     "syncVersion": "Sync to latest";
     "synced": "Synced to latest version";
     "syncedAllResult": "{count, plural, =0 {Already up to date} one {# clause synced} other {# clauses synced}}";
+    "takeTheirText": "Use the saved text";
     "titleLabel": "Title";
     "titlePlaceholder": "e.g. Confidentiality clause";
     "unlinkClause": "Unlink";
@@ -1424,6 +1548,7 @@ type Messages = {
     "variantUpdated": "Variant updated";
     "variants": "Variants";
     "versionCount": "{count, plural, one {# version} other {# versions}}";
+    "versionLimitReached": "Version limit reached for this clause";
     "versionRestored": "Version restored";
   };
   "common": {
@@ -1457,6 +1582,7 @@ type Messages = {
       "socialSecurityNumber": "Social security number";
       "taxIdentificationNumber": "Tax identification number";
     };
+    "approve": "Approve";
     "archive": "Archive";
     "ask": "Ask";
     "askAI": "Ask AI";
@@ -1498,6 +1624,16 @@ type Messages = {
     "currency": "Currency";
     "currentPage": "Current page";
     "date": "Date";
+    "datePicker": {
+      "label": "Date picker";
+      "nextDecade": "Next decade";
+      "nextMonth": "Next month";
+      "nextYear": "Next year";
+      "previousDecade": "Previous decade";
+      "previousMonth": "Previous month";
+      "previousYear": "Previous year";
+      "time": "Time";
+    };
     "decisions": "Decisions";
     "decline": "Decline";
     "delete": "Delete";
@@ -1557,6 +1693,7 @@ type Messages = {
     };
     "fact": "Fact";
     "failed": "Failed";
+    "files": "Files";
     "filter": "Filter";
     "filters": "Filters";
     "find": "Find";
@@ -1645,6 +1782,7 @@ type Messages = {
     "organization": "Organization";
     "organizationName": "Organization name";
     "page": "Page {page}";
+    "paymentRetryNotice": "Payment issue. Update your payment method by {date} to keep access.";
     "pin": "Pin";
     "playbooks": "Playbooks";
     "preparing": "Preparing…";
@@ -1656,6 +1794,7 @@ type Messages = {
     "properties": "Properties";
     "queued": "Queued";
     "reason": "Reason";
+    "recommended": "Recommended";
     "reconnecting": "Reconnecting…";
     "reference": "Reference";
     "refresh": "Refresh";
@@ -1738,12 +1877,14 @@ type Messages = {
   };
   "consent": {
     "allow": "Allow";
+    "appIdentity": "App identity";
     "completeSetup": "Complete setup";
     "defaultClientName": "An application";
     "description": "{clientName} wants to access your stella workspace";
     "error": "Something went wrong. Please try again.";
     "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.";
     "permissions": "This will allow the application to:";
+    "redirectDestination": "Redirect destination";
     "scopeAdminRead": "Read your organization's audit log";
     "scopeAdminWrite": "Manage organization members and settings";
     "scopeBillingWrite": "Create, edit, and delete your time entries";
@@ -1765,6 +1906,7 @@ type Messages = {
     "scopeTemplates": "List, fill, and create your document templates";
     "scopeTemplatesAnonymized": "List, fill, and create anonymized versions of your document templates";
     "title": "Authorize access";
+    "unverifiedApp": "Unverified app";
   };
   "contacts": {
     "alsoPartyIn": "Also appears as party in {count, plural, one {# other matter} other {# other matters}}";
@@ -1778,6 +1920,7 @@ type Messages = {
       "addBankAccount": "Add bank account";
       "noBillingData": "No billing details set.";
       "removeBankAccount": "Remove bank account";
+      "selectCurrencyForRate": "Select a currency to set an hourly rate.";
       "title": "Billing details";
     };
     "columns": {
@@ -2107,6 +2250,13 @@ type Messages = {
     "unnamedAttachment": "Unnamed attachment";
   };
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "This action is temporarily paused. Please try again shortly.";
+      "concurrencyBusy": "Other work is in progress. Please try again shortly.";
+      "contact": "Contact us";
+      "notEnabled": "This action is not enabled for your organization.";
+      "periodExhausted": "This action is paused for your organization.";
+    };
     "actionFailed": "Action failed";
     "api": {
       "badRequest": "The request could not be completed.";
@@ -2114,6 +2264,7 @@ type Messages = {
       "forbidden": "You do not have permission to do this.";
       "notFound": "We could not find what you requested.";
       "payloadTooLarge": "The request is too large.";
+      "publicCountryUnavailable": "Public law for this country is not available. Choose another country.";
       "rateLimited": "Too many requests. Please try again later.";
       "server": "The server could not complete the request. Please try again.";
       "serviceUnavailable": "The service is temporarily unavailable. Please try again.";
@@ -2133,13 +2284,21 @@ type Messages = {
       "aiConfigModelInvalid": "The AI model configuration is invalid. Check the selected models.";
       "aiConfigProviderInvalid": "The AI provider configuration is invalid. Check the provider settings.";
       "aiConfigProviderValidationFailed": "The AI provider rejected the configuration. Check the API key and model.";
+      "clauseDirectivesInvalid": "A linked clause has invalid directives. Correct the clause before filling the template.";
+      "clauseDirectivesInvalidDetails": "Clause {clauseName} in slot {slotName} has invalid directives. Open the clause editor, correct the named paragraphs, and fill the template again.";
+      "clauseDirectivesOverrideInvalidDetails": "The override for clause {clauseName} in slot {slotName} has invalid directives. Correct this fill’s override before filling again.";
       "deeplKeyRejected": "The stored DeepL key was rejected. Replace it in organization settings.";
       "deeplQuotaExceeded": "The DeepL character quota for this organization has been used up.";
       "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.";
+      "encryptedContent": "Encrypted document content cannot be extracted. Remove the password from the file and try again.";
+      "filePropertyTypeImmutable": "File property types cannot be changed. Keep the existing type; create a custom property for other values.";
       "forbidden": "You do not have permission to do this.";
       "internalServerError": "The server could not complete the action. Please try again.";
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.";
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.";
+      "matterContactCapacityExceeded": "This matter has more contacts than can be displayed. Remove visible contact links to reveal the remaining contacts.";
+      "matterContactCapacityReached": "This matter has reached its contact limit. Remove a contact link before adding another.";
+      "mcpAuthorizationApprovalRequired": "An administrator must approve this connector before you can connect.";
       "notOrganizationMember": "You are not a member of this organization.";
       "providerKeyRejected": "The provider rejected the API key.";
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.";
@@ -2276,6 +2435,7 @@ type Messages = {
       "missingInBase": "Document part exists only in the target";
       "missingInTarget": "Document part exists only in the base";
       "notEditable": "Document part is not editable";
+      "unsupportedContent": "This version contains content that can't be compared yet.";
     };
     "compareUnverified": "Unverified comparison";
     "compareVerificationFailures": "{count, plural, one {One round-trip check failed. Review this comparison before relying on it.} other {# round-trip checks failed. Review this comparison before relying on it.}}";
@@ -3213,7 +3373,6 @@ type Messages = {
       "editSkill": "Edit skill";
       "enableSkill": "Enable skill";
       "fileExists": "A file with this path already exists";
-      "filesHeading": "Files";
       "howItRuns": "How it runs";
       "importFailureFetch": "The skill source could not be loaded.";
       "importFailureIntegrity": "The skill source changed after discovery. Review it again.";
@@ -3271,6 +3430,8 @@ type Messages = {
         "none": "No auth";
         "oauth2": "OAuth 2.0";
       };
+      "authorizationReviewDescription": "Review the authorization server and endpoint origins before approving.";
+      "authorizationServer": "Authorization server";
       "bearerTokenDescription": "This server uses a bearer token. Paste the token from the provider to finish connecting.";
       "connectedToast": "MCP connected";
       "connectedWithLastUsed": "Connected · last used {time}";
@@ -3281,9 +3442,11 @@ type Messages = {
       "emptyDescription": "Curated legal integrations will appear here as they are enabled for your workspace.";
       "emptyTitle": "No integrations yet";
       "enable": "Enable";
+      "endpointOrigins": "Endpoint origins";
       "errorDescription": "The integration could not be updated.";
       "errorTitle": "MCP failed";
       "mcpExplainer": "Integrations connect external services to the chat that the AI can work with.";
+      "needsReapproval": "Needs re-approval";
       "needsReauth": "Needs reconnect";
       "off": "Off";
       "on": "On";
@@ -3693,7 +3856,6 @@ type Messages = {
     "aiTitle": "Connect your AI provider";
     "appsSubtitle": "stella also works outside the browser: on your desktop and inside your AI assistant. You can come back to this setup anytime later.";
     "appsTitle": "Get stella everywhere";
-    "assistantDocsLink": "How to connect your assistant";
     "catalogueAlwaysOn": "Always on";
     "catalogueClearSearch": "Clear search";
     "catalogueCommunityHeading": "Others";
@@ -4151,7 +4313,6 @@ type Messages = {
       "deleteAccountWarningExplanation": "We will send a verification code to your email address to confirm this request. Completed workspace history remains attributed to your deleted account.";
       "desktop": "Desktop";
       "desktopAppDescription": "Recall anything you copy, and open stella documents in the desktop apps you already use.";
-      "desktopAutoConnectHint": "Open stella desktop after installing. It connects to this account on its own.";
       "desktopClipboardDescription": "Open, search, organize, and reuse copied text from any app.";
       "desktopClipboardTitle": "Searchable clipboard history";
       "desktopConnectFailed": "Could not connect stella desktop.";
@@ -4220,31 +4381,40 @@ type Messages = {
       "wordEditShortcutPlaceholder": "e.g. JK";
     };
     "connections": {
+      "accessTitle": "{clientName} can";
+      "browseIntegrations": "Add a service";
       "cliDescription": "Install the stella command-line client and sign in to script matters, documents, and templates from a terminal.";
-      "cliHelpHint": "Run \"stella --help\" for the full list of commands.";
       "cliInstallLabel": "Install";
       "cliLoginLabel": "Log in";
       "cliTitle": "Command-line interface";
-      "connectedAppsDescription": "Applications and tools you have authorized to access your account.";
-      "connectedAppsEmpty": "Apps you authorize, like Claude or the stella CLI, will appear here.";
-      "connectedAppsTitle": "Connected apps";
-      "connectedColumn": "Connected";
-      "description": "Connect MCP clients and the command-line interface to your account.";
+      "connected": "Connected";
+      "connectedAgo": "Connected {time}";
+      "connectedAppsDescription": "Apps you have signed in to stella with. Disconnect any you no longer use.";
+      "connectedAppsEmpty": "Nothing yet. Set up Claude or ChatGPT above and it will appear here.";
+      "connectedAppsTitle": "Apps with access";
+      "description": "Use stella from your AI assistant and see what can access your account.";
+      "developerDescription": "Server addresses and the command-line tool, for technical setups.";
+      "developerTitle": "Developer access";
       "disconnectConfirmDescription": "This revokes {clientName}'s access to your account, along with any tokens it has issued. You can reconnect at any time.";
       "disconnectConfirmTitle": "Disconnect {clientName}?";
       "disconnectSuccess": "Disconnected {clientName}";
+      "integrationsDescription": "Outside services the AI can use for you, such as your document drive.";
+      "integrationsEmpty": "Add your first service";
+      "integrationsTitle": "Connected services";
       "mcpAnonymizedLabel": "Anonymized endpoint";
-      "mcpAnonymizedNote": "An anonymized endpoint is also available; it exposes the same tools with personal data masked.";
-      "mcpDescription": "Connect an MCP-compatible client, such as Claude or Cursor, to your stella account using this server URL.";
+      "mcpAnonymizedShortNote": "The same tools, with personal data masked.";
+      "mcpFullNote": "Full access to your matters and documents.";
       "mcpLawLabel": "Legal corpus endpoint";
-      "mcpLawNote": "A legal corpus endpoint is also available; it exposes public case law and legislation only, and does not access matter data.";
-      "mcpStep1": "Add the URL above as a custom connector or MCP server in your client.";
-      "mcpStep2": "Sign in when the browser prompts you.";
-      "mcpStep3": "Approve access on the consent screen.";
+      "mcpLawShortNote": "Public case law and legislation only, no matter data.";
+      "mcpSetupHint": "Add a URL as a custom connector in Claude, Cursor or another MCP client, then sign in and approve access.";
       "mcpTitle": "MCP server";
       "mcpUrlLabel": "Server URL";
-      "scopesLabel": "Access";
+      "noMatches": "No connections match “{query}”";
+      "notConnected": "Not connected";
+      "permissionCount": "{count, plural, one {# permission} other {# permissions}}";
+      "searchPlaceholder": "Search connections";
       "title": "Connections";
+      "turnedOff": "Turned off";
     };
     "organization": {
       "activeMembers": "Active members";
@@ -4323,6 +4493,20 @@ type Messages = {
       "renameDescription": "Members will see the new name immediately.";
       "renameTitle": "Rename organization";
       "renameTypeToConfirm": "Type the new name to confirm: {name}";
+      "timePolicy": {
+        "description": "Set time rounding, editing limits and monthly locks.";
+        "editWindow": "Editing window (days)";
+        "editWindowHelp": "Zero allows edits only on the work date.";
+        "invalidEditWindow": "Enter a whole number of days, zero or more.";
+        "invalidLockedMonth": "Choose a completed month.";
+        "invalidMinimumUnit": "Choose a time unit that divides 60 minutes.";
+        "lockedThrough": "Locked through";
+        "lockedThroughHelp": "Entries in this month and earlier months cannot be edited.";
+        "minimumUnit": "Minimum time unit";
+        "minimumUnitHelp": "Time is billed in multiples of this many minutes.";
+        "narrativeRequired": "Require a narrative";
+        "title": "Time policy";
+      };
       "usage": "Usage";
       "usageDescription": "Usage limits and entitlement state for this organisation";
       "usageEmptyDescription": "Configure a usage entitlement to enable metered AI features for this organisation.";
@@ -4674,6 +4858,7 @@ type Messages = {
     "addPart": "Add part";
     "addTag": "Add tag";
     "aiAdaptHint": "AI adapts this wording to fit each place it appears in the document.";
+    "aiConditionsUndecided": "AI could not decide these conditions, so their sections were filled as if they do not apply: {list}";
     "aiDecidedConditions": "Decided by AI";
     "aiFieldsNotDrafted": "AI could not draft these fields: {list}";
     "allTemplates": "All templates";
@@ -4736,6 +4921,7 @@ type Messages = {
     "conditionOpOnOrBefore": "on or before";
     "conditionOperator": "Operator";
     "conditionOverrideHint": "Click to set this yourself, click again to hand it back to AI";
+    "conditionPreviewIncomplete": "Condition preview is incomplete because the linked clauses exceed the preview limit.";
     "conditionUseFieldInstead": "Use a field instead";
     "conditionUseFormula": "ƒ Calculated value…";
     "conditionWhen": "When";
@@ -4764,6 +4950,7 @@ type Messages = {
     "directiveFor": "Loop: {expression}";
     "directiveIf": "If: {expression}";
     "discoveryFailed": "Failed to analyze template";
+    "documentCreatedIncomplete": "Document created, but the fill is incomplete";
     "downloadAnyway": "Download anyway";
     "downloadDocx": "Download DOCX";
     "downloadPdf": "Download PDF";
@@ -4859,6 +5046,7 @@ type Messages = {
     "saveFailed": "Failed to save template";
     "savedLookupFormats": "Saved output formats";
     "searchTemplates": "Search templates…";
+    "structureErrorsInDocument": "Template directives that could not be applied: {count}. Check the document.";
     "structureWarningParagraph": "Paragraph {paragraph, number}";
     "structureWarnings": "{count, plural, one {# structure warning} other {# structure warnings}}";
     "studio": {
@@ -5021,6 +5209,11 @@ type Messages = {
     "whenToUse": "When to use";
     "whenToUsePlaceholder": "When should this template be used? (guides AI template selection)";
   };
+  "timesheets": {
+    "day": {
+      "internalWork": "Internal work";
+    };
+  };
   "translate": {
     "dialog": {
       "aiDescription": "Use stella AI while keeping the document structure and formatting.";
@@ -5130,6 +5323,10 @@ type Messages = {
       "noOtherMatters": "No other Matters available";
       "operation": "Operation";
       "rootFolder": "(Root folder)";
+      "sourceChanged": "The item changed while it was being moved. Try again.";
+      "sourceInUse": "The item is currently in use. Finish processing, editing, collaboration, or signing, then try again.";
+      "sourceReferenced": "This item is linked to time entries or expenses and cannot be moved.";
+      "sourceVersionLimit": "This item has too many versions or field values to move.";
       "targetFolder": "Target folder (optional)";
       "targetMatter": "Target Matter";
       "title": "Copy to Matter";
@@ -5912,6 +6109,7 @@ type Messages = {
         "submit": "Export report";
         "templateLabel": "Report template";
         "title": "Export report";
+        "withoutAiSummaries": "Export without AI summaries";
       };
       "saveAsTemplate": "Save as preset…";
       "selectProperty": "Select property";

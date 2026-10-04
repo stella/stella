@@ -5,6 +5,7 @@ import { createReadFilesystemTreeHandler } from "@/api/handlers/entities/filesys
 import { createReadEntitiesHandler } from "@/api/handlers/entities/list";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const queryEntitiesMock = mock();
@@ -23,7 +24,7 @@ const createContext = (
     workspaceId,
     user: { id: userId },
     session: { activeOrganizationId: organizationId },
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     body,
     safeDb: async () => Result.ok([]),
     request: new Request("https://example.test/v1/entities/query"),

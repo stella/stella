@@ -1,5 +1,7 @@
 import type { Result } from "better-result";
 
+import type { SearchPaginationOutcome } from "@stll/api-contract/search";
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -88,6 +90,7 @@ export type LegalSearchResult = {
   hits: LegalSearchHit[];
   facets: LegalSearchFacets;
   nextCursor: string | null;
+  paginationOutcome: SearchPaginationOutcome;
   limit: number;
 };
 
@@ -142,6 +145,7 @@ export type LegalSearchProvider = {
    */
   search: (
     query: LegalSearchQuery,
+    observer: RegistryRequestObservation,
   ) => Promise<Result<LegalSearchResult, LegalSearchError>>;
   /**
    * Corpus-wide facet counts for the browse page. Returns a Result rather
@@ -150,6 +154,7 @@ export type LegalSearchProvider = {
    */
   browseFacets: (
     query: LegalBrowseFacetsQuery,
+    observer: RegistryRequestObservation,
   ) => Promise<Result<LegalBrowseFacets, LegalBrowseFacetsError>>;
   /** Canonical text/AST for the AI reader; served from object storage. */
   getDocumentContext: (

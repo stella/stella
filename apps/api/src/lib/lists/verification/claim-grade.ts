@@ -17,11 +17,13 @@ import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { claimPassage } from "@/api/lib/lists/verification/claim-context";
 import {
   CLAIM_FACT_RELATIONS,
   SCORED_CLAIM_STATES,
 } from "@/api/lib/lists/verification/contract";
 import type {
+  ClaimAnchor,
   ClaimRef,
   ClaimType,
   ClaimVerdict,
@@ -81,10 +83,11 @@ export const gradedClaimType = (grade: ClaimGrade): ClaimType =>
   grade.state === "notverifiable" ? "unverifiable" : "fact";
 
 /** A claim to grade, with the text of the block it sits in for meaning. */
-type GradeableClaim = { key: string; text: string; context: string };
-
-/** Characters of a claim's block shown beside it. */
-const CLAIM_CONTEXT_MAX = 1500;
+type GradeableClaim = {
+  key: string;
+  text: string;
+  context: { text: string; anchor: Pick<ClaimAnchor, "start" | "end"> };
+};
 
 const SYSTEM_PROMPT = `You check claims from a legal document against a record of evidence (the facts), one claim at a time.
 
@@ -287,7 +290,7 @@ export const gradeClaims = async ({
             `Claims:\n${batch
               .map(
                 ({ promptId, claim }) =>
-                  `- ${promptId}: ${claim.text}\n  passage: ${claim.context.slice(0, CLAIM_CONTEXT_MAX)}`,
+                  `- ${promptId}: ${claim.text}\n  passage: ${claimPassage(claim.context.text, claim.context.anchor)}`,
               )
               .join("\n")}`,
           );

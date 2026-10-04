@@ -1,6 +1,6 @@
 import { t } from "elysia";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 
@@ -16,7 +16,12 @@ const config = {
     "Change one variant's label, body, or position within its clause; only " +
     "the fields you pass are written.",
   permissions: { clause: ["update"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   params: updateVariantParamsSchema,
   body: updateVariantBodySchema,
 } satisfies HandlerConfig;

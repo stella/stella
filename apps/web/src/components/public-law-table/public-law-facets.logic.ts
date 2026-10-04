@@ -1,3 +1,8 @@
+import { panic } from "better-result";
+
+import { FACET_COUNT_TYPE } from "@stll/api-contract/search";
+import type { FacetCountType } from "@stll/api-contract/search";
+
 /**
  * What one filter section shows: the buckets the current result set reports,
  * trimmed to a scannable head, with the reader's own choice always among them.
@@ -7,8 +12,7 @@
 export type FacetItem = {
   value: string;
   label: string;
-  count: number | null;
-};
+} & ({ count: number | null } | { count: number; countType: FacetCountType });
 
 export type FacetSectionView = {
   items: readonly FacetItem[];
@@ -17,11 +21,20 @@ export type FacetSectionView = {
 };
 
 /** A bucket as either facet source reports it. */
-export type FacetSourceBucket = {
+export type CountedSourceFacetBucket = {
   value: string;
   label?: string | null | undefined;
-  count?: number | null | undefined;
+  count: number;
+  countType: FacetCountType;
 };
+
+export type FacetSourceBucket =
+  | CountedSourceFacetBucket
+  | {
+      value: string;
+      label?: string | null | undefined;
+      count?: number | null | undefined;
+    };
 
 export type FacetSectionOptions = {
   buckets: readonly FacetSourceBucket[];
@@ -32,11 +45,46 @@ export type FacetSectionOptions = {
   selectedValue: string | undefined;
 };
 
-const toItem = (bucket: FacetSourceBucket): FacetItem => ({
-  value: bucket.value,
-  label: bucket.label ?? bucket.value,
-  count: bucket.count ?? null,
-});
+const toItem = (bucket: FacetSourceBucket): FacetItem => {
+  if ("countType" in bucket) {
+    return {
+      value: bucket.value,
+      label: bucket.label ?? bucket.value,
+      count: bucket.count,
+      countType: bucket.countType,
+    };
+  }
+  return {
+    value: bucket.value,
+    label: bucket.label ?? bucket.value,
+    count: bucket.count ?? null,
+  };
+};
+
+export const formatFacetCount = (
+  item: FacetItem,
+  formatNumber: (count: number) => string,
+): string | null => {
+  if (item.count === null) {
+    return null;
+  }
+  const count = formatNumber(item.count);
+  if (!("countType" in item)) {
+    return count;
+  }
+  const { countType } = item;
+  switch (countType) {
+    case FACET_COUNT_TYPE.EXACT:
+      return count;
+    case FACET_COUNT_TYPE.AT_LEAST:
+      return `${count}+`;
+    case FACET_COUNT_TYPE.ESTIMATE:
+      return `~${count}`;
+    default:
+      countType satisfies never;
+      return panic(`Unhandled facet count type: ${String(countType)}`);
+  }
+};
 
 /**
  * A section's visible items.

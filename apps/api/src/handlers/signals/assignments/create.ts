@@ -10,7 +10,7 @@ import {
   SIGNAL_EVENT_TYPE,
   transitionSignal,
 } from "@/api/handlers/signals/transition";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -24,8 +24,13 @@ const config = {
     "Assign an open inbox signal to an organization member, or clear the " +
     "assignment with null.",
   permissions: { signal: ["resolve"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   params: signalParamsSchema,
   body: assignBodySchema,
 } satisfies HandlerConfig;

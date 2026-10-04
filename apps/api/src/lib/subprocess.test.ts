@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   SubprocessError,
   SUBPROCESS_TERMINATION_REASON,
@@ -14,6 +16,7 @@ import {
 
 const FIXTURES_DIR = path.resolve(import.meta.dir, "__fixtures__");
 const ECHO_WORKER = path.resolve(FIXTURES_DIR, "echo-worker.ts");
+const ENVIRONMENT_WORKER = path.resolve(FIXTURES_DIR, "env.ts");
 const FAIL_WORKER = path.resolve(FIXTURES_DIR, "fail-worker.ts");
 const SIGTERM_WORKER = path.resolve(FIXTURES_DIR, "sigterm-worker.ts");
 const SLEEP_WORKER = path.resolve(FIXTURES_DIR, "sleep-worker.ts");
@@ -29,6 +32,20 @@ describe("spawnWorker", () => {
     expect(Result.isError(result)).toBe(false);
     if (!Result.isError(result)) {
       expect(result.value.trim()).toBe("hello");
+    }
+  });
+
+  test("starts workers with a minimal environment", async () => {
+    const result = await spawnWorker({
+      workerPath: ENVIRONMENT_WORKER,
+      stdin: new Blob([""]),
+      timeoutMs: 5000,
+    });
+
+    expect(Result.isError(result)).toBe(false);
+    if (!Result.isError(result)) {
+      const childEnvironment: unknown = JSON.parse(result.value);
+      expect(childEnvironment).toEqual(["PATH"]);
     }
   });
 
@@ -123,13 +140,18 @@ describe("spawnWorker", () => {
     abort.abort();
 
     expect(
-      spawnWorker({
-        workerPath: SLEEP_WORKER,
-        stdin: new Blob([""]),
-        timeoutMs: 600_000,
-        signal: abort.signal,
-      }),
-    ).rejects.toThrow("The operation was aborted.");
+      await rejectionOf(
+        spawnWorker({
+          workerPath: SLEEP_WORKER,
+          stdin: new Blob([""]),
+          timeoutMs: 600_000,
+          signal: abort.signal,
+        }),
+      ),
+    ).toHaveProperty(
+      "message",
+      expect.stringContaining("The operation was aborted."),
+    );
   });
 });
 

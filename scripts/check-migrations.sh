@@ -108,35 +108,46 @@ schema_file_has_migration_relevant_diff() {
     const changedFile = process.argv.at(2);
 
     const normalizeSchemaSource = (source) => {
-      const keptLines = [];
-      let inTypeImport = false;
-
-      for (const line of source.split("\n")) {
-        const startsTypeImport = line.trimStart().startsWith("import type ");
-        if (!inTypeImport && startsTypeImport) {
-          inTypeImport = !line.includes(";");
-          continue;
-        }
-
-        if (inTypeImport) {
-          inTypeImport = !line.includes(";");
-          continue;
-        }
-
-        keptLines.push(line);
-      }
-
-      // `$type<...>` and type-only imports cannot change generated DDL.
-      // Printing without comments also ignores allowance-only edits to a
-      // schema input while preserving SQL template text and code tokens.
-      const code = keptLines.join("\n").replace(/\.\$type<.*>/gu, ".$type<>");
+      // Type-only imports and zero-argument `$type<T>()` calls do not alter DDL.
+      // AST erasure preserves runtime calls and SQL text around nested types.
       const parsed = ts.createSourceFile(
         changedFile,
-        code,
+        source,
         ts.ScriptTarget.Latest,
         true,
       );
-      return ts.createPrinter({ removeComments: true }).printFile(parsed);
+      const transformed = ts.transform(parsed, [(context) => {
+        const visit = (node) => {
+          if (ts.isImportDeclaration(node) && node.importClause?.isTypeOnly) {
+            return undefined;
+          }
+          if (ts.isImportSpecifier(node) && node.isTypeOnly) {
+            return undefined;
+          }
+          if (
+            ts.isCallExpression(node) &&
+            node.arguments.length === 0 &&
+            node.typeArguments?.length > 0 &&
+            !node.questionDotToken &&
+            ts.isPropertyAccessExpression(node.expression) &&
+            !node.expression.questionDotToken &&
+            node.expression.name.text === "$type"
+          ) {
+            return ts.visitNode(node.expression.expression, visit);
+          }
+          // Ignore source line breaks after removing a type-only chain link.
+          return ts.setTextRange(ts.visitEachChild(node, visit, context), {
+            pos: -1,
+            end: -1,
+          });
+        };
+        return (root) => ts.visitNode(root, visit);
+      }]);
+      const normalized = ts.createPrinter({ removeComments: true }).printFile(
+        transformed.transformed[0],
+      );
+      transformed.dispose();
+      return normalized;
     };
 
     const currentSource = fs.readFileSync(changedFile, "utf8");
@@ -192,21 +203,9 @@ fi
 # those; every NEW migration (not listed) is still fully linted.
 BASELINE_FILE="scripts/migration-baseline.txt"
 
-# A PR must not baseline a migration it adds or modifies: that would skip both
-# linters for exactly the file that needs them. Entries for untouched, already
-# applied migrations may still be added (for example when the rule set changes).
-BASE_BASELINE="$(git show "$BASE_REF:$BASELINE_FILE" 2>/dev/null || true)"
-while IFS= read -r entry; do
-  [[ -z "$entry" || "$entry" == \#* ]] && continue
-  if grep -qxF "$entry" <<< "$BASE_BASELINE"; then
-    continue
-  fi
-  if grep -qxF "$entry" <<< "$CHANGED_FILES"; then
-    echo "ERROR: $entry is added to $BASELINE_FILE in the same change that adds or modifies it." >&2
-    echo "The baseline exempts only migrations applied before the current rule set; lint the new migration instead." >&2
-    exit 1
-  fi
-done < "$BASELINE_FILE"
+# The baseline only shrinks, except that a change introducing a
+# migration-safety rule may add merged, unchanged migrations the new rule flags.
+bun scripts/check-migration-baseline.ts "$BASE_REF"
 
 LINT_SQL_FILES=()
 for migration_file in "${MIGRATION_SQL_FILES[@]+"${MIGRATION_SQL_FILES[@]}"}"; do

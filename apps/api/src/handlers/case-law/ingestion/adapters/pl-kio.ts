@@ -1,3 +1,4 @@
+import { Result, panic } from "better-result";
 /**
  * Polish public-procurement rulings from the UZP decision database.
  *
@@ -33,14 +34,14 @@
  * separate id spaces; {@link plProcurementRulingKeys} is the relationship
  * between their rows, and nothing here merges or deletes either side.
  */
-
-import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
+import type { AnyNode } from "domhandler";
 
 import {
   DECISION_IDENTIFIER_TYPES,
   type DecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
@@ -81,6 +82,7 @@ import type {
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -89,6 +91,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
+  legacyQuarantineHtmlText,
+  visibleHtmlText,
+} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -96,6 +102,8 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -286,6 +294,28 @@ type PlKioListingPage = {
   rows: PlKioListingItem[];
 };
 
+const readPlKioListingItem = (
+  node: cheerio.Cheerio<AnyNode>,
+  readText = visibleHtmlText,
+): PlKioListingItem => {
+  const item: PlKioListingItem = { html: node.toString() };
+  const labels = node.find("label");
+  labels.each((index) => {
+    const label = labels.eq(index);
+    const name = collapse(readText(label)).replace(/:$/u, "");
+    if (!isListingLabel(name)) {
+      return;
+    }
+    const parent = label.parent().clone();
+    parent.find("label").remove();
+    item[LISTING_LABELS[name]] = presentText(readText(parent));
+  });
+  const href = node.find("a.link-details").attr("href");
+  item.id =
+    href === undefined ? undefined : DETAILS_HREF.exec(href)?.groups?.["id"];
+  return item;
+};
+
 /**
  * Read a listing page, or `null` for anything that is not one.
  *
@@ -306,25 +336,7 @@ export const readPlKioListing = (html: string): PlKioListingPage | null => {
 
   const rows = $(".search-list-item")
     .toArray()
-    .map((element) => {
-      const item: PlKioListingItem = { html: $.html(element) };
-      const node = $(element);
-      node.find("label").each((_, label) => {
-        const name = collapse($(label).text()).replace(/:$/u, "");
-        if (!isListingLabel(name)) {
-          return;
-        }
-        const parent = $(label).parent().clone();
-        parent.find("label").remove();
-        item[LISTING_LABELS[name]] = presentText(parent.text());
-      });
-      const href = node.find("a.link-details").attr("href");
-      item.id =
-        href === undefined
-          ? undefined
-          : DETAILS_HREF.exec(href)?.groups?.["id"];
-      return item;
-    });
+    .map((element) => readPlKioListingItem($(element)));
 
   return { counts: [all, kio, so, sa, sn], rows };
 };
@@ -363,6 +375,19 @@ const plKioQuarantineId = (item: PlKioListingItem): string =>
       issueDate: item.issueDate,
     }),
   )}`;
+
+// Raw-text digests are repair aliases only; newly quarantined rows use visible fields.
+const plKioQuarantineRepairIds = (item: PlKioListingItem): string[] => {
+  const canonicalId = plKioQuarantineId(item);
+  if (item.html === undefined) {
+    return [canonicalId];
+  }
+  const $ = cheerio.load(item.html);
+  const legacyId = plKioQuarantineId(
+    readPlKioListingItem($(".search-list-item"), legacyQuarantineHtmlText),
+  );
+  return [...new Set([canonicalId, legacyId])];
+};
 
 /** The database's own record id, where the row states a usable one. */
 const publisherIdOf = (item: PlKioListingItem): string | undefined => {
@@ -465,13 +490,14 @@ export const readPlKioDetail = (html: string): PlKioDetail | null => {
   }
 
   const heading = presentText(
-    $("#pageContent h2.section-title")
-      .first()
-      .clone()
-      .children()
-      .remove()
-      .end()
-      .text(),
+    visibleHtmlText(
+      $("#pageContent h2.section-title")
+        .first()
+        .clone()
+        .children()
+        .remove()
+        .end(),
+    ),
   );
   const kindHref = $('a[href^="/Home/PdfMetrics/"]').attr("href");
   const kindText =
@@ -484,7 +510,7 @@ export const readPlKioDetail = (html: string): PlKioDetail | null => {
   const fields = new Map<string, string>();
   const cases: PlKioCase[] = [];
   metrics.find("label").each((_, element) => {
-    const label = collapse($(element).text());
+    const label = collapse(visibleHtmlText($(element)));
     const container = $(element).parent();
     if (isCaseListLabel(label)) {
       // Recorded even when empty, so the inventory sees the label.
@@ -492,7 +518,7 @@ export const readPlKioDetail = (html: string): PlKioDetail | null => {
       container.find("li").each((__, item) => {
         cases.push(
           ...plKioCaseOf(
-            $(item).text(),
+            visibleHtmlText($(item)),
             label === "Sygnatura akt / Sygnatura KIO / Sposób rozstrzygnięcia",
           ),
         );
@@ -501,18 +527,18 @@ export const readPlKioDetail = (html: string): PlKioDetail | null => {
     }
     const value = container.clone();
     value.find("label").remove();
-    fields.set(label, collapse(value.text()));
+    fields.set(label, collapse(visibleHtmlText(value)));
   });
 
   const lists = new Map<string, string[]>();
   metrics.find("b").each((_, element) => {
-    const title = collapse($(element).text());
+    const title = collapse(visibleHtmlText($(element)));
     const items = $(element)
       .nextAll("p")
       .first()
       .find("a")
       .toArray()
-      .flatMap((anchor) => $(anchor).text().split("|"))
+      .flatMap((anchor) => visibleHtmlText($(anchor)).split("|"))
       .map((item) => presentText(item))
       .filter((item) => item !== undefined);
     lists.set(title, items);
@@ -709,7 +735,7 @@ export const normalizeProcurementDocket = (docket: string): string => {
 
 /** What the ruling key is read from: stored columns only. */
 type ProcurementRulingKeyInput = Pick<
-  IngestionResult,
+  RawIngestionResult,
   "caseNumber" | "identifiers" | "court" | "decisionDate" | "decisionType"
 >;
 
@@ -976,7 +1002,7 @@ export const assemblePlKioDecision = ({
     decisionType,
   };
 
-  const decision: IngestionResult = {
+  const decision: IngestionResult = plainTextIngestionResult({
     ...keyed,
     ...(statedCaseNumber === undefined
       ? { caseNumberIsPlaceholder: true }
@@ -986,7 +1012,7 @@ export const assemblePlKioDecision = ({
     // quarantined, so the repair enriches that row.
     ...(id === undefined
       ? {}
-      : { sourceDocumentIdRepairAliases: [quarantineId] }),
+      : { sourceDocumentIdRepairAliases: plKioQuarantineRepairIds(item) }),
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIO].country,
     language: PL_KIO_LANGUAGE,
     fulltext,
@@ -1029,7 +1055,7 @@ export const assemblePlKioDecision = ({
     documentAst,
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  };
+  });
 
   return listingOnly
     ? { type: "detail-unavailable", decision }
@@ -1058,19 +1084,26 @@ type Requested = { status: number; body: string; url: string };
  */
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
-const request = async ({
-  cursor,
-  form,
-  path,
-  signal,
-  timeoutMs,
-}: {
+type RequestOptions = {
+  fetchStage: DocumentFetchStage;
   cursor: string;
   form?: URLSearchParams | undefined;
   path: string;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
-}): Promise<Result<Requested, AdapterFetchError>> => {
+};
+
+/** A response read up to the cap; `bytes` is null past it. */
+type Received = { status: number; bytes: Uint8Array | null; url: string };
+
+const receive = async ({
+  cursor,
+  fetchStage,
+  form,
+  path,
+  signal,
+  timeoutMs,
+}: RequestOptions): Promise<Received> => {
   const target = restrictOutboundUrl({
     hostPolicy: PL_KIO_HOST_POLICY,
     rawUrl: `${ORIGIN}${path}`,
@@ -1092,26 +1125,34 @@ const request = async ({
             },
       redirect: "error",
     },
-    { adapterKey: ADAPTER_KEYS.PL_KIO, signal, timeoutMs },
+    {
+      fetchStage,
+      adapterKey: ADAPTER_KEYS.PL_KIO,
+      signal,
+      timeoutMs,
+    },
   );
   const bytes =
     response.body === null
       ? new Uint8Array()
       : await readCappedBytes(response.body, MAX_RESPONSE_BYTES);
+  return { status: response.status, bytes, url: target.toString() };
+};
+
+const request = async (
+  options: RequestOptions,
+): Promise<Result<Requested, AdapterFetchError>> => {
+  const { status, bytes, url } = await receive(options);
   if (bytes === null) {
     return Result.err(
       publisherError(
-        cursor,
-        `${path} answered more than ${MAX_RESPONSE_BYTES} bytes`,
-        response.status,
+        options.cursor,
+        `${options.path} answered more than ${MAX_RESPONSE_BYTES} bytes`,
+        status,
       ),
     );
   }
-  return Result.ok({
-    status: response.status,
-    body: new TextDecoder().decode(bytes),
-    url: target.toString(),
-  });
+  return Result.ok({ status, body: new TextDecoder().decode(bytes), url });
 };
 
 type ListOptions = {
@@ -1162,6 +1203,7 @@ const listPage = async ({
   });
   const requested = await request({
     cursor,
+    fetchStage: "listing",
     form,
     path: LISTING_PATH,
     signal,
@@ -1248,6 +1290,7 @@ const fetchPlKioDecision = async ({
   }
   const detailRequested = await request({
     cursor,
+    fetchStage: "document",
     path: `/Home/Details/${id}`,
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -1275,19 +1318,21 @@ const fetchPlKioDecision = async ({
       ),
     );
   }
-  const contentRequested = await request({
+  const content = await receive({
     cursor,
+    fetchStage: "document",
     path: documentPathOf(id, record.kind),
     signal,
     timeoutMs: ADAPTER_TIMEOUT.PAGE,
   });
-  if (Result.isError(contentRequested)) {
-    return contentRequested;
-  }
-  const content = contentRequested.value;
-  if (content.status === 404 || content.status === 410) {
-    // A record whose document is gone is still the record: stored with no
-    // document, which the pipeline keeps unpublished and re-asks for.
+  if (
+    content.status === 404 ||
+    content.status === 410 ||
+    (content.status === 200 && content.bytes === null)
+  ) {
+    // A record whose document is gone, or past what this adapter reads, is
+    // still the record: stored with no document, which the pipeline keeps
+    // unpublished and re-asks for.
     return Result.ok(
       assemblePlKioDecision({
         item,
@@ -1296,7 +1341,7 @@ const fetchPlKioDecision = async ({
       }),
     );
   }
-  if (content.status !== 200) {
+  if (content.status !== 200 || content.bytes === null) {
     return Result.err(
       publisherError(
         cursor,
@@ -1309,7 +1354,7 @@ const fetchPlKioDecision = async ({
     assemblePlKioDecision({
       item,
       detailHtml: detail.body,
-      documentHtml: content.body,
+      documentHtml: new TextDecoder().decode(content.bytes),
     }),
   );
 };
@@ -1439,7 +1484,11 @@ const advanceToPopulatedMonth = async (
     : Result.ok(last);
 };
 
-type Built = { decisions: IngestionResult[]; aborted: boolean };
+type Built = {
+  decisions: IngestionResult[];
+  itemBuildFailures: number;
+  aborted: boolean;
+};
 
 const buildRows = async (
   rows: readonly PlKioListingItem[],
@@ -1447,11 +1496,25 @@ const buildRows = async (
   signal?: AbortSignal,
 ): Promise<Result<Built, AdapterFetchError>> => {
   const decisions: IngestionResult[] = [];
+  let itemBuildFailures = 0;
   for (const item of rows) {
     if (signal?.aborted) {
-      return Result.ok({ decisions, aborted: true });
+      return Result.ok({ decisions, itemBuildFailures, aborted: true });
     }
-    const attempted = await fetchPlKioDecision({ cursor, item, signal });
+    const captured = await buildPlainTextItem({
+      adapterKey: ADAPTER_KEYS.PL_KIO,
+
+      rawListing: JSON.stringify(item),
+      decisionOf: (result) =>
+        result.isOk() ? result.value.decision : undefined,
+      build: async () => await fetchPlKioDecision({ cursor, item, signal }),
+    });
+    if (captured.type === "item_build_failed") {
+      itemBuildFailures += 1;
+      decisions.push(captured.decision);
+      continue;
+    }
+    const attempted = captured.value;
     if (Result.isError(attempted)) {
       return attempted;
     }
@@ -1467,7 +1530,7 @@ const buildRows = async (
       }
     }
   }
-  return Result.ok({ decisions, aborted: false });
+  return Result.ok({ decisions, itemBuildFailures, aborted: false });
 };
 
 /**
@@ -1506,9 +1569,17 @@ const fetchTailPage = async (
   if (Result.isError(built)) {
     return built;
   }
-  const { decisions, aborted } = built.value;
+  const { decisions, itemBuildFailures, aborted } = built.value;
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: listed.value.url,
     nextCursor: aborted
       ? cursor
@@ -1536,11 +1607,19 @@ const plKioFetchPage = async (
   if (Result.isError(built)) {
     return built;
   }
-  const { decisions, aborted } = built.value;
+  const { decisions, itemBuildFailures, aborted } = built.value;
   if (aborted) {
     // Replay the page rather than checkpoint past rows never reached.
     return Result.ok({
       decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
       sourceUrl: listed.url,
       nextCursor: encodePlKioCursor(cursor),
     });
@@ -1549,6 +1628,14 @@ const plKioFetchPage = async (
   if (reached < listed.total) {
     return Result.ok({
       decisions,
+      ...(itemBuildFailures === 0
+        ? {}
+        : {
+            itemBuildFailures: {
+              type: "item_build_failed" as const,
+              count: itemBuildFailures,
+            },
+          }),
       sourceUrl: listed.url,
       nextCursor: encodePlKioCursor({ ...cursor, offset: reached }),
     });
@@ -1556,6 +1643,14 @@ const plKioFetchPage = async (
   const next = monthAfter(cursor.month);
   return Result.ok({
     decisions,
+    ...(itemBuildFailures === 0
+      ? {}
+      : {
+          itemBuildFailures: {
+            type: "item_build_failed" as const,
+            count: itemBuildFailures,
+          },
+        }),
     sourceUrl: listed.url,
     nextCursor: encodePlKioCursor(
       next === null
@@ -1655,6 +1750,7 @@ const plKioTotalCount = async (
 // ── Adapter ──────────────────────────────────────────────
 
 export const plKioAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_KIO,
   language: PL_KIO_LANGUAGE,
   minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,
@@ -1676,6 +1772,17 @@ export const plKioAdapter = defineSourceAdapter({
   getTotalCount: plKioTotalCount,
 
   reconciliation: {
+    // Listing identity and decision labels exclude row markup and result coordinates.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            id: payload["id"],
+            court: payload["court"],
+            documentType: payload["documentType"],
+            signature: payload["signature"],
+            issueDate: payload["issueDate"],
+          }
+        : null,
     firstSlice: PL_KIO_FIRST_SLICE,
     ...plKioDaySlices.walk,
     tipWindowDays: PL_KIO_TIP_WINDOW_DAYS,

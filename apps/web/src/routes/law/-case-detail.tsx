@@ -19,6 +19,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import Tooltip from "@/components/tooltip";
+import { decisionHasNoDocument } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
@@ -27,8 +28,11 @@ import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import {
   extractId,
+  fileMayHoldOthersOf,
   type PublicCaseLawDecision,
 } from "@/routes/law/-case-detail.logic";
+import { PublicDecisionFileNote } from "@/routes/law/-components/public-decision-file-note";
+import { PublicDecisionTextNotice } from "@/routes/law/-components/public-decision-text-notice";
 
 const AuthenticatedCaseLawWorkspace = lazy(async () => {
   const module = await import("@/components/authenticated-case-law-workspace");
@@ -56,6 +60,11 @@ export function PublicDecisionViewer({
     select: ({ location }) =>
       location.hash === "" ? undefined : location.hash,
   });
+  // The reader arrived by a docket that found this decision alone in a case
+  // file whose other decisions the read may not have reached.
+  const fileMayHoldOthers = useRouterState({
+    select: ({ location }) => fileMayHoldOthersOf(location.search),
+  });
   const authStatus = useClientAuthStatus();
   const inspector = useInspectorView();
   const navigate = useNavigate();
@@ -73,6 +82,7 @@ export function PublicDecisionViewer({
     );
   });
 
+  const noDocument = decisionHasNoDocument(decision);
   const originalUrl =
     buildDecisionFacts({
       decisionType: decision.decisionType,
@@ -128,7 +138,7 @@ export function PublicDecisionViewer({
   };
 
   return (
-    <main className="flex min-h-0 flex-1 overflow-hidden">
+    <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <DecisionDetailsTab
         decision={decision}
         key={decision.id}
@@ -158,36 +168,41 @@ export function PublicDecisionViewer({
           }
         />
       </ChromeHeaderActions>
-      {authStatus.isAuthenticated ? (
-        <Suspense
-          fallback={
-            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-              <DecisionWorkspace
-                aiMode="gated"
+      {fileMayHoldOthers && <PublicDecisionFileNote />}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {noDocument && <PublicDecisionTextNotice sourceUrl={originalUrl} />}
+        {!noDocument &&
+          (authStatus.isAuthenticated ? (
+            <Suspense
+              fallback={
+                <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                  <DecisionWorkspace
+                    aiMode="gated"
+                    decision={decision}
+                    decisionId={decisionId}
+                    initialAnchorId={initialAnchorId}
+                    initialSearchQuery={initialSearchQuery}
+                  />
+                </div>
+              }
+            >
+              <AuthenticatedCaseLawWorkspace
                 decision={decision}
                 decisionId={decisionId}
                 initialAnchorId={initialAnchorId}
                 initialSearchQuery={initialSearchQuery}
+                user={authStatus.user}
               />
-            </div>
-          }
-        >
-          <AuthenticatedCaseLawWorkspace
-            decision={decision}
-            decisionId={decisionId}
-            initialAnchorId={initialAnchorId}
-            initialSearchQuery={initialSearchQuery}
-            user={authStatus.user}
-          />
-        </Suspense>
-      ) : (
-        <GuestDecisionWorkspace
-          decision={decision}
-          decisionId={decisionId}
-          initialAnchorId={initialAnchorId}
-          initialSearchQuery={initialSearchQuery}
-        />
-      )}
+            </Suspense>
+          ) : (
+            <GuestDecisionWorkspace
+              decision={decision}
+              decisionId={decisionId}
+              initialAnchorId={initialAnchorId}
+              initialSearchQuery={initialSearchQuery}
+            />
+          ))}
+      </div>
     </main>
   );
 }

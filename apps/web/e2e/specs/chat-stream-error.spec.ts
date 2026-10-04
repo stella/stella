@@ -12,6 +12,15 @@ import { expect, test } from "../helpers/test";
 // production.
 const EMPTY_COMPLETION_MARKER = "Return an empty completion please";
 
+// Marker recognized by the same mock adapter (E2E_EMPTY_CONTINUATION_MARKER):
+// the mock asks a question through the `ask-user` card and, once it is
+// answered, stops with an empty text message while still reporting completion
+// tokens.
+const EMPTY_CONTINUATION_MARKER = "Ask me, then answer with nothing please";
+
+const EMPTY_REPLY_COPY =
+  "The AI returned an empty reply. Try again or rephrase your message.";
+
 // Regression: a first-turn stream error used to drive the thread page into a
 // sustained render storm (~133 commits/sec) and drop the turn without any
 // visible error state. The render-storm canary turns a recurrence into a
@@ -71,9 +80,7 @@ test("a first-turn stream error surfaces retry UI without a render storm", async
   // send error: reverting the empty_completion classification in
   // apps/api/src/lib/ai-error.ts drops this back to generic copy and fails
   // here.
-  await expect(transcript).toContainText(
-    "The AI returned an empty reply. Try again or rephrase your message.",
-  );
+  await expect(transcript).toContainText(EMPTY_REPLY_COPY);
   await expect(errorBoundary).toHaveCount(0);
 
   // The incident's render storm fired after the SECOND failed turn (resend →
@@ -91,13 +98,51 @@ test("a first-turn stream error surfaces retry UI without a render storm", async
   await secondTurn;
   await expect(resend).toBeEnabled({ timeout: 30_000 });
   await expect(transcript).toContainText(EMPTY_COMPLETION_MARKER);
-  await expect(transcript).toContainText(
-    "The AI returned an empty reply. Try again or rephrase your message.",
-  );
+  await expect(transcript).toContainText(EMPTY_REPLY_COPY);
   await expect(errorBoundary).toHaveCount(0);
 
   // Hold the settled error state open long enough for the render-storm canary
   // (2 sustained one-second windows) to trip if the error path still loops;
   // the browserErrors fixture fails the spec on its console.error.
   await page.waitForTimeout(4000);
+});
+
+// Regression: a model that stopped with an empty message after the user
+// answered its question left the turn `completed` with nothing on screen. The
+// message the run continued already held the question, so it was never empty
+// as a whole; the server now reads what the run itself added.
+test("an empty answer to an answered question surfaces retry UI, live and after reload", async ({
+  page,
+  browserErrors,
+}) => {
+  if (EXPECTS_DEV_RUNTIME) {
+    browserErrors.expectCaptured(/empty_completion/u);
+  }
+
+  await page.goto("/chat", { waitUntil: "commit" });
+
+  const composer = page.getByRole("textbox", { name: /type your question/iu });
+  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await composer.click();
+  await composer.pressSequentially(EMPTY_CONTINUATION_MARKER);
+  await page.getByRole("button", { name: "Send message" }).click();
+
+  const transcript = page.getByRole("log");
+  const submit = transcript.getByRole("button", { name: "Submit answers" });
+  await expect(submit).toBeVisible({ timeout: 30_000 });
+  await transcript.getByPlaceholder("Your answer").fill("Buyer");
+  await submit.click();
+
+  const resend = transcript.getByRole("button", { name: "Resend" });
+  await expect(resend).toBeVisible({ timeout: 30_000 });
+  await expect(transcript).toContainText(EMPTY_REPLY_COPY);
+  // The question and its answer stay on the failed turn.
+  await expect(transcript).toContainText("Which side?");
+  await expect(transcript).toContainText("Buyer");
+
+  await page.reload({ waitUntil: "commit" });
+  await expect(resend).toBeVisible({ timeout: 30_000 });
+  await expect(transcript).toContainText(EMPTY_REPLY_COPY);
+  await expect(transcript).toContainText("Which side?");
+  await expect(transcript).toContainText("Buyer");
 });

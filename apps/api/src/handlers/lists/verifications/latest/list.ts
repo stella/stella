@@ -9,7 +9,7 @@ import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { legalListClaims, legalListVerificationRuns } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
@@ -36,8 +36,14 @@ const config = {
     "verdict state. A file never verified is absent from the answer. Earlier " +
     "runs are in lists.verifications.list.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "document_processing",
+    consumesServices: false,
+  },
   body: t.Object({
     documents: t.Array(
       t.Object(

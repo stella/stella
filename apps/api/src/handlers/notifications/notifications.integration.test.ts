@@ -34,6 +34,7 @@ import {
   NOTIFICATION_INSERT_BATCH_SIZE,
 } from "@/api/lib/notifications";
 import type { NewNotification } from "@/api/lib/notifications";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -116,12 +117,13 @@ const contextFor = ({
     }),
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     getActiveWorkspaceIds: async () => [],
     getAccessibleWorkspaces: async () => [],
     getWorkspaceAccess: async () => null,
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     promptCachingEnabled: false,
     createAuditRecorder: () => recordAuditEvent,
     recordAuditEvent,

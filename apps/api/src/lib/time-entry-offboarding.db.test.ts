@@ -11,6 +11,11 @@ import {
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
+import {
+  TIME_ENTRY_ACTIVITY_GROUP,
+  type TimeEntryActivityGroup,
+} from "@stll/api-contract";
+
 import { member } from "@/api/db/auth-schema";
 import {
   organizationSettings,
@@ -24,8 +29,10 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import deleteTimeEntry from "@/api/handlers/time-entries/delete";
 import updateTimeEntry from "@/api/handlers/time-entries/update";
 import { getAuth } from "@/api/lib/auth";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -53,7 +60,10 @@ afterAll(async () => {
 beforeEach(() => setSystemTime(new Date("2026-09-30T12:00:00Z")));
 afterEach(() => setSystemTime());
 
-const createMemberWithActiveTimer = async (dateWorked: string) => {
+const createMemberWithActiveTimer = async (
+  dateWorked: string,
+  activityGroup: TimeEntryActivityGroup = TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
+) => {
   const auth = getAuth();
   const owner = await signInHuman(
     `timer-owner-${Bun.randomUUIDv7()}@stella.dev`,
@@ -96,14 +106,22 @@ const createMemberWithActiveTimer = async (dateWorked: string) => {
   await testDb.insert(timeEntries).values({
     id: timerId,
     organizationId,
-    workspaceId,
+    workspaceId:
+      activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT ? workspaceId : null,
+    activityGroup,
     userId,
     dateWorked,
     timezoneId: "UTC",
     durationMinutes: 0,
     billedMinutes: 0,
-    rateAtEntry: cents(100),
-    currency: "USD",
+    rateAtEntry: cents(
+      activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT ? 100 : 0,
+    ),
+    billable: activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
+    currency:
+      activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT
+        ? "USD"
+        : UNPRICED_TIME_ENTRY_CURRENCY,
     narrative: "",
     source: "timer",
     timerStartedAt: new Date(Date.now() - 3_600_000),
@@ -118,7 +136,8 @@ const createMemberWithActiveTimer = async (dateWorked: string) => {
     id: globalTimerId,
     organizationId,
     userId,
-    workspaceId,
+    workspaceId:
+      activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT ? workspaceId : null,
     legacyTimeEntryId: timerId,
     state: "running",
     startedAt: new Date(Date.now() - 86_400_000),
@@ -206,6 +225,61 @@ describe("member removal with an active timer", () => {
     ).toMatchObject({ state: "running" });
   });
 
+  test("closes an internal timer without a matter and preserves zero billing during member removal", async () => {
+    const fixture = await createMemberWithActiveTimer(
+      "2026-09-30",
+      TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+    );
+    const before = await testDb.query.timeEntries.findFirst({
+      where: { id: { eq: fixture.timerId } },
+    });
+    expect(before).toMatchObject({
+      activityGroup: "internal",
+      workspaceId: null,
+      billedMinutes: 0,
+    });
+    const response = await fixture.auth.api.removeMember({
+      body: {
+        memberIdOrEmail: fixture.invitee.email,
+        organizationId: fixture.organization.id,
+      },
+      headers: fixture.owner.headers(),
+      asResponse: true,
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(
+      await testDb.query.timeEntries.findFirst({
+        where: { id: { eq: fixture.timerId } },
+      }),
+    ).toMatchObject({
+      activityGroup: "internal",
+      workspaceId: null,
+      durationMinutes: 12,
+      billedMinutes: 0,
+      rateAtEntry: 0,
+      currency: UNPRICED_TIME_ENTRY_CURRENCY,
+      billable: false,
+      timerStartedAt: null,
+      timerStoppedAt: expect.any(Date),
+    });
+    expect(
+      await testDb.query.timeTimers.findFirst({
+        where: { id: { eq: fixture.globalTimerId } },
+      }),
+    ).toMatchObject({ state: "paused", accumulatedSeconds: 721 });
+    expect(
+      await testDb
+        .select({ id: member.id })
+        .from(member)
+        .where(
+          and(
+            eq(member.organizationId, fixture.organization.id),
+            eq(member.userId, fixture.userId),
+          ),
+        ),
+    ).toEqual([]);
+  });
+
   test("closes an unlocked timer and removes the member", async () => {
     const fixture = await createMemberWithActiveTimer("2026-09-30");
     await testDb.insert(organizationSettings).values({
@@ -264,7 +338,7 @@ describe("member removal with an active timer", () => {
     const recordAuditEvent = async () => undefined;
     const context = {
       user: { id: fixture.ownerId },
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       session: { activeOrganizationId: fixture.organizationId },
       workspaceId: fixture.workspaceId,
       safeDb: createSafeDb(

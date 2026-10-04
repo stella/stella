@@ -1,4 +1,4 @@
-import { useSelector } from "@tanstack/react-store";
+import { useSelector } from "@tanstack/react-form";
 import type { ColumnPinningState } from "@tanstack/react-table";
 import { useTranslations } from "use-intl";
 

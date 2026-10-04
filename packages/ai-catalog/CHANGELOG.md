@@ -1,5 +1,23 @@
 # @stll/ai-catalog
 
+## 0.5.0
+
+### Minor Changes
+
+- [#4521](https://github.com/stella/stella/pull/4521) [`ffc2d3c`](https://github.com/stella/stella/commit/ffc2d3cfaed8592c5de1a18fc795129bd931f6b2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/ai-catalog/benchmarks` and `@stll/ai-catalog/benchmark-frontier`: quality ratings and typical call cost per offered model, and the cost and quality frontier over them.
+
+## 0.4.0
+
+### Minor Changes
+
+- [#4464](https://github.com/stella/stella/pull/4464) [`e3a70d4`](https://github.com/stella/stella/commit/e3a70d437b3332129691e62eedd406df59781dfa) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add image-input capability metadata and a typed accessor.
+
+## 0.3.2
+
+### Patch Changes
+
+- [#4191](https://github.com/stella/stella/pull/4191) [`1715d35`](https://github.com/stella/stella/commit/1715d356f41f0c1d6e049a1d3ed18a5f5f4811c4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer GPT-6.1 Sol.
+
 ## 0.3.1
 
 ### Patch Changes
