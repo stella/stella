@@ -30,6 +30,7 @@ import type {
   SchedulerTask,
   SchedulerTaskContext,
 } from "@/api/lib/scheduler/types";
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK =
@@ -344,6 +345,7 @@ export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
   db,
   job,
   logger,
+  runId,
   scheduleContinuation,
   signal,
 }) => {
@@ -368,6 +370,10 @@ export const backfillCorpusIndexJobDetail: SchedulerTask = async ({
           tx,
           { cursor, family },
         );
+        await recordSystemAudit(tx, "system:corpus-index-job-detail-backfill", {
+          subject: runId,
+          counts: { movedJobs: movedCount },
+        });
         if (nextCursor !== null) {
           // Checkpoint last: replaying a page moves nothing a second time,
           // while advancing first could step over rows the update did not
