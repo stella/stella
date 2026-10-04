@@ -2511,8 +2511,8 @@ describe("cz-nss reads the portal did not answer", () => {
     expect(failure).toBe(deadline.signal.reason);
   });
 
-  test("reports a rich-text read that fails and builds from the text", async () => {
-    failRequestsUnder(
+  test("reports a rich-text read that fails and holds the row instead of building it from the text", async () => {
+    const { requests } = failRequestsUnder(
       "/DokumentOriginal/Html/",
       () => new TypeError("fetch failed"),
     );
@@ -2523,8 +2523,11 @@ describe("cz-nss reads the portal did not answer", () => {
       signal: AbortSignal.timeout(5000),
     });
 
-    expect(built.type).toBe("built");
-    expect(built.decision.fulltext).toContain("Kasační stížnost");
+    expect(built.type).toBe("detail-unavailable");
+    expect(built.decision.isListingOnly).toBe(true);
+    expect(
+      requests.filter(({ url }) => url.includes("/DokumentOriginal/Text/")),
+    ).toEqual([]);
     expect(
       warnings("case_law.ingestion.document_fetch_failed").at(0)?.attributes,
     ).toMatchObject({
@@ -2554,5 +2557,84 @@ describe("cz-nss reads the portal did not answer", () => {
     expect(
       requests.filter(({ url }) => url.includes("/DokumentOriginal/Text/")),
     ).toEqual([]);
+  });
+
+  /** Answers that fail a read without stating that the document is absent. */
+  const READ_FAILURES = {
+    "a server error": () => htmlResponse("", 500),
+    "a request timeout": () => {
+      throw new DOMException("request deadline", "TimeoutError");
+    },
+    "an empty 204": () => new Response(null, { status: 204 }),
+    "an empty 200 body": () => htmlResponse(""),
+  } as const satisfies Record<string, () => Response>;
+
+  /** Serve the portal, answering every request under `pathPrefix` with `fail`. */
+  const answerUnder = (
+    pathPrefix: string,
+    fail: () => Response,
+  ): { requests: RecordedRequest[] } => {
+    const recorded = installStub({ search: [] });
+    const served = globalThis.fetch;
+    globalThis.fetch = asFetchMock(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.pathname.startsWith(pathPrefix)) {
+          return await Promise.resolve().then(fail);
+        }
+        return await served(input, init);
+      },
+    );
+    return recorded;
+  };
+
+  for (const [failure, fail] of Object.entries(READ_FAILURES)) {
+    test(`holds a row whose rich-text read answers ${failure}, without reading the text`, async () => {
+      const { requests } = answerUnder("/DokumentOriginal/Html/", fail);
+
+      const built = await buildCzNssDecision({
+        row: listedMunicipalRow(),
+        session: SESSION,
+        signal: AbortSignal.timeout(5000),
+      });
+
+      expect(built.type).toBe("detail-unavailable");
+      expect(built.decision.isListingOnly).toBe(true);
+      expect(built.decision.fulltext).toBeUndefined();
+      expect(
+        requests.filter(({ url }) => url.includes("/DokumentOriginal/Text/")),
+      ).toEqual([]);
+    });
+  }
+
+  for (const failure of ["an empty 204", "an empty 200 body"] as const) {
+    test(`holds a row whose detail read answers ${failure}`, async () => {
+      answerUnder("/DokumentDetail/Index/", READ_FAILURES[failure]);
+
+      const built = await buildCzNssDecision({
+        row: listedMunicipalRow(),
+        session: SESSION,
+        signal: AbortSignal.timeout(5000),
+      });
+
+      expect(built.type).toBe("detail-unavailable");
+      expect(built.decision.isListingOnly).toBe(true);
+      expect(built.decision.ecli).toBeUndefined();
+    });
+  }
+
+  test("builds from the text where the portal holds no rich original", async () => {
+    installStub({ search: [], htmlDocumentStatus: 404 });
+
+    const built = await buildCzNssDecision({
+      row: listedMunicipalRow(),
+      session: SESSION,
+      signal: AbortSignal.timeout(5000),
+    });
+
+    expect(built.type).toBe("built");
+    expect(built.decision.fulltext).toContain("Kasační stížnost");
   });
 });

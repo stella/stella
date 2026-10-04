@@ -31,9 +31,12 @@ import {
   readPresent,
   readRefused,
   readUnavailable,
+  type AbsenceEvidence,
   type ReadOutcome,
   type ReadRefusalScope,
+  type ReadUnavailableCause,
 } from "@/api/lib/errors/read-outcome";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 import {
   fetchPublisher,
@@ -130,4 +133,87 @@ export const readPublisherText = async (
   return text.value.length === 0
     ? readUnavailable({ kind: "empty-body", status: response.status })
     : readPresent(text.value);
+};
+
+/** A read that established no value: an absence or a failure. */
+export type UnreadPublisherOutcome = Exclude<
+  ReadOutcome<unknown>,
+  { readonly type: "present" }
+>;
+
+const ABSENCE_HTTP_STATUS = {
+  "http-404": 404,
+  "http-410": 410,
+  "stated-zero": undefined,
+  "publisher-typed-absence": undefined,
+} as const satisfies Record<AbsenceEvidence, number | undefined>;
+
+type UnreadPublisherErrorOptions = {
+  outcome: UnreadPublisherOutcome;
+  /** What failed, e.g. "NSS search failed"; the status or cause is appended. */
+  message: string;
+  adapterKey: string;
+  cursor: string | null;
+};
+
+const unavailableReadError = ({
+  cause,
+  message,
+  adapterKey,
+  cursor,
+}: Omit<UnreadPublisherErrorOptions, "outcome"> & {
+  cause: ReadUnavailableCause;
+}): AdapterFetchError => {
+  switch (cause.kind) {
+    case "status":
+      return new AdapterFetchError({
+        message: `${message}: ${cause.status}`,
+        adapterKey,
+        cursor,
+        httpStatus: cause.status,
+      });
+    case "no-content":
+    case "empty-body":
+      return new AdapterFetchError({
+        message: `${message}: ${cause.status} ${cause.kind}`,
+        adapterKey,
+        cursor,
+      });
+    case "thrown":
+      return new AdapterFetchError({
+        message: `${message}: ${cause.error instanceof Error ? cause.error.message : String(cause.error)}`,
+        adapterKey,
+        cursor,
+        cause: cause.error,
+      });
+    default:
+      cause satisfies never;
+      return panic(`Unhandled read failure: ${String(cause)}`);
+  }
+};
+
+/**
+ * A read that established no value, as the adapter error its caller throws or
+ * reports. The HTTP status or the thrown cause is kept, so the cycle
+ * classifies the failure as it would the raw response or exception.
+ */
+export const unreadPublisherError = ({
+  outcome,
+  ...context
+}: UnreadPublisherErrorOptions): AdapterFetchError => {
+  switch (outcome.type) {
+    case "absent": {
+      const httpStatus = ABSENCE_HTTP_STATUS[outcome.evidence];
+      return new AdapterFetchError({
+        ...context,
+        message: `${context.message}: ${httpStatus ?? outcome.evidence}`,
+        ...(httpStatus === undefined ? {} : { httpStatus }),
+      });
+    }
+    case "unavailable":
+      return unavailableReadError({ ...context, cause: outcome.cause });
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled unread outcome: ${String(outcome)}`);
+  }
 };

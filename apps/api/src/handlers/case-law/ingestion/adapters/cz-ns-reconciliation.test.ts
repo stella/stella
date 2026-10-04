@@ -899,7 +899,11 @@ describe("cz-ns buildDecision", () => {
 
     expect(
       await buildCzNsDecision({ unid: UNID.FIRST, caseNumber: DOCKET.FIRST }),
-    ).toEqual({ type: "detail-unavailable", httpStatus: 503 });
+    ).toEqual({
+      type: "detail-unavailable",
+      page: "detail",
+      read: { type: "unavailable", cause: { kind: "status", status: 503 } },
+    });
   });
 
   test("a payload this adapter no longer recognises is unkeyable, unasked", async () => {

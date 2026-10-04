@@ -1,6 +1,7 @@
 // parser-output-unchanged: Bounded crawl retries and cursor encoding change fetch control without changing parsed decision output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+// parser-output-unchanged: failed publisher reads are held unread instead of built; decisions from successful reads are unchanged.
 import { panic, Result } from "better-result";
 
 import {
@@ -51,7 +52,12 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  readPublisher,
+  readPublisherText,
+  unreadPublisherError,
+  type UnreadPublisherOutcome,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -72,6 +78,7 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { PlainTextError } from "@/api/lib/case-law/plain-text";
 import { addUtcDays } from "@/api/lib/dates";
+import { readAbsent, type ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -627,6 +634,8 @@ const CZ_NSS_RAW_PART = {
   TEXT: "text",
 } as const;
 
+type CzNssRawPart = (typeof CZ_NSS_RAW_PART)[keyof typeof CZ_NSS_RAW_PART];
+
 /**
  * A read of the portal that failed: it did not answer, or not in time. Graded
  * as the publisher being unavailable, since the document is read again on a
@@ -736,61 +745,84 @@ const czNssSourceHash = ({
   }
 };
 
+/** The document's content, or the fact that a document read failed. */
+type DecisionContentRead =
+  | { type: "read"; content: DecisionContent }
+  | { type: "unavailable" };
+
+type ObserveDocumentReadFailedOptions = {
+  documentId: string;
+  phase: CzNssRawPart;
+  read: UnreadPublisherOutcome;
+};
+
+/** A document endpoint's read failed; reported, and the row is held unread. */
+const observeDocumentReadFailed = ({
+  documentId,
+  phase,
+  read,
+}: ObserveDocumentReadFailedOptions): DecisionContentRead => {
+  observeFailure(
+    publisherReadFailure(
+      unreadPublisherError({
+        outcome: read,
+        message: `NSS ${phase} read failed`,
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        cursor: null,
+      }),
+    ),
+    {
+      sink: documentReadFailed,
+      ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId, phase },
+    },
+  );
+  return { type: "unavailable" };
+};
+
 /**
- * Read the rich HTML from /DokumentOriginal/Html/{id}, or `undefined` where
- * the portal serves none for the document or the read fails.
+ * The placeholder page the portal serves for a document it holds no rich
+ * original of.
+ */
+const isRichDocumentPlaceholder = (html: string): boolean =>
+  html.length <= 200 || html.includes("<body>\n    N/A\n</body>");
+
+/**
+ * Read the rich HTML from /DokumentOriginal/Html/{id}.
  *
- * A failed read is reported and left to the plain-text fallback. A read the
- * page's signal aborts goes back to the crawl, which disposes of the row
- * together with the rest of its page and asks the text endpoint nothing.
+ * Absent where the portal answers 404 or 410, or serves its placeholder page:
+ * it holds no rich original, and the plain-text endpoint is read instead. A
+ * failed read is not that absence. A read the page's signal aborts goes back
+ * to the crawl, which disposes of the row together with the rest of its page.
  */
 const fetchRichDocument = async (
   documentId: string,
   session: SessionState,
   signal: AbortSignal,
-): Promise<string | undefined> => {
-  try {
-    const response = await fetchPublisher(
-      `${BASE_URL}/DokumentOriginal/Html/${documentId}`,
-      {
-        fetchStage: "document",
-        adapterKey: ADAPTER_KEYS.CZ_NSS,
-        signal,
-        headers: {
-          ...COMMON_HEADERS,
-          Cookie: session.cookies,
-        },
-        timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+): Promise<ReadOutcome<string>> => {
+  const read = await readPublisherText(
+    `${BASE_URL}/DokumentOriginal/Html/${documentId}`,
+    {
+      fetchStage: "document",
+      adapterKey: ADAPTER_KEYS.CZ_NSS,
+      signal,
+      headers: {
+        ...COMMON_HEADERS,
+        Cookie: session.cookies,
       },
-    );
-    if (!response.ok) {
-      return undefined;
-    }
-    const html = await response.text();
-    return html.length > 200 && !html.includes("<body>\n    N/A\n</body>")
-      ? html
-      : undefined;
-  } catch (error) {
-    if (signal.aborted) {
-      throw error;
-    }
-    observeFailure(publisherReadFailure(error), {
-      sink: documentReadFailed,
-      ctx: {
-        adapterKey: ADAPTER_KEYS.CZ_NSS,
-        documentId,
-        phase: CZ_NSS_RAW_PART.DOCUMENT,
-      },
-    });
-    return undefined;
-  }
+      timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    },
+  );
+  return read.type === "present" && isRichDocumentPlaceholder(read.value)
+    ? readAbsent("publisher-typed-absence")
+    : read;
 };
 
 /**
- * Fetch rich HTML from /DokumentOriginal/Html/{id} and parse
- * it into a DocumentAst. Falls back to /Text/{id} for plain
- * fulltext if the rich endpoint serves nothing, its read fails,
- * or the parser cannot read what it served.
+ * Fetch rich HTML from /DokumentOriginal/Html/{id} and parse it into a
+ * DocumentAst. Falls back to /Text/{id} for plain fulltext where the portal
+ * holds no rich original or the parser cannot read what it served. A failed
+ * read of either endpoint is reported unavailable, never replaced by the
+ * other representation.
  */
 const fetchDecisionContent = async (
   documentId: string,
@@ -798,108 +830,150 @@ const fetchDecisionContent = async (
   detail: CzNssDetailMetadata,
   session: SessionState,
   signal: AbortSignal,
-): Promise<DecisionContent> => {
-  const html = await fetchRichDocument(documentId, session, signal);
-  if (html !== undefined) {
-    const parsed = Result.try({
-      try: () =>
-        parseNssDecisionHtml({
-          caseNumber: row.caseNumber,
-          ecli: detail.ecli,
-          court: czNssCourt(detail.ecli, documentId),
-          decisionDate: (() => {
-            if (detail.decisionDate) {
-              return parseCeDate(detail.decisionDate);
-            }
-            if (row.decisionDate) {
-              return parseCeDate(row.decisionDate);
-            }
-            return undefined;
-          })(),
-          decisionType: (
-            detail.decisionType ?? row.decisionType
-          )?.toLowerCase(),
-          sourceUrl: row.documentUrl,
-          html,
-          detailMetadata: { ...detail },
-        }),
-      catch: (cause: unknown) => cause,
-    });
-    if (Result.isOk(parsed)) {
-      return {
+): Promise<DecisionContentRead> => {
+  const rich = await fetchRichDocument(documentId, session, signal);
+  switch (rich.type) {
+    case "present":
+      break;
+    case "absent":
+      return await fetchPlainTextContent(documentId, session, signal);
+    case "unavailable":
+      return observeDocumentReadFailed({
+        documentId,
+        phase: CZ_NSS_RAW_PART.DOCUMENT,
+        read: rich,
+      });
+    default:
+      rich satisfies never;
+      return panic(`Unhandled NSS document read: ${String(rich)}`);
+  }
+  const html = rich.value;
+  const parsed = Result.try({
+    try: () =>
+      parseNssDecisionHtml({
+        caseNumber: row.caseNumber,
+        ecli: detail.ecli,
+        court: czNssCourt(detail.ecli, documentId),
+        decisionDate: (() => {
+          if (detail.decisionDate) {
+            return parseCeDate(detail.decisionDate);
+          }
+          if (row.decisionDate) {
+            return parseCeDate(row.decisionDate);
+          }
+          return undefined;
+        })(),
+        decisionType: (detail.decisionType ?? row.decisionType)?.toLowerCase(),
+        sourceUrl: row.documentUrl,
+        html,
+        detailMetadata: { ...detail },
+      }),
+    catch: (cause: unknown) => cause,
+  });
+  if (Result.isOk(parsed)) {
+    return {
+      type: "read",
+      content: {
         fulltext: parsed.value.fulltext,
         documentAst: parsed.value.documentAst,
         sourceRaw: html,
         fallbackText: undefined,
-      };
+      },
+    };
+  }
+  // Each parser failure is reported, which keeps it apart from decisions
+  // the portal serves as plain text. It is observed unclassified, as the
+  // parser's own failure.
+  observeFailure(parsed.error, {
+    sink: documentParseFailed,
+    ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId },
+  });
+  return await fetchPlainTextContent(documentId, session, signal);
+};
+
+/**
+ * Read plain text from /DokumentOriginal/Text/{id}, which the portal serves
+ * as UTF-16. A 404 or 410 states the portal has no text either: the content
+ * is empty and the row is stored listing-only. A failed read, an empty body
+ * included, is reported unavailable.
+ */
+const fetchPlainTextContent = async (
+  documentId: string,
+  session: SessionState,
+  signal: AbortSignal,
+): Promise<DecisionContentRead> => {
+  const read = await readPublisher(
+    `${BASE_URL}/DokumentOriginal/Text/${documentId}`,
+    {
+      fetchStage: "document",
+      adapterKey: ADAPTER_KEYS.CZ_NSS,
+      signal,
+      headers: {
+        ...COMMON_HEADERS,
+        Cookie: session.cookies,
+      },
+      timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    },
+  );
+  switch (read.type) {
+    case "present":
+      break;
+    case "absent":
+      return { type: "read", content: EMPTY_CONTENT };
+    case "unavailable":
+      return observeDocumentReadFailed({
+        documentId,
+        phase: CZ_NSS_RAW_PART.TEXT,
+        read,
+      });
+    default:
+      read satisfies never;
+      return panic(`Unhandled NSS text read: ${String(read)}`);
+  }
+  const response = read.value;
+  const buffer = await Result.tryPromise({
+    try: async () => await response.arrayBuffer(),
+    catch: (cause: unknown) => cause,
+  });
+  if (Result.isError(buffer)) {
+    // A read the page's signal aborts goes back to the crawl, which disposes
+    // of the row together with the rest of its page.
+    if (signal.aborted) {
+      throw buffer.error;
     }
-    // Each parser failure is reported, which keeps it apart from decisions
-    // the portal serves as plain text. It is observed unclassified, as the
-    // parser's own failure.
-    observeFailure(parsed.error, {
-      sink: documentParseFailed,
-      ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId },
+    return observeDocumentReadFailed({
+      documentId,
+      phase: CZ_NSS_RAW_PART.TEXT,
+      read: {
+        type: "unavailable",
+        cause: { kind: "thrown", error: buffer.error },
+      },
     });
   }
-
-  // Fallback: plain text from /Text/{id}
-  try {
-    const response = await fetchPublisher(
-      `${BASE_URL}/DokumentOriginal/Text/${documentId}`,
-      {
-        fetchStage: "document",
-        adapterKey: ADAPTER_KEYS.CZ_NSS,
-        signal,
-        headers: {
-          ...COMMON_HEADERS,
-          Cookie: session.cookies,
-        },
-        timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+  if (buffer.value.byteLength === 0) {
+    return observeDocumentReadFailed({
+      documentId,
+      phase: CZ_NSS_RAW_PART.TEXT,
+      read: {
+        type: "unavailable",
+        cause: { kind: "empty-body", status: response.status },
       },
-    );
-
-    if (!response.ok) {
-      return {
-        fulltext: undefined,
-        documentAst: undefined,
-        sourceRaw: undefined,
-        fallbackText: undefined,
-      };
-    }
-
-    const buffer = await response.arrayBuffer();
-    const text = new TextDecoder("utf-16").decode(buffer);
-    const body = stripHtml(text);
-    const usable = body.length > CZ_NSS_MIN_FULLTEXT_CHARS;
-    return {
+    });
+  }
+  const text = new TextDecoder("utf-16").decode(buffer.value);
+  const body = stripHtml(text);
+  const usable = body.length > CZ_NSS_MIN_FULLTEXT_CHARS;
+  return {
+    type: "read",
+    content: {
       fulltext: usable ? body : undefined,
       documentAst: undefined,
       sourceRaw: undefined,
       // Decoded rather than verbatim: the endpoint serves UTF-16, and the raw
       // is stored as text. It is the payload this row's fulltext came from.
       fallbackText: usable ? text : undefined,
-    };
-  } catch (error) {
-    // A read the page's signal aborts goes back to the crawl, which disposes
-    // of the row together with the rest of its page.
-    if (signal.aborted) {
-      throw error;
-    }
-    observeFailure(publisherReadFailure(error), {
-      sink: documentReadFailed,
-      ctx: {
-        adapterKey: ADAPTER_KEYS.CZ_NSS,
-        documentId,
-        phase: CZ_NSS_RAW_PART.TEXT,
-      },
-    });
-    return {
-      fulltext: undefined,
-      documentAst: undefined,
-      sourceRaw: undefined,
-      fallbackText: undefined,
-    };
-  }
+    },
+  };
 };
 
 // ── Source-field inventory ───────────────────────────────
@@ -1374,10 +1448,11 @@ const EMPTY_DETAIL: CzNssDetailMetadata = {
 /**
  * The detail page, or the fact that it could not be read.
  *
- * A portal that answers 404 has no metadata for the document, and the row is
- * built without it. A timeout, a failed request or a server error is not
- * that: the metadata exists and was not read. Such a document is reported as
- * unavailable; the crawl stores it as a listing-only row, which the
+ * A portal that answers 404 or 410 has no metadata for the document, and the
+ * row is built without it. A timeout, a failed request, a server error, a 204
+ * or an empty body is not that: the metadata exists and was not read. Such a
+ * document is reported as unavailable; the crawl stores it as a listing-only
+ * row, which the
  * reconciliation does not count as held and so reads again, and the
  * reconciliation itself parks it for a later attempt. A page the parser
  * throws on is reported as the parser's failure and held the same way.
@@ -1391,73 +1466,50 @@ type DetailFetch =
   | { type: "fetched"; detail: CzNssDetailMetadata; html: string | null }
   | { type: "unavailable" };
 
-/** The detail page as served: absent (404), unreadable, or its HTML. */
-type DetailRead =
-  | { type: "absent" }
-  | { type: "unavailable" }
-  | { type: "read"; html: string };
-
-const readDetailPage = async (
-  documentId: string,
-  session: SessionState,
-  signal: AbortSignal,
-): Promise<DetailRead> => {
-  const attempt = await Result.tryPromise({
-    try: async () => {
-      const response = await fetchPublisher(
-        `${BASE_URL}/DokumentDetail/Index/${documentId}`,
-        {
-          fetchStage: "document",
-          adapterKey: ADAPTER_KEYS.CZ_NSS,
-          signal,
-          headers: {
-            ...COMMON_HEADERS,
-            Cookie: session.cookies,
-          },
-          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-        },
-      );
-      if (response.status === 404) {
-        return { type: "absent" } as const satisfies DetailRead;
-      }
-      if (!response.ok) {
-        return { type: "unavailable" } as const satisfies DetailRead;
-      }
-
-      return {
-        type: "read",
-        html: await response.text(),
-      } as const satisfies DetailRead;
-    },
-    catch: (cause: unknown) => cause,
-  });
-  if (Result.isError(attempt)) {
-    const error = attempt.error;
-    if (signal.aborted) {
-      throw error;
-    }
-    observeFailure(publisherReadFailure(error), {
-      sink: detailReadFailed,
-      ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId },
-    });
-    return { type: "unavailable" };
-  }
-  return attempt.value;
-};
-
 const fetchDetailMetadata = async (
   documentId: string,
   session: SessionState,
   signal: AbortSignal,
 ): Promise<DetailFetch> => {
-  const read = await readDetailPage(documentId, session, signal);
-  if (read.type === "absent") {
-    return { type: "fetched", detail: EMPTY_DETAIL, html: null };
+  const read = await readPublisherText(
+    `${BASE_URL}/DokumentDetail/Index/${documentId}`,
+    {
+      fetchStage: "document",
+      adapterKey: ADAPTER_KEYS.CZ_NSS,
+      signal,
+      headers: {
+        ...COMMON_HEADERS,
+        Cookie: session.cookies,
+      },
+      timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    },
+  );
+  switch (read.type) {
+    case "present":
+      break;
+    case "absent":
+      return { type: "fetched", detail: EMPTY_DETAIL, html: null };
+    case "unavailable":
+      observeFailure(
+        publisherReadFailure(
+          unreadPublisherError({
+            outcome: read,
+            message: "NSS detail read failed",
+            adapterKey: ADAPTER_KEYS.CZ_NSS,
+            cursor: null,
+          }),
+        ),
+        {
+          sink: detailReadFailed,
+          ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId },
+        },
+      );
+      return { type: "unavailable" };
+    default:
+      read satisfies never;
+      return panic(`Unhandled NSS detail read: ${String(read)}`);
   }
-  if (read.type === "unavailable") {
-    return { type: "unavailable" };
-  }
-  const { html } = read;
+  const html = read.value;
   const parsed = Result.try({
     try: () => parseCzNssDetailMetadata(html),
     catch: (cause: unknown) => cause,
@@ -1927,7 +1979,7 @@ let cachedSession: {
 } | null = null;
 
 const initSession = async (signal: AbortSignal): Promise<SessionState> => {
-  const response = await fetchPublisher(BASE_URL, {
+  const read = await readPublisher(BASE_URL, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.CZ_NSS,
     signal,
@@ -1936,15 +1988,16 @@ const initSession = async (signal: AbortSignal): Promise<SessionState> => {
     timeoutMs: CZ_NSS_LISTING_TIMEOUT_MS,
   });
 
-  if (!response.ok) {
-    throw new AdapterFetchError({
-      message: `NSS session init failed: ${response.status}`,
+  if (read.type !== "present") {
+    throw unreadPublisherError({
+      outcome: read,
+      message: "NSS session init failed",
       adapterKey: ADAPTER_KEYS.CZ_NSS,
       cursor: null,
-      httpStatus: response.status,
     });
   }
 
+  const response = read.value;
   const html = await response.text();
   const cookies = extractCookies(response);
   const token = extractAntiforgeryToken(html);
@@ -2043,7 +2096,7 @@ const executeSearch = async (
   formData.set(DATE_FROM_FIELD, czDate);
   formData.set(DATE_TO_FIELD, czDate);
 
-  const response = await fetchPublisher(`${BASE_URL}/Home/Index`, {
+  const read = await readPublisher(`${BASE_URL}/Home/Index`, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.CZ_NSS,
     method: "POST",
@@ -2059,17 +2112,18 @@ const executeSearch = async (
     timeoutMs: CZ_NSS_LISTING_TIMEOUT_MS,
   });
 
-  if (!response.ok) {
+  if (read.type !== "present") {
     return {
       type: "unavailable",
-      error: new AdapterFetchError({
-        message: `NSS search failed: ${response.status}`,
+      error: unreadPublisherError({
+        outcome: read,
+        message: "NSS search failed",
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         cursor: date,
-        httpStatus: response.status,
       }),
     };
   }
+  const response = read.value;
 
   // Merge any new cookies (overwriting stale names)
   const newCookies = extractCookies(response);
@@ -2148,7 +2202,7 @@ const fetchResultPage = async ({
   formData.set("pageNum", String(page));
   formData.set("resultOrder", continuation.order);
 
-  const response = await fetchPublisher(`${BASE_URL}/Home/MyResTRowsCont`, {
+  const read = await readPublisher(`${BASE_URL}/Home/MyResTRowsCont`, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.CZ_NSS,
     method: "POST",
@@ -2164,19 +2218,19 @@ const fetchResultPage = async ({
     timeoutMs: CZ_NSS_LISTING_TIMEOUT_MS,
   });
 
-  if (!response.ok) {
+  if (read.type !== "present") {
     invalidateSession();
     return Result.err(
-      new AdapterFetchError({
-        message: `NSS pagination failed: ${response.status}`,
+      unreadPublisherError({
+        outcome: read,
+        message: "NSS pagination failed",
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         cursor: `${date}:${page}`,
-        httpStatus: response.status,
       }),
     );
   }
 
-  const html = await response.text();
+  const html = await read.value.text();
   // Case-law rule 14: a day ends when the source says there is nothing more.
   // This endpoint answers 200 with an empty body for two different things —
   // a page past the day's last record, and a query it did not recognise —
@@ -2288,13 +2342,25 @@ export const buildCzNssDecision = async ({
     };
   }
   const { detail, html: detailHtml } = detailFetch;
-  const content = await fetchDecisionContent(
+  const contentRead = await fetchDecisionContent(
     documentId,
     row,
     detail,
     session,
     signal,
   );
+  if (contentRead.type === "unavailable") {
+    // A document read failed. The row is stored listing-only, exactly as for
+    // a detail page that was not read, never built from another endpoint's
+    // representation.
+    return {
+      type: "detail-unavailable",
+      decision: listingOnlyDecision(
+        rowToResult({ row, content: EMPTY_CONTENT, detail, detailHtml }),
+      ),
+    };
+  }
+  const { content } = contentRead;
   const decision = rowToResult({ row, content, detail, detailHtml });
 
   // Both document endpoints answered with nothing usable. The metadata row is
@@ -2709,7 +2775,7 @@ export const czNssAdapter = defineSourceAdapter({
         `31.12.${Temporal.Now.plainDateISO().year + 1}`,
       );
 
-      const response = await fetchPublisher(`${BASE_URL}/Home/Index`, {
+      const read = await readPublisher(`${BASE_URL}/Home/Index`, {
         fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         method: "POST",
@@ -2725,14 +2791,16 @@ export const czNssAdapter = defineSourceAdapter({
         timeoutMs: 90_000,
       });
 
-      if (!response.ok) {
-        return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
+      if (read.type !== "present") {
+        return read.type === "unavailable" && read.cause.kind === "thrown"
+          ? { type: "probe-failed", errorTag: errorTag(read.cause.error) }
+          : sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
 
       // A zero here is not a corpus of nothing; it is a search that did not
       // run, which `sourceTotalRead` refuses along with every other value a
       // total cannot be.
-      const count = statedResultCount(await response.text());
+      const count = statedResultCount(await read.value.text());
       return count === null
         ? sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD)
         : sourceTotalRead(count);
