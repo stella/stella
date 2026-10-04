@@ -273,19 +273,14 @@ const readCappedDocumentBody = async (
 ): Promise<CappedBody> => {
   const prefix = new Uint8Array(OVERSIZED_PREFIX_BYTES);
   let prefixBytes = 0;
-  const observed = body.pipeThrough(
-    new TransformStream<Uint8Array, Uint8Array>({
-      transform: (chunk, controller) => {
-        if (prefixBytes < OVERSIZED_PREFIX_BYTES) {
-          const part = chunk.subarray(0, OVERSIZED_PREFIX_BYTES - prefixBytes);
-          prefix.set(part, prefixBytes);
-          prefixBytes += part.byteLength;
-        }
-        controller.enqueue(chunk);
-      },
-    }),
-  );
-  const bytes = await readCappedBytes(observed, MAX_DOCUMENT_PDF_BYTES);
+  const bytes = await readCappedBytes(body, MAX_DOCUMENT_PDF_BYTES, (chunk) => {
+    if (prefixBytes >= OVERSIZED_PREFIX_BYTES) {
+      return;
+    }
+    const part = chunk.subarray(0, OVERSIZED_PREFIX_BYTES - prefixBytes);
+    prefix.set(part, prefixBytes);
+    prefixBytes += part.byteLength;
+  });
   return bytes === null
     ? { type: "over", prefix: prefix.subarray(0, prefixBytes) }
     : { type: "complete", bytes };
