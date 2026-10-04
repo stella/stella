@@ -102,7 +102,11 @@ Merges go through `bun scripts/merge-bar.ts <pr>`: it re-reads PR state,
 mergeability, the required checks on the exact head SHA, unresolved review
 threads, and migration identity (no merged migration renamed or deleted) in
 one invocation, then
-arms "merge when ready" pinned to that head. Release pull requests queue
+arms "merge when ready" with `expectedHeadOid` checked at arm time. The
+`disarm-auto-merge.yml` synchronize workflow disables auto-merge after pushes
+from anyone except the CI autofix app. HOLD means
+`bun scripts/merge-bar.ts --disarm <pr>`: disable auto-merge and dequeue.
+Release pull requests queue
 normally; only an explicit `--jump` enqueues a pull request at the front.
 Main has a merge queue: GitHub
 builds main plus the pull request, runs CI on that commit, and merges only if

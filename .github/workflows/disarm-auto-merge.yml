@@ -1,0 +1,51 @@
+name: Disarm auto-merge on push
+
+on:
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  disarm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Disarm changed pull request
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const shouldDisarm = ({ sender, autoMerge }) =>
+              autoMerge !== null && !(
+                sender?.login === "autofix-ci[bot]" &&
+                sender?.id === 114827586 &&
+                sender?.type === "Bot"
+              );
+
+            const { owner, repo } = context.repo;
+            const number = context.payload.pull_request.number;
+            const { repository: { pullRequest: pull } } = await github.graphql(`
+              query($owner:String!, $repo:String!, $number:Int!) {
+                repository(owner:$owner,name:$repo) {
+                  pullRequest(number:$number) { id autoMergeRequest { enabledAt } }
+                }
+              }
+            `, { owner, repo, number });
+            // Read current state: the synchronize snapshot may predate arming.
+            // Keep every event; a later autofix must not cancel a human push.
+            if (!shouldDisarm({ sender: context.payload.sender, autoMerge: pull.autoMergeRequest })) {
+              await core.summary.addRaw(`PR #${number}: auto-merge kept or already disabled.`).write();
+              return;
+            }
+            const { disablePullRequestAutoMerge: { pullRequest: after } } = await github.graphql(`
+              mutation($id:ID!) {
+                disablePullRequestAutoMerge(input:{pullRequestId:$id}) {
+                  pullRequest { id autoMergeRequest { enabledAt } }
+                }
+              }
+            `, { id: pull.id });
+            if (after.id !== pull.id || after.autoMergeRequest !== null) {
+              throw new Error("Auto-merge disable receipt did not confirm disarming");
+            }
+            await core.summary.addRaw(`PR #${number}: auto-merge disabled after push.`).write();
