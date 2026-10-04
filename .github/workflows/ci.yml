@@ -2231,7 +2231,8 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: |
           bun test scripts/check-migration-order.test.ts
-          bun test scripts/merge-bar.test.ts scripts/merge-bar-freshness.test.ts
+          bun test scripts/merge-bar.test.ts scripts/merge-bar-freshness.test.ts \
+            scripts/merge-bar-arm-guard.test.ts scripts/merge-bar-disarm.test.ts
 
       # Check migration identity against the branch this run merges into. In a
       # merge group that is main as it stands at merge time.
