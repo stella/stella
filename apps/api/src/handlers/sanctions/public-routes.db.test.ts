@@ -656,9 +656,38 @@ describe("public sanctions search parity", () => {
           ),
         );
       }
+      // Finish the immutable edition before loading either access boundary's index.
+      // Valid single-token input can still exceed the edit-distance backstop.
+      const costlyName = "abcde".repeat(90);
+      const costly = Array.from({ length: 8 }, (_, index) =>
+        entry({
+          source: "eu",
+          sourceId: `costly-${index}`,
+          overrides: {
+            names: [{ name: `${costlyName}${index}`, quality: "strong" }],
+          },
+        }),
+      );
+      const partialAliases = Array.from({ length: 100 }, (_, index) =>
+        entry({
+          source: "eu",
+          sourceId: `partial-${index}`,
+          overrides: {
+            entityType: "person",
+            names: [{ name: `Mohammed${index} Ali`, quality: "weak" }],
+          },
+        }),
+      );
+      await seedEntries("eu", [...costly, ...partialAliases]);
       await db
         .update(sanctionsEditions)
-        .set({ entryCount: entriesFor("eu").length + BENCHMARK_ENTRY_COUNT })
+        .set({
+          entryCount:
+            entriesFor("eu").length +
+            BENCHMARK_ENTRY_COUNT +
+            costly.length +
+            partialAliases.length,
+        })
         .where(eq(sanctionsEditions.id, activeEdition("eu")));
       const cache = createSanctionsIndexCache();
       const context = new InMemoryRateLimitContext();
@@ -748,7 +777,7 @@ describe("public sanctions search parity", () => {
         }
         const parityCaches = {
           product: createSanctionsIndexCache(),
-          public: createSanctionsIndexCache(),
+          public: cache,
         };
         for (const name of [
           "Registered Entity 42 Holdings",
@@ -774,45 +803,9 @@ describe("public sanctions search parity", () => {
           },
         });
         expect(person.status).toBe("possible-match");
-        // Valid single-token input can still exceed the edit-distance backstop.
-        const name = "abcde".repeat(90);
-        const costly = Array.from({ length: 8 }, (_, index) =>
-          entry({
-            source: "eu",
-            sourceId: `costly-${index}`,
-            overrides: {
-              names: [{ name: `${name}${index}`, quality: "strong" }],
-            },
-          }),
-        );
-        const partialAliases = Array.from({ length: 100 }, (_, index) =>
-          entry({
-            source: "eu",
-            sourceId: `partial-${index}`,
-            overrides: {
-              entityType: "person",
-              names: [{ name: `Mohammed${index} Ali`, quality: "weak" }],
-            },
-          }),
-        );
-        await seedEntries("eu", [...costly, ...partialAliases]);
-        await db
-          .update(sanctionsEditions)
-          .set({
-            entryCount:
-              entriesFor("eu").length +
-              BENCHMARK_ENTRY_COUNT +
-              costly.length +
-              partialAliases.length,
-          })
-          .where(eq(sanctionsEditions.id, activeEdition("eu")));
-        const incompleteCaches = {
-          product: createSanctionsIndexCache(),
-          public: createSanctionsIndexCache(),
-        };
         const incomplete = await assertParity({
-          caches: incompleteCaches,
-          subject: { type: "organization", name, companyId: null },
+          caches: parityCaches,
+          subject: { type: "organization", name: costlyName, companyId: null },
         });
         expect(
           incomplete.lists.find(({ source }) => source === "eu"),
@@ -824,7 +817,7 @@ describe("public sanctions search parity", () => {
         });
         expect(incomplete.status).not.toBe("clear");
         const partial = await assertParity({
-          caches: incompleteCaches,
+          caches: parityCaches,
           subject: {
             type: "organization",
             name: "Mohammed Ali",
