@@ -152,7 +152,9 @@ const isNormalized = (context: Context, node: AstNode): boolean => {
   }
   const binding = resolveImport(context, node.callee);
   return (
-    binding?.imported === "childExitStatus" && binding.moduleId.endsWith(OWNER)
+    binding?.imported === "childExitStatus" &&
+    (binding.moduleId.endsWith(OWNER) ||
+      binding.moduleId === "@stll/scripts/src/child-exit-status")
   );
 };
 
@@ -303,7 +305,7 @@ const rawCallStatus = ({ context, node, seen }: StatusOptions): boolean => {
       isAstNode(declaration) &&
       declaration.type === "FunctionDeclaration"
         ? declaration
-        : variable === null || variable === undefined
+        : variable === null
           ? null
           : stableInitializer(variable);
     if (

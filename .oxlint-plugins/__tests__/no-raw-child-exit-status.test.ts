@@ -155,6 +155,23 @@ describe("child termination normalization", () => {
     ).toEqual([6, 7, 11, 12]);
     expect(
       await lint(
+        [
+          'import { childExitStatus as normalize } from "@stll/scripts/src/child-exit-status";',
+          'import * as status from "@stll/scripts/src/child-exit-status";',
+          'import { childExitStatus as foreign } from "@stll/scripts/src/child-exit-status-other";',
+          'const child = Bun.spawn(["tool"]);',
+          "process.exit(normalize(child));",
+          "process.exit(status.childExitStatus(child));",
+          "const { childExitStatus: safe } = status;",
+          "const alias = safe;",
+          "process.exitCode = alias(child);",
+          "process.exit(child.exitCode);",
+          "process.exit(foreign(child));",
+        ].join("\n"),
+      ),
+    ).toEqual([10, 11]);
+    expect(
+      await lint(
         'import { childExitStatus } from "./child-exit-status"; const child = Bun.spawn(["tool"]); process.exit(childExitStatus(child));',
         "packages/scripts/src/example.ts",
       ),

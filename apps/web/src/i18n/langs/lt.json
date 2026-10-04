@@ -2288,6 +2288,7 @@
       "deeplQuotaExceeded": "Šios organizacijos „DeepL“ simbolių kvota išnaudota.",
       "disposableEmailNotAllowed": "Laikini el. pašto adresai neleidžiami. Naudokite nuolatinį el. pašto adresą.",
       "encryptedContent": "Užšifruoto dokumento turinio išgauti negalima. Pašalinkite failo slaptažodį ir bandykite dar kartą.",
+      "filePropertyTypeImmutable": "Failo savybės tipo keisti negalima. Palikite esamą tipą; kitoms reikšmėms sukurkite pasirinktinę savybę.",
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
       "legalSourceEntityLimitReached": "Šioje byloje pasiektas elementų limitas, todėl dokumento sukurti nepavyko.",

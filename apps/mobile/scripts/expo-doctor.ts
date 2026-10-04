@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { childExitStatus } from "../../../packages/scripts/src/child-exit-status";
+import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 const DUPLICATE_CHECK = "Check that no duplicate dependencies are installed";
 const EXPO_BUN_WORKSPACE_ISSUE = "https://github.com/expo/expo/issues/46429";

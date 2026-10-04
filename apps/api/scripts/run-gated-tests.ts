@@ -1,6 +1,7 @@
 import path from "node:path";
 
-import { childExitStatus } from "../../../packages/scripts/src/child-exit-status";
+import { childExitStatus } from "@stll/scripts/src/child-exit-status";
+
 import packageJson from "../package.json" with { type: "json" };
 import { buildApiTestCommand } from "./api-test-command";
 import {

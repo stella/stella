@@ -3794,6 +3794,7 @@ export default defineConfig({
               "apps/api/src/env-db-load-gate.ts",
               "apps/api/src/env-online-index.ts",
               "apps/api/src/env-db-timeouts.ts",
+              "apps/api/src/env-replay.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/db-url.ts",
@@ -3966,11 +3967,16 @@ export default defineConfig({
     {
       // Every workspace mutation must leave an audit trail (SOC 2 /
       // ISO 27001). Handlers are held to the full rule; the block below
-      // extends it to MCP and library code with a reasoned ledger.
+      // extends it to MCP and library code with a reasoned ledger. A handler
+      // module registered in SYSTEM_AUDIT_MODULES is audited by its actor's
+      // run, as in library code.
       files: ["apps/api/src/handlers/**/*.ts"],
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
-        "require-audit-on-mutation/require-audit-on-mutation": "error",
+        "require-audit-on-mutation/require-audit-on-mutation": [
+          "error",
+          { systemModules: SYSTEM_AUDIT_MODULES },
+        ],
       },
     },
     {

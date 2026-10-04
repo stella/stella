@@ -10,8 +10,8 @@ import { availableParallelism, tmpdir, totalmem } from "node:os";
 import path from "node:path";
 
 import { PROPERTY_TEST_TIMEOUT_BASE_MS_ENV } from "@stll/property-testing";
+import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
-import { childExitStatus } from "../../../packages/scripts/src/child-exit-status";
 import { API_TEST_TIMEOUT_MS } from "../src/tests/test-timeouts";
 import { buildApiTestCommand } from "./api-test-command";
 import {

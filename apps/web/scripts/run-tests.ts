@@ -2,7 +2,8 @@ import { statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { childExitStatus } from "../../../packages/scripts/src/child-exit-status";
+import { childExitStatus } from "@stll/scripts/src/child-exit-status";
+
 import { planTestRuns } from "./test-run-plan";
 import type { PathKind } from "./test-run-plan";
 

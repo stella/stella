@@ -15,7 +15,8 @@
 
 import path from "node:path";
 
-import { childExitStatus } from "../../../packages/scripts/src/child-exit-status";
+import { childExitStatus } from "@stll/scripts/src/child-exit-status";
+
 import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
 
 const API_ROOT = path.resolve(import.meta.dir, "..");

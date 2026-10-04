@@ -6,8 +6,7 @@ import {
   getRunnerDefinitions,
   isRunnerName,
 } from "@stll/legal-atlas";
-
-import { childExitStatus } from "../../../packages/scripts/src/child-exit-status";
+import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 const HELP = `Usage:
   legal-atlas list

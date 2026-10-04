@@ -34,6 +34,7 @@ import type {
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { deriveBlockId } from "@stll/folio-core/server";
+import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 import {
   billingCodes,
@@ -91,7 +92,6 @@ import type {
 } from "@/api/lib/workflow/playbook-positions";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
-import { childExitStatus } from "../../../packages/scripts/src/child-exit-status";
 import { seedCaseLaw } from "./seed-case-law";
 import { seedTemplates } from "./seed-templates";
 import {
