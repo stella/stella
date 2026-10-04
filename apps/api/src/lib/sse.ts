@@ -1317,7 +1317,9 @@ export const startSse = (
   }
 
   const lifecycle: SseLifecycle = {
-    createClient: dependencies.createClient ?? createRedisClient,
+    createClient:
+      dependencies.createClient ??
+      (() => createRedisClient({ storeClass: "cache" })),
     keepAliveTimer: setInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL_MS),
     publishAccessRevoked:
       dependencies.publishAccessRevoked ?? publishWorkspaceAccessRevoked,

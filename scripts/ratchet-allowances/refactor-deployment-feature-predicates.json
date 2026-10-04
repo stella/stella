@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "lib/deployment-feature.ts is the single owner of FEATURE_* flag reads and their per-flag local-development policy, used by handlers, lib, mcp and scheduler code alike. It replaces lib/legal-search/public-law-feature.ts, lib/lists/deployment.ts and copies in mcp and handlers, which no single subdirectory owns."
+}

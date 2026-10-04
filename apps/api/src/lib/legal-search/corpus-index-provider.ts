@@ -35,6 +35,10 @@ import {
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
 import {
+  corpusQueryVariant,
+  corpusQueryVariantCursorTarget,
+} from "@/api/lib/legal-search/corpus-query-variant-policy";
+import {
   type CorpusIndexRankingMode,
   corpusQueryRankingMode,
   corpusRankingCursorTarget,
@@ -271,9 +275,13 @@ const searchResult = async (
     sort: "relevance",
     textTokenCount: tokenizeCorpusFreeText(query.query).length,
   });
-  const cursorTarget = corpusRankingCursorTarget(
-    target.value.cursorTarget,
-    rankingMode,
+  const queryVariant = corpusQueryVariant({
+    configuredVariant: envBase.CORPUS_INDEX_QUERY_VARIANT,
+    verbatim: false,
+  });
+  const cursorTarget = corpusQueryVariantCursorTarget(
+    corpusRankingCursorTarget(target.value.cursorTarget, rankingMode),
+    queryVariant,
   );
   const generation = serving.generation;
 
@@ -286,7 +294,7 @@ const searchResult = async (
   // resolver takes it separately from the clause.
   // The generation decides which fields exist to be named; the language
   // filter, then the jurisdiction, decides how the reader's words are stemmed.
-  const { surfaceFields, keywordFields, stemming } = caseLawCorpusQueryFields({
+  const fields = caseLawCorpusQueryFields({
     generation,
     jurisdiction: query.jurisdiction,
     language: query.language,
@@ -296,6 +304,7 @@ const searchResult = async (
       caseLawCorpusQuery({
         jurisdiction: query.jurisdiction,
         text: query.query,
+        queryVariant,
         filters: {
           court: query.court,
           courtPartitions: courtPartitionsForCourtFilter(contract, query.court),
@@ -307,9 +316,8 @@ const searchResult = async (
           source: query.source,
         },
         expand,
-        stemming,
-        surfaceFields,
-        keywordFields,
+        ...fields,
+        functionWords: null,
       }),
     jurisdiction: query.jurisdiction,
     mode: envBase.QUERY_EXPANSION_MODE,
@@ -386,7 +394,7 @@ const searchResult = async (
         : markCorpusFragment({
             text,
             tokens: snippetTokens,
-            language: stemming?.language ?? null,
+            language: fields.stemming?.language ?? null,
           });
     },
     // Upper bound for the pagination early-stop: scanning may end only once

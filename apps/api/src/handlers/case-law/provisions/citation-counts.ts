@@ -29,7 +29,7 @@ type StatuteCitationCountsQuery = Static<
 >;
 
 /** A hard response bound; exceeding it hides counts rather than truncating. */
-const PROVISION_COUNT_LIMIT = 10_000;
+export const PROVISION_COUNT_LIMIT = 10_000;
 
 export const readStatuteCitationCountsHandler = async (
   query: StatuteCitationCountsQuery,

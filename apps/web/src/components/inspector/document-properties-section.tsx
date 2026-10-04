@@ -15,11 +15,11 @@ import {
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import { stellaToast } from "@stll/ui/toast";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { documentPropertiesQueryKey } from "@/lib/files/file-metadata-query.logic";
 import {
   documentPropertiesOptions,
@@ -306,10 +306,10 @@ const EditablePropertyValue = ({
 
     if (Result.isError(result)) {
       setDraft(value);
-      stellaToast.add({
-        title: t("inspector.metadata.documentProperties.saveFailed"),
-        type: "error",
-      });
+      notifyUserError(
+        result.error,
+        t("inspector.metadata.documentProperties.saveFailed"),
+      );
       return;
     }
     await queryClient.invalidateQueries({

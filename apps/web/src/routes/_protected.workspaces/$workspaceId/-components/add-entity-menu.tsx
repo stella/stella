@@ -29,6 +29,8 @@ import type { StyleSelection } from "@/features/style-sets/style-set-picker-dial
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
+import { toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateEntities } from "@/lib/workspaces/mutations/entities";
 import { useCreateTask } from "@/lib/workspaces/mutations/tasks";
@@ -124,11 +126,8 @@ export const AddEntityMenu = ({
           });
           onFolderCreated?.(data.entityId);
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -165,10 +164,7 @@ export const AddEntityMenu = ({
               styleSetId: toSafeId<"styleSet">(style.styleSetId),
             });
     if (response.error) {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+      notifyUserError(toAPIError(response.error), t("errors.actionFailed"));
       return false;
     }
 

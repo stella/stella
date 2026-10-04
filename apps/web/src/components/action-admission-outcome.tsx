@@ -4,7 +4,7 @@ import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { getTranslator } from "@/i18n/i18n-store";
+import { getTranslator } from "@/i18n/translator";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { sanitizeHref } from "@/lib/sanitize-href";
 

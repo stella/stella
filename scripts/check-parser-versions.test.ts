@@ -137,6 +137,36 @@ test("registered versions cannot decrease, including unchanged and exempted outp
   }
 });
 
+test("an owner-scoped unchanged marker exempts only its registered source", () => {
+  const base = fixture();
+  const parserChanged = {
+    markerSource:
+      "// parser-output-unchanged: [test-a] A does not reach this shared change\n",
+    helperSource: "export const helper = () => 'changed';\n",
+  };
+  expect(changed(base, fixture(parserChanged))).toEqual([
+    expect.stringContaining("test-b: parser version 1 must exceed base 1"),
+  ]);
+
+  const unknownOwner = fixture({
+    markerSource:
+      "// parser-output-unchanged: [not-registered] no source owns this marker\n",
+    helperSource: "export const helper = () => 'changed';\n",
+  });
+  expect(
+    changed(base, unknownOwner).map((message) => message.split(":")[0]),
+  ).toEqual(["test-a", "test-b"]);
+
+  const malformedOwner = fixture({
+    markerSource:
+      "// parser-output-unchanged: [test_a] malformed owner syntax must not become global\n",
+    helperSource: "export const helper = () => 'changed';\n",
+  });
+  expect(
+    changed(base, malformedOwner).map((message) => message.split(":")[0]),
+  ).toEqual(["test-a", "test-b"]);
+});
+
 test("adapter case-law helpers are owned without unrelated dependency fan-out", () => {
   const helper = "apps/api/src/lib/case-law/court.ts";
   const nestedHelper = "apps/api/src/lib/case-law/court-name.ts";

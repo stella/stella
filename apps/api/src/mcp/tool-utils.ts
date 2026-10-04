@@ -23,11 +23,11 @@ import {
 } from "@stll/api-contract/statute-route";
 import type { StatuteRouteInput } from "@stll/api-contract/statute-route";
 
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
@@ -51,7 +51,6 @@ import type {
   InternalToolSuccess,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
-import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
  * Wrap the request-scoped recorder so audit rows written by the reused backing
@@ -1119,13 +1118,12 @@ export const buildMatterUrl = (workspaceId: string) =>
 
 export { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 
-export const isPublicLawAppUrlEnabled = (): boolean =>
-  isLocalDevOpen() || env.FEATURE_PUBLIC_LAW;
-
 export const buildCaseLawDecisionAppUrl = (
   input: CaseLawDecisionRouteInput,
 ): string | null =>
-  isPublicLawAppUrlEnabled() ? buildCaseLawDecisionUrl(input) : null;
+  isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW")
+    ? buildCaseLawDecisionUrl(input)
+    : null;
 
 /**
  * The route shape is owned by `@stll/api-contract/case-law-decision-route`, so
@@ -1177,7 +1175,7 @@ export const buildLegislationDocumentAppUrl = ({
   eli,
   slug,
 }: Omit<StatuteRouteInput, "version">): string | null =>
-  isPublicLawAppUrlEnabled()
+  isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW")
     ? `${getAppBaseUrl()}${createStatutePath(
         createStatuteRouteParams({
           country,

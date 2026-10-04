@@ -13,6 +13,7 @@ import {
   statuteCitationCaseCount,
   statuteCitationCountStateJoin,
 } from "@/api/handlers/legislation/citation-count";
+import { projectStatuteReader } from "@/api/handlers/legislation/reader-response";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -124,7 +125,7 @@ export const readPublicLegislationHandler = async (
         step: "readLegislation.corpusText",
       });
 
-  return { ...rest, documentAst, fulltext };
+  return projectStatuteReader({ ...rest, documentAst, fulltext });
 };
 
 const config = {

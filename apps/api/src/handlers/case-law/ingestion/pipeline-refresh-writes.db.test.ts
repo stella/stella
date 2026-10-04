@@ -431,9 +431,9 @@ test.each([
     await ingest(withoutDocument(caseNumber, "page-v1"), corpus);
     const first = await storedRow(caseNumber);
     // Stored unpublished: an inline source that served no document.
-    expect(partialObservationFromMetadata(first.metadata).isListingOnly).toBe(
-      true,
-    );
+    expect(
+      partialObservationFromMetadata(first.metadata).detail === "listing-only",
+    ).toBe(true);
     expect(first.mirrorStatus).toBe("settled");
     const packsBefore = transferred.length;
 
@@ -460,9 +460,9 @@ test("a document arriving for a document-less decision is still written", async 
   const second = await storedRow(caseNumber);
   expect(second.contentHash).not.toBe(first.contentHash);
   expect(second.updatedAt).not.toBe(first.updatedAt);
-  expect(partialObservationFromMetadata(second.metadata).isListingOnly).toBe(
-    false,
-  );
+  expect(
+    partialObservationFromMetadata(second.metadata).detail === "listing-only",
+  ).toBe(false);
   const decisionRow = (
     await db
       .select({ id: caseLawDecisions.id })

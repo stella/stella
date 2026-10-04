@@ -25,10 +25,10 @@ import { Label } from "@stll/ui/label";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { TextSeparator } from "@stll/ui/separator";
-import { stellaToast } from "@stll/ui/toast";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
 import { SKILL_CHIP_CATALOG } from "@/components/chat-editor-slash-items";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { ConditionGroupEditor } from "@/routes/knowledge/-components/condition-builder";
 import {
   emptyGroup,
@@ -756,10 +756,10 @@ const ConditionReusePicker = ({
               className="hover:bg-muted flex w-full items-center gap-2 rounded px-1.5 py-1.5 text-start text-sm"
               onClick={() => {
                 if (!onRewrite(option.ref)) {
-                  stellaToast.add({
-                    type: "error",
-                    title: t("templates.studio.invalidExpression"),
-                  });
+                  notifyUserError(
+                    undefined,
+                    t("templates.studio.invalidExpression"),
+                  );
                   return;
                 }
                 setOpen(false);
@@ -893,10 +893,7 @@ const ConditionRuleBuilder = ({
       setOpen(false);
       return;
     }
-    stellaToast.add({
-      type: "error",
-      title: t("templates.studio.invalidExpression"),
-    });
+    notifyUserError(undefined, t("templates.studio.invalidExpression"));
   };
 
   if (!open) {
@@ -997,10 +994,7 @@ const ConditionAiBuilder = ({
       aiPrompt: trimmedPrompt,
     });
     if (!onRewrite(path)) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.studio.invalidExpression"),
-      });
+      notifyUserError(undefined, t("templates.studio.invalidExpression"));
     }
   };
 

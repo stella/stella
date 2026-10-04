@@ -50,6 +50,8 @@ import {
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { DECISION_DOCUMENT_HYDRATION } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import { searchCorpusIndexDecisions } from "@/api/handlers/case-law/decisions/search";
+import * as searchInterpretation from "@/api/handlers/case-law/decisions/search-interpretation";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { executeRegistryLookup } from "@/api/lib/business-registries/dispatch";
@@ -64,6 +66,11 @@ import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
+import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
+import type { ServingCorpusIndexTarget } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
+import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
+import { corpusQueryVariantCursorTarget } from "@/api/lib/legal-search/corpus-query-variant-policy";
+import { corpusRankingCursorTarget } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
   CORPUS_SEARCH_CURSOR_MAX_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
@@ -2122,6 +2129,93 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(second.nextCursor).toBeNull();
   });
 
+  test("search_case_law and its handler interpret the enabled query variant identically", async () => {
+    const configuredVariant = "provision-refs";
+    const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+    const resolution = corpusIndexReadTarget({
+      manifest,
+      jurisdiction: "CZE",
+      attestedGroups: new Set(),
+      enrolledGroups: new Set(),
+    });
+    if (resolution.type !== "ready") {
+      panic("Expected the base Czech corpus group to be ready");
+    }
+    const target = {
+      ...resolution.target,
+      manifest,
+      serving: {
+        family: "case_law",
+        generation: manifest.generation,
+        cluster: manifest.cluster,
+      },
+    } as const satisfies ServingCorpusIndexTarget;
+    // An off-variant cursor stops the real handler after interpretation,
+    // before database or engine reads, when provision grouping is enabled.
+    const cursor = encodeCorpusSearchCursor({
+      dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+      id: DECISION_ID,
+      score: 0.5,
+      sort: "relevance",
+      windowStart: 0,
+      target: corpusQueryVariantCursorTarget(
+        corpusRankingCursorTarget(
+          target.cursorTarget,
+          envBase.CORPUS_INDEX_RANKING_MODE,
+        ),
+        "off",
+      ),
+    });
+    const unreadableDb = Object.assign(
+      async () => panic("A cross-variant cursor must not read the database"),
+      caseLawPublicReadDb,
+    );
+    searchDecisionsHandlerMock.mockImplementation(
+      async ({ body, observer }) =>
+        await searchCorpusIndexDecisions({
+          body,
+          caseLawDb: unreadableDb,
+          observer,
+          dependencies: {
+            configuredVariant,
+            readServingTarget: async () => Result.ok(target),
+          },
+        }),
+    );
+    const capture = spyOn(searchInterpretation, "interpretDecisionQuery");
+    try {
+      const result = await handleMcpToolCall({
+        args: {
+          country: "CZE",
+          queries: ["§ 451 občanského zákoníku"],
+          cursor,
+        },
+        context: createContext({
+          testDependencies: { corpusIndexQueryVariant: configuredVariant },
+        }),
+        toolName: "search_case_law",
+      });
+      expect(result.isError).toBe(true);
+      expect(parseToolPayload(result)).toMatchObject({
+        error: {
+          code: "validation_error",
+          message: "Invalid cursor",
+          hint: expect.stringContaining("search_case_law"),
+        },
+      });
+      expect(capture).toHaveBeenCalledTimes(2);
+      const mcpInterpretation = capture.mock.results.at(0);
+      const handlerInterpretation = capture.mock.results.at(1);
+      expect(mcpInterpretation).toEqual({
+        type: "return",
+        value: expect.objectContaining({ queryVariant: "provision-refs" }),
+      });
+      expect(handlerInterpretation).toEqual(mcpInterpretation);
+    } finally {
+      capture.mockRestore();
+    }
+  });
+
   test("search_case_law maps filters and returns decision links", async () => {
     searchDecisionsHandlerMock.mockResolvedValue({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
@@ -2213,8 +2307,8 @@ describe("OpenAI-compatible MCP tools", () => {
 
     // snake_case in, the body's camelCase out, and `sort` reaches the handler
     // as the closed value the public body declares.
-    expect(searchDecisionsHandlerMock).toHaveBeenCalledWith(
-      {
+    expect(searchDecisionsHandlerMock).toHaveBeenCalledWith({
+      body: {
         country: "CZE",
         court: "Nejvyšší soud",
         dateFrom: "2024-01-01",
@@ -2225,9 +2319,9 @@ describe("OpenAI-compatible MCP tools", () => {
         sort: "newest",
         sourceId: "11111111-1111-4111-8111-111111111111",
       },
-      caseLawPublicReadDb,
+      caseLawDb: caseLawPublicReadDb,
       observer,
-    );
+    });
 
     expect(parseToolPayload(result)).toEqual({
       facets: {
@@ -2838,7 +2932,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("search_case_law merges several phrasings by best rank", async () => {
     searchDecisionsHandlerMock.mockImplementation(
-      async ({ query }: { query: string }) => ({
+      async ({ body: { query } }: { body: { query: string } }) => ({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: {
           court: [],
@@ -2913,14 +3007,14 @@ describe("OpenAI-compatible MCP tools", () => {
     // `limit` bounds the merged page, so each phrasing was asked for half.
     expect(
       searchDecisionsHandlerMock.mock.calls.map(
-        (call) => asTestRaw<{ limit: number }>(call.at(0)).limit,
+        (call) => asTestRaw<{ body: { limit: number } }>(call.at(0)).body.limit,
       ),
     ).toEqual([5, 5]);
   });
 
   test("search_case_law resumes each phrasing from its own sub-cursor", async () => {
     searchDecisionsHandlerMock.mockImplementation(
-      async ({ query }: { query: string }) => ({
+      async ({ body: { query } }: { body: { query: string } }) => ({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: null,
         hits: [createCaseLawHit(`dec-${query}`, query)],
@@ -2958,11 +3052,14 @@ describe("OpenAI-compatible MCP tools", () => {
     // The exhausted phrasing is not re-run, and the other resumes where its
     // own page ended.
     expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(1);
-    expect(searchDecisionsHandlerMock).toHaveBeenCalledWith(
-      expect.objectContaining({ cursor: "engine-first-2", query: "first" }),
-      caseLawPublicReadDb,
+    expect(searchDecisionsHandlerMock).toHaveBeenCalledWith({
+      body: expect.objectContaining({
+        cursor: "engine-first-2",
+        query: "first",
+      }),
+      caseLawDb: caseLawPublicReadDb,
       observer,
-    );
+    });
   });
 
   test("search_case_law reports what an exhausted phrasing required", async () => {
@@ -2971,7 +3068,7 @@ describe("OpenAI-compatible MCP tools", () => {
     // claim every one of its words was required, which is the opposite of
     // what page one did with it.
     searchDecisionsHandlerMock.mockImplementation(
-      async ({ query }: { query: string }) => ({
+      async ({ body: { query } }: { body: { query: string } }) => ({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: null,
         hits: [createCaseLawHit(`dec-${query}`, query)],
@@ -3049,7 +3146,7 @@ describe("OpenAI-compatible MCP tools", () => {
       CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
     );
     searchDecisionsHandlerMock.mockImplementation(
-      async ({ query }: { query: string }) => ({
+      async ({ body: { query } }: { body: { query: string } }) => ({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: null,
         hits: [createCaseLawHit("dec-a", "a")],
@@ -3094,11 +3191,11 @@ describe("OpenAI-compatible MCP tools", () => {
         toolName: "search_case_law",
       });
     expect(continued.isError).toBeUndefined();
-    expect(searchDecisionsHandlerMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ cursor: longestEngineCursor }),
-      caseLawPublicReadDb,
+    expect(searchDecisionsHandlerMock).toHaveBeenLastCalledWith({
+      body: expect.objectContaining({ cursor: longestEngineCursor }),
+      caseLawDb: caseLawPublicReadDb,
       observer,
-    );
+    });
   });
 
   test("search_case_law rejects a cursor issued for another query count", async () => {
@@ -4310,11 +4407,11 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "search_case_law",
     });
 
-    expect(searchDecisionsHandlerMock).toHaveBeenCalledWith(
-      expect.objectContaining({ dateFrom: "2026-10-01" }),
-      caseLawPublicReadDb,
+    expect(searchDecisionsHandlerMock).toHaveBeenCalledWith({
+      body: expect.objectContaining({ dateFrom: "2026-10-01" }),
+      caseLawDb: caseLawPublicReadDb,
       observer,
-    );
+    });
   });
 
   test("search_case_law rejects invalid source IDs", async () => {
@@ -4348,7 +4445,8 @@ describe("OpenAI-compatible MCP tools", () => {
    */
   describe("search_case_law reads a full-property client's placeholders", () => {
     const searchedBody = (): Record<string, unknown> => {
-      const body = searchDecisionsHandlerMock.mock.calls.at(0)?.at(0);
+      const args = searchDecisionsHandlerMock.mock.calls.at(0)?.at(0);
+      const body = isRecord(args) ? args["body"] : undefined;
       if (!isRecord(body)) {
         throw new Error("expected the search to run");
       }
@@ -8146,12 +8244,16 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("save_task completes cancelled work while governed enforcement is off", async () => {
     const { scopedDb, workflowUpdates } = createTaskStatusScopedDb();
+    // Local development opens governed workflow; strict mode lets the flag decide.
+    const restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: RUNTIME_MODE.strict,
+    });
 
     const result = await handleMcpToolCall({
       args: { task_id: "00000000-0000-4000-8000-00000007a001", status: "done" },
       context: createContext({ scopedDb }),
       toolName: "save_task",
-    });
+    }).finally(restoreRuntimeMode);
 
     expect(result).toEqual({
       content: [

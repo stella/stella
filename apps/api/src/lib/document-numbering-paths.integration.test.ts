@@ -625,6 +625,7 @@ test("matter creation skips an already numbered reference candidate", async () =
   const created = expectOk(
     await Result.gen(() =>
       createWorkspaceHandler({
+        userEmail: "standard@example.test",
         safeDb: asTestRaw(createSafeDb(testDb, [], ids.orgA, ids.userA1)),
         organizationId: ids.orgA,
         userId: ids.userA1,
@@ -698,6 +699,7 @@ test.each([
     const create = async () =>
       await Result.gen(() =>
         createWorkspaceHandler({
+          userEmail: "standard@example.test",
           safeDb: asTestRaw(createSafeDb(testDb, [], ids.orgA, ids.userA1)),
           organizationId: ids.orgA,
           userId: ids.userA1,

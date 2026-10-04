@@ -35,6 +35,8 @@ const STEP = 41;
 
 const budgetWithStep = (step: number): ArchiveInspectionBudget => ({
   windowBytes: OVERLAP + step,
+  maxNestedEntryBytes: 1024 * 1024,
+  maxTotalInflatedBytes: 1024 * 1024 * 1024,
   maxEvidenceBytes: 4 * 1024 * 1024,
   timeBudgetMs: 600_000,
 });
@@ -423,7 +425,12 @@ describe("archives that cannot be inspected", () => {
     );
     const matches = await scanArchive(
       await zipOf([{ name: "word/_rels/document.xml.rels", content }]),
-      { ...REFUSAL_BUDGET, maxEvidenceBytes: 1024 },
+      {
+        ...REFUSAL_BUDGET,
+        maxNestedEntryBytes: 1024 * 1024,
+        maxTotalInflatedBytes: 1024 * 1024 * 1024,
+        maxEvidenceBytes: 1024,
+      },
     );
 
     expect(rulesOf(matches)).toEqual(["archive-inspection-budget"]);

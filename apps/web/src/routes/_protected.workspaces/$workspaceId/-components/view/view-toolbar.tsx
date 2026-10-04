@@ -69,6 +69,7 @@ import { toAPIError } from "@/lib/errors/api";
 import type { ToAPIErrorProps } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { getExportBaseName, getExportFileName } from "@/lib/export-download";
 import {
   PLAYBOOK_PICKER_LIMIT,
@@ -494,10 +495,7 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
 
     if (Result.isError(result)) {
       analytics.captureError(result.error);
-      stellaToast.add({
-        title: t("workspaces.views.exportFailed"),
-        type: "error",
-      });
+      notifyUserError(result.error, t("workspaces.views.exportFailed"));
       return;
     }
 
@@ -617,16 +615,14 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
     const result = await Result.tryPromise(request);
     onSettled();
 
-    const reportFailure = (description: string) => {
-      stellaToast.add({
-        type: "error",
-        title: t("workspaces.playbooks.runFailed"),
+    const reportFailure = (error: unknown, description: string) => {
+      notifyUserError(error, t("workspaces.playbooks.runFailed"), {
         description,
       });
     };
     if (Result.isError(result)) {
       analytics.captureError(result.error);
-      reportFailure(t("common.unexpectedError"));
+      reportFailure(result.error, t("common.unexpectedError"));
       return null;
     }
 
@@ -634,12 +630,13 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
     if (response.error) {
       analytics.captureError(toAPIError(response.error));
       reportFailure(
+        toAPIError(response.error),
         userErrorMessage(response.error, t("common.unexpectedError")),
       );
       return null;
     }
     if (response.data === null) {
-      reportFailure(t("common.unexpectedError"));
+      reportFailure(undefined, t("common.unexpectedError"));
       return null;
     }
 

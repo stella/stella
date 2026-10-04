@@ -10,6 +10,7 @@ import {
 } from "@stll/api-contract";
 
 import { envBase } from "@/api/env-base";
+import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import documentUploadAppHtml from "@/api/mcp/apps/document-upload/generated/app.html.txt" with { type: "text" };
 import fileComparisonAppHtml from "@/api/mcp/apps/file-comparison/generated/app.html.txt" with { type: "text" };
 import type { McpMode } from "@/api/mcp/constants";
@@ -39,7 +40,6 @@ import {
   TEMPLATE_WORKFLOW_REFERENCE_URI,
 } from "@/api/mcp/template-workflow-reference";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
-import type { McpToolFeatureFlag } from "@/api/mcp/tool-types";
 
 /**
  * MCP resources are static, no-argument documents (the textbook fit for a
@@ -67,7 +67,7 @@ type StaticResource = {
    * it is neither listed nor readable while the gate is closed: the same
    * predicate, on both surfaces.
    */
-  feature?: McpToolFeatureFlag;
+  feature?: DeploymentFeatureFlag;
   /**
    * Whether this audience serves the resource at all, beyond the deployment
    * gate and the per-mode URI allowlist below. A reference that renders to

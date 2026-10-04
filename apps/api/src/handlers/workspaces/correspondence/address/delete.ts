@@ -7,6 +7,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 
 const config = {
+  accountAccess: "standard",
   description: "Revoke the active inbound address for a matter.",
   permissions: { workspace: ["update"] },
   mcp: { type: "internal", reason: "provider_secret" },

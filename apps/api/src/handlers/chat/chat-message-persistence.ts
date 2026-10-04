@@ -6,7 +6,6 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
-import { env } from "@/api/env";
 import {
   attachTerminalTurnOutcome,
   chatMessageContentFromMessage,
@@ -62,6 +61,7 @@ import {
   type ChatThreadNamesRead,
   recordChatThreadNamesOnTx,
 } from "@/api/lib/chat/thread-names";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError, TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -273,7 +273,8 @@ const insertMessages = async ({
         userId,
         role: persistedMessage.role,
         content: chatMessageContentFromMessage(persistedMessage),
-        memoryExtractionEligible: env.FEATURE_AI_MEMORY,
+        memoryExtractionEligible:
+          isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
       })),
     );
     await tx
@@ -922,7 +923,9 @@ const runPersistMessage = async ({
         .set({
           role: persistencePlan.message.role,
           content: chatMessageContentFromMessage(persistencePlan.message),
-          ...(!env.FEATURE_AI_MEMORY && { memoryExtractionEligible: false }),
+          ...(!isDeploymentFeatureEnabled("FEATURE_AI_MEMORY") && {
+            memoryExtractionEligible: false,
+          }),
         })
         .where(eq(chatMessages.id, updatedMessageId));
       await tx
@@ -1073,7 +1076,7 @@ const runPersistMessage = async ({
       threadId,
       userId,
       workspaceId,
-      memoryExtractionEligible: env.FEATURE_AI_MEMORY,
+      memoryExtractionEligible: isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
     });
     await tx
       .update(chatThreads)
