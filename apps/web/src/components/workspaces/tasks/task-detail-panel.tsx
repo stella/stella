@@ -18,7 +18,6 @@ import {
 import { Input } from "@stll/ui/input";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -63,7 +62,7 @@ import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { localISODate } from "@/lib/local-iso-date";
 import { DAY_AND_MONTH_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -171,7 +170,7 @@ const TaskDetailPanelContent = ({
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.error(userErrorFromThrown(error, tCommon("unexpectedError")));
+      notifyUserError(error, tCommon("unexpectedError"));
     },
   });
 
@@ -207,7 +206,7 @@ const TaskDetailPanelContent = ({
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.error(userErrorFromThrown(error, tCommon("unexpectedError")));
+      notifyUserError(error, tCommon("unexpectedError"));
     },
   });
 
@@ -242,7 +241,7 @@ const TaskDetailPanelContent = ({
     },
     onError: (error) => {
       analytics.captureError(error);
-      stellaToast.error(userErrorFromThrown(error, tCommon("unexpectedError")));
+      notifyUserError(error, tCommon("unexpectedError"));
     },
   });
 

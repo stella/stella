@@ -9,14 +9,16 @@ type Declaration = {
   columns: Readonly<Record<string, { kind: string; reason: string }>>;
 };
 
-const COLUMN_SQL_TYPES: Readonly<Record<string, readonly string[]>> = {
-  "public-corpus-id": ["uuid", "text", "varchar"],
-  counter: ["integer", "bigint", "numeric", "smallint"],
-  timestamp: ["timestamp", "date"],
-  enum: ["text", "varchar"],
-  "parser-version": ["integer", "smallint"],
-  "corpus-cursor": ["text", "varchar", "json", "jsonb", "bytea"],
-};
+const COLUMN_SQL_TYPES = new Map(
+  Object.entries({
+    "public-corpus-id": ["uuid", "text", "varchar"],
+    counter: ["integer", "bigint", "numeric", "smallint"],
+    timestamp: ["timestamp", "date"],
+    enum: ["text", "varchar"],
+    "parser-version": ["integer", "smallint"],
+    "corpus-cursor": ["text", "varchar", "json", "jsonb", "bytea"],
+  }),
+);
 
 const normalizedPolicy = (expression: string): string =>
   expression
@@ -40,7 +42,9 @@ export const isOwnerOnlyExpression = (
   return relations.some(
     (relation) =>
       normalized ===
-      `current_user=selectpg_get_userbyidrelownerfrompg_classwhereoid='${relation}'::regclass`,
+        `current_user=selectpg_get_userbyidrelownerfrompg_classwhereoid='${relation}'::regclass` ||
+      normalized ===
+        `current_user=selectpg_get_userbyidrelownerfrompg_classwhereoid='${relation}'::regclass::oid`,
   );
 };
 
@@ -89,11 +93,14 @@ export const verifyPublicCorpusSchema = ({
     if (
       classification === undefined ||
       sqlType === undefined ||
-      !COLUMN_SQL_TYPES[classification.kind]?.includes(sqlType)
+      !COLUMN_SQL_TYPES.get(classification.kind)?.includes(sqlType)
     ) {
       errors.push("column classification does not match its schema type");
     }
-    if (classification?.kind === "enum" && !column.enumValues?.length) {
+    if (
+      classification?.kind === "enum" &&
+      (column.enumValues?.length ?? 0) === 0
+    ) {
       errors.push("enum classification requires schema enum values");
     }
   }

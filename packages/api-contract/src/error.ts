@@ -1,3 +1,7 @@
+export const CLAUSE_DIRECTIVES_INVALID_CODE =
+  "clause_directives_invalid" as const;
+export const CLAUSE_VERSION_LIMIT_ERROR_CODE = "clause_version_limit_reached";
+
 export const API_VALIDATION_ERROR_CODE = "validation" as const;
 
 /** The submitted chat continuation does not match the server-owned pending turn. */
@@ -7,6 +11,13 @@ export const CHAT_CONTINUATION_REJECTED_ERROR_CODE =
 /** A chat request whose turn has no execution it may continue: the turn was
  *  stopped, superseded or already settled. */
 export const CHAT_TURN_NOT_OWNED_ERROR_CODE = "chat_turn_not_owned" as const;
+
+/**
+ * A request needed an encrypted (password-protected) file's content: an
+ * encrypted PDF or Office document cannot be read, extracted or sent to a
+ * model. Shared so every client can explain it instead of a generic failure.
+ */
+export const ENCRYPTED_CONTENT_ERROR_CODE = "encrypted_content" as const;
 
 export const API_FILE_SECURITY_REJECTED_ERROR_CODE =
   "file_security_rejected" as const;
@@ -117,12 +128,14 @@ export const parseApiErrorValue = (input: unknown): ApiErrorValue => {
   if (!("message" in input) || typeof input.message !== "string") {
     return null;
   }
-  const result: ApiErrorObjectValue = { message: input.message };
-  for (const [key, value] of Object.entries(input)) {
-    if (key !== "code" && key !== "message" && key !== "type") {
-      result[key] = value;
-    }
-  }
+  const result: ApiErrorObjectValue = {
+    message: input.message,
+    ...Object.fromEntries(
+      Object.entries(input).filter(
+        ([key]) => key !== "code" && key !== "message" && key !== "type",
+      ),
+    ),
+  };
   if ("code" in input && typeof input.code === "string") {
     result.code = input.code;
   }

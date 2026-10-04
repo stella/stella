@@ -75,6 +75,11 @@ export const corpusIndexProjectionIntents = p.pgTable(
     settledAt: timestamptz("settled_at"),
     cancelledAt: timestamptz("cancelled_at"),
     cleanupAttempts: p.integer("cleanup_attempts").default(0).notNull(),
+    /**
+     * Deletes issued again because revisions they targeted were written after
+     * them. Bounded: at the limit the revisions stall instead.
+     */
+    deleteReissues: p.integer("delete_reissues").default(0).notNull(),
     lastError: p.varchar("last_error", { length: 2048 }),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
@@ -201,6 +206,10 @@ export const corpusIndexProjectionIntents = p.pgTable(
       sql`${t.cleanupAttempts} >= 0`,
     ),
     p.check(
+      "corpus_index_projection_intents_delete_reissues_nonnegative",
+      sql`${t.deleteReissues} >= 0`,
+    ),
+    p.check(
       "corpus_index_projection_intents_delete_opstamp_nonnegative",
       sql`${t.deleteOpstamp} IS NULL OR ${t.deleteOpstamp} >= 0`,
     ),
@@ -297,6 +306,15 @@ export const corpusIndexProjectionIntents = p.pgTable(
           AND ${t.deleteOpstamp} IS NOT NULL
           AND ${t.settledAt} IS NULL
           AND ${t.cancelledAt} IS NULL
+        WHEN 'cleanup_stalled' THEN
+          ${t.leaseToken} IS NULL
+          AND ${t.appendStartedAt} IS NOT NULL
+          AND ${t.appendPublishBarrierAt} IS NOT NULL
+          AND ${t.cleanupNotBefore} IS NOT NULL
+          AND ${t.cleanupStartedAt} IS NOT NULL
+          AND ${t.deleteOpstamp} IS NOT NULL
+          AND ${t.settledAt} IS NULL
+          AND ${t.cancelledAt} IS NULL
         WHEN 'settled' THEN
           ${t.leaseToken} IS NULL
           AND ${t.appendStartedAt} IS NOT NULL
@@ -335,6 +353,7 @@ export const corpusIndexProjectionIntents = p.pgTable(
         AND (${t.appendPublishBarrierAt} IS NULL OR ${t.appendPublishBarrierAt}::timestamptz >= ${t.appendStartedAt}::timestamptz)`,
     ),
     ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 

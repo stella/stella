@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm";
+
 import type { FileKey } from "@/api/lib/file-key";
 
 import { chatThreads } from "./chat";
@@ -62,6 +64,10 @@ export const userFiles = p.pgTable(
 
 // -- Workspace Views --
 
+/** Unique index holding a matter to one correspondence view. */
+export const WORKSPACE_VIEWS_CORRESPONDENCE_INDEX =
+  "workspace_views_correspondence_uidx";
+
 export const workspaceViews = p.pgTable(
   "workspace_views",
   {
@@ -78,6 +84,12 @@ export const workspaceViews = p.pgTable(
     p
       .index("workspace_views_workspace_position_idx")
       .on(table.workspaceId, table.position),
+    // One correspondence view per matter: views.create's FOR UPDATE check
+    // cannot see a concurrent insert, so the database refuses the second one.
+    p
+      .uniqueIndex(WORKSPACE_VIEWS_CORRESPONDENCE_INDEX)
+      .on(table.workspaceId)
+      .where(sql`(${table.layout} ->> 'type') = 'correspondence'`),
     ...wsPolicies(),
   ],
 );
@@ -123,10 +135,12 @@ export type AgentSkillScope = (typeof AGENT_SKILL_SCOPES)[number];
 
 // `authored` covers skills the user composes directly in the editor
 // (no uploaded bundle, no URL import). Migrated `prompt_shortcuts`
-// rows also use this origin.
+// rows also use this origin. `default` marks the starter skills stella
+// installs for every new membership; members may edit and delete them.
 export const AGENT_SKILL_ORIGINS = [
   "authored",
   "bundled",
+  "default",
   "upload",
   "url",
 ] as const;

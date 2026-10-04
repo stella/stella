@@ -3,10 +3,11 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
+import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -59,6 +60,7 @@ const batchDelete = createSafeHandler(
       "without an error and there is no per-entry ownership check, so the " +
       "returned count is the only report of what happened.",
     permissions: { timeEntry: ["approve"] },
+    accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: {
       type: "capability",
       reason: "billing_admin",
@@ -162,6 +164,7 @@ const batchDelete = createSafeHandler(
           tx,
           buildBatchDeleteEvents({ deleted, writtenOff }),
         );
+        await recordBillingCapCrossings(tx, { workspaceId, recordAuditEvent });
 
         return {
           type: "updated" as const,

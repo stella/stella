@@ -6184,10 +6184,13 @@ export async function seed(organizationId?: string, userId?: string) {
 
       const fileId = seedId(`${wsLabel}-file-${j}`);
       const s3Key = `${ORG_ID}/${wsId}/${fileId}.${format.extension}`;
-      await writeS3ObjectWithRetry({
-        data: new Uint8Array(content),
-        key: s3Key,
-      });
+      await writeS3ObjectWithRetry(
+        {
+          data: new Uint8Array(content),
+          key: s3Key,
+        },
+        { type: "fixture" },
+      );
 
       // DOCX files are rendered natively via Folio — no PDF twin needed.
       // Non-DOCX convertible types still get a PDF twin from Gotenberg.
@@ -6229,10 +6232,13 @@ export async function seed(organizationId?: string, userId?: string) {
           `${wsLabel}-supplier-agreement-base-file`,
         );
         const baseContent = await createSupplierAgreementDocx("reject");
-        await writeS3ObjectWithRetry({
-          data: new Uint8Array(baseContent),
-          key: `${ORG_ID}/${wsId}/${baseFileId}.docx`,
-        });
+        await writeS3ObjectWithRetry(
+          {
+            data: new Uint8Array(baseContent),
+            key: `${ORG_ID}/${wsId}/${baseFileId}.docx`,
+          },
+          { type: "fixture" },
+        );
         const baseFileContent = {
           version: 1,
           type: "file",

@@ -142,7 +142,7 @@ const createdColumns = (
 ) => {
   const columns = definition.split(/, */u);
   const errors: string[] = [];
-  const columnTypes: Record<string, string> = {};
+  const columnTypes = new Map<string, string>();
   if (!columns.every((column) => SIMPLE_COLUMN.test(column))) {
     errors.push("unsupported table definition or foreign key");
   }
@@ -153,16 +153,18 @@ const createdColumns = (
         .exec(column)
         ?.at(1);
     if (name !== undefined && type !== undefined) {
-      columnTypes[name] = type.toLowerCase();
+      columnTypes.set(name, type.toLowerCase());
     }
   }
-  const names = columns.map((column) => column.split(" ").at(0)).toSorted();
+  const names = columns
+    .map((column) => column.split(" ").at(0) ?? "")
+    .toSorted();
   if (
     JSON.stringify(names) !== JSON.stringify(Object.keys(classified).toSorted())
   ) {
     errors.push("migration columns differ from classified columns");
   }
-  return { errors, columnTypes };
+  return { errors, columnTypes: Object.fromEntries(columnTypes) };
 };
 
 export const verifyCorpusMigrations = (
@@ -171,9 +173,13 @@ export const verifyCorpusMigrations = (
 ) => {
   const errors: string[] = [];
   const relevant: { file: string; statement: string }[] = [];
-  const columnTypes: Record<string, string> = {};
+  const columnTypes = new Map<string, string>();
   if (!/^[a-z_][a-z0-9_]*$/u.test(entry.sqlName)) {
-    return { errors: ["unsupported relation name"], relevant, columnTypes };
+    return {
+      errors: ["unsupported relation name"],
+      relevant,
+      columnTypes: Object.fromEntries(columnTypes),
+    };
   }
   const relation = `public\\.${entry.sqlName}`;
   const mentions = new RegExp(`\\b${entry.sqlName}\\b`, "iu");
@@ -220,7 +226,9 @@ export const verifyCorpusMigrations = (
         }
         const parsed = createdColumns(definition, entry.columns);
         errors.push(...parsed.errors);
-        Object.assign(columnTypes, parsed.columnTypes);
+        for (const [name, type] of Object.entries(parsed.columnTypes)) {
+          columnTypes.set(name, type);
+        }
         continue;
       }
       if (!created) {
@@ -252,7 +260,7 @@ export const verifyCorpusMigrations = (
       if (revoke !== null) {
         const roles = revoke
           .slice(1)
-          .filter((role) => role !== undefined)
+          .filter((role) => role !== "")
           .map((role) => role.toLowerCase());
         revokedApp ||= roles.includes("stella");
         revokedPublic ||= roles.includes("public");
@@ -263,8 +271,7 @@ export const verifyCorpusMigrations = (
         "iu",
       ).exec(statement);
       if (
-        policy !== null &&
-        policy[1] !== undefined &&
+        policy?.[1] !== undefined &&
         policy[2] !== undefined &&
         isOwnerOnlyExpression(policy[1], entry.sqlName) &&
         isOwnerOnlyExpression(policy[2], entry.sqlName)
@@ -289,7 +296,7 @@ export const verifyCorpusMigrations = (
       "migration proof requires creation, ENABLE/FORCE RLS, both revokes and one owner-only policy",
     );
   }
-  return { errors, relevant, columnTypes };
+  return { errors, relevant, columnTypes: Object.fromEntries(columnTypes) };
 };
 
 type VerifyBundleArgs = {

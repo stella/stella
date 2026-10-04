@@ -6,6 +6,7 @@ import { auditLogs, correspondence } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -91,7 +92,7 @@ describe("correspondence handling audit", () => {
               body,
               params: { correspondenceId: id },
               workspaceId: ids.wsA2,
-              memberRole: { role: "owner" },
+              memberRole: sessionMemberRole("owner"),
               user: { id: ids.userA1 },
               request: new Request("https://api.example.test/correspondence"),
               session: { activeOrganizationId: ids.orgA },

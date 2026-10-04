@@ -4,7 +4,10 @@ import { t } from "elysia";
 import type { TemplatePackCatalogue } from "@stll/template-packs";
 import type { GeneratedTemplatePack } from "@stll/template-packs/schema";
 
-import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  createSafePublicHandler,
+} from "@/api/lib/api-handlers";
 import { renderTemplatePreview } from "@/api/lib/docx/render-template-preview";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -137,6 +140,7 @@ export const createPublicKnowledgeEndpoints = (
   const listPacks = createSafePublicHandler(
     {
       cache: { kind: "public", maxAge: 300 },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
     },
     async function* () {
@@ -150,6 +154,7 @@ export const createPublicKnowledgeEndpoints = (
   const readPack = createSafePublicHandler(
     {
       cache: { kind: "public", maxAge: 300 },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
       params: packParams,
     },
@@ -165,6 +170,7 @@ export const createPublicKnowledgeEndpoints = (
   const readTemplate = createSafePublicHandler(
     {
       cache: { kind: "public", maxAge: 300 },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
       params: templateParams,
     },
@@ -177,6 +183,7 @@ export const createPublicKnowledgeEndpoints = (
   const readTemplatePreview = createSafePublicHandler(
     {
       cache: { kind: "public", maxAge: 300 },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
       params: templateParams,
     },
@@ -254,6 +261,7 @@ export const createPublicKnowledgeEndpoints = (
   const listStarters = createSafePublicHandler(
     {
       cache: { kind: "public", maxAge: 300 },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
     },
     async function* () {
@@ -265,6 +273,7 @@ export const createPublicKnowledgeEndpoints = (
   const readStarter = createSafePublicHandler(
     {
       cache: { kind: "public", maxAge: 300 },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
       params: starterParams,
     },

@@ -200,7 +200,7 @@ export const resolveCommandTree = async ({
   // the cached listings + the baked capability merge), so a diverged registry
   // never drops the generated capability leaves. A missing/corrupt catalog or
   // a tree that fails to build falls back to the baked-in tree (rule 6).
-  const entries = await loadBakedCapabilityCatalog();
+  const entries = loadBakedCapabilityCatalog();
   if (entries === null) {
     return { tree: generatedRouteMap, disabled };
   }

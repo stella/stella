@@ -1,3 +1,5 @@
+import { PGlite } from "@electric-sql/pglite";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import {
@@ -66,6 +68,33 @@ const posture = {
 } satisfies PublicCorpusCatalogPosture;
 
 describe("public corpus bookkeeping admission", () => {
+  test("accepts the owner policy deparsed by PostgreSQL", async () => {
+    const database = new PGlite();
+    try {
+      await database.exec(`CREATE TABLE public.checkpoint (cursor text);
+        CREATE POLICY owner ON public.checkpoint FOR ALL TO PUBLIC
+        USING (${ownerPolicy.using}) WITH CHECK (${ownerPolicy.check});`);
+      const { rows } = await database.query<{ using: string; check: string }>(
+        "SELECT pg_get_expr(polqual, polrelid) AS using, pg_get_expr(polwithcheck, polrelid) AS check FROM pg_policy WHERE polrelid = 'public.checkpoint'::regclass",
+      );
+      const expressions = rows.at(0);
+      expect(expressions).toBeDefined();
+      if (expressions === undefined) {
+        panic("Owner policy missing from fixture catalog");
+      }
+      expect(expressions.using).not.toBe(ownerPolicy.using);
+      expect(expressions.check).not.toBe(ownerPolicy.check);
+      expect(
+        verifyPublicCorpusCatalog({
+          ...posture,
+          policies: [{ ...ownerPolicy, ...expressions }],
+        }),
+      ).toEqual([]);
+    } finally {
+      await database.close();
+    }
+  });
+
   test("accepts operational columns with only an owner policy", () => {
     expect(
       verifyPublicCorpusSchema({ declaration, schema: { checkpoint } }),

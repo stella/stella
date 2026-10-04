@@ -3,6 +3,7 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { CLI_DEMO_TOOLS } from "../apps/landing/src/data/cli-demo";
 import {
@@ -12,9 +13,10 @@ import {
 } from "../apps/landing/src/data/product-story";
 import { products } from "../apps/landing/src/data/products/registry";
 import { securityControls } from "../apps/landing/src/data/security-controls";
+import { readCapabilityCatalog } from "../packages/cli/src/capability-catalog-data";
 import { readProductMediaManifestSync } from "./product-media";
 
-const CAPABILITY_CATALOG_PATH = "packages/cli/capability-catalog.json";
+const CAPABILITY_CATALOG_PATH = "packages/cli/capabilities";
 const POLICY_EVIDENCE_PATH = "docs/policies/evidence.json";
 const CLI_REGISTRY_SNAPSHOT_PATH =
   "packages/cli/src/generated/registry-snapshot.json";
@@ -24,10 +26,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const getCapabilityIds = (rootDir: string): Set<string> => {
   const catalogPath = nodePath.join(rootDir, CAPABILITY_CATALOG_PATH);
-  const raw: unknown = JSON.parse(readFileSync(catalogPath, "utf-8"));
-  if (!Array.isArray(raw)) {
-    panic(`${CAPABILITY_CATALOG_PATH} must contain an array`);
-  }
+  const raw = readCapabilityCatalog(
+    pathToFileURL(`${catalogPath}${nodePath.sep}`),
+  );
 
   const ids = new Set<string>();
   for (const capability of raw) {

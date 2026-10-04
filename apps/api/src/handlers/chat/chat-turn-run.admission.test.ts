@@ -453,6 +453,11 @@ describe("chat run admission follows owned settlement", () => {
       const writtenMessages: Record<string, unknown>[] = [];
       const writtenTurns: Record<string, unknown>[] = [];
       const db = createScopedDbMock({
+        query: {
+          chatThreadCompactions: {
+            findFirst: async () => await Promise.resolve(null),
+          },
+        },
         update: (table: unknown) => ({
           set: (values: Record<string, unknown>) => ({
             where: () => {
@@ -644,8 +649,7 @@ describe("chat run admission follows owned settlement", () => {
     if (Result.isError(acquired)) {
       throw acquired.error;
     }
-    const admission =
-      acquired.value ?? panic("Enabled admission must acquire a lease");
+    const admission = acquired.value;
     let persisted = 0;
     const run = new ChatTurnRun({
       admission,

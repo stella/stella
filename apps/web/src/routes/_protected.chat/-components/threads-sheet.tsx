@@ -19,6 +19,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { HistoryIcon, TrashIcon } from "@stll/ui/icons";
 import { InputGroup, InputGroupInput } from "@stll/ui/input-group";
+import { LANDING_SECTION_HEADING_CLASS } from "@stll/ui/landing";
 import {
   Sheet,
   SheetHeader,
@@ -27,7 +28,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@stll/ui/sheet";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
@@ -50,6 +50,7 @@ import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -153,10 +154,7 @@ export const ThreadsSheet = ({
       {triggerVariant === "section" ? (
         <SheetTrigger
           render={
-            <button
-              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase outline-none focus-visible:ring-2"
-              type="button"
-            />
+            <button className={LANDING_SECTION_HEADING_CLASS} type="button" />
           }
         >
           {icon ?? <HistoryIcon className="size-4" />}
@@ -265,11 +263,8 @@ const DeleteThreadButton = ({
         workspaceId: variables.workspaceId,
       });
     },
-    onError: () => {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
     },
     onSuccess: async (_data, variables) => {
       if (activeThreadRef?.threadId === variables.threadId) {

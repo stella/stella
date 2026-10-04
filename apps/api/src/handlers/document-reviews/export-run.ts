@@ -14,7 +14,7 @@ import {
   documentReviewRuns,
   entities,
 } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -29,9 +29,9 @@ import {
   referencePassageIds,
 } from "@/api/lib/document-review/reference-passages";
 import {
+  basisForReader,
   findingForReader,
   readableReferenceWorkspaces,
-  referencesForReader,
   referenceWorkspacesByPosition,
 } from "@/api/lib/document-review/reference-visibility";
 import { DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX } from "@/api/lib/document-review/run-contract";
@@ -65,6 +65,8 @@ const withoutExtension = (name: string): string => {
 };
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.standard,
+  contentDelivery: { type: "audited" },
   description:
     "Download a document review run as an issues table (XLSX, DOCX or CSV).",
   permissions: { workspace: ["read"] },
@@ -145,10 +147,7 @@ const exportDocumentReviewRun = createSafeHandler(
       basis: run.basis,
     });
     const positionWorkspaces = referenceWorkspacesByPosition(run.basis);
-    const basis = {
-      ...run.basis,
-      references: referencesForReader(run.basis.references, readable),
-    };
+    const basis = basisForReader(run.basis, readable);
     const rows = buildIssuesTableRows({
       basis,
       passageTextById,

@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { PdfSigningSessionCloseReason } from "@/api/db/schema";
-import { createSafeTokenHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -103,6 +103,11 @@ const certificateConflict = () =>
   });
 
 const config = {
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  contentDelivery: {
+    type: "none",
+    reason: "Verifies signing inputs without returning stored-file bytes.",
+  },
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: permissiveBodySchema({
     keys: ["sessionToken", "certificate"],

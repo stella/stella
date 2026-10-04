@@ -7,13 +7,18 @@ import type { AgentSkillScope } from "@/api/db/schema";
 import { canManageSkill } from "@/api/lib/agent-skills/access";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { MemberRole } from "@/api/lib/member-roles";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
 type SkillManagementAction = "edit" | "delete";
 
+const SKILL_MANAGEMENT_PERMISSION = {
+  edit: "update",
+  delete: "delete",
+} as const satisfies Record<SkillManagementAction, "update" | "delete">;
+
 type RequireSkillManagerOptions = {
   skill: { scope: AgentSkillScope; userId: string };
-  memberRole: { role: MemberRole };
+  memberRole: AuthorizedMemberRole;
   userId: SafeId<"user">;
   action: SkillManagementAction;
 };
@@ -24,7 +29,14 @@ export const requireSkillManager = ({
   userId,
   action,
 }: RequireSkillManagerOptions): Result<void, HandlerError> => {
-  if (canManageSkill({ skill, memberRole, userId })) {
+  if (
+    canManageSkill({
+      skill,
+      memberRole,
+      userId,
+      spends: SKILL_MANAGEMENT_PERMISSION[action],
+    })
+  ) {
     return Result.ok(undefined);
   }
   return Result.err(

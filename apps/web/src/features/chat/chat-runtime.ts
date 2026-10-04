@@ -44,7 +44,7 @@ import type {
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import { APIError, toAPIError } from "@/lib/errors/api";
+import { APIError, chatRefusal, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
@@ -506,8 +506,9 @@ export const createChatRuntime = ({
       // reporting its typed cause. A new request clears the error first.
       if (
         error !== undefined &&
-        actionAdmissionOutcome(snapshot.error) &&
-        !actionAdmissionOutcome(error)
+        ((actionAdmissionOutcome(snapshot.error) &&
+          !actionAdmissionOutcome(error)) ||
+          (chatRefusal(snapshot.error) !== null && chatRefusal(error) === null))
       ) {
         return;
       }

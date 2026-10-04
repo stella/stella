@@ -1,3 +1,4 @@
+// parser-output-unchanged: A grammar's format spells a reader's docket family only; ingestion reads acceptance and the case-file key, both from the input.
 import { panic } from "better-result";
 
 import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
@@ -58,24 +59,40 @@ const canonicalDocketKey = canonicalDecisionIdentifierKey;
 type CreateDecisionDocketGrammarOptions<TJurisdiction extends string> = {
   readonly jurisdiction: TJurisdiction;
   readonly patterns: readonly RegExp[];
-  readonly canonicalize: (formatted: string) => string;
+  /** The case-file key of an accepted docket, as folded input. */
+  readonly canonicalize: (folded: string) => string;
+  /**
+   * An accepted docket as its court writes it. A reader's family is keyed by
+   * the function that keys a stored docket (`citation_key`), which reads the
+   * court's spelling, so a lead word, a lower-case chamber numeral or a
+   * glued registry the court never prints would key apart from the stored
+   * row. Grammars whose every accepted spelling already keys alike keep the
+   * input (`asWritten`).
+   */
+  readonly format: (folded: string) => string;
 };
+
+/** The format of a grammar whose accepted spellings all key alike. */
+const asWritten = (folded: string): string => folded;
 
 const createDecisionDocketGrammar = <const TJurisdiction extends string>({
   canonicalize,
+  format,
   jurisdiction,
   patterns,
 }: CreateDecisionDocketGrammarOptions<TJurisdiction>): DecisionDocketGrammarFor<TJurisdiction> => ({
   jurisdiction,
   parse: (raw) => {
-    const formatted = foldDecisionIdentifierInput(raw);
-    if (!patterns.some((pattern) => pattern.test(formatted))) {
+    const folded = foldDecisionIdentifierInput(raw);
+    if (!patterns.some((pattern) => pattern.test(folded))) {
       return null;
     }
+    // The case-file key reads the input, not the court spelling, so the key
+    // a stored docket was given cannot move when a format changes.
     return {
       jurisdiction,
-      formatted,
-      canonical: canonicalize(formatted),
+      formatted: format(folded),
+      canonical: canonicalize(folded),
     };
   },
 });
@@ -434,6 +451,27 @@ const CZE_DOCKET_PATTERNS = [
   CZE_SENATE_DOCKET_RE,
   CZE_LETTER_FIRST_DOCKET_RE,
 ] as const;
+
+const CZE_CONSTITUTIONAL_DOCKET_RE =
+  /^(?<senate>pl|iv|i{1,3})\.? ?[úu]s (?<docket>\d{1,6}\/\d{2}(?:\d{2})?)$/iu;
+
+/**
+ * A Czech docket as the courts write it. A Constitutional Court docket takes
+ * the court's spelling (`IV. ÚS 23/05`, `Pl. ÚS 1/20`): the stored key reads
+ * a senate numeral only in capitals once a part follows the docket, so
+ * `iv. ús 23/05 - II.` keyed apart from the stored sibling. Every other
+ * accepted spelling already keys as the stored docket.
+ */
+const formatCzechDocket = (folded: string): string => {
+  const groups = CZE_CONSTITUTIONAL_DOCKET_RE.exec(folded)?.groups;
+  const senate = groups?.["senate"];
+  const docket = groups?.["docket"];
+  if (senate === undefined || docket === undefined) {
+    return folded;
+  }
+  const numeral = senate.toLowerCase() === "pl" ? "Pl" : senate.toUpperCase();
+  return `${numeral}. ÚS ${docket}`;
+};
 const SVK_DOCKET_RE =
   /^(?<senate>\d{1,3}) ?(?<registry>\p{L}{1,7})(?: ?\/ ?| )(?<ordinal>\d{1,6})\/(?<year>\d{4})$/iu;
 /**
@@ -511,6 +549,42 @@ const AUT_DOCKET_PATTERNS = [
 ] as const;
 
 /**
+ * A Polish court docket's chamber numeral, spaced from its division or glued
+ * to an administrative register (`IISA/WR 12/01`). Only a chamber is
+ * followed by either, so a tax signature or a Tribunal prefix never matches.
+ */
+const POL_CHAMBER_NUMERAL_RE = /^[ivx]{1,5}(?=\s|s(?:a|pp|o))/iu;
+
+/**
+ * A Polish docket with its chamber numeral in capitals, as every court
+ * prints it: the stored key reads a chamber only in capitals, so
+ * `ii csk 1/99` keyed apart from `II CSK 1/99`. The rest keeps the reader's
+ * case, since a common court's registers are title case (`XXIII Gz`).
+ */
+const formatPolishDocket = (folded: string): string =>
+  folded.replace(POL_CHAMBER_NUMERAL_RE, (chamber) => chamber.toUpperCase());
+
+/** A case number as the Court of Justice prints it: no lead word, capitals. */
+const formatEuDocket = (folded: string): string =>
+  folded.replace(EU_DOCKET_LEAD_RE, "").toUpperCase();
+
+/**
+ * An Austrian docket spaced as RIS prints it (`1 Ob 1/26a`, `Ra
+ * 2019/01/0001`, `W 998/2099`): one space wherever letters and digits meet
+ * before the first slash, so a compact `5Ob200/20x` keys as the stored row.
+ * The year's letter after the slash stays glued.
+ */
+const formatAustrianDocket = (folded: string): string => {
+  const slash = folded.indexOf("/");
+  return `${folded
+    .slice(0, slash)
+    .replace(
+      /(?<=\p{L})(?=\d)|(?<=\d)(?=\p{L})/gu,
+      " ",
+    )}${folded.slice(slash)}`;
+};
+
+/**
  * A Constitutional Court docket in the court's spelling (`II. ÚS 55/98`) and
  * its stored `citation_key` (`iiús55/98`, `plús3/2019`): senate, `ús`, number
  * and year run together in lower case, the accent kept, as the ingestion
@@ -550,7 +624,12 @@ const slovakDocketGrammar: DecisionDocketGrammarFor<"SVK"> = {
     }
     return {
       jurisdiction: "SVK",
-      formatted: folded,
+      // Glued, as the courts write it (`5Obo/998/2099`): a stored docket with
+      // a part after it keys by its spelling, so a spaced family would miss it.
+      formatted: folded.replace(
+        SVK_DOCKET_RE,
+        "$<senate>$<registry>/$<ordinal>/$<year>",
+      ),
       canonical: canonicalSlovakDocketKey(folded),
     };
   },
@@ -568,7 +647,8 @@ const slovakDocketGrammar: DecisionDocketGrammarFor<"SVK"> = {
  * - `No. 1`: a number with no term, as older dockets were written. The `No.`
  *   is required here, because a bare number is not a docket.
  *
- * A leading `No.` is optional on the other forms and never part of the key.
+ * A leading `No.` is optional on the other forms and never part of the key;
+ * the formatted docket always carries it, as the Court prints it.
  * Every digit is: `21-123` and `21-456` are two cases, so the sheet-number
  * strip the other grammars apply to a trailing `-digits` never runs here.
  */
@@ -585,36 +665,65 @@ const USA_DOCKET_FORMS = [
   {
     pattern: /^(?:no\.? ?)?(?<term>\d{2})-(?<number>\d{1,5})$/iu,
     key: ({ number, term }: UnitedStatesDocketParts) => `${term}-${number}`,
+    format: ({ number, term }: UnitedStatesDocketParts) =>
+      `No. ${term}-${number}`,
   },
   {
     pattern: /^(?:no\.? ?)?(?<term>\d{2})a(?<number>\d{1,5})$/iu,
     key: ({ number, term }: UnitedStatesDocketParts) => `${term}a${number}`,
+    format: ({ number, term }: UnitedStatesDocketParts) =>
+      `No. ${term}A${number}`,
   },
   {
     pattern: /^(?:no\.? ?)?(?<term>\d{2})o(?<number>\d{1,4})$/iu,
     key: ({ number }: UnitedStatesDocketParts) => originalDocketKey(number),
+    // Printed, as every original case is: an electronic family would key
+    // apart from a printed member with a part after it.
+    format: ({ number }: UnitedStatesDocketParts) =>
+      `No. ${String(Number.parseInt(number, 10))}, Orig.`,
   },
   {
     pattern: /^(?:no\.? ?)?(?<number>\d{1,4}),? orig(?:inal|\.)?$/iu,
     key: ({ number }: UnitedStatesDocketParts) => originalDocketKey(number),
+    format: ({ number }: UnitedStatesDocketParts) => `No. ${number}, Orig.`,
   },
   {
     pattern: /^no\.? ?(?<number>\d{1,5})$/iu,
     key: ({ number }: UnitedStatesDocketParts) => number,
+    format: ({ number }: UnitedStatesDocketParts) => `No. ${number}`,
   },
 ] as const;
 
 const USA_DOCKET_PATTERNS = USA_DOCKET_FORMS.map(({ pattern }) => pattern);
 
-const canonicalUnitedStatesDocketKey = (formatted: string): string => {
-  for (const { key, pattern } of USA_DOCKET_FORMS) {
-    const groups = pattern.exec(formatted)?.groups;
+type UnitedStatesDocketForm = (typeof USA_DOCKET_FORMS)[number];
+
+/** The declared form an accepted docket matches, and its parts. */
+const unitedStatesDocketFormOf = (
+  folded: string,
+): { form: UnitedStatesDocketForm; parts: UnitedStatesDocketParts } => {
+  for (const form of USA_DOCKET_FORMS) {
+    const groups = form.pattern.exec(folded)?.groups;
     const number = groups?.["number"];
     if (number !== undefined) {
-      return key({ number, term: groups?.["term"] ?? "" }).toLowerCase();
+      return { form, parts: { number, term: groups?.["term"] ?? "" } };
     }
   }
   return panic("Accepted United States docket matches no declared form");
+};
+
+const canonicalUnitedStatesDocketKey = (folded: string): string => {
+  const { form, parts } = unitedStatesDocketFormOf(folded);
+  return form.key(parts).toLowerCase();
+};
+
+/**
+ * A docket as the Court prints it, behind its `No.` (`No. 21-123`, `No.
+ * 141, Orig.`), which is the spelling the stored docket carries.
+ */
+const formatUnitedStatesDocket = (folded: string): string => {
+  const { form, parts } = unitedStatesDocketFormOf(folded);
+  return form.format(parts);
 };
 
 const canonicalSlovakDocketKey = (formatted: string): string => {
@@ -679,34 +788,39 @@ const canonicalPolishDocketKey = (formatted: string): string =>
 export const DECISION_DOCKET_GRAMMARS = {
   AUT: createDecisionDocketGrammar({
     canonicalize: canonicalDocketKey,
+    format: formatAustrianDocket,
     jurisdiction: "AUT",
     patterns: AUT_DOCKET_PATTERNS,
   }),
   CZE: createDecisionDocketGrammar({
-    canonicalize: (formatted) =>
-      canonicalDocketKey(formatted.replaceAll(".", "")),
+    canonicalize: (folded) => canonicalDocketKey(folded.replaceAll(".", "")),
+    format: formatCzechDocket,
     jurisdiction: "CZE",
     patterns: CZE_DOCKET_PATTERNS,
   }),
   EU: createDecisionDocketGrammar({
-    canonicalize: (formatted) =>
-      canonicalDocketKey(formatted.replace(EU_DOCKET_LEAD_RE, "")),
+    canonicalize: (folded) =>
+      canonicalDocketKey(folded.replace(EU_DOCKET_LEAD_RE, "")),
+    format: formatEuDocket,
     jurisdiction: "EU",
     patterns: EU_DOCKET_PATTERNS,
   }),
   HUN: createDecisionDocketGrammar({
     canonicalize: canonicalHungarianDocketKey,
+    format: asWritten,
     jurisdiction: "HUN",
     patterns: HUN_DOCKET_PATTERNS,
   }),
   POL: createDecisionDocketGrammar({
     canonicalize: canonicalPolishDocketKey,
+    format: formatPolishDocket,
     jurisdiction: "POL",
     patterns: POL_DOCKET_PATTERNS,
   }),
   SVK: slovakDocketGrammar,
   USA: createDecisionDocketGrammar({
     canonicalize: canonicalUnitedStatesDocketKey,
+    format: formatUnitedStatesDocket,
     jurisdiction: "USA",
     patterns: USA_DOCKET_PATTERNS,
   }),

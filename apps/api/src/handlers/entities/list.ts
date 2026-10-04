@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import { ENTITY_KINDS } from "@stll/api-contract";
 
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
@@ -61,6 +61,7 @@ const config = {
     "entities.filesystem-tree.get for the same query shaped as a folder " +
     "tree, and entities.get to read one row in full.",
   permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "list_documents" },
   access: "read",
   body: readEntitiesBodySchema,

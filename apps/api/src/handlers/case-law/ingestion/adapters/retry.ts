@@ -1,4 +1,7 @@
-// parser-output-unchanged: retries affect request scheduling only, not parsed output.
+// parser-output-unchanged: refusal stops are opt-in; existing response and retry semantics are unchanged.
+// parser-output-unchanged: retries and fetch-stage observation affect request scheduling and diagnostics only, not parsed output.
+// parser-output-unchanged: rethrowCycleStop moves the existing cycle-stop rethrow here unchanged; parsed output is not affected.
+// parser-output-unchanged: a 429 to a typed read ends the cycle through a refusal mode; returned responses are unchanged.
 /**
  * The only way a case-law adapter reaches its publisher.
  *
@@ -12,6 +15,8 @@
 import { Result, panic } from "better-result";
 
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
@@ -23,18 +28,43 @@ import {
   type PublisherGateId,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
 
 import { abortableSleep } from "./publisher-request-gate";
 import { INGESTION_USER_AGENT, isTimeoutError } from "./utils";
 
+/**
+ * Which answers end the cycle instead of returning the response: none, only
+ * the publisher's rate-limit refusal (rule 19a), or every refusal (a session
+ * workflow, where a 401/403/429 on any request means the source refuses the
+ * crawl).
+ */
+const STOP_STATUSES = {
+  "return-response": [],
+  "stop-rate-limit": [429],
+  "stop-refusal": [401, 403, 429],
+} as const satisfies Record<string, readonly number[]>;
+
+type PublisherRefusalMode = keyof typeof STOP_STATUSES;
+
+const isStopStatus = (
+  mode: PublisherRefusalMode | undefined,
+  status: number,
+): boolean =>
+  STOP_STATUSES[mode ?? "return-response"].some((stop) => stop === status);
+
 export type PublisherFetchInit = FetchWithTimeoutInit & {
   /** Whose publisher budget this request spends. */
   adapterKey: AdapterKey;
+  fetchStage: DocumentFetchStage;
   /** A supplementary publisher, distinct from the decision listing's host. */
   publisherGate?: PublisherGateId | undefined;
+  expectedContentType?: "pdf" | undefined;
   retryPolicy?: "publisher-backoff";
+  /** Existing workflows receive refusals; session adapters can stop explicitly. */
+  refusalMode?: PublisherRefusalMode | undefined;
   /** Publisher-defined redirect target; use manual redirects to inspect it. */
   isRateLimitRedirect?: (response: Response) => boolean;
 };
@@ -52,9 +82,31 @@ export const fetchPublisher = async (
   if (retryPolicy === "publisher-backoff") {
     return await retryPublisherRequest(url, init);
   }
+  const response = await fetchPublisherRequest(url, init);
+  if (isStopStatus(init.refusalMode, response.status)) {
+    const retryAfter = response.headers.get("Retry-After");
+    await response.body?.cancel();
+    throw new AdapterFetchError({
+      message: `Publisher request refused: ${response.status}`,
+      adapterKey: init.adapterKey,
+      cursor: null,
+      httpStatus: response.status,
+      ...(retryAfter === null ? {} : { retryAfter }),
+    });
+  }
+  return response;
+};
+
+const fetchPublisherRequest = async (
+  url: string | URL,
+  init: PublisherFetchInit,
+): Promise<Response> => {
   const {
     adapterKey,
     publisherGate,
+    refusalMode: _refusalMode,
+    fetchStage,
+    expectedContentType,
     isRateLimitRedirect: _isRateLimitRedirect,
     ...requestInit
   } = init;
@@ -63,8 +115,18 @@ export const fetchPublisher = async (
   } else {
     await reservePublisherGateSlot(publisherGate, requestInit.signal);
   }
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher fetch boundary: the lint rule checks each target where fetchPublisher or fetchWithRetry is called
-  return await fetchWithTimeout(url, requestInit);
+  // Each publisher-backoff attempt re-enters here, so every attempt is gated and observed.
+  const request = async () =>
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher fetch boundary: the lint rule checks each target where fetchPublisher or fetchWithRetry is called
+    await fetchWithTimeout(url, requestInit);
+  if (fetchStage === "listing") {
+    return await request();
+  }
+  return await observePublisherDocumentFetch({
+    source: adapterKey,
+    fetch: request,
+    expectedContentType,
+  });
 };
 
 /**
@@ -88,6 +150,8 @@ type FetchWithRetryOptions = {
    * request the budget never saw.
    */
   adapterKey: AdapterKey;
+  refusalMode?: PublisherRefusalMode | undefined;
+  fetchStage: DocumentFetchStage;
   /** Maximum retry attempts (default: 2). */
   maxRetries?: number;
   /** Per-request timeout in ms (default: ADAPTER_TIMEOUT.REQUEST). */
@@ -108,7 +172,7 @@ type FetchWithRetryOptions = {
  *
  * A 5xx is the publisher failing to answer; a 429 is the publisher answering
  * that the budget is spent. Retrying the refusal spends the budget the halt
- * protects, so it is returned to the caller after exactly one request.
+ * protects, so the caller receives the refusal after exactly one request.
  */
 const isRetryableStatus = (status: number): boolean => status >= 500;
 
@@ -124,6 +188,8 @@ const isRetryableStatus = (status: number): boolean => status >= 500;
  * - HTTP 4xx, the publisher's rate-limit refusal included (rule 19a)
  * - Network errors (DNS, connection refused)
  *
+ * Returns HTTP refusals by default. Session workflows may opt into a typed
+ * stop on 401/403/429; that choice does not affect existing adapters.
  * Returns the response even for retryable statuses after
  * exhausting retries, so the caller can decide what to do
  * (skip page, treat as miss, etc.).
@@ -143,6 +209,8 @@ export const fetchWithRetry = async (
     maxDelayMs = 30_000,
     signal,
     adapterKey,
+    refusalMode,
+    fetchStage,
   } = opts;
 
   const headers = new Headers(init?.headers);
@@ -158,6 +226,8 @@ export const fetchWithRetry = async (
       const response = await fetchPublisher(url, {
         ...init,
         adapterKey,
+        refusalMode,
+        fetchStage,
         headers,
         timeoutMs,
         signal,
@@ -232,6 +302,7 @@ export class PublisherRateLimitRefusalError extends AdapterFetchError {
       adapterKey,
       cursor,
       httpStatus: status,
+      stopKind: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
     });
     this.name = "PublisherRateLimitRefusalError";
     this.publisherKey = publisherKey;
@@ -253,18 +324,13 @@ type PublisherRetryDelayOptions = {
   random: number;
 };
 
-/** Full jitter, with the publisher's bounded Retry-After as a minimum. */
-export const publisherRetryDelay = ({
-  attempt,
-  retryAfter,
-  now,
-  random,
-}: PublisherRetryDelayOptions): number => {
-  const jitter =
-    random *
-    Math.min(PUBLISHER_BASE_DELAY_MS * 2 ** attempt, PUBLISHER_MAX_DELAY_MS);
+/** Parse the protocol value before a publisher policy applies its own bounds. */
+export const parsePublisherRetryAfter = (
+  retryAfter: string | null,
+  now: number,
+): number | null => {
   if (retryAfter === null) {
-    return jitter;
+    return null;
   }
   const value = retryAfter.trim();
   // The platform date parser accepts bare numbers and non-HTTP dates; reject those rather
@@ -280,7 +346,21 @@ export const publisherRetryDelay = ({
     // HTTP-date is a legacy protocol grammar rather than Temporal's ISO grammar.
     parsed = new Date(value).getTime() - now;
   }
-  if (Number.isNaN(parsed)) {
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+/** Full jitter, with the publisher's bounded Retry-After as a minimum. */
+export const publisherRetryDelay = ({
+  attempt,
+  retryAfter,
+  now,
+  random,
+}: PublisherRetryDelayOptions): number => {
+  const jitter =
+    random *
+    Math.min(PUBLISHER_BASE_DELAY_MS * 2 ** attempt, PUBLISHER_MAX_DELAY_MS);
+  const parsed = parsePublisherRetryAfter(retryAfter, now);
+  if (parsed === null) {
     return jitter;
   }
   return Math.max(jitter, Math.min(Math.max(0, parsed), RETRY_AFTER_MAX_MS));
@@ -307,7 +387,7 @@ export const retryPublisherRequest = async (
   dependencies?: PublisherRetryDependencies,
 ): Promise<Response> => {
   const runtime = dependencies ?? {
-    request: fetchPublisher,
+    request: fetchPublisherRequest,
     defer: async (durationMs: number, signal?: AbortSignal) =>
       await deferPublisherGate(
         init.publisherGate ?? ADAPTER_PUBLISHER_GATES[init.adapterKey],
@@ -336,6 +416,21 @@ export const retryPublisherRequest = async (
         }),
     });
     init.signal?.throwIfAborted();
+    if (
+      Result.isOk(fetched) &&
+      init.refusalMode === "stop-refusal" &&
+      (fetched.value.status === 401 || fetched.value.status === 403)
+    ) {
+      const retryAfter = fetched.value.headers.get("Retry-After");
+      await fetched.value.body?.cancel();
+      throw new AdapterFetchError({
+        message: `Publisher request refused: ${fetched.value.status}`,
+        adapterKey: init.adapterKey,
+        cursor: null,
+        httpStatus: fetched.value.status,
+        ...(retryAfter === null ? {} : { retryAfter }),
+      });
+    }
     if (Result.isError(fetched) && !isPublisherTimeout(fetched.error.cause)) {
       throw fetched.error;
     }
@@ -399,4 +494,24 @@ export const retryPublisherRequest = async (
     await runtime.sleep(delay, init.signal);
   }
   return panic("retryPublisherRequest: unreachable");
+};
+
+/**
+ * Rejects with `error` when it ends the ingestion cycle rather than describing
+ * one read: the caller's cancellation, or a source-level publisher refusal
+ * stop (an opted-in `stop-refusal`, or the gate's rate-limit refusal). The
+ * typed read owner (`publisher-read.ts`) keeps the publisher's rejection
+ * contract for these through this boundary.
+ */
+export const rethrowCycleStop = (
+  error: unknown,
+  signal: AbortSignal | undefined,
+): void => {
+  if (
+    signal?.aborted === true ||
+    (error instanceof AdapterFetchError &&
+      error.stopKind === INGESTION_STOP_KIND.PUBLISHER_REFUSAL)
+  ) {
+    throw error;
+  }
 };

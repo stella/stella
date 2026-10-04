@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * What a refresh that brings nothing new writes: nothing it does not have to.
  *
@@ -12,8 +13,6 @@
  * Each case first shows the refresh did apply (the observation advanced), so
  * the stillness that follows is not a skipped write.
  */
-
-import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -41,6 +40,7 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -89,36 +89,38 @@ const withDocument = (
   caseNumber: string,
   rawHash: string,
   metadata: Record<string, unknown> = {},
-): IngestionResult => ({
-  caseNumber,
-  court: "Nejvyšší soud",
-  country: "CZE",
-  language: "cs",
-  decisionDate: "2024-03-01",
-  decisionType: "rozsudek",
-  fulltext: PRECEDENT,
-  metadata,
-  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  rawHash,
-  documentAst: {},
-});
+): IngestionResult =>
+  plainTextIngestionResult({
+    caseNumber,
+    court: "Nejvyšší soud",
+    country: "CZE",
+    language: "cs",
+    decisionDate: "2024-03-01",
+    decisionType: "rozsudek",
+    fulltext: PRECEDENT,
+    metadata,
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash,
+    documentAst: {},
+  });
 
 /** A decision the publisher lists and serves inline, with no document. */
 const withoutDocument = (
   caseNumber: string,
   rawHash: string,
-): IngestionResult => ({
-  caseNumber,
-  court: "Nejvyšší soud",
-  country: "CZE",
-  language: "cs",
-  decisionDate: "2024-03-01",
-  decisionType: "rozsudek",
-  metadata: {},
-  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  rawHash,
-  documentAst: {},
-});
+): IngestionResult =>
+  plainTextIngestionResult({
+    caseNumber,
+    court: "Nejvyšší soud",
+    country: "CZE",
+    language: "cs",
+    decisionDate: "2024-03-01",
+    decisionType: "rozsudek",
+    metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash,
+    documentAst: {},
+  });
 
 type StoredRow = {
   id: string;
@@ -350,7 +352,10 @@ test("a refresh that rewrites the decision's identifier rows moves updated_at", 
     value: "R 12/2021 civ",
   } as const;
   await ingest(
-    { ...withDocument(caseNumber, "page-v1"), identifiers: [reporter] },
+    plainTextIngestionResult({
+      ...withDocument(caseNumber, "page-v1"),
+      identifiers: [reporter],
+    }),
     canonical,
   );
   const first = await storedRow(caseNumber);
@@ -362,7 +367,10 @@ test("a refresh that rewrites the decision's identifier rows moves updated_at", 
   `);
 
   await ingest(
-    { ...withDocument(caseNumber, "page-v2"), identifiers: [reporter] },
+    plainTextIngestionResult({
+      ...withDocument(caseNumber, "page-v2"),
+      identifiers: [reporter],
+    }),
     canonical,
   );
   const rewritten = await storedRow(caseNumber);
@@ -375,7 +383,10 @@ test("a refresh that rewrites the decision's identifier rows moves updated_at", 
 
   // The rows now match, so the next refresh of the same page leaves it.
   await ingest(
-    { ...withDocument(caseNumber, "page-v3"), identifiers: [reporter] },
+    plainTextIngestionResult({
+      ...withDocument(caseNumber, "page-v3"),
+      identifiers: [reporter],
+    }),
     canonical,
   );
   expect((await storedRow(caseNumber)).updatedAt).toBe(rewritten.updatedAt);
@@ -420,9 +431,9 @@ test.each([
     await ingest(withoutDocument(caseNumber, "page-v1"), corpus);
     const first = await storedRow(caseNumber);
     // Stored unpublished: an inline source that served no document.
-    expect(partialObservationFromMetadata(first.metadata).isListingOnly).toBe(
-      true,
-    );
+    expect(
+      partialObservationFromMetadata(first.metadata).detail === "listing-only",
+    ).toBe(true);
     expect(first.mirrorStatus).toBe("settled");
     const packsBefore = transferred.length;
 
@@ -449,9 +460,9 @@ test("a document arriving for a document-less decision is still written", async 
   const second = await storedRow(caseNumber);
   expect(second.contentHash).not.toBe(first.contentHash);
   expect(second.updatedAt).not.toBe(first.updatedAt);
-  expect(partialObservationFromMetadata(second.metadata).isListingOnly).toBe(
-    false,
-  );
+  expect(
+    partialObservationFromMetadata(second.metadata).detail === "listing-only",
+  ).toBe(false);
   const decisionRow = (
     await db
       .select({ id: caseLawDecisions.id })
@@ -496,11 +507,11 @@ test("a matching source hash refreshes a row whose stored document was removed",
 
 test("a matching source hash restores sections-only content", async () => {
   const caseNumber = "30 Cdo 304/2024";
-  const document = {
+  const document = plainTextIngestionResult({
     ...withDocument(caseNumber, "sections-only"),
     fulltext: undefined,
     sections: [{ index: 0, type: "ruling", title: null, text: PRECEDENT }],
-  } satisfies IngestionResult;
+  }) satisfies IngestionResult;
   await ingest(document, canonical);
   const first = await storedRow(caseNumber);
   expect(first.contentHash).not.toBeNull();
@@ -559,7 +570,10 @@ test("a refresh that moves the decision's language re-settles its kept citations
   // decision rather than part of which decision it is.
   const sourceDocumentId = "publisher-400";
   await ingest(
-    { ...withDocument(caseNumber, "page-v1"), sourceDocumentId },
+    plainTextIngestionResult({
+      ...withDocument(caseNumber, "page-v1"),
+      sourceDocumentId,
+    }),
     canonical,
   );
   const first = await storedRow(caseNumber);
@@ -567,11 +581,11 @@ test("a refresh that moves the decision's language re-settles its kept citations
   expect(citations).toHaveLength(1);
 
   await ingest(
-    {
+    plainTextIngestionResult({
       ...withDocument(caseNumber, "page-v2"),
       sourceDocumentId,
       language: "sk",
-    },
+    }),
     canonical,
   );
   // Still the same decision, now in the other language.
@@ -634,16 +648,17 @@ test("a payload replaced between the read and the write is planned again", async
 });
 
 test("a directory jurisdiction's decision is written with its court id, and every other without one", async () => {
-  const usa = (rawHash: string): IngestionResult => ({
-    ...withDocument("No. 19-1392", rawHash),
-    court: "Supreme Court of the United States",
-    courtId: "scotus",
-    country: "USA",
-    language: "en",
-    // The jurisdiction tells its language versions apart by the publisher's
-    // document, so every decision of it names one.
-    sourceDocumentId: "scotus-19-1392",
-  });
+  const usa = (rawHash: string): IngestionResult =>
+    plainTextIngestionResult({
+      ...withDocument("No. 19-1392", rawHash),
+      court: "Supreme Court of the United States",
+      courtId: "scotus",
+      country: "USA",
+      language: "en",
+      // The jurisdiction tells its language versions apart by the publisher's
+      // document, so every decision of it names one.
+      sourceDocumentId: "scotus-19-1392",
+    });
   const courtIdOf = async (caseNumber: string) =>
     (
       await db
@@ -671,11 +686,11 @@ test("a directory jurisdiction's decision is written with its court id, and ever
   // defect; nothing is written for it.
   const { courtId: _courtId, ...unresolved } = usa("page-v3");
   const rejection: unknown = await processDecision({
-    input: {
+    input: plainTextIngestionResult({
       ...unresolved,
       caseNumber: "No. 20-1",
       sourceDocumentId: "scotus-20-1",
-    },
+    }),
     observationOrder: 1000n,
     sourceId,
     scopedDb,
@@ -695,14 +710,14 @@ test("a directory jurisdiction's decision is written with its court id, and ever
 });
 
 test("an identity-changing USA refresh leaves its outgoing citation rows untouched", async () => {
-  const decision = {
+  const decision = plainTextIngestionResult({
     ...withDocument("No. 19-1393", "page-v1"),
     court: "Supreme Court of the United States",
     courtId: "scotus",
     country: "USA",
     language: "en",
     sourceDocumentId: "scotus-19-1393",
-  } satisfies IngestionResult;
+  }) satisfies IngestionResult;
   await ingest(decision, canonical);
   const row =
     (

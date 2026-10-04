@@ -12,7 +12,7 @@ import {
   loadResolvedThreadMessagePage,
   loadWebSearchAvailable,
 } from "@/api/handlers/chat/file-thread-shared";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -34,7 +34,13 @@ const resolveFileThreadBodySchema = t.Object({
 });
 
 const config = {
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Resolves the conversation associated with a file without delivering stored bytes.",
+  },
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
   body: resolveFileThreadBodySchema,
 } satisfies WorkspaceHandlerConfig;

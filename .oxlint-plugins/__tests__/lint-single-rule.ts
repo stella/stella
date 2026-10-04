@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import { appendFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -34,6 +35,8 @@ type LintSingleRuleOptions = {
   plugin?: string;
   /** The rule's options object, for a rule configured by data. */
   ruleOptions?: unknown;
+  /** Options that name paths under the scratch root the source is written to. */
+  ruleOptionsForRoot?: (root: string) => unknown;
   /** Where the source is written, relative to a scratch root. */
   sourcePath?: string;
 };
@@ -50,10 +53,12 @@ export const lintSingleRule = async (
     plugin = ruleName,
     pluginPath,
     ruleOptions,
+    ruleOptionsForRoot,
     sourcePath = "source.ts",
   }: LintSingleRuleOptions = {},
 ): Promise<number[]> => {
   const directory = await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`));
+  const options = ruleOptionsForRoot?.(directory) ?? ruleOptions;
   const lintResult = await Result.tryPromise(async () => {
     const configPath = path.join(directory, "oxlint.config.ts");
     await Bun.write(
@@ -66,7 +71,7 @@ export const lintSingleRule = async (
         ],
         rules: {
           [`${plugin}/${ruleName}`]:
-            ruleOptions === undefined ? "error" : ["error", ruleOptions],
+            options === undefined ? "error" : ["error", options],
         },
       })};\n`,
     );
@@ -85,18 +90,18 @@ export const lintSingleRule = async (
       ],
       { cwd: REPOSITORY_ROOT, stderr: "pipe", stdout: "pipe" },
     );
-    const [stdout, stderr] = await Promise.all([
+    const [stdout, stderr, exitCode] = await Promise.all([
       new Response(spawned.stdout).text(),
       new Response(spawned.stderr).text(),
       spawned.exited,
     ]);
-    return { stdout, stderr };
+    return { stdout, stderr, exitCode };
   });
   await rm(directory, { force: true, recursive: true });
   if (Result.isError(lintResult)) {
     return panic(`oxlint run failed: ${lintResult.error.message}`);
   }
-  const { stdout, stderr } = lintResult.value;
+  const { stdout, stderr, exitCode } = lintResult.value;
   const output = ["stdout:", stdout, "stderr:", stderr].join("\n");
   const report = Result.try((): unknown => JSON.parse(stdout));
   if (Result.isError(report)) {
@@ -108,13 +113,45 @@ export const lintSingleRule = async (
   if (!isUnknownArray(diagnostics)) {
     return panic(`oxlint reported no diagnostics array:\n${output}`);
   }
-  return diagnostics
-    .map((diagnostic) =>
-      reportedLine(
-        diagnostic,
-        plugin === ruleName ? `${plugin}(` : `${plugin}(${ruleName})`,
-      ),
+  if (
+    !isRecord(report.value) ||
+    report.value.number_of_files !== 1 ||
+    report.value.number_of_rules !== 1
+  ) {
+    return panic(
+      `oxlint must execute exactly one file and one rule:\n${output}`,
+    );
+  }
+  if (exitCode !== 0 && exitCode !== 1) {
+    return panic(`oxlint failed with exit ${exitCode}:\n${output}`);
+  }
+  if (
+    diagnostics.some(
+      (diagnostic) => isRecord(diagnostic) && diagnostic.code === undefined,
     )
+  ) {
+    return panic(`oxlint reported a parser or configuration error:\n${output}`);
+  }
+  const lines = diagnostics
+    .map((diagnostic) => reportedLine(diagnostic, `${plugin}(${ruleName})`))
     .filter((line): line is number => line !== null)
     .toSorted((left, right) => left - right);
+  if (lines.length !== diagnostics.length) {
+    return panic(
+      `oxlint reported diagnostics outside the requested rule:\n${output}`,
+    );
+  }
+  if (exitCode === 1 && lines.length === 0) {
+    return panic(
+      `oxlint failed without reporting the requested rule:\n${output}`,
+    );
+  }
+  const coveragePath = process.env.OXLINT_RULE_COVERAGE_PATH;
+  if (coveragePath !== undefined) {
+    appendFileSync(
+      coveragePath,
+      `${JSON.stringify({ ruleId: `${plugin}/${ruleName}`, outcome: lines.length === 0 ? "clean" : "report" })}\n`,
+    );
+  }
+  return lines;
 };

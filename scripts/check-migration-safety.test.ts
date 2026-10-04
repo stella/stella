@@ -4,7 +4,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
+
+import { checkMigrationSources } from "./check-migration-safety";
 
 type CheckerResult = {
   exitCode: number | null;
@@ -13,8 +15,6 @@ type CheckerResult = {
 };
 
 const decoder = new TextDecoder();
-// Each property run spawns the checker as a subprocess.
-const PROPERTY_TEST_TIMEOUT_MS = 60_000;
 
 const TIMEOUTS = `
 SET LOCAL lock_timeout = '1s';
@@ -59,6 +59,17 @@ const expectClean = (result: CheckerResult) => {
   expect(result.stderr).toBe("");
   expect(result.exitCode).toBe(0);
 };
+
+// Property samples run the checker in process. Outside the repository, like
+// the temporary files runChecker writes, so a corpus read sorts it first.
+const PROPERTY_MIGRATION = "../property-sample/migration.sql";
+
+const findingsIn = (sql: string) =>
+  checkMigrationSources([
+    { file: PROPERTY_MIGRATION, source: `${TIMEOUTS}${sql}` },
+  ]).flatMap(({ invariantFindings, guardedFindings, acknowledgementErrors }) =>
+    invariantFindings.concat(guardedFindings, acknowledgementErrors),
+  );
 
 const expectFinding = (result: CheckerResult, ruleId: string) => {
   expect(result.stderr).toContain(`[${ruleId}]`);
@@ -630,47 +641,71 @@ describe("check-migration-safety", () => {
       (fragment) => `SELECT $tag$${fragment}$tag$;`,
     ];
 
-    it(
-      "never fires on unsafe SQL inside comments, literals, or identifiers",
-      () => {
-        fc.assert(
-          fc.property(
-            fc.constantFrom(...UNSAFE_FRAGMENTS),
-            fc.constantFrom(...wrappers),
-            fc.constantFrom(...wrappers),
-            (fragment, first, second) => {
-              expectClean(
-                runChecker(`${first(fragment)}\n${second(fragment)}`),
-              );
-            },
-          ),
-          propertyConfig({ numRuns: 30 }),
-        );
-      },
-      PROPERTY_TEST_TIMEOUT_MS,
-    );
+    const maskedSql = fc
+      .tuple(
+        fc.constantFrom(...UNSAFE_FRAGMENTS),
+        fc.constantFrom(...wrappers),
+        fc.constantFrom(...wrappers),
+      )
+      .map(
+        ([fragment, first, second]) =>
+          `${first(fragment)}\n${second(fragment)}`,
+      );
 
-    it(
-      "always fires on the same unsafe SQL when it executes",
-      () => {
-        fc.assert(
-          fc.property(
-            fc.constantFrom(...UNSAFE_FRAGMENTS.slice(0, 5)),
-            fc.constantFrom(...wrappers),
-            (fragment, wrapper) => {
-              const executable = fragment.startsWith("ON CONFLICT")
-                ? `INSERT INTO "documents" ("slug") VALUES ('x') ${fragment};`
-                : `${fragment};`;
-              const result = runChecker(`${wrapper(fragment)}\n${executable}`);
+    const executedSql = fc
+      .tuple(
+        fc.constantFrom(...UNSAFE_FRAGMENTS.slice(0, 5)),
+        fc.constantFrom(...wrappers),
+      )
+      .map(([fragment, wrapper]) => {
+        const executable = fragment.startsWith("ON CONFLICT")
+          ? `INSERT INTO "documents" ("slug") VALUES ('x') ${fragment};`
+          : `${fragment};`;
+        return `${wrapper(fragment)}\n${executable}`;
+      });
 
-              expect(result.exitCode).toBe(1);
-            },
-          ),
-          propertyConfig({ numRuns: 20 }),
-        );
-      },
-      PROPERTY_TEST_TIMEOUT_MS,
-    );
+    it("never fires on unsafe SQL inside comments, literals, or identifiers", () => {
+      fc.assert(
+        fc.property(maskedSql, (sql) => {
+          expect(findingsIn(sql)).toEqual([]);
+        }),
+        propertyConfig({ numRuns: 30 }),
+      );
+    });
+
+    it("always fires on the same unsafe SQL when it executes", () => {
+      fc.assert(
+        fc.property(executedSql, (sql) => {
+          expect(findingsIn(sql).length).toBeGreaterThan(0);
+        }),
+        propertyConfig({ numRuns: 20 }),
+      );
+    });
+
+    // The spawned CLI must agree with the in-process verdict the properties
+    // assert: no finding exactly when it prints no error and exits 0. Ten
+    // spawns measure ~1 s; 30 s leaves a cold runner a margin above 20x.
+    it("the CLI reports exactly the in-process findings for drawn samples", () => {
+      for (const { value: sql, label } of [
+        ...drawPropertySamples(maskedSql, { numRuns: 5 }).map(
+          ({ value, label: drawn }) => ({ value, label: `maskedSql ${drawn}` }),
+        ),
+        ...drawPropertySamples(executedSql, { numRuns: 5 }).map(
+          ({ value, label: drawn }) => ({
+            value,
+            label: `executedSql ${drawn}`,
+          }),
+        ),
+      ]) {
+        const findings = findingsIn(sql);
+        const result = runChecker(sql);
+        expect(result.exitCode, label).toBe(findings.length > 0 ? 1 : 0);
+        expect(result.stderr === "", label).toBe(findings.length === 0);
+        for (const { ruleId } of findings) {
+          expect(result.stderr, label).toContain(`[${ruleId}]`);
+        }
+      }
+    }, 30_000);
   });
 
   describe("high-volume-table-dml", () => {
@@ -795,6 +830,170 @@ describe("check-migration-safety", () => {
           CREATE OR REPLACE FUNCTION repair_later() RETURNS void AS $$
             UPDATE "case_law_citations" SET "resolution_status" = 'pending';
           $$ LANGUAGE sql;
+        `),
+      );
+    });
+  });
+
+  describe("code-owned-table-write", () => {
+    // The seed that left clean and upgraded databases with different rows.
+    const REGISTRATION_SWEEP_SEED = `
+      INSERT INTO "scheduler_jobs" ("id", "task", "description", "schedule", "enabled", "next_run_at")
+      VALUES ('auth.sweepRegistrations.hour', 'auth.sweepRegistrations', 'Delete expired unused registrations', '{"type":"interval","everyMs":3600000}', true, now())
+      ON CONFLICT ON CONSTRAINT "scheduler_jobs_pkey" DO NOTHING;
+    `;
+
+    it("rejects the migration-seeded scheduler job", () => {
+      const result = runChecker(REGISTRATION_SWEEP_SEED);
+
+      expectFinding(result, "code-owned-table-write");
+      expect(result.stderr).toContain("[volatile-data-write]");
+      expect(result.stderr).toContain("DECLARED_SCHEDULER_JOBS");
+    });
+
+    it("cannot be acknowledged", () => {
+      const result = runChecker(`
+        -- stella-migration-safety: reviewed code-owned-table-write - the boot sync upserts the same row anyway
+        ${REGISTRATION_SWEEP_SEED}
+      `);
+
+      expectFinding(result, "code-owned-table-write");
+      expectFinding(result, "unacknowledgeable-rule");
+    });
+
+    it("rejects every insert, update and merge of a code-owned table", () => {
+      const writes = [
+        `INSERT INTO "scheduler_jobs" ("id", "enabled") VALUES ('x.hour', true);`,
+        `INSERT INTO public.scheduler_jobs ("id") SELECT 'x.hour' WHERE NOT EXISTS (SELECT 1 FROM "scheduler_jobs" WHERE "id" = 'x.hour');`,
+        `UPDATE "scheduler_jobs" SET "enabled" = false WHERE "id" = 'x.hour';`,
+        `UPDATE ONLY "public" . "scheduler_jobs" SET "schedule" = '{}' WHERE "id" = 'x.hour';`,
+        `WITH retired AS (SELECT 'x.hour' AS id) UPDATE scheduler_jobs SET "enabled" = false FROM retired WHERE scheduler_jobs."id" = retired.id;`,
+        `MERGE INTO "scheduler_jobs" j USING (VALUES ('x.hour')) v(id) ON j."id" = v.id WHEN NOT MATCHED THEN INSERT ("id") VALUES (v.id);`,
+        `DO $$ BEGIN INSERT INTO "scheduler_jobs" ("id") VALUES ('x.hour'); END $$;`,
+        // A comment is whitespace between any two tokens.
+        `INSERT /* seed */ INTO "scheduler_jobs" ("id") VALUES ('x.hour');`,
+        `INSERT -- seed\n INTO scheduler_jobs ("id") VALUES ('x.hour');`,
+        `UPDATE /* a */ ONLY /* b */ "public" /* c */ . /* d */ "scheduler_jobs" SET "enabled" = false WHERE "id" = 'x.hour';`,
+        `MERGE /* m */ INTO public./* t */scheduler_jobs j USING (VALUES ('x.hour')) v(id) ON j."id" = v.id WHEN NOT MATCHED THEN INSERT ("id") VALUES (v.id);`,
+      ];
+
+      for (const sql of writes) {
+        expect([
+          sql,
+          findingsIn(sql).some(
+            ({ ruleId }) => ruleId === "code-owned-table-write",
+          ),
+        ]).toEqual([sql, true]);
+      }
+    });
+
+    it("allows deletes, DDL and mentions that write nothing", () => {
+      expectClean(
+        runChecker(`
+          -- stella-migration-safety: reviewed delete-data - one row by primary key, recreated from code at boot
+          DELETE FROM "scheduler_jobs" WHERE "id" = 'auth.sweepRegistrations.hour';
+          ALTER TABLE "scheduler_jobs" ADD COLUMN "note" text;
+          SELECT "id" FROM "scheduler_jobs" WHERE "id" = 'x' FOR UPDATE;
+          -- INSERT INTO "scheduler_jobs" ("id") VALUES ('x');
+          INSERT INTO "audit_notes" ("body")
+            VALUES ('UPDATE scheduler_jobs SET enabled = false');
+          CREATE OR REPLACE FUNCTION reschedule_later() RETURNS void AS $$
+            UPDATE "scheduler_jobs" SET "enabled" = false;
+          $$ LANGUAGE sql;
+        `),
+      );
+    });
+
+    it("passes the migration that removes the seeded job", () => {
+      expectClean(
+        runCheckerOn(
+          "apps/api/drizzle/20261004104000_unseed_registration_sweep_job/migration.sql",
+        ),
+      );
+    });
+  });
+
+  describe("volatile-data-write", () => {
+    const VOLATILE_VALUES = [
+      "now()",
+      "pg_catalog.now()",
+      "NOW ()",
+      "current_timestamp",
+      "CURRENT_TIMESTAMP(3)",
+      "current_date",
+      "current_time",
+      "localtimestamp",
+      "localtime",
+      "clock_timestamp()",
+      "statement_timestamp()",
+      "transaction_timestamp()",
+      "timeofday()",
+      "random()",
+      "gen_random_uuid()",
+      "uuid_generate_v4()",
+      "uuidv7()",
+    ];
+    const WRITE_SHAPES = [
+      (value: string) =>
+        `INSERT INTO "practice_areas" ("slug", "created_at") VALUES ('corporate', ${value});`,
+      (value: string) =>
+        `INSERT INTO "practice_areas" ("id", "slug") SELECT ${value}, v.slug FROM (VALUES ('corporate')) v(slug);`,
+      (value: string) =>
+        `UPDATE "practice_areas" SET "updated_at" = ${value} WHERE "slug" = 'corporate';`,
+      (value: string) =>
+        `INSERT INTO "practice_areas" ("slug") VALUES ('corporate') ON CONFLICT ON CONSTRAINT "practice_areas_slug_unique" DO UPDATE SET "updated_at" = ${value};`,
+      (value: string) =>
+        `MERGE INTO "practice_areas" p USING (VALUES ('corporate')) v(slug) ON p."slug" = v.slug WHEN MATCHED THEN UPDATE SET "updated_at" = ${value};`,
+      (value: string) =>
+        `DO $$ BEGIN UPDATE "practice_areas" SET "updated_at" = ${value} WHERE "slug" = 'corporate'; END $$;`,
+    ];
+
+    it("rejects every volatile value in every row-writing shape", () => {
+      for (const value of VOLATILE_VALUES) {
+        for (const shape of WRITE_SHAPES) {
+          const sql = shape(value);
+          expect([
+            sql,
+            findingsIn(sql).some(
+              ({ ruleId }) => ruleId === "volatile-data-write",
+            ),
+          ]).toEqual([sql, true]);
+        }
+      }
+    });
+
+    it("cannot be acknowledged", () => {
+      const result = runChecker(`
+        -- stella-migration-safety: reviewed volatile-data-write - the column default is volatile anyway
+        UPDATE "practice_areas" SET "updated_at" = now() WHERE "slug" = 'corporate';
+      `);
+
+      expectFinding(result, "volatile-data-write");
+      expectFinding(result, "unacknowledgeable-rule");
+    });
+
+    it("allows volatile column defaults, DEFAULT writes, deletes and inert mentions", () => {
+      expectClean(
+        runChecker(`
+          CREATE TABLE "practice_area_notes" (
+            "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            "created_at" timestamptz NOT NULL DEFAULT now()
+          );
+          ALTER TABLE "practice_areas" ADD COLUMN "seen_at" timestamptz DEFAULT clock_timestamp();
+          ALTER TABLE "practice_areas" ALTER COLUMN "updated_at" SET DEFAULT current_timestamp;
+          INSERT INTO "practice_areas" ("id", "slug", "created_at") VALUES (DEFAULT, 'corporate', DEFAULT);
+          UPDATE "practice_areas" SET "updated_at" = DEFAULT WHERE "slug" = 'corporate';
+          -- stella-migration-safety: reviewed delete-data - expired rows only, the sweeper deletes them anyway
+          DELETE FROM "verification" WHERE "expires_at" < now();
+          -- UPDATE "practice_areas" SET "updated_at" = now();
+          INSERT INTO "audit_notes" ("body") VALUES ('set at now() by random()');
+          UPDATE "practice_areas" SET "now" = 'x' WHERE "slug" = 'corporate';
+          CREATE OR REPLACE FUNCTION touch_practice_area() RETURNS trigger AS $$
+          BEGIN
+            UPDATE "practice_areas" SET "updated_at" = now() WHERE "id" = NEW."id";
+            RETURN NEW;
+          END;
+          $$ LANGUAGE plpgsql;
         `),
       );
     });

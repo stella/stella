@@ -49,10 +49,16 @@ for (const entry of PUBLIC_CORPUS_BOOKKEEPING_TABLES) {
       }
     }
   }
-  const module: Record<string, unknown> = await import(
+  const module: unknown = await import(
     new URL(`../../../../${entry.moduleId}.ts`, import.meta.url).href
   );
-  if (module[entry.schemaExport] !== exportsByName.get(entry.schemaExport)) {
+  if (
+    typeof module !== "object" ||
+    module === null ||
+    !(entry.schemaExport in module) ||
+    Reflect.get(module, entry.schemaExport) !==
+      exportsByName.get(entry.schemaExport)
+  ) {
     errors.push("schema export does not belong to its declared module");
   }
   if (errors.length !== 0) {

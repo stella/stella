@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
+import type { Static } from "elysia";
 import * as v from "valibot";
 
 import { getAuth } from "@/api/lib/auth";
@@ -8,14 +9,16 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   MACHINE_API_KEY_CONFIG_ID,
   MACHINE_API_KEY_EXPIRY,
-  MACHINE_API_KEY_GRANTABLE_AUDIENCES,
   MACHINE_API_KEY_GRANTABLE_SCOPES,
   MACHINE_API_KEY_NAME_MAX_LENGTH,
   machineApiKeyMetadataSchema,
   machineApiKeyPermissionsSchema,
   parseMachineApiKeyPermissions,
 } from "@/api/lib/machine-api-key-config";
-import type { MachineApiKeyScope } from "@/api/lib/machine-api-key-config";
+import type {
+  MACHINE_API_KEY_GRANTABLE_AUDIENCES,
+  MachineApiKeyScope,
+} from "@/api/lib/machine-api-key-config";
 import { findOrganizationMachineApiKey } from "@/api/lib/machine-api-key-queries";
 import type { MachineApiKeyRow } from "@/api/lib/machine-api-key-queries";
 import { logger } from "@/api/lib/observability/logger";
@@ -98,10 +101,24 @@ export const machineApiKeyAudienceSchema = t.Optional(
   // `t.Union` of literals rather than `t.UnionEnum`: the latter coerces an
   // absent field to its first member, which would silently bind every key that
   // named no audience to the default one instead of leaving it unbound.
-  t.Union(
-    MACHINE_API_KEY_GRANTABLE_AUDIENCES.map((audience) => t.Literal(audience)),
-  ),
+  t.Union([t.Literal("default"), t.Literal("documents"), t.Literal("law")]),
 );
+
+// The literal list mirrors MACHINE_API_KEY_GRANTABLE_AUDIENCES: a member on
+// one side only fails to compile here.
+type GrantableAudience = (typeof MACHINE_API_KEY_GRANTABLE_AUDIENCES)[number];
+type AudienceSchemaValue = Static<typeof machineApiKeyAudienceSchema>;
+type MissingAudienceSchemaValue = Exclude<
+  GrantableAudience,
+  AudienceSchemaValue
+>;
+type UnexpectedAudienceSchemaValue = Exclude<
+  AudienceSchemaValue,
+  GrantableAudience
+>;
+
+true satisfies MissingAudienceSchemaValue extends never ? true : never;
+true satisfies UnexpectedAudienceSchemaValue extends never ? true : never;
 
 export const machineApiKeyExpiresInDaysSchema = t.Optional(
   t.Integer({

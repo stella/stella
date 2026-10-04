@@ -39,7 +39,7 @@ export const countSqlPerfHits = (source: string, filename: string): number => {
       .join("\n");
     return panic(errors);
   }
-  // The OR/subquery and optional-keyset bans start at zero; existing per-file
+  // OR/subquery, optional-keyset and per-source full-count bans start at zero; per-file
   // allowances cover only the kinds that were present when the baseline was
   // introduced.
   return result.hits.filter((hit) => isBaselinedSqlPerfKind(hit.kind)).length;

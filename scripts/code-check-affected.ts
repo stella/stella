@@ -69,11 +69,13 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
   "$TURBO_ROOT$/apps/api/src/lib/db/public-corpus-audit/**",
   "$TURBO_ROOT$/apps/api/drizzle/**",
-  "$TURBO_ROOT$/apps/api/src/**",
-  "$TURBO_ROOT$/packages/**",
+  "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
   "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
   "$TURBO_ROOT$/scripts/design-lint-policy.ts",
   "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+  "$TURBO_ROOT$/scripts/derived-attributes.ts",
+  "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+  "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
 ] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
@@ -595,7 +597,9 @@ export const scopedCommands = (
   }
   if (plan.rootLintPaths.length > 0) {
     if (!rootChecks.has(ROOT_CHECKS.rootScriptLint)) {
+      commands.push(["bun", "run", "generate"]);
       commands.push(["bun", "--cwd=packages/cli", "run", "codegen:runtime"]);
+      commands.push(["bun", "apps/api/scripts/generate-capability-runtime.ts"]);
     }
     commands.push([
       "bun",
@@ -724,12 +728,27 @@ const main = () => {
         : presentChangedPaths.filter((file) => ownsCodeCheckPath(file, leg)),
     mergeBase,
     resolveMergeBase: () => {
-      const result = Bun.spawnSync(
-        ["git", "merge-base", DEFAULT_BASE, "HEAD"],
-        { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
-      );
+      const git = (args: string[]) =>
+        Bun.spawnSync(["git", ...args], {
+          cwd: REPO_ROOT,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+      // Only a missing comparison ref means "no base"; any other Git failure
+      // is surfaced rather than silently skipping the exact lint.
+      if (
+        git(["rev-parse", "--verify", "--quiet", `${DEFAULT_BASE}^{commit}`])
+          .exitCode !== 0
+      ) {
+        return null;
+      }
+      const result = git(["merge-base", DEFAULT_BASE, "HEAD"]);
       const base = result.stdout.toString().trim();
-      return result.exitCode === 0 && base !== "" ? base : null;
+      return result.exitCode === 0 && base !== ""
+        ? base
+        : panic(
+            `git merge-base ${DEFAULT_BASE} HEAD failed: ${result.stderr.toString().trim()}`,
+          );
     },
     measureDebt: measureResultBoundaryDebt,
     report: (message) => {

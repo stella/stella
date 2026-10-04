@@ -19,6 +19,7 @@ import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { type PublicLawData, unwrapPublicLawEden } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import type { SafeId } from "@/lib/safe-id";
 
 /**
  * Legal-vocabulary alternatives for a search's words, as the expansion
@@ -49,6 +50,7 @@ export type DecisionListFilters = {
   search?: string;
   /** How a search orders its hits; absent while there is nothing to rank. */
   sort?: SearchSort;
+  sourceId?: SafeId<"caseLawSource">;
   /**
    * Require every word the query carries, function words included. Present
    * only when the reader asked for it: the endpoint's default is the lenient
@@ -96,6 +98,7 @@ const caseLawDecisionKeys = {
       pageSize: key.pageSize,
       search: key.search,
       sort: key.sort,
+      sourceId: key.sourceId,
       strict: key.strict,
     } satisfies Record<keyof DecisionListKey, unknown>,
   ],
@@ -235,6 +238,9 @@ export const decisionsInfiniteOptions = (
               court: listFilters.court,
             }),
             country: listFilters.country,
+            ...(listFilters.sourceId !== undefined && {
+              sourceId: listFilters.sourceId,
+            }),
             ...(listFilters.dateFrom !== undefined && {
               dateFrom: listFilters.dateFrom,
             }),
@@ -304,6 +310,9 @@ export const decisionsInfiniteOptions = (
             court: listFilters.court,
           }),
           country: listFilters.country,
+          ...(listFilters.sourceId !== undefined && {
+            sourceId: listFilters.sourceId,
+          }),
           ...(listFilters.dateFrom !== undefined && {
             dateFrom: listFilters.dateFrom,
           }),

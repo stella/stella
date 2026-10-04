@@ -38,6 +38,7 @@ import {
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
+import { SESSION_LIFETIME_FIELDS } from "@/api/lib/auth/session-lifetime";
 
 const PRODUCT_AUTH_MODEL_NAMES = [
   "twoFactor",
@@ -53,7 +54,11 @@ const PRODUCT_AUTH_MODEL_NAMES = [
 ] as const;
 
 const OAUTH_PROVIDER_MODEL_TABLES = [
-  ["oauthClient", authSchema.oauthClient, ["public", "type"]],
+  [
+    "oauthClient",
+    authSchema.oauthClient,
+    ["public", "type", "registrationOrigin"],
+  ],
   ["oauthResource", authSchema.oauthResource, []],
   ["oauthClientResource", authSchema.oauthClientResource, []],
   ["oauthRefreshToken", authSchema.oauthRefreshToken, []],
@@ -271,6 +276,16 @@ const HOST_USER_FIELDS = {
   }),
 };
 
+const HOST_SESSION_FIELDS = normalizeRuntimeFields(SESSION_LIFETIME_FIELDS, {
+  refreshMode: {
+    databaseDefault: {
+      kind: "literal",
+      value: SESSION_LIFETIME_FIELDS.refreshMode.defaultValue,
+    },
+    databaseNotNull: true,
+  },
+});
+
 const HOST_MEMBER_FIELDS = {
   lastActiveWorkspaceId: hostField("lastActiveWorkspaceId", "string", {
     input: "server-managed",
@@ -416,11 +431,10 @@ describe("auth schema", () => {
     expect(Object.keys(dependencySchema).toSorted()).toEqual(
       OAUTH_PROVIDER_MODEL_TABLES.map(([model]) => model).toSorted(),
     );
-    for (const [model, table, rollbackColumns] of OAUTH_PROVIDER_MODEL_TABLES) {
+    for (const [model, table, hostColumns] of OAUTH_PROVIDER_MODEL_TABLES) {
       const dependencyFields = Object.keys(dependencySchema[model].fields);
       const hostFields = Object.keys(getColumns(table)).filter(
-        (field) =>
-          !rollbackColumns.some((rollbackColumn) => rollbackColumn === field),
+        (field) => !hostColumns.some((hostColumn) => hostColumn === field),
       );
       expect(hostFields.toSorted(), model).toEqual(
         ["id", ...dependencyFields].toSorted(),
@@ -445,7 +459,10 @@ describe("auth schema", () => {
         table: user,
       }),
       session: normalizeModel({
-        expectedFields: BETTER_AUTH_CORE_SCHEMA.session.fields,
+        expectedFields: {
+          ...BETTER_AUTH_CORE_SCHEMA.session.fields,
+          ...HOST_SESSION_FIELDS,
+        },
         modelName: "session",
         table: session,
       }),
@@ -520,11 +537,15 @@ describe("auth schema", () => {
       },
       {
         fields: {
+          session: HOST_SESSION_FIELDS,
           account: HOST_ACCOUNT_FIELDS,
           user: HOST_USER_FIELDS,
           member: HOST_MEMBER_FIELDS,
         },
         indexes: {
+          session: [
+            { fields: ["priorTokenHash"], predicate: null, unique: true },
+          ],
           account: [
             {
               fields: ["providerId"],
@@ -551,6 +572,10 @@ describe("auth schema", () => {
               predicate: null,
               unique: false,
             },
+          ],
+          // Bounds the expired-row sweep.
+          verification: [
+            { fields: ["expiresAt"], predicate: null, unique: false },
           ],
         },
         models: PRODUCT_AUTH_MODEL_NAMES,

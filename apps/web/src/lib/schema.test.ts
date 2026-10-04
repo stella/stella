@@ -2,7 +2,38 @@ import { FieldApi, FormApi } from "@tanstack/react-form";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import * as v from "valibot";
 
-import { emailSchema, schemaFormOptions } from "@/lib/schema";
+import {
+  emailSchema,
+  optionalUuidSearchSchema,
+  schemaFormOptions,
+} from "@/lib/schema";
+
+describe("optional UUID search filters", () => {
+  const uuid = "0194d94a-1122-7000-8000-123456789abc";
+
+  test("preserves full UUIDs in either hex case and absent filters", () => {
+    for (const value of [uuid, uuid.toUpperCase(), undefined]) {
+      expect(v.parse(optionalUuidSearchSchema, value)).toBe(value);
+    }
+  });
+
+  test("drops malformed public URL identifiers instead of sending them to the API", () => {
+    for (const value of [
+      "not-a-uuid",
+      "",
+      `${uuid}\n`,
+      ` ${uuid}`,
+      `${uuid} `,
+      uuid.replaceAll("-", ""),
+      uuid.replace("a", "g"),
+      42,
+      null,
+      [uuid],
+    ]) {
+      expect(v.parse(optionalUuidSearchSchema, value)).toBeUndefined();
+    }
+  });
+});
 
 const INVALID_EMAIL = "not an email";
 const VALID_EMAIL = "  User@Example.COM  ";
