@@ -980,7 +980,6 @@
     "packPartial": "{installed} installiert, {failed} fehlgeschlagen",
     "removed": "Dieses Tool ist nicht mehr verfügbar.",
     "sectionOthers": "Weitere",
-    "sectionRecommended": "Empfohlen",
     "settings": {
       "packTitle": "Empfohlenes Paket"
     },
@@ -1188,8 +1187,10 @@
       "label": "Simulierte KI"
     },
     "modelSelector": {
+      "allModels": "Alle Modelle ({count, number})",
       "autoDescription": "Wählt Modell und Denkaufwand automatisch aus.",
       "autoLabel": "Automatisch",
+      "belowFrontier": "Unter den besten Kompromissen",
       "effortHelpDescription": "Legt fest, wie viel Denkaufwand das Modell vor der Antwort verwendet. Höhere Stufen können bei komplexen Aufgaben helfen, dauern aber meist länger. Der Punkt markiert die Standardeinstellung des Anbieters für dieses Modell.",
       "effortHelpLabel": "Informationen zum Denkaufwand",
       "effortLabel": "Denkaufwand",
@@ -1203,6 +1204,10 @@
         "providerDefault": "Standard",
         "xhigh": "Sehr hoch"
       },
+      "newModel": "Neu",
+      "premiumCost": "Ungewöhnlich hohe Kosten",
+      "recommendedHelpDescription": "Kein anderes verfügbares Modell ist zugleich günstiger und besser bewertet. Modelle, die für eine Bewertung noch zu neu sind, sind als neu markiert. Qualität: <link>{benchmark} von LMArena</link> ({licence}); Kosten: Listenpreise.",
+      "recommendedHelpLabel": "Über empfohlene Modelle",
       "selectionLabel": "{model} | {effort}",
       "title": "Chat-Modell auswählen",
       "viaProvider": "über {provider}"
@@ -1616,6 +1621,16 @@
     "currency": "Währung",
     "currentPage": "Aktuelle Seite",
     "date": "Datum",
+    "datePicker": {
+      "label": "Datumsauswahl",
+      "nextDecade": "Nächstes Jahrzehnt",
+      "nextMonth": "Nächster Monat",
+      "nextYear": "Nächstes Jahr",
+      "previousDecade": "Vorheriges Jahrzehnt",
+      "previousMonth": "Vorheriger Monat",
+      "previousYear": "Vorheriges Jahr",
+      "time": "Uhrzeit"
+    },
     "decisions": "Entscheidungen",
     "decline": "Ablehnen",
     "delete": "Löschen",
@@ -1776,6 +1791,7 @@
     "properties": "Eigenschaften",
     "queued": "Eingereiht",
     "reason": "Grund",
+    "recommended": "Empfohlen",
     "reconnecting": "Verbindung wird wiederhergestellt…",
     "reference": "Referenz",
     "refresh": "Aktualisieren",
@@ -1901,6 +1917,7 @@
       "addBankAccount": "Bankkonto hinzufügen",
       "noBillingData": "Keine Rechnungsdaten hinterlegt.",
       "removeBankAccount": "Bankkonto entfernen",
+      "selectCurrencyForRate": "Wählen Sie eine Währung, um einen Stundensatz festzulegen.",
       "title": "Rechnungsdaten"
     },
     "columns": {
