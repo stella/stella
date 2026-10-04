@@ -223,11 +223,6 @@ const installSearchMock = ({
       if (url.pathname.endsWith("/Search/GetAbstract.aspx")) {
         return Promise.resolve(new Response(makeAbstractPage()));
       }
-      // The court's answer that it holds no record card: a card it failed to
-      // serve would hold the record unread.
-      if (url.pathname.endsWith("/Search/ResultDetail.aspx")) {
-        return Promise.resolve(new Response("no card", { status: 404 }));
-      }
       return Promise.resolve(new Response("unexpected", { status: 500 }));
     }),
   );

@@ -46,6 +46,11 @@ import type {
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
+  isReadRefusal,
+  isStoredReadUnavailable,
+  READ_OUTCOME_METADATA_KEY,
+} from "@/api/lib/errors/read-outcome";
+import {
   AdapterFetchError,
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
@@ -55,7 +60,9 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
   faultedResponse,
   READ_FAULTS,
+  READ_REFUSALS,
   type ReadFault,
+  type ReadRefusalFault,
 } from "@/api/tests/helpers/read-fault-drivers";
 import {
   installRecordingAnalytics,
@@ -1311,7 +1318,7 @@ describe("a failed publisher read is never built", () => {
     faulted,
     body,
   }: {
-    fault: ReadFault;
+    fault: ReadFault | ReadRefusalFault;
     faulted: (url: string) => boolean;
     body: string;
   }): void => {
@@ -1387,6 +1394,11 @@ describe("a failed publisher read is never built", () => {
             expect(held.type).toBe("detail-unavailable");
             if (held.type === "detail-unavailable") {
               expect(held.decision.isListingOnly).toBe(true);
+              expect(
+                isStoredReadUnavailable(
+                  held.decision.metadata[READ_OUTCOME_METADATA_KEY],
+                ),
+              ).toBe(true);
               expect(held.decision.fulltext).toBeUndefined();
               expect(
                 Object.keys(
@@ -1424,6 +1436,50 @@ describe("a failed publisher read is never built", () => {
     }
   });
 
+  test.each(READ_REFUSALS)(
+    "a document read answered with %s holds the row listing-only with the typed refusal",
+    async (fault) => {
+      const item = await itemByDocket(LISTING, DISTRICT_DOCKET);
+      serveWithFault({
+        fault,
+        faulted: (url) => url === item.odkaz,
+        body: await readFixture(DISTRICT_DOCUMENT),
+      });
+      const logs = installRecordingLogger();
+      try {
+        const built = await buildCzRegionalDecision(item);
+        expect(built.type).toBe("detail-unavailable");
+        if (built.type === "detail-unavailable") {
+          const outcome = built.decision.metadata[READ_OUTCOME_METADATA_KEY];
+          expect(isReadRefusal(outcome)).toBe(true);
+          expect(outcome).toMatchObject({ scope: "document" });
+          expect(built.decision.isListingOnly).toBe(true);
+          expect(built.decision.fulltext).toBeUndefined();
+        }
+        expect(detailReadReports(logs)).toEqual(["18 C 130/2024"]);
+      } finally {
+        logs.restore();
+      }
+    },
+  );
+
+  test.each(READ_REFUSALS)(
+    "a day listing answered with %s stops the source as a publisher refusal",
+    async (fault) => {
+      serveWithFault({
+        fault,
+        faulted: () => true,
+        body: await readFixture(LISTING),
+      });
+      const page = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
+      expect(
+        page.isErr() &&
+          page.error instanceof AdapterFetchError &&
+          page.error.stopKind,
+      ).toBe("publisher_refusal");
+    },
+  );
+
   const CHAIN_DOCUMENT_ID = "e21716f9-8855-4a85-a7e6-9af23622661b";
 
   test.each(READ_FAULTS)(
@@ -1439,6 +1495,20 @@ describe("a failed publisher read is never built", () => {
           async () => await fetchCzRegionalAffectingDocs(CHAIN_DOCUMENT_ID),
         ),
       ).toMatchObject({ value: { type: "unavailable" } });
+    },
+  );
+
+  test.each(READ_REFUSALS)(
+    "a chain read answered with %s is a refused part, never an empty chain",
+    async (fault) => {
+      serveWithFault({
+        fault,
+        faulted: () => true,
+        body: await readFixture(CHAIN),
+      });
+      expect(
+        await fetchCzRegionalAffectingDocs(CHAIN_DOCUMENT_ID),
+      ).toMatchObject({ type: "refused", scope: "part" });
     },
   );
 

@@ -1,6 +1,5 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
-// parser-output-unchanged: failed publisher reads are held unread instead of built; decisions from successful reads are unchanged.
 import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
@@ -78,9 +77,12 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { addUtcDays } from "@/api/lib/dates";
 import {
+  READ_OUTCOME_METADATA_KEY,
   readPresent,
   readUnavailable,
+  storedReadUnavailable,
   type ReadOutcome,
+  type StoredReadOutcome,
 } from "@/api/lib/errors/read-outcome";
 import {
   AdapterFetchError,
@@ -458,6 +460,7 @@ const readCzRegionalPage = async (
       break;
     case "absent":
       return { type: "absent" };
+    case "refused":
     case "unavailable":
       return {
         type: "unavailable",
@@ -709,6 +712,7 @@ const fetchFinaldoc = async (
         },
         redirect: "error",
         timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        refusalScope: "document",
       }),
   );
   if (read.type !== "present") {
@@ -785,6 +789,9 @@ export const fetchCzRegionalAffectingDocs = async (
         "User-Agent": INGESTION_USER_AGENT,
       },
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+      // The chain is a part of a decision already held; a refusal withholds
+      // it, not the decision.
+      refusalScope: "part",
     },
   );
   if (read.type !== "present") {
@@ -1293,12 +1300,21 @@ const buildCzRegionalListingFallback = (
 };
 
 /**
- * The document a finaldoc read yields, or null where none is in hand.
+ * The document a finaldoc read yields, or why none is in hand: the publisher
+ * holds none (or the link is not its), or the read failed or was refused.
+ */
+type CzRegionalFinaldocOutcome =
+  | { type: "document"; document: CzRegionalDocumentPayload | null }
+  | { type: "unread"; readOutcome: StoredReadOutcome };
+
+/**
+ * The document a finaldoc read yields.
  *
  * A publisher error status fails the page, as it always has, so the cursor
- * holds. A request that did not answer or an empty 204 is reported, and the
- * row is held listing-only for a later read; it is never assembled as though
- * the publisher had no document.
+ * holds. A request that did not answer, an empty 204 or a refusal of the one
+ * document is reported, and the row is held listing-only with the typed
+ * outcome for a later read; it is never assembled as though the publisher
+ * had no document, and a refusal does not stop the crawl.
  */
 const finaldocOf = ({
   read,
@@ -1306,13 +1322,30 @@ const finaldocOf = ({
 }: {
   read: CzRegionalFinaldocRead;
   caseNumber: string;
-}): CzRegionalDocumentPayload | null => {
+}): CzRegionalFinaldocOutcome => {
   switch (read.type) {
     case "present":
-      return read.value;
+      return { type: "document", document: read.value };
     case "absent":
     case "link-rejected":
-      return null;
+      return { type: "document", document: null };
+    case "refused":
+      observeFailure(
+        classifyFailure(
+          unreadPublisherError({
+            outcome: read,
+            message: "CZ Regional document refused",
+            adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+            cursor: null,
+          }),
+          "upstream_unavailable",
+        ),
+        {
+          sink: documentReadFailed,
+          ctx: { adapterKey: ADAPTER_KEYS.CZ_REGIONAL, documentId: caseNumber },
+        },
+      );
+      return { type: "unread", readOutcome: read };
     case "unavailable": {
       const error = unreadPublisherError({
         outcome: read,
@@ -1335,7 +1368,16 @@ const finaldocOf = ({
         sink: documentReadFailed,
         ctx: { adapterKey: ADAPTER_KEYS.CZ_REGIONAL, documentId: caseNumber },
       });
-      return null;
+      return {
+        type: "unread",
+        // The adapter sees one cycle; counting consecutive ones is the
+        // pipeline's.
+        readOutcome: storedReadUnavailable({
+          cause: read.cause,
+          scope: "document",
+          consecutiveCycles: 1,
+        }),
+      };
     }
     default:
       read satisfies never;
@@ -1383,10 +1425,11 @@ export const buildCzRegionalDecision = async (
     return assembleCzRegionalDecision({ item, document: null, chain: null });
   }
   const caseNumber = splitCaseReference(item.jednaciCislo).caseNumber;
-  const document = finaldocOf({
+  const finaldoc = finaldocOf({
     read: await fetchFinaldoc(publishedDocumentUrl, caseNumber, signal),
     caseNumber,
   });
+  const document = finaldoc.type === "document" ? finaldoc.document : null;
   const built = assembleCzRegionalDecision({
     item,
     rawListing: raw,
@@ -1396,7 +1439,24 @@ export const buildCzRegionalDecision = async (
   if (document !== null || built.type !== "built") {
     return built;
   }
-  return { type: "detail-unavailable", decision: built.decision };
+  switch (finaldoc.type) {
+    case "document":
+      return { type: "detail-unavailable", decision: built.decision };
+    case "unread":
+      return {
+        type: "detail-unavailable",
+        decision: plainTextIngestionResult({
+          ...built.decision,
+          metadata: {
+            ...built.decision.metadata,
+            [READ_OUTCOME_METADATA_KEY]: finaldoc.readOutcome,
+          },
+        }),
+      };
+    default:
+      finaldoc satisfies never;
+      return panic(`Unhandled regional finaldoc: ${String(finaldoc)}`);
+  }
 };
 
 type CursorState = {
@@ -1514,6 +1574,7 @@ const fetchListPage = async ({ cursor, signal, state }: FetchListPageOptions) =>
             "User-Agent": INGESTION_USER_AGENT,
           },
           timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+          refusalScope: "source",
         });
 
         // A request that failed or a 5xx is retried; every other outcome is
@@ -2399,11 +2460,13 @@ export const czRegionalAdapter = defineSourceAdapter({
             adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
             signal,
             timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+            refusalScope: "source",
           });
           switch (read.type) {
             case "present":
               break;
             case "absent":
+            case "refused":
               return sourceTotalProbeFailed(
                 SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS,
               );

@@ -1,4 +1,4 @@
-// parser-output-unchanged: a publisher behind its own gate reads through the same typed outcome; a successful read returns the same response.
+// parser-output-unchanged: a publisher behind its own gate reads through the same typed outcome, and an unread outcome names its refusal; a successful read returns the same response.
 /**
  * The typed way a case-law adapter reads its publisher.
  *
@@ -25,6 +25,8 @@
  */
 
 import { panic, Result } from "better-result";
+
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
 import {
   readAbsent,
@@ -168,7 +170,7 @@ export const readPublisherText = async (
 ): Promise<ReadOutcome<string>> =>
   await readGatedResponseText(sharedGateRead(url, init));
 
-/** A read that established no value: an absence or a failure. */
+/** A read that established no value: an absence, a refusal or a failure. */
 export type UnreadPublisherOutcome = Exclude<
   ReadOutcome<unknown>,
   { readonly type: "present" }
@@ -228,7 +230,9 @@ const unavailableReadError = ({
 /**
  * A read that established no value, as the adapter error its caller throws or
  * reports. The HTTP status or the thrown cause is kept, so the cycle
- * classifies the failure as it would the raw response or exception.
+ * classifies the failure as it would the raw response or exception. A
+ * refusal carries its typed `ReadRefusal` as the cause, and stops the
+ * source only when its scope is the source.
  */
 export const unreadPublisherError = ({
   outcome,
@@ -243,6 +247,22 @@ export const unreadPublisherError = ({
         ...(httpStatus === undefined ? {} : { httpStatus }),
       });
     }
+    case "refused":
+      return new AdapterFetchError({
+        ...context,
+        message: `${context.message}: ${outcome.status} refused (${outcome.scope})`,
+        httpStatus: outcome.status,
+        ...(outcome.cause.retryAfter === null
+          ? {}
+          : { retryAfter: outcome.cause.retryAfter }),
+        cause: outcome,
+        // A refused document or part is that one address; only a refusal of
+        // the source stops the crawl.
+        stopKind:
+          outcome.scope === "source"
+            ? INGESTION_STOP_KIND.PUBLISHER_REFUSAL
+            : INGESTION_STOP_KIND.ADAPTER_ERROR,
+      });
     case "unavailable":
       return unavailableReadError({ ...context, cause: outcome.cause });
     default:

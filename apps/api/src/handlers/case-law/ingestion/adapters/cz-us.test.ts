@@ -19,6 +19,7 @@ import {
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   czUsAdapter,
+  openNalusSession,
   parseNalusDetail,
   RESULTS_PAGE_SIZE,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
@@ -31,9 +32,17 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import {
+  isReadRefusal,
+  isStoredReadUnavailable,
+  READ_OUTCOME_METADATA_KEY,
+} from "@/api/lib/errors/read-outcome";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import {
   faultedResponse,
   READ_FAULTS,
+  READ_REFUSALS,
   type ReadFault,
+  type ReadRefusalFault,
 } from "@/api/tests/helpers/read-fault-drivers";
 import {
   installRecordingAnalytics,
@@ -1054,73 +1063,112 @@ describe("czUsAdapter.fetchPage", () => {
     expect(submitted?.get("ctl00$MainContent$decidedFrom")).toBeNull();
   });
 
-  test.each([
-    {
-      name: "a 500",
-      failure: { abstractStatus: 500 },
-      errorType: "NalusResponseError",
-    },
-    {
-      name: "a request that fails",
-      failure: { abstractFailure: new TypeError("fetch failed") },
-      errorType: "TypeError",
-    },
-  ])(
-    "an abstract read answered with $name holds the record unread and reports the read",
-    async ({ failure, errorType }) => {
-      const logs = installRecordingLogger();
-      try {
-        installSearchMock({
-          rows: [
-            {
-              id: "4001",
-              sz: "1-1-24_1",
-              caseNumber: "I.ÚS 1/24",
-              date: "1. 1. 2024",
-            },
-          ],
-          ...failure,
-        });
+  test("abstract failure does not drop a listed decision", async () => {
+    const logs = installRecordingLogger();
+    try {
+      installSearchMock({
+        rows: [
+          {
+            id: "4001",
+            sz: "1-1-24_1",
+            caseNumber: "I.ÚS 1/24",
+            date: "1. 1. 2024",
+          },
+        ],
+        abstractStatus: 500,
+      });
 
-        const page = unwrap(
-          await czUsAdapter.fetchPage(historicalCursor(2024), {}),
-        );
-        // The listed identity is kept, but nothing the failed read would have
-        // carried is stated as read: the row is listing-only, so it stays out
-        // of public surfaces and the reconciliation builds it again.
-        expect(page.decisions).toHaveLength(1);
-        const decision = page.decisions[0];
-        expect(decision?.caseNumber === "I.ÚS 1/24").toBe(true);
-        expect(decision?.isListingOnly).toBe(true);
-        expect(decision?.fulltext).toBeUndefined();
-        expect(
-          decision?.metadata["listedOnlyReason"] === "abstract-unavailable",
-        ).toBe(true);
-        expect(decision?.metadata).not.toHaveProperty("abstractState");
-        expect(
-          Object.keys(decodeSourceRawEnvelope(decision?.sourceRaw ?? "") ?? {}),
-        ).toEqual(["listing"]);
-        expect(
-          logs
-            .at("WARN")
-            .filter(
-              (record) =>
-                record.message === "case_law.ingestion.detail_fetch_failed",
-            )
-            .map((record) => record.attributes),
-        ).toEqual([
-          expect.objectContaining({
-            documentId: "nalus-record:4001",
-            operation: "abstract",
-            "error.type": errorType,
-            "failure.grade": "transient",
-          }),
-        ]);
-      } finally {
-        logs.restore();
-      }
-    },
-  );
+      const page = unwrap(
+        await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+      );
+      expect(page.decisions).toHaveLength(1);
+      expect(page.decisions[0]?.caseNumber === "I.ÚS 1/24").toBe(true);
+      expect(page.decisions[0]?.isListingOnly).toBeUndefined();
+      expect(page.decisions[0]?.fulltext).toContain("Lorem ipsum");
+      expect(page.decisions[0]?.sourceRawContentType).toBe(
+        SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      );
+      expect(
+        decodeSourceRawEnvelope(page.decisions[0]?.sourceRaw ?? ""),
+      ).toMatchObject({
+        listing: expect.stringContaining("ResultDetail.aspx?id=4001"),
+        document: expect.stringContaining("lblRegistrySign"),
+      });
+      expect(
+        decodeSourceRawEnvelope(page.decisions[0]?.sourceRaw ?? ""),
+      ).not.toHaveProperty("abstract");
+      // A server error says nothing about the abstract: the row states the
+      // recoverable gap, which the reconciliation reads again.
+      expect(
+        page.decisions[0]?.metadata["abstractState"] === "unavailable",
+      ).toBe(true);
+      expect(readAgainByReconciliation(page.decisions[0])).toBe(true);
+      expect(
+        logs
+          .at("WARN")
+          .filter(
+            (record) =>
+              record.message === "case_law.ingestion.detail_fetch_failed",
+          )
+          .map((record) => record.attributes),
+      ).toEqual([
+        expect.objectContaining({
+          documentId: "nalus-record:4001",
+          operation: "abstract",
+          "failure.grade": "transient",
+        }),
+      ]);
+    } finally {
+      logs.restore();
+    }
+  });
+
+  test("records an abstract read that fails as unavailable and reports the read", async () => {
+    const logs = installRecordingLogger();
+    try {
+      installSearchMock({
+        rows: [
+          {
+            id: "4002",
+            sz: "1-2-24_1",
+            caseNumber: "I.ÚS 2/24",
+            date: "1. 1. 2024",
+          },
+        ],
+        abstractFailure: new TypeError("fetch failed"),
+      });
+
+      const page = unwrap(
+        await czUsAdapter.fetchPage(historicalCursor(2024), {}),
+      );
+      expect(page.decisions[0]).toMatchObject({
+        caseNumber: "I.ÚS 2/24",
+        sourceDocumentId: "nalus-record:4002",
+        metadata: { abstractState: "unavailable" },
+      });
+      expect(readAgainByReconciliation(page.decisions[0])).toBe(true);
+      expect(page.decisions[0]?.isListingOnly).toBeUndefined();
+      expect(page.decisions[0]?.fulltext).toContain("Lorem ipsum");
+      expect(
+        logs
+          .at("WARN")
+          .filter(
+            (record) =>
+              record.message === "case_law.ingestion.detail_fetch_failed",
+          )
+          .map((record) => record.attributes),
+      ).toEqual([
+        expect.objectContaining({
+          documentId: "nalus-record:4002",
+          operation: "abstract",
+          "error.type": "TypeError",
+          "failure.grade": "transient",
+        }),
+      ]);
+    } finally {
+      logs.restore();
+    }
+  });
 
   test("records an abstract the court does not hold as absent", async () => {
     installSearchMock({
@@ -2384,18 +2432,14 @@ describe("czUsAdapter judges", () => {
     });
   });
 
-  test("holds the record unread when the court could not serve the card", async () => {
+  test("says so on the row when the court could not serve the card", async () => {
     const decision = await decisionWithCard({ recordCardStatus: 500 });
 
-    // Stored with no bench, the row would read as a decision no judge sat on.
-    expect(decision?.isListingOnly).toBe(true);
     expect(decision?.judges).toBeUndefined();
+    expect(decision?.metadata["recordCard"] === "unavailable").toBe(true);
     expect(
-      decision?.metadata["listedOnlyReason"] === "record-card-unavailable",
-    ).toBe(true);
-    expect(
-      Object.keys(decodeSourceRawEnvelope(decision?.sourceRaw ?? "") ?? {}),
-    ).toEqual(["listing"]);
+      decodeSourceRawEnvelope(decision?.sourceRaw ?? ""),
+    ).not.toHaveProperty("detail");
   });
 
   // The two gaps are not the same question: the backfill asks again about the
@@ -2557,7 +2601,7 @@ describe("czUsAdapter.reparseStoredRaw", () => {
   });
 });
 
-describe("a failed NALUS read is never built", () => {
+describe("a failed or refused NALUS read", () => {
   const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
 
@@ -2586,7 +2630,10 @@ describe("a failed NALUS read is never built", () => {
   } as const;
 
   /** Crawl one listed record with every request to `path` failing as `fault`. */
-  const crawlWithFault = async (path: string, fault: ReadFault) => {
+  const crawlWithFault = async (
+    path: string,
+    fault: ReadFault | ReadRefusalFault,
+  ) => {
     installSearchMock({ rows: [ROW] });
     const served = globalThis.fetch;
     globalThis.fetch = asFetchMock(
@@ -2606,44 +2653,108 @@ describe("a failed NALUS read is never built", () => {
     },
   );
 
-  for (const [path, part] of [
-    ["/Search/ResultDetail.aspx", "record-card"],
-    ["/Search/GetAbstract.aspx", "abstract"],
+  const reportedOperations = (
+    logs: ReturnType<typeof installRecordingLogger>,
+  ) =>
+    logs
+      .at("WARN")
+      .filter(
+        (record) => record.message === "case_law.ingestion.detail_fetch_failed",
+      )
+      .map((record) => record.attributes?.["operation"]);
+
+  for (const [path, part, stateKey] of [
+    ["/Search/ResultDetail.aspx", "record-card", "recordCard"],
+    ["/Search/GetAbstract.aspx", "abstract", "abstractState"],
   ] as const) {
     test.each(READ_FAULTS)(
-      `a ${part} read answered with %s holds the record unread`,
+      `a ${part} read answered with %s stores the decision with the typed gap and reports the read`,
       async (fault) => {
         const logs = installRecordingLogger();
         try {
           const page = unwrap(await crawlWithFault(path, fault));
           expect(page.decisions).toHaveLength(1);
           const decision = page.decisions[0];
-          expect(decision?.isListingOnly).toBe(true);
-          expect(decision?.fulltext).toBeUndefined();
-          expect(decision?.judges).toBeUndefined();
-          expect(decision?.metadata["listedOnlyReason"]).toBe(
-            `${part}-unavailable`,
-          );
-          expect(
-            Object.keys(
-              decodeSourceRawEnvelope(decision?.sourceRaw ?? "") ?? {},
-            ),
-          ).toEqual(["listing"]);
-          expect(
-            logs
-              .at("WARN")
-              .filter(
-                (record) =>
-                  record.message === "case_law.ingestion.detail_fetch_failed",
-              )
-              .map((record) => record.attributes?.["operation"]),
-          ).toEqual([part]);
+          expect(decision?.isListingOnly).toBeUndefined();
+          expect(decision?.fulltext).toContain("Lorem ipsum");
+          expect(decision?.metadata[stateKey]).toBe("unavailable");
+          const outcome = decision?.metadata[READ_OUTCOME_METADATA_KEY];
+          expect(isStoredReadUnavailable(outcome)).toBe(true);
+          expect(outcome).toMatchObject({ scope: "part" });
+          expect(reportedOperations(logs)).toEqual([part]);
+        } finally {
+          logs.restore();
+        }
+      },
+    );
+
+    test.each(READ_REFUSALS)(
+      `a ${part} read answered with %s stores the decision with the typed refusal`,
+      async (fault) => {
+        const logs = installRecordingLogger();
+        try {
+          const page = unwrap(await crawlWithFault(path, fault));
+          expect(page.decisions).toHaveLength(1);
+          const decision = page.decisions[0];
+          expect(decision?.isListingOnly).toBeUndefined();
+          expect(decision?.fulltext).toContain("Lorem ipsum");
+          expect(decision?.metadata[stateKey]).toBe("unavailable");
+          const outcome = decision?.metadata[READ_OUTCOME_METADATA_KEY];
+          expect(isReadRefusal(outcome)).toBe(true);
+          expect(outcome).toMatchObject({ scope: "part" });
+          expect(reportedOperations(logs)).toEqual([part]);
         } finally {
           logs.restore();
         }
       },
     );
   }
+
+  test.each(READ_REFUSALS)(
+    "a text read answered with %s holds the record listing-only without failing the page",
+    async (fault) => {
+      const logs = installRecordingLogger();
+      try {
+        const page = unwrap(
+          await crawlWithFault("/Search/GetText.aspx", fault),
+        );
+        expect(page.decisions).toHaveLength(1);
+        const decision = page.decisions[0];
+        expect(decision?.isListingOnly).toBe(true);
+        expect(decision?.fulltext).toBeUndefined();
+        expect(decision?.metadata["listedOnlyReason"]).toBe(
+          `text-refused-${fault === "refused-401" ? 401 : 403}`,
+        );
+        expect(
+          isReadRefusal(decision?.metadata[READ_OUTCOME_METADATA_KEY]),
+        ).toBe(true);
+        expect(reportedOperations(logs)).toEqual(["text"]);
+      } finally {
+        logs.restore();
+      }
+    },
+  );
+
+  test.each([401, 403] as const)(
+    "a session the court answers %d for stops the source as a typed refusal",
+    async (status) => {
+      globalThis.fetch = asFetchMock(
+        async () => await Promise.resolve(new Response("", { status })),
+      );
+
+      const rejection: unknown = await openNalusSession().then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+      expect(rejection).toBeInstanceOf(AdapterFetchError);
+      expect(rejection).toMatchObject({ stopKind: "publisher_refusal" });
+      expect(
+        rejection instanceof AdapterFetchError &&
+          isReadRefusal(rejection.cause),
+      ).toBe(true);
+    },
+  );
 
   test("a text the court answers 404 for is a listed-only record, not a failure", async () => {
     installSearchMock({ rows: [ROW], detailStatus: 404 });

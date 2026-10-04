@@ -1,6 +1,5 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
-// parser-output-unchanged: failed publisher reads are held unread instead of built; decisions from successful reads are unchanged.
 import { Result, panic } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
@@ -758,8 +757,10 @@ const buildCzNsDecisionFromPages = ({
  * The print page is the AST's source and is treated as enrichment: where the
  * publisher has none (404 or 410), the decision still carries the fulltext
  * and metadata the detail page states, and is stored with an empty AST. A
- * print read that failed is not that absence: the decision is reported unread
- * like a failed detail read rather than stored without its AST.
+ * print read that failed or was refused is not that absence: the decision is
+ * reported unread like a failed detail read rather than stored without its
+ * AST. A refusal is reported with its typed `ReadRefusal` and does not stop
+ * the crawl.
  */
 export const buildCzNsDecision = async (
   row: CzNsListingRow,
@@ -783,6 +784,7 @@ export const buildCzNsDecision = async (
       signal,
       headers: COMMON_HEADERS,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+      refusalScope: "document",
     }),
     readPublisherText(printUrl, {
       fetchStage: "document",
@@ -790,6 +792,8 @@ export const buildCzNsDecision = async (
       signal,
       headers: COMMON_HEADERS,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+      // The AST's source: a refusal withholds the document, not a part.
+      refusalScope: "document",
     }),
   ]);
 
@@ -797,6 +801,7 @@ export const buildCzNsDecision = async (
     case "present":
       break;
     case "absent":
+    case "refused":
     case "unavailable":
       return {
         type: "detail-unavailable",
@@ -821,6 +826,7 @@ export const buildCzNsDecision = async (
       return buildFromPages(print.value);
     case "absent":
       return buildFromPages("");
+    case "refused":
     case "unavailable":
       return {
         type: "detail-unavailable",
@@ -1182,6 +1188,7 @@ const listCzNsSlicePage = async ({
     signal,
     headers: COMMON_HEADERS,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    refusalScope: "source",
   });
   if (listing.type !== "present") {
     throw unreadPublisherError({
@@ -1401,6 +1408,7 @@ export const czNsAdapter = defineSourceAdapter({
         signal,
         headers: COMMON_HEADERS,
         timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        refusalScope: "source",
       });
       if (read.type !== "present") {
         return read.type === "unavailable" && read.cause.kind === "thrown"
@@ -1444,6 +1452,7 @@ export const czNsAdapter = defineSourceAdapter({
           headers: COMMON_HEADERS,
           signal,
           timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+          refusalScope: "source",
         });
 
         if (listRead.type !== "present") {

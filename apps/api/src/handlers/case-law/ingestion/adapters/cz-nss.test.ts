@@ -52,6 +52,11 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import {
+  isReadRefusal,
+  isStoredReadUnavailable,
+  READ_OUTCOME_METADATA_KEY,
+} from "@/api/lib/errors/read-outcome";
+import {
   decodeSourceRawEnvelope,
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
@@ -2624,6 +2629,86 @@ describe("cz-nss reads the portal did not answer", () => {
       expect(built.decision.ecli).toBeUndefined();
     });
   }
+
+  /** Build the listed row, with every request under `pathPrefix` answered `status`. */
+  const buildWithStatusUnder = async (pathPrefix: string, status: number) => {
+    const { requests } = answerUnder(pathPrefix, () =>
+      htmlResponse("", status),
+    );
+    const built = await buildCzNssDecision({
+      row: listedMunicipalRow(),
+      session: SESSION,
+      signal: AbortSignal.timeout(5000),
+    });
+    return { built, requests };
+  };
+
+  for (const status of [401, 403] as const) {
+    for (const pathPrefix of [
+      "/DokumentDetail/Index/",
+      "/DokumentOriginal/Html/",
+    ] as const) {
+      test(`holds a row whose ${pathPrefix} read answers ${status} with the typed refusal`, async () => {
+        const { built, requests } = await buildWithStatusUnder(
+          pathPrefix,
+          status,
+        );
+
+        expect(built.type).toBe("detail-unavailable");
+        expect(built.decision.isListingOnly).toBe(true);
+        expect(built.decision.fulltext).toBeUndefined();
+        const outcome = built.decision.metadata[READ_OUTCOME_METADATA_KEY];
+        expect(isReadRefusal(outcome)).toBe(true);
+        expect(outcome).toMatchObject({ status, scope: "document" });
+        // A refused rich original is never replaced by the text endpoint.
+        expect(
+          requests.filter(({ url }) => url.includes("/DokumentOriginal/Text/")),
+        ).toEqual([]);
+      });
+    }
+
+    test(`holds a row whose text read answers ${status} with the typed refusal`, async () => {
+      installStub({ search: [], htmlDocumentStatus: 404 });
+      const served = globalThis.fetch;
+      globalThis.fetch = asFetchMock(
+        async (input: string | URL | Request, init?: RequestInit) =>
+          new URL(
+            input instanceof Request ? input.url : String(input),
+          ).pathname.startsWith("/DokumentOriginal/Text/")
+            ? htmlResponse("", status)
+            : await served(input, init),
+      );
+
+      const built = await buildCzNssDecision({
+        row: listedMunicipalRow(),
+        session: SESSION,
+        signal: AbortSignal.timeout(5000),
+      });
+
+      expect(built.type).toBe("detail-unavailable");
+      expect(built.decision.isListingOnly).toBe(true);
+      expect(built.decision.metadata[READ_OUTCOME_METADATA_KEY]).toMatchObject({
+        type: "refused",
+        status,
+        scope: "document",
+      });
+    });
+  }
+
+  test("a row held for a failed document read states the typed unavailable outcome", async () => {
+    const { built } = await buildWithStatusUnder(
+      "/DokumentOriginal/Html/",
+      500,
+    );
+
+    expect(built.decision.isListingOnly).toBe(true);
+    const outcome = built.decision.metadata[READ_OUTCOME_METADATA_KEY];
+    expect(isStoredReadUnavailable(outcome)).toBe(true);
+    expect(outcome).toMatchObject({
+      scope: "document",
+      cause: { kind: "status", status: 500 },
+    });
+  });
 
   test("builds from the text where the portal holds no rich original", async () => {
     installStub({ search: [], htmlDocumentStatus: 404 });

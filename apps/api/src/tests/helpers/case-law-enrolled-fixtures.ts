@@ -64,7 +64,7 @@ import {
   fetchCzRegionalAffectingDocs,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
-import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
+import { buildCzUsListedRecord } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import {
   ecjRawParts,
@@ -113,6 +113,10 @@ import {
   PL_UOKIK_LABEL,
   plUokikRawPartsOf,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
+import {
+  unreadPublisherError,
+  type UnreadPublisherOutcome,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { assembleSkCourtsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { buildSkUsDecision } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { readGzipJson } from "@/api/lib/gzip-json";
@@ -217,6 +221,20 @@ const CZ_NS_PRINT_PAGE =
   `<p>Odůvodnění: Soud prvního stupně rozsudkem zamítl žalobu, kterou se žalobkyně domáhala zaplacení částky.</p>` +
   `<p>JUDr. Pavel Horák, Ph.D.<br />předseda senátu</p></body></html>`;
 
+/**
+ * A build the adapter reported unread, failed with the outcome it carries: a
+ * refusal fails typed, as the crawl reports it.
+ */
+const unreadBuild = (adapterKey: string, outcome: UnreadPublisherOutcome) =>
+  Promise.reject(
+    unreadPublisherError({
+      outcome,
+      message: `${adapterKey} fixture did not build`,
+      adapterKey,
+      cursor: null,
+    }),
+  );
+
 export const czNsFixture = (): EnrolledAdapterFixture => ({
   buildDecision: async () => {
     globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
@@ -233,9 +251,17 @@ export const czNsFixture = (): EnrolledAdapterFixture => ({
       unid: "0000000000000000000000000000000A",
       caseNumber: "30 Cdo 3000/2025",
     });
-    return built.type === "built"
-      ? built.decision
-      : panic(`cz-ns fixture did not build: ${built.type}`);
+    switch (built.type) {
+      case "built":
+        return built.decision;
+      case "detail-unavailable":
+        return await unreadBuild("cz-ns", built.read);
+      case "unkeyable":
+        return panic("cz-ns fixture did not build: unkeyable");
+      default:
+        built satisfies never;
+        return panic("Unhandled cz-ns fixture build");
+    }
   },
 });
 
@@ -410,9 +436,8 @@ export const czNssFixture = (): EnrolledAdapterFixture => ({
       session: { cookies: "", token: "", formFields: new Map() },
       signal: AbortSignal.timeout(30_000),
     });
-    return built.type === "built"
-      ? built.decision
-      : panic(`cz-nss fixture did not build: ${built.type}`);
+    // A row held listing-only states its typed read outcome.
+    return built.decision;
   },
 });
 
@@ -596,6 +621,10 @@ export const czRegionalFixture = (): EnrolledAdapterFixture => ({
     });
 
     const crawled = await buildCzRegionalDecision(CZ_REGIONAL_LISTING_ROW);
+    // A row held listing-only states its typed read outcome.
+    if (crawled.type === "detail-unavailable") {
+      return crawled.decision;
+    }
     if (crawled.type !== "built") {
       return panic(`cz-regional fixture did not build: ${crawled.type}`);
     }
@@ -607,8 +636,10 @@ export const czRegionalFixture = (): EnrolledAdapterFixture => ({
       crawled.decision.sourceDocumentId ??
         panic("the cz-regional fixture states no publisher id"),
     );
+    // The chain pass writes nothing for a chain it did not read, and asks
+    // again on a later run.
     if (chain.type !== "present") {
-      return panic(`cz-regional fixture read no chain: ${chain.type}`);
+      return await unreadBuild("cz-regional", chain);
     }
 
     const reparsed = await czRegionalAdapter.reparseStoredRaw?.({
@@ -1196,14 +1227,13 @@ export const czUsFixture = (): EnrolledAdapterFixture => ({
     Bun.sleep = async () => {
       await Promise.resolve();
     };
-    const built = await czUsAdapter.reconciliation
-      .buildDecision({ ...CZ_US_LISTING_ROW })
-      .finally(() => {
-        Bun.sleep = sleep;
-      });
-    return built.type === "built"
-      ? built.decision
-      : panic(`cz-us fixture did not build: ${built.type}`);
+    const built = await buildCzUsListedRecord({
+      ...CZ_US_LISTING_ROW,
+    }).finally(() => {
+      Bun.sleep = sleep;
+    });
+    // A record held listing-only states its typed read outcome.
+    return built.decision;
   },
 });
 

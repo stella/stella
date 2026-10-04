@@ -13,6 +13,7 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import {
   readPublisher,
   readPublisherText,
+  unreadPublisherError,
   type PublisherReadInit,
 } from "./publisher-read";
 
@@ -162,6 +163,45 @@ test("only a refusal with a refusal status and a scope is a refusal marker", () 
   ]) {
     expect(isReadRefusal(value)).toBe(false);
   }
+});
+
+describe("unreadPublisherError", () => {
+  test.each([
+    { scope: "document", stopKind: "adapter_error" },
+    { scope: "part", stopKind: "adapter_error" },
+    { scope: "source", stopKind: "publisher_refusal" },
+  ] as const)(
+    "a $scope refusal carries its typed marker and stops as $stopKind",
+    async ({ scope, stopKind }) => {
+      globalThis.fetch = asFetchMock(
+        async () =>
+          await Promise.resolve(
+            new Response("", { status: 403, headers: { "Retry-After": "60" } }),
+          ),
+      );
+      const outcome = await readPublisher(
+        URL_UNDER_TEST,
+        init({ refusalScope: scope }),
+      );
+      if (outcome.type !== "refused") {
+        return panic(`expected a refusal, got ${outcome.type}`);
+      }
+
+      const error = unreadPublisherError({
+        outcome,
+        message: "refused",
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        cursor: null,
+      });
+
+      expect(isReadRefusal(error.cause)).toBe(true);
+      expect(error).toMatchObject({
+        httpStatus: 403,
+        retryAfter: "60",
+        stopKind,
+      });
+    },
+  );
 });
 
 describe("readPublisherText", () => {

@@ -1,7 +1,6 @@
 // parser-output-unchanged: Bounded crawl retries and cursor encoding change fetch control without changing parsed decision output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
-// parser-output-unchanged: failed publisher reads are held unread instead of built; decisions from successful reads are unchanged.
 import { panic, Result } from "better-result";
 
 import {
@@ -78,7 +77,13 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { PlainTextError } from "@/api/lib/case-law/plain-text";
 import { addUtcDays } from "@/api/lib/dates";
-import { readAbsent, type ReadOutcome } from "@/api/lib/errors/read-outcome";
+import {
+  READ_OUTCOME_METADATA_KEY,
+  readAbsent,
+  storedReadUnavailable,
+  type ReadOutcome,
+  type StoredReadOutcome,
+} from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -745,18 +750,45 @@ const czNssSourceHash = ({
   }
 };
 
-/** The document's content, or the fact that a document read failed. */
+/**
+ * A read that established nothing about a document the portal lists: refused
+ * or failed. A 404 or 410 is not one; it states the portal holds nothing.
+ */
+type UnreadNssRead = Exclude<UnreadPublisherOutcome, { type: "absent" }>;
+
+/**
+ * The typed outcome a row held listing-only for an unread document carries,
+ * re-checked on the normal cadence. The adapter sees one cycle; counting
+ * consecutive ones is the pipeline's.
+ */
+const storedDocumentReadOutcome = (read: UnreadNssRead): StoredReadOutcome =>
+  read.type === "refused"
+    ? read
+    : storedReadUnavailable({
+        cause: read.cause,
+        scope: "document",
+        consecutiveCycles: 1,
+      });
+
+/**
+ * The document's content, or the fact that a document read failed. A held
+ * row states the outcome of the read that failed where one did; a parser's
+ * failure states none.
+ */
 type DecisionContentRead =
   | { type: "read"; content: DecisionContent }
-  | { type: "unavailable" };
+  | { type: "unavailable"; readOutcome: StoredReadOutcome | null };
 
 type ObserveDocumentReadFailedOptions = {
   documentId: string;
   phase: CzNssRawPart;
-  read: UnreadPublisherOutcome;
+  read: UnreadNssRead;
 };
 
-/** A document endpoint's read failed; reported, and the row is held unread. */
+/**
+ * A document endpoint's read failed or was refused; reported (a refusal with
+ * its typed `ReadRefusal`), and the row is held unread with the outcome.
+ */
 const observeDocumentReadFailed = ({
   documentId,
   phase,
@@ -776,7 +808,7 @@ const observeDocumentReadFailed = ({
       ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId, phase },
     },
   );
-  return { type: "unavailable" };
+  return { type: "unavailable", readOutcome: storedDocumentReadOutcome(read) };
 };
 
 /**
@@ -810,6 +842,9 @@ const fetchRichDocument = async (
         Cookie: session.cookies,
       },
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+      // The AST's source: a refusal withholds the document, and the text
+      // endpoint is never read in its place.
+      refusalScope: "document",
     },
   );
   return read.type === "present" && isRichDocumentPlaceholder(read.value)
@@ -837,6 +872,7 @@ const fetchDecisionContent = async (
       break;
     case "absent":
       return await fetchPlainTextContent(documentId, session, signal);
+    case "refused":
     case "unavailable":
       return observeDocumentReadFailed({
         documentId,
@@ -913,6 +949,7 @@ const fetchPlainTextContent = async (
         Cookie: session.cookies,
       },
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+      refusalScope: "document",
     },
   );
   switch (read.type) {
@@ -920,6 +957,7 @@ const fetchPlainTextContent = async (
       break;
     case "absent":
       return { type: "read", content: EMPTY_CONTENT };
+    case "refused":
     case "unavailable":
       return observeDocumentReadFailed({
         documentId,
@@ -1464,7 +1502,7 @@ const EMPTY_DETAIL: CzNssDetailMetadata = {
  */
 type DetailFetch =
   | { type: "fetched"; detail: CzNssDetailMetadata; html: string | null }
-  | { type: "unavailable" };
+  | { type: "unavailable"; readOutcome: StoredReadOutcome | null };
 
 const fetchDetailMetadata = async (
   documentId: string,
@@ -1482,6 +1520,7 @@ const fetchDetailMetadata = async (
         Cookie: session.cookies,
       },
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+      refusalScope: "document",
     },
   );
   switch (read.type) {
@@ -1489,6 +1528,7 @@ const fetchDetailMetadata = async (
       break;
     case "absent":
       return { type: "fetched", detail: EMPTY_DETAIL, html: null };
+    case "refused":
     case "unavailable":
       observeFailure(
         publisherReadFailure(
@@ -1504,7 +1544,10 @@ const fetchDetailMetadata = async (
           ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId },
         },
       );
-      return { type: "unavailable" };
+      return {
+        type: "unavailable",
+        readOutcome: storedDocumentReadOutcome(read),
+      };
     default:
       read satisfies never;
       return panic(`Unhandled NSS detail read: ${String(read)}`);
@@ -1521,7 +1564,7 @@ const fetchDetailMetadata = async (
       sink: detailParseFailed,
       ctx: { adapterKey: ADAPTER_KEYS.CZ_NSS, documentId },
     });
-    return { type: "unavailable" };
+    return { type: "unavailable", readOutcome: null };
   }
   return { type: "fetched", detail: parsed.value, html };
 };
@@ -1986,6 +2029,7 @@ const initSession = async (signal: AbortSignal): Promise<SessionState> => {
     redirect: "follow",
     headers: COMMON_HEADERS,
     timeoutMs: CZ_NSS_LISTING_TIMEOUT_MS,
+    refusalScope: "source",
   });
 
   if (read.type !== "present") {
@@ -2110,6 +2154,7 @@ const executeSearch = async (
     body: formData.toString(),
     redirect: "follow",
     timeoutMs: CZ_NSS_LISTING_TIMEOUT_MS,
+    refusalScope: "source",
   });
 
   if (read.type !== "present") {
@@ -2216,6 +2261,7 @@ const fetchResultPage = async ({
     },
     body: formData.toString(),
     timeoutMs: CZ_NSS_LISTING_TIMEOUT_MS,
+    refusalScope: "source",
   });
 
   if (read.type !== "present") {
@@ -2293,17 +2339,32 @@ type BuildCzNssDecisionOptions = {
  * Marked `isListingOnly`, which keeps it off every public surface and out of
  * what the reconciliation counts as held. Its hash is its own, distinct from
  * the one the same document hashes to once read, so the full row replaces it
- * when the document is read.
+ * when the document is read. Where a read failed or was refused, the row
+ * states that outcome, typed, under `metadata.readOutcome`.
  */
-const listingOnlyDecision = (decision: IngestionResult): IngestionResult =>
+const listingOnlyDecision = (
+  decision: IngestionResult,
+  readOutcome: StoredReadOutcome | null,
+): IngestionResult =>
   plainTextIngestionResult({
     ...decision,
     isListingOnly: true,
     rawHash: hashContent(`${decision.rawHash}|listing-only`),
+    ...(readOutcome === null
+      ? {}
+      : {
+          metadata: {
+            ...decision.metadata,
+            [READ_OUTCOME_METADATA_KEY]: readOutcome,
+          },
+        }),
   });
 
 /** The listing-only row for a listed document nothing was read for. */
-const unreadRowDecision = (row: ParsedRow): IngestionResult =>
+const unreadRowDecision = (
+  row: ParsedRow,
+  readOutcome: StoredReadOutcome | null,
+): IngestionResult =>
   listingOnlyDecision(
     rowToResult({
       row,
@@ -2311,6 +2372,7 @@ const unreadRowDecision = (row: ParsedRow): IngestionResult =>
       detail: EMPTY_DETAIL,
       detailHtml: null,
     }),
+    readOutcome,
   );
 
 /**
@@ -2330,7 +2392,7 @@ export const buildCzNssDecision = async ({
     // the legacy row, now or later, so it remains a listing-only observation.
     return {
       type: "detail-unavailable",
-      decision: unreadRowDecision(row),
+      decision: unreadRowDecision(row, null),
     };
   }
 
@@ -2338,7 +2400,7 @@ export const buildCzNssDecision = async ({
   if (detailFetch.type === "unavailable") {
     return {
       type: "detail-unavailable",
-      decision: unreadRowDecision(row),
+      decision: unreadRowDecision(row, detailFetch.readOutcome),
     };
   }
   const { detail, html: detailHtml } = detailFetch;
@@ -2357,6 +2419,7 @@ export const buildCzNssDecision = async ({
       type: "detail-unavailable",
       decision: listingOnlyDecision(
         rowToResult({ row, content: EMPTY_CONTENT, detail, detailHtml }),
+        contentRead.readOutcome,
       ),
     };
   }
@@ -2368,7 +2431,10 @@ export const buildCzNssDecision = async ({
   // reads the document again; to the reconciliation it is a document that has
   // not been read yet.
   return content.sourceRaw === undefined && content.fulltext === undefined
-    ? { type: "detail-unavailable", decision: listingOnlyDecision(decision) }
+    ? {
+        type: "detail-unavailable",
+        decision: listingOnlyDecision(decision, null),
+      }
     : { type: "built", decision };
 };
 
@@ -2789,6 +2855,7 @@ export const czNssAdapter = defineSourceAdapter({
         body: formData.toString(),
         redirect: "follow",
         timeoutMs: 90_000,
+        refusalScope: "source",
       });
 
       if (read.type !== "present") {
@@ -2981,7 +3048,7 @@ export const czNssAdapter = defineSourceAdapter({
             rawListing: JSON.stringify(row),
             build: async () => {
               if (readBudgetSpent()) {
-                return unreadRowDecision(row);
+                return unreadRowDecision(row, null);
               }
               const built = await Result.tryPromise({
                 try: async () =>
@@ -2999,7 +3066,7 @@ export const czNssAdapter = defineSourceAdapter({
                 readBudgetSpent() &&
                 !(built.error instanceof PlainTextError)
               ) {
-                return unreadRowDecision(row);
+                return unreadRowDecision(row, null);
               }
               throw built.error;
             },

@@ -293,9 +293,11 @@ export const runCzRegionalChainBackfill = async ({
         await writeRow(row, chain.value.raw);
         return;
       case "absent":
+      case "refused":
       case "unavailable":
-        // The publisher was asked and did not answer with a chain. Nothing is
-        // written, so the row stays selectable and a later run asks again.
+        // The publisher was asked and did not answer with a chain, or refused
+        // it. Nothing is written, so the row stays selectable and a later run
+        // asks again; a refusal is never stored as an empty chain.
         report.deferred += 1;
         return;
       default:

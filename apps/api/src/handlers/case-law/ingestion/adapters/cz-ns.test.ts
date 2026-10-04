@@ -5,6 +5,8 @@ import {
   czNsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
+import { isReadRefusal } from "@/api/lib/errors/read-outcome";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 describe("Domino listings distinguish publisher refusal from an empty view", () => {
@@ -177,6 +179,55 @@ describe("decision pages the publisher did not serve", () => {
 
     expect(built.type).toBe("built");
   });
+
+  for (const status of [401, 403] as const) {
+    test(`a print page answering ${status} is reported as the document refused`, async () => {
+      serveWith("/WebPrint/", () => new Response("", { status }));
+
+      const built = await buildCzNsDecision(ROW);
+
+      expect(built).toMatchObject({
+        type: "detail-unavailable",
+        page: "print",
+        read: { type: "refused", status, scope: "document" },
+      });
+      expect(
+        built.type === "detail-unavailable" && isReadRefusal(built.read),
+      ).toBe(true);
+    });
+
+    test(`a detail page answering ${status} is reported as the document refused`, async () => {
+      serveWith("/WebSearch/", () => new Response("", { status }));
+
+      expect(await buildCzNsDecision(ROW)).toMatchObject({
+        type: "detail-unavailable",
+        page: "detail",
+        read: { type: "refused", status, scope: "document" },
+      });
+    });
+
+    test(`the crawl moves past an entry whose detail page answers ${status}`, async () => {
+      serveWith("/WebSearch/", () => new Response("", { status }));
+
+      const page = (await czNsAdapter.fetchPage("1", {})).unwrap();
+
+      expect(page.decisions).toEqual([]);
+      expect(page.nextCursor).toBe("2");
+    });
+
+    test(`a listing answering ${status} stops the source as a publisher refusal`, async () => {
+      serveWith("ReadViewEntries", () => new Response("", { status }));
+
+      const page = await czNsAdapter.fetchPage("1", {});
+
+      expect(page.isErr()).toBe(true);
+      expect(
+        page.isErr() &&
+          page.error instanceof AdapterFetchError &&
+          page.error.stopKind,
+      ).toBe("publisher_refusal");
+    });
+  }
 
   test("a detail page the publisher has none of is reported as absent", async () => {
     serveWith("/WebSearch/", () => new Response("", { status: 404 }));
