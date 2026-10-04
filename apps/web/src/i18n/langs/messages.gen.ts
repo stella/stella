@@ -1611,15 +1611,6 @@ type Messages = {
     "currency": "Currency";
     "currentPage": "Current page";
     "date": "Date";
-    "datePicker": {
-      "label": "Date picker";
-      "nextDecade": "Next decade";
-      "nextMonth": "Next month";
-      "nextYear": "Next year";
-      "previousDecade": "Previous decade";
-      "previousMonth": "Previous month";
-      "previousYear": "Previous year";
-    };
     "decisions": "Decisions";
     "decline": "Decline";
     "delete": "Delete";
