@@ -44,6 +44,7 @@ import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
 import { STARTER_PLAYBOOKS } from "@/api/lib/workflow/starter-playbooks";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -131,8 +132,13 @@ const createdId = (result: unknown) => {
   return toSafeId<"playbookDefinition">(result["id"]);
 };
 
+// The seeding helper is typed against the production driver; the test driver
+// exposes the same `insert` builder at runtime.
+const asDocumentTypeWriter = (tx: unknown) =>
+  asTestRaw<Parameters<typeof ensureDefaultDocumentTypes>[1]>(tx);
+
 const createOrganization = async () => {
-  const organizationId = createSafeId<"organization">();
+  const organizationId = mintAuthProviderId<"organization">();
   await testDb.insert(organization).values({
     id: organizationId,
     name: "Document type reference test",
@@ -434,9 +440,12 @@ describe("playbook document type references", () => {
     const organizationId = await createOrganization();
     const context = orgContext(organizationId);
     for (let pass = 0; pass < 2; pass += 1) {
-      const seeded = await context.safeDb((tx) =>
-        ensureDefaultDocumentTypes(organizationId, tx),
-      );
+      const seeded = await context.safeDb(async (tx) => {
+        await ensureDefaultDocumentTypes(
+          organizationId,
+          asDocumentTypeWriter(tx),
+        );
+      });
       expect(Result.isOk(seeded)).toBe(true);
     }
     const defaults = await testDb
@@ -448,7 +457,7 @@ describe("playbook document type references", () => {
       .from(documentTypes)
       .where(eq(documentTypes.organizationId, organizationId))
       .orderBy(documentTypes.sortOrder);
-    expect(defaults).toEqual(DEFAULT_DOCUMENT_TYPES);
+    expect(defaults).toEqual([...DEFAULT_DOCUMENT_TYPES]);
     expect(
       await testDb
         .select({ id: auditLogs.id })
@@ -494,9 +503,12 @@ describe("playbook document type references", () => {
   test("refuses a starter whose seeded document type was deleted", async () => {
     const organizationId = await createOrganization();
     const context = orgContext(organizationId);
-    const seeded = await context.safeDb((tx) =>
-      ensureDefaultDocumentTypes(organizationId, tx),
-    );
+    const seeded = await context.safeDb(async (tx) => {
+      await ensureDefaultDocumentTypes(
+        organizationId,
+        asDocumentTypeWriter(tx),
+      );
+    });
     expect(Result.isOk(seeded)).toBe(true);
     const starter = STARTER_PLAYBOOKS.at(0);
     if (!starter) {

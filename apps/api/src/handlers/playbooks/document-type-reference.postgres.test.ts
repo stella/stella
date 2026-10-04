@@ -259,7 +259,7 @@ const expectWinnerAudit = async ({
       action: event.action,
       resourceType: event.resourceType,
       resourceId: event.resourceId,
-      changes: event.changes,
+      changes: event.changes ?? null,
       organizationId: fixture.organizationId,
       workspaceId: null,
       userId: fixture.userId,
