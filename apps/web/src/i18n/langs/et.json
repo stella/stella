@@ -4835,6 +4835,7 @@
     "addPart": "Lisa osa",
     "addTag": "Lisa silt",
     "aiAdaptHint": "AI kohandab seda sõnastust dokumendi iga koha järgi, kus see esineb.",
+    "aiConditionsUndecided": "AI ei suutnud neid tingimusi otsustada, seega täideti nende osad nii, nagu need ei kehtiks: {list}",
     "aiDecidedConditions": "Otsustab AI",
     "aiFieldsNotDrafted": "AI ei suutnud neid välju koostada: {list}",
     "allTemplates": "Kõik mallid",
@@ -4926,6 +4927,7 @@
     "directiveFor": "Tsükkel: {expression}",
     "directiveIf": "Kui: {expression}",
     "discoveryFailed": "Malli analüüsimine ebaõnnestus",
+    "documentCreatedIncomplete": "Dokument loodi, kuid täitmine on puudulik",
     "downloadAnyway": "Laadi ikkagi alla",
     "downloadDocx": "Laadi alla DOCX",
     "downloadPdf": "Laadi alla PDF",
@@ -5021,6 +5023,7 @@
     "saveFailed": "Malli salvestamine ebaõnnestus",
     "savedLookupFormats": "Salvestatud väljundvormingud",
     "searchTemplates": "Otsi malle…",
+    "structureErrorsInDocument": "Malli direktiivid, mida ei saanud rakendada: {count}. Kontrollige dokumenti.",
     "structureWarningParagraph": "Lõik {paragraph, number}",
     "structureWarnings": "{count, plural, one {# struktuurihoiatus} other {# struktuurihoiatust}}",
     "studio": {

@@ -4835,6 +4835,7 @@
     "addPart": "Teil hinzufügen",
     "addTag": "Schlagwort hinzufügen",
     "aiAdaptHint": "Die KI passt diese Formulierung an jede Stelle im Dokument an, an der sie vorkommt.",
+    "aiConditionsUndecided": "Die KI konnte diese Bedingungen nicht entscheiden; ihre Abschnitte wurden so ausgefüllt, als ob sie nicht zutreffen: {list}",
     "aiDecidedConditions": "Von der KI entschieden",
     "aiFieldsNotDrafted": "Die KI konnte diese Felder nicht entwerfen: {list}",
     "allTemplates": "Alle Vorlagen",
@@ -4926,6 +4927,7 @@
     "directiveFor": "Schleife: {expression}",
     "directiveIf": "Wenn: {expression}",
     "discoveryFailed": "Vorlage konnte nicht analysiert werden",
+    "documentCreatedIncomplete": "Dokument erstellt, aber die Ausfüllung ist unvollständig",
     "downloadAnyway": "Trotzdem herunterladen",
     "downloadDocx": "DOCX herunterladen",
     "downloadPdf": "PDF herunterladen",
@@ -5021,6 +5023,7 @@
     "saveFailed": "Vorlage konnte nicht gespeichert werden",
     "savedLookupFormats": "Gespeicherte Ausgabeformate",
     "searchTemplates": "Vorlagen durchsuchen…",
+    "structureErrorsInDocument": "Vorlagenanweisungen, die nicht angewendet werden konnten: {count}. Prüfen Sie das Dokument.",
     "structureWarningParagraph": "Absatz {paragraph, number}",
     "structureWarnings": "{count, plural, one {# Strukturwarnung} other {# Strukturwarnungen}}",
     "studio": {
