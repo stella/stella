@@ -1691,6 +1691,14 @@ jobs:
           bun test scripts/sql-perf-detector.test.ts scripts/sql-perf-baseline.test.ts
           bun scripts/sql-perf-baseline.ts --check
 
+      - name: Failure-as-empty baseline
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        run: |
+          bun test scripts/failure-as-empty-baseline.test.ts
+          bun run check:failure-as-empty
+
       - name: Oxlint override union guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # Oxlint resolves `overrides` by replacement: for a given file the last
