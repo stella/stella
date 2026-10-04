@@ -2288,6 +2288,7 @@
       "deeplQuotaExceeded": "Se ha agotado la cuota de caracteres de DeepL de esta organización.",
       "disposableEmailNotAllowed": "No se permiten direcciones de correo temporales. Usa una dirección de correo permanente.",
       "encryptedContent": "No se puede extraer el contenido de un documento cifrado. Quita la contraseña del archivo y vuelve a intentarlo.",
+      "filePropertyTypeImmutable": "No se puede cambiar el tipo de una propiedad de archivo. Mantén el tipo actual; crea una propiedad personalizada para otros valores.",
       "forbidden": "No tienes permiso para hacer esto.",
       "internalServerError": "Algo salió mal. Inténtalo de nuevo.",
       "legalSourceEntityLimitReached": "Este asunto ha alcanzado el límite de elementos, por lo que no se pudo crear el documento.",
@@ -3476,6 +3477,7 @@
         "approvedOn": "Aprobado el {date}",
         "approvedToast": "Playbook aprobado",
         "saveBeforeApprove": "Guarda los cambios antes de aprobar este playbook.",
+        "sourcesNotice": "Antes de aprobar, comprueba que ninguna posición mencione un documento, un asunto o una contraparte: toda la organización puede leer este playbook.",
         "statusApproved": "Aprobado",
         "statusDraft": "Borrador"
       },
@@ -3574,6 +3576,7 @@
       "referenceStandard": "De la referencia",
       "removeCheck": "Eliminar verificación",
       "removeIdeal": "Eliminar la redacción ideal",
+      "removeSource": "Quitar la fuente {documentName}",
       "reorderPosition": "Reordenar posición",
       "review": {
         "changePlaybook": "Elegir otro playbook",
@@ -3605,6 +3608,10 @@
         "blocker": "Bloqueante"
       },
       "severityLabel": "Gravedad",
+      "staleCopy": {
+        "loaded": "Se ha cargado una versión más reciente de este playbook. Recárguelo antes de editarlo.",
+        "unavailable": "No se pudo cargar la última versión de este playbook. Esta es la última copia cargada y puede estar desactualizada."
+      },
       "starters": {
         "addedToast": "Playbook añadido",
         "browseButton": "Explorar playbooks de inicio",

@@ -53,6 +53,7 @@ const createOrgContext = (
 
   return {
     createAuditRecorder: () => noopAuditRecorder,
+    getActiveWorkspaceIds: async () => [],
     memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,

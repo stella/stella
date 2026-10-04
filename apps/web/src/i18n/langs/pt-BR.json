@@ -2288,6 +2288,7 @@
       "deeplQuotaExceeded": "A cota de caracteres do DeepL desta organização foi esgotada.",
       "disposableEmailNotAllowed": "Endereços de e-mail temporários não são permitidos. Use um endereço de e-mail permanente.",
       "encryptedContent": "Não é possível extrair o conteúdo de um documento criptografado. Remova a senha do arquivo e tente novamente.",
+      "filePropertyTypeImmutable": "Não é possível alterar o tipo de uma propriedade de arquivo. Mantenha o tipo atual; crie uma propriedade personalizada para outros valores.",
       "forbidden": "Você não tem permissão para fazer isso.",
       "internalServerError": "Algo deu errado. Tente novamente.",
       "legalSourceEntityLimitReached": "Este assunto atingiu o limite de itens, portanto não foi possível criar o documento.",
@@ -3476,6 +3477,7 @@
         "approvedOn": "Aprovado em {date}",
         "approvedToast": "Playbook aprovado",
         "saveBeforeApprove": "Salve as alterações antes de aprovar este playbook.",
+        "sourcesNotice": "Antes de aprovar, verifique se nenhuma posição menciona um documento, um caso ou uma contraparte: toda a organização pode ler este playbook.",
         "statusApproved": "Aprovado",
         "statusDraft": "Rascunho"
       },
@@ -3574,6 +3576,7 @@
       "referenceStandard": "Da referência",
       "removeCheck": "Remover verificação",
       "removeIdeal": "Remover a redação ideal",
+      "removeSource": "Remover a fonte {documentName}",
       "reorderPosition": "Reordenar posição",
       "review": {
         "changePlaybook": "Escolher outro playbook",
@@ -3605,6 +3608,10 @@
         "blocker": "Bloqueador"
       },
       "severityLabel": "Gravidade",
+      "staleCopy": {
+        "loaded": "Uma versão mais recente deste playbook foi carregada. Recarregue antes de editar.",
+        "unavailable": "Não foi possível carregar a versão mais recente deste playbook. Esta é a última cópia carregada e pode estar desatualizada."
+      },
       "starters": {
         "addedToast": "Playbook adicionado",
         "browseButton": "Explorar playbooks iniciais",

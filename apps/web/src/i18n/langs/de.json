@@ -2288,6 +2288,7 @@
       "deeplQuotaExceeded": "Das DeepL-Zeichenkontingent dieser Organisation ist aufgebraucht.",
       "disposableEmailNotAllowed": "Temporäre E-Mail-Adressen sind nicht zulässig. Verwenden Sie eine dauerhafte E-Mail-Adresse.",
       "encryptedContent": "Der Inhalt verschlüsselter Dokumente kann nicht extrahiert werden. Entfernen Sie das Passwort aus der Datei und versuchen Sie es erneut.",
+      "filePropertyTypeImmutable": "Der Typ einer Dateieigenschaft kann nicht geändert werden. Behalten Sie den bestehenden Typ bei; erstellen Sie für andere Werte eine benutzerdefinierte Eigenschaft.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "legalSourceEntityLimitReached": "Diese Akte hat das Limit für Einträge erreicht, daher konnte das Dokument nicht erstellt werden.",
@@ -3476,6 +3477,7 @@
         "approvedOn": "Genehmigt am {date}",
         "approvedToast": "Playbook genehmigt",
         "saveBeforeApprove": "Speichern Sie die Änderungen, bevor Sie dieses Playbook genehmigen.",
+        "sourcesNotice": "Prüfen Sie vor der Genehmigung, dass kein Standpunkt ein Dokument, eine Akte oder eine Gegenpartei nennt: Die gesamte Organisation kann dieses Playbook lesen.",
         "statusApproved": "Genehmigt",
         "statusDraft": "Entwurf"
       },
@@ -3574,6 +3576,7 @@
       "referenceStandard": "Aus der Referenz",
       "removeCheck": "Prüfung entfernen",
       "removeIdeal": "Ideale Formulierung entfernen",
+      "removeSource": "Quelle {documentName} entfernen",
       "reorderPosition": "Standpunkt neu anordnen",
       "review": {
         "changePlaybook": "Anderes Playbook wählen",
@@ -3605,6 +3608,10 @@
         "blocker": "Kritisch"
       },
       "severityLabel": "Schweregrad",
+      "staleCopy": {
+        "loaded": "Eine neuere Version dieses Playbooks wurde geladen. Laden Sie neu, bevor Sie es bearbeiten.",
+        "unavailable": "Die neueste Version dieses Playbooks konnte nicht geladen werden. Dies ist die zuletzt geladene Kopie; sie ist möglicherweise veraltet."
+      },
       "starters": {
         "addedToast": "Playbook hinzugefügt",
         "browseButton": "Playbook-Vorlagen durchsuchen",
