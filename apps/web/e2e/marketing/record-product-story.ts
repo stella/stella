@@ -796,7 +796,7 @@ const warmSceneRoutes = async ({
   configurePage(page);
   for (const route of new Set(captures.map((capture) => capture.path(views)))) {
     await page.goto(route, { waitUntil: "domcontentloaded" });
-    await page.waitForLoadState("networkidle").catch(() => undefined);
+    await page.waitForLoadState("networkidle").catch(() => {});
   }
   await context.close();
 };
@@ -1529,7 +1529,7 @@ const selectMarketingOrganization = async (
         response.url().includes(`/v1/views/${EXPORT_REVIEW_WORKSPACE_ID}`),
       { timeout: 30_000 },
     )
-    .catch(() => undefined);
+    .catch(() => {});
   // The seeded organization's display name (apps/api/scripts/seed-test-user.ts
   // TEST_ORG); it is filmed in the sidebar chrome, so it is a real-sounding
   // firm name rather than a placeholder.
@@ -1693,7 +1693,7 @@ const isViewRecord = (value: unknown): value is ViewRecord => {
 // reports and throws ERR_INVALID_URL, so the session cookies are parsed
 // from the sign-in response by hand instead.
 const authenticate = async () => {
-  const origin = new URL(WEB_URL).origin;
+  const { origin } = new URL(WEB_URL);
   const jsonHeaders = { origin, "content-type": "application/json" };
   const sendResponse = await fetch(
     `${API_URL}/api/auth/email-otp/send-verification-otp`,
@@ -1898,9 +1898,7 @@ const closeInspectorIfOpen = async (page: Page): Promise<boolean> => {
     return false;
   }
   await closeButton.click();
-  await closeButton
-    .waitFor({ state: "hidden", timeout: 5000 })
-    .catch(() => undefined);
+  await closeButton.waitFor({ state: "hidden", timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(500);
   return true;
 };
