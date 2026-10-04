@@ -28,8 +28,8 @@ import { ExpenseListView } from "@/routes/_protected.workspaces/$workspaceId/-co
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/expenses",
 )({
-  beforeLoad: ({ params }) => {
-    if (!isTimeBillingRouteEnabled()) {
+  beforeLoad: async ({ context, params }) => {
+    if (!(await isTimeBillingRouteEnabled(context.queryClient))) {
       throw redirect({
         to: "/workspaces/$workspaceId",
         params: { workspaceId: params.workspaceId },

@@ -10,8 +10,8 @@ import { SettingsPageHeader } from "@/routes/_protected.settings/-components/set
 export const Route = createFileRoute(
   "/_protected/settings/organization/time-policy",
 )({
-  beforeLoad: () => {
-    if (!isTimeBillingRouteEnabled()) {
+  beforeLoad: async ({ context }) => {
+    if (!(await isTimeBillingRouteEnabled(context.queryClient))) {
       redirect({
         to: "/settings/organization/members",
         replace: true,

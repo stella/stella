@@ -8,6 +8,8 @@ import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { listsRoute } from "@/api/handlers/lists/routes";
+import { readDeploymentFeatures } from "@/api/handlers/organization-settings/deployment-features/get";
+import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
 import { savedTimeNarrativesRoute } from "@/api/handlers/saved-time-narratives/routes";
 import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-queue/routes";
@@ -186,5 +188,32 @@ describe("time billing on agent surfaces", () => {
         expect(omittedCapabilities).not.toContain(id);
       }
     });
+  });
+});
+
+describe("time billing for the web client", () => {
+  test("the deployment features answer follows the flag the routes follow", async () => {
+    for (const enabled of [false, true]) {
+      const features = await withTimeBilling(enabled, async () =>
+        readDeploymentFeatures(),
+      );
+      expect(features.timeBilling).toBe(enabled);
+    }
+  });
+
+  test("the deployment features route is served whatever the flag says", async () => {
+    for (const enabled of [false, true]) {
+      const response = await withTimeBilling(
+        enabled,
+        async () =>
+          await organizationSettingsRoute.handle(
+            new Request(
+              "http://localhost/organization-settings/deployment-features",
+            ),
+          ),
+      );
+      // An unauthenticated probe stops at authentication, never at a flag.
+      expect(response.status).toBe(401);
+    }
   });
 });
