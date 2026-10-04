@@ -2112,10 +2112,10 @@ const unreadNalusFailure = ({
 }: {
   subject: string;
   cause: ReadUnavailableCause;
-}): object => {
+}): Error => {
   switch (cause.kind) {
     case "thrown":
-      return typeof cause.error === "object" && cause.error !== null
+      return cause.error instanceof Error
         ? cause.error
         : new NalusResponseError({
             message: `NALUS ${subject} failed: ${String(cause.error)}`,
