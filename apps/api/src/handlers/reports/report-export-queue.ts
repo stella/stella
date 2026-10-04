@@ -493,11 +493,14 @@ const runExport = async ({
   // org/workspace segments keep the key tenant-scoped); the status endpoint
   // presigns it and names the download from the stored key's extension.
   const key = `exports/${actor.organizationId}/${actor.workspaceId}/${actor.exportId}.${delivery.ext}`;
-  await writeS3ObjectWithRetry({
-    contentType: delivery.mimeType,
-    data: delivery.buffer,
-    key,
-  });
+  await writeS3ObjectWithRetry(
+    {
+      contentType: delivery.mimeType,
+      data: delivery.buffer,
+      key,
+    },
+    { type: "lifecycle-prefix", prefix: "exports/" },
+  );
   await completeExport(actor, { type: "download", s3Key: key });
 };
 

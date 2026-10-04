@@ -315,6 +315,7 @@ describe("writeS3ObjectWithRetry", () => {
 
     const certainty = await writeS3ObjectWithRetry(
       object,
+      { type: "fixture" },
       failingWriter(attempts, 1),
     );
 
@@ -327,6 +328,7 @@ describe("writeS3ObjectWithRetry", () => {
 
     const certainty = await writeS3ObjectWithRetry(
       object,
+      { type: "fixture" },
       failingWriter(attempts, 0),
     );
 
@@ -342,6 +344,7 @@ describe("writeS3ObjectWithRetry", () => {
 
     const certainty = await writeS3ObjectWithRetry(
       object,
+      { type: "fixture" },
       failingWriter(attempts, 1),
     );
 
@@ -358,6 +361,7 @@ describe("writeS3ObjectWithRetry", () => {
     // type-aware lint; capture the rejection explicitly instead.
     const rejection = await writeS3ObjectWithRetry(
       object,
+      { type: "fixture" },
       failingWriter(attempts, Number.POSITIVE_INFINITY),
     ).then(
       () => null,
@@ -383,7 +387,11 @@ describe("writeS3ObjectWithRetry", () => {
       throw failure;
     };
 
-    const rejection = await writeS3ObjectWithRetry(object, write).then(
+    const rejection = await writeS3ObjectWithRetry(
+      object,
+      { type: "fixture" },
+      write,
+    ).then(
       () => null,
       (error: unknown) => error,
     );

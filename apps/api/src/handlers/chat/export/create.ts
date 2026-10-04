@@ -254,11 +254,14 @@ const createMessageExport = createSafeRootHandler(
     yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await writeS3ObjectWithRetry({
-            contentType: DOCX_MIME_TYPE,
-            data: new Uint8Array(renderedExport.docx),
-            key,
-          }),
+          await writeS3ObjectWithRetry(
+            {
+              contentType: DOCX_MIME_TYPE,
+              data: new Uint8Array(renderedExport.docx),
+              key,
+            },
+            { type: "lifecycle-prefix", prefix: "exports/" },
+          ),
         catch: (cause) =>
           new HandlerError({
             status: 502,

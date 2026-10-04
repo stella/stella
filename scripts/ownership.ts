@@ -338,6 +338,32 @@ const MODEL_REQUEST_NAMES = [
   "streamTanStackTextForRole",
 ] as const;
 
+// Case-law modules that still call the raw publisher fetch. Each migrates to
+// `readPublisher` and leaves this list; nothing is added to it.
+const UNMIGRATED_PUBLISHER_READERS = [
+  "handlers/case-law/ingestion/adapters/at-findok-throttle.ts",
+  "handlers/case-law/ingestion/adapters/at-ris-throttle.ts",
+  "handlers/case-law/ingestion/adapters/cz-ns.ts",
+  "handlers/case-law/ingestion/adapters/cz-nss.ts",
+  "handlers/case-law/ingestion/adapters/cz-regional.ts",
+  "handlers/case-law/ingestion/adapters/eu-ecj.ts",
+  "handlers/case-law/ingestion/adapters/hu-bhgy.ts",
+  "handlers/case-law/ingestion/adapters/pagination.ts",
+  "handlers/case-law/ingestion/adapters/pl-courts.ts",
+  "handlers/case-law/ingestion/adapters/pl-kio.ts",
+  "handlers/case-law/ingestion/adapters/pl-kis.ts",
+  "handlers/case-law/ingestion/adapters/pl-ncourt.ts",
+  "handlers/case-law/ingestion/adapters/pl-nsa-dataset.ts",
+  "handlers/case-law/ingestion/adapters/pl-sn.ts",
+  "handlers/case-law/ingestion/adapters/pl-tk.ts",
+  "handlers/case-law/ingestion/adapters/pl-uodo.ts",
+  "handlers/case-law/ingestion/adapters/pl-uokik.ts",
+  "handlers/case-law/ingestion/adapters/sk-collections.ts",
+  "handlers/case-law/ingestion/adapters/sk-court-directory.ts",
+  "handlers/case-law/ingestion/adapters/sk-courts.ts",
+  "handlers/case-law/ingestion/adapters/sk-us.ts",
+] as const;
+
 export const OWNERSHIP = [
   {
     id: "entity-sibling-naming",
@@ -697,7 +723,7 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/flows/flow-executor.ts",
           reason:
-            "Flow steps; their authority model is still to be classified.",
+            "Flow steps, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/folio-collab-rooms.ts",
@@ -706,11 +732,13 @@ export const OWNERSHIP = [
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.ts",
-          reason: "Compacts a user's own chat threads.",
+          reason:
+            "Compacts a user's own chat threads; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
-          reason: "Extracts a user's own chat memory.",
+          reason:
+            "Extracts a user's own chat memory; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts",
@@ -727,7 +755,7 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/workflow-queue.ts",
           reason:
-            "Workflow property generation; its authority model is still to be classified.",
+            "Workflow property generation, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
         },
       ],
     },
@@ -1966,6 +1994,44 @@ export const OWNERSHIP = [
           path: "apps/api/src/lib/safe-handler-factories.type-test.ts",
           reason:
             "Reads the module's export names at type level to bind the factory map; calls nothing.",
+        },
+      ],
+    },
+  },
+  {
+    id: "publisher-read",
+    capability: "Reading a case-law publisher response",
+    owner: [
+      "apps/api/src/lib/errors/read-outcome.ts",
+      "apps/api/src/handlers/case-law/ingestion/adapters/publisher-read.ts",
+      "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
+    ],
+    summary:
+      "readPublisher sends the gated publisher request and returns a ReadOutcome: " +
+      "the response, an absence only the publisher stated (404 or 410), or a " +
+      "failure to read, so no helper can return a failed read as an empty " +
+      "result. Raw fetchPublisher and fetchWithRetry callers are the adapters " +
+      "not yet migrated; the list only shrinks. The read-fault guard drives " +
+      "every enrolled adapter's reads with failures.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/handlers/case-law/ingestion/adapters/retry"],
+      names: ["fetchPublisher", "fetchWithRetry"],
+      allowed: [
+        ...UNMIGRATED_PUBLISHER_READERS.map((file) => ({
+          path: `apps/api/src/${file}`,
+          reason:
+            "Reads its publisher raw; pending migration to readPublisher.",
+        })),
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts",
+          reason:
+            "Types the injected publisher fetch of its RIS walk; sends no request itself.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/adapters/at-findok.ts",
+          reason:
+            "Types the injected publisher fetch of its document reads; sends no request itself.",
         },
       ],
     },

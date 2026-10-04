@@ -66,6 +66,7 @@ import {
 } from "@/api/lib/templates/configure-field-input";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
 import {
+  recordTemplateExecution,
   recordTemplateFill,
   recordTemplateUse,
 } from "@/api/lib/templates/record-use";
@@ -611,6 +612,11 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  permissions: {
+    type: "any",
+    alternatives: [{ template: ["create"] }, { template: ["update"] }],
+    reason: "template_id selects update; without it the call creates.",
+  },
   anonymized: { exposure: "excluded", reason: "write" },
   name: "create_template",
   scope: "stella:templates",
@@ -698,6 +704,7 @@ export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  permissions: { type: "all", permissions: { template: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: "configure_template_fields",
   scope: "stella:templates",
@@ -809,6 +816,7 @@ const FILL_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  permissions: { type: "all", permissions: { template: ["use"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: "fill_template",
   scope: "stella:templates",
@@ -876,6 +884,15 @@ const SAVE_FILLED_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  permissions: {
+    type: "any",
+    alternatives: [
+      { template: ["use"], entity: ["create"] },
+      { template: ["use"], entity: ["update"] },
+    ],
+    reason:
+      "action selects saving into a new document or a new version of an existing one.",
+  },
   additionalScopes: ["stella:templates"],
   anonymized: { exposure: "excluded", reason: "write" },
   name: "save_filled_template",
@@ -1376,6 +1393,7 @@ const handleFillTemplateTool: McpToolHandler<
     scopedDb: context.scopedDb,
     organizationId: context.organizationId,
     requiredFields: "enforce",
+    useRecording: "caller",
     assertUsageAvailable,
     aiCollaborators,
   });
@@ -1405,28 +1423,29 @@ const handleFillTemplateTool: McpToolHandler<
     });
   }
 
-  // Record the execution (fill row + EXECUTE audit) like the REST fill routes,
-  // so agent-driven fills appear in the audit trail. Best-effort: a successful
-  // render is not discarded if the bookkeeping write fails (it is captured).
-  await context
-    .scopedDb(
-      async (tx) =>
-        await (
-          context.testDependencies?.recordTemplateFill ?? recordTemplateFill
-        )({
-          tx,
-          templateId: brandPersistedTemplateId(parsed.output.template_id),
-          organizationId: context.organizationId,
-          userId: context.userId,
-          format: "docx",
-          unmatchedCount: filled.unmatchedPlaceholders.length,
-          aiFieldErrorCount: filled.aiFieldErrors.length,
-          unusedCount: filled.unusedValues.length,
-          structureErrors: filled.structureErrors,
-          recordAuditEvent: context.recordAuditEvent,
-        }),
-    )
-    .catch(captureError);
+  // The rendered text reaches the agent only once the fill is recorded (use
+  // count, fill row, EXECUTE audit); a recording failure fails the call.
+  const recorded = await recordTemplateExecution({
+    scopedDb: context.scopedDb,
+    recorders: {
+      recordTemplateUse:
+        context.testDependencies?.recordTemplateUse ?? recordTemplateUse,
+      recordTemplateFill:
+        context.testDependencies?.recordTemplateFill ?? recordTemplateFill,
+    },
+    templateId: brandPersistedTemplateId(parsed.output.template_id),
+    organizationId: context.organizationId,
+    userId: context.userId,
+    format: "docx",
+    unmatchedCount: filled.unmatchedPlaceholders.length,
+    aiFieldErrorCount: filled.aiFieldErrors.length,
+    unusedCount: filled.unusedValues.length,
+    structureErrors: filled.structureErrors,
+    recordAuditEvent: context.recordAuditEvent,
+  });
+  if (Result.isError(recorded)) {
+    return internalFailureResult(recorded.error);
+  }
 
   const completion = gateTemplateFillCompletion({
     mode: parsed.output.completion_mode,

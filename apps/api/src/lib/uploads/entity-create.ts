@@ -39,7 +39,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  lockObjectCleanupIntentsForWriter,
+  retirePublishedObjectCleanupIntentsInTransaction,
+} from "@/api/lib/buffer-intent-reconciliation";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import {
@@ -54,7 +57,6 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   detectFileEncryption,
   uploadFileEncryption,
@@ -68,13 +70,13 @@ import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivativ
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { LIMITS } from "@/api/lib/limits";
-import { getS3 } from "@/api/lib/s3";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
   processExtraction,
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
+import type { PromotedUploadObject } from "@/api/lib/uploads/promote-tmp-object";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
   UploadFinalizeError,
@@ -467,7 +469,7 @@ export type FinalizeEntityCreateProps = {
   claimRequestId: string;
   promoteTmpObject: (
     finalKey: string,
-  ) => Promise<Result<void, UploadFinalizeError>>;
+  ) => Promise<Result<PromotedUploadObject, UploadFinalizeError>>;
 };
 
 type EntityCreatePurposeData = Extract<
@@ -543,236 +545,223 @@ export const finalizeEntityCreate = async function* ({
     return promoteResult;
   }
 
-  type WriteResult =
-    | {
-        status: "ok";
-        finalized: Extract<
-          PendingUploadFinalizedResult,
-          { type: "entity_create" }
-        >;
+  try {
+    type WriteResult =
+      | {
+          status: "ok";
+          finalized: Extract<
+            PendingUploadFinalizedResult,
+            { type: "entity_create" }
+          >;
+        }
+      | { status: EntityCreateWriteFailureStatus };
+
+    const parentId = purposeData.parentId ?? null;
+
+    const writeResultResult = await safeDb(async (tx): Promise<WriteResult> => {
+      const capacityResult = await checkEntityCreateCapacityForInsert({
+        tx,
+        workspaceId,
+        entityCount: 1,
+        excludeUploadId: uploadId,
+      });
+      if (Result.isError(capacityResult)) {
+        return { status: capacityResult.error };
       }
-    | { status: EntityCreateWriteFailureStatus };
 
-  const cleanupFinalObject = async (stage: string) => {
-    const deleted = Result.flatten(
-      await Result.tryPromise({
-        try: async () => {
-          if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
-            return await deleteOrganizationFileWithSignal(
-              finalKey,
-              AbortSignal.timeout(10_000),
-            );
-          }
-          await getS3().delete(finalKey);
-          return Result.ok(undefined);
-        },
-        catch: (cause) => cause,
-      }),
-    );
-    if (Result.isError(deleted)) {
-      captureError(deleted.error, { entityId, fieldId, stage });
-    }
-  };
+      await lockObjectCleanupIntentsForWriter(tx, [
+        promoteResult.value.intentId,
+      ]);
 
-  const parentId = purposeData.parentId ?? null;
+      const targetResult = await checkEntityCreateTargetForInsert({
+        tx,
+        workspaceId,
+        propertyId: purposeData.propertyId,
+        parentId,
+      });
+      if (Result.isError(targetResult)) {
+        return { status: targetResult.error };
+      }
 
-  const writeResultResult = await safeDb(async (tx): Promise<WriteResult> => {
-    const capacityResult = await checkEntityCreateCapacityForInsert({
-      tx,
-      workspaceId,
-      entityCount: 1,
-      excludeUploadId: uploadId,
-    });
-    if (Result.isError(capacityResult)) {
-      return { status: capacityResult.error };
-    }
+      const renamed = await resolveEntityCreateFileName({
+        tx,
+        workspaceId,
+        parentId,
+        name: sanitizedName,
+      });
 
-    const targetResult = await checkEntityCreateTargetForInsert({
-      tx,
-      workspaceId,
-      propertyId: purposeData.propertyId,
-      parentId,
-    });
-    if (Result.isError(targetResult)) {
-      return { status: targetResult.error };
-    }
+      const entityStamp = await allocateEntityStamp(tx, workspaceId);
 
-    const renamed = await resolveEntityCreateFileName({
-      tx,
-      workspaceId,
-      parentId,
-      name: sanitizedName,
-    });
-
-    const entityStamp = await allocateEntityStamp(tx, workspaceId);
-
-    await insertNamedEntity(tx, {
-      id: entityId,
-      workspaceId,
-      parentId,
-      name: renamed.name,
-      createdBy: userId,
-      docSequence: entityStamp.docSequence,
-    });
-    await insertEntityVersion(tx, {
-      id: entityVersionId,
-      workspaceId,
-      entityId,
-      versionNumber: 1,
-      source: UPLOAD_DOCUMENT_SOURCE,
-      stamp: entityStamp.stamp,
-    });
-    await tx
-      .update(entities)
-      .set({ currentVersionId: entityVersionId })
-      .where(eq(entities.id, entityId));
-    await tx.insert(fields).values({
-      id: fieldId,
-      workspaceId,
-      propertyId: targetResult.value.propertyId,
-      entityVersionId,
-      content: fileContentWithMintedObject({
-        type: "file",
-        version: 1,
-        id: fileId,
-        fileName: renamed.value,
-        mimeType: declaredMime,
-        sizeBytes: declaredSize,
-        encryption,
-        sha256Hex: declaredSha256Hex,
-        pdfFileId: null,
-        pdfDerivative: pdfDerivativeStateForFile({
-          encrypted,
+      await insertNamedEntity(tx, {
+        id: entityId,
+        workspaceId,
+        parentId,
+        name: renamed.name,
+        createdBy: userId,
+        docSequence: entityStamp.docSequence,
+      });
+      await insertEntityVersion(tx, {
+        id: entityVersionId,
+        workspaceId,
+        entityId,
+        versionNumber: 1,
+        source: UPLOAD_DOCUMENT_SOURCE,
+        stamp: entityStamp.stamp,
+      });
+      await tx
+        .update(entities)
+        .set({ currentVersionId: entityVersionId })
+        .where(eq(entities.id, entityId));
+      await tx.insert(fields).values({
+        id: fieldId,
+        workspaceId,
+        propertyId: targetResult.value.propertyId,
+        entityVersionId,
+        content: fileContentWithMintedObject({
+          type: "file",
+          version: 1,
+          id: fileId,
+          fileName: renamed.value,
           mimeType: declaredMime,
-        }),
-        thumbnailFileId: null,
-        thumbnailDerivative: thumbnailDerivativeStateForFile({
-          encrypted,
-          mimeType: declaredMime,
-        }),
-        ...(scanWarnings !== undefined && { scanWarnings }),
-      }),
-    });
-    await tx
-      .update(workspaces)
-      .set({ lastActivityAt: new Date() })
-      .where(eq(workspaces.id, workspaceId));
-
-    // Durable extraction request, committed with the file it reads. The
-    // post-promote call below only accelerates the queue handoff.
-    await requestNativeExtractionRun({ entityId, tx });
-
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.CREATE,
-      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-      resourceId: entityId,
-      changes: {
-        created: {
-          old: null,
-          new: {
-            kind: "document",
-            fileName: renamed.value,
+          sizeBytes: declaredSize,
+          encryption,
+          sha256Hex: declaredSha256Hex,
+          pdfFileId: null,
+          pdfDerivative: pdfDerivativeStateForFile({
+            encrypted,
             mimeType: declaredMime,
-            sizeBytes: declaredSize,
-            propertyId: targetResult.value.propertyId,
-            parentId,
+          }),
+          thumbnailFileId: null,
+          thumbnailDerivative: thumbnailDerivativeStateForFile({
+            encrypted,
+            mimeType: declaredMime,
+          }),
+          ...(scanWarnings !== undefined && { scanWarnings }),
+        }),
+      });
+      await tx
+        .update(workspaces)
+        .set({ lastActivityAt: new Date() })
+        .where(eq(workspaces.id, workspaceId));
+
+      // Durable extraction request, committed with the file it reads. The
+      // post-promote call below only accelerates the queue handoff.
+      await requestNativeExtractionRun({ entityId, tx });
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        resourceId: entityId,
+        changes: {
+          created: {
+            old: null,
+            new: {
+              kind: "document",
+              fileName: renamed.value,
+              mimeType: declaredMime,
+              sizeBytes: declaredSize,
+              propertyId: targetResult.value.propertyId,
+              parentId,
+            },
           },
         },
-      },
-    });
+      });
 
-    const finalized: Extract<
-      PendingUploadFinalizedResult,
-      { type: "entity_create" }
-    > = {
-      type: "entity_create",
-      entityId,
-      fileId,
-      fileName: renamed.value,
-      renamed: renamed.renamed,
+      const finalized: Extract<
+        PendingUploadFinalizedResult,
+        { type: "entity_create" }
+      > = {
+        type: "entity_create",
+        entityId,
+        fileId,
+        fileName: renamed.value,
+        renamed: renamed.renamed,
+      };
+
+      // audit: skip — final FSM transition on pending_uploads;
+      // the entity-level audit row landed above in this same transaction.
+      const finalizedRows = await tx
+        .update(pendingUploads)
+        .set({
+          status: "finalized",
+          finalizedResult: finalized,
+          finalizedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(pendingUploads.id, uploadId),
+            eq(pendingUploads.userId, userId),
+            eq(pendingUploads.workspaceId, workspaceId),
+            eq(pendingUploads.status, "scanning"),
+            eq(pendingUploads.claimedByRequestId, claimRequestId),
+          ),
+        )
+        .returning({ id: pendingUploads.id });
+      if (!finalizedRows.at(0)) {
+        panic("Pending upload finalize marker update returned no rows");
+      }
+
+      await retirePublishedObjectCleanupIntentsInTransaction({
+        tx,
+        intentIds: [promoteResult.value.intentId],
+      });
+      return { status: "ok", finalized };
+    });
+    const writeResult = yield* writeResultResult;
+    if (writeResult.status !== "ok") {
+      return finalizeErr({
+        status: 400,
+        message: entityCreateWriteErrorMessage(writeResult.status),
+        rejectReason: writeResult.status,
+      });
+    }
+    const { finalized } = writeResult;
+
+    const afterPromote = () => {
+      // Async kickoffs mirror the legacy handler. They run only after
+      // both promotion and the DB transaction have succeeded, so
+      // consumers never read a final key before it exists.
+      processExtraction(entityId).catch((error: unknown) => {
+        captureError(error, { entityId, mimeType: declaredMime });
+      });
+      // File-upload flow trigger. Fire-and-forget on the USER upload path only;
+      // flow-created documents (create-document step) never reach this call site.
+      maybeStartUploadTriggeredFlows({
+        entityId,
+        workspaceId,
+        organizationId,
+        fileName: finalized.fileName,
+      }).catch((error: unknown) => {
+        captureError(error, { entityId, workspaceId });
+      });
+      enqueuePdfDerivativeOrMarkFailed({
+        encrypted,
+        entityId,
+        fieldId,
+        mimeType: declaredMime,
+        organizationId,
+        userId,
+        workspaceId,
+      }).catch((error: unknown) => {
+        captureError(error, { entityId, fieldId, mimeType: declaredMime });
+      });
+      enqueueImageThumbnailOrMarkFailed({
+        encrypted,
+        entityId,
+        fieldId,
+        mimeType: declaredMime,
+        organizationId,
+        userId,
+        workspaceId,
+      }).catch((error: unknown) => {
+        captureError(error, { entityId, fieldId, mimeType: declaredMime });
+      });
     };
 
-    // audit: skip — final FSM transition on pending_uploads;
-    // the entity-level audit row landed above in this same transaction.
-    const finalizedRows = await tx
-      .update(pendingUploads)
-      .set({
-        status: "finalized",
-        finalizedResult: finalized,
-        finalizedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(pendingUploads.id, uploadId),
-          eq(pendingUploads.userId, userId),
-          eq(pendingUploads.workspaceId, workspaceId),
-          eq(pendingUploads.status, "scanning"),
-          eq(pendingUploads.claimedByRequestId, claimRequestId),
-        ),
-      )
-      .returning({ id: pendingUploads.id });
-    if (!finalizedRows.at(0)) {
-      panic("Pending upload finalize marker update returned no rows");
-    }
-
-    return { status: "ok", finalized };
-  });
-  if (Result.isError(writeResultResult)) {
-    await cleanupFinalObject("final-cleanup-after-db-error");
+    return finalizeOk({ finalizedResult: finalized, finalKey, afterPromote });
+  } finally {
+    await promoteResult.value.cleanup();
   }
-  const writeResult = yield* writeResultResult;
-  if (writeResult.status !== "ok") {
-    await cleanupFinalObject("final-cleanup-after-business-error");
-    return finalizeErr({
-      status: 400,
-      message: entityCreateWriteErrorMessage(writeResult.status),
-      rejectReason: writeResult.status,
-    });
-  }
-  const { finalized } = writeResult;
-
-  const afterPromote = () => {
-    // Async kickoffs mirror the legacy handler. They run only after
-    // both promotion and the DB transaction have succeeded, so
-    // consumers never read a final key before it exists.
-    processExtraction(entityId).catch((error: unknown) => {
-      captureError(error, { entityId, mimeType: declaredMime });
-    });
-    // File-upload flow trigger. Fire-and-forget on the USER upload path only;
-    // flow-created documents (create-document step) never reach this call site.
-    maybeStartUploadTriggeredFlows({
-      entityId,
-      workspaceId,
-      organizationId,
-      fileName: finalized.fileName,
-    }).catch((error: unknown) => {
-      captureError(error, { entityId, workspaceId });
-    });
-    enqueuePdfDerivativeOrMarkFailed({
-      encrypted,
-      entityId,
-      fieldId,
-      mimeType: declaredMime,
-      organizationId,
-      userId,
-      workspaceId,
-    }).catch((error: unknown) => {
-      captureError(error, { entityId, fieldId, mimeType: declaredMime });
-    });
-    enqueueImageThumbnailOrMarkFailed({
-      encrypted,
-      entityId,
-      fieldId,
-      mimeType: declaredMime,
-      organizationId,
-      userId,
-      workspaceId,
-    }).catch((error: unknown) => {
-      captureError(error, { entityId, fieldId, mimeType: declaredMime });
-    });
-  };
-
-  return finalizeOk({ finalizedResult: finalized, finalKey, afterPromote });
 };
 
 /** Local re-export so the generic dispatcher can narrow on it. */

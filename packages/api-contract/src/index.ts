@@ -1,6 +1,13 @@
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 4 as const;
 
+export { SEARCH_QUERY_MAX_LENGTH } from "./limits";
+export {
+  currencyCodeSchema,
+  CURRENCY_CODE_LENGTH,
+  CURRENCY_CODE_PATTERN,
+} from "./currency-code";
+
 export { AGENDA_ITEM_KINDS, AGENDA_ITEM_SOURCES } from "./agenda";
 export type {
   AgendaItemKind,
