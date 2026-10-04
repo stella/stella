@@ -47,6 +47,7 @@ import type { CitationResolutionStatus } from "@/api/handlers/case-law/citation-
 import type { DecisionReference } from "@/api/handlers/case-law/citations/decision-references";
 import { resolveDecisionReference } from "@/api/handlers/case-law/citations/reference-resolution";
 import type { ReferenceResolution } from "@/api/handlers/case-law/citations/reference-resolution";
+import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
@@ -81,6 +82,11 @@ type HolderSpec = {
   identifiers?: { type: DecisionIdentifierType; normalizedValue: string }[];
   /** Overrides the case key on the holder's own `citation_key`. */
   citationKey?: string | null;
+  /** Overrides the case key as the holder's stored docket. */
+  caseNumber?: string;
+  /** The sheet the holder's source recorded, in its column. */
+  sheetNumber?: string;
+  metadata?: Record<string, unknown>;
 };
 
 type ReferenceSpec = {
@@ -105,6 +111,11 @@ type Expected =
 
 type Case = {
   name: string;
+  /**
+   * The file the reference cites, keyed into the case key, where a sheet is
+   * read against its file. Distinct per case, like the synthetic key.
+   */
+  docket?: string;
   citing?: {
     country?: string;
     decisionDate?: string | null;
@@ -238,6 +249,7 @@ const cases: Case[] = [
   },
   {
     name: "the printed sheet on one holder's ECLI",
+    docket: "8 As 287/2020",
     reference: { hints: { sheetNumber: "33" } },
     holders: [
       { name: "sheet", ecli: "ECLI:CZ:NSS:2021:8.As.287.2020.33" },
@@ -247,12 +259,13 @@ const cases: Case[] = [
   },
   {
     name: "the printed sheet on one holder's case-number identifier",
+    docket: "8 As 1/2020",
     reference: { hints: { sheetNumber: "12" } },
     holders: [
       {
         name: "sheet",
         identifiers: [
-          { type: "case-number", normalizedValue: "8as/1/2020-12" },
+          { type: "case-number", normalizedValue: "8 As 1/2020-12" },
         ],
       },
       {},
@@ -260,7 +273,66 @@ const cases: Case[] = [
     expect: { status: "resolved", rule: "sheet-number", target: "sheet" },
   },
   {
+    name: "the printed sheet on another file's case-number identifier",
+    docket: "8 As 2/2020",
+    reference: { hints: { sheetNumber: "12" } },
+    holders: [
+      {
+        identifiers: [
+          { type: "case-number", normalizedValue: "$key" },
+          { type: "case-number", normalizedValue: "9 As 2/2020-12" },
+        ],
+      },
+      {},
+    ],
+    expect: { status: "ambiguous" },
+  },
+  {
+    name: "the printed sheet recorded on one holder",
+    docket: "8 As 3/2020",
+    reference: { hints: { sheetNumber: "014" } },
+    holders: [{ name: "sheet", sheetNumber: "14" }, { sheetNumber: "15" }],
+    expect: { status: "resolved", rule: "sheet-number", target: "sheet" },
+  },
+  {
+    name: "the printed sheet on one holder's published reference",
+    docket: "8 As 4/2020",
+    reference: { hints: { sheetNumber: "21" } },
+    holders: [
+      { name: "sheet", metadata: { publishedCaseNumber: "8 As 4/2020 - 21" } },
+      { metadata: { publishedCaseNumber: "8 As 4/2020 - 22" } },
+    ],
+    expect: { status: "resolved", rule: "sheet-number", target: "sheet" },
+  },
+  {
+    name: "the printed sheet on one holder's stored docket",
+    docket: "8 As 5/2020",
+    reference: { hints: { sheetNumber: "7" } },
+    holders: [
+      {
+        name: "sheet",
+        caseNumber: "8 As 5/2020-7",
+        identifiers: [{ type: "case-number", normalizedValue: "$key" }],
+      },
+      {},
+    ],
+    expect: { status: "resolved", rule: "sheet-number", target: "sheet" },
+  },
+  {
+    // A general court's ECLI ends on the decision's sequence number in its
+    // file, which no printed sheet answers to.
+    name: "a sequence number on an ECLI outside the sheet schemes",
+    docket: "1 Cdo 1/2019",
+    reference: { hints: { sheetNumber: "7" } },
+    holders: [
+      { ecli: "ECLI:CZ:NS:2019:1.CDO.1.2019.7" },
+      { ecli: "ECLI:CZ:NS:2019:1.CDO.1.2019.9" },
+    ],
+    expect: { status: "ambiguous" },
+  },
+  {
     name: "the printed sheet on two holders",
+    docket: "1 As 1/2021",
     reference: {
       hints: {
         sheetNumber: "33",
@@ -268,9 +340,13 @@ const cases: Case[] = [
       },
     },
     holders: [
-      { ecli: "ECLI:CZ:US:2021:1.US.1.21.33", decisionType: nalez, court: US },
       {
-        ecli: "ECLI:CZ:US:2020:1.US.1.21.33",
+        ecli: "ECLI:CZ:NSS:2021:1.As.1.2021.33",
+        decisionType: nalez,
+        court: US,
+      },
+      {
+        ecli: "ECLI:CZ:NSS:2022:1.As.1.2021.33",
         decisionType: usneseni,
         court: US,
       },
@@ -288,14 +364,15 @@ const cases: Case[] = [
   },
   {
     name: "the sheet outranks the date",
+    docket: "1 As 1/2019",
     reference: { hints: { sheetNumber: "7", decisionDate: "2019-05-05" } },
     holders: [
       {
         name: "sheet",
         decisionDate: "2019-03-03",
-        ecli: "ECLI:CZ:NS:2019:1.CDO.1.2019.7",
+        ecli: "ECLI:CZ:NSS:2019:1.As.1.2019.7",
       },
-      { decisionDate: "2019-05-05", ecli: "ECLI:CZ:NS:2019:1.CDO.1.2019.9" },
+      { decisionDate: "2019-05-05", ecli: "ECLI:CZ:NSS:2019:1.As.1.2019.9" },
     ],
     expect: { status: "resolved", rule: "sheet-number", target: "sheet" },
   },
@@ -470,10 +547,11 @@ type Written = {
 
 const writeCase = async (
   db: Db,
-  { citing = {}, reference = {}, holders }: Case,
+  { citing = {}, docket, reference = {}, holders }: Case,
   index: number,
 ): Promise<Written> => {
-  const key = `k${String(index)}/2020`;
+  const key =
+    docket === undefined ? `k${String(index)}/2020` : bareCitationKey(docket);
   const citingId = createSafeId<"caseLawDecision">();
   const names = new Map<string, string>();
   await db.insert(caseLawDecisions).values({
@@ -501,8 +579,10 @@ const writeCase = async (
       sourceId,
       sourceDocumentId: id,
       slug: id,
-      caseNumber: key,
+      caseNumber: holder.caseNumber ?? key,
       citationKey: holder.citationKey === undefined ? key : holder.citationKey,
+      sheetNumber: holder.sheetNumber ?? null,
+      metadata: holder.metadata ?? {},
       court: holder.court ?? NS,
       country: holder.country ?? "CZE",
       language: holder.language ?? "cs",

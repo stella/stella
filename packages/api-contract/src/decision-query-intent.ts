@@ -617,82 +617,143 @@ export const ecliSheetOf = (
 const CASE_NUMBER_IDENTIFIER = "case-number";
 const ECLI_IDENTIFIER = "ecli";
 
+/**
+ * How a sheet source's values are read: as a docket spelling of the file
+ * (whose tail may be a sheet or a part), as an ECLI (whose scheme may end on
+ * the sheet), or as a sheet the source stated beside a docket.
+ */
+export type DecisionSheetReading = "docket" | "ecli" | "stated";
+
+/**
+ * Every place a decision's sheet can be known from, and how each is read.
+ * Where the sheet is stored never changes which decision a reference names,
+ * so a lookup (`resolveDecisionIdentity`) and the citation resolver's SQL
+ * each map over this one list with a total map of their own: a source added
+ * here without a reader on either side fails typecheck.
+ *
+ * - `case-number`: the stored docket, which keeps a sheet the row was
+ *   written with (`DECISION_DOCKETS_STORED_WITH_SHEETS`).
+ * - `published-case-number`: the reference as the court published it.
+ * - `case-number-identifier`: a full file number a publisher supplied.
+ * - `recorded-sheet`: the sheet the source's adapter split off and recorded,
+ *   a sheet of the file it was split from only.
+ * - `ecli`, `ecli-identifier`: an ECLI whose scheme ends on the sheet
+ *   (`DECISION_ECLI_SHEET_SCHEMES`).
+ */
+export const DECISION_SHEET_SOURCES = [
+  { source: "case-number", reading: "docket" },
+  { source: "published-case-number", reading: "docket" },
+  { source: "case-number-identifier", reading: "docket" },
+  { source: "recorded-sheet", reading: "stated" },
+  { source: "ecli", reading: "ecli" },
+  { source: "ecli-identifier", reading: "ecli" },
+] as const satisfies readonly {
+  source: string;
+  reading: DecisionSheetReading;
+}[];
+
+export type DecisionSheetSource =
+  (typeof DECISION_SHEET_SOURCES)[number]["source"];
+
+/** The longest sheet a source states on its own that is read as one. */
+export const DECISION_STATED_SHEET_MAX_DIGITS = 8;
+
+const identifierValuesOf = (hit: DecisionHitIdentity, type: string): string[] =>
+  (hit.identifiers ?? [])
+    .filter((identifier) => identifier.type === type)
+    .map(({ value }) => value);
+
+const HIT_SHEET_SOURCE_VALUES = {
+  "case-number": (hit) => [hit.caseNumber],
+  "published-case-number": (hit) =>
+    hit.publishedCaseNumber ? [hit.publishedCaseNumber] : [],
+  "case-number-identifier": (hit) =>
+    identifierValuesOf(hit, CASE_NUMBER_IDENTIFIER),
+  "recorded-sheet": (hit) => (hit.sheetNumber ? [hit.sheetNumber] : []),
+  ecli: (hit) => (hit.ecli === null ? [] : [hit.ecli]),
+  "ecli-identifier": (hit) => identifierValuesOf(hit, ECLI_IDENTIFIER),
+} as const satisfies Record<
+  DecisionSheetSource,
+  (hit: DecisionHitIdentity) => readonly string[]
+>;
+
+const STATED_SHEET_RE = new RegExp(
+  String.raw`^\d{1,${String(DECISION_STATED_SHEET_MAX_DIGITS)}}$`,
+  "u",
+);
+
+type SheetReadingContext = {
+  familyCanonical: string;
+  grammar: DecisionDocketGrammar;
+};
+
+/** A docket spelling as a reference within the file, or null for another. */
+const fileReferenceOf = (
+  docket: string,
+  { familyCanonical, grammar }: SheetReadingContext,
+): DecisionDocketReference | null => {
+  const reference = readDecisionDocketReference(docket, { grammar });
+  return reference?.family.canonical === familyCanonical ? reference : null;
+};
+
+const SHEET_READINGS = {
+  docket: (value, context) =>
+    fileReferenceOf(value, context)?.selector ?? { kind: "none" },
+  ecli: (value, { familyCanonical }) => {
+    const sheet = ecliSheetOf(value, familyCanonical);
+    return sheet === null ? { kind: "none" } : { kind: "sheet", value: sheet };
+  },
+  // Ingestion splits the recorded sheet off the reference as the court
+  // published it, or off the stored docket where none was kept
+  // (`splitCaseReference`), so it is a sheet of that docket's file only: a
+  // hit reached through a parallel file number does not carry it here.
+  stated: (value, context, { publishedCaseNumber, caseNumber }) => {
+    const stated = value.trim();
+    return STATED_SHEET_RE.test(stated) &&
+      fileReferenceOf(publishedCaseNumber ?? caseNumber, context) !== null
+      ? { kind: "sheet", value: numeral(stated) }
+      : { kind: "none" };
+  },
+} as const satisfies Record<
+  DecisionSheetReading,
+  (
+    value: string,
+    context: SheetReadingContext,
+    hit: DecisionHitIdentity,
+  ) => DecisionDocketSelector
+>;
+
 type CarriedSelectors = { sheets: Set<string>; parts: Set<string> };
 
 /**
- * The sheet a hit's source recorded, as a sheet of the file asked about, or
- * null. Ingestion splits the recorded sheet off the reference as the court
- * published it, or off the stored docket where none was kept
- * (`splitCaseReference`), so it is a sheet of that docket's file only: a hit
- * reached through a parallel file number does not carry it in that file.
- */
-const statedSheetOf = (
-  hit: DecisionHitIdentity,
-  familyCanonical: string,
-  grammar: DecisionDocketGrammar,
-): string | null => {
-  const stated = hit.sheetNumber?.trim();
-  if (stated === undefined || !/^\d{1,8}$/u.test(stated)) {
-    return null;
-  }
-  const source = readDecisionDocketReference(
-    hit.publishedCaseNumber ?? hit.caseNumber,
-    { grammar },
-  );
-  return source?.family.canonical === familyCanonical ? numeral(stated) : null;
-};
-
-/**
- * Every selector a hit is known to carry within the file: from each docket
- * spelling of the file it stores (its own stored docket, which keeps a sheet
- * the row was written with, the reference as the court published it, and a
- * full file number a publisher supplied beside it), from the sheet its source
- * recorded off a docket of this file, and from each ECLI whose scheme ends on
- * the sheet.
- *
- * The one place a sibling's known sheet is derived: every source counts
- * alike, so where a sheet is stored never changes what a sheet selects.
+ * Every selector a hit is known to carry within the file, read from each of
+ * `DECISION_SHEET_SOURCES`. A docket spelling of another file carries none of
+ * this one's.
  */
 const selectorsOfHit = (
   hit: DecisionHitIdentity,
-  familyCanonical: string,
-  grammar: DecisionDocketGrammar,
+  context: SheetReadingContext,
 ): CarriedSelectors => {
   const sheets = new Set<string>();
   const parts = new Set<string>();
-  const dockets = [
-    hit.caseNumber,
-    ...(hit.publishedCaseNumber ? [hit.publishedCaseNumber] : []),
-    ...(hit.identifiers ?? [])
-      .filter(({ type }) => type === CASE_NUMBER_IDENTIFIER)
-      .map(({ value }) => value),
-  ];
-  for (const docket of dockets) {
-    const reference = readDecisionDocketReference(docket, { grammar });
-    if (reference === null || reference.family.canonical !== familyCanonical) {
-      continue;
+  for (const { source, reading } of DECISION_SHEET_SOURCES) {
+    for (const value of HIT_SHEET_SOURCE_VALUES[source](hit)) {
+      const selector = SHEET_READINGS[reading](value, context, hit);
+      switch (selector.kind) {
+        case "none":
+          break;
+        case "sheet":
+          sheets.add(selector.value);
+          break;
+        case "part":
+          parts.add(selector.value);
+          break;
+        default: {
+          selector satisfies never;
+          return panic(`Unhandled docket selector: ${String(selector)}`);
+        }
+      }
     }
-    if (reference.selector.kind === "sheet") {
-      sheets.add(reference.selector.value);
-    } else if (reference.selector.kind === "part") {
-      parts.add(reference.selector.value);
-    }
-  }
-  const eclis = [
-    ...(hit.ecli === null ? [] : [hit.ecli]),
-    ...(hit.identifiers ?? [])
-      .filter(({ type }) => type === ECLI_IDENTIFIER)
-      .map(({ value }) => value),
-  ];
-  for (const ecli of eclis) {
-    const sheet = ecliSheetOf(ecli, familyCanonical);
-    if (sheet !== null) {
-      sheets.add(sheet);
-    }
-  }
-  const stated = statedSheetOf(hit, familyCanonical, grammar);
-  if (stated !== null) {
-    sheets.add(stated);
   }
   return { sheets, parts };
 };
@@ -752,7 +813,7 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
     grammar,
   );
   const known = family.map((hit) => {
-    const { parts, sheets } = selectorsOfHit(hit, familyCanonical, grammar);
+    const { parts, sheets } = selectorsOfHit(hit, { familyCanonical, grammar });
     return { hit, carried: selector.kind === "sheet" ? sheets : parts };
   });
   const selected = known

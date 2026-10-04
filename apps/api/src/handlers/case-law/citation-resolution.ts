@@ -25,9 +25,10 @@
  *   one that reads an identity rather than a word. One docket names a case
  *   file, and a court can rule in it more than once, so the docket alone
  *   leaves those decisions indistinguishable. The court names the one it
- *   means by the sheet the document sits on — "č. j. 8 As 287/2020-33" — and
- *   that sheet is the last segment of the decision's ECLI. When exactly one
- *   time-valid candidate answers to it, the link goes there.
+ *   means by the sheet the document sits on — "č. j. 8 As 287/2020-33" —
+ *   which a candidate is known to carry from any of its sheet sources
+ *   (`DECISION_SHEET_SOURCES`), the same ones a lookup reads. When exactly
+ *   one time-valid candidate answers to it, the link goes there.
  * - **The text names the date.** The second adjudication rule, for the
  *   citations that print no sheet: "rozsudek … ze dne 17. 2. 2021, č. j. …".
  *   When exactly one candidate carries that date, the link goes there. Two
@@ -85,6 +86,17 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import { DECISION_DASH_CLASS_SOURCE } from "@stll/api-contract/decision-docket-grammar";
+import {
+  DECISION_ECLI_SHEET_SCHEMES,
+  DECISION_SHEET_SOURCES,
+  DECISION_STATED_SHEET_MAX_DIGITS,
+} from "@stll/api-contract/decision-query-intent";
+import type {
+  DecisionSheetReading,
+  DecisionSheetSource,
+} from "@stll/api-contract/decision-query-intent";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -94,7 +106,10 @@ import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
 } from "@/api/db/schema";
-import { courtNameKeySql } from "@/api/handlers/case-law/citation-court-hint";
+import {
+  courtNameKeySql,
+  foldCzechSlovakLettersSql,
+} from "@/api/handlers/case-law/citation-court-hint";
 import {
   CITATION_DECISION_TYPE_HINT_FAMILIES,
   CITATION_DECISION_TYPE_HINTS,
@@ -136,36 +151,185 @@ const decisionTypeArray = (types: readonly string[]): SQL =>
     sql`, `,
   )}]::varchar[]`;
 
+/** A digit run as a number reads, so `033` and `33` compare equal. */
+const numeralSql = (digits: SQL): SQL =>
+  sql`regexp_replace(${digits}, '^0+(?=[0-9])', '')`;
+
 /**
- * A candidate that answers to the sheet number the citing text printed.
- *
- * Two published spellings carry it, and a court uses whichever it uses. The
- * ECLI's last segment is the sheet
- * (`ECLI:CZ:NSS:2021:8.As.287.2020.33` is sheet 33 of `8 As 287/2020`), and a
- * publisher that supplies the full file number instead leaves it on a
- * `case-number` identifier row, where docket normalisation keeps the sheet on
- * the key. Both are matched by concatenation rather than a pattern built from
- * the column, so the sheet travels as a bind parameter; the column's CHECK
- * keeps it to digits, which carry no `LIKE` metacharacter.
- *
- * `holder` is the candidate decision's alias and `sheetNumber` the printed
- * sheet.
+ * Every dash style a publisher prints, as the hyphen the grammars read. The
+ * grammars' own class, which PostgreSQL's regular expressions read alike.
  */
-export const holderAnswersSheetSql = (holder: SQL, sheetNumber: SQL): SQL =>
-  // sql-perf-allow: bounded by CITATION_CANDIDATE_SCAN_CAP candidates per walk (its one reader)
-  sql`
-  ${sheetNumber} IS NOT NULL
-  AND (
-        ${holder}.ecli LIKE ('%.' || ${sheetNumber})
-     OR EXISTS (
+const foldDashesSql = (text: SQL): SQL =>
+  sql`regexp_replace(${text}, ${`[${DECISION_DASH_CLASS_SOURCE}]`}, '-', 'g')`;
+
+/**
+ * A docket's case file as a comparison shape, the same function on both
+ * sides: letters folded, every run of letters glued across spacing and
+ * punctuation, every run of digits apart (`8 As 287/2020` and the key
+ * `8as/287/2020` are both `8 as 287 2020`; `II. ÚS 55/98` and `iiús55/98`
+ * are both `iius 55 98`).
+ */
+const docketShapeSql = (docket: SQL): SQL => sql`
+  btrim(regexp_replace(regexp_replace(regexp_replace(
+    regexp_replace(${foldCzechSlovakLettersSql(docket)}, '[^a-z0-9]+', ' ', 'g'),
+    '([a-z]) (?=[a-z])', '\\1', 'g'),
+    '([a-z])(?=[0-9])', '\\1 ', 'g'),
+    '([0-9])(?=[a-z])', '\\1 ', 'g'))`;
+
+/** A file key's numbers in order, without leading zeros: `8.287.2020`. */
+const familyNumbersSql = (familyKey: SQL): SQL => sql`
+  btrim(regexp_replace(regexp_replace(
+    '.' || regexp_replace(${familyKey}, '[^0-9]+', '.', 'g') || '.',
+    '\\.0+(?=[0-9])', '.', 'g'),
+    '\\.\\.+', '.', 'g'), '.')`;
+
+/** A docket spelling ending on a sheet: the docket, then a dash and the sheet. */
+const SHEET_TAIL_DOCKET_PATTERN = String.raw`^(.*[0-9])\s*-\s*[0-9]{1,4}$`;
+const SHEET_TAIL_SHEET_PATTERN = String.raw`^.*[0-9]\s*-\s*([0-9]{1,4})$`;
+
+const ECLI_SHEET_SCHEMES = Object.keys(DECISION_ECLI_SHEET_SCHEMES);
+
+/** An ECLI's ordinal: everything after its fourth colon, or null. */
+const ecliOrdinalSql = (ecli: SQL): SQL =>
+  sql`substring(${ecli} from '^(?:[^:]*:){4}(.*)$')`;
+
+/**
+ * The all-digit segments of an ordinal before its last one, each without
+ * leading zeros, between dots: `8.As.287.2020.33` reads `.8.287.2020.`.
+ */
+const ecliLeadingNumbersSql = (ordinal: SQL): SQL => sql`
+  regexp_replace(regexp_replace(
+    '.' || regexp_replace(${ordinal}, '\\.?[^.]*$', '') || '.',
+    '\\.(?=\\.)|\\.[^.]*[^0-9.][^.]*(?=\\.)', '', 'g'),
+    '\\.0+(?=[0-9])', '.', 'g')`;
+
+type CitedSheet = {
+  /** The printed sheet, digits only. */
+  sheetNumber: SQL;
+  /** The cited file's key, as a citation's `citation_key` holds it. */
+  familyKey: SQL;
+};
+
+/**
+ * `DECISION_SHEET_SOURCES`' readings in SQL, each the predicate that a value
+ * carries the cited sheet of the cited file. The function a lookup reads them
+ * by is `selectorsOfHit` in `decision-query-intent.ts`;
+ * `citation-sheet-sources.db.test.ts` holds the two to one answer.
+ */
+const SHEET_READING_SQL = {
+  // A trailing number after a dash, on a spelling of this file and no other.
+  docket: (value, { familyKey, sheetNumber }) => {
+    const folded = sql`btrim(${foldDashesSql(value)})`;
+    return sql`(
+          ${numeralSql(sql`substring(${folded} from ${SHEET_TAIL_SHEET_PATTERN})`)}
+            = ${numeralSql(sheetNumber)}
+      AND ${docketShapeSql(sql`substring(${folded} from ${SHEET_TAIL_DOCKET_PATTERN})`)}
+            = ${docketShapeSql(familyKey)}
+    )`;
+  },
+  // The segment after this file's own numbers, in a scheme that puts the
+  // sheet there (`ecliSheetOf`).
+  ecli: (value, { familyKey, sheetNumber }) => {
+    const ordinal = ecliOrdinalSql(value);
+    const last = sql`substring(${ordinal} from '([^.]*)$')`;
+    const suffix = sql`('.' || ${familyNumbersSql(familyKey)} || '.')`;
+    return sql`(
+          upper(split_part(${value}, ':', 2) || ':' || split_part(${value}, ':', 3))
+            IN (${sql.join(
+              ECLI_SHEET_SCHEMES.map((scheme) => sql`${scheme}`),
+              sql`, `,
+            )})
+      AND ${last} ~ '^[0-9]+$'
+      AND ${numeralSql(last)} = ${numeralSql(sheetNumber)}
+      AND ${familyNumbersSql(familyKey)} <> ''
+      AND right(${ecliLeadingNumbersSql(ordinal)}, length(${suffix})) = ${suffix}
+    )`;
+  },
+  stated: (value, { sheetNumber }) => sql`(
+        btrim(${value}) ~ ${String.raw`^[0-9]{1,${String(DECISION_STATED_SHEET_MAX_DIGITS)}}$`}
+    AND ${numeralSql(sql`btrim(${value})`)} = ${numeralSql(sheetNumber)}
+  )`,
+} as const satisfies Record<
+  DecisionSheetReading,
+  (value: SQL, cited: CitedSheet) => SQL
+>;
+
+const identifierValuesSql = (
+  holder: SQL,
+  type: DecisionIdentifierType,
+): SQL => sql`
+  SELECT sheet_identifier.value
+    FROM ${caseLawDecisionIdentifiers} sheet_identifier
+   WHERE sheet_identifier.decision_id = ${holder}.id
+     AND sheet_identifier.type = ${type}`;
+
+/**
+ * Where each sheet source is stored on a candidate, as a relation of text
+ * values. The recorded sheet is read from its column and from the metadata
+ * the adapter wrote it to, which is where a lookup reads it: where the sheet
+ * sits never changes the answer.
+ */
+const HOLDER_SHEET_SOURCE_VALUES_SQL = {
+  "case-number": (holder) => sql`VALUES (${holder}.case_number::text)`,
+  "published-case-number": (holder) =>
+    sql`VALUES (${holder}.metadata ->> 'publishedCaseNumber')`,
+  "case-number-identifier": (holder) =>
+    identifierValuesSql(holder, DECISION_IDENTIFIER_TYPES.CASE_NUMBER),
+  "recorded-sheet": (holder) =>
+    sql`VALUES (${holder}.sheet_number::text), (${holder}.metadata ->> 'sheetNumber')`,
+  ecli: (holder) => sql`VALUES (${holder}.ecli::text)`,
+  "ecli-identifier": (holder) =>
+    identifierValuesSql(holder, DECISION_IDENTIFIER_TYPES.ECLI),
+} as const satisfies Record<DecisionSheetSource, (holder: SQL) => SQL>;
+
+/**
+ * The candidate columns `holderAnswersSheetSql` reads, which every relation
+ * it is applied to must carry.
+ */
+const HOLDER_SHEET_COLUMNS = [
+  "case_number",
+  "sheet_number",
+  "metadata",
+] as const;
+
+const holderSheetColumnsSql = (holder: SQL): SQL =>
+  sql.join(
+    HOLDER_SHEET_COLUMNS.map((column) => sql`${holder}.${sql.raw(column)}`),
+    sql`, `,
+  );
+
+type HolderAnswersSheetSqlOptions = CitedSheet & {
+  /** The candidate decision's alias. */
+  holder: SQL;
+};
+
+/**
+ * A candidate that answers to the sheet the citing text printed, known from
+ * any of `DECISION_SHEET_SOURCES`, so a citation resolves as a lookup of the
+ * same reference does. The court prints the sheet the document sits on
+ * ("č. j. 8 As 287/2020-33"), and a publisher states it on whichever of
+ * those it uses. The sheet travels as a bind parameter, never as a pattern.
+ */
+export const holderAnswersSheetSql = ({
+  holder,
+  sheetNumber,
+  familyKey,
+}: HolderAnswersSheetSqlOptions): SQL => {
+  const value = sql.raw("sheet_source.value");
+  return sql`(
+    ${sheetNumber} IS NOT NULL
+    AND (${sql.join(
+      DECISION_SHEET_SOURCES.map(
+        ({ source, reading }) => sql`EXISTS (
           SELECT 1
-          FROM ${caseLawDecisionIdentifiers} sheet_identifier
-          WHERE sheet_identifier.decision_id = ${holder}.id
-            AND sheet_identifier.type = 'case-number'
-            AND sheet_identifier.normalized_value
-                  LIKE ('%-' || ${sheetNumber})
-        )
-      )`;
+            FROM (${HOLDER_SHEET_SOURCE_VALUES_SQL[source](holder)}) AS sheet_source(value)
+           WHERE ${SHEET_READING_SQL[reading](value, { sheetNumber, familyKey })}
+        )`,
+      ),
+      sql` OR `,
+    )})
+  )`;
+};
 
 /**
  * A candidate's stored decision type as the type rules compare it: folded by
@@ -175,11 +339,6 @@ export const holderAnswersSheetSql = (holder: SQL, sheetNumber: SQL): SQL =>
  */
 export const decisionTypeKeySql = (holder: SQL): SQL =>
   sql`lower(${holder}.decision_type)`;
-
-const sheetMatchSql = holderAnswersSheetSql(
-  sql.raw("k"),
-  sql.raw("b.cited_sheet_number"),
-);
 
 /**
  * The hint vocabulary as a CTE, one row per family: which stored
@@ -376,7 +535,8 @@ const citationMatchingHoldersSql = ({
          candidate.court,
          candidate.decision_type,
          candidate.ecli,
-         candidate.decision_date
+         candidate.decision_date,
+         ${holderSheetColumnsSql(sql.raw("candidate"))}
   FROM (
     SELECT ${holder}.id,
            ${holder}.court,
@@ -384,6 +544,7 @@ const citationMatchingHoldersSql = ({
            ${holder}.ecli,
            ${holder}.decision_date,
            ${holder}.language,
+           ${holderSheetColumnsSql(holder)},
            CASE
              WHEN ${holder}.language_group_key IS NULL
                THEN 'decision:' || ${holder}.id::text
@@ -408,6 +569,7 @@ const citationMatchingHoldersSql = ({
            ${holder}.ecli,
            ${holder}.decision_date,
            ${holder}.language,
+           ${holderSheetColumnsSql(holder)},
            CASE
              WHEN ${holder}.language_group_key IS NULL
                THEN 'decision:' || ${holder}.id::text
@@ -463,9 +625,9 @@ const classificationCtes = (batch: SQL): SQL => sql`
            m.date_id,
            j.blocked,
            -- The text named the sheet the decision sits on, and exactly one
-           -- candidate answers to it. The sheet is the last segment of the
-           -- decision's ECLI, so this is the decision's own published
-           -- identity rather than a word about it, and it is asked before
+           -- candidate answers to it. The sheet is part of the decision's
+           -- own published identity rather than a word about it, and it is
+           -- asked before
            -- every hint. Bounded like the rules below: a count taken on a
            -- truncated candidate set is a guess.
            (
@@ -553,10 +715,8 @@ const classificationCtes = (batch: SQL): SQL => sql`
                    AND ${courtNameKeySql(sql.raw("k.court"))}
                      = ${courtNameKeySql(sql.raw("b.cited_court_hint"))}
                ))[1] AS court_id,
-               count(*) FILTER (WHERE ${sheetMatchSql}
-               )::int AS sheet_n,
-               (array_agg(k.id) FILTER (WHERE ${sheetMatchSql}
-               ))[1] AS sheet_id,
+               count(*) FILTER (WHERE k.answers_sheet)::int AS sheet_n,
+               (array_agg(k.id) FILTER (WHERE k.answers_sheet))[1] AS sheet_id,
                count(*) FILTER (
                  WHERE b.cited_decision_date IS NOT NULL
                    AND k.decision_date = b.cited_decision_date
@@ -575,6 +735,14 @@ const classificationCtes = (batch: SQL): SQL => sql`
                  WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (${decisionTypeArray(PROCEDURAL_DECISION_TYPES)})
                )::int AS procedural_n
           FROM (
+            -- Read once per candidate rather than once per aggregate.
+            SELECT holder.*,
+                   ${holderAnswersSheetSql({
+                     holder: sql.raw("holder"),
+                     sheetNumber: sql.raw("b.cited_sheet_number"),
+                     familyKey: sql.raw("b.citation_key"),
+                   })} AS answers_sheet
+              FROM (
             ${citationMatchingHoldersSql({
               holder: sql.raw("cited"),
               citationKey: sql.raw("b.citation_key"),
@@ -588,6 +756,7 @@ const classificationCtes = (batch: SQL): SQL => sql`
               jurisdictionPredicate: sql`cited.country = ANY (pol.resolves_to)`,
               limit: CITATION_CANDIDATE_SCAN_CAP,
             })}
+              ) holder
           ) k
       ) m ON true
       LEFT JOIN LATERAL (
