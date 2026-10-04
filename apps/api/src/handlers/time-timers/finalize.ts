@@ -88,6 +88,7 @@ const CONTEXTUAL_OR_RESET_LEGACY_FIELDS = [
   "status",
   "source",
   "invoiceId",
+  "invoiceAttachment",
   "splitGroupId",
   "timerStartedAt",
   "timerStoppedAt",
