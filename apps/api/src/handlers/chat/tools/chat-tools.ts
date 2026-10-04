@@ -1105,8 +1105,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // organization with no matter yet still manages its library, templates,
   // contacts and settings, and creates its first matter here. A write that
   // acts inside a matter answers with a recoverable needs-a-matter result
-  // (`matterRequiredResult`) instead of disappearing. Role checks stay in the
-  // handlers. Real per-workspace statuses are threaded through so the
+  // (`matterRequiredResult`) instead of disappearing. Each tool's declared
+  // write permissions gate its registration; handlers keep their
+  // input-specific role checks. Real per-workspace statuses are threaded through so the
   // handlers' `ensureActiveWorkspace` gate keeps archived matters read-only.
   const registryWriteTools = buildChatWriteTools({
     memberRole,

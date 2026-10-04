@@ -1194,6 +1194,10 @@ export const STELLA_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     access: "write",
+    permissions: {
+      type: "all",
+      permissions: { organizationSettings: ["update"] },
+    },
     anonymized: { exposure: "excluded", reason: "write" },
     name: SET_PRACTICE_JURISDICTIONS_TOOL,
     inputNormalization: {

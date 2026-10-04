@@ -26,6 +26,7 @@ import {
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
 import { loadCapabilityEndpoint } from "@/api/mcp/capability-tools";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const memberRoles = Object.keys(roles).map((role) => {
   if (!isMemberRole(role)) {
@@ -53,7 +54,7 @@ const recordAuditEvent: AuditRecorder = async () => undefined;
 
 const registrationProps = (memberRole: MemberRole) =>
   ({
-    memberRole,
+    memberRole: sessionMemberRole(memberRole),
     memoryEnabled: true,
     orgAIConfig: null,
     managedAIResidency: "eu",
@@ -235,9 +236,10 @@ describe("native chat tool delegation", () => {
     const declarations = {
       "sample-writer": NATIVE_CHAT_TOOL_DELEGATIONS.suggest_changes.server,
     } as const;
-    const tools = {
+    // The inspector reads registered names only.
+    const tools = asTestRaw<ChatToolMap>({
       "sample-writer": { name: "sample-writer" },
-    } satisfies ChatToolMap;
+    });
     expect(
       await inspectDelegatedRegistrations({
         declarations,

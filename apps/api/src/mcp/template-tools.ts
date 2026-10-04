@@ -610,6 +610,11 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  permissions: {
+    type: "any",
+    alternatives: [{ template: ["create"] }, { template: ["update"] }],
+    reason: "template_id selects update; without it the call creates.",
+  },
   anonymized: { exposure: "excluded", reason: "write" },
   name: "create_template",
   scope: "stella:templates",
@@ -697,6 +702,7 @@ export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  permissions: { type: "all", permissions: { template: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: "configure_template_fields",
   scope: "stella:templates",
@@ -808,6 +814,7 @@ const FILL_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  permissions: { type: "all", permissions: { template: ["use"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: "fill_template",
   scope: "stella:templates",
@@ -875,6 +882,15 @@ const SAVE_FILLED_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   access: "write",
+  permissions: {
+    type: "any",
+    alternatives: [
+      { template: ["use"], entity: ["create"] },
+      { template: ["use"], entity: ["update"] },
+    ],
+    reason:
+      "action selects saving into a new document or a new version of an existing one.",
+  },
   additionalScopes: ["stella:templates"],
   anonymized: { exposure: "excluded", reason: "write" },
   name: "save_filled_template",

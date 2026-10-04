@@ -51,6 +51,7 @@ import {
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
+import { hasMcpToolAuthority } from "@/api/mcp/write-tool-authority";
 
 const DOCUMENTS_MCP_CAPABILITY_IDS: ReadonlySet<string> = new Set(
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
@@ -331,6 +332,17 @@ export const handleMcpToolCall = async ({
         code: "feature_disabled",
         message: FEATURE_DISABLED_MESSAGE,
         hint: featureDisabledHint(staticTool.feature),
+      }),
+    );
+  }
+
+  // Discovery already withholds the tool; this keeps the refusal on the call
+  // path for any caller that reaches dispatch by name.
+  if (!hasMcpToolAuthority(context, staticTool)) {
+    return serializeForSurface(
+      structuredErrorResult({
+        code: "permission_denied",
+        message: `Your member role does not permit ${toolName}`,
       }),
     );
   }

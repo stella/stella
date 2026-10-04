@@ -2119,6 +2119,11 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: "invoke_capability",
     access: "write",
+    permissions: {
+      type: "delegated",
+      reason:
+        "The selected capability's endpoint permissions and purpose requirements are checked before its dispatch.",
+    },
     readClass: resolveCapabilityReadClass,
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "capability-catalog" },
