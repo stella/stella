@@ -1,3 +1,4 @@
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -34,6 +35,7 @@ import {
   type McpWriteToolOperationSelector,
   selectableOperations,
 } from "@/api/mcp/write-tool-authority";
+import { callMcpToolOverHttp } from "@/api/tests/helpers/mcp-http-tool-call";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { parseCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-load";
@@ -622,7 +624,20 @@ const GATE_PROBE_ARGUMENT = "role_matrix_gate_probe";
 
 type CallOutcome = "permission_denied" | "past_permission_gate";
 
-/** Call a tool by name the way the CLI does, and read where dispatch stopped. */
+const errorCodeOf = (result: CallToolResult): string | null => {
+  const item = result.content.at(0);
+  const payload: unknown = item?.type === "text" ? JSON.parse(item.text) : null;
+  const parsed = v.safeParse(
+    v.object({ error: v.object({ code: v.string() }) }),
+    payload,
+  );
+  return parsed.success ? parsed.output.error.code : null;
+};
+
+/**
+ * Call a tool by name over HTTP, the transport the CLI uses, and read where
+ * dispatch stopped. The direct dispatch entry point must answer the same.
+ */
 const callOutcome = async ({
   args,
   mode,
@@ -634,19 +649,14 @@ const callOutcome = async ({
   role: MemberRole;
   tool: string;
 }): Promise<{ outcome: CallOutcome; code: string | null }> => {
-  const result = await handleMcpToolCall({
-    args,
-    context: mcpContextFor(role),
+  const call = { args, context: mcpContextFor(role), mode, toolName: tool };
+  const code = errorCodeOf(await callMcpToolOverHttp(call));
+  expect({ tool, role, mode, code }).toEqual({
+    tool,
+    role,
     mode,
-    toolName: tool,
+    code: errorCodeOf(await handleMcpToolCall(call)),
   });
-  const item = result.content.at(0);
-  const payload: unknown = item?.type === "text" ? JSON.parse(item.text) : null;
-  const parsed = v.safeParse(
-    v.object({ error: v.object({ code: v.string() }) }),
-    payload,
-  );
-  const code = parsed.success ? parsed.output.error.code : null;
   return {
     code,
     outcome:

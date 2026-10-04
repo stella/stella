@@ -9,6 +9,9 @@
 //   - outbound HTTP: `safeOutboundFetchBytes` / `safeOutboundFetchStream`
 //     (`@/api/lib/safe-outbound-fetch`), or `readCappedBytes`
 //     (`@stll/skills/streaming`) over `response.body`;
+//   - case-law publishers: `readPublisherText` / `readPublisherBytes`, or
+//     `readBodyText` over a `readPublisher` outcome
+//     (`adapters/publisher-read.ts`);
 //   - object storage: `readS3ObjectBounded`, `readCorpusS3BytesBounded`, and
 //     `readCorpusS3ObjectBounded` (`@/api/lib/s3`).
 //
@@ -19,6 +22,9 @@
 //     `fetchWithTimeout`, `fetchPublisher`, and `fetchWithRetry`;
 //   - a call to a function declared in the same file whose return type is
 //     annotated `Response` or `Promise<Response>`;
+//   - the `.value` of a read outcome returned by `readPublisher`, which
+//     carries the publisher's `Response` (`outcome.value.json()`, or
+//     `const response = outcome.value`);
 //   - a parameter or binding annotated `Response` (optionally `| null` or
 //     `| undefined`);
 //   - any of the above behind `await`, `.clone()`, a `const` (or a
@@ -43,7 +49,9 @@
 // (`fetchImpl(...)`, `dependencies.request(...)`), Response-returning helpers
 // imported from another module without being one of the wrappers above,
 // unannotated callback parameters (`parseResponse: async (response) => ...`),
-// and responses unwrapped from a `Result` (`responseResult.value.json()`).
+// responses unwrapped from a `Result` (`responseResult.value.json()`), a
+// read outcome destructured (`const { value } = outcome`), and
+// `readPublisher` passed in under another name (`read = readPublisher`).
 // Reading a `Response` this process built itself is bounded by construction
 // but is reported when it arrives through a `Response`-typed parameter.
 
@@ -76,6 +84,11 @@ const FETCH_FUNCTIONS: ReadonlySet<string> = new Set([
   "fetchPublisher",
   "fetchWithRetry",
   "fetchWithTimeout",
+]);
+
+// Functions returning a read outcome whose present `.value` is a `Response`.
+const RESPONSE_OUTCOME_FUNCTIONS: ReadonlySet<string> = new Set([
+  "readPublisher",
 ]);
 
 const S3_MODULE = "@/api/lib/s3";
@@ -172,7 +185,10 @@ export default eslintCompatPlugin({
             "`.{{method}}()` buffers the whole fetch response with no size " +
             "limit. Read it with a byte ceiling: safeOutboundFetchBytes / " +
             "safeOutboundFetchStream (@/api/lib/safe-outbound-fetch), or " +
-            "readCappedBytes (@stll/skills/streaming) over response.body.",
+            "readCappedBytes (@stll/skills/streaming) over response.body. " +
+            "Case-law publisher reads: readPublisherText / " +
+            "readPublisherBytes, or readBodyText over a " +
+            "readPublisher outcome.",
           s3Reader:
             "`{{method}}` reads the whole object with no size limit. Use " +
             "readS3ObjectBounded, readCorpusS3BytesBounded, or " +
@@ -316,6 +332,38 @@ export default eslintCompatPlugin({
           );
         };
 
+        // A call to a read-outcome function, behind `await` or a stable
+        // binding.
+        const isResponseOutcome = (
+          node: unknown,
+          visited: Set<unknown>,
+        ): boolean => {
+          const current = unwrapExpression(node);
+          if (current === null || visited.has(current)) {
+            return false;
+          }
+          visited.add(current);
+          if (current.type === "AwaitExpression") {
+            return isResponseOutcome(current.argument, visited);
+          }
+          if (current.type === "CallExpression") {
+            const callee = unwrapExpression(current.callee);
+            return (
+              callee !== null &&
+              isIdentifierReference(callee) &&
+              RESPONSE_OUTCOME_FUNCTIONS.has(callee.name)
+            );
+          }
+          if (!isIdentifierReference(current)) {
+            return false;
+          }
+          const variable = resolveVariable(context, current);
+          return (
+            variable !== null &&
+            isResponseOutcome(stableBindingInitializer(variable), visited)
+          );
+        };
+
         const isFetchResponse = (
           node: unknown,
           visited: Set<unknown>,
@@ -334,6 +382,12 @@ export default eslintCompatPlugin({
               return isFetchResponse(member.object, visited);
             }
             return isFetchCall(current);
+          }
+          if (
+            current.type === "MemberExpression" &&
+            memberName(current) === "value"
+          ) {
+            return isResponseOutcome(current.object, visited);
           }
           if (!isIdentifierReference(current)) {
             return false;
