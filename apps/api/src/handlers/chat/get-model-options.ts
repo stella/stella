@@ -9,7 +9,7 @@ import {
   TYPICAL_CALL_OUTPUT_TOKENS,
 } from "@stll/ai-catalog/benchmarks";
 
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   getChatModelBenchmarkOptions,
@@ -22,6 +22,7 @@ const config = {
   // response carries only model identifiers, never key material, so this
   // does not require admin scope (mirrors read-ai-availability.ts).
   permissions: { chat: ["create"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
 } satisfies HandlerConfig;
 

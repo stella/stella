@@ -202,6 +202,7 @@ import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { AIKeyRequiredDialog } from "@/components/require-ai-key";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { ControlSizesPlayground } from "@/routes/dev/-components/control-sizes-playground";
 
 const renderPlaygroundAnchor = ({
@@ -269,17 +270,18 @@ const TABLE_ROWS = [
 ] as const;
 
 const showPromiseToast = () => {
+  const toastId = stellaToast.loading("Saving draft");
   detached(
-    stellaToast.promise(
-      new Promise<string>((resolve) => {
-        setTimeout(() => resolve("complete"), 900);
+    new Promise<string>((resolve) => {
+      setTimeout(() => resolve("complete"), 900);
+    })
+      .then(() => {
+        stellaToast.update(toastId, { title: "Draft saved", type: "success" });
+        return undefined;
+      })
+      .catch((error: unknown) => {
+        notifyUserError(error, "Save failed", { toastId });
       }),
-      {
-        loading: { title: "Saving draft" },
-        success: { title: "Draft saved" },
-        error: { title: "Save failed" },
-      },
-    ),
     "ui-playground.promise-toast",
   );
 };
@@ -1065,7 +1067,7 @@ export function UiPlayground() {
                   </Button>
                   <Button
                     onClick={() => {
-                      stellaToast.error("Unable to save", {
+                      notifyUserError(undefined, "Unable to save", {
                         description: "The server rejected the update.",
                       });
                     }}

@@ -72,6 +72,90 @@ const readStatus = async () =>
       ),
   );
 
+type QuietGenerationFixture = {
+  manifest:
+    | typeof CORPUS_INDEX_MANIFESTS.case_law_v6
+    | typeof CORPUS_INDEX_MANIFESTS.case_law_v7;
+  entityId: string;
+  intentId: typeof APPLIED_INTENT_ID;
+};
+
+const seedQuietGeneration = async ({
+  manifest,
+  entityId,
+  intentId,
+}: QuietGenerationFixture) => {
+  const target = { family: manifest.family, generation: manifest.generation };
+  const indexId = `${manifest.generation}_cs_sk`;
+  await db.insert(corpusIndexGenerations).values({
+    ...target,
+    cluster: "q09",
+    manifestDigest: corpusIndexManifestDigest(manifest),
+    status: "building",
+  });
+  await db.insert(corpusIndexProjectionIntents).values({
+    id: intentId,
+    ...target,
+    entityId,
+    epoch: 1n,
+    fingerprint: FINGERPRINT,
+    indexId,
+    status: "applied",
+    appendStartedAt: NOW,
+    appendCommittedAt: NOW,
+    expectedDocumentCount: 1,
+    appliedAt: NOW,
+  });
+  await db.insert(corpusIndexProjectionStates).values({
+    ...target,
+    entityId,
+    desiredAction: "upsert",
+    desiredEpoch: 1n,
+    desiredFingerprint: FINGERPRINT,
+    desiredIndexId: indexId,
+    appliedAction: "upsert",
+    appliedEpoch: 1n,
+    appliedRevision: intentId,
+    appliedFingerprint: FINGERPRINT,
+    appliedIndexId: indexId,
+    appliedAt: NOW,
+  });
+  return { ...target, indexId, entityId };
+};
+
+const clearGenerationFixture = async ({
+  family,
+  generation,
+}: Pick<
+  typeof corpusIndexGenerations.$inferSelect,
+  "family" | "generation"
+>) => {
+  await db
+    .delete(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+      ),
+    );
+  await db
+    .delete(corpusIndexProjectionIntents)
+    .where(
+      and(
+        eq(corpusIndexProjectionIntents.family, family),
+        eq(corpusIndexProjectionIntents.generation, generation),
+      ),
+    );
+  await db
+    .delete(corpusIndexGenerations)
+    .where(
+      and(
+        eq(corpusIndexGenerations.family, family),
+        eq(corpusIndexGenerations.generation, generation),
+      ),
+    );
+};
+
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
@@ -278,6 +362,14 @@ const BLOCKING_REVISION_SHAPES = {
     deleteOpstamp: 7n,
     deleteTaskCreatedAt: NOW,
   },
+  cleanup_stalled: {
+    appendStartedAt: NOW,
+    appendPublishBarrierAt: NOW,
+    cleanupNotBefore: NOW,
+    cleanupStartedAt: NOW,
+    deleteOpstamp: 7n,
+    deleteTaskCreatedAt: NOW,
+  },
 } as const satisfies Record<
   BlockingIntentStatus,
   Partial<typeof corpusIndexProjectionIntents.$inferInsert>
@@ -418,4 +510,100 @@ test("a settling erasure cannot offset an unreferenced applied revision", async 
   await db
     .delete(corpusIndexProjectionIntents)
     .where(eq(corpusIndexProjectionIntents.id, CONVERGED_INTENT_ID));
+});
+
+// Classifying cleanup_stalled as terminal must not admit a quiet generation.
+test("stalled cleanup keeps an otherwise quiet generation from census", async () => {
+  const target = await seedQuietGeneration({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
+    entityId: "0198e331-e578-7000-8000-000000000411",
+    intentId: toSafeId<"corpusIndexProjectionIntent">(
+      "0198e331-e578-7000-8000-000000000412",
+    ),
+  });
+  const read = async () =>
+    await db.transaction(
+      async (tx) =>
+        await readCorpusIndexProjectionConvergenceTx(
+          asTestRaw<Transaction>(tx),
+          target,
+        ),
+    );
+  try {
+    expect(await read()).toBe("ready_for_census");
+    const stalledIntentId = toSafeId<"corpusIndexProjectionIntent">(
+      "0198e331-e578-7000-8000-000000000413",
+    );
+    await db.insert(corpusIndexProjectionIntents).values({
+      id: stalledIntentId,
+      ...target,
+      epoch: 2n,
+      fingerprint: "b".repeat(64),
+      status: "cleanup_stalled",
+      appendStartedAt: NOW,
+      appendCommittedAt: NOW,
+      appendPublishBarrierAt: NOW,
+      cleanupNotBefore: NOW,
+      cleanupStartedAt: NOW,
+      deleteOpstamp: 42n,
+      deleteTaskCreatedAt: NOW,
+      deleteReissues: 3,
+      lastError: "cleanup remains unresolved",
+    });
+    expect(await read()).toBe("intent_outstanding");
+    await db
+      .delete(corpusIndexProjectionIntents)
+      .where(eq(corpusIndexProjectionIntents.id, stalledIntentId));
+    expect(await read()).toBe("ready_for_census");
+  } finally {
+    await clearGenerationFixture(target);
+  }
+});
+
+// Removing the publication probe's generation scope would hold the wrong census.
+test("unpublished revisions hold only their own generation's census", async () => {
+  const target = await seedQuietGeneration({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
+    entityId: "0198e331-e578-7000-8000-000000000421",
+    intentId: toSafeId<"corpusIndexProjectionIntent">(
+      "0198e331-e578-7000-8000-000000000422",
+    ),
+  });
+  try {
+    const otherIntentId = toSafeId<"corpusIndexProjectionIntent">(
+      "0198e331-e578-7000-8000-000000000424",
+    );
+    const other = await seedQuietGeneration({
+      manifest: CORPUS_INDEX_MANIFESTS.case_law_v7,
+      entityId: "0198e331-e578-7000-8000-000000000423",
+      intentId: otherIntentId,
+    });
+    const unpublishedAt = new Date(Date.now() + 60_000);
+    await db
+      .update(corpusIndexProjectionIntents)
+      .set({
+        appendStartedAt: unpublishedAt,
+        appendCommittedAt: unpublishedAt,
+        appliedAt: unpublishedAt,
+      })
+      .where(eq(corpusIndexProjectionIntents.id, otherIntentId));
+    const statuses = await db.transaction(async (tx) => ({
+      other: await readCorpusIndexProjectionConvergenceTx(
+        asTestRaw<Transaction>(tx),
+        other,
+      ),
+      target: await readCorpusIndexProjectionConvergenceTx(
+        asTestRaw<Transaction>(tx),
+        target,
+      ),
+    }));
+    expect(statuses.other).toBe("publish_pending");
+    expect(statuses.target).toBe("ready_for_census");
+  } finally {
+    await clearGenerationFixture({
+      family: "case_law",
+      generation: "case_law_v7",
+    });
+    await clearGenerationFixture(target);
+  }
 });

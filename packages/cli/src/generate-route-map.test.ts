@@ -377,6 +377,7 @@ describe("generateRouteMap: flag mapping (S3)", () => {
     expect(findLeaf(tree, ["template", "fill"])?.inputOnly).toEqual(["values"]);
     expect(findLeaf(tree, ["clause", "save"])?.inputOnly).toEqual([
       "body",
+      "expected_body",
       "metadata",
     ]);
     // set_field_value.content has an untyped `value` child -> whole object to --input.

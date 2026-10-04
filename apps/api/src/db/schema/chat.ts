@@ -1021,8 +1021,10 @@ export const chatThreadCompactions = p.pgTable(
 /** Whose memory a row is: the firm, one lawyer, or one matter. */
 const AI_MEMORY_SCOPES = ["organization", "user", "workspace"] as const;
 
+export type AiMemoryScope = (typeof AI_MEMORY_SCOPES)[number];
+
 /** What a memory asserts; drives which scopes may hold it. */
-const AI_MEMORY_KINDS = [
+export const AI_MEMORY_KINDS = [
   "preference",
   "instruction",
   "fact",
@@ -1030,13 +1032,13 @@ const AI_MEMORY_KINDS = [
   "relationship",
 ] as const;
 
-type AiMemoryKind = (typeof AI_MEMORY_KINDS)[number];
+export type AiMemoryKind = (typeof AI_MEMORY_KINDS)[number];
 
 /**
  * Kinds that carry no matter-specific content, so any scope may hold them.
  * Every other kind is matter-derived and belongs to a workspace.
  */
-const AI_MEMORY_SCOPE_FREE_KINDS = [
+export const AI_MEMORY_SCOPE_FREE_KINDS = [
   "preference",
   "instruction",
 ] as const satisfies readonly AiMemoryKind[];
@@ -1226,6 +1228,7 @@ export type McpConnectorAuthType = (typeof MCP_CONNECTOR_AUTH_TYPES)[number];
 export const MCP_CONNECTION_STATUSES = [
   "connected",
   "needs_reauth",
+  "needs_approval",
   "revoked",
 ] as const;
 export type McpConnectionStatus = (typeof MCP_CONNECTION_STATUSES)[number];

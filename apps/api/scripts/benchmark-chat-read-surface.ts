@@ -295,12 +295,11 @@ type BenchModel = {
 };
 
 const getBenchModel = async (): Promise<BenchModel | null> => {
-  const {
-    getTanStackTextModelById,
-    getTanStackTextModelForRole,
-    getTanStackTextModelInfoForRole,
-    requireTanStackAIAvailableForRole,
-  } = await import("@/api/lib/tanstack-ai-models");
+  const { getTanStackTextModelInfoForRole, requireTanStackAIAvailableForRole } =
+    await import("@/api/lib/tanstack-ai-models");
+
+  const { resolveTanStackTextModel } =
+    await import("@/api/lib/tanstack-ai-generate");
 
   const available = requireTanStackAIAvailableForRole({
     configStatus: ORG_AI_CONFIG_STATUS.ok,
@@ -318,7 +317,9 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
       dataClass: "public_corpus",
       organizationId: null,
     });
-    const model = getTanStackTextModelById(overrideModel, null, {
+    const model = await resolveTanStackTextModel({
+      modelId: overrideModel,
+      orgAIConfig: null,
       dataClass: "public_corpus",
       role: "fast",
       organizationId: null,
@@ -334,7 +335,9 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
     dataClass: "public_corpus",
     organizationId: null,
   });
-  const model = getTanStackTextModelForRole("fast", null, {
+  const model = await resolveTanStackTextModel({
+    role: "fast",
+    orgAIConfig: null,
     dataClass: "public_corpus",
     organizationId: null,
   });

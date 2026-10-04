@@ -47,6 +47,7 @@ describe("resetKnowledgeCache", () => {
 
     await resetKnowledgeCache(queryClient);
     resolveRead("org-a data");
+    // swallow-ok: cache reset deliberately cancels the read; cache absence is asserted below
     await read.catch(() => undefined);
 
     expect(queryClient.getQueryCache().find({ queryKey: key })).toBeUndefined();

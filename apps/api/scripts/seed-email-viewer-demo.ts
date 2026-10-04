@@ -282,11 +282,14 @@ const seedEmailViewerDemo = async () => {
     );
 
     const s3Key = `${target.organizationId}/${target.workspaceId}/${fileId}.eml`;
-    await writeS3ObjectWithRetry({
-      contentType: EML_MIME_TYPE,
-      data: new Uint8Array(content),
-      key: s3Key,
-    });
+    await writeS3ObjectWithRetry(
+      {
+        contentType: EML_MIME_TYPE,
+        data: new Uint8Array(content),
+        key: s3Key,
+      },
+      { type: "fixture" },
+    );
 
     const fileContent = {
       version: 1,

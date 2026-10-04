@@ -256,3 +256,16 @@ describe("table caption retention", () => {
     ]);
   });
 });
+
+test("retains nested table text only in its owning outer cell", () => {
+  const { documentAst, fulltext } = parsePlDecisionContent(
+    baseInput(
+      "<table><thead><tr><th>Header</th></tr></thead><tbody><tr><td>Outer<table><tr><td>Inner</td></tr></table></td></tr></tbody><tfoot><tr><td>Footer</td></tr></tfoot></table>",
+    ),
+  );
+  const table = documentAst.blocks.find((block) => block.type === "table");
+  expect(table?.rows).toHaveLength(3);
+  expect(fulltext.match(/Inner/gu)).toHaveLength(1);
+  expect(fulltext).toContain("Header");
+  expect(fulltext).toContain("Footer");
+});

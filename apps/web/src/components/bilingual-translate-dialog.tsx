@@ -1,3 +1,4 @@
+import { useState, type ReactNode } from "react";
 /**
  * Bilingual-translation trigger + dialog.
  *
@@ -6,8 +7,6 @@
  * happens to every row and how the defined terms are rendered, then follow the
  * run that writes the filled document back as a new version.
  */
-
-import { useState, type ReactNode } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
@@ -27,7 +26,6 @@ import {
   DialogTrigger,
 } from "@stll/ui/dialog";
 import { BookOpenCheckIcon } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
 
 import {
   BilingualReviewGlossary,
@@ -52,6 +50,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import type { DeepLTargetLanguageCode } from "@/lib/deepl/languages";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 type BilingualTranslateDialogProps = {
@@ -109,10 +108,8 @@ export const BilingualTranslateDialog = ({
 
   const reportFailure = (error: unknown, title: string) => {
     analytics.captureError(error);
-    stellaToast.add({
-      title,
+    notifyUserError(error, title, {
       description: userErrorFromThrown(error, t("errors.actionFailed")),
-      type: "error",
     });
   };
 

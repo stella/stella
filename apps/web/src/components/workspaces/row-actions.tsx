@@ -122,9 +122,10 @@ import {
 } from "@/lib/desktop-edit-formats";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { getExtension } from "@/lib/files/file-extension";
 import { toSafeId } from "@/lib/safe-id";
 import type {
@@ -607,32 +608,38 @@ export const RowActions = ({
     } catch (error) {
       analytics.captureError(error);
       if (error instanceof Error && isUnauthorizedError(error)) {
-        stellaToast.add({
-          description: t(
-            "workspaces.files.desktopEdit.authRequiredDescription",
-          ),
-          title: t("workspaces.files.desktopEdit.authRequiredTitle"),
-          type: "error",
-        });
+        notifyUserError(
+          error,
+          t("workspaces.files.desktopEdit.authRequiredTitle"),
+          {
+            description: t(
+              "workspaces.files.desktopEdit.authRequiredDescription",
+            ),
+          },
+        );
         return;
       }
 
       if (error instanceof DesktopBridgeIncompatibleError) {
-        stellaToast.add({
-          description: t(
-            "workspaces.files.desktopEdit.updateRequiredDescription",
-          ),
-          title: t("workspaces.files.desktopEdit.updateRequiredTitle"),
-          type: "error",
-        });
+        notifyUserError(
+          error,
+          t("workspaces.files.desktopEdit.updateRequiredTitle"),
+          {
+            description: t(
+              "workspaces.files.desktopEdit.updateRequiredDescription",
+            ),
+          },
+        );
         return;
       }
 
-      stellaToast.add({
-        description: t("workspaces.files.desktopEdit.unavailableDescription"),
-        title: t("workspaces.files.desktopEdit.unavailableTitle"),
-        type: "error",
-      });
+      notifyUserError(
+        error,
+        t("workspaces.files.desktopEdit.unavailableTitle"),
+        {
+          description: t("workspaces.files.desktopEdit.unavailableDescription"),
+        },
+      );
     }
   };
 
@@ -663,32 +670,38 @@ export const RowActions = ({
     } catch (forceError) {
       analytics.captureError(forceError);
       if (forceError instanceof Error && isUnauthorizedError(forceError)) {
-        stellaToast.add({
-          description: t(
-            "workspaces.files.desktopEdit.authRequiredDescription",
-          ),
-          title: t("workspaces.files.desktopEdit.authRequiredTitle"),
-          type: "error",
-        });
+        notifyUserError(
+          forceError,
+          t("workspaces.files.desktopEdit.authRequiredTitle"),
+          {
+            description: t(
+              "workspaces.files.desktopEdit.authRequiredDescription",
+            ),
+          },
+        );
         return;
       }
 
       if (forceError instanceof DesktopBridgeIncompatibleError) {
-        stellaToast.add({
-          description: t(
-            "workspaces.files.desktopEdit.updateRequiredDescription",
-          ),
-          title: t("workspaces.files.desktopEdit.updateRequiredTitle"),
-          type: "error",
-        });
+        notifyUserError(
+          forceError,
+          t("workspaces.files.desktopEdit.updateRequiredTitle"),
+          {
+            description: t(
+              "workspaces.files.desktopEdit.updateRequiredDescription",
+            ),
+          },
+        );
         return;
       }
 
-      stellaToast.add({
-        description: t("workspaces.files.desktopEdit.unavailableDescription"),
-        title: t("workspaces.files.desktopEdit.unavailableTitle"),
-        type: "error",
-      });
+      notifyUserError(
+        forceError,
+        t("workspaces.files.desktopEdit.unavailableTitle"),
+        {
+          description: t("workspaces.files.desktopEdit.unavailableDescription"),
+        },
+      );
     }
   };
 
@@ -710,13 +723,11 @@ export const RowActions = ({
       );
       if (Result.isError(requested)) {
         analytics.captureError(requested.error);
-        stellaToast.add({
+        notifyUserError(requested.error, t("errors.actionFailed"), {
           description: userErrorFromThrown(
             requested.error,
             t("common.unexpectedError"),
           ),
-          title: t("errors.actionFailed"),
-          type: "error",
         });
         return;
       }
@@ -823,6 +834,7 @@ export const RowActions = ({
       timeout: Number.POSITIVE_INFINITY,
     });
     let failedCount = 0;
+    let firstFailure: unknown;
     let openedDuplicate: { entityId: string; fieldId: string } | null = null;
     try {
       for (const target of bulkTargets) {
@@ -847,6 +859,7 @@ export const RowActions = ({
         });
         if (Result.isError(result)) {
           failedCount++;
+          firstFailure ??= result.error;
           analytics.captureError(result.error);
           continue;
         }
@@ -860,10 +873,7 @@ export const RowActions = ({
       }
 
       if (failedCount === bulkTargets.length) {
-        stellaToast.update(toastId, {
-          title: t("errors.actionFailed"),
-          type: "error",
-        });
+        notifyUserError(firstFailure, t("errors.actionFailed"), { toastId });
         return;
       }
 
@@ -913,11 +923,8 @@ export const RowActions = ({
             type: "success",
           });
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.failedToDeleteEntities"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.failedToDeleteEntities"));
         },
       },
     );
@@ -966,10 +973,8 @@ export const RowActions = ({
       });
     } catch (error) {
       analytics.captureError(error);
-      stellaToast.add({
-        title: t("workspaces.files.ocrQueueFailed"),
+      notifyUserError(error, t("workspaces.files.ocrQueueFailed"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
       });
     } finally {
       setIsOcrPending(false);
@@ -1009,6 +1014,7 @@ export const RowActions = ({
         content={t("common.actions")}
         render={
           <MenuTrigger
+            aria-label={t("common.actions")}
             className={cn(
               triggerClassName ??
                 "opacity-0! transition-opacity group-hover/row:opacity-100!",
@@ -1726,11 +1732,8 @@ const CreateSubfolderMenuItem = ({
           });
           onSubfolderCreated(data.entityId, entity.entityId);
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -1797,21 +1800,32 @@ const downloadEntityAsZip = async (
   );
 
   if (Result.isError(responseResult)) {
-    stellaToast.update(toastId, { title: msg.failed, type: "error" });
+    notifyUserError(responseResult.error, msg.failed, { toastId });
     return;
   }
 
   const response = responseResult.value;
 
   if (!response.ok) {
-    stellaToast.update(toastId, { title: msg.failed, type: "error" });
+    const body = await Result.tryPromise(async () => {
+      const payload: unknown = await response.json();
+      return payload;
+    });
+    notifyUserError(
+      toAPIError({
+        status: response.status,
+        value: Result.isError(body) ? undefined : body.value,
+      }),
+      msg.failed,
+      { toastId },
+    );
     return;
   }
 
   const blobResult = await Result.tryPromise(async () => await response.blob());
 
   if (Result.isError(blobResult)) {
-    stellaToast.update(toastId, { title: msg.failed, type: "error" });
+    notifyUserError(blobResult.error, msg.failed, { toastId });
     return;
   }
 
@@ -1842,8 +1856,22 @@ const downloadOcrExport = async ({
         },
       ),
   );
-  if (Result.isError(responseResult) || !responseResult.value.ok) {
-    stellaToast.add({ title: msg.failed, type: "error" });
+  if (Result.isError(responseResult)) {
+    notifyUserError(responseResult.error, msg.failed);
+    return;
+  }
+  if (!responseResult.value.ok) {
+    const body = await Result.tryPromise(async () => {
+      const payload: unknown = await responseResult.value.json();
+      return payload;
+    });
+    notifyUserError(
+      toAPIError({
+        status: responseResult.value.status,
+        value: Result.isError(body) ? undefined : body.value,
+      }),
+      msg.failed,
+    );
     return;
   }
 
@@ -1851,7 +1879,7 @@ const downloadOcrExport = async ({
     async () => await responseResult.value.blob(),
   );
   if (Result.isError(blobResult)) {
-    stellaToast.add({ title: msg.failed, type: "error" });
+    notifyUserError(blobResult.error, msg.failed);
     return;
   }
   downloadFile(blobResult.value, getOcrExportFileName(source.fileName, format));
@@ -1872,7 +1900,7 @@ const downloadSingleFile = async (
     fileName: file.fileName,
     variant,
     workspaceId,
-    onError: (message) => {
-      stellaToast.add({ title: message, type: "error" });
+    onError: (message, error) => {
+      notifyUserError(error, message);
     },
   });

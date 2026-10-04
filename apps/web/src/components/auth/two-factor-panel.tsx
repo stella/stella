@@ -15,7 +15,6 @@ import {
 } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@stll/ui/input-otp";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
@@ -23,6 +22,7 @@ import { usePulse } from "@/hooks/use-pulse";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 type TwoFactorMode = "totp" | "backupCode";
 
@@ -68,7 +68,7 @@ export const TwoFactorPanel = ({ className }: TwoFactorPanelProps) => {
           } else if (error.code === "INVALID_BACKUP_CODE") {
             message = t("auth.twoFactor.invalidBackupCode");
           }
-          stellaToast.add({ title: message, type: "error" });
+          notifyUserError(toAuthClientError(error), message);
         }
         throw toAuthClientError(error);
       }

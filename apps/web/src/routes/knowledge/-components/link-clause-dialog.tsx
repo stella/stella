@@ -33,6 +33,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   clauseCategoriesOptions,
   clausesOptions,
@@ -247,9 +248,7 @@ export const LinkClauseDialog = ({
     setLinking(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.linkFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.linkFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),

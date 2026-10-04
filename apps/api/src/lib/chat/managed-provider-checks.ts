@@ -5,10 +5,12 @@ import { Temporal } from "@stll/time";
 import { env } from "@/api/env";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { createManagedProviderAvailability } from "@/api/lib/chat/managed-provider-availability";
+import { getManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import {
   managedProviderUnavailable,
   fetchManagedProviderCatalog,
 } from "@/api/lib/chat/provider-data-policy";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -26,7 +28,7 @@ export const checkManagedOpenRouterModel = (
   model: string,
   residency: ManagedAIResidency,
 ) => {
-  if (!env.FEATURE_MANAGED_PROVIDER_CHECKS) {
+  if (!isDeploymentFeatureEnabled("FEATURE_MANAGED_PROVIDER_CHECKS")) {
     return Result.ok(undefined);
   }
   return (
@@ -38,22 +40,17 @@ export const checkManagedOpenRouterModel = (
 export const startManagedProviderChecks = async (
   schedule = startNonOverlappingInterval,
 ) => {
-  if (!env.FEATURE_MANAGED_PROVIDER_CHECKS) {
+  if (!isDeploymentFeatureEnabled("FEATURE_MANAGED_PROVIDER_CHECKS")) {
     return async () => await Promise.resolve(undefined);
   }
   const intervalMs = env.MANAGED_PROVIDER_CHECK_INTERVAL_MS;
   const timeoutMs = env.MANAGED_PROVIDER_CHECK_TIMEOUT_MS;
-  const apiKey = env.OPENROUTER_API_KEY;
-  if (
-    intervalMs === undefined ||
-    timeoutMs === undefined ||
-    apiKey === undefined
-  ) {
+  if (intervalMs === undefined || timeoutMs === undefined) {
     return panic("Managed provider check configuration was not validated.");
   }
   const controller = new AbortController();
   const monitor = createManagedProviderAvailability({
-    apiKey,
+    getCredential: getManagedOpenRouterCredential,
     intervalMs,
     timeoutMs,
     signal: controller.signal,

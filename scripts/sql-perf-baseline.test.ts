@@ -20,6 +20,10 @@ import {
 describe("SQL performance baseline source scope", () => {
   test.each([
     ["apps/api/src/handlers/query.ts", true],
+    ["apps/api/scripts/query.ts", true],
+    ["apps/legal-atlas-runner/src/runners/query.ts", true],
+    ["apps/legal-atlas-runner/src/runners/query.test.ts", false],
+    ["apps/api/scripts/__fixtures__/query.ts", false],
     ["packages/legal/src/query.tsx", true],
     ["apps/web/src/query.ts", false],
     ["packages/legal/src/query.test.ts", false],
@@ -40,6 +44,10 @@ describe("SQL performance baseline source scope", () => {
       !SQL_PERF_LINT_EXCLUDES.some((glob) => new Bun.Glob(glob).match(file));
     for (const file of [
       "apps/api/src/handlers/query.ts",
+      "apps/api/scripts/query.ts",
+      "apps/legal-atlas-runner/src/runners/query.ts",
+      "apps/legal-atlas-runner/src/runners/query.test.ts",
+      "apps/api/scripts/__fixtures__/query.ts",
       "apps/api/src/lib/search/index-global.ts",
       "packages/legal/src/query.tsx",
       "packages/legal/src/query.test.ts",

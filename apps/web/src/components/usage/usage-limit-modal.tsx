@@ -11,12 +11,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { stellaToast } from "@stll/ui/toast";
 
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 /** Modal shown when the current organisation cannot run more AI work. */
 
@@ -56,10 +56,8 @@ export const UsageLimitModal = ({
       window.location.href = url;
     },
     onError: (error: unknown) => {
-      stellaToast.add({
-        title: t("settings.organization.usageManageError"),
+      notifyUserError(error, t("settings.organization.usageManageError"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
       });
     },
   });

@@ -16,6 +16,7 @@ import {
   isFieldPath,
 } from "@stll/template-conditions";
 
+import type { ClauseSlot } from "@/api/lib/docx/discover-clause-slots";
 import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
@@ -194,15 +195,32 @@ export type DiscoveredField = {
   visibleWhen?: string;
 };
 
+export type ClauseProvenance = {
+  slotKey: string;
+  resolution?:
+    | "latest"
+    | "pinned"
+    | "explicit"
+    | "variant"
+    | "override"
+    | undefined;
+  version?: number | undefined;
+  id?: string | undefined;
+  name?: string | undefined;
+};
+
 export type TemplateStructureError = {
   message: string;
   paragraphIndex: number;
   directive: string;
   /** Which container this error originated from. */
-  source?: ParagraphSource;
+  source?: ParagraphSource | "clause" | undefined;
+  clause?: ClauseProvenance | undefined;
 };
 
 export type DiscoveredTemplate = {
+  clauseSlots?: ClauseSlot[] | undefined;
+  clauseFieldPaths?: string[] | undefined;
   placeholders: DiscoveredPlaceholder[];
   fields: DiscoveredField[];
   structureErrors: TemplateStructureError[];
@@ -288,6 +306,8 @@ export type FieldValidation = v.InferOutput<typeof fieldValidationSchema>;
 export type FieldMeta = v.InferOutput<typeof fieldMetaSchema>;
 
 export type TemplateManifest = {
+  /** Cached targets from the template bytes, absent on older caches. */
+  clauseSlots?: ClauseSlot[] | undefined;
   version: number;
   fields: FieldMeta[];
 };
@@ -719,7 +739,17 @@ export const isTemplateManifest = (value: unknown): value is TemplateManifest =>
   typeof value["version"] === "number" &&
   Number.isFinite(value["version"]) &&
   Array.isArray(value["fields"]) &&
-  value["fields"].every(isFieldMeta);
+  value["fields"].every(isFieldMeta) &&
+  (value["clauseSlots"] === undefined ||
+    (Array.isArray(value["clauseSlots"]) &&
+      value["clauseSlots"].every(
+        (slot: unknown) =>
+          isRecordLike(slot) &&
+          typeof slot["name"] === "string" &&
+          typeof slot["patchKey"] === "string" &&
+          (slot["versionModifier"] === undefined ||
+            typeof slot["versionModifier"] === "string"),
+      )));
 
 export type ResolvedField = {
   path: string;
