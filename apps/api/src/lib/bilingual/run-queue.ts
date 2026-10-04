@@ -53,6 +53,7 @@ import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buff
 import { errorTag } from "@/api/lib/errors/utils";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { getScanWarnings } from "@/api/lib/file-scan/warnings";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -637,6 +638,7 @@ const executeRun = async (
     buffer: applied.value.buffer,
     fileName: loaded.value.fileName,
     mimeType: DOCX_MIME_TYPE,
+    encryption: serverBuiltFileEncryption(),
     source: null,
     writePolicy: {
       type: "automatic-docx-edit",

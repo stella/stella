@@ -44,6 +44,7 @@ import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
   flowRunCompletedNotification,
   resolveActorUserId,
@@ -849,6 +850,7 @@ const runCreateDocumentStep = async ({
         // before the extension-preserving pass could protect it.
         fileName: `${stepDef.documentTitle}.docx`,
         mimeType: DOCX_MIME_TYPE,
+        encryption: serverBuiltFileEncryption(),
         afterCreate: async (tx, document) => {
           // The entity creator holds the workspace cap lock before this run lock.
           // Keep the artifact and its owning step in the same commit: cancellation

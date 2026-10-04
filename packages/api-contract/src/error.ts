@@ -15,6 +15,13 @@ export const CHAT_CONTINUATION_REJECTED_ERROR_CODE =
  *  stopped, superseded or already settled. */
 export const CHAT_TURN_NOT_OWNED_ERROR_CODE = "chat_turn_not_owned" as const;
 
+/**
+ * A request needed an encrypted (password-protected) file's content: an
+ * encrypted PDF or Office document cannot be read, extracted or sent to a
+ * model. Shared so every client can explain it instead of a generic failure.
+ */
+export const ENCRYPTED_CONTENT_ERROR_CODE = "encrypted_content" as const;
+
 export const API_FILE_SECURITY_REJECTED_ERROR_CODE =
   "file_security_rejected" as const;
 
