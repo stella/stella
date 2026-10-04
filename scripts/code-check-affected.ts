@@ -1074,6 +1074,19 @@ const main = async (): Promise<Result<void, CodeCheckError>> => {
   return Result.ok();
 };
 
+/**
+ * A failed check must never exit 0: a signal-terminated child can report a
+ * missing or zero code, which would turn the failure into a pass.
+ */
+export const failureExitCode = (code: number | null | undefined) =>
+  code !== null &&
+  code !== undefined &&
+  Number.isInteger(code) &&
+  code > 0 &&
+  code < 256
+    ? code
+    : 1;
+
 if (import.meta.main) {
   const result = await main();
   if (result.isErr()) {
@@ -1096,6 +1109,6 @@ if (import.meta.main) {
         panic("unknown code-check failure");
       }
     }
-    process.exit(error.exitCode);
+    process.exit(failureExitCode(error.exitCode));
   }
 }

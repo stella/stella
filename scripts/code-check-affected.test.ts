@@ -19,6 +19,7 @@ import {
   ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS,
   CommandFailedError,
   DEPENDENCY_CACHE_INPUTS,
+  failureExitCode,
   formatCheckFailure,
   LINT_ONLY_CACHE_INPUTS,
   planCheck,
@@ -1041,6 +1042,14 @@ const expectNoStackFrames = (text: string) => {
 };
 
 describe("check failure summary", () => {
+  test("a failed check never exits 0", () => {
+    expect(failureExitCode(2)).toBe(2);
+    expect(failureExitCode(128)).toBe(128);
+    for (const code of [0, null, undefined, -1, 256, 1.5, Number.NaN]) {
+      expect(failureExitCode(code)).toBe(1);
+    }
+  });
+
   test("names the failed Turbo task and its TypeScript errors from prefixed output", () => {
     const summary = summarizeCheckFailure(
       failure(TURBO_LINT_TYPECHECK, [
