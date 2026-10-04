@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { playbookDefinitions } from "@/api/db/schema";
+import { mapPlaybookDocumentTypeError } from "@/api/handlers/playbooks/assert-document-type";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -118,7 +119,7 @@ const restorePlaybookVersion = createSafeRootHandler(
             restoredFromVersion: { old: null, new: params.version },
           },
         });
-      }),
+      }).then((result) => result.mapError(mapPlaybookDocumentTypeError)),
     );
 
     return Result.ok({ status: "draft" as const });

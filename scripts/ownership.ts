@@ -723,7 +723,7 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/flows/flow-executor.ts",
           reason:
-            "Flow steps; their authority model is still to be classified.",
+            "Flow steps, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/folio-collab-rooms.ts",
@@ -732,11 +732,13 @@ export const OWNERSHIP = [
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/chat-thread-compactor.ts",
-          reason: "Compacts a user's own chat threads.",
+          reason:
+            "Compacts a user's own chat threads; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
-          reason: "Extracts a user's own chat memory.",
+          reason:
+            "Extracts a user's own chat memory; a member-run task not yet on the run actor (scripts/scheduler-task-authority-baseline.json).",
         },
         {
           path: "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts",
@@ -753,7 +755,7 @@ export const OWNERSHIP = [
         {
           path: "apps/api/src/lib/workflow-queue.ts",
           reason:
-            "Workflow property generation; its authority model is still to be classified.",
+            "Workflow property generation, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
         },
       ],
     },
@@ -2007,6 +2009,11 @@ export const OWNERSHIP = [
           path: "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts",
           reason:
             "Types the injected publisher fetch of its RIS walk; sends no request itself.",
+        },
+        {
+          path: "apps/api/src/handlers/case-law/ingestion/adapters/at-findok.ts",
+          reason:
+            "Types the injected publisher fetch of its document reads; sends no request itself.",
         },
       ],
     },

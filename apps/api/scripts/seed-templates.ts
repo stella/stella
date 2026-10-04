@@ -2501,10 +2501,13 @@ export async function seedTemplates(
     const sizeBytes = file.bytes.byteLength;
 
     // Upload to S3
-    const { object: stored } = await writeScannedObject({
-      file,
-      key: `${ORG_ID}/templates/${templateId}.docx`,
-    });
+    const { object: stored } = await writeScannedObject(
+      {
+        file,
+        key: `${ORG_ID}/templates/${templateId}.docx`,
+      },
+      { type: "fixture" },
+    );
 
     // Insert template
     await db.transaction(
@@ -2529,10 +2532,13 @@ export async function seedTemplates(
     );
 
     // Insert version v1
-    const { object: storedVersion } = await writeScannedObject({
-      file,
-      key: `${ORG_ID}/templates/${templateId}/v1.docx`,
-    });
+    const { object: storedVersion } = await writeScannedObject(
+      {
+        file,
+        key: `${ORG_ID}/templates/${templateId}/v1.docx`,
+      },
+      { type: "fixture" },
+    );
 
     await db.transaction(
       async (tx) =>

@@ -92,7 +92,7 @@ const hrefOf = (input: FetchInput): string => {
  * A request's fetch stage: method, host and path with identifiers folded, so
  * the same read of another document is the same stage.
  */
-export const fetchStageOf = (input: FetchInput, init?: RequestInit): string => {
+const fetchStageOf = (input: FetchInput, init?: RequestInit): string => {
   const request = input instanceof Request ? input : null;
   const url = new URL(hrefOf(input));
   const method = (init?.method ?? request?.method ?? "GET").toUpperCase();
@@ -132,7 +132,7 @@ export const faultedResponse = async (
  * Run `build` with every fetch it (or a fixture inside it) installs routed
  * through `intercept`, then restore the global.
  */
-export const withInterceptedFetch = async <T>(
+const withInterceptedFetch = async <T>(
   intercept: (stage: string, served: Delegate) => Promise<Response>,
   build: () => Promise<T>,
 ): Promise<T> => {

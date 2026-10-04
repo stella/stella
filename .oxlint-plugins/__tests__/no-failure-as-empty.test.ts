@@ -35,8 +35,11 @@ describe.serial("failed reads stay distinct from empty results", () => {
         "const d = async () => { const r = await fetch(u); if (r.status >= 400) return []; return r; };",
         "const e = async () => { const r = await read(); if (Result.isError(r)) return []; return r.value; };",
         "const f = async () => { const r = await read(); if (r.isErr()) { return null; } return r.value; };",
+        "const g = async () => { const r = await fetch(u); if (r.status === 500) return []; return r; };",
+        "const h = async () => { const r = await fetch(u); if (403 === r.status) { return null; } return r; };",
+        "const i = async () => { const r = await fetch(u); if (r.status == 429) return undefined; return r; };",
       ]),
-    ).toEqual([1, 2, 3, 4, 5, 6]);
+    ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 
   test("rejects promise and Result handlers that map a failure to an empty value", async () => {
@@ -61,6 +64,7 @@ describe.serial("failed reads stay distinct from empty results", () => {
         "const f = async () => { await load().catch((error) => { throw wrap(error); }); };",
         'const g = async () => { const r = await fetch(u); if (!r.ok) return { type: "unavailable", status: r.status }; return r; };',
         "const h = async () => { const r = await fetch(u); if (r.status === 200) return []; return r; };",
+        "const i = async () => { const r = await fetch(u); if (r.status === 410) return null; if (!r.ok) throw new Error(); return r; };",
       ]),
     ).toEqual([]);
   });

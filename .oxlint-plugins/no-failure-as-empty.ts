@@ -196,7 +196,23 @@ const isNumber = (node: unknown, value?: number) => {
   );
 };
 
-/** `!res.ok`, `res.status !== 200`, `res.status >= 400`, `res.status === 204`. */
+/** Publisher-stated absence: an empty result is the truthful outcome. */
+const ABSENCE_STATUSES = new Set([404, 410]);
+
+/** 204, or any 4xx/5xx other than a stated absence. */
+const isFailureStatus = (node: unknown) => {
+  const literal = unwrapExpression(node);
+  if (literal?.type !== "Literal" || typeof literal.value !== "number") {
+    return false;
+  }
+  const status = literal.value;
+  return status === 204 || (status >= 400 && !ABSENCE_STATUSES.has(status));
+};
+
+/**
+ * `!res.ok`, `res.status !== 200`, `res.status >= 400`, and equality with a
+ * failure status (`res.status === 500`, `=== 204`).
+ */
 const isFailedResponseTest = (test: unknown): boolean => {
   const node = unwrapExpression(test);
   if (node === null) {
@@ -223,7 +239,7 @@ const isFailedResponseTest = (test: unknown): boolean => {
     return false;
   }
   if (operator === "===" || operator === "==") {
-    return isNumber(number, 204);
+    return isFailureStatus(number);
   }
   return ["!==", "!=", ">=", ">", "<"].includes(operator);
 };
