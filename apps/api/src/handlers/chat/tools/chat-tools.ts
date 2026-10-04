@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type BrowserClientCapability,
@@ -99,6 +101,11 @@ import type {
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { authorizeDocumentWriteAccess } from "@/api/lib/entities/authorize-document-write";
+import type {
+  DocumentWriteAccess,
+  NewDocumentVersionOperation,
+} from "@/api/lib/entities/authorize-document-write";
 import { FIELD_VALUE_WRITE_PERMISSIONS } from "@/api/lib/fields/write-field";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -200,6 +207,69 @@ type ResolveRegisteredDocxEditModeOptions = {
     | undefined;
 };
 
+type ChatRequestWorkspaceOptions = Pick<
+  ResolveRegisteredDocxEditModeOptions,
+  "requestWorkspaceId" | "toolWorkspaceIds" | "workspaceStatusById"
+>;
+
+/** The request's pinned matter as the member sees it, or `null`. */
+const chatRequestWorkspace = ({
+  requestWorkspaceId,
+  toolWorkspaceIds,
+  workspaceStatusById,
+}: ChatRequestWorkspaceOptions): AccessibleWorkspace | null => {
+  if (
+    requestWorkspaceId === null ||
+    !toolWorkspaceIds.includes(requestWorkspaceId)
+  ) {
+    return null;
+  }
+  const status = workspaceStatusById?.get(requestWorkspaceId);
+  return status === undefined ? null : { id: requestWorkspaceId, status };
+};
+
+type ResolveAutoApplyDocxEditAccessOptions = Omit<
+  ResolveRegisteredDocxEditModeOptions,
+  "editApplyMode" | "hasActiveDocxEditClient"
+>;
+
+/**
+ * Write access for the automatic `suggest_changes` variant: an editable
+ * active DOCX file with a file field, an audit recorder, and the shared
+ * document-write gate for a new version of that file.
+ */
+const resolveAutoApplyDocxEditAccess = ({
+  activeFile,
+  memberRole,
+  recordAuditEventAvailable,
+  requestWorkspaceId,
+  toolWorkspaceIds,
+  workspaceStatusById,
+}: ResolveAutoApplyDocxEditAccessOptions): DocumentWriteAccess<NewDocumentVersionOperation> | null => {
+  if (
+    activeFile?.supportsDocxEdits !== true ||
+    activeFile.fileFieldId === undefined ||
+    requestWorkspaceId === null ||
+    !recordAuditEventAvailable
+  ) {
+    return null;
+  }
+  const access = authorizeDocumentWriteAccess({
+    authority: memberRole,
+    workspace: chatRequestWorkspace({
+      requestWorkspaceId,
+      toolWorkspaceIds,
+      workspaceStatusById,
+    }),
+    operation: {
+      type: "new_version",
+      workspaceId: requestWorkspaceId,
+      entityId: activeFile.entityId,
+    },
+  });
+  return Result.isOk(access) ? access.value : null;
+};
+
 /**
  * Single source of truth for which mutually exclusive DOCX edit tool is
  * registered on a turn. Prompt construction calls the same predicate, so it
@@ -207,34 +277,16 @@ type ResolveRegisteredDocxEditModeOptions = {
  * removed from the tool map.
  */
 export const resolveRegisteredDocxEditMode = ({
-  activeFile,
   editApplyMode,
   hasActiveDocxEditClient,
-  memberRole,
-  recordAuditEventAvailable,
-  requestWorkspaceId,
-  toolWorkspaceIds,
-  workspaceStatusById,
+  ...accessOptions
 }: ResolveRegisteredDocxEditModeOptions): ChatEditApplyMode | null => {
   if (editApplyMode === CHAT_EDIT_APPLY_MODE.manual) {
     return hasActiveDocxEditClient ? CHAT_EDIT_APPLY_MODE.manual : null;
   }
-
-  if (
-    activeFile?.supportsDocxEdits !== true ||
-    activeFile.fileFieldId === undefined ||
-    requestWorkspaceId === null ||
-    !recordAuditEventAvailable ||
-    !toolWorkspaceIds.includes(requestWorkspaceId) ||
-    workspaceStatusById?.get(requestWorkspaceId) !== "active"
-  ) {
-    return null;
-  }
-
-  const canEditWorkspaceDocument = hasMemberPermission(memberRole, {
-    entity: ["update"],
-  });
-  return canEditWorkspaceDocument ? CHAT_EDIT_APPLY_MODE.auto : null;
+  return resolveAutoApplyDocxEditAccess(accessOptions) === null
+    ? null
+    : CHAT_EDIT_APPLY_MODE.auto;
 };
 
 type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
@@ -539,9 +591,9 @@ type CreateWorkspaceDocumentChatToolsProps = Pick<
 >;
 
 /**
- * Mirrors the REST/MCP entity-create boundary for the direct chat mutation.
- * Keeping the full gate here prevents registration from drifting away from
- * the authorization required by its execution path.
+ * Registers `create_matter_document` only when the shared document-write gate
+ * admits a create in the request's pinned matter; the tool repeats the
+ * per-write step on every call.
  */
 const createAuthorizedWorkspaceDocumentTools = ({
   memberRole,
@@ -554,13 +606,19 @@ const createAuthorizedWorkspaceDocumentTools = ({
   userId,
   workspaceStatusById,
 }: CreateWorkspaceDocumentChatToolsProps): ChatToolMap => {
-  if (
-    requestWorkspaceId === null ||
-    recordAuditEvent === undefined ||
-    !toolWorkspaceIds.includes(requestWorkspaceId) ||
-    workspaceStatusById?.get(requestWorkspaceId) !== "active" ||
-    !hasMemberPermission(memberRole, { entity: ["create"] })
-  ) {
+  if (requestWorkspaceId === null || recordAuditEvent === undefined) {
+    return {};
+  }
+  const access = authorizeDocumentWriteAccess({
+    authority: memberRole,
+    workspace: chatRequestWorkspace({
+      requestWorkspaceId,
+      toolWorkspaceIds,
+      workspaceStatusById,
+    }),
+    operation: { type: "create", workspaceId: requestWorkspaceId },
+  });
+  if (Result.isError(access)) {
     return {};
   }
 
@@ -568,7 +626,7 @@ const createAuthorizedWorkspaceDocumentTools = ({
     scopedDb,
     organizationId,
     userId,
-    workspaceId: requestWorkspaceId,
+    access: access.value,
     recordAuditEvent,
     refRegistry,
   });
@@ -824,18 +882,16 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     toolWorkspaceIds,
     workspaceStatusById,
   });
+  const autoApplyDocxEditAccess = resolveAutoApplyDocxEditAccess({
+    activeFile,
+    memberRole,
+    recordAuditEventAvailable: recordAuditEvent !== undefined,
+    requestWorkspaceId,
+    toolWorkspaceIds,
+    workspaceStatusById,
+  });
   const automaticDocxEditAvailableForValidation =
-    forValidation &&
-    resolveRegisteredDocxEditMode({
-      activeFile,
-      editApplyMode: CHAT_EDIT_APPLY_MODE.auto,
-      hasActiveDocxEditClient,
-      memberRole,
-      recordAuditEventAvailable: recordAuditEvent !== undefined,
-      requestWorkspaceId,
-      toolWorkspaceIds,
-      workspaceStatusById,
-    }) === CHAT_EDIT_APPLY_MODE.auto;
+    forValidation && autoApplyDocxEditAccess !== null;
   // Exactly one `suggest_changes` registration per turn.
   //
   // Manual: the client-executed queue variant. The file overlay queues into
@@ -848,27 +904,12 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   //
   // Auto: the server-executed apply variant. It writes a new entity
   // version directly instead of queuing suggestions into the browser review
-  // panel, so it needs its own explicit authorization mirror rather than
-  // inheriting one from the queue variant (which has none of its own -- it
-  // never writes). Registered ONLY when every one of these holds:
-  //   - `editApplyMode === "auto"`: the session opted into headless apply
-  //     (see `editApplyMode`'s doc comment on `GetChatToolsProps`).
-  //   - An editable active DOCX file is present
-  //     (`activeFile.supportsDocxEdits === true`), with its current version
-  //     id used to pin the batch.
-  //   - `entity: ["update"]` permission -- this tool overwrites the active
-  //     document's content, the same grant `docx-suggestions/create.ts`,
-  //     `resolve.ts`, and `entities/versions/upload.ts` require for DOCX edits.
-  //     `create_matter_document` checks `entity: ["create"]` instead
-  //     because it creates a new document; this tool edits an existing
-  //     one, so it checks the "update" action, not "create".
-  //   - Active (non-archived) matter status, from the same
-  //     `workspaceStatusById` map `create_matter_document` reads, so an
-  //     archived matter stays read-only through this tool too.
-  //   - `recordAuditEvent` present, since `createEntityVersionFromBuffer`
-  //     always writes an audit event.
-  // (`resolveRegisteredDocxEditMode` checks the role, matter, and file
-  // preconditions; the remaining narrowings below only refine the types.)
+  // panel. Registered ONLY when the session opted into headless apply
+  // (`editApplyMode === "auto"`) and `resolveAutoApplyDocxEditAccess` holds:
+  // an editable active DOCX file, an audit recorder, and the shared
+  // document-write gate (`authorizeDocumentWriteAccess`) for a new version of
+  // that file. The tool repeats the per-write step (`authorizeDocumentWrite`)
+  // on every call; the remaining narrowings below only refine the types.
   const manualSuggestChangesRegistered =
     registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.manual ||
     (forValidation && hasActiveDocxEditClient);
@@ -876,16 +917,15 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     !manualSuggestChangesRegistered &&
     (registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.auto ||
       automaticDocxEditAvailableForValidation) &&
+    autoApplyDocxEditAccess !== null &&
     activeFile?.currentVersionId !== undefined &&
     activeFile.fileFieldId !== undefined &&
-    requestWorkspaceId !== null &&
     recordAuditEvent !== undefined
       ? {
-          entityId: activeFile.entityId,
+          access: autoApplyDocxEditAccess,
           expectedCurrentVersionId: activeFile.currentVersionId,
           fileFieldId: activeFile.fileFieldId,
           recordAuditEvent,
-          workspaceId: requestWorkspaceId,
         }
       : null;
   const resolveSuggestChangesTools = () => {
@@ -1031,31 +1071,12 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // matter-pick round trip like `create-document`), so its destination
   // workspace must come from server-validated context rather than model
   // input or a client-side picker. `requestWorkspaceId` is that context: the
-  // request's single pinned/active matter. Gated on it being set (chat
-  // surfaces with no active matter, e.g. global chat, never see this tool)
-  // and re-checked against `toolWorkspaceIds` as defense in depth. Also
-  // requires `recordAuditEvent` (mirrors `createSkillTools`'s
-  // `recordAuditEvent !== undefined` gate for its own mutation tools) since
-  // `createEntityFromBuffer` always writes an audit event.
-  //
-  // Because this tool calls `createEntityFromBuffer` directly instead of
-  // going through the MCP `save_document` / REST `create-from-legal-source`
-  // dispatch, it does not inherit either of those paths' authorization
-  // checks — so both are mirrored here explicitly:
-  //   - `entity: ["create"]` permission, the same grant `save_document`'s
-  //     create branch checks in `document-tools.ts`
-  //     (`roles[context.memberRole].authorize({ entity: ["create"] })`) and
-  //     `create-from-legal-source`'s `permissions` config enforces. Without
-  //     it, a chat-capable-but-entity-create-less role (e.g. `intern`, which
-  //     has `chat` but `entity: []`) could create documents through chat
-  //     alone.
-  //   - Active (non-archived) matter status, read from the same
-  //     `workspaceStatusById` map the registry write tools thread into
-  //     `buildMcpContextFromChat` for their own `ensureActiveWorkspace` gate
-  //     (`toolWorkspaceIds` includes archived matters, so that alone is not
-  //     enough). Without it, an archived matter would stay writable through
-  //     this tool alone.
-  // KNOWN LIMITATION: creates at the matter root every time — there is no
+  // request's single pinned/active matter. Chat surfaces with no active
+  // matter (e.g. global chat) never see this tool. It also requires
+  // `recordAuditEvent`, since `createEntityFromBuffer` always writes an audit
+  // event. Permission and matter status come from the shared
+  // `authorizeDocumentWriteAccess` gate that REST and MCP document writes use.
+  // KNOWN LIMITATION: creates at the matter root every time; there is no
   // folder/parent targeting yet.
   const createWorkspaceDocumentTools = createAuthorizedWorkspaceDocumentTools({
     memberRole,
