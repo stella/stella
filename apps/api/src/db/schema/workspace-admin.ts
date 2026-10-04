@@ -4,6 +4,7 @@ import {
   DEFAULT_MANAGED_AI_RESIDENCY,
   MANAGED_AI_RESIDENCIES,
 } from "@/api/lib/chat/ai-data-policy";
+import { SANCTIONS_MONITORING_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 
 import {
   bytea,
@@ -172,6 +173,10 @@ export const organizationSettings = p.pgTable(
       .notNull()
       .unique()
       .references(() => organization.id, { onDelete: "cascade" }),
+    sanctionsMonitoringMode: p
+      .text("sanctions_monitoring_mode", { enum: SANCTIONS_MONITORING_MODES })
+      .notNull()
+      .default("enabled"),
     matterNumberPattern: p
       .varchar("matter_number_pattern", { length: 128 })
       .notNull()
@@ -332,6 +337,13 @@ export const organizationSettings = p.pgTable(
       .where(
         sql`${table.memoryExtractionEnabled} = true AND ${table.memoryExtractionScheduledAt} IS NOT NULL`,
       ),
+    p.check(
+      "organization_settings_sanctions_monitoring_mode_check",
+      sql`${table.sanctionsMonitoringMode} IN (${sql.join(
+        SANCTIONS_MONITORING_MODES.map((mode) => sql`${mode}`),
+        sql`, `,
+      )})`,
+    ),
     ...orgPolicies(),
   ],
 );

@@ -7,7 +7,7 @@
 #
 # Shrinks only. The single exception: a PR that introduces a new
 # migration-safety rule may add already-merged, unchanged migrations that the
-# new rule flags.
+# new rule flags. scripts/check-migration-baseline.ts enforces both.
 apps/api/drizzle/20260429152450_entity-version-ai-summaries/migration.sql
 apps/api/drizzle/20260429205610_global-search-indexes/migration.sql
 apps/api/drizzle/20260429220500_global-search-unaccent/migration.sql

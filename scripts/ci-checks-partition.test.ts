@@ -93,7 +93,7 @@ const withoutActionRef = (step: Step): Step => {
 const CONTINUATION_PREFIXES = {
   checkout: "${{ !cancelled() && steps.checkout.outcome == 'success'",
   install:
-    "${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure'",
+    "${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure'",
   installPackages: "${{ !cancelled() && steps.install.outcome == 'success'",
 } as const;
 const outcomeDependencies: Record<string, string> = {
@@ -934,6 +934,35 @@ test("continued guard conditions preserve every previously runnable plan outcome
               step,
             ).if;
             expect(evaluate(condition), `${id}: ${step.name}`).toBe(true);
+          }
+          const checkoutIndex = steps.findIndex(
+            ({ name }) => name === "Checkout",
+          );
+          expect(checkoutIndex).toBeGreaterThanOrEqual(0);
+          for (const checkoutOutcome of ["failure", "skipped"]) {
+            const unavailableOutcomes = Object.fromEntries(
+              Object.keys(outcomes).map((stepId) => [
+                stepId,
+                { outcome: "skipped" },
+              ]),
+            );
+            unavailableOutcomes["checkout"] = { outcome: checkoutOutcome };
+            const evaluateUnavailable = conditionEvaluator({
+              outcomes: unavailableOutcomes,
+              scopes,
+              event: input.event,
+              cancelled: false,
+            });
+            for (const step of steps.slice(checkoutIndex + 1)) {
+              const condition = v.parse(
+                v.looseObject({ if: v.string() }),
+                step,
+              ).if;
+              expect(
+                evaluateUnavailable(condition),
+                `${id}: checkout ${checkoutOutcome}: ${step.name}`,
+              ).toBe(false);
+            }
           }
           if (id !== "ci-checks-rest") {
             continue;

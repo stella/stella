@@ -1,5 +1,6 @@
 import { t } from "elysia";
 
+import { fieldRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -20,6 +21,7 @@ const config = {
     "clears the cell.",
   permissions: FIELD_VALUE_WRITE_PERMISSIONS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: fieldRealtimeUpdates,
   mcp: { type: "tool", name: "set_field_value" },
   body: t.Object({
     propertyId: tSafeId("property", {

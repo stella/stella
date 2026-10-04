@@ -4,6 +4,7 @@ import { t } from "elysia";
 import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
+import { kanbanPlacementRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -41,6 +42,7 @@ export const createUpdateKanbanPlacement = ({
         "The request may change a task status, up to two property values, or both.",
       permissions: FIELD_VALUE_WRITE_PERMISSIONS,
       accountAccess: ACCOUNT_ACCESS.sandbox,
+      realtime: kanbanPlacementRealtimeUpdates,
       mcp: {
         type: "capability",
         reason: "workspace_schema",

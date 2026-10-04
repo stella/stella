@@ -46,6 +46,10 @@ permissions: {}
 env:
   # Queue-ref cache entries cannot be reused by other refs.
   TURBO_CACHE: ${{ github.event_name == 'merge_group' && 'local:rw,remote:r' || 'local:rw,remote:rw' }}
+  # Disposable non-RDS databases: online index builds in migrate must not wait
+  # on EBS metrics or a wall-clock busy window.
+  DB_LOAD_GATE_EBS_SIGNAL: disabled
+  DB_LOAD_GATE_BUSY_WINDOWS: "[]"
 
 jobs:
   ci-plan:
@@ -1512,7 +1516,7 @@ jobs:
         run: bun run lint:ws
 
       - name: Dependabot group guard
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         # Related framework and plugin updates must stay in one PR even when
         # upstream moves packages between scopes.
         run: bun test scripts/dependabot-grouping.test.ts
@@ -1555,7 +1559,7 @@ jobs:
           bun scripts/check-stll-quarantine-excludes.ts
 
       - name: Policy evidence
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun run policies:check
 
       - name: Marketing content check
@@ -1585,7 +1589,7 @@ jobs:
         run: bun run i18n:check
 
       - name: Release changelog guard
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bash scripts/check-release-changelog.sh --base "origin/$BASE_REF"
@@ -1593,7 +1597,7 @@ jobs:
       # Same verdict the tag workflow gives after merge, delivered while the
       # release pull request can still wait for the Version Packages one.
       - name: Release CLI coupling guard
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bun scripts/check-cli-release-coupling.ts --base "origin/$BASE_REF"
@@ -1601,7 +1605,7 @@ jobs:
       # Hold CLI changesets while a release is open or main's VERSION awaits
       # its tag. Pull request runs warn; merge queue runs enforce the hold.
       - name: Release CLI changeset hold
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
@@ -1634,7 +1638,7 @@ jobs:
             --is-release "$current_is_release"
 
       - name: CLI contract changeset guard
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bun scripts/check-cli-contract-changeset.ts --base "origin/$BASE_REF"
@@ -1659,7 +1663,7 @@ jobs:
           fi
 
       - name: Rust format
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.desktop_rust_checks_required == 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.desktop_rust_checks_required == 'true') }}
         run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
 
       - name: React Compiler bailout guard
@@ -1984,7 +1988,7 @@ jobs:
       # bridge change. Always runs (no `if:` gate) — it's seconds
       # and has no deps.
       - name: Test desktop bridge CI guards
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: |
           bash scripts/check-bridge-version.test.sh
           bash scripts/detect-tauri-rust-changes.test.sh
@@ -1995,14 +1999,14 @@ jobs:
       # binary, S3 manifest mirror path, CloudFront invalidation
       # key). A bug here makes them silently disagree.
       - name: Test release-channel script
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bash scripts/release-channel.test.sh
 
       # The web compiler uses native Rolldown bindings, while the deployed
       # container is ARM64. Keep build and runtime dependency architectures
       # separated in the Docker stage graph.
       - name: Test web container platform boundary
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun test scripts/check-web-docker-platform.test.ts
 
       # Bun links @stll dependencies to local workspaces only while versions
@@ -2010,7 +2014,7 @@ jobs:
       # (or back). Needs only bun.lock, so it stays runnable when the
       # dependency install is skipped.
       - name: Test @stll resolution pin
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun test scripts/stll-registry-resolutions.test.ts
 
       # The runner image stages workspace packages reached by externalized
@@ -2038,7 +2042,7 @@ jobs:
       # dependencies, so it remains runnable when a PR changes only workflows
       # and the dependency install above is intentionally skipped.
       - name: Test release policy scripts
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: |
           bun test scripts/check-api-deployment.test.ts
           bun test scripts/check-staging-deploy-decision.test.ts
@@ -2064,7 +2068,7 @@ jobs:
         run: bun test scripts/thin-queue.test.ts
 
       - name: Test service-suite dependency scope
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun test scripts/detect-service-suite-changes.test.ts
 
       - name: Test nightly rehearsal and retry guards
@@ -2107,15 +2111,15 @@ jobs:
       # regression either ships stale desktop builds or reintroduces
       # pointless ~30 MB redownloads.
       - name: Test detect-desktop-release-changes script
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bash scripts/detect-desktop-release-changes.test.sh
 
       - name: Test route smoke change detector
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun test scripts/detect-route-smoke-changes.test.ts
 
       - name: Test CI workflow invariants
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: >-
           bun test
           scripts/detect-e2e-changes.test.ts
@@ -2126,7 +2130,7 @@ jobs:
           scripts/dependabot-changeset.test.ts
 
       - name: Test install-free CI commands
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bun test scripts/install-free-ci.test.ts
 
       - name: Test merge-base network comparison
@@ -2171,11 +2175,11 @@ jobs:
         run: bun test scripts/env-tool.test.ts
 
       - name: Test retry script
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bash scripts/retry.test.sh
 
       - name: Test base image pull script
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bash scripts/pull-base-images.test.sh
 
       # Both guards decide whether a change may reach a live database or the
@@ -2233,7 +2237,7 @@ jobs:
       # bumping BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs.
       # See scripts/check-bridge-version.sh for rationale.
       - name: Bridge-version guard
-        if: ${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request') }}
         run: bash scripts/check-bridge-version.sh
 
   # The `test` task, split into shards that run in parallel. Each shard filters

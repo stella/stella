@@ -1,6 +1,7 @@
 import { t } from "elysia";
 
 import { renameEntityHandler } from "@/api/handlers/entities/rename-operation";
+import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -21,6 +22,7 @@ const config = {
     "in step with the entity name. A read-only entity is refused.",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: entityRealtimeUpdates,
   mcp: { type: "covered", by: "save_document" },
   body: renameEntityBodySchema,
 } satisfies WorkspaceHandlerConfig;

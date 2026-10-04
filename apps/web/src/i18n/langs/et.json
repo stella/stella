@@ -980,7 +980,6 @@
     "packPartial": "{installed} installitud, {failed} ebaõnnestus",
     "removed": "See tööriist pole enam saadaval.",
     "sectionOthers": "Muud",
-    "sectionRecommended": "Soovitatud",
     "settings": {
       "packTitle": "Soovitatud pakett"
     },
@@ -1188,8 +1187,10 @@
       "label": "Simuleeritud AI"
     },
     "modelSelector": {
+      "allModels": "Kõik mudelid ({count, number})",
       "autoDescription": "Valib mudeli ja arutlustaseme automaatselt.",
       "autoLabel": "Automaatne",
+      "belowFrontier": "Allpool parimaid kompromisse",
       "effortHelpDescription": "Määrab, kui palju arutluskäiku mudel enne vastamist kasutab. Kõrgem tase võib keerukate ülesannete puhul aidata, kuid võtab tavaliselt kauem aega. Punkt tähistab teenusepakkuja selle mudeli vaiketaset.",
       "effortHelpLabel": "Teave arutlustaseme kohta",
       "effortLabel": "Arutlustase",
@@ -1203,6 +1204,10 @@
         "providerDefault": "Vaikimisi",
         "xhigh": "Väga kõrge"
       },
+      "newModel": "Uus",
+      "premiumCost": "Ebatavaliselt kõrge hind",
+      "recommendedHelpDescription": "Ükski teine saadaolev mudel pole korraga odavam ja kõrgema hinnanguga. Hindamiseks liiga uued mudelid on märgitud uuena. Kvaliteet: <link>LMArena {benchmark}</link> ({licence}); hind: hinnakirja hinnad.",
+      "recommendedHelpLabel": "Soovitatud mudelitest",
       "selectionLabel": "{model} | {effort}",
       "title": "Vali vestlusmudel",
       "viaProvider": "teenuse {provider} kaudu"
@@ -1616,6 +1621,16 @@
     "currency": "Valuuta",
     "currentPage": "Praegune lehekülg",
     "date": "Kuupäev",
+    "datePicker": {
+      "label": "Kuupäevavalija",
+      "nextDecade": "Järgmine kümnend",
+      "nextMonth": "Järgmine kuu",
+      "nextYear": "Järgmine aasta",
+      "previousDecade": "Eelmine kümnend",
+      "previousMonth": "Eelmine kuu",
+      "previousYear": "Eelmine aasta",
+      "time": "Kellaaeg"
+    },
     "decisions": "Lahendid",
     "decline": "Keeldu",
     "delete": "Kustuta",
@@ -1776,6 +1791,7 @@
     "properties": "Omadused",
     "queued": "Ootel",
     "reason": "Põhjus",
+    "recommended": "Soovitatud",
     "reconnecting": "Taasühendamine…",
     "reference": "Viide",
     "refresh": "Värskenda",
@@ -1901,6 +1917,7 @@
       "addBankAccount": "Lisa pangakonto",
       "noBillingData": "Arveldusandmed puuduvad.",
       "removeBankAccount": "Eemalda pangakonto",
+      "selectCurrencyForRate": "Tunnihinna määramiseks valige valuuta.",
       "title": "Arveldusandmed"
     },
     "columns": {
@@ -2275,6 +2292,8 @@
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
       "legalSourceEntityLimitReached": "See toimik on jõudnud üksuste piirini, mistõttu dokumenti ei saanud luua.",
       "legalSourceFilePropertyMissing": "Sellel toimikul puudub faili atribuut, mistõttu dokumenti ei saanud luua.",
+      "matterContactCapacityExceeded": "Selles toimikus on rohkem kontakte, kui saab kuvada. Ülejäänud kontaktide kuvamiseks eemaldage nähtavaid kontaktiseoseid.",
+      "matterContactCapacityReached": "See toimik on saavutanud kontaktide arvu ülempiiri. Enne uue kontakti lisamist eemaldage üks kontaktiseos.",
       "mcpAuthorizationApprovalRequired": "Enne ühendamist peab administraator selle ühenduse heaks kiitma.",
       "notOrganizationMember": "Te ei ole selle organisatsiooni liige.",
       "providerKeyRejected": "Teenusepakkuja lükkas API-võtme tagasi.",

@@ -157,6 +157,10 @@ import {
   reconcileStyleSetPackageCleanups,
 } from "@/api/lib/scheduler/tasks/style-set-package-cleanup-reconcile";
 import {
+  PURGE_SYSTEM_AUDIT_RUNS_TASK,
+  purgeSystemAuditRunsTask,
+} from "@/api/lib/scheduler/tasks/system-audit-retention";
+import {
   CLEAN_TEMPLATE_DELETION_OBJECTS_TASK,
   cleanTemplateDeletionObjects,
 } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
@@ -208,6 +212,7 @@ const SCHEDULER_TASKS = {
   [SWEEP_CHAT_RUN_LOGS_TASK]: sweepChatRunLogs,
   [SWEEP_ACTION_COSTS_TASK]: sweepActionCostRecords,
   [SWEEP_REGISTRATIONS_TASK]: sweepRegistrationRecords,
+  [PURGE_SYSTEM_AUDIT_RUNS_TASK]: purgeSystemAuditRunsTask,
   [BACKFILL_WORK_OBLIGATIONS_TASK]: backfillWorkObligations,
   [BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK]: backfillLegislationExpressionIds,
   [WORK_ATTENTION_SCOUT_TASK]: runWorkAttentionScoutTask,

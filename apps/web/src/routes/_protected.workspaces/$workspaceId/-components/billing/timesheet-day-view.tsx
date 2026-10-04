@@ -4,7 +4,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { prorateHourlyCents } from "@stll/money";
+import { timeEntryAmount } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
@@ -71,10 +71,7 @@ export const TimesheetDayView = ({
     let total = 0;
     for (const e of entries) {
       if (e.billable) {
-        total += prorateHourlyCents({
-          billedMinutes: e.billedMinutes,
-          hourlyRateCents: e.rateAtEntry,
-        });
+        total += timeEntryAmount(e);
       }
     }
     return total;

@@ -12,9 +12,10 @@
 // cacheable Turbo root task. Inconsistent affected-workspace output still
 // fails safe to the full check.
 
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { stripVTControlCharacters } from "node:util";
 
 import {
   CODE_CHECK_LEGS,
@@ -68,6 +69,7 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
   "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
   "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
+  "$TURBO_ROOT$/apps/api/src/lib/system-audit/modules.ts",
   "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
   "$TURBO_ROOT$/scripts/design-lint-policy.ts",
   "$TURBO_ROOT$/scripts/design-lint-baseline.json",
@@ -366,63 +368,299 @@ const parseArgs = (args: readonly string[]): Options => {
   };
 };
 
-const run = (
+export class CommandFailedError extends TaggedError("CommandFailedError")<{
+  message: string;
+  command: readonly string[];
+  exitCode: number;
+  output: string;
+}> {}
+
+type CommandFailure = {
+  command: readonly string[];
+  exitCode: number;
+  output: string;
+};
+
+const commandFailed = (failure: CommandFailure): CommandFailedError =>
+  new CommandFailedError({
+    message: `Command failed (${failure.exitCode}): ${failure.command.join(" ")}`,
+    ...failure,
+  });
+
+const capture = (
   command: readonly string[],
-  options: { capture?: boolean; env?: Record<string, string | undefined> } = {},
-): string => {
-  const capture = options.capture ?? false;
+  env?: Record<string, string | undefined>,
+): Result<string, CommandFailedError> => {
   const result = Bun.spawnSync([...command], {
     cwd: REPO_ROOT,
-    ...(options.env === undefined ? {} : { env: options.env }),
-    stdout: capture ? "pipe" : "inherit",
-    stderr: capture ? "pipe" : "inherit",
+    ...(env === undefined ? {} : { env }),
+    stdout: "pipe",
+    stderr: "pipe",
   });
-  const stdout = result.stdout?.toString() ?? "";
-  const stderr = result.stderr?.toString() ?? "";
+  const stdout = result.stdout.toString();
   if (result.exitCode !== 0) {
-    const output = capture ? `\n${stderr}${stdout}` : "";
-    panic(`Command failed (${result.exitCode}): ${command.join(" ")}${output}`);
+    return Result.err(
+      commandFailed({
+        command,
+        exitCode: result.exitCode,
+        output: `${stdout}\n${result.stderr.toString()}`,
+      }),
+    );
   }
-  return stdout;
+  return Result.ok(stdout);
+};
+
+const tee = async (
+  stream: ReadableStream<Uint8Array>,
+  sink: NodeJS.WriteStream,
+): Promise<string> => {
+  const decoder = new TextDecoder();
+  const chunks: string[] = [];
+  for await (const chunk of stream) {
+    sink.write(chunk);
+    chunks.push(decoder.decode(chunk, { stream: true }));
+  }
+  chunks.push(decoder.decode());
+  return chunks.join("");
+};
+
+// Streams the check's output live and keeps a copy, so a failure can be
+// summarized from the failed task's own lines.
+const runCheck = async (
+  command: readonly string[],
+): Promise<Result<void, CommandFailedError>> => {
+  const child = Bun.spawn([...command], {
+    cwd: REPO_ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    tee(child.stdout, process.stdout),
+    tee(child.stderr, process.stderr),
+    child.exited,
+  ]);
+  if (exitCode !== 0) {
+    return Result.err(
+      commandFailed({ command, exitCode, output: `${stdout}\n${stderr}` }),
+    );
+  }
+  return Result.ok();
+};
+
+type FailedTask = { task: string; errors: string[] };
+
+type CheckFailureSummary = {
+  command: string;
+  exitCode: number;
+  tasks: FailedTask[];
+};
+
+const TURBO_FAILED_TASKS = /^\s*Failed:\s+(?<tasks>\S.*)$/u;
+const TURBO_RUN_SUMMARY = /^\s*Tasks:\s+\d+ successful/u;
+const GROUP_START = /^::group::(?<task>.+)$/u;
+const GROUP_END = "::endgroup::";
+const STACK_FRAME = /^\s*at\s|node_modules\/|\.bun\/install\/cache\//u;
+const EXIT_NOISE = /exited \(\d+\)|exited with code \d+/u;
+const ERROR_LINE =
+  /error TS\d+|^::error\b|^##\[error\]|^\s*[x×!] [\w@/.-]+\([\w@/.-]+\): |^\s*,-\[[^\]]+\]$|^error\b|^Found \d+ warnings? and \d+ errors?/u;
+const ANNOTATION = /^::error(?: (?<properties>[^:]*))?::(?<message>.*)$/u;
+const ANNOTATION_TITLE = /(?:^|,)title=(?<title>[^,]*)/u;
+const MAX_ERROR_LINES = 20;
+const FALLBACK_TAIL_LINES = 10;
+
+const decodeAnnotation = (value: string): string =>
+  value
+    .replaceAll("%2C", ",")
+    .replaceAll("%3A", ":")
+    .replaceAll("%0A", " ")
+    .replaceAll("%0D", "")
+    .replaceAll("%25", "%");
+
+// A tool's own GitHub annotation reads as "title: message" in the summary.
+const readableErrorLine = (line: string): string => {
+  const annotation = ANNOTATION.exec(line)?.groups;
+  if (annotation === undefined) {
+    return line.trim();
+  }
+  const message = decodeAnnotation(annotation["message"] ?? "");
+  const title = ANNOTATION_TITLE.exec(annotation["properties"] ?? "")?.groups?.[
+    "title"
+  ];
+  return title === undefined
+    ? message
+    : `${decodeAnnotation(title)}: ${message}`;
+};
+
+const errorLines = (lines: readonly string[]): string[] => {
+  const meaningful = lines.filter(
+    (line) =>
+      line.trim() !== "" && !STACK_FRAME.test(line) && !EXIT_NOISE.test(line),
+  );
+  const matched = meaningful.filter((line) => ERROR_LINE.test(line));
+  const picked = (
+    matched.length > 0 ? matched : meaningful.slice(-FALLBACK_TAIL_LINES)
+  ).map(readableErrorLine);
+  if (picked.length <= MAX_ERROR_LINES) {
+    return picked;
+  }
+  return [
+    ...picked.slice(0, MAX_ERROR_LINES),
+    `... ${picked.length - MAX_ERROR_LINES} more error lines above`,
+  ];
+};
+
+/**
+ * Names each failed Turbo task with its own error lines. Turbo prefixes task
+ * output with `<package>:<task>: ` locally and puts it under a task header on
+ * GitHub Actions; both shapes attribute lines to a task. A command that is not
+ * a Turbo run is its own single task.
+ */
+export const summarizeCheckFailure = ({
+  command,
+  exitCode,
+  output,
+}: CommandFailedError): CheckFailureSummary => {
+  const commandText = command.join(" ");
+  const lines = stripVTControlCharacters(output).split(/\r?\n/u);
+  const failedTasks = lines.flatMap(
+    (line) =>
+      TURBO_FAILED_TASKS.exec(line)
+        ?.groups?.["tasks"]?.split(",")
+        .map((task) => task.trim())
+        .filter(Boolean) ?? [],
+  );
+  if (failedTasks.length === 0) {
+    return {
+      command: commandText,
+      exitCode,
+      tasks: [{ task: commandText, errors: errorLines(lines) }],
+    };
+  }
+
+  // Turbo reports `<package>#<task>` but labels output `<package>:<task>`.
+  const taskByLabel = new Map(
+    failedTasks.map((task) => [task.replace("#", ":"), task]),
+  );
+  const taskLines = new Map<string, string[]>();
+  for (const task of failedTasks) {
+    taskLines.set(task, []);
+  }
+  let current: string | undefined;
+  for (const line of lines) {
+    if (line === GROUP_END || TURBO_RUN_SUMMARY.test(line)) {
+      current = undefined;
+      continue;
+    }
+    const header = GROUP_START.exec(line)?.groups?.["task"] ?? line.trim();
+    if (taskByLabel.has(header) || GROUP_START.test(line)) {
+      current = taskByLabel.get(header);
+      continue;
+    }
+    const prefixed = [...taskByLabel].find(([label]) =>
+      line.startsWith(`${label}:`),
+    );
+    if (prefixed !== undefined) {
+      const [label, task] = prefixed;
+      taskLines.get(task)?.push(line.slice(label.length + 1).trimStart());
+      continue;
+    }
+    if (current !== undefined) {
+      taskLines.get(current)?.push(line);
+    }
+  }
+  return {
+    command: commandText,
+    exitCode,
+    tasks: failedTasks.map((task) => ({
+      task,
+      errors: errorLines(taskLines.get(task) ?? []),
+    })),
+  };
+};
+
+const escapeAnnotationData = (value: string): string =>
+  value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+
+const escapeAnnotationProperty = (value: string): string =>
+  escapeAnnotationData(value).replaceAll(":", "%3A").replaceAll(",", "%2C");
+
+type FormatCheckFailureOptions = {
+  summary: CheckFailureSummary;
+  annotations: boolean;
+};
+
+export const formatCheckFailure = ({
+  summary,
+  annotations,
+}: FormatCheckFailureOptions): string => {
+  const lines = [
+    "",
+    `code-check: failed (exit ${summary.exitCode}): ${summary.command}`,
+  ];
+  for (const { task, errors } of summary.tasks) {
+    lines.push(`  ${task}`, ...errors.map((error) => `    ${error}`));
+  }
+  if (annotations) {
+    for (const { task, errors } of summary.tasks) {
+      lines.push(
+        `::error title=${escapeAnnotationProperty(`code-check: ${task} failed`)}::${escapeAnnotationData(errors.join("\n"))}`,
+      );
+    }
+  }
+  return `${lines.join("\n")}\n`;
 };
 
 type ExecuteCheckCommandsOptions = {
   commands: readonly (readonly string[])[];
-  runner?: (command: readonly string[]) => number;
+  runner?: (
+    command: readonly string[],
+  ) => Result<void, CodeCheckError> | Promise<Result<void, CodeCheckError>>;
   write?: (output: string) => void;
   dryRun?: boolean;
 };
 
-export const executeCheckCommands = ({
+export const executeCheckCommands = async ({
   commands,
-  runner = (command) =>
-    Bun.spawnSync([...command], {
-      cwd: REPO_ROOT,
-      stdout: "inherit",
-      stderr: "inherit",
-    }).exitCode,
+  runner = runCheck,
   write = (output) => {
     process.stdout.write(output);
   },
   dryRun = false,
-}: ExecuteCheckCommandsOptions): number => {
-  const failures: { command: readonly string[]; exitCode: number }[] = [];
+}: ExecuteCheckCommandsOptions): Promise<number> => {
+  const failures: CodeCheckError[] = [];
   for (const command of commands) {
     if (dryRun) {
       write(`  ${command.join(" ")}\n`);
       continue;
     }
-    const exitCode = runner(command);
-    if (exitCode !== 0) {
-      failures.push({ command, exitCode });
+    const result = await runner(command);
+    if (result.isErr()) {
+      failures.push(result.error);
     }
   }
   if (failures.length === 0) {
     return 0;
   }
   write(`code-check: ${failures.length} failed command(s)\n`);
-  for (const { command, exitCode } of failures) {
-    write(`  (${exitCode}) ${command.join(" ")}\n`);
+  for (const failure of failures) {
+    switch (failure._tag) {
+      case "CommandFailedError": {
+        write(
+          formatCheckFailure({
+            summary: summarizeCheckFailure(failure),
+            annotations: process.env["GITHUB_ACTIONS"] === "true",
+          }),
+        );
+        break;
+      }
+      case "DelegatedCheckFailedError": {
+        break;
+      }
+      default: {
+        failure satisfies never;
+        panic("unknown code-check failure");
+      }
+    }
   }
   return 1;
 };
@@ -445,28 +683,31 @@ const workspacePaths = (): Set<string> => {
   return workspaces;
 };
 
-const repositoryPaths = (): string[] =>
-  run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
-    capture: true,
-  })
-    .split("\0")
-    .filter(Boolean);
+const repositoryPaths = (): Result<string[], CommandFailedError> =>
+  capture([
+    "git",
+    "ls-files",
+    "--cached",
+    "--others",
+    "--exclude-standard",
+    "-z",
+  ]).map((output) => output.split("\0").filter(Boolean));
 
-const changedPaths = (base: string): { mergeBase: string; paths: string[] } => {
-  const mergeBase = run(["git", "merge-base", base, "HEAD"], {
-    capture: true,
-  }).trim();
-  if (mergeBase === "") {
-    panic(`Could not find merge base for ${base}`);
-  }
-  const output = run(["git", "diff", "--name-only", "-z", mergeBase, "HEAD"], {
-    capture: true,
+type ChangedPaths = { mergeBase: string; paths: string[] };
+
+const changedPaths = (base: string): Result<ChangedPaths, CommandFailedError> =>
+  capture(["git", "merge-base", base, "HEAD"]).andThen((output) => {
+    const mergeBase = output.trim();
+    if (mergeBase === "") {
+      panic(`Could not find merge base for ${base}`);
+    }
+    return capture(["git", "diff", "--name-only", "-z", mergeBase, "HEAD"]).map(
+      (diff) => ({
+        mergeBase,
+        paths: diff.split("\0").filter(Boolean),
+      }),
+    );
   });
-  return {
-    mergeBase,
-    paths: output.split("\0").filter(Boolean),
-  };
-};
 
 type TurboOutput = {
   packages?: {
@@ -474,18 +715,16 @@ type TurboOutput = {
   };
 };
 
-const affectedWorkspacePaths = (mergeBase: string): string[] => {
-  const output = run(
-    ["bun", "--bun", "turbo", "ls", "--affected", "--output=json"],
-    {
-      capture: true,
-      env: {
-        ...process.env,
-        TURBO_SCM_BASE: mergeBase,
-        TURBO_SCM_HEAD: "HEAD",
-      },
-    },
-  );
+const affectedWorkspacePaths = (
+  mergeBase: string,
+): Result<string[], CommandFailedError> =>
+  capture(["bun", "--bun", "turbo", "ls", "--affected", "--output=json"], {
+    ...process.env,
+    TURBO_SCM_BASE: mergeBase,
+    TURBO_SCM_HEAD: "HEAD",
+  }).map(parseAffectedWorkspacePaths);
+
+const parseAffectedWorkspacePaths = (output: string): string[] => {
   const jsonStart = output.indexOf("{");
   if (jsonStart === -1) {
     panic("Turbo affected output did not contain JSON");
@@ -724,32 +963,39 @@ type ScopeCheck = {
   mergeBase: string | null;
 };
 
-const planScope = (scope: CheckScope): ScopeCheck => {
+const planScope = (
+  scope: CheckScope,
+): Result<ScopeCheck, CommandFailedError> => {
   switch (scope.type) {
     case "all": {
-      const files = presentPaths(repositoryPaths());
-      return {
-        plan: planFullCheck({
-          files,
-          workspacePaths: workspacePaths(),
-        }),
-        presentChangedPaths: files,
-        mergeBase: null,
-      };
+      return repositoryPaths().map((paths) => {
+        const files = presentPaths(paths);
+        return {
+          plan: planFullCheck({
+            files,
+            workspacePaths: workspacePaths(),
+          }),
+          presentChangedPaths: files,
+          mergeBase: null,
+        };
+      });
     }
     case "affected": {
-      const changed = changedPaths(scope.base);
-      const presentChangedPaths = presentPaths(changed.paths);
-      return {
-        plan: planCheck({
-          changedPaths: changed.paths,
-          presentChangedPaths,
-          affectedWorkspacePaths: affectedWorkspacePaths(changed.mergeBase),
-          workspacePaths: workspacePaths(),
+      return changedPaths(scope.base).andThen((changed) =>
+        affectedWorkspacePaths(changed.mergeBase).map((affected) => {
+          const presentChangedPaths = presentPaths(changed.paths);
+          return {
+            plan: planCheck({
+              changedPaths: changed.paths,
+              presentChangedPaths,
+              affectedWorkspacePaths: affected,
+              workspacePaths: workspacePaths(),
+            }),
+            presentChangedPaths,
+            mergeBase: changed.mergeBase,
+          };
         }),
-        presentChangedPaths,
-        mergeBase: changed.mergeBase,
-      };
+      );
     }
     default: {
       scope satisfies never;
@@ -758,9 +1004,49 @@ const planScope = (scope: CheckScope): ScopeCheck => {
   }
 };
 
-const main = () => {
+// The full-repository fallback is another code-check run, which prints its
+// own failure summary.
+class DelegatedCheckFailedError extends TaggedError(
+  "DelegatedCheckFailedError",
+)<{
+  message: string;
+  exitCode: number;
+}> {}
+
+type CodeCheckError = CommandFailedError | DelegatedCheckFailedError;
+
+const runFullFallback = (
+  leg: CodeCheckLeg | undefined,
+): Result<void, DelegatedCheckFailedError> => {
+  const command = [
+    "bun",
+    "run",
+    "code-check",
+    ...(leg === undefined ? [] : ["--leg", leg]),
+  ];
+  const { exitCode } = Bun.spawnSync(command, {
+    cwd: REPO_ROOT,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  if (exitCode !== 0) {
+    return Result.err(
+      new DelegatedCheckFailedError({
+        message: `Command failed (${exitCode}): ${command.join(" ")}`,
+        exitCode,
+      }),
+    );
+  }
+  return Result.ok();
+};
+
+const main = async (): Promise<Result<number, CommandFailedError>> => {
   const options = parseArgs(process.argv.slice(2));
-  const { plan, presentChangedPaths, mergeBase } = planScope(options.scope);
+  const scoped = planScope(options.scope);
+  if (scoped.isErr()) {
+    return scoped;
+  }
+  const { plan, presentChangedPaths, mergeBase } = scoped.value;
   const leg = options.leg;
   const resultBoundaryCommand = planResultBoundaryLint({
     files:
@@ -806,13 +1092,23 @@ const main = () => {
     process.stdout.write(
       `code-check: full repository (${plan.changedPath} requires fallback)\n`,
     );
-    commands.push([
+    const fallbackCommand = [
       "bun",
       "run",
       "code-check",
       ...(leg === undefined ? [] : ["--leg", leg]),
-    ]);
-    return executeCheckCommands({ commands, dryRun: options.dryRun });
+    ];
+    commands.push(fallbackCommand);
+    return Result.ok(
+      await executeCheckCommands({
+        commands,
+        dryRun: options.dryRun,
+        runner: (command) =>
+          command === fallbackCommand
+            ? runFullFallback(leg)
+            : runCheck(command),
+      }),
+    );
   }
 
   const scopeLabel = (scope: TaskScope): string => {
@@ -833,9 +1129,34 @@ const main = () => {
       leg === undefined ? undefined : { leg, workspaces: workspacePaths() },
     ),
   );
-  return executeCheckCommands({ commands, dryRun: options.dryRun });
+  return Result.ok(
+    await executeCheckCommands({ commands, dryRun: options.dryRun }),
+  );
 };
 
+/**
+ * A failed check must never exit 0: a signal-terminated child can report a
+ * missing or zero code, which would turn the failure into a pass.
+ */
+export const failureExitCode = (code: number | null | undefined) =>
+  code !== null &&
+  code !== undefined &&
+  Number.isInteger(code) &&
+  code > 0 &&
+  code < 256
+    ? code
+    : 1;
+
 if (import.meta.main) {
-  process.exitCode = main();
+  const result = await main();
+  if (result.isErr()) {
+    process.stdout.write(
+      formatCheckFailure({
+        summary: summarizeCheckFailure(result.error),
+        annotations: process.env["GITHUB_ACTIONS"] === "true",
+      }),
+    );
+    process.exit(failureExitCode(result.error.exitCode));
+  }
+  process.exitCode = result.value;
 }
