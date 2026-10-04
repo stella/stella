@@ -7,10 +7,11 @@ import type {
   PgUpdateSetSource,
 } from "drizzle-orm/pg-core";
 
-type LifecycleTable = PgTable & { id: AnyPgColumn; status: AnyPgColumn };
-type Status<TTable extends LifecycleTable> = GetColumnData<TTable["status"]> &
+type StatusTable = PgTable & { status: AnyPgColumn };
+type LifecycleTable = StatusTable & { id: AnyPgColumn };
+type Status<TTable extends StatusTable> = GetColumnData<TTable["status"]> &
   string;
-type FenceKey<TTable extends LifecycleTable> = Extract<
+type FenceKey<TTable extends StatusTable> = Extract<
   keyof TTable["_"]["columns"],
   "leaseToken" | "attempt" | "claimedAt"
 >;
@@ -46,7 +47,36 @@ export const defineTransitions = <
   table: TTable,
   edges: TEdges,
   options: TOptions,
-) => {
+) => defineKeyedTransitions({ table, key: "id", edges, options });
+
+type DefineKeyedTransitionsArgs<
+  TTable extends StatusTable,
+  TKey extends keyof TTable["_"]["columns"] & string,
+  TEdges extends Readonly<Record<Status<TTable>, readonly Status<TTable>[]>>,
+  TOptions extends {
+    terminal: readonly Status<TTable>[];
+    fence?: FenceKey<TTable>;
+  },
+> = { table: TTable; key: TKey; edges: TEdges; options: TOptions };
+
+/** Tables with a domain primary key retain their real column identity. */
+export const defineKeyedTransitions = <
+  TTable extends StatusTable,
+  const TKey extends keyof TTable["_"]["columns"] & string,
+  const TEdges extends Readonly<
+    Record<Status<TTable>, readonly Status<TTable>[]>
+  >,
+  const TOptions extends {
+    terminal: readonly Status<TTable>[];
+    fence?: FenceKey<TTable>;
+  },
+>({
+  table,
+  key,
+  edges,
+  options,
+}: DefineKeyedTransitionsArgs<TTable, TKey, TEdges, TOptions>) => {
+  const idColumn = getColumns(table)[key];
   const statuses = table.status.enumValues;
   if (
     statuses === undefined ||
@@ -75,11 +105,16 @@ export const defineTransitions = <
   ) {
     panic("The declared transition fence is not a table column");
   }
+  if (idColumn === undefined || !idColumn.primary) {
+    panic("A transition identity must be a primary-key column");
+  }
   for (const targets of Object.values<readonly string[]>(edges)) {
     Object.freeze(targets);
   }
   return Object.freeze({
     table,
+    key,
+    idColumn,
     edges: Object.freeze(edges),
     options: Object.freeze(options),
     terminal: Object.freeze([...options.terminal]),
@@ -116,7 +151,7 @@ type Move<TEdges extends Readonly<Record<string, readonly string[]>>> = {
 }[keyof TEdges & string];
 
 type Fence<
-  TTable extends LifecycleTable,
+  TTable extends StatusTable,
   TOptions extends { fence?: string },
 > = TOptions extends { fence: infer TKey extends keyof TTable["_"]["columns"] }
   ? { fence: GetColumnData<TTable["_"]["columns"][TKey]> }
@@ -166,21 +201,22 @@ type TransitionArgs<
   ) => Promise<void>;
 };
 
-/** The update and required audit share the caller's transaction. */
-export const transition = async <
-  TTx extends TransitionTransaction,
-  TTable extends LifecycleTable,
-  const TEdges extends Readonly<Record<string, readonly string[]>>,
-  TOptions extends { terminal: readonly string[]; fence?: string },
->({
-  tx,
+type TransitionAssignmentsArgs = {
+  spec: TransitionSpec;
+  key: string;
+  options: {
+    from: readonly string[];
+    to: string;
+    set?: Readonly<Record<string, unknown>>;
+    fence?: unknown;
+  };
+};
+
+const transitionAssignments = ({
   spec,
-  id,
+  key: identityKey,
   options,
-  recordTransitionAuditEvent,
-}: TransitionArgs<TTx, TTable, TEdges, TOptions>): Promise<
-  TransitionResult<GetColumnData<TTable["id"]>, Status<TTable>>
-> => {
+}: TransitionAssignmentsArgs) => {
   if (
     options.from.length === 0 ||
     options.from.some((from) => !permitsTransition(spec, from, options.to))
@@ -196,7 +232,7 @@ export const transition = async <
     const column = columns[key];
     if (
       column === undefined ||
-      key === "id" ||
+      key === identityKey ||
       key === "status" ||
       key === spec.fence
     ) {
@@ -210,7 +246,7 @@ export const transition = async <
   }
   for (const [key, column] of Object.entries(columns)) {
     if (
-      key === "id" ||
+      key === identityKey ||
       key === "status" ||
       key === spec.fence ||
       Reflect.get(options.set ?? {}, key) !== undefined ||
@@ -233,6 +269,29 @@ export const transition = async <
   if (spec.fence === undefined && expectedFence !== undefined) {
     panic("This transition table has no fence");
   }
+  return { assignments, fence };
+};
+
+/** The update and required audit share the caller's transaction. */
+export const transition = async <
+  TTx extends TransitionTransaction,
+  TTable extends LifecycleTable,
+  const TEdges extends Readonly<Record<string, readonly string[]>>,
+  TOptions extends { terminal: readonly string[]; fence?: string },
+>({
+  tx,
+  spec,
+  id,
+  options,
+  recordTransitionAuditEvent,
+}: TransitionArgs<TTx, TTable, TEdges, TOptions>): Promise<
+  TransitionResult<GetColumnData<TTable["id"]>, Status<TTable>>
+> => {
+  const { assignments, fence } = transitionAssignments({
+    spec,
+    key: "id",
+    options,
+  });
   const rows = await tx.execute(sql`
     UPDATE ${spec.table}
     SET ${sql.join(assignments, sql`, `)}
@@ -264,4 +323,91 @@ export const transition = async <
   } as const;
   await recordTransitionAuditEvent(tx, transitioned.row);
   return transitioned;
+};
+
+type TransitionBatchArgs<
+  TTx extends TransitionTransaction,
+  TTable extends StatusTable,
+  TKey extends keyof TTable["_"]["columns"] & string,
+  TEdges extends Readonly<Record<string, readonly string[]>>,
+  TOptions extends { terminal: readonly string[]; fence?: string },
+> = {
+  tx: TTx;
+  spec: TransitionSpec & {
+    table: TTable;
+    key: TKey;
+    idColumn: TTable["_"]["columns"][TKey];
+    edges: TEdges;
+    options: TOptions;
+  };
+  ids: readonly GetColumnData<NoInfer<TTable>["_"]["columns"][NoInfer<TKey>]>[];
+  options: Move<NoInfer<TEdges>> &
+    Fence<NoInfer<TTable>, NoInfer<TOptions>> & {
+      set?: Omit<
+        PgUpdateSetSource<NoInfer<TTable>>,
+        NoInfer<TKey> | TransitionOwnedKeys<NoInfer<TOptions>>
+      > &
+        Partial<
+          Record<NoInfer<TKey> | TransitionOwnedKeys<NoInfer<TOptions>>, never>
+        >;
+    };
+  recordTransitionAuditEvent: (
+    tx: TTx,
+    rows: readonly {
+      id: GetColumnData<TTable["_"]["columns"][TKey]>;
+      status: Status<TTable>;
+    }[],
+  ) => Promise<void>;
+};
+
+/** One conditional update per held batch; only changed rows reach its required audit. */
+export const transitionBatch = async <
+  TTx extends TransitionTransaction,
+  TTable extends StatusTable,
+  TKey extends keyof TTable["_"]["columns"] & string,
+  const TEdges extends Readonly<Record<string, readonly string[]>>,
+  TOptions extends { terminal: readonly string[]; fence?: string },
+>({
+  tx,
+  spec,
+  ids,
+  options,
+  recordTransitionAuditEvent,
+}: TransitionBatchArgs<TTx, TTable, TKey, TEdges, TOptions>) => {
+  const { assignments, fence } = transitionAssignments({
+    spec,
+    key: spec.key,
+    options,
+  });
+  if (ids.length === 0) {
+    return [];
+  }
+  const rows = await tx.execute(sql`
+    UPDATE ${spec.table}
+    SET ${sql.join(assignments, sql`, `)}
+    WHERE ${spec.idColumn} IN (${sql.join(
+      ids.map((id) => sql`${sql.param(id, spec.idColumn)}`),
+      sql`, `,
+    )})
+      AND ${spec.table.status} IN (${sql.join(
+        options.from.map((from) => sql`${from}`),
+        sql`, `,
+      )})
+      ${fence === undefined ? sql`` : sql`AND ${fence} IS NOT DISTINCT FROM ${sql.param(options.fence, fence)}`}
+    RETURNING ${spec.idColumn} AS "id", ${spec.table.status} AS "status"
+  `);
+  const idDecoder: DriverValueDecoder<
+    GetColumnData<TTable["_"]["columns"][TKey]>,
+    unknown
+  > = spec.idColumn;
+  const statusDecoder: DriverValueDecoder<Status<TTable>, unknown> = spec.table
+    .status;
+  const changed = rows.map((row) => ({
+    id: idDecoder.mapFromDriverValue(row["id"]),
+    status: statusDecoder.mapFromDriverValue(row["status"]),
+  }));
+  if (changed.length > 0) {
+    await recordTransitionAuditEvent(tx, changed);
+  }
+  return changed;
 };

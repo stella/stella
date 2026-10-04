@@ -8,6 +8,8 @@ import { assertProperty } from "@stll/property-testing";
 import { timestamptz } from "@/api/db/columns";
 import {
   defineTransitions,
+  defineKeyedTransitions,
+  transitionBatch,
   permitsTransition,
   transition,
 } from "@/api/lib/db/transitions";
@@ -338,4 +340,84 @@ describe("conditional status transitions", () => {
       });
     expect(missingRecorder).toBeFunction();
   });
+});
+
+test("a keyed batch binds every identifier and audits only changed rows once", async () => {
+  const keyedJobs = pgTable("keyed_transition_jobs", {
+    entityId: text("entity_id").primaryKey(),
+    status: text({ enum: states }).notNull(),
+    description: text(),
+  });
+  const keyed = defineKeyedTransitions({
+    table: keyedJobs,
+    key: "entityId",
+    edges: graph,
+    options: { terminal: ["completed", "failed"] },
+  });
+  const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
+  const tx = {
+    execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+      queries.push(dialect.sqlToQuery(query));
+      return [{ id: "first", status: "failed" }];
+    },
+    rollback,
+  };
+  let audits = 0;
+  const result = await transitionBatch({
+    tx,
+    spec: keyed,
+    ids: ["first", "second"],
+    options: {
+      from: ["queued", "running"],
+      to: "failed",
+      set: { description: "Closed" },
+    },
+    recordTransitionAuditEvent: async (auditTx, rows) => {
+      expect(auditTx).toBe(tx);
+      expect(rows).toEqual([{ id: "first", status: "failed" }]);
+      audits += 1;
+    },
+  });
+  expect(result).toEqual([{ id: "first", status: "failed" }]);
+  expect(audits).toBe(1);
+  expect(queries).toHaveLength(1);
+  expect(queries.at(0)?.sql).toContain(
+    '"keyed_transition_jobs"."entity_id" IN',
+  );
+  expect(queries.at(0)?.params).toEqual([
+    "failed",
+    "Closed",
+    "first",
+    "second",
+    "queued",
+    "running",
+  ]);
+});
+
+test("empty and stale batches perform no audit", async () => {
+  let queries = 0;
+  let audits = 0;
+  const tx = {
+    execute: async () => {
+      queries += 1;
+      return [];
+    },
+    rollback,
+  };
+  const recordTransitionAuditEvent = async () => {
+    audits += 1;
+  };
+  for (const ids of [[], ["job"]]) {
+    expect(
+      await transitionBatch({
+        tx,
+        spec,
+        ids,
+        options: { from: ["queued"], to: "running" },
+        recordTransitionAuditEvent,
+      }),
+    ).toEqual([]);
+  }
+  expect(queries).toBe(1);
+  expect(audits).toBe(0);
 });

@@ -9,6 +9,7 @@ import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
   properties,
+  auditLogs,
   desktopEditHandoffs,
   pdfSigningSessions,
   desktopEditSessions,
@@ -34,7 +35,10 @@ import { addAssigneeHandler } from "@/api/handlers/tasks/assignees/add";
 import { moveAssigneeHandler } from "@/api/handlers/tasks/assignees/move";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
-import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import {
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
 import { getAuth, resolveMemberAuthorization } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import { executeFlowStep } from "@/api/lib/flows/flow-executor";
@@ -816,6 +820,49 @@ if (!databaseUrl || !runPostgresTests) {
             .from(flowRuns)
             .where(eq(flowRuns.id, runId)),
         ).toEqual([{ status: "cancelled" }]);
+        const persistedSteps = await db
+          .select({
+            id: flowRunSteps.id,
+            index: flowRunSteps.index,
+            status: flowRunSteps.status,
+          })
+          .from(flowRunSteps)
+          .where(eq(flowRunSteps.runId, runId));
+        expect(persistedSteps).toHaveLength(steps.length);
+        expect(persistedSteps.map(({ status }) => status)).toEqual(
+          steps.map(() => "skipped"),
+        );
+        const runAudit = await db
+          .select({ changes: auditLogs.changes, metadata: auditLogs.metadata })
+          .from(auditLogs)
+          .where(
+            and(
+              eq(auditLogs.resourceId, runId),
+              eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.FLOW_RUN),
+            ),
+          );
+        expect(runAudit).toHaveLength(steps.length + 1);
+        expect(runAudit).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              changes: { status: { old: "awaiting_review", new: "cancelled" } },
+            }),
+            ...persistedSteps.map((step) =>
+              expect.objectContaining({
+                changes: {
+                  stepStatus: {
+                    old: step.index === 0 ? "awaiting_review" : "pending",
+                    new: "skipped",
+                  },
+                },
+                metadata: expect.objectContaining({
+                  cause: "membership_removed",
+                  stepId: step.id,
+                }),
+              }),
+            ),
+          ]),
+        );
         await executeFlowStep(
           { runId, stepIndex: 1 },
           new AbortController().signal,
@@ -1031,6 +1078,21 @@ if (!databaseUrl || !runPostgresTests) {
             .from(pdfSigningSessions)
             .where(eq(pdfSigningSessions.createdBy, actorUserId)),
         ).toEqual([{ status: "open" }]);
+        const signingAudit = await db
+          .select({ changes: auditLogs.changes })
+          .from(auditLogs)
+          .where(
+            and(
+              eq(auditLogs.workspaceId, workspaceId),
+              eq(
+                auditLogs.resourceType,
+                AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
+              ),
+            ),
+          );
+        expect(signingAudit).toEqual([
+          { changes: { status: { old: "open", new: "cancelled" } } },
+        ]);
       } finally {
         await db
           .delete(organization)

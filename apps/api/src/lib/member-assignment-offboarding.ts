@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
@@ -53,6 +53,8 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import { clearOrganizationCorrespondenceAssignments } from "@/api/lib/email/correspondence/offboarding";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { MAX_FLOW_STEPS } from "@/api/lib/flows/flow-types";
@@ -199,63 +201,73 @@ const clearMemberObligationOwners = async ({
         }
       }
       if (owned.length > 0) {
-        // db-await-in-loop: persist this bounded ownership batch before the next read.
-        await tx
-          .update(workObligations)
-          .set({
-            ownerUserId: nextOwnerUserId,
-            status: nextStatus,
-            acknowledgedAt: null,
-            acknowledgedByUserId: null,
-            updatedAt: new Date(),
-          })
-          .where(
-            inArray(
-              workObligations.entityId,
-              owned.map(({ entityId }) => entityId),
-            ),
-          );
-        // db-await-in-loop: write history for this bounded ownership batch.
-        await tx.insert(workObligationEvents).values(
-          owned.map((row) => ({
-            id: createSafeId<"workObligationEvent">(),
-            workspaceId: row.workspaceId,
-            obligationEntityId: row.entityId,
-            actorUserId,
-            type: WORK_OBLIGATION_EVENT_TYPE.DELEGATED,
-            details: {
-              type: "ownership_changed" as const,
-              previousOwnerUserId: userId,
-              nextOwnerUserId,
-              cause: "owner_removed_from_workspace" as const,
+        // db-await-in-loop: transition this held ownership page before consuming the next counted batch.
+        const changed = await transitionBatch({
+          tx,
+          spec: TRANSITIONS.workObligations,
+          ids: owned.map(({ entityId }) => entityId),
+          options: {
+            from: [
+              WORK_OBLIGATION_STATUS.ACTIVE,
+              WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+            ],
+            to: nextStatus,
+            set: {
+              ownerUserId: nextOwnerUserId,
+              acknowledgedAt: null,
+              acknowledgedByUserId: null,
+              updatedAt: new Date(),
             },
-            occurredAt: new Date(),
-          })),
-        );
-        const recorder = createBackgroundAuditRecorder({
-          organizationId: scope.organizationId,
-          workspaceId: null,
-          userId: actorUserId,
-          execution: {
-            performer: { type: "user", id: actorUserId },
-            trigger: { type: "system", source: "membership_removal" },
+          },
+          recordTransitionAuditEvent: async (auditTx, rows) => {
+            const changedIds = new Set(rows.map(({ id }) => id));
+            const changedOwners = owned.filter(({ entityId }) =>
+              changedIds.has(entityId),
+            );
+            await auditTx.insert(workObligationEvents).values(
+              changedOwners.map((row) => ({
+                id: createSafeId<"workObligationEvent">(),
+                workspaceId: row.workspaceId,
+                obligationEntityId: row.entityId,
+                actorUserId,
+                type: WORK_OBLIGATION_EVENT_TYPE.DELEGATED,
+                details: {
+                  type: "ownership_changed" as const,
+                  previousOwnerUserId: userId,
+                  nextOwnerUserId,
+                  cause: "owner_removed_from_workspace" as const,
+                },
+                occurredAt: new Date(),
+              })),
+            );
+            const recorder = createBackgroundAuditRecorder({
+              organizationId: scope.organizationId,
+              workspaceId: null,
+              userId: actorUserId,
+              execution: {
+                performer: { type: "user", id: actorUserId },
+                trigger: { type: "system", source: "membership_removal" },
+              },
+            });
+            await recorder(
+              auditTx,
+              changedOwners.map((row) => ({
+                action: AUDIT_ACTION.UPDATE,
+                resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+                resourceId: row.entityId,
+                workspaceId: row.workspaceId,
+                changes: {
+                  ownerUserId: { old: userId, new: nextOwnerUserId },
+                  status: { old: row.status, new: nextStatus },
+                },
+                metadata: { cause: "membership_removed" },
+              })),
+            );
           },
         });
-        // db-await-in-loop: batch audit for each drained ownership page.
-        await recorder(
-          tx,
-          owned.map((row) => ({
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
-            resourceId: row.entityId,
-            workspaceId: row.workspaceId,
-            changes: {
-              ownerUserId: { old: userId, new: nextOwnerUserId },
-              status: { old: row.status, new: nextStatus },
-            },
-            metadata: { cause: "membership_removed" },
-          })),
-        );
+        if (changed.length !== owned.length) {
+          panic("Locked obligation ownership changed during member removal");
+        }
       }
     }
   }
@@ -396,10 +408,60 @@ const clearMemberTaskAssignments = async ({
   }
 };
 
+type RecordMemberSessionTransitionsOptions = {
+  tx: Transaction;
+  actorUserId: SafeId<"user">;
+  resourceType:
+    | typeof AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION
+    | typeof AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION;
+  rows: readonly {
+    id: string;
+    workspaceId: SafeId<"workspace">;
+    organizationId: SafeId<"organization">;
+  }[];
+  recordAuditEvent?: AuditRecorder | undefined;
+};
+
+const recordMemberSessionTransitions = async ({
+  tx,
+  actorUserId,
+  resourceType,
+  rows,
+  recordAuditEvent,
+}: RecordMemberSessionTransitionsOptions) => {
+  await recordAuditGroups({
+    tx,
+    recordAuditEvent,
+    groups: rows.map((row) => ({
+      bindings: {
+        organizationId: row.organizationId,
+        workspaceId: row.workspaceId,
+        userId: actorUserId,
+        execution: {
+          performer: { type: "user" as const, id: actorUserId },
+          trigger: { type: "system" as const, source: "membership_removal" },
+        },
+      },
+      events: [
+        {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType,
+          resourceId: row.id,
+          workspaceId: row.workspaceId,
+          changes: { status: { old: "open", new: "cancelled" } },
+          metadata: { cause: "membership_removed" },
+        },
+      ],
+    })),
+  });
+};
+
 const closeMemberExchanges = async ({
   tx,
   scope,
   userId,
+  actorUserId,
+  recordAuditEvent,
 }: ClearMemberAssignmentsOptions) => {
   // audit: skip - removeWorkspaceMemberHandler and removeOrganizationMemberInTransaction record lifecycle audit rows; verifyAndDeleteUser calls recordAccountDeletionRequest in the same transaction.
   const workspaceScope = memberWorkspaceScope(scope);
@@ -429,22 +491,63 @@ const closeMemberExchanges = async ({
         sql`${desktopEditHandoffs.expiresAt} > ${now}`,
       ),
     );
-  await tx
-    .update(pdfSigningSessions)
-    .set({
-      status: "cancelled",
-      closeReason: "expired",
-      closedAt: now,
-      handoffExpiresAt: now,
-      tokenExpiresAt: now,
-    })
-    .where(
-      and(
-        inArray(pdfSigningSessions.workspaceId, scopedWorkspaces),
-        eq(pdfSigningSessions.createdBy, userId),
-        eq(pdfSigningSessions.status, "open"),
-      ),
-    );
+  const signingScope = and(
+    inArray(pdfSigningSessions.workspaceId, scopedWorkspaces),
+    eq(pdfSigningSessions.createdBy, userId),
+    eq(pdfSigningSessions.status, "open"),
+  );
+  const signingCount = await tx.$count(pdfSigningSessions, signingScope);
+  for (
+    let remaining = signingCount;
+    remaining > 0;
+    remaining -= LIMITS.memberRemovalCleanupBatchSize
+  ) {
+    // db-await-in-loop: lock a bounded signing session page after the matter prefix.
+    const signing = await tx
+      .select({
+        id: pdfSigningSessions.id,
+        workspaceId: pdfSigningSessions.workspaceId,
+        organizationId: workspaces.organizationId,
+      })
+      .from(pdfSigningSessions)
+      .innerJoin(workspaces, eq(workspaces.id, pdfSigningSessions.workspaceId))
+      .where(signingScope)
+      .orderBy(pdfSigningSessions.id)
+      .limit(LIMITS.memberRemovalCleanupBatchSize)
+      .for("update", { of: pdfSigningSessions });
+    if (signing.length === 0) {
+      break;
+    }
+    // db-await-in-loop: transition and audit the held signing page before consuming the next counted batch.
+    const changed = await transitionBatch({
+      tx,
+      spec: TRANSITIONS.pdfSigningSessions,
+      ids: signing.map(({ id }) => id),
+      options: {
+        from: ["open"],
+        to: "cancelled",
+        set: {
+          closeReason: "expired",
+          closedAt: now,
+          handoffExpiresAt: now,
+          tokenExpiresAt: now,
+        },
+      },
+      recordTransitionAuditEvent: async (auditTx, rows) => {
+        const ids = new Set(rows.map(({ id }) => id));
+        await recordMemberSessionTransitions({
+          tx: auditTx,
+          actorUserId,
+          resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
+          rows: signing.filter(({ id }) => ids.has(id)),
+          recordAuditEvent,
+        });
+      },
+    });
+    if (changed.length !== signing.length) {
+      panic("Locked signing sessions changed during member removal");
+    }
+  }
 };
 
 const clearMemberContactAssignments = async ({
@@ -1013,32 +1116,17 @@ const cancelMemberFlowRuns = async ({
     if (runs.length > 0) {
       const runIds = runs.map(({ id }) => id);
       // db-await-in-loop: lock each batch of steps after its run locks.
-      await tx
-        .select({ id: flowRunSteps.id })
+      const steps = await tx
+        .select({
+          id: flowRunSteps.id,
+          runId: flowRunSteps.runId,
+          status: flowRunSteps.status,
+        })
         .from(flowRunSteps)
         .where(inArray(flowRunSteps.runId, runIds))
         .orderBy(flowRunSteps.runId, flowRunSteps.index)
         .limit(runIds.length * MAX_FLOW_STEPS)
         .for("update");
-      // db-await-in-loop: persist this bounded run cancellation batch.
-      await tx
-        .update(flowRuns)
-        .set({ status: "cancelled", finishedAt: new Date() })
-        .where(inArray(flowRuns.id, runIds));
-      // db-await-in-loop: persist this bounded step cancellation batch.
-      await tx
-        .update(flowRunSteps)
-        .set({ status: "skipped", finishedAt: new Date() })
-        .where(
-          and(
-            inArray(flowRunSteps.runId, runIds),
-            inArray(flowRunSteps.status, [
-              "pending",
-              "running",
-              "awaiting_review",
-            ]),
-          ),
-        );
       const recordAuditEvent = createBackgroundAuditRecorder({
         organizationId,
         workspaceId: null,
@@ -1048,18 +1136,84 @@ const cancelMemberFlowRuns = async ({
           trigger: { type: "system", source: "membership_removal" },
         },
       });
-      // db-await-in-loop: audit the cancelled run batch before reading the next page.
-      await recordAuditEvent(
-        tx,
-        runs.map((run) => ({
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
-          resourceId: run.id,
-          workspaceId: run.workspaceId,
-          changes: { status: { old: run.status, new: "cancelled" } },
-          metadata: { cause: "membership_removed" },
-        })),
+      const activeSteps = steps.filter(
+        ({ status }) =>
+          status === "pending" ||
+          status === "running" ||
+          status === "awaiting_review",
       );
+      // db-await-in-loop: transition held runs and steps before consuming the next counted batch.
+      const changed = await transitionBatch({
+        tx,
+        spec: TRANSITIONS.flowRuns,
+        ids: runIds,
+        options: {
+          from: ["pending", "running", "awaiting_review"],
+          to: "cancelled",
+          set: { finishedAt: new Date() },
+        },
+        recordTransitionAuditEvent: async (auditTx, rows) => {
+          const changedIds = new Set(rows.map(({ id }) => id));
+          const changedRuns = runs.filter(({ id }) => changedIds.has(id));
+          const changedSteps = await transitionBatch({
+            tx: auditTx,
+            spec: TRANSITIONS.flowRunSteps,
+            ids: activeSteps
+              .filter(({ runId }) => changedIds.has(runId))
+              .map(({ id }) => id),
+            options: {
+              from: ["pending", "running", "awaiting_review"],
+              to: "skipped",
+              set: { finishedAt: new Date() },
+            },
+            recordTransitionAuditEvent: async (stepTx, stepRows) => {
+              const stepIds = new Set(stepRows.map(({ id }) => id));
+              const runById = new Map(changedRuns.map((run) => [run.id, run]));
+              await recordAuditEvent(
+                stepTx,
+                activeSteps
+                  .filter(({ id }) => stepIds.has(id))
+                  .map((step) => {
+                    const run = runById.get(step.runId);
+                    if (run === undefined) {
+                      panic("A transitioned step must belong to a held run");
+                    }
+                    return {
+                      action: AUDIT_ACTION.UPDATE,
+                      resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+                      resourceId: run.id,
+                      workspaceId: run.workspaceId,
+                      changes: {
+                        stepStatus: { old: step.status, new: "skipped" },
+                      },
+                      metadata: {
+                        cause: "membership_removed",
+                        stepId: step.id,
+                      },
+                    };
+                  }),
+              );
+            },
+          });
+          if (changedSteps.length !== activeSteps.length) {
+            panic("Locked flow steps changed during member removal");
+          }
+          await recordAuditEvent(
+            auditTx,
+            changedRuns.map((run) => ({
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+              resourceId: run.id,
+              workspaceId: run.workspaceId,
+              changes: { status: { old: run.status, new: "cancelled" } },
+              metadata: { cause: "membership_removed" },
+            })),
+          );
+        },
+      });
+      if (changed.length !== runs.length) {
+        panic("Locked flow runs changed during member removal");
+      }
     }
   }
 };
@@ -1132,6 +1286,78 @@ const lockOrganizationCleanupWorkspaces = async ({
   }
 };
 
+type CancelMemberDesktopSessionsOptions = Pick<
+  RemoveOrganizationMemberOptions,
+  "tx" | "organizationId" | "userId" | "actorUserId"
+>;
+
+const cancelMemberDesktopSessions = async ({
+  tx,
+  organizationId,
+  userId,
+  actorUserId,
+}: CancelMemberDesktopSessionsOptions) => {
+  const affectedWorkspaceIds = tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(eq(workspaces.organizationId, organizationId));
+  const desktopScope = and(
+    inArray(desktopEditSessions.workspaceId, affectedWorkspaceIds),
+    eq(desktopEditSessions.createdBy, userId),
+    eq(desktopEditSessions.status, "open"),
+  );
+  const desktopCount = await tx.$count(desktopEditSessions, desktopScope);
+  for (
+    let remaining = desktopCount;
+    remaining > 0;
+    remaining -= LIMITS.memberRemovalCleanupBatchSize
+  ) {
+    // db-await-in-loop: lock a bounded desktop session page after assignment cleanup.
+    const sessions = await tx
+      .select({
+        id: desktopEditSessions.id,
+        workspaceId: desktopEditSessions.workspaceId,
+      })
+      .from(desktopEditSessions)
+      .where(desktopScope)
+      .orderBy(desktopEditSessions.id)
+      .limit(LIMITS.memberRemovalCleanupBatchSize)
+      .for("update");
+    if (sessions.length === 0) {
+      break;
+    }
+    // db-await-in-loop: transition and audit the held desktop page before consuming the next counted batch.
+    const changed = await transitionBatch({
+      tx,
+      spec: TRANSITIONS.desktopEditSessions,
+      ids: sessions.map(({ id }) => id),
+      options: {
+        from: ["open"],
+        to: "cancelled",
+        set: { closedAt: new Date() },
+      },
+      recordTransitionAuditEvent: async (auditTx, rows) => {
+        const ids = new Set(rows.map(({ id }) => id));
+        await recordMemberSessionTransitions({
+          tx: auditTx,
+          actorUserId,
+          resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+          rows: sessions
+            .filter(({ id }) => ids.has(id))
+            .map((row) => ({
+              id: row.id,
+              workspaceId: row.workspaceId,
+              organizationId,
+            })),
+        });
+      },
+    });
+    if (changed.length !== sessions.length) {
+      panic("Locked desktop sessions changed during member removal");
+    }
+  }
+};
+
 /**
  * Better Auth's permission/owner checks precede this transactional operation.
  * The membership row, its credentials and every assignment leave in the
@@ -1182,10 +1408,6 @@ export const removeOrganizationMemberInTransaction = async (
     }
   }
   // Workspace locks precede run, step, obligation and entity cleanup.
-  const affectedWorkspaceIds = tx
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(eq(workspaces.organizationId, organizationId));
   await cancelMemberFlowRuns({
     tx,
     organizationId,
@@ -1210,16 +1432,12 @@ export const removeOrganizationMemberInTransaction = async (
         eq(workspaces.leadUserId, userId),
       ),
     );
-  await tx
-    .update(desktopEditSessions)
-    .set({ status: "cancelled", closedAt: new Date() })
-    .where(
-      and(
-        inArray(desktopEditSessions.workspaceId, affectedWorkspaceIds),
-        eq(desktopEditSessions.createdBy, userId),
-        eq(desktopEditSessions.status, "open"),
-      ),
-    );
+  await cancelMemberDesktopSessions({
+    tx,
+    organizationId,
+    userId,
+    actorUserId,
+  });
   await tx
     .delete(mcpUserConnections)
     .where(
