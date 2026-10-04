@@ -40,6 +40,105 @@ afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
 
+const renderParties = async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+  });
+  clients.push(client);
+  const root = createRootRoute({
+    component: () => <PartiesSection workspaceId={WORKSPACE_ID} />,
+  });
+  const router = createRouter({
+    routeTree: root,
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
+  await router.load();
+  const view = render(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </IntlProvider>,
+  );
+  return view;
+};
+
+test.each([
+  { kind: "client", status: 500, code: "internal_server_error" },
+  { kind: "personal", status: 500, code: "internal_server_error" },
+  { kind: "client", status: 422, code: "matter_contact_capacity_exceeded" },
+  { kind: "personal", status: 422, code: "matter_contact_capacity_exceeded" },
+])(
+  "a failed $kind contacts read ($code) shows an error and retry",
+  async ({ kind, status, code }) => {
+    let reads = 0;
+    const initialRead = Promise.withResolvers<Response>();
+    globalThis.fetch = Object.assign(
+      async (input: RequestInfo | URL) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.pathname === `/v1/workspaces/${WORKSPACE_ID}`) {
+          return Response.json({
+            id: WORKSPACE_ID,
+            name: "Matter",
+            client:
+              kind === "personal"
+                ? null
+                : {
+                    id: "00000000-0000-4000-a000-000000000001",
+                    type: "person",
+                    displayName: "Client",
+                    color: null,
+                  },
+          });
+        }
+        if (url.pathname === `/v1/workspaces/${WORKSPACE_ID}/contacts`) {
+          reads += 1;
+          if (reads === 1) {
+            return await initialRead.promise;
+          }
+          return Response.json({
+            contacts: [],
+            overflow: false,
+          } satisfies ContactRead);
+        }
+        throw new Error(`Unexpected parties transport: ${url.pathname}`);
+      },
+      { preconnect: () => undefined },
+    );
+    const view = await renderParties();
+    await waitFor(() =>
+      expect(
+        view.getByRole("status", { name: messages.common.loading }),
+      ).toBeDefined(),
+    );
+    expect(view.queryByText(messages.workspaces.parties.noParties)).toBeNull();
+    await act(async () => {
+      initialRead.resolve(
+        Response.json({ code, message: "Internal read details" }, { status }),
+      );
+    });
+    await waitFor(() =>
+      expect(view.getByRole("alert").textContent).toContain(
+        status === 422
+          ? messages.errors.apiCodes.matterContactCapacityExceeded
+          : messages.errors.actionFailed,
+      ),
+    );
+    expect(view.queryByText(messages.workspaces.parties.noParties)).toBeNull();
+    expect(view.queryByText("Internal read details")).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: messages.common.retry }));
+    await waitFor(() =>
+      expect(
+        view.getByText(messages.workspaces.parties.noParties),
+      ).toBeDefined(),
+    );
+    expect(view.queryByRole("alert")).toBeNull();
+    expect(reads).toBe(2);
+  },
+);
+
 test.each(["client", "personal"])(
   "an overflowing %s matter retains visible links and allows removing them",
   async (kind) => {
@@ -70,7 +169,6 @@ test.each(["client", "personal"])(
         }) satisfies ContactRead["contacts"][number],
     );
     const initialRead = Promise.withResolvers<Response>();
-    const readStarted = Promise.withResolvers<undefined>();
     const deletions: string[] = [];
     let reads = 0;
     globalThis.fetch = Object.assign(
@@ -96,7 +194,6 @@ test.each(["client", "personal"])(
         if (url.pathname === `/v1/workspaces/${WORKSPACE_ID}/contacts`) {
           reads += 1;
           if (reads === 1) {
-            readStarted.resolve(undefined);
             return await initialRead.promise;
           }
           return Response.json({
@@ -115,26 +212,13 @@ test.each(["client", "personal"])(
       },
       { preconnect: () => undefined },
     );
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false, gcTime: Infinity } },
-    });
-    clients.push(client);
-    const root = createRootRoute({
-      component: () => <PartiesSection workspaceId={WORKSPACE_ID} />,
-    });
-    const router = createRouter({
-      routeTree: root,
-      history: createMemoryHistory({ initialEntries: ["/"] }),
-    });
-    await router.load();
-    const view = render(
-      <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <QueryClientProvider client={client}>
-          <RouterProvider router={router} />
-        </QueryClientProvider>
-      </IntlProvider>,
+    const view = await renderParties();
+    await waitFor(() =>
+      expect(
+        view.getByRole("status", { name: messages.common.loading }),
+      ).toBeDefined(),
     );
-    await readStarted.promise;
+    expect(view.queryByText(messages.workspaces.parties.noParties)).toBeNull();
     await act(async () => {
       initialRead.resolve(
         Response.json({
@@ -160,7 +244,7 @@ test.each(["client", "personal"])(
       .at(0);
     expect(button).toBeDefined();
     if (!button) {
-      return;
+      throw new Error("expected a remove contact link button");
     }
     const removedLink = links.at(0);
     if (!removedLink) {

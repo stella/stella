@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { ContactType } from "@stll/api-contract";
@@ -33,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -45,8 +47,10 @@ import { useCreateContact } from "@/lib/contacts/mutations";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import {
   PARTY_ROLES,
@@ -66,8 +70,6 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   const queryClient = useQueryClient();
   const workspaceQuery = useQuery(workspaceOptions(workspaceId));
   const workspace = workspaceQuery.data;
-  const { data: contactRead } = useQuery(workspaceContactsOptions(workspaceId));
-  const parties = contactRead?.contacts;
   const updateWorkspace = useUpdateWorkspace();
   const createContact = useCreateContact();
 
@@ -139,9 +141,6 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
       </section>
     </div>
   ) : null;
-  if (!client && (!parties || parties.length === 0)) {
-    return personalSection;
-  }
 
   return (
     <div className="flex flex-col">
@@ -199,14 +198,65 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
           </h3>
           <AddPartyDialog showTriggerLabel={false} workspaceId={workspaceId} />
         </div>
-        {contactRead?.overflow && (
-          <p className="text-muted-foreground px-3 py-2 text-sm" role="status">
-            {t("errors.apiCodes.matterContactCapacityExceeded")}
-          </p>
-        )}
-        {parties && parties.length > 0 ? (
+        <PartiesList workspaceId={workspaceId} />
+      </section>
+    </div>
+  );
+};
+
+const PartiesList = ({ workspaceId }: PartiesSectionProps) => {
+  const t = useTranslations();
+  const view = useQueryView(useQuery(workspaceContactsOptions(workspaceId)), {
+    isEmpty: ({ contacts, overflow }) => contacts.length === 0 && !overflow,
+  });
+  switch (view.type) {
+    case "pending":
+      return (
+        <div
+          aria-label={t("common.loading")}
+          className="px-3 py-2"
+          role="status"
+        >
+          <Skeleton className="h-4 w-full" />
+        </div>
+      );
+    case "error":
+      return (
+        <PartiesReadError
+          error={view.error}
+          onRetry={() => detached(view.retry(), "parties-section.retry")}
+        />
+      );
+    case "empty":
+      return (
+        <p
+          className={cn(
+            "text-muted-foreground flex items-center px-3 text-sm italic",
+            TOOLBAR_ROW_HEIGHT,
+          )}
+        >
+          {t("workspaces.parties.noParties")}
+        </p>
+      );
+    case "items":
+      return (
+        <>
+          {view.refetchError !== undefined && (
+            <PartiesReadError
+              error={view.refetchError}
+              onRetry={() => detached(view.retry(), "parties-section.retry")}
+            />
+          )}
+          {view.items.overflow && (
+            <p
+              className="text-muted-foreground px-3 py-2 text-sm"
+              role="status"
+            >
+              {t("errors.apiCodes.matterContactCapacityExceeded")}
+            </p>
+          )}
           <ul>
-            {parties.map((party) => (
+            {view.items.contacts.map((party) => (
               <PartyRow
                 key={party.id}
                 party={party}
@@ -214,17 +264,29 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
               />
             ))}
           </ul>
-        ) : (
-          <p
-            className={cn(
-              "text-muted-foreground flex items-center px-3 text-sm italic",
-              TOOLBAR_ROW_HEIGHT,
-            )}
-          >
-            {t("workspaces.parties.noParties")}
-          </p>
-        )}
-      </section>
+        </>
+      );
+    default:
+      view satisfies never;
+      return panic("Unhandled parties query state");
+  }
+};
+
+type PartiesReadErrorProps = {
+  error: unknown;
+  onRetry: () => void;
+};
+
+const PartiesReadError = ({ error, onRetry }: PartiesReadErrorProps) => {
+  const t = useTranslations();
+  return (
+    <div className="flex items-center gap-2 px-3 py-2" role="alert">
+      <p className="text-destructive text-sm">
+        {userErrorFromThrown(error, t("errors.actionFailed"))}
+      </p>
+      <Button onClick={onRetry} size="xs" variant="ghost">
+        {t("common.retry")}
+      </Button>
     </div>
   );
 };
