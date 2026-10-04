@@ -1,6 +1,5 @@
 {
   "ai-output-strict-schema/ai-output-strict-schema::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
-  "auth-lifecycle/after-remove-member-revokes-artifacts::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "auth-lifecycle/no-direct-auth-artifact-delete::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "bun-test-hygiene/no-disabled-tests::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
   "bun-test-hygiene/no-focused-tests::untested": "Existing rule lacks reporting and clean coverage recorded by the shared harness.",
