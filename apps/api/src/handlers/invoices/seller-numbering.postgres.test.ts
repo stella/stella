@@ -326,10 +326,16 @@ if (!databaseUrl || !runPostgres) {
         if (event.changes?.["action"]?.new !== "finalize") {
           return [];
         }
+        const invoiceNumber = event.changes["invoiceNumber"]?.new;
+        if (typeof invoiceNumber !== "string") {
+          panic(
+            "Expected an invoice number string in the finalize audit event",
+          );
+        }
         return [
           {
             invoiceId: event.resourceId,
-            invoiceNumber: event.changes["invoiceNumber"]?.new,
+            invoiceNumber,
           },
         ];
       });
