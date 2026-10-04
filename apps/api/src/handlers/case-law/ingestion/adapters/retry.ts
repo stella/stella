@@ -1,6 +1,7 @@
 // parser-output-unchanged: refusal stops are opt-in; existing response and retry semantics are unchanged.
 // parser-output-unchanged: retries and fetch-stage observation affect request scheduling and diagnostics only, not parsed output.
 // parser-output-unchanged: rethrowCycleStop moves the existing cycle-stop rethrow here unchanged; parsed output is not affected.
+// parser-output-unchanged: a 429 to a typed read ends the cycle through a refusal mode; returned responses are unchanged.
 /**
  * The only way a case-law adapter reaches its publisher.
  *
