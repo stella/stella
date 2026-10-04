@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test, setDefaultTimeout } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+
+import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
 
 import { invitation, member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -318,8 +320,18 @@ if (!databaseUrl || !runPostgresTests) {
               firstResult,
               secondResult,
             ]);
-            expect(Result.isError(earlier)).toBe(false);
-            expect(Result.isError(later)).toBe(first === "removal");
+            expect(
+              earlier,
+              Bun.inspect(earlier, { depth: Infinity }),
+            ).toMatchObject({
+              status: "ok",
+            });
+            expect(
+              later,
+              Bun.inspect(later, { depth: Infinity }),
+            ).toMatchObject({
+              status: first === "removal" ? "error" : "ok",
+            });
             if (first === "removal" && Result.isError(later)) {
               expect(later.error).toMatchObject({
                 status: 400,
@@ -381,6 +393,138 @@ if (!databaseUrl || !runPostgresTests) {
         });
       });
     }
+  }
+  for (const holder of ["projection", "writer"] as const) {
+    test(`contact cleanup with a held ${holder} transaction`, async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const { db: holdingDb } = openClient();
+        const { db: removalDb } = openClient();
+        const held = Promise.withResolvers<undefined>();
+        const release = Promise.withResolvers<undefined>();
+        const organizationId = mintAuthProviderId<"organization">();
+        const actorUserId = mintAuthProviderId<"user">();
+        const leaverUserId = mintAuthProviderId<"user">();
+        const memberId = Bun.randomUUIDv7();
+        const contactId = createSafeId<"contact">();
+        await db.insert(user).values(
+          [actorUserId, leaverUserId].map((id) => ({
+            id,
+            name: "Contact member",
+            email: `${id}@example.test`,
+          })),
+        );
+        await db.insert(organization).values({
+          id: organizationId,
+          name: "Contact organization",
+          slug: organizationId,
+          createdAt: new Date(),
+        });
+        try {
+          await db.insert(member).values([
+            {
+              id: Bun.randomUUIDv7(),
+              organizationId,
+              userId: actorUserId,
+              role: "owner",
+              createdAt: new Date(),
+            },
+            {
+              id: memberId,
+              organizationId,
+              userId: leaverUserId,
+              role: "member",
+              createdAt: new Date(),
+            },
+          ]);
+          await db.insert(contacts).values({
+            id: contactId,
+            organizationId,
+            type: "person",
+            displayName: "Contact assignment",
+            originatingAttorneyId: leaverUserId,
+          });
+          const holderResult = Result.tryPromise(
+            async () =>
+              await holdingDb.transaction(async (tx) => {
+                if (holder === "projection") {
+                  // The projection insert holds the source contact's FK KEY SHARE.
+                  await tx.execute(sql`
+                  INSERT INTO contact_search_documents (
+                    contact_id, organization_id, contact_type, title, searchable_text, tsv
+                  ) VALUES (${contactId}, ${organizationId}, 'person', 'Contact assignment', '', ''::tsvector)
+                `);
+                } else {
+                  await tx
+                    .update(contacts)
+                    .set({ displayName: "Contact writer" })
+                    .where(eq(contacts.id, contactId));
+                }
+                held.resolve(undefined);
+                await release.promise;
+              }),
+          );
+          await Promise.race([
+            held.promise,
+            holderResult.then((result) => {
+              if (Result.isError(result)) {
+                throw result.error;
+              }
+              throw new Error("Contact transaction did not hold its lock");
+            }),
+          ]);
+          try {
+            const removalResult = await safeDbFromScoped(
+              async (fn) =>
+                await removalDb.transaction(
+                  async (tx) => await fn(asTestRaw<Transaction>(tx)),
+                ),
+            )(
+              async (tx) =>
+                await removeOrganizationMemberInTransaction(tx, {
+                  organizationId,
+                  memberId,
+                  userId: leaverUserId,
+                  actorUserId,
+                }),
+            );
+            if (holder === "projection") {
+              expect(removalResult).toMatchObject({ status: "ok" });
+            } else {
+              expect(removalResult).toMatchObject({
+                status: "error",
+                error: {
+                  cause: { status: 409, code: MEMBER_REMOVAL_BUSY_CODE },
+                },
+              });
+            }
+            expect(await db.$count(member, eq(member.id, memberId))).toBe(
+              holder === "projection" ? 0 : 1,
+            );
+            const rows = await db
+              .select({ originatingAttorneyId: contacts.originatingAttorneyId })
+              .from(contacts)
+              .where(eq(contacts.id, contactId));
+            expect(rows).toEqual([
+              {
+                originatingAttorneyId:
+                  holder === "projection" ? null : leaverUserId,
+              },
+            ]);
+          } finally {
+            release.resolve(undefined);
+            expect(await holderResult).toMatchObject({ status: "ok" });
+          }
+        } finally {
+          release.resolve(undefined);
+          await db
+            .delete(organization)
+            .where(eq(organization.id, organizationId));
+          await db.delete(user).where(eq(user.id, actorUserId));
+          await db.delete(user).where(eq(user.id, leaverUserId));
+        }
+      });
+    });
   }
   test("rejoining starts with current memberships and operation state", async () => {
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {

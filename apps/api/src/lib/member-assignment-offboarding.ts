@@ -474,7 +474,9 @@ const clearMemberContactAssignments = async ({
     remaining -= LIMITS.memberRemovalCleanupBatchSize
   ) {
     // Matter creation already locks its client before organization membership.
-    // Refuse contention here instead of introducing the opposite waiting order.
+    // Refuse writer contention instead of introducing the opposite waiting order.
+    // Attorney updates preserve contact keys, so projection FK checks can retain
+    // KEY SHARE while cleanup takes NO KEY UPDATE without waiting.
     const contactResult = await Result.tryPromise({
       try: async () =>
         // db-await-in-loop: drain attorney references in bounded audited batches.
@@ -489,7 +491,7 @@ const clearMemberContactAssignments = async ({
           .where(attorneyScope)
           .orderBy(contacts.id)
           .limit(LIMITS.memberRemovalCleanupBatchSize)
-          .for("update", { noWait: true }),
+          .for("no key update", { noWait: true }),
       catch: (error) => error,
     });
     if (Result.isError(contactResult)) {

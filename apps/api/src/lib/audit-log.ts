@@ -404,7 +404,7 @@ type BackgroundAuditGroup = {
 };
 
 type RecordAuditGroupsOptions = {
-  tx: Transaction;
+  tx: AuditTransaction;
   groups: readonly BackgroundAuditGroup[];
   recordAuditEvent?: AuditRecorder | undefined;
 };
