@@ -709,7 +709,8 @@ const settleCompaction = async (
   db: SchedulerDb,
   compactionId: SafeId<"chatThreadCompaction">,
 ): Promise<boolean> => {
-  const settledAt = new Date();
+  // The database clock: a write timestamp, not a decision about a due slot.
+  const settledAt = sql`now()`;
   // audit: skip — settles a compaction its owner can no longer read; no member-visible state changes and the skip is logged
   const settled = await db
     .update(chatThreadCompactions)
