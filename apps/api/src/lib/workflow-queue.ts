@@ -1496,6 +1496,7 @@ export const processWorkflowEntityRun = async ({
 
     // Each level reads anew, so access is settled again before it; level 0
     // was settled above.
+    // db-await-in-loop: one access check per dependency level, which must run before that level's reads
     if (level > 0 && !(await requesterCanOpenMatter(actor))) {
       signal.throwIfAborted();
       await failEntity({
