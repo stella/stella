@@ -17,7 +17,7 @@
  * producer cannot grow a new outcome field that no kind accounts for.
  */
 import { Result } from "better-result";
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -51,7 +51,6 @@ import type {
   FillDiagnostics,
   FillDiagnosticSources,
 } from "@/api/lib/templates/template-fill-completion";
-import * as templateFillService from "@/api/lib/templates/template-fill-service";
 import type {
   FilledDocumentMember,
   FillTemplateResult,
@@ -258,17 +257,27 @@ const TEMPLATE_ID = "00000000-0000-4000-8000-000000000000";
 const organizationId = toSafeId<"organization">("org_parity");
 const userId = toSafeId<"user">("user_parity");
 
-/** A transaction that keeps the rows written to it. */
-const recordingDb = () => {
-  const rows: Record<string, unknown>[] = [];
-  const { scopedDb, safeDb } = createScopedDbMock({
-    insert: () => ({
-      values: async (row: Record<string, unknown>) => {
-        rows.push(row);
+/** A transaction that keeps the rows inserted into it and accepts the
+ *  template use-count bump. */
+const recordingTx = (rows: Record<string, unknown>[]) => ({
+  insert: () => ({
+    values: async (row: Record<string, unknown>) => {
+      rows.push(row);
+      await Promise.resolve();
+    },
+  }),
+  update: () => ({
+    set: () => ({
+      where: async () => {
         await Promise.resolve();
       },
     }),
-  });
+  }),
+});
+
+const recordingDb = () => {
+  const rows: Record<string, unknown>[] = [];
+  const { scopedDb, safeDb } = createScopedDbMock(recordingTx(rows));
   return { rows, scopedDb, safeDb };
 };
 
@@ -324,40 +333,36 @@ const chatVerdict = async (
   unrestoredFields: unknown;
 }> => {
   const { rows, scopedDb } = recordingDb();
-  const fill = spyOn(
-    templateFillService,
-    "fillStoredTemplate",
-  ).mockResolvedValue({ text: "Filled.", ...sources });
-  try {
-    const tools = createTemplateTools({
-      orgAIConfig: null,
-      managedAIResidency: "eu",
-      scopedDb,
-      safeDb: asTestRaw<SafeDb>(() => {
-        throw new Error("no metered step runs in this test");
-      }),
-      organizationId,
-      userId,
-      thirdPartyBoundary: anonymizedBoundary(),
-    });
-    const execute = asTestRaw<
-      (input: unknown, options: unknown) => Promise<Record<string, unknown>>
-    >(tools.fill_template.execute);
-    // Each unrestored path holds a placeholder the turn never sent; the
-    // others hold plain text.
-    const values = Object.fromEntries([
-      ["plain_value", "Plain text"],
-      ...unrestoredFields.map((path, index) => [path, `[PERSON_${index + 1}]`]),
-    ]);
-    const result = await execute({ templateId: TEMPLATE_ID, values }, {});
-    return {
-      completionStatus: result["completionStatus"],
-      recorded: rows.at(0)?.["status"],
-      unrestoredFields: result["unrestoredFields"],
-    };
-  } finally {
-    fill.mockRestore();
-  }
+  const tools = createTemplateTools({
+    orgAIConfig: null,
+    managedAIResidency: "eu",
+    scopedDb,
+    safeDb: asTestRaw<SafeDb>(() => {
+      throw new Error("no metered step runs in this test");
+    }),
+    organizationId,
+    userId,
+    thirdPartyBoundary: anonymizedBoundary(),
+    dependencies: {
+      fillStoredTemplate: async () =>
+        await Promise.resolve({ text: "Filled.", ...sources }),
+    },
+  });
+  const execute = asTestRaw<
+    (input: unknown, options: unknown) => Promise<Record<string, unknown>>
+  >(tools.fill_template.execute);
+  // Each unrestored path holds a placeholder the turn never sent; the
+  // others hold plain text.
+  const values = Object.fromEntries([
+    ["plain_value", "Plain text"],
+    ...unrestoredFields.map((path, index) => [path, `[PERSON_${index + 1}]`]),
+  ]);
+  const result = await execute({ templateId: TEMPLATE_ID, values }, {});
+  return {
+    completionStatus: result["completionStatus"],
+    recorded: rows.at(0)?.["status"],
+    unrestoredFields: result["unrestoredFields"],
+  };
 };
 
 const mcpContext = (
@@ -372,14 +377,7 @@ const mcpContext = (
       text: "Filled.",
       ...sources,
     });
-  const { scopedDb, safeDb } = createScopedDbMock({
-    insert: () => ({
-      values: async (row: Record<string, unknown>) => {
-        rows.push(row);
-        await Promise.resolve();
-      },
-    }),
-  });
+  const { scopedDb, safeDb } = createScopedDbMock(recordingTx(rows));
   return {
     accessibleWorkspaceIds: [],
     accessibleWorkspaceIdSet: new Set(),
