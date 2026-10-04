@@ -293,20 +293,31 @@ const SHEET_READING_SQL = {
       AND right(${ecliLeadingNumbersSql(ordinal)}, length(${suffix})) = ${suffix}
     )`;
   },
-  stated: (value, { sheetNumber }) => sql`(
+  // A sheet of the file it was split from only: the candidate's stored
+  // docket, which the adapter split it off, is the cited file under the
+  // citation key and read as a file by its grammar at ingestion
+  // (`docket_family_key`). The key alone folds the letter case a grammar
+  // keeps (`NAD 224/2014` reads as no file).
+  stated: (value, { sheetNumber, familyKey }, holder) => sql`(
         btrim(${value}) ~ ${String.raw`^[0-9]{1,${String(DECISION_STATED_SHEET_MAX_DIGITS)}}$`}
     AND ${numeralSql(sql`btrim(${value})`)} = ${numeralSql(sheetNumber)}
+    AND ${holder}.citation_key = ${familyKey}
+    AND ${holder}.docket_family_key IS NOT NULL
   )`,
 } as const satisfies Record<
   SqlReadSheetSourceEntry["reading"],
-  (value: SQL, cited: CitedSheet) => SQL
+  (value: SQL, cited: CitedSheet, holder: SQL) => SQL
 >;
 
 /**
  * The candidate columns `holderAnswersSheetSql` reads, which every relation
  * it is applied to must carry.
  */
-const HOLDER_SHEET_COLUMNS = ["metadata"] as const;
+const HOLDER_SHEET_COLUMNS = [
+  "metadata",
+  "citation_key",
+  "docket_family_key",
+] as const;
 
 const holderSheetColumnsSql = (holder: SQL): SQL =>
   sql.join(
@@ -321,8 +332,8 @@ type HolderAnswersSheetSqlOptions = CitedSheet & {
 
 /**
  * A candidate that answers to the sheet the citing text printed, known from
- * a sheet source SQL reads (`SQL_READ_SHEET_SOURCES`): the recorded sheet or
- * an ECLI in a sheet scheme. The court prints the sheet the document sits on
+ * a sheet source SQL reads (`SQL_READ_SHEET_SOURCES`): the sheet recorded
+ * off its stored docket of the cited file, or an ECLI in a sheet scheme. The court prints the sheet the document sits on
  * ("č. j. 8 As 287/2020-33"); a sheet known only from a docket spelling is
  * left to a lookup, so such a citation stays unresolved rather than resolved
  * by a reading that disagrees with the lookup's. The sheet travels as a bind
@@ -341,7 +352,7 @@ export const holderAnswersSheetSql = ({
         ({ source, reading }) => sql`EXISTS (
           SELECT 1
             FROM (${SHEET_SOURCE_SQL[source].values(holder)}) AS sheet_source(value)
-           WHERE ${SHEET_READING_SQL[reading](value, { sheetNumber, familyKey })}
+           WHERE ${SHEET_READING_SQL[reading](value, { sheetNumber, familyKey }, holder)}
         )`,
       ),
       sql` OR `,

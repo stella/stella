@@ -13,7 +13,10 @@
  * set a lookup reading the same sources says carries it. A sheet stored
  * where the public reader cannot see it (the `sheet_number` column) is
  * admitted by neither, and one known only from a docket spelling is seen by
- * the lookup alone.
+ * the lookup alone. A recorded sheet is written as an adapter writes it,
+ * split off the decision's reference with the remaining docket stored, so
+ * one recorded off another file's reference is admitted by neither, though
+ * the decision is a candidate of the cited file by a case-number identifier.
  */
 
 import { panic } from "better-result";
@@ -38,6 +41,7 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
+import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import {
   holderAnswersSheetSql,
   SQL_READ_SHEET_SOURCES,
@@ -47,9 +51,12 @@ import {
   bareCitationKey,
   normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { DEFAULT_PRIMARY_REFERENCE_TYPE } from "@/api/lib/legal-search/decision-primary-reference";
+import { storedCaseNumberOf } from "@/api/lib/legal-search/ingestion-normalization";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   createTestPglite,
@@ -138,6 +145,13 @@ const sheetPickArb: fc.Arbitrary<SheetPick> = fc.oneof(
     .map((value) => ({ kind: "other", value }) as const),
 );
 
+const sheetTailArb = fc.record({
+  kind: fc.constant("sheet" as const),
+  sheet: sheetPickArb,
+  dash: fc.constantFrom("-", " - ", "– ", " – ", "—", " ‐ "),
+  zero: fc.boolean(),
+});
+
 const docketSpellingArb: fc.Arbitrary<DocketSpelling> = fc.record({
   file: fc.constantFrom("own", "other"),
   form: fc.constantFrom(...DOCKET_FORMS),
@@ -146,13 +160,20 @@ const docketSpellingArb: fc.Arbitrary<DocketSpelling> = fc.record({
   tail: fc.oneof(
     fc.constant({ kind: "none" } as const),
     fc.constant({ kind: "part" } as const),
-    fc.record({
-      kind: fc.constant("sheet" as const),
-      sheet: sheetPickArb,
-      dash: fc.constantFrom("-", " - ", "– ", " – ", "—", " ‐ "),
-      zero: fc.boolean(),
-    }),
+    sheetTailArb,
   ),
+});
+
+/**
+ * A reference an adapter splits a sheet off (`splitCaseReference`): a docket
+ * dated after a slash, then the sheet, then nothing.
+ */
+const splitReferenceArb: fc.Arbitrary<DocketSpelling> = fc.record({
+  file: fc.constantFrom("own", "other"),
+  form: fc.constantFrom("as-written", "lowercase", "uppercase"),
+  prefix: fc.constantFrom("", "č. j. "),
+  trailing: fc.constant(""),
+  tail: sheetTailArb,
 });
 
 const ecliSpellingArb: fc.Arbitrary<EcliSpelling> = fc.record({
@@ -168,14 +189,26 @@ const recordedSheetArb: fc.Arbitrary<RecordedSheet> = fc.record({
   storage: fc.constantFrom("column", "metadata", "both"),
 });
 
-const decisionSpecArb: fc.Arbitrary<DecisionSpec> = fc.record({
-  caseNumber: docketSpellingArb,
-  published: fc.option(docketSpellingArb, { nil: null }),
-  caseNumberIdentifiers: fc.array(docketSpellingArb, { maxLength: 2 }),
-  recorded: fc.option(recordedSheetArb, { nil: null }),
-  ecli: fc.option(ecliSpellingArb, { nil: null }),
-  ecliIdentifiers: fc.array(ecliSpellingArb, { maxLength: 1 }),
-});
+const decisionSpecArb: fc.Arbitrary<DecisionSpec> = fc.oneof(
+  fc.record({
+    caseNumber: docketSpellingArb,
+    published: fc.option(docketSpellingArb, { nil: null }),
+    caseNumberIdentifiers: fc.array(docketSpellingArb, { maxLength: 2 }),
+    recorded: fc.constant(null),
+    ecli: fc.option(ecliSpellingArb, { nil: null }),
+    ecliIdentifiers: fc.array(ecliSpellingArb, { maxLength: 1 }),
+  }),
+  // A sheet is recorded only off a reference it was split from: the one the
+  // court published, or the stored docket where none was kept.
+  fc.record({
+    caseNumber: splitReferenceArb,
+    published: fc.option(splitReferenceArb, { nil: null }),
+    caseNumberIdentifiers: fc.array(docketSpellingArb, { maxLength: 2 }),
+    recorded: recordedSheetArb,
+    ecli: fc.option(ecliSpellingArb, { nil: null }),
+    ecliIdentifiers: fc.array(ecliSpellingArb, { maxLength: 1 }),
+  }),
+);
 
 const scenarioArb: fc.Arbitrary<Scenario> = fc.record({
   file: fc.nat({ max: FILES.length - 1 }),
@@ -294,9 +327,20 @@ const writtenDecisionOf = (
   spec: DecisionSpec,
 ): WrittenDecision => {
   const id = createSafeId<"caseLawDecision">();
-  const caseNumber = docketOf(scenario, spec.caseNumber);
   const published =
     spec.published === null ? null : docketOf(scenario, spec.published);
+  // The docket an adapter stores beside a recorded sheet is what remains of
+  // the reference it split the sheet off, so the two name one file.
+  const caseNumber =
+    spec.recorded === null
+      ? docketOf(scenario, spec.caseNumber)
+      : storedCaseNumberOf({
+          caseNumber: splitCaseReference(
+            published ?? docketOf(scenario, spec.caseNumber),
+          ).caseNumber,
+          country: "CZE",
+          sourceDocumentId: id,
+        });
   const recorded =
     spec.recorded === null ? null : recordedValueOf(scenario, spec.recorded);
   const storage = spec.recorded?.storage;
@@ -340,7 +384,11 @@ const writtenDecisionOf = (
       sourceId,
       sourceDocumentId: id,
       slug: id,
-      caseNumber,
+      ...decisionDocketColumns({
+        caseNumber,
+        caseNumberType: DEFAULT_PRIMARY_REFERENCE_TYPE,
+        country: "CZE",
+      }),
       court: "Nejvyšší správní soud",
       country: "CZE",
       language: "cs",
@@ -421,8 +469,10 @@ const carriedByLookup = async (
   }
   const resolution = resolveDecisionIdentity(intent, hits, { sheetSources });
   switch (resolution.status) {
+    // Every written decision holds the file's docket, so nothing answers
+    // only where each is known under another sheet: none carries this one.
     case "none":
-      return panic("every written decision holds the file's docket");
+      return [];
     case "unique":
       return [resolution.decision.id];
     case "ambiguous":
@@ -540,6 +590,34 @@ describe("a decision's sheet from any source", () => {
         admitted: readInSql ? [carrier] : [],
         carried: [carrier],
       });
+    }
+  });
+
+  test("a sheet recorded off another file's reference is carried by neither", async () => {
+    const scenario: Scenario = {
+      file: 0,
+      cited: { value: 33, zero: false },
+      decisions: [],
+    };
+    const otherFileSheet: DocketSpelling = { ...CITED_DOCKET, file: "other" };
+    const recorded: RecordedSheet = {
+      value: CITED,
+      zero: false,
+      padded: false,
+      storage: "metadata",
+    };
+    // Split off the reference the court published, or off the stored docket
+    // where none was kept; either way the decision reaches the cited file
+    // only through the bare docket every decision holds as an identifier.
+    for (const spec of [
+      { ...NOTHING_ELSE, published: otherFileSheet, recorded },
+      { ...NOTHING_ELSE, caseNumber: otherFileSheet, recorded },
+    ]) {
+      const written = await writeScenario(scenario, [spec, NOTHING_ELSE]);
+      expect({
+        admitted: await admittedBySql(scenario, written),
+        carried: await carriedByLookup(scenario, written),
+      }).toEqual({ admitted: [], carried: [] });
     }
   });
 

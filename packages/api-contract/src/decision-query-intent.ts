@@ -705,13 +705,15 @@ const SHEET_READINGS = {
     return sheet === null ? { kind: "none" } : { kind: "sheet", value: sheet };
   },
   // Ingestion splits the recorded sheet off the reference as the court
-  // published it, or off the stored docket where none was kept
-  // (`splitCaseReference`), so it is a sheet of that docket's file only: a
-  // hit reached through a parallel file number does not carry it here.
-  stated: (value, context, { publishedCaseNumber, caseNumber }) => {
+  // published it and stores the docket that remains (`splitCaseReference`),
+  // so it is a sheet of the stored docket's file only: a hit reached through
+  // a parallel file number does not carry it here. The remainder is read
+  // rather than the published reference, whose sheet the grammar may not
+  // take (more than four digits) though the split did.
+  stated: (value, context, { caseNumber }) => {
     const stated = value.trim();
     return STATED_SHEET_RE.test(stated) &&
-      fileReferenceOf(publishedCaseNumber ?? caseNumber, context) !== null
+      fileReferenceOf(caseNumber, context) !== null
       ? { kind: "sheet", value: numeral(stated) }
       : { kind: "none" };
   },

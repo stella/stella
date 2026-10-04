@@ -19,6 +19,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
@@ -82,7 +83,7 @@ type HolderSpec = {
   identifiers?: { type: DecisionIdentifierType; normalizedValue: string }[];
   /** Overrides the case key on the holder's own `citation_key`. */
   citationKey?: string | null;
-  /** Overrides the case key as the holder's stored docket. */
+  /** Overrides the case's docket (or key) as the holder's stored docket. */
   caseNumber?: string;
   /**
    * A sheet in the `sheet_number` column, which a lookup cannot read; the
@@ -302,6 +303,24 @@ const cases: Case[] = [
       { metadata: { sheetNumber: "15" } },
     ],
     expect: { status: "resolved", rule: "sheet-number", target: "sheet" },
+  },
+  {
+    // The adapter split the recorded sheet off the holder's own docket, of
+    // another file than the one cited, which it is a candidate of only by
+    // a parallel case-number identifier.
+    name: "the printed sheet recorded off another file's docket",
+    docket: "8 As 7/2020",
+    reference: { hints: { sheetNumber: "14" } },
+    holders: [
+      {
+        caseNumber: "9 As 7/2020",
+        citationKey: bareCitationKey("9 As 7/2020"),
+        identifiers: [{ type: "case-number", normalizedValue: "$key" }],
+        metadata: { sheetNumber: "14", publishedCaseNumber: "9 As 7/2020-14" },
+      },
+      { metadata: { sheetNumber: "15" } },
+    ],
+    expect: { status: "ambiguous" },
   },
   {
     // A lookup reads the recorded sheet from the metadata only, so a
@@ -592,17 +611,22 @@ const writeCase = async (
     if (holder.name !== undefined) {
       names.set(id, holder.name);
     }
+    // Stored as the docket the case cites, keyed as ingestion keys it, so a
+    // grammar reads its file as it reads a written row's.
+    const caseNumber = holder.caseNumber ?? docket ?? key;
+    const country = holder.country ?? "CZE";
     await db.insert(caseLawDecisions).values({
       id,
       sourceId,
       sourceDocumentId: id,
       slug: id,
-      caseNumber: holder.caseNumber ?? key,
+      caseNumber,
       citationKey: holder.citationKey === undefined ? key : holder.citationKey,
+      docketFamilyKey: docketFamilyKeyOf(caseNumber, country),
       sheetNumber: holder.sheetNumber ?? null,
       metadata: holder.metadata ?? {},
       court: holder.court ?? NS,
-      country: holder.country ?? "CZE",
+      country,
       language: holder.language ?? "cs",
       decisionDate:
         holder.decisionDate === undefined ? "2019-01-01" : holder.decisionDate,
