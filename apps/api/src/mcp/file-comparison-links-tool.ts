@@ -10,6 +10,8 @@ import * as v from "valibot";
 
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 
+import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
+import { probeEncryptedOoxml } from "@/api/lib/files/encrypted-ooxml";
 import { presignUploadUrl, putPresignedUpload } from "@/api/lib/s3-presign";
 import {
   parseSafeOutboundUrl,
@@ -274,6 +276,16 @@ const resolveLinkedFile = async ({
         hint: DOWNLOAD_HINT,
         message: `The ${side} file is empty`,
         reason: "The link served no bytes",
+        side,
+      }),
+    );
+  }
+  if (probeEncryptedOoxml(bytes).status === "encrypted") {
+    return Result.err(
+      linkIssue({
+        hint: "Remove the password from the document, then link it again.",
+        message: ENCRYPTED_CONTENT_MESSAGE,
+        reason: "The downloaded document is password-protected",
         side,
       }),
     );

@@ -44,6 +44,7 @@ import {
 } from "@/api/lib/file-scan/scan-upload";
 import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -1962,6 +1963,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
           buffer: filled.file.bytes,
           fileName,
           mimeType: DOCX_MIME_TYPE,
+          encryption: serverBuiltFileEncryption(),
           parentId:
             input.parent_id === undefined
               ? undefined
@@ -2006,6 +2008,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
         buffer: filled.file.bytes,
         fileName,
         mimeType: DOCX_MIME_TYPE,
+        encryption: serverBuiltFileEncryption(),
         source: null,
         writePolicy: { type: "replace-current-file" },
         afterWrite: async (tx, persisted) => {
