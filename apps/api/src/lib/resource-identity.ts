@@ -274,6 +274,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     resourceType: RESOURCE_TYPE.NUMBER_SERIES,
   },
   schedulerJobRun: { type: "non_resource", reason: "job" },
+  systemScriptRun: { type: "non_resource", reason: "job" },
   sanctionsScreeningEvent: { type: "non_resource", reason: "event" },
   sanctionsEdition: { type: "non_resource", reason: "projection" },
   // Guidance corpus rows have no product resource surface yet.
