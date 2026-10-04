@@ -251,7 +251,9 @@ export const storeDecisionTextFields = ({
   // URL diagnostics are generated before the internal text-field projection;
   // publisher keys are reserved by checkedDecisionMetadata at the producer.
   checkDecisionTextMetadata(metadata);
-  const stored = {
+  // Spreading an index-signature record beside a computed key drops the index
+  // signature from the inferred type; the stored row is an open record.
+  const stored: Record<string, unknown> = {
     ...metadata,
     [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
       DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
