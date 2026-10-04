@@ -5,10 +5,9 @@
 # hash, so editing one to satisfy a newer rule would break the migrator on live
 # databases. Every migration NOT listed here is fully linted.
 #
-# Never add a new migration: check-migrations.sh refuses an entry for a file the
-# same change adds or modifies. A new rule may add the already-applied files it
-# flags (code-owned-table-write and volatile-data-write did). A listed file that
-# no longer exists fails check-migration-safety.ts until the entry is removed.
+# Shrinks only. The single exception: a PR that introduces a new
+# migration-safety rule may add already-merged, unchanged migrations that the
+# new rule flags.
 apps/api/drizzle/20260429152450_entity-version-ai-summaries/migration.sql
 apps/api/drizzle/20260429205610_global-search-indexes/migration.sql
 apps/api/drizzle/20260429220500_global-search-unaccent/migration.sql

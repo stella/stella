@@ -579,64 +579,73 @@ const GUARDED_RULES: GuardedRule[] = [
 const HIGH_VOLUME_TABLE_NAMES = new Set<string>(HIGH_VOLUME_TABLES);
 const HIGH_VOLUME_INDEX_BUILD_RULE_ID = "high-volume-index-build";
 
-// A DML verb and the relation it targets, read from unmasked text so a quoted
-// or schema-qualified name is still a name; the qualifier may carry whitespace
-// around its dot, as PostgreSQL allows.
-const DML_TARGET_PATTERN =
-  /\b(?<verb>UPDATE|DELETE\s+FROM|INSERT\s+INTO|MERGE\s+INTO)\s+(?:ONLY\s+)?(?:"?public"?\s*\.\s*)?"?(?<table>[A-Za-z_][A-Za-z0-9_]*)"?/giu;
-
 const DML_VERBS = ["INSERT", "UPDATE", "DELETE", "MERGE"] as const;
 type DmlVerb = (typeof DML_VERBS)[number];
-const DML_VERB_SET = new Set<string>(DML_VERBS);
-const isDmlVerb = (word: string): word is DmlVerb => DML_VERB_SET.has(word);
+
+// The keyword between a DML verb and its target relation; UPDATE takes none.
+const DML_TARGET_KEYWORDS = {
+  INSERT: "into",
+  UPDATE: undefined,
+  DELETE: "from",
+  MERGE: "into",
+} as const satisfies Record<DmlVerb, string | undefined>;
+
+const DML_VERB_BY_TOKEN = new Map<string, DmlVerb>(
+  DML_VERBS.map((verb) => [verb.toLowerCase(), verb]),
+);
 
 type DmlTarget = { verb: DmlVerb; table: string };
 
-// The relations a statement writes rows of when the migration runs. `raw`
-// still carries quoted identifiers, which `text` masks, so the target is read
-// from `raw`; the verb is then checked at the same offset of `text`, where a
-// keyword inside a comment or a string literal has been masked away. Both
-// views index the same characters, `text` additionally carrying the masked
-// comment block that precedes the statement. A stored-routine body executes
-// nothing at migration time, and an UPDATE after a clause keyword (`FOR
-// UPDATE`, `DO UPDATE`) is not a statement of its own.
-const executedDmlTargets = ({
-  deferred,
-  raw,
-  text,
-}: Statement): DmlTarget[] => {
-  if (deferred) {
+// The relations a statement writes rows of when the migration runs, read from
+// the token stream: comments and string literals are masked there and quoted
+// identifiers are tokens of their own, so no keyword or name inside a comment
+// or literal counts, and a comment between tokens (`INSERT /* x */ INTO`) is
+// plain whitespace. A relation outside the public schema is none of the
+// registered tables. A stored-routine body executes nothing at migration
+// time, and an UPDATE after a clause keyword (`FOR UPDATE`, `DO UPDATE`) is
+// not a statement of its own.
+const executedDmlTargets = (statement: Statement): DmlTarget[] => {
+  if (statement.deferred) {
     return [];
   }
 
-  const textOffset = text.length - raw.length;
-  const words = wordsWithDepth(text);
+  const tokens = indexTokens(statement);
   const targets: DmlTarget[] = [];
 
-  for (const match of raw.matchAll(DML_TARGET_PATTERN)) {
-    const verbText = match.groups?.["verb"];
-    const table = match.groups?.["table"]?.toLowerCase();
-    if (verbText === undefined || table === undefined) {
+  for (const [position, token] of tokens.entries()) {
+    const verb =
+      token.kind === "word" ? DML_VERB_BY_TOKEN.get(token.value) : undefined;
+    if (verb === undefined) {
       continue;
     }
 
-    const verbIndex = match.index + textOffset;
-    if (text.slice(verbIndex, verbIndex + verbText.length) !== verbText) {
+    const previous = tokens[position - 1];
+    if (
+      verb === UPDATE_KEYWORD &&
+      previous?.kind === "word" &&
+      UPDATE_CLAUSE_PREFIXES.has(previous.value.toUpperCase())
+    ) {
       continue;
     }
 
-    const verb = verbText.split(/\s+/u).at(0)?.toUpperCase() ?? "";
-    if (!isDmlVerb(verb)) {
+    let next = position + 1;
+    const keyword = DML_TARGET_KEYWORDS[verb];
+    if (keyword !== undefined) {
+      if (!isIndexKeyword(tokens[next], keyword)) {
+        continue;
+      }
+      next++;
+    }
+    if (isIndexKeyword(tokens[next], "only")) {
+      next++;
+    }
+
+    const relation = readIndexRelation(tokens, next)?.relation;
+    if (relation?.schema.toLowerCase() !== "public") {
       continue;
     }
 
-    const position = words.findIndex(({ index }) => index === verbIndex);
-    const previousWord = words[position - 1]?.word ?? "";
-    if (verb === UPDATE_KEYWORD && UPDATE_CLAUSE_PREFIXES.has(previousWord)) {
-      continue;
-    }
-
-    targets.push({ verb, table });
+    targets.push({ verb, table: relation.name.toLowerCase() });
   }
 
   return targets;

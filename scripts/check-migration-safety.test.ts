@@ -870,6 +870,11 @@ describe("check-migration-safety", () => {
         `WITH retired AS (SELECT 'x.hour' AS id) UPDATE scheduler_jobs SET "enabled" = false FROM retired WHERE scheduler_jobs."id" = retired.id;`,
         `MERGE INTO "scheduler_jobs" j USING (VALUES ('x.hour')) v(id) ON j."id" = v.id WHEN NOT MATCHED THEN INSERT ("id") VALUES (v.id);`,
         `DO $$ BEGIN INSERT INTO "scheduler_jobs" ("id") VALUES ('x.hour'); END $$;`,
+        // A comment is whitespace between any two tokens.
+        `INSERT /* seed */ INTO "scheduler_jobs" ("id") VALUES ('x.hour');`,
+        `INSERT -- seed\n INTO scheduler_jobs ("id") VALUES ('x.hour');`,
+        `UPDATE /* a */ ONLY /* b */ "public" /* c */ . /* d */ "scheduler_jobs" SET "enabled" = false WHERE "id" = 'x.hour';`,
+        `MERGE /* m */ INTO public./* t */scheduler_jobs j USING (VALUES ('x.hour')) v(id) ON j."id" = v.id WHEN NOT MATCHED THEN INSERT ("id") VALUES (v.id);`,
       ];
 
       for (const sql of writes) {
