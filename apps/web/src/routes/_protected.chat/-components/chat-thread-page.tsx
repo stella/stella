@@ -90,6 +90,7 @@ import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
+import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
@@ -579,6 +580,7 @@ export const ChatThreadPage = ({
         >
           <div className="relative flex w-full flex-1 flex-col overflow-hidden">
             <ChromeHeaderActions>
+              <ChatThreadFilesButton attachedFiles={data.attachedFiles} />
               <Tooltip
                 content={t("inspector.moveToSide")}
                 render={

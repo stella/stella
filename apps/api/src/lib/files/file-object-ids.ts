@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import type { FieldContent } from "@/api/db/schema-validators";
+import type { FileEncryption } from "@/api/lib/files/detect-file-encryption";
 
 const mintedFileIdSchema = v.pipe(
   v.string(),
@@ -59,16 +60,28 @@ export const resolveQueuedFileObject = (
 ): MintedFileId =>
   fileId === undefined ? allocateFileObject() : brandMintedFileId(fileId);
 
-export const fileContentWithMintedObject = (
-  content: MintedFileFieldContent,
-): WritableFileFieldContent => {
+/**
+ * New file content for a freshly minted object. The `encrypted` attribute is
+ * taken from a detector-made `FileEncryption` (see `detect-file-encryption.ts`),
+ * never from the caller, so a writer cannot record a guessed value.
+ */
+export const fileContentWithMintedObject = ({
+  encryption,
+  ...content
+}: Omit<MintedFileFieldContent, "encrypted"> & {
+  encryption: FileEncryption;
+}): WritableFileFieldContent => {
   const { thumbnailFileId, ...contentWithoutThumbnail } = content;
+  const written = {
+    ...contentWithoutThumbnail,
+    encrypted: encryption.encrypted,
+  };
 
   if (thumbnailFileId === undefined) {
-    return contentWithoutThumbnail;
+    return written;
   }
 
-  return { ...contentWithoutThumbnail, thumbnailFileId };
+  return { ...written, thumbnailFileId };
 };
 
 export const reuseFileObjectWithinEntity = (

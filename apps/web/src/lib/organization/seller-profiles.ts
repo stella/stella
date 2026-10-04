@@ -1,4 +1,4 @@
-import { infiniteQueryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import { api } from "@/lib/api";
@@ -28,6 +28,23 @@ export const sellerProfilesOptions = (organizationId: string) =>
     queryFn: async ({ pageParam, signal }) =>
       listSellerProfiles(pageParam, signal),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
+  });
+
+export const sellerProfileOptions = ({
+  organizationId,
+  id,
+}: {
+  organizationId: string;
+  id: string;
+}) =>
+  queryOptions({
+    queryKey: [...sellerProfilesKeys.all(organizationId), "profile", id],
+    queryFn: async ({ signal }) =>
+      unwrapEden(
+        await api["seller-profiles"]({
+          sellerProfileId: toSafeId<"sellerProfile">(id),
+        }).get({ fetch: { signal } }),
+      ),
   });
 
 export type SellerProfile = Awaited<

@@ -61,6 +61,10 @@ const allowedModules = new Set([
   "lib/file-scan/warnings.ts",
   "lib/file-scan/yara.ts",
   "lib/file-scan/zip.ts",
+  // The scan recognises a password-protected Office upload from its bytes
+  // alone: a bounded compound-file reader and the encrypted layout check.
+  "lib/files/compound-file.ts",
+  "lib/files/encrypted-ooxml.ts",
   "lib/runtime-worker-path.ts",
   "lib/sanitize-filename.ts",
   "lib/type-guards.ts",
