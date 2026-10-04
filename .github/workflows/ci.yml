@@ -1773,6 +1773,18 @@ jobs:
         # names has moved. Regenerate: `bun scripts/ownership.ts --write`.
         run: bun scripts/ownership.ts --check
 
+      - name: Queue authority
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Every BullMQ queue declares whose authority its jobs run under
+        # (apps/api/src/lib/member-run-queues.ts), and a member-run queue
+        # builds its handles with the run actor. Existing gaps are listed in
+        # a shrink-only baseline: `bun scripts/queue-authority.ts --write`.
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        run: |
+          bun scripts/queue-authority.ts --self-test
+          bun scripts/queue-authority.ts --check
+
       - name: Design token docs
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # DESIGN.md's semantic token table and font stack are rendered from
